@@ -6,9 +6,10 @@ import { AppDialog, PrimaryAction, SecondaryAction, SelectInput, TextInput } fro
 // одной кнопкой и отбор по селлеру с категорией. Третьего пути — набирать строки
 // руками — намеренно нет: инвентаризация начинается с того, что уже числится.
 
-export type CreateFill =
-  | { mode: 'all' }
-  | { mode: 'filters'; seller: string | null; category: string | null }
+// Отдельной кнопки «весь склад» нет намеренно: не поставил фильтры — значит
+// берём всё. Две кнопки для одного и того же заставляли выбирать там, где
+// выбора нет.
+export type CreateFill = { seller: string | null; category: string | null }
 
 type Props = {
   open: boolean
@@ -34,14 +35,8 @@ export function InventoryCreateDialog({
 
   const narrowed = Boolean(seller || category)
 
-  function submit(mode: 'all' | 'filters') {
-    onCreate(
-      warehouse,
-      mode === 'all'
-        ? { mode: 'all' }
-        : { mode: 'filters', seller: seller || null, category: category || null },
-      comment,
-    )
+  function submit() {
+    onCreate(warehouse, { seller: seller || null, category: category || null }, comment)
   }
 
   return (
@@ -56,23 +51,17 @@ export function InventoryCreateDialog({
           <SecondaryAction onClick={onClose} data-testid="inv-create-cancel">
             Отмена
           </SecondaryAction>
-          <SecondaryAction onClick={() => submit('all')} data-testid="inv-create-all">
-            Весь склад
-          </SecondaryAction>
-          <PrimaryAction
-            onClick={() => submit('filters')}
-            disabledReason={narrowed ? undefined : 'Выберите селлера или категорию'}
-            data-testid="inv-create-filters"
-          >
-            Создать по отбору
+          <PrimaryAction onClick={submit} data-testid="inv-create-filters">
+            Создать
           </PrimaryAction>
         </>
       }
     >
       <Stack spacing={2}>
         <Typography variant="body2" color="text.secondary">
-          Документ наполняется тем, что числится на складе прямо сейчас. Можно взять склад
-          целиком или сузить отбор — тогда в документ попадут только подходящие товары.
+          {narrowed
+            ? 'В документ попадёт только то, что подходит под отбор.'
+            : 'Фильтры не выбраны — в документ попадёт весь склад целиком.'}
         </Typography>
         <SelectInput
           label="Склад"

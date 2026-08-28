@@ -69,6 +69,13 @@ export type InventoryCount = {
   postedAt: string | null
   postedBy: string | null
   comment: string
+  /**
+   * Адресное хранение включено у арендатора.
+   *
+   * Выключено — ячеек в системе нет вообще, и показывать их нельзя нигде:
+   * ни заголовком, ни в подсказке, ни как «Без ячеек». Остаётся тара и товар.
+   */
+  addressStorage: boolean
   cells: CellNode[]
 }
 

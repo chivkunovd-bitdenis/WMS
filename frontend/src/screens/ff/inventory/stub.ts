@@ -72,6 +72,7 @@ export function stubCount(): InventoryCount {
     postedAt: null,
     postedBy: null,
     comment: '',
+    addressStorage: true,
     cells: [
       cell('А 1.1', [
         pallet('П-000117', [
@@ -130,6 +131,12 @@ export function stubCountForBox(): InventoryCount {
 
 export function emptyCount(): InventoryCount {
   return { ...stubCount(), cells: [] }
+}
+
+/** Арендатор без адресного хранения: ячеек нет, есть только тара и товар. */
+export function noAddressCount(): InventoryCount {
+  const base = stubCount()
+  return { ...base, id: 'inv-126', number: 'ИНВ-000126', addressStorage: false }
 }
 
 export function postedCount(): InventoryCount {

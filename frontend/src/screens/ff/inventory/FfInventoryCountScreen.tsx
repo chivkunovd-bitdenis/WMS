@@ -52,13 +52,6 @@ function plural(n: number, one: string, few: string, many: string): string {
   return `${n} ${many}`
 }
 
-function fillLabel(count: InventoryCount): string {
-  if (count.fill.mode === 'all') return 'весь склад'
-  if (count.fill.mode === 'object') return count.fill.objectLabel.toLowerCase()
-  const parts = [count.fill.seller, count.fill.category].filter(Boolean)
-  return parts.length ? parts.join(', ') : 'по отбору'
-}
-
 type Props = {
   count: InventoryCount
   loading: boolean
@@ -130,10 +123,7 @@ export function FfInventoryCountScreen({
           </IconAction>
         </Box>
         <Box sx={{ flex: 1 }}>
-          <ScreenHeader
-            title={`Инвентаризация ${count.number}`}
-            purpose={`Склад ${count.warehouseName}, наполнен: ${fillLabel(count)}. Введите фактическое количество у товара — расхождение посчитается само.`}
-          />
+          <ScreenHeader title={`Инвентаризация ${count.number}`} />
         </Box>
       </Stack>
 

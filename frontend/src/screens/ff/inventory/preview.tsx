@@ -13,7 +13,14 @@ import { muiTheme } from '../../../mui/theme'
 import { FfInventoryCountScreen } from './FfInventoryCountScreen'
 import { FfInventoryListScreen } from './FfInventoryListScreen'
 import { InventoryCreateDialog, type CreateFill } from './InventoryCreateDialog'
-import { emptyCount, postedCount, stubCount, stubCountForBox, stubList } from './stub'
+import {
+  emptyCount,
+  noAddressCount,
+  postedCount,
+  stubCount,
+  stubCountForBox,
+  stubList,
+} from './stub'
 import { allProducts, totals } from './InventoryRows'
 import type { InventoryCount } from './InventoryTypes'
 import '../../../index.css'
@@ -25,12 +32,21 @@ import '../../../index.css'
 // Полоса состояний сверху — обвязка превью, а не часть экрана. На боевом экране
 // её не будет: состояние приходит от сервера, а не выбирается кнопкой.
 
-type PreviewState = 'list' | 'draft' | 'byBox' | 'posted' | 'loading' | 'error' | 'empty'
+type PreviewState =
+  | 'list'
+  | 'draft'
+  | 'byBox'
+  | 'noAddress'
+  | 'posted'
+  | 'loading'
+  | 'error'
+  | 'empty'
 
 const STATES: Array<{ value: PreviewState; label: string }> = [
   { value: 'list', label: 'Список документов' },
   { value: 'draft', label: 'Документ: черновик' },
   { value: 'byBox', label: 'Документ: по коробу' },
+  { value: 'noAddress', label: 'Без адресного хранения' },
   { value: 'posted', label: 'Документ: проведён' },
   { value: 'loading', label: 'Грузится' },
   { value: 'error', label: 'Ошибка' },
@@ -50,9 +66,11 @@ export function PreviewHarness() {
       ? postedCount()
       : state === 'empty'
         ? emptyCount()
-        : state === 'byBox'
-          ? byBox
-          : count
+        : state === 'noAddress'
+          ? noAddressCount()
+          : state === 'byBox'
+            ? byBox
+            : count
 
   function update(next: InventoryCount) {
     setNote(null)
@@ -78,28 +96,30 @@ export function PreviewHarness() {
 
   function handleCreate(warehouse: string, fill: CreateFill, comment: string) {
     const base = stubCount()
-    const filtered =
-      fill.mode === 'all'
-        ? base
-        : {
-            ...base,
-            cells: base.cells
-              .map((cell) => ({
-                ...cell,
-                children: cell.children.filter((node) => {
-                  if (node.kind !== 'product') return true
-                  if (fill.seller && node.seller !== fill.seller) return false
-                  if (fill.category && node.category !== fill.category) return false
-                  return true
-                }),
-              }))
-              .filter((cell) => cell.children.length > 0),
-          }
+    const narrowed = Boolean(fill.seller || fill.category)
+    const filtered = !narrowed
+      ? base
+      : {
+          ...base,
+          cells: base.cells
+            .map((cell) => ({
+              ...cell,
+              children: cell.children.filter((node) => {
+                if (node.kind !== 'product') return true
+                if (fill.seller && node.seller !== fill.seller) return false
+                if (fill.category && node.category !== fill.category) return false
+                return true
+              }),
+            }))
+            .filter((cell) => cell.children.length > 0),
+        }
     setCount({
       ...filtered,
       warehouseName: warehouse,
       comment,
-      fill: fill.mode === 'all' ? { mode: 'all' } : fill,
+      fill: narrowed
+        ? { mode: 'filters', seller: fill.seller, category: fill.category }
+        : { mode: 'all' },
     })
     setCreateOpen(false)
     setNote(null)

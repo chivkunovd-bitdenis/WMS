@@ -268,6 +268,14 @@ export function buildRows(
   collapsed: Set<string>,
 ): InvRow[] {
   const ctx: BuildCtx = { filters, collapsed, rows: [] }
+  if (!count.addressStorage) {
+    // Ячеек у арендатора нет: дерево начинается сразу с тары и товара, лежащего
+    // отдельно. Заголовок «Без ячеек» тоже не рисуем — он называет то, чего в
+    // этой картине мира не существует.
+    const flat = count.cells.flatMap((cell) => cell.children)
+    walk(flat, ctx, 0, 'root')
+    return ctx.rows
+  }
   for (const cell of count.cells) {
     const kept = collectProducts(cell.children).filter((p) => matchesFilters(p, filters))
     if (kept.length === 0) continue

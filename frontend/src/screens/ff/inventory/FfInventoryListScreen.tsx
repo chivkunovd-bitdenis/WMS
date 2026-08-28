@@ -1,5 +1,5 @@
 import { Box, Link, Stack, Typography } from '@mui/material'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import {
   DataTable,
   FilterBar,
@@ -34,17 +34,10 @@ type Props = {
 
 export function FfInventoryListScreen({ items, loading, onOpen, onCreate }: Props) {
   const [status, setStatus] = useState('')
-  const [seller, setSeller] = useState('')
   const [query, setQuery] = useState('')
-
-  const sellers = useMemo(
-    () => [...new Set(items.map((i) => i.fillLabel))].sort((a, b) => a.localeCompare(b, 'ru')),
-    [items],
-  )
 
   const rows = items.filter((item) => {
     if (status && item.status !== status) return false
-    if (seller && item.fillLabel !== seller) return false
     const needle = query.trim().toLowerCase()
     if (!needle) return true
     return `${item.number} ${item.createdBy} ${item.fillLabel}`.toLowerCase().includes(needle)
@@ -170,14 +163,6 @@ export function FfInventoryListScreen({ items, loading, onOpen, onCreate }: Prop
           ]}
           emptyLabel="Любой"
           testId="inv-list-status"
-        />
-        <SelectInput
-          label="Чем наполнен"
-          value={seller}
-          onChange={setSeller}
-          options={sellers.map((s) => ({ value: s, label: s }))}
-          emptyLabel="Любой"
-          testId="inv-list-fill"
         />
       </FilterBar>
       <DataTable

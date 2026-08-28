@@ -152,6 +152,11 @@ export function PreviewHarness() {
             onPrintCell={(row: MapRow, size) =>
               setNote(`Заглушка: ШК ячейки ${row.title}, этикетка ${size.label} — принтера в макете нет`)
             }
+            onInventory={(row: MapRow) =>
+              setNote(
+                `Откроется инвентаризация по строке «${row.title}» — документ уже наполнен её составом. Экран: /inventory.html`,
+              )
+            }
             historyFor={(row: MapRow) =>
               shown.journal.filter((entry) => entry.subject === row.title)
             }

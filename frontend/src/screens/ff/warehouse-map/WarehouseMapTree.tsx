@@ -3,6 +3,7 @@ import CallSplitOutlined from '@mui/icons-material/CallSplitOutlined'
 import ExpandMore from '@mui/icons-material/ExpandMore'
 import DragIndicator from '@mui/icons-material/DragIndicator'
 import GridViewOutlined from '@mui/icons-material/GridViewOutlined'
+import FactCheckOutlined from '@mui/icons-material/FactCheckOutlined'
 import HistoryOutlined from '@mui/icons-material/HistoryOutlined'
 import InboxOutlined from '@mui/icons-material/InboxOutlined'
 import Inventory2Outlined from '@mui/icons-material/Inventory2Outlined'
@@ -66,6 +67,8 @@ type Props = {
   onTakeOff: (row: MapRow) => void
   onDisband: (row: MapRow) => void
   onHistory: (row: MapRow) => void
+  /** Пересчитать содержимое этой строки: открывает документ инвентаризации. */
+  onInventory: (row: MapRow) => void
   onPrintCell: (row: MapRow) => void
   onDragStart: (row: MapRow) => void
   onDragEnd: () => void
@@ -82,6 +85,7 @@ export function WarehouseMapTree({
   onTakeOff,
   onDisband,
   onHistory,
+  onInventory,
   onPrintCell,
   onDragStart,
   onDragEnd,
@@ -185,10 +189,19 @@ export function WarehouseMapTree({
     {
       key: 'actions',
       header: '',
-      width: 116,
+      width: 148,
       align: 'right',
       render: (row) => (
         <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'flex-end' }}>
+          {/* Пересчитать можно всё, что содержит товар: ячейку, тару и сам товар.
+              Документ открывается уже наполненным составом именно этой строки. */}
+          <IconAction
+            title={`Пересчитать: ${row.title}`}
+            onClick={() => onInventory(row)}
+            testId={`map-inventory-${row.key}`}
+          >
+            <FactCheckOutlined fontSize="small" />
+          </IconAction>
           {row.kind === 'cell' ? (
             <PrintAction
               what="ШК ячейки"
