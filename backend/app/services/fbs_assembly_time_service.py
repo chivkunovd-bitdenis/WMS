@@ -12,11 +12,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.fbs_order import FbsOrder
 from app.models.fbs_supply import FbsSupply
 
+ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
+ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
+SECONDS_PER_HOUR = 3600
+
 
 @dataclass(frozen=True)
 class FbsAssemblyTime:
     hours: float
     orders: int
+    within_12_hours_percent: int
+    within_24_hours_percent: int
+
+
+def _percentage_within_threshold(
+    durations_seconds: list[float],
+    threshold_hours: int,
+) -> int:
+    if not durations_seconds:
+        return 0
+    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
+    matching_orders = sum(
+        duration_seconds <= threshold_seconds
+        for duration_seconds in durations_seconds
+    )
+    return round(matching_orders * 100 / len(durations_seconds))
 
 
 async def calculate_fbs_assembly_time(
@@ -53,6 +73,22 @@ async def calculate_fbs_assembly_time(
         if delivered_at is not None and delivered_at >= created_at_wb
     ]
     if not durations:
-        return FbsAssemblyTime(hours=0.0, orders=0)
-    average_hours = sum(durations) / len(durations) / 3600
-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
+        return FbsAssemblyTime(
+            hours=0.0,
+            orders=0,
+            within_12_hours_percent=0,
+            within_24_hours_percent=0,
+        )
+    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
+    return FbsAssemblyTime(
+        hours=round(average_hours, 1),
+        orders=len(durations),
+        within_12_hours_percent=_percentage_within_threshold(
+            durations,
+            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
+        ),
+        within_24_hours_percent=_percentage_within_threshold(
+            durations,
+            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
+        ),
+    )
