@@ -71,6 +71,8 @@ class FbsOrderSyncOut(BaseModel):
 class FbsAssemblyTimeOut(BaseModel):
     hours: float
     orders: int
+    within_12_hours_percent: int
+    within_24_hours_percent: int
 
 
 class FbsCancelledProductOut(BaseModel):
@@ -164,7 +166,12 @@ async def get_fbs_assembly_time(
         if str(exc) == "invalid_period":
             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
         raise
-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
+    return FbsAssemblyTimeOut(
+        hours=result.hours,
+        orders=result.orders,
+        within_12_hours_percent=result.within_12_hours_percent,
+        within_24_hours_percent=result.within_24_hours_percent,
+    )
 
 
 @contract_router.get(

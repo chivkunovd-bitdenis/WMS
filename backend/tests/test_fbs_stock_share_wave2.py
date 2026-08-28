@@ -237,7 +237,7 @@ async def test_fbs_import_skips_unserved_but_keeps_unmapped(
     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
 
 
-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
+# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
 @pytest.mark.asyncio
 async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
     headers, suffix = await _register_admin(async_client)
@@ -251,7 +251,7 @@ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncCli
         assert seller is not None
         tenant_id = seller.tenant_id
         for index, (seller_id, hours) in enumerate(
-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
+            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
         ):
             created_at = period_from + timedelta(days=index)
             supply = FbsSupply(
@@ -294,7 +294,53 @@ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncCli
         },
     )
     assert response.status_code == 200, response.text
-    assert response.json() == {"hours": 8.0, "orders": 2}
+    assert response.json() == {
+        "hours": 9.0,
+        "orders": 2,
+        "within_12_hours_percent": 100,
+        "within_24_hours_percent": 100,
+    }
+
+    all_sellers_response = await async_client.get(
+        "/fbs/assembly-time",
+        headers=headers,
+        params={
+            "from": period_from.isoformat(),
+            "to": (period_from + timedelta(days=7)).isoformat(),
+        },
+    )
+    assert all_sellers_response.status_code == 200, all_sellers_response.text
+    assert all_sellers_response.json() == {
+        "hours": 16.0,
+        "orders": 3,
+        "within_12_hours_percent": 67,
+        "within_24_hours_percent": 67,
+    }
+
+
+# TC-NEW-FBS-SHARE-W2-003: an empty period returns zeroed assembly metrics.
+@pytest.mark.asyncio
+async def test_fbs_assembly_time_empty_period(async_client: AsyncClient) -> None:
+    headers, _ = await _register_admin(async_client)
+    period_from = datetime(2026, 9, 20, tzinfo=UTC)
+
+    response = await async_client.get(
+        "/fbs/assembly-time",
+        headers=headers,
+        params={
+            "from": period_from.isoformat(),
+            "to": (period_from + timedelta(days=1)).isoformat(),
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "hours": 0.0,
+        "orders": 0,
+        "within_12_hours_percent": 0,
+        "within_24_hours_percent": 0,
+    }
+
+
 # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
 @pytest.mark.asyncio
 async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
