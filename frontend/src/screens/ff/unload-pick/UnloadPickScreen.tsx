@@ -16,7 +16,7 @@ import {
 } from '../../../ui-kit'
 import type { Column } from '../../../ui-kit'
 import { ProductPhotoThumb } from '../../../components/ProductPhotoThumb'
-import { PickSourceDialog } from './PickSourceDialog'
+import { PickPlacesTree } from './PickPlacesTree'
 import {
   DOCUMENT,
   OBJECTS,
@@ -29,11 +29,11 @@ import {
   objRef,
 } from './pickStub'
 import {
-  isInside,
   pickKey,
   placeLabel,
   placesUnder,
   rowsOf,
+  rowsWithin,
   type PickPlace,
   type PickRow,
   type PickedMap,
@@ -47,13 +47,18 @@ import {
 // адресе места. Если у палеты или короба ячейки нет, снимается точно так же:
 // объект стоит без ячейки, и это нормальное состояние склада, а не ошибка.
 //
-// Переключателя «списать с ячейки / с короба / с палеты» здесь намеренно нет.
-// Кладовщик подошёл, увидел штрихкод и пикнул его — что это было, разбирает
-// экран (канон R-26: сканер тупой, решает экран). Выбор руками появляется
-// только там, где выбор действительно есть: когда один и тот же товар лежит в
-// нескольких местах внутри того, что пикнули.
+// Раскрывашка товара отвечает на вопрос «откуда снимаем» сама — постоянно и
+// на месте (§6 контракта 20260828). Диалога «Откуда снимаем» на этом экране
+// больше нет: то же самое поле количества, что и раньше открывалось окном,
+// теперь стоит прямо в строке места.
 
 type PickOp = { productId: string; placeKey: string; qty: number }
+
+/** «В 3 местах», «В 1 месте», «Нет на складе» — колонка «Где лежит» (§2). */
+function placesCountLabel(count: number): string {
+  if (count === 0) return 'Нет на складе'
+  return count === 1 ? 'В 1 месте' : `В ${count} местах`
+}
 
 export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void }) {
   const [picked, setPicked] = useState<PickedMap>({})
@@ -62,7 +67,7 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
   const [scanValue, setScanValue] = useState('')
   const [scanError, setScanError] = useState<string | null>(null)
   const [scanNotice, setScanNotice] = useState<string | null>(null)
-  const [asking, setAsking] = useState<{ row: PickRow; places: PickPlace[] } | null>(null)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
   const rows = rowsOf(PLAN, STOCK, OBJECTS, PICK_CELLS, picked)
   const planQty = rows.reduce((sum, row) => sum + row.plan, 0)
@@ -70,13 +75,52 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
   const leftQty = planQty - pickedQty
   const sourceText = source ? placeLabel(source, OBJECTS, PICK_CELLS) : null
 
-  function take(row: PickRow, place: PickPlace, qty: number) {
+  function expandRow(rowKey: string) {
+    setExpandedIds((current) => (current.has(rowKey) ? current : new Set(current).add(rowKey)))
+  }
+
+  function expandRows(rowKeys: string[]) {
+    setExpandedIds((current) => {
+      const next = new Set(current)
+      rowKeys.forEach((key) => next.add(key))
+      return next
+    })
+  }
+
+  function toggleRow(rowKey: string) {
+    setExpandedIds((current) => {
+      const next = new Set(current)
+      if (next.has(rowKey)) next.delete(rowKey)
+      else next.add(rowKey)
+      return next
+    })
+  }
+
+  /**
+   * Единственный способ поменять «снято»: и сканер (+1), и рука в поле места
+   * зовут эту же функцию — экран не решает разными путями одно и то же
+   * (контракт §4, §5).
+   */
+  function applyDelta(row: PickRow, place: PickPlace, delta: number) {
+    if (delta === 0) return
     const key = pickKey(row.product.id, place.key)
-    setPicked((current) => ({ ...current, [key]: (current[key] ?? 0) + qty }))
-    setHistory((current) => [...current, { productId: row.product.id, placeKey: place.key, qty }])
+    setPicked((current) => ({ ...current, [key]: Math.max(0, (current[key] ?? 0) + delta) }))
     setScanError(null)
-    setScanNotice(`${row.product.sku}: снято ${qty} шт — ${place.label}`)
-    onNote(`Заглушка: ${row.product.sku}, снято ${qty} шт — ${place.label}`)
+    if (delta > 0) {
+      // Только снятие ложится в историю отмены: ручное уменьшение — это уже
+      // сама по себе поправка оператора, отменять поправку поправкой незачем.
+      setHistory((current) => [...current, { productId: row.product.id, placeKey: place.key, qty: delta }])
+      setScanNotice(`${row.product.sku}: снято ${delta} шт — ${place.label}`)
+      onNote(`Заглушка: ${row.product.sku}, снято ${delta} шт — ${place.label}`)
+    } else {
+      setScanNotice(`${row.product.sku}: возврат ${Math.abs(delta)} шт — ${place.label}`)
+      onNote(`Заглушка: возврат ${Math.abs(delta)} шт — ${place.label}`)
+    }
+  }
+
+  /** Поле места — сразу факт: новое значение и есть снятое количество. */
+  function handlePlaceQtyChange(row: PickRow, place: PickPlace, next: number | null) {
+    applyDelta(row, place, (next ?? 0) - place.picked)
   }
 
   /**
@@ -99,20 +143,17 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
     onNote(`Заглушка: возврат ${operation.qty} шт — ${place?.label ?? 'место не найдено'}`)
   }
 
-  /** Кнопка в строке: место выбирается руками и количество вводится числом. */
-  function askFor(row: PickRow) {
-    setAsking({ row, places: row.places.filter((place) => place.left > 0) })
-  }
-
   function handleScan(code: string) {
     setScanValue('')
     const cell = PICK_CELLS.find(
       (one) => one.barcode === code || one.code.toLowerCase() === code.toLowerCase(),
     )
     if (cell) {
-      setSource(cellRef(cell.id))
+      const reference = cellRef(cell.id)
+      setSource(reference)
       setScanError(null)
       setScanNotice(`Ячейка ${cell.code} — пикните товар, который снимаете`)
+      expandRows(rowsWithin(rows, reference, OBJECTS).map((one) => one.key))
       return
     }
     const object = OBJECTS.find(
@@ -123,6 +164,7 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
       setSource(reference)
       setScanError(null)
       setScanNotice(`${placeLabel(reference, OBJECTS, PICK_CELLS)} — пикните товар`)
+      expandRows(rowsWithin(rows, reference, OBJECTS).map((one) => one.key))
       return
     }
     const product = PRODUCTS.find(
@@ -157,11 +199,17 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
     // Одно место — вопрос не задаём: спрашивать «откуда», когда ответ один,
     // значит тратить движение кладовщика на подтверждение очевидного.
     if (found.length === 1) {
-      take(row, found[0], 1)
+      expandRow(row.key)
+      applyDelta(row, found[0], 1)
       return
     }
+    // Мест-кандидатов несколько — экран не выбирает за оператора (ДЫРА → R-38):
+    // ничего не списывается, раскрывашка открыта, чтобы было видно кандидатов.
+    expandRow(row.key)
     setScanNotice(null)
-    setAsking({ row, places: found })
+    setScanError(
+      `${product.sku} лежит в ${found.length} местах внутри ${sourceText ?? 'склада'} — уточните место или укажите число руками`,
+    )
   }
 
   const columns: Column<PickRow>[] = [
@@ -181,43 +229,9 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
       render: (row) => <TextCell value={row.product.name} />,
     },
     {
-      // Ключевая колонка экрана. Не список ячеек, а список мест сверху вниз:
-      // адрес читается целиком одной строкой, и «палета без ячейки» стоит в том
-      // же списке, что и полка, — снимают с неё точно так же.
       key: 'places',
       header: 'Где лежит',
-      render: (row) => {
-        if (row.places.length === 0) {
-          return (
-            <Typography variant="body2" color="text.secondary">
-              Нет на складе — снимать нечего
-            </Typography>
-          )
-        }
-        return (
-          <Stack spacing={0.25} data-testid={`pick-places-${row.product.id}`}>
-            {row.places.map((place) => {
-              const inSource = Boolean(source && isInside(place.holder, source, OBJECTS))
-              return (
-                <Stack
-                  key={place.key}
-                  direction="row"
-                  spacing={0.75}
-                  sx={{ alignItems: 'baseline', whiteSpace: 'nowrap' }}
-                >
-                  <Typography variant="body2" sx={{ fontWeight: inSource ? 700 : 400 }}>
-                    {place.label}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    — {place.left} шт
-                    {place.picked > 0 ? ` · снято ${place.picked}` : ''}
-                  </Typography>
-                </Stack>
-              )
-            })}
-          </Stack>
-        )
-      },
+      render: (row) => <TextCell value={placesCountLabel(row.places.length)} />,
     },
     {
       key: 'plan',
@@ -244,9 +258,9 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
       key: 'actions',
       header: '',
       align: 'right',
-      render: (row) => (
-        <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end', alignItems: 'center' }}>
-          {row.picked > 0 ? (
+      render: (row) =>
+        row.picked > 0 ? (
+          <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
             <IconAction
               title={`Отменить последнее снятие: ${row.product.sku}`}
               onClick={() => undoLast(row)}
@@ -254,22 +268,8 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
             >
               <UndoOutlined fontSize="small" />
             </IconAction>
-          ) : null}
-          <PrimaryAction
-            onClick={() => askFor(row)}
-            disabledReason={
-              row.left === 0
-                ? 'По плану уже всё снято'
-                : row.places.every((place) => place.left === 0)
-                  ? 'Этого товара нет на складе'
-                  : undefined
-            }
-            data-testid={`pick-take-${row.product.id}`}
-          >
-            Снять
-          </PrimaryAction>
-        </Stack>
-      ),
+          </Stack>
+        ) : null,
     },
   ]
 
@@ -347,6 +347,18 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
           title: 'В отгрузке нет товаров',
           hint: 'Добавьте товары в план отгрузки — снимать пока нечего.',
         }}
+        expand={{
+          isExpanded: (row) => expandedIds.has(row.key),
+          onToggle: (row) => toggleRow(row.key),
+          label: (row) => `Показать места товара ${row.product.sku}`,
+          render: (row) => (
+            <PickPlacesTree
+              row={row}
+              highlightedKey={source}
+              onQtyChange={(place, next) => handlePlaceQtyChange(row, place, next)}
+            />
+          ),
+        }}
       />
 
       <Stack direction="row" sx={{ mt: 2, justifyContent: 'flex-end' }}>
@@ -363,20 +375,6 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
           </PrimaryAction>
         </ActionGroup>
       </Stack>
-
-      <PickSourceDialog
-        open={asking !== null}
-        productName={asking ? asking.row.product.name : ''}
-        planLeft={asking ? asking.row.left : 0}
-        places={asking ? asking.places : []}
-        onClose={() => setAsking(null)}
-        onConfirm={(placeKey, qty) => {
-          if (!asking) return
-          const place = asking.places.find((one) => one.key === placeKey)
-          if (place) take(asking.row, place, qty)
-          setAsking(null)
-        }}
-      />
     </Box>
   )
 }

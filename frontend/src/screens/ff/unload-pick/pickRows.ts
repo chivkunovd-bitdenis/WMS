@@ -1,6 +1,8 @@
 import { isCellRef, refId } from '../sorting-objects/objectsStub'
 import {
   KIND_TITLE,
+  cellRef,
+  objRef,
   productById,
   type Cell,
   type GoodsLine,
@@ -182,4 +184,80 @@ export function placesUnder(
   const available = places.filter((place) => place.left > 0)
   if (!source) return available
   return available.filter((place) => isInside(place.holder, source, objects))
+}
+
+/** Строки плана, у которых есть хоть одно место внутри отсканированного объекта. */
+export function rowsWithin(rows: PickRow[], source: string, objects: WarehouseObject[]): PickRow[] {
+  return rows.filter((row) => row.places.some((place) => isInside(place.holder, source, objects)))
+}
+
+/**
+ * Строка дерева мест: ячейка или объект на своей ступеньке отступа.
+ *
+ * Раскрывашка товара показывает не список ячеек, а структуру: ячейка → палета
+ * → короб. `place` заполнен только там, где товар физически лежит и берётся
+ * рукой — это те же ключи, что и в `PickPlace` (§3, §4 контракта). Узел без
+ * `place` — чистая структура: он отвечает на вопрос «куда идти», снять с него
+ * нечего.
+ */
+export type PlaceTreeRow = {
+  key: string
+  label: string
+  depth: number
+  place: PickPlace | null
+}
+
+type TreeNode = { key: string; label: string; place: PickPlace | null; children: TreeNode[] }
+
+/**
+ * Дерево мест одного товара, разложенное в плоский список для `DataTable`.
+ *
+ * Ключ узла всегда совпадает с ключом места (`cell:c-a11`, `obj:plt-131`,
+ * `none`), когда узел — место: это ссылка на держатель, а не второй
+ * идентификатор экрана (контракт, §12). Поэтому подсветку сканера можно
+ * передавать в `DataTable.highlightedKey` напрямую — тем же значением, что
+ * лежит в `source`.
+ */
+export function placeTreeOf(
+  places: PickPlace[],
+  objects: WarehouseObject[],
+  cells: Cell[],
+): PlaceTreeRow[] {
+  const roots = new Map<string, TreeNode>()
+
+  function rootFor(cell: Cell | null): TreeNode {
+    const key = cell ? cellRef(cell.id) : 'none'
+    const existing = roots.get(key)
+    if (existing) return existing
+    const node: TreeNode = { key, label: cell ? cell.code : 'Без ячейки', place: null, children: [] }
+    roots.set(key, node)
+    return node
+  }
+
+  for (const place of places) {
+    const { cell, chain } = chainOf(place.holder, objects, cells)
+    let current = rootFor(cell)
+    if (chain.length === 0) {
+      current.place = place
+      continue
+    }
+    chain.forEach((object, index) => {
+      const key = objRef(object.id)
+      let child = current.children.find((one) => one.key === key)
+      if (!child) {
+        child = { key, label: `${KIND_TITLE[object.kind]} ${object.code}`, place: null, children: [] }
+        current.children.push(child)
+      }
+      current = child
+      if (index === chain.length - 1) current.place = place
+    })
+  }
+
+  const flat: PlaceTreeRow[] = []
+  function visit(node: TreeNode, depth: number) {
+    flat.push({ key: node.key, label: node.label, depth, place: node.place })
+    node.children.forEach((child) => visit(child, depth + 1))
+  }
+  roots.forEach((node) => visit(node, 0))
+  return flat
 }
