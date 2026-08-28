@@ -45,6 +45,7 @@ import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
 import { FfStoragePage } from './screens/ff/FfStoragePage'
 import { FfInventoryPage } from './screens/ff/inventory/FfInventoryPage'
 import { FfProductsFbsPage } from './screens/ff/products-fbs/FfProductsFbsPage'
+import { FfSortingObjectsPage } from './screens/ff/sorting-objects/FfSortingObjectsPage'
 import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff/FfInboundRequestView'
 import { FfInboundQueuePage } from './screens/ff/FfInboundQueuePage'
 import { FfProductsCatalogScreen } from './screens/v2/FfProductsCatalogScreen'
@@ -3173,6 +3174,22 @@ export default function App() {
           <Route
             path="ff/inventory"
             element={token && canInventoryOps ? <FfStoragePage isFulfillmentAdmin={isFulfillmentAdmin} token={token} /> : ffAccessDenied}
+          />
+
+          {/* Раскладка объектами: товар в коробе, короб на палете, палета в ячейке.
+              Место товара не хранится, а вычисляется по цепочке держателей. */}
+          <Route
+            path="ff/sorting-objects"
+            element={
+              token && canCellsOps ? (
+                <FfSortingObjectsPage
+                  token={token}
+                  warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}
+                />
+              ) : (
+                ffAccessDenied
+              )
+            }
           />
 
           {/* Управление остатком FBS: доля свободного остатка вместо числа штук.

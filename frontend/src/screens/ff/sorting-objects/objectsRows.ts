@@ -11,6 +11,7 @@ import {
   type GoodsLine,
   type Holder,
   type ObjKind,
+  type Product,
   type WarehouseObject,
 } from './objectsStub'
 
@@ -101,6 +102,7 @@ function walk(
   depth: number,
   objects: WarehouseObject[],
   lines: GoodsLine[],
+  products: Product[],
   collapsed: Set<string>,
   out: ObjectRow[],
 ) {
@@ -122,11 +124,11 @@ function walk(
       inside: children,
     })
     if (children > 0 && expanded) {
-      walk(objRef(object.id), depth + 1, objects, lines, collapsed, out)
+      walk(objRef(object.id), depth + 1, objects, lines, products, collapsed, out)
     }
   }
   for (const line of lines.filter((one) => one.holder === holder)) {
-    const product = productById(line.productId)
+    const product = productById(products, line.productId)
     out.push({
       key: `l-${line.id}`,
       depth,
@@ -153,10 +155,11 @@ function walk(
 export function unplacedRows(
   objects: WarehouseObject[],
   lines: GoodsLine[],
+  products: Product[],
   collapsed: Set<string>,
 ): ObjectRow[] {
   const out: ObjectRow[] = []
-  walk(null, 0, objects, lines, collapsed, out)
+  walk(null, 0, objects, lines, products, collapsed, out)
   return out
 }
 
@@ -165,10 +168,11 @@ export function cellRows(
   cell: Cell,
   objects: WarehouseObject[],
   lines: GoodsLine[],
+  products: Product[],
   collapsed: Set<string>,
 ): ObjectRow[] {
   const out: ObjectRow[] = []
-  walk(cellRef(cell.id), 0, objects, lines, collapsed, out)
+  walk(cellRef(cell.id), 0, objects, lines, products, collapsed, out)
   return out
 }
 
@@ -181,13 +185,14 @@ export function cellRows(
 export function allRows(
   objects: WarehouseObject[],
   lines: GoodsLine[],
+  products: Product[],
   cells: Cell[],
   collapsed: Set<string>,
 ): ObjectRow[] {
   const out: ObjectRow[] = []
-  walk(null, 0, objects, lines, collapsed, out)
+  walk(null, 0, objects, lines, products, collapsed, out)
   for (const cell of cells) {
-    walk(cellRef(cell.id), 0, objects, lines, collapsed, out)
+    walk(cellRef(cell.id), 0, objects, lines, products, collapsed, out)
   }
   return out
 }

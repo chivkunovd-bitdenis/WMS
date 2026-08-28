@@ -20,12 +20,15 @@ import {
   CELLS,
   INITIAL_LINES,
   INITIAL_OBJECTS,
+  PRODUCTS,
   KIND_TITLE,
   cellQty,
   cellRef,
   productById,
+  type Cell,
   type GoodsLine,
   type Holder,
+  type Product,
   whereIs,
   type ObjKind,
   type WarehouseObject,
@@ -51,10 +54,41 @@ import {
 // содержимым внутри, товар россыпью — такими же строками верхнего уровня, а
 // разница между «ещё не поставлено» и «стоит на полке» видна колонкой «Где».
 
-export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => void }) {
+/**
+ * Экран работает и от сервера, и от заглушки.
+ *
+ * Данные приходят пропсами, без них берутся выдуманные: превью макета обязано
+ * открываться без сервера, иначе посмотреть на экран можно будет только после
+ * готового бэка, а смотреть надо раньше.
+ */
+type SortingScreenProps = {
+  onNote: (note: string) => void
+  initialObjects?: WarehouseObject[]
+  initialLines?: GoodsLine[]
+  products?: Product[]
+  initialCells?: Cell[]
+  /** Поставить объект или товар на ячейку. Без него экран двигает только себя. */
+  onPlace?: (payload: {
+    kind: ObjKind | 'product'
+    id: string
+    cellId: string | null
+    toId: string | null
+    qty: number
+  }) => void
+}
+
+export function SortingObjectsScreen({
+  onNote,
+  initialObjects,
+  initialLines,
+  products: productsProp,
+  initialCells,
+  onPlace,
+}: SortingScreenProps) {
   const theme = useTheme()
-  const [objects, setObjects] = useState<WarehouseObject[]>(INITIAL_OBJECTS)
-  const [lines, setLines] = useState<GoodsLine[]>(INITIAL_LINES)
+  const products = productsProp ?? PRODUCTS
+  const [objects, setObjects] = useState<WarehouseObject[]>(initialObjects ?? INITIAL_OBJECTS)
+  const [lines, setLines] = useState<GoodsLine[]>(initialLines ?? INITIAL_LINES)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [carried, setCarried] = useState<Carried | null>(null)
   const [activeCellId, setActiveCellId] = useState<string | null>(null)
@@ -69,7 +103,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
   const [cellDialogOpen, setCellDialogOpen] = useState(false)
   const [extraCells, setExtraCells] = useState<typeof CELLS>([])
 
-  const cells = [...CELLS, ...extraCells]
+  const cells = [...(initialCells ?? CELLS), ...extraCells]
   const activeCell = cells.find((one) => one.id === activeCellId) ?? null
   const loose = lines.filter((line) => line.holder === null)
   const unplaced = objects.filter((one) => one.holder === null)
@@ -87,7 +121,17 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
     })
   }
 
+  /** Куда именно поставили: ячейка или другой объект. Сервер различает их. */
+  function targetParts(target: Holder): { cellId: string | null; toId: string | null } {
+    if (!target) return { cellId: null, toId: null }
+    if (target.startsWith('cell:')) return { cellId: target.slice(5), toId: null }
+    return { cellId: null, toId: target.slice(4) }
+  }
+
   function moveGoods(line: GoodsLine, qty: number, target: Holder) {
+    // Экран двигает у себя сразу, не дожидаясь сервера: оператор ставит короба
+    // подряд, и пауза на каждый ответ превращает раскладку в ожидание.
+    onPlace?.({ kind: 'product', id: line.productId, qty, ...targetParts(target) })
     setLines((current) => {
       const rest = current.filter((one) => one.id !== line.id)
       const left = line.qty - qty
@@ -100,6 +144,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
   }
 
   function moveObject(object: WarehouseObject, target: Holder, label: string) {
+    onPlace?.({ kind: object.kind, id: object.id, qty: 1, ...targetParts(target) })
     setObjects((current) => current.map((one) => (one.id === object.id ? { ...one, holder: target } : one)))
     onNote(`${KIND_TITLE[object.kind]} ${object.code} → ${label}`)
   }
@@ -286,7 +331,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
             </SecondaryAction>
           </Stack>
           <ObjectsTree
-            rows={unplacedRows(objects, lines, collapsed)}
+            rows={unplacedRows(objects, lines, products, collapsed)}
             objects={objects}
             carried={carried}
             testId="objects-tree"
@@ -403,7 +448,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
             />
           </Stack>
           <ObjectsTree
-            rows={cellRows(activeCell, objects, lines, collapsed)}
+            rows={cellRows(activeCell, objects, lines, products, collapsed)}
             objects={objects}
             carried={carried}
             testId="objects-cell-tree"
@@ -510,7 +555,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
           <Typography variant="subtitle2">
             {asking
               ? asking.kind === 'goods'
-                ? productById(asking.line.productId).name
+                ? productById(products, asking.line.productId).name
                 : objectTitle(asking.object)
               : ''}
           </Typography>

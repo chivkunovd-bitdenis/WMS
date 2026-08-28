@@ -110,8 +110,26 @@ export const INITIAL_LINES: GoodsLine[] = [
   { id: 'l-8', productId: 'p-socks', qty: 40, holder: null },
 ]
 
-export function productById(id: string): Product {
-  return PRODUCTS.find((one) => one.id === id)!
+/**
+ * Товар по идентификатору. Список передаётся снаружи, а не берётся из заглушки:
+ * иначе экран навсегда привязан к выдуманным данным и подключить его к серверу
+ * можно только переписав.
+ */
+export function productById(products: Product[], id: string): Product {
+  return (
+    products.find((one) => one.id === id) ?? {
+      // Товар, которого нет в списке, на экране всё равно называем: пустая
+      // строка вместо названия читается как поломка, а это просто рассинхрон.
+      id,
+      name: 'Товар не найден',
+      sku: '—',
+      seller: '—',
+      barcode: '',
+      photo: '',
+      size: null,
+      alreadyAt: [],
+    }
+  )
 }
 
 /** Сколько штук внутри объекта — вместе со всем вложенным. */
