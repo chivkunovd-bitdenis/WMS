@@ -3467,11 +3467,14 @@ export default function App() {
           <Route
             path="ops/transfers"
             element={
+              // Маршрут перемещений открыт только при включённом адресном хранении:
+              // без ячеек перемещать нечего между чем. Внутри флаг уже заведомо
+              // не false — повторная проверка ничего не решает, и типы это видят.
               token && isFulfillmentAdmin && me.address_storage_enabled !== false ? (
                 <TransfersScreen
                   opsError={opsError}
                   opsBusy={opsBusy}
-                  isFulfillmentAdmin={isFulfillmentAdmin} addressStorageEnabled={me.address_storage_enabled !== false}
+                  isFulfillmentAdmin={isFulfillmentAdmin} addressStorageEnabled
                   locations={locations}
                   products={products}
                   onStockTransfer={(e) => void onStockTransfer(e)}
