@@ -126,7 +126,7 @@ async def test_fbs_seller_warehouses_contract_get_and_put(
     assert missing_wms.status_code == 422
 
     configured = await async_client.put(
-        f"/operations/fbs-sellers/{seller_id}/warehouses/{WB_WAREHOUSE_OURS}",
+        f"/fbs-sellers/{seller_id}/warehouses/{WB_WAREHOUSE_OURS}",
         headers=headers,
         json={"served": True, "wms_warehouse_id": warehouse_id},
     )
@@ -295,19 +295,6 @@ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncCli
     )
     assert response.status_code == 200, response.text
     assert response.json() == {"hours": 8.0, "orders": 2}
-    operations_alias = await async_client.get(
-        "/operations/fbs-orders/assembly-time",
-        headers=headers,
-        params={
-            "from": period_from.isoformat(),
-            "to": (period_from + timedelta(days=7)).isoformat(),
-            "seller_id": seller_a,
-        },
-    )
-    assert operations_alias.status_code == 200, operations_alias.text
-    assert operations_alias.json() == response.json()
-
-
 # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
 @pytest.mark.asyncio
 async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:

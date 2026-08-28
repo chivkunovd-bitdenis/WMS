@@ -214,10 +214,6 @@ async def list_fbs_seller_warehouses(
     "/{seller_id}/warehouses/{wb_warehouse_id}",
     response_model=FbsSellerWarehouseOut,
 )
-@router.put(
-    "/{seller_id}/warehouses/{wb_warehouse_id}",
-    response_model=FbsSellerWarehouseOut,
-)
 async def configure_fbs_seller_warehouse(
     seller_id: uuid.UUID,
     wb_warehouse_id: Annotated[int, Path(gt=0)],

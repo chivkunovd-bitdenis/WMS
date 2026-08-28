@@ -87,7 +87,6 @@ async def _active_ozon_account_exists(
 
 
 @contract_router.get("/assembly-time", response_model=FbsAssemblyTimeOut)
-@router.get("/assembly-time", response_model=FbsAssemblyTimeOut)
 async def get_fbs_assembly_time(
     period_from: Annotated[datetime, Query(alias="from")],
     period_to: Annotated[datetime, Query(alias="to")],
