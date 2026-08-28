@@ -213,8 +213,14 @@ async def list_balances_total(
     *,
     seller_product_owner_id: uuid.UUID | None = None,
     warehouse_id: uuid.UUID | None = None,
+    product_ids: list[uuid.UUID] | None = None,
 ) -> list[tuple[uuid.UUID, str, str, int, int, int, int, int]]:
     """Итоговые остатки по SKU (сумма по всем ячейкам, в т.ч. зона сортировки).
+
+    ``product_ids`` сужает выборку до нужных товаров. Это не удобство, а
+    аварийная правка производительности от 26.08: экран каталога грузится
+    страницами, и считать остаток по всем десяти тысячам позиций ради сотни
+    видимых означало секунды ожидания на каждой перелистке.
 
     Возвращает:
     (product_id, sku_code, product_name, quantity_total, quantity_in_sorting,
@@ -253,6 +259,10 @@ async def list_balances_total(
         stmt = stmt.where(Product.seller_id == seller_product_owner_id)
     if warehouse_id is not None:
         stmt = stmt.where(StorageLocation.warehouse_id == warehouse_id)
+    if product_ids is not None:
+        if not product_ids:
+            return []
+        stmt = stmt.where(Product.id.in_(product_ids))
     res = await session.execute(stmt)
     rows = [
         (pid, sku, name, int(q or 0), int(sort_q or 0), int(unp or 0), int(pck or 0))
