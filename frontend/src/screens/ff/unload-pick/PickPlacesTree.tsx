@@ -12,6 +12,7 @@ import type { Column } from '../../../ui-kit'
 import { placeNodesOf } from './pickRows'
 import type { PickPlace, PickRow, PlaceKind, PlaceNode } from './pickRows'
 import { OBJECTS, PICK_CELLS } from './pickStub'
+import type { Cell, WarehouseObject } from './pickStub'
 
 // Содержимое раскрывашки товара: раскрывающаяся структура склада, а не список.
 //
@@ -69,10 +70,16 @@ export function PickPlacesTree({
   row,
   highlightedKey,
   onQtyChange,
+  objects = OBJECTS,
+  cells = PICK_CELLS,
+  busy = false,
 }: {
   row: PickRow
   highlightedKey: string | null
   onQtyChange: (place: PickPlace, next: number | null) => void
+  objects?: WarehouseObject[]
+  cells?: Cell[]
+  busy?: boolean
 }) {
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(() => new Set())
   if (row.places.length === 0) {
@@ -85,7 +92,7 @@ export function PickPlacesTree({
     )
   }
 
-  const all = placeNodesOf(row.places, OBJECTS, PICK_CELLS)
+  const all = placeNodesOf(row.places, objects, cells)
   // Свёрнутое хранится списком, а не «раскрытым»: по умолчанию структура открыта
   // целиком, иначе оператор при каждом заходе кликал бы, чтобы увидеть работу.
   const collapsed = collapsedKeys
@@ -211,6 +218,7 @@ export function PickPlacesTree({
             onChange={(next) => onQtyChange(node.place, next)}
             min={0}
             max={ceiling}
+            disabled={busy}
             testId={`pick-place-qty-${row.product.id}-${node.place.key}`}
           />
         )
