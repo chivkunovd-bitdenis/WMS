@@ -13,9 +13,26 @@ branch_labels = None
 depends_on = None
 
 
+def _has_unique_constraint(table: str, name: str) -> bool:
+    """Ограничение уже стоит в базе?
+
+    Стейдж и прод получали ревизии из двух разошедшихся линий, и это ограничение
+    там уже создано другой миграцией. Повторное создание валит накатку целиком —
+    приложение не поднимается вовсе. Проверка дешёвая, а без неё выкатка встаёт
+    на живой базе и чинится только руками.
+    """
+    inspector = sa.inspect(op.get_bind())
+    existing = {item["name"] for item in inspector.get_unique_constraints(table)}
+    existing |= {item["name"] for item in inspector.get_indexes(table)}
+    return name in existing
+
+
 def upgrade() -> None:
     uuid = sa.Uuid(as_uuid=True)
-    op.create_unique_constraint("uq_operation_facts_tenant_id_id", "operation_facts", ["tenant_id", "id"])
+    if not _has_unique_constraint("operation_facts", "uq_operation_facts_tenant_id_id"):
+        op.create_unique_constraint(
+            "uq_operation_facts_tenant_id_id", "operation_facts", ["tenant_id", "id"]
+        )
     op.create_table(
         "billing_invoices_v2",
         sa.Column("id", uuid, primary_key=True),
@@ -69,4 +86,5 @@ def downgrade() -> None:
     op.drop_table("billing_invoice_v2_sources")
     op.drop_table("billing_invoice_v2_lines")
     op.drop_table("billing_invoices_v2")
-    op.drop_constraint("uq_operation_facts_tenant_id_id", "operation_facts", type_="unique")
+    if _has_unique_constraint("operation_facts", "uq_operation_facts_tenant_id_id"):
+        op.drop_constraint("uq_operation_facts_tenant_id_id", "operation_facts", type_="unique")
