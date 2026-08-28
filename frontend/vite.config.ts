@@ -76,6 +76,7 @@ export default defineConfig({
         moveLab: 'move-lab.html',
         sortingObjects: 'sorting-objects.html',
         products: 'products.html',
+        unloadPick: 'unload-pick.html',
       },
     },
   },
