@@ -36,6 +36,7 @@ from app.api.ozon_returns import router as ozon_returns_router
 from app.api.packaging_tasks import router as packaging_tasks_router
 from app.api.products import router as products_router
 from app.api.reports import router as reports_router
+from app.api.scan_resolver import router as scan_resolver_router
 from app.api.seller_staff_accounts import router as seller_staff_accounts_router
 from app.api.sellers import router as sellers_router
 from app.api.staff_accounts import router as staff_accounts_router
@@ -132,6 +133,7 @@ def create_app() -> FastAPI:
     app.include_router(stock_transfer_router)
     app.include_router(outbound_shipment_router)
     app.include_router(reports_router)
+    app.include_router(scan_resolver_router)
     app.include_router(marketplace_unload_requests_router)
     app.include_router(packaging_tasks_router)
     app.include_router(marking_codes_router)
