@@ -706,7 +706,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         const query = new URLSearchParams({ from: fromIso, to: toIso })
         if (metricSellerId) query.set('seller_id', metricSellerId)
         const res = await fetch(apiUrl(`/fbs/assembly-time?${query.toString()}`), {
-          headers: { ...authHeaders },
+          headers: { ...authHeaders(token) },
         })
         if (!res.ok) throw new Error('assembly_time_failed')
         const body = (await res.json()) as {
@@ -733,7 +733,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     return () => {
       cancelled = true
     }
-  }, [authHeaders, metricPreset, metricSellerId, metricRange.start, metricRange.end])
+  }, [token, authHeaders, metricPreset, metricSellerId, metricRange.start, metricRange.end])
 
   const syncTargets = useMemo(
     () => buildFbsSyncTargets(sellers.map((seller) => seller.id), sellerId),
