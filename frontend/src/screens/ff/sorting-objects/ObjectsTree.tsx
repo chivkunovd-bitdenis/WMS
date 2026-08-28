@@ -71,7 +71,7 @@ export function ObjectsTree({
   onDragEnd: () => void
   onDropOn: (target: Holder) => void
   onTakeOut: (row: ObjectRow) => void
-  /** Убрать одну штуку с места — обратный ход к «положить». */
+  /** Снять с ячейки целиком — обратный ход к «поставить». */
   onMinus: (row: ObjectRow) => void
   onPrint: (row: ObjectRow) => void
   onPickCell: (cellId: string) => void
@@ -298,9 +298,12 @@ export function ObjectsTree({
                 testId={`${testId}-print-${row.key}`}
               />
             ) : null}
-            {compact && row.kind === 'goods' ? (
+            {/* Снять с ячейки можно всё, что на ней стоит: и товар, и короб, и
+                палету с грузоместом — целиком, вместе с содержимым. Снимают
+                полку, а не по штуке: по штуке это уже пересчёт, а не снятие. */}
+            {compact && holder && holder.startsWith('cell:') ? (
               <IconAction
-                title="Убрать одну штуку"
+                title="Снять с ячейки"
                 onClick={() => onMinus(row)}
                 testId={`${testId}-minus-${row.key}`}
               >

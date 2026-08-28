@@ -129,10 +129,16 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
     setCarried(null)
   }
 
-  /** Минус: одна штука уезжает с места обратно в россыпь, без вопросов. */
-  function minusOne(row: ObjectRow) {
-    if (row.kind !== 'goods') return
-    moveGoods(row.line, 1, null)
+  /** Снять с ячейки: уезжает целиком и вместе с содержимым, без вопросов. */
+  function takeOffCell(row: ObjectRow) {
+    if (row.kind === 'goods') {
+      moveGoods(row.line, row.line.qty, null)
+      return
+    }
+    setObjects((current) =>
+      current.map((one) => (one.id === row.object.id ? { ...one, holder: null } : one)),
+    )
+    onNote(`${KIND_TITLE[row.object.kind]} ${row.object.code} снят с ячейки`)
   }
 
   /** Вынуть наружу: то же окно, но место уже выбрано — россыпь. */
@@ -302,7 +308,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
             onDragEnd={() => setCarried(null)}
             onDropOn={drop}
             onTakeOut={takeOut}
-            onMinus={minusOne}
+            onMinus={takeOffCell}
             onPrint={(row) => setPrinting(row.kind === 'object' ? objectTitle(row.object) : row.name)}
             onPickCell={setActiveCellId}
           />
@@ -421,7 +427,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
             onDragEnd={() => setCarried(null)}
             onDropOn={drop}
             onTakeOut={takeOut}
-            onMinus={minusOne}
+            onMinus={takeOffCell}
             onPrint={(row) => setPrinting(row.kind === 'object' ? objectTitle(row.object) : row.name)}
             onPickCell={setActiveCellId}
           />
