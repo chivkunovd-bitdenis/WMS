@@ -167,7 +167,7 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
     void load()
   }, [load])
 
-  async function saveRule(productIds: string[], rule: FbsRule) {
+  async function saveRule(productIds: string[], rule: FbsRule): Promise<string | null> {
     setError(null)
     const body = {
       publish: rule.publish,
@@ -192,8 +192,11 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
         if (!res.ok) throw new Error(await readApiErrorMessage(res))
       }
       await load()
+      return null
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось сохранить правило')
+      // Возвращаем текст наверх: окно правила покажет его у себя и останется
+      // открытым, чтобы не терять введённое.
+      return err instanceof Error ? err.message : 'Не удалось сохранить правило'
     }
   }
 
@@ -227,7 +230,7 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
         sellers={sellers}
         rules={rules}
         loading={loading}
-        onSaveRule={(ids, rule) => void saveRule(ids, rule)}
+        onSaveRule={(ids, rule) => saveRule(ids, rule)}
         onBindWarehouse={(sellerId, warehouseId, wbWarehouseId) =>
           void bindWarehouse(sellerId, warehouseId, wbWarehouseId)
         }

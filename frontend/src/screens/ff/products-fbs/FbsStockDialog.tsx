@@ -4,6 +4,7 @@ import {
   ActionGroup,
   AppDialog,
   CheckboxInput,
+  ErrorNotice,
   PercentSlider,
   PrimaryAction,
   SecondaryAction,
@@ -37,6 +38,7 @@ export function FbsStockDialog({
   onClose,
   onSave,
   onBind,
+  saveError,
 }: {
   open: boolean
   /** Один товар или несколько — модалка одна и та же. */
@@ -46,6 +48,8 @@ export function FbsStockDialog({
   onClose: () => void
   onSave: (rule: FbsRule) => void
   onBind: (warehouseId: string, wbWarehouseId: string) => void
+  /** Отказ сервера. Показываем прямо здесь: окно с введённым не закрываем. */
+  saveError?: string | null
 }) {
   if (!open) return null
   return (
@@ -56,6 +60,7 @@ export function FbsStockDialog({
       onClose={onClose}
       onSave={onSave}
       onBind={onBind}
+      saveError={saveError}
     />
   )
 }
@@ -67,6 +72,7 @@ function FbsStockDialogBody({
   onClose,
   onSave,
   onBind,
+  saveError,
 }: {
   products: Product[]
   seller: Seller
@@ -74,6 +80,7 @@ function FbsStockDialogBody({
   onClose: () => void
   onSave: (rule: FbsRule) => void
   onBind: (warehouseId: string, wbWarehouseId: string) => void
+  saveError?: string | null
 }) {
   // Черновик начинается с текущего правила; тело монтируется на каждое открытие,
   // поэтому синхронизировать его с внешним значением не нужно.
@@ -125,6 +132,10 @@ function FbsStockDialogBody({
       }
     >
       <Stack spacing={2.5}>
+        {/* Отказ сервера показываем здесь, а не наверху страницы: оператор
+            смотрит в это окно и должен видеть, что именно не сошлось, не теряя
+            уже введённого. */}
+        {saveError ? <ErrorNotice testId="fbs-stock-error">{saveError}</ErrorNotice> : null}
         <Stack spacing={0.5}>
           <Typography variant="subtitle2">
             {many

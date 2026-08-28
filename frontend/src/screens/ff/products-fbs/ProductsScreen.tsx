@@ -52,7 +52,7 @@ type ProductsScreenProps = {
   rules?: FbsRule[]
   loading?: boolean
   /** Сохранить правило для перечисленных товаров. Без него экран правит только себя. */
-  onSaveRule?: (productIds: string[], rule: FbsRule) => void
+  onSaveRule?: (productIds: string[], rule: FbsRule) => Promise<string | null>
   onBindWarehouse?: (sellerId: string, warehouseId: string, wbWarehouseId: string) => void
 }
 
@@ -81,6 +81,9 @@ export function ProductsScreen({
   const [sellerId, setSellerId] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [editing, setEditing] = useState<Product[] | null>(null)
+  // Отказ сервера на сохранение правила: держим здесь, чтобы показать его
+  // внутри окна и не закрывать окно, пока оператор не поправит.
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [bulkError, setBulkError] = useState<string | null>(null)
 
   const rows: Row[] = useMemo(() => {
@@ -276,12 +279,23 @@ export function ProductsScreen({
           products={editing}
           seller={sellerById(editing[0]!.sellerId)}
           rule={ruleFor(rules, editing[0]!.id)}
-          onClose={() => setEditing(null)}
+          onClose={() => {
+            setEditing(null)
+            setSaveError(null)
+          }}
+          saveError={saveError}
           onSave={(rule) => {
             const ids = editing.map((one) => one.id)
             if (onSaveRule) {
-              onSaveRule(ids, rule)
-            } else {
+              // Окно закрываем только когда сервер принял. Иначе оператор теряет
+              // введённое и не понимает, почему ничего не изменилось.
+              void onSaveRule(ids, rule).then((message) => {
+                setSaveError(message)
+                if (!message) setEditing(null)
+              })
+              return
+            }
+            {
               setRules((current) => [
                 ...current.filter((one) => !ids.includes(one.productId)),
                 ...ids.map((productId) => ({ ...rule, productId })),
