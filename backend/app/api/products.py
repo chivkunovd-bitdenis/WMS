@@ -8,7 +8,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -56,8 +56,10 @@ from app.services.catalog_service import (
 )
 from app.services.fbs_stock_rule_service import (
     FbsRule,
+    FbsRuleView,
     FbsStockRuleError,
     get_rule_view,
+    get_rule_views,
     set_rule_for_products,
 )
 from app.services.product_tz_import_service import (
@@ -367,6 +369,33 @@ class ProductFbsRuleOut(ProductFbsRuleBody):
     on_hand: int
     reserved: int
     published_now: int
+
+
+FBS_RULE_BULK_READ_MAX_PRODUCTS = 200
+
+
+class ProductsFbsRuleBulkReadBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    product_ids: list[uuid.UUID] = Field(min_length=1)
+
+    @field_validator("product_ids")
+    @classmethod
+    def validate_batch_size(cls, value: list[uuid.UUID]) -> list[uuid.UUID]:
+        if len(value) > FBS_RULE_BULK_READ_MAX_PRODUCTS:
+            raise ValueError(
+                "За один запрос можно получить правила максимум "
+                f"для {FBS_RULE_BULK_READ_MAX_PRODUCTS} товаров."
+            )
+        return value
+
+
+class ProductFbsRuleBulkItemOut(ProductFbsRuleOut):
+    product_id: str
+
+
+class ProductsFbsRuleBulkReadOut(BaseModel):
+    items: list[ProductFbsRuleBulkItemOut]
 
 
 class ProductsFbsRuleBulkBody(BaseModel):
@@ -1399,12 +1428,81 @@ async def _assert_product_rule_access(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
 
 
+async def _assert_products_rule_access(
+    session: AsyncSession,
+    user: User,
+    product_ids: list[uuid.UUID],
+    effective_seller_id: uuid.UUID | None,
+) -> None:
+    """Пакетная версия той же tenant/seller-проверки, что у одиночной ручки."""
+    await assert_seller_permission(session, user, PERM_PRODUCTS)
+    rows = list(
+        (
+            await session.execute(
+                select(Product.id, Product.seller_id).where(
+                    Product.tenant_id == user.tenant_id,
+                    Product.id.in_(product_ids),
+                )
+            )
+        ).all()
+    )
+    if len({product_id for product_id, _seller_id in rows}) != len(product_ids):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found"
+        )
+    if user.role == FULFILLMENT_SELLER:
+        owner_id = user.seller_id
+        if user_can_manage_seller_shops(user) and effective_seller_id is not None:
+            owner_id = effective_seller_id
+        if owner_id is None or any(seller_id != owner_id for _product_id, seller_id in rows):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    elif user.role != FULFILLMENT_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+
 def _rule_from_body(body: ProductFbsRuleBody) -> FbsRule:
     return FbsRule(
         publish=body.publish,
         same_everywhere=body.same_everywhere,
         percent=body.percent,
         by_warehouse={int(key): value for key, value in body.by_warehouse.items()},
+    )
+
+
+def _rule_view_out(
+    product_id: uuid.UUID, view: FbsRuleView
+) -> ProductFbsRuleBulkItemOut:
+    return ProductFbsRuleBulkItemOut(
+        product_id=str(product_id),
+        publish=view.rule.publish,
+        same_everywhere=view.rule.same_everywhere,
+        percent=view.rule.percent,
+        by_warehouse={str(key): value for key, value in view.rule.by_warehouse.items()},
+        free_stock=view.free_stock,
+        on_hand=view.on_hand,
+        reserved=view.reserved,
+        published_now=view.published_now,
+    )
+
+
+@router.post("/fbs-rule/bulk", response_model=ProductsFbsRuleBulkReadOut)
+async def post_products_fbs_rule_bulk_read(
+    body: ProductsFbsRuleBulkReadBody,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> ProductsFbsRuleBulkReadOut:
+    """Вернуть до 200 FBS-правил одним запросом, сохранив порядок товаров."""
+    product_ids = list(dict.fromkeys(body.product_ids))
+    await _assert_products_rule_access(session, user, product_ids, effective_seller_id)
+    try:
+        views = await get_rule_views(session, user.tenant_id, product_ids)
+    except FbsStockRuleError as exc:
+        raise HTTPException(
+            status_code=_rule_error_status(exc.code), detail=exc.message
+        ) from None
+    return ProductsFbsRuleBulkReadOut(
+        items=[_rule_view_out(product_id, views[product_id]) for product_id in product_ids]
     )
 
 

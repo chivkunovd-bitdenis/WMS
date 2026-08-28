@@ -257,6 +257,92 @@ async def get_rule_view(
     )
 
 
+async def get_rule_views(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, FbsRuleView]:
+    """Получить правила нескольких товаров без поштучных запросов к БД.
+
+    Товары группируются по продавцу, потому что у каждого продавца свой набор
+    складов WB. Остатки при этом считаются пакетно для всех товаров продавца на
+    каждом обслуживающем их физическом складе.
+    """
+    unique_ids = list(dict.fromkeys(product_ids))
+    if not unique_ids:
+        raise FbsStockRuleError("empty_selection", message="Не выбрано ни одного товара.")
+
+    products = list(
+        (
+            await session.scalars(
+                select(Product).where(
+                    Product.tenant_id == tenant_id,
+                    Product.id.in_(unique_ids),
+                )
+            )
+        ).all()
+    )
+    products_by_id = {product.id: product for product in products}
+    if len(products_by_id) != len(unique_ids):
+        raise FbsStockRuleError("product_not_found", message="Товар не найден.")
+    if any(product.seller_id is None for product in products):
+        raise FbsStockRuleError(
+            "product_without_seller",
+            message="У товара нет продавца, поэтому складов WB для него тоже нет.",
+        )
+
+    products_by_seller: dict[uuid.UUID, list[Product]] = {}
+    for product in products:
+        assert product.seller_id is not None
+        products_by_seller.setdefault(product.seller_id, []).append(product)
+
+    views: dict[uuid.UUID, FbsRuleView] = {}
+    for seller_id, seller_products in products_by_seller.items():
+        bindings = await _seller_bindings(session, tenant_id, seller_id, served_only=False)
+        served = [binding for binding in bindings if binding.served]
+        binding_ids = [binding.id for binding in bindings]
+        seller_product_ids = [product.id for product in seller_products]
+
+        pools_by_product: dict[uuid.UUID, dict[uuid.UUID, FbsBindingStockPool]] = {
+            product_id: {} for product_id in seller_product_ids
+        }
+        if binding_ids:
+            pool_stmt = select(FbsBindingStockPool).where(
+                FbsBindingStockPool.tenant_id == tenant_id,
+                FbsBindingStockPool.product_id.in_(seller_product_ids),
+                FbsBindingStockPool.binding_id.in_(binding_ids),
+            )
+            for pool in (await session.scalars(pool_stmt)).all():
+                pools_by_product[pool.product_id][pool.binding_id] = pool
+
+        stock_by_product = {
+            product_id: [0, 0, 0] for product_id in seller_product_ids
+        }
+        warehouse_ids = sorted({binding.wms_warehouse_id for binding in bindings}, key=str)
+        for warehouse_id in warehouse_ids:
+            breakdown = await fbs_stock_breakdown_by_product(
+                session, tenant_id, warehouse_id, seller_product_ids
+            )
+            for product_id, row in breakdown.items():
+                totals = stock_by_product[product_id]
+                totals[0] += row.on_hand
+                totals[1] += row.reserved
+                totals[2] += row.free
+
+        for product in seller_products:
+            rule = rule_from_product(product, pools_by_product[product.id], bindings)
+            on_hand, reserved, free = stock_by_product[product.id]
+            amounts = split_amounts(rule, free, served)
+            views[product.id] = FbsRuleView(
+                rule=rule,
+                on_hand=on_hand,
+                reserved=reserved,
+                free_stock=free,
+                published_now=sum(amounts.values()),
+            )
+    return views
+
+
 async def set_rule_for_products(
     session: AsyncSession,
     tenant_id: uuid.UUID,

@@ -13,6 +13,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal, engine
@@ -30,6 +31,7 @@ from app.services.fbs_stock_rule_service import (
     FbsStockRuleError,
     amount_from_percent,
     get_rule_view,
+    get_rule_views,
     publish_amounts_for_binding,
     set_rule_for_products,
     split_amounts,
@@ -195,6 +197,61 @@ async def test_rule_view_shows_three_numbers(db_session: AsyncSession) -> None:
     assert view.free_stock == 420
     assert view.published_now == 210
     assert view.rule.percent == 50
+
+
+@pytest.mark.asyncio
+async def test_bulk_rule_views_match_single_rule_math(db_session: AsyncSession) -> None:
+    # TC-NEW-FBS-RULE-BULK-READ-001
+    # Дано два товара одного продавца на общем складе. Когда правила читаются
+    # пачкой, тогда остаток и публикуемое количество совпадают с одиночным
+    # расчётом для каждого товара.
+    seed = await _seed(db_session, on_hand=420)
+    location = await db_session.scalar(
+        select(StorageLocation).where(
+            StorageLocation.tenant_id == seed.tenant.id,
+            StorageLocation.warehouse_id == seed.warehouse.id,
+        )
+    )
+    assert location is not None
+    second_product = Product(
+        id=uuid.uuid4(),
+        tenant_id=seed.tenant.id,
+        seller_id=seed.seller.id,
+        name="Second product",
+        sku_code=f"SKU-{uuid.uuid4().hex[:8]}",
+        wb_chrt_id=778,
+        fbs_stock_sync_enabled=True,
+    )
+    db_session.add_all(
+        [
+            second_product,
+            InventoryBalance(
+                id=uuid.uuid4(),
+                tenant_id=seed.tenant.id,
+                storage_location_id=location.id,
+                product_id=second_product.id,
+                quantity=80,
+            ),
+        ]
+    )
+    await db_session.commit()
+    product_ids = [second_product.id, seed.product.id]
+    await set_rule_for_products(
+        db_session,
+        seed.tenant.id,
+        product_ids,
+        FbsRule(publish=True, same_everywhere=True, percent=50, by_warehouse={}),
+    )
+
+    bulk = await get_rule_views(db_session, seed.tenant.id, product_ids)
+    singles = {
+        product_id: await get_rule_view(db_session, seed.tenant.id, product_id)
+        for product_id in product_ids
+    }
+
+    assert bulk == singles
+    assert bulk[second_product.id].published_now == 40
+    assert bulk[seed.product.id].published_now == 210
 
 
 @pytest.mark.asyncio
