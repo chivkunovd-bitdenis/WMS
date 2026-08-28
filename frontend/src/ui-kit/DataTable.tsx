@@ -101,6 +101,14 @@ type Props<Row> = {
    * Ключ строки уезжает в атрибут data-row-key, чтобы экран мог прокрутить к ней.
    */
   highlightedKey?: string | number | null
+  /**
+   * Строка доделана: работа по ней закрыта и возвращаться не нужно.
+   *
+   * Пара к `hasDiscrepancy`: тот красит красным то, что требует внимания, этот —
+   * зелёным то, что внимания больше не требует. Оператор ведёт глазом по столбцу
+   * и видит, где ещё работа, не читая чисел.
+   */
+  isComplete?: (row: Row) => boolean
 }
 
 export function DataTable<Row>({
@@ -116,6 +124,7 @@ export function DataTable<Row>({
   fixedLayout = false,
   highlightedKey = null,
   hideHeader = false,
+  isComplete,
 }: Props<Row>) {
   const theme = useTheme()
   const showEmpty = !loading && rows.length === 0
@@ -241,6 +250,9 @@ export function DataTable<Row>({
                     sx={{
                       ...(hasDiscrepancy?.(row)
                         ? { backgroundColor: 'rgba(163, 42, 32, 0.10)' }
+                        : null),
+                      ...(isComplete?.(row)
+                        ? { backgroundColor: alpha(theme.palette.success.main, 0.12) }
                         : null),
                       ...(highlightedKey === rowKey
                         ? {

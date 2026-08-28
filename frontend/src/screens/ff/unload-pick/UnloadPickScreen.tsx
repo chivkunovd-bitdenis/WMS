@@ -377,6 +377,9 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
         columns={columns}
         rows={rows}
         getRowKey={(row) => row.key}
+        // Собранная строка гаснет зелёным: оператор ведёт глазом по столбцу и
+        // видит, где ещё работа. Скорректировал вниз — подсветка уходит сама.
+        isComplete={(row) => row.plan > 0 && row.left === 0}
         testId="pick-table"
         empty={{
           title: 'В отгрузке нет товаров',
