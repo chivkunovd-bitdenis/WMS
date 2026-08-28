@@ -8,7 +8,7 @@ import {
   PrimaryAction,
   SecondaryAction,
 } from '../../../ui-kit'
-import type { MapRow } from './WarehouseMapRows'
+import type { MapRow, MapRowKind } from './WarehouseMapRows'
 
 // Что оператор собирается сделать руками. Три повода — один диалог: во всех
 // трёх случаях вопрос один и тот же — что, откуда, куда и сколько.
@@ -19,6 +19,9 @@ export type MoveIntent = {
   fromLabel: string
   /** Ключ строки-места, куда кладём. У расформирования это всегда «Без ячеек». */
   toKey: string
+  /** Серверу нужны тип и настоящий id цели, а не составной ключ строки дерева. */
+  toKind: Exclude<MapRowKind, 'product'>
+  toId: string | null
   /** Куда кладём — подпись того же места для человека. */
   toLabel: string
 }

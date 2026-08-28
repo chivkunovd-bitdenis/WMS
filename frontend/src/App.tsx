@@ -46,6 +46,7 @@ import { FfStoragePage } from './screens/ff/FfStoragePage'
 import { FfInventoryPage } from './screens/ff/inventory/FfInventoryPage'
 import { FfProductsFbsPage } from './screens/ff/products-fbs/FfProductsFbsPage'
 import { FfSortingObjectsPage } from './screens/ff/sorting-objects/FfSortingObjectsPage'
+import { FfWarehouseMapPage } from './screens/ff/warehouse-map/FfWarehouseMapPage'
 import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff/FfInboundRequestView'
 import { FfInboundQueuePage } from './screens/ff/FfInboundQueuePage'
 import { FfProductsCatalogScreen } from './screens/v2/FfProductsCatalogScreen'
@@ -3183,6 +3184,20 @@ export default function App() {
             element={
               token && canCellsOps ? (
                 <FfSortingObjectsPage
+                  token={token}
+                  warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}
+                />
+              ) : (
+                ffAccessDenied
+              )
+            }
+          />
+
+          <Route
+            path="ff/warehouse-map"
+            element={
+              token && canCellsOps ? (
+                <FfWarehouseMapPage
                   token={token}
                   warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}
                 />

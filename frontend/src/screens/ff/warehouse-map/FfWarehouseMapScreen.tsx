@@ -28,6 +28,13 @@ import {
 } from './WarehouseMapTypes'
 
 const PURPOSE = 'Что физически лежит на каждой ячейке. Строку можно перетащить на другую ячейку.'
+type IntentTarget = Pick<MapRow, 'key' | 'id' | 'kind' | 'placeLabel'>
+const UNASSIGNED_TARGET: IntentTarget = {
+  key: UNASSIGNED_ID,
+  id: UNASSIGNED_ID,
+  kind: 'unassigned',
+  placeLabel: UNASSIGNED_LABEL,
+}
 
 // Карта склада: что физически лежит на каждой ячейке и как это переложить рукой.
 // Экран ничего не знает про сервер — он показывает данные и сообщает наверх о
@@ -150,8 +157,17 @@ export function FfWarehouseMapScreen({
     return rowsByKey.get(row.parentKey)?.placeLabel ?? UNASSIGNED_LABEL
   }
 
-  function openIntent(reason: MoveIntent['reason'], row: MapRow, toKey: string, toLabel: string) {
-    setIntent({ reason, row, fromLabel: placeOf(row), toKey, toLabel })
+  function openIntent(reason: MoveIntent['reason'], row: MapRow, target: IntentTarget) {
+    if (target.kind === 'product') return
+    setIntent({
+      reason,
+      row,
+      fromLabel: placeOf(row),
+      toKey: target.key,
+      toKind: target.kind,
+      toId: target.kind === 'unassigned' ? null : target.id,
+      toLabel: target.placeLabel,
+    })
   }
 
   if (error) {
@@ -241,8 +257,8 @@ export function FfWarehouseMapScreen({
                   }
             }
             onToggle={toggleRow}
-            onTakeOff={(row) => openIntent('takeOff', row, UNASSIGNED_ID, UNASSIGNED_LABEL)}
-            onDisband={(row) => openIntent('disband', row, UNASSIGNED_ID, UNASSIGNED_LABEL)}
+            onTakeOff={(row) => openIntent('takeOff', row, UNASSIGNED_TARGET)}
+            onDisband={(row) => openIntent('disband', row, UNASSIGNED_TARGET)}
             onHistory={setHistoryRow}
             onPrintCell={setPrintRow}
             onInventory={onInventory}
@@ -250,7 +266,7 @@ export function FfWarehouseMapScreen({
             onDragEnd={() => setCarried(null)}
             onDrop={(target) => {
               if (!carried) return
-              openIntent('move', carried, target.key, target.placeLabel)
+              openIntent('move', carried, target)
               setCarried(null)
             }}
           />
