@@ -6,6 +6,10 @@ import { FfWarehouseMapScreen } from './FfWarehouseMapScreen'
 import type { MapRow } from './WarehouseMapRows'
 import type { MoveIntent } from './WarehouseMapMoveDialog'
 import { addCell, addWarehouse, applyIntent, emptyStubData, noWarehousesStubData, stubData } from './stub'
+import { InventoryCountDialog } from '../inventory/InventoryCountDialog'
+import { countFromMapRow, placeOf, targetTitle } from '../inventory/fromWarehouseMap'
+import { totals } from '../inventory/InventoryRows'
+import type { InventoryCount } from '../inventory/InventoryTypes'
 import type { WarehouseMapData } from './WarehouseMapTypes'
 import '../../../index.css'
 
@@ -33,6 +37,13 @@ export function PreviewHarness() {
   const [warehouseId, setWarehouseId] = useState('wh-yartsevo')
   const [data, setData] = useState<WarehouseMapData>(() => stubData('wh-yartsevo'))
   const [note, setNote] = useState<string | null>(null)
+  // Пересчёт открывается модалкой прямо с карты: это тот же документ
+  // инвентаризации, суженный до одной ячейки или одной тары.
+  const [countDialog, setCountDialog] = useState<{
+    title: string
+    place: string | null
+    count: InventoryCount
+  } | null>(null)
 
   function reload(nextWarehouseId: string) {
     setWarehouseId(nextWarehouseId)
@@ -152,26 +163,71 @@ export function PreviewHarness() {
             onPrintCell={(row: MapRow, size) =>
               setNote(`Заглушка: ШК ячейки ${row.title}, этикетка ${size.label} — принтера в макете нет`)
             }
-            onInventory={(row: MapRow) =>
-              setNote(
-                `Откроется инвентаризация по строке «${row.title}» — документ уже наполнен её составом. Экран: /inventory.html`,
-              )
-            }
+            onInventory={(row: MapRow) => {
+              const title = targetTitle(row.kind, row.title)
+              const target = { kind: row.kind, id: row.id, title }
+              const count = countFromMapRow(shown, target, 'Ярцево', true)
+              if (!count) {
+                setNote(`Не нашёл состав строки «${row.title}» — пересчитывать нечего`)
+                return
+              }
+              setNote(null)
+              setCountDialog({ title, place: placeOf(shown, target), count })
+            }}
             historyFor={(row: MapRow) =>
               shown.journal.filter((entry) => entry.subject === row.title)
             }
           />
         </Box>
       </Box>
+
+      <InventoryCountDialog
+        open={countDialog !== null}
+        title={countDialog?.title ?? ''}
+        place={countDialog?.place ?? null}
+        count={countDialog?.count ?? null}
+        onChange={(next) =>
+          setCountDialog((current) => (current ? { ...current, count: next } : current))
+        }
+        onClose={() => setCountDialog(null)}
+        onSave={() => {
+          const t = countDialog ? totals(countDialog.count) : null
+          setCountDialog(null)
+          setNote(
+            t
+              ? `Заглушка: черновик пересчёта сохранён, посчитано ${t.counted} из ${t.lines}. Остатки не тронуты.`
+              : null,
+          )
+        }}
+        onPost={() => {
+          const t = countDialog ? totals(countDialog.count) : null
+          setCountDialog(null)
+          setNote(
+            t
+              ? `Заглушка: проведено ${t.discrepancies} движений, излишек ${t.surplus}, недостача ${t.shortage}. В макете остаток на карте не меняется.`
+              : null,
+          )
+        }}
+      />
     </Box>
   )
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ThemeProvider theme={muiTheme}>
-      <CssBaseline />
-      <PreviewHarness />
-    </ThemeProvider>
-  </StrictMode>,
-)
+// Корень создаётся один раз: Вите при горячей перезагрузке исполняет модуль
+// заново, второй createRoot на том же узле React отвергает, на экране остаётся
+// старое дерево, и клики уходят в никуда.
+type RootHost = HTMLElement & { __previewRoot?: ReturnType<typeof createRoot> }
+
+const container = document.getElementById('root') as RootHost | null
+if (container) {
+  const root = container.__previewRoot ?? createRoot(container)
+  container.__previewRoot = root
+  root.render(
+    <StrictMode>
+      <ThemeProvider theme={muiTheme}>
+        <CssBaseline />
+        <PreviewHarness />
+      </ThemeProvider>
+    </StrictMode>,
+  )
+}

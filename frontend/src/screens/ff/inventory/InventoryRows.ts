@@ -268,10 +268,10 @@ export function buildRows(
   collapsed: Set<string>,
 ): InvRow[] {
   const ctx: BuildCtx = { filters, collapsed, rows: [] }
-  if (!count.addressStorage) {
-    // Ячеек у арендатора нет: дерево начинается сразу с тары и товара, лежащего
-    // отдельно. Заголовок «Без ячеек» тоже не рисуем — он называет то, чего в
-    // этой картине мира не существует.
+  if (!count.addressStorage || count.scoped) {
+    // Уровня ячейки в дереве нет по одной из двух причин: либо у арендатора
+    // выключено адресное хранение и ячеек не существует вовсе, либо документ
+    // сужен до одного объекта и его место уже названо в шапке.
     const flat = count.cells.flatMap((cell) => cell.children)
     walk(flat, ctx, 0, 'root')
     return ctx.rows
