@@ -30,7 +30,6 @@ from app.models.fbs_order import (
 )
 from app.models.fbs_order_pick import FbsOrderPick
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
-from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_DRAFT,
@@ -61,9 +60,6 @@ from app.services.fbs_ozon_packaging_service import (
 )
 from app.services.fbs_ozon_packaging_service import (
     resolve_order_for_pack_unit as _resolve_ozon_order_for_pack_unit,
-)
-from app.services.fbs_ozon_packaging_service import (
-    write_off_order as _write_off_ozon_order,
 )
 from app.services.fbs_packaging_stock_service import (
     insufficient_stock_message as _insufficient_stock_message,
@@ -663,103 +659,6 @@ async def _all_active_orders_fulfilled(
     return True
 
 
-async def _write_off_active_orders_once(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    supply: FbsSupply,
-    task: PackagingTask,
-) -> None:
-    """Write off each packed order once and leave an auditable reversal unit."""
-    order_ids = [
-        order.id
-        for order in supply.orders
-        if order.product_id is not None or order.marketplace == "ozon"
-    ]
-    fulfillment_rows = (
-        await session.execute(
-            select(
-                FbsPackagingFulfillment.fbs_order_id,
-                PackagingTaskLine.product_id,
-                PackagingTaskLine.storage_location_id,
-            )
-            .join(
-                PackagingTaskLine,
-                PackagingTaskLine.id == FbsPackagingFulfillment.packaging_task_line_id,
-            )
-            .where(
-                FbsPackagingFulfillment.packaging_task_id == task.id,
-                FbsPackagingFulfillment.fbs_order_id.in_(order_ids),
-                FbsPackagingFulfillment.undone_at.is_(None),
-            )
-        )
-    ).all()
-    fulfillment_by_order: dict[uuid.UUID, tuple[uuid.UUID, uuid.UUID]] = {}
-    for order_id, product_id, storage_location_id in fulfillment_rows:
-        if order_id in fulfillment_by_order:
-            raise FbsPackagingIntegrationError("ambiguous_fbs_packaging_fulfillment")
-        fulfillment_by_order[order_id] = (product_id, storage_location_id)
-
-    existing_ids = set(
-        (
-            await session.execute(
-                select(FbsShipmentReversalLedger.fbs_order_id).where(
-                    FbsShipmentReversalLedger.tenant_id == tenant_id,
-                    FbsShipmentReversalLedger.fbs_order_id.in_(order_ids),
-                )
-            )
-        ).scalars()
-    )
-    for order in supply.orders:
-        if order.status == FBS_ORDER_STATUS_CANCELLED:
-            continue
-        if order.id in existing_ids:
-            continue
-        if order.marketplace == "ozon":
-            try:
-                await _write_off_ozon_order(session, tenant_id=tenant_id, order=order)
-            except OzonPackagingError as exc:
-                raise FbsPackagingIntegrationError(str(exc)) from exc
-            continue
-        if order.product_id is None:
-            continue
-        fulfillment = fulfillment_by_order.get(order.id)
-        if fulfillment is None:
-            raise FbsPackagingIntegrationError("missing_fbs_packaging_location")
-        fulfilled_product_id, storage_location_id = fulfillment
-        if fulfilled_product_id != order.product_id:
-            raise FbsPackagingIntegrationError("fbs_packaging_product_mismatch")
-        session.add(
-            FbsShipmentReversalLedger(
-                tenant_id=tenant_id,
-                fbs_order_id=order.id,
-                product_id=order.product_id,
-                storage_location_id=storage_location_id,
-                quantity=1,
-            )
-        )
-        await session.flush()
-        # Тот же принцип, что и на самой упаковке: нехватка остатка в ячейке не должна
-        # останавливать поставку. Иначе заказ, упакованный без списания (товар лежал в
-        # сортировке другого склада), упирался бы в отказ на завершении упаковки — то
-        # есть склад вставал бы на шаг позже, чем раньше.
-        try:
-            await inv_svc.apply_fbs_supply_write_off(
-                session,
-                tenant_id=tenant_id,
-                product_id=order.product_id,
-                storage_location_id=storage_location_id,
-                quantity=1,
-            )
-        except ValueError as exc:
-            if str(exc) != "insufficient stock":
-                raise
-            logger.warning(
-                "fbs write-off skipped, no stock: tenant=%s product=%s location=%s order=%s",
-                tenant_id,
-                order.product_id,
-                storage_location_id,
-                order.id,
-            )
 
 
 async def try_promote_fbs_supply_if_ready(
