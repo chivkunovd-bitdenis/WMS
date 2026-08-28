@@ -1069,7 +1069,11 @@ async def _auto_pass_picking_if_needed(
     )
     picked_at = datetime.now(tz=UTC)
     for order in supply.orders:
-        if order.pick_status != PICK_STATUS_PENDING or order.product_id is None:
+        if (
+            order.status == FBS_ORDER_STATUS_CANCELLED
+            or order.pick_status != PICK_STATUS_PENDING
+            or order.product_id is None
+        ):
             continue
         idempotency_key = f"auto-pick:{supply.id}:{order.id}"
         existing = await session.scalar(

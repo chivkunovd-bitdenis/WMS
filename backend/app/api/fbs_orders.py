@@ -30,6 +30,7 @@ from app.services.fbs_cancellation_service import (
     cancel_order,
     sync_seller_order_statuses,
 )
+from app.services.fbs_cancelled_after_pack_service import fetch_cancelled_after_pack_page
 from app.services.fbs_worklist_service import fetch_worklist_page
 from app.services.marketplace_provider import (
     FakeMarketplaceTransport,
@@ -72,6 +73,59 @@ class FbsAssemblyTimeOut(BaseModel):
     orders: int
 
 
+class FbsCancelledProductOut(BaseModel):
+    id: str | None
+    name: str
+    article: str | None
+    wb_article: str | None
+    size: str | None
+
+
+class FbsCancelledSellerOut(BaseModel):
+    id: str
+    name: str
+
+
+class FbsCancelledSupplyOut(BaseModel):
+    id: str | None
+    wb_supply_id: str | None
+    name: str | None
+    status: str | None
+
+
+class FbsCancelledCargoPlaceOut(BaseModel):
+    box_id: str
+    box_number: int
+    box_barcode: str
+    trbx_id: str | None
+    wb_trbx_id: str | None
+
+
+class FbsCancelledAfterPackItemOut(BaseModel):
+    order_id: str
+    wb_order_id: int
+    product: FbsCancelledProductOut
+    seller: FbsCancelledSellerOut
+    supply: FbsCancelledSupplyOut
+    cargo_place: FbsCancelledCargoPlaceOut | None
+    assembled_at: datetime | None
+    picked_at: datetime | None
+    packed_at: datetime | None
+    cancelled_at: datetime
+    cancellation_code: str
+    cancellation_reason: str
+    sticker_printed: bool
+    sticker_printed_at: datetime | None
+    supply_departed: bool | None
+
+
+class FbsCancelledAfterPackPageOut(BaseModel):
+    items: list[FbsCancelledAfterPackItemOut]
+    total: int
+    limit: int
+    offset: int
+
+
 async def _active_ozon_account_exists(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -111,6 +165,52 @@ async def get_fbs_assembly_time(
             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
         raise
     return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
+
+
+@contract_router.get(
+    "/cancelled-after-pack",
+    response_model=FbsCancelledAfterPackPageOut,
+)
+async def get_fbs_cancelled_after_pack(
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    supply_id: Annotated[uuid.UUID | None, Query()] = None,
+    cancelled_from: Annotated[datetime | None, Query()] = None,
+    cancelled_to: Annotated[datetime | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> FbsCancelledAfterPackPageOut:
+    filter_seller = seller_id if seller_id is not None else effective_seller_id
+    if filter_seller is not None:
+        seller = await session.get(Seller, filter_seller)
+        if seller is None or seller.tenant_id != user.tenant_id:
+            raise_fbs_http(status.HTTP_404_NOT_FOUND, "seller_not_found")
+    try:
+        page = await fetch_cancelled_after_pack_page(
+            session,
+            user.tenant_id,
+            seller_id=filter_seller,
+            supply_id=supply_id,
+            cancelled_from=cancelled_from,
+            cancelled_to=cancelled_to,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        if code == "supply_not_found":
+            raise_fbs_http(status.HTTP_404_NOT_FOUND, code)
+        if code == "invalid_period":
+            raise_fbs_http(status.HTTP_400_BAD_REQUEST, code)
+        raise
+    return FbsCancelledAfterPackPageOut(
+        items=[FbsCancelledAfterPackItemOut.model_validate(item) for item in page.items],
+        total=page.total,
+        limit=page.limit,
+        offset=page.offset,
+    )
 
 
 async def _run_blocked_ozon_fake() -> None:

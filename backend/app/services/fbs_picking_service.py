@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.fbs_order import (
+    FBS_ORDER_STATUS_CANCELLED,
     PACK_STATUS_PACKED,
     PICK_STATUS_PENDING,
     PICK_STATUS_PICKED,
@@ -33,6 +34,10 @@ from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.services import inventory_service
+from app.services.fbs_cancelled_after_pack_service import (
+    cancelled_operation_message,
+    order_belonged_to_supply,
+)
 from app.services.fbs_workspace_service import FbsWorkspaceError, get_supply_workspace
 from app.services.operation_fact_service import record_fbs_pick
 from app.services.sorting_location_service import (
@@ -171,6 +176,19 @@ async def scan_pick_product(
         return await get_supply_workspace(session, tenant_id, supply_id)
 
     supply = await _load_supply(session, tenant_id, supply_id)
+    if order_id is not None:
+        requested_order = await session.get(FbsOrder, order_id)
+        if (
+            requested_order is not None
+            and requested_order.tenant_id == tenant_id
+            and requested_order.status == FBS_ORDER_STATUS_CANCELLED
+            and await order_belonged_to_supply(session, requested_order, supply)
+        ):
+            raise FbsPickingError(
+                "order_cancelled",
+                cancelled_operation_message(requested_order, "подбирать нельзя"),
+                context={"order_id": str(requested_order.id)},
+            )
     if supply.marketplace == "ozon":
         existing_position_pick = await session.scalar(
             select(FbsOrderProductPick.id).where(
@@ -223,6 +241,20 @@ async def scan_pick_product(
             context={"product_id": str(product.id)},
         )
     if supply.marketplace != "ozon" and not eligible_orders:
+        cancelled_order = next(
+            (
+                order
+                for order in supply.orders
+                if order.product_id == product.id and order.status == FBS_ORDER_STATUS_CANCELLED
+            ),
+            None,
+        )
+        if cancelled_order is not None:
+            raise FbsPickingError(
+                "order_cancelled",
+                cancelled_operation_message(cancelled_order, "подбирать нельзя"),
+                context={"order_id": str(cancelled_order.id)},
+            )
         raise FbsPickingError(
             "product_not_in_supply",
             "Товар не входит в состав поставки или уже подобран.",
@@ -758,6 +790,8 @@ def _pending_positions_by_product(
 ) -> dict[uuid.UUID, list[tuple[FbsOrder, FbsOrderProduct]]]:
     out: dict[uuid.UUID, list[tuple[FbsOrder, FbsOrderProduct]]] = {}
     for order in orders:
+        if order.status == FBS_ORDER_STATUS_CANCELLED:
+            continue
         if order.product_positions:
             for position in order.product_positions:
                 if position.product_id is not None and position.picked_quantity < position.quantity:
@@ -837,7 +871,11 @@ def _eligible_orders_for_product(
     product_id: uuid.UUID,
 ) -> list[FbsOrder]:
     return [
-        o for o in orders if o.product_id == product_id and o.pick_status == PICK_STATUS_PENDING
+        o
+        for o in orders
+        if o.product_id == product_id
+        and o.pick_status == PICK_STATUS_PENDING
+        and o.status != FBS_ORDER_STATUS_CANCELLED
     ]
 
 
@@ -847,6 +885,7 @@ def _eligible_positions_for_product(
     return [
         (order, position)
         for order in orders
+        if order.status != FBS_ORDER_STATUS_CANCELLED
         if order.pick_status == PICK_STATUS_PENDING
         for position in order.product_positions
         if position.product_id == product_id and position.picked_quantity < position.quantity

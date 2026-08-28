@@ -61,6 +61,8 @@ def _raise_from_print_asset_service(exc: FbsPrintAssetError) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
     if exc.code in {"invalid_kind", "invalid_order_ids"}:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
+    if exc.code == "order_cancelled":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
     if exc.code.startswith("wb_"):
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
     raise HTTPException(

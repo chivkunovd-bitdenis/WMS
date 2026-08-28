@@ -628,6 +628,8 @@ def _raise_from_print_asset_service(exc: FbsPrintAssetError) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
     if exc.code in {"invalid_kind", "invalid_order_ids"}:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
+    if exc.code == "order_cancelled":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
     if exc.code.startswith("wb_"):
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
@@ -1662,7 +1664,7 @@ async def print_fbs_supply_order_tape(
         requested=result.print_batch.requested if result.print_batch else len(body.order_ids),
         ready=result.print_batch.ready if result.print_batch else len(result.orders),
         missing=result.print_batch.missing if result.print_batch else 0,
-        failed=result.print_batch.failed if result.print_batch else 0,
+        failed=(result.print_batch.failed if result.print_batch else len(result.order_errors)),
         order_errors=[
             FbsPrintOrderErrorOut(
                 order_id=str(err.order_id),
