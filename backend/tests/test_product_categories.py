@@ -361,14 +361,20 @@ async def test_categories_follow_switched_effective_seller_but_admin_sees_tenant
     assert admin_categories.json() == ["Делегированная категория", "Домашняя категория"]
 
 
+CATEGORY_REVISION = "20260828_0221"
+
+
 def test_product_category_migration_is_additive_and_the_only_head() -> None:
     """TC-NEW-A2-004: historical products must remain untouched by a branched migration."""
     backend_dir = Path(__file__).resolve().parents[1]
     config = Config(str(backend_dir / "alembic.ini"))
     config.set_main_option("script_location", str(backend_dir / "alembic"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["20260828_0221"]
-    revision = script.get_revision("20260828_0221")
+    # Голова должна быть одна: две головы — это разъехавшиеся ветки миграций,
+    # и на выкатке они дадут отказ. А вот её номер закреплять нельзя: каждая
+    # следующая миграция сдвигает голову, и тест ломался бы без причины.
+    assert len(script.get_heads()) == 1, script.get_heads()
+    revision = script.get_revision(CATEGORY_REVISION)
     assert revision is not None
     source = Path(revision.path).read_text(encoding="utf-8")
     assert "op.add_column(\"products\"" in source

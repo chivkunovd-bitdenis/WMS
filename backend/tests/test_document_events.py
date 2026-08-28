@@ -460,7 +460,7 @@ async def test_fbs_and_marketplace_unload_status_sequences(
             assert promoted.status == FBS_SUPPLY_STATUS_PACKED
             await session.commit()
             await session.refresh(supply, attribute_names=["orders"])
-            await fbs_shipment_svc._apply_local_delivered(session, supply, list(supply.orders))
+            await fbs_shipment_svc._apply_local_delivered(session, supply, list(supply.orders), None)
             await session.commit()
             order.status = FBS_ORDER_STATUS_DONE
             await fbs_tracking_svc._maybe_complete_supply(session, supply)

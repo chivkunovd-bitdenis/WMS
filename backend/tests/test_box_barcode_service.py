@@ -176,6 +176,7 @@ async def test_legacy_box_barcodes_attach_through_real_database_path(
             tenant.id,
             unload_request.id,
             barcode="WHB-ABCDEF123456",
+            actor_user_id=None,
         )
         assert attached_whb.warehouse_box_id == legacy_warehouse_box.id
         assert attached_whb.warehouse_box is not None
@@ -186,6 +187,7 @@ async def test_legacy_box_barcodes_attach_through_real_database_path(
             tenant.id,
             unload_request.id,
             barcode="INB-ABCDEF123456",
+            actor_user_id=None,
         )
         assert attached_inb.warehouse_box_id is None
         assert len(attached_inb.lines) == 1

@@ -218,6 +218,16 @@ async def test_discrepancy_act_approval_records_approving_user_as_actor(
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(
+    reason=(
+        "Тест закрепляет списание остатка на завершении упаковки. Этого этапа "
+        "больше нет: по решению владельца от 28.08.2026 товар списывается ровно "
+        "один раз — на подтверждённой доставке, иначе он уходил дважды. "
+        "Озоновский заказ с привязанным товаром списывается там же, вместе со "
+        "всеми остальными. Тест нужно переписать под этап доставки — это "
+        "отдельное решение, а не переписывание проверок под код."
+    )
+)
 async def test_ozon_packaging_write_off_records_operator_actor(
     async_client: AsyncClient,
 ) -> None:
@@ -384,7 +394,11 @@ async def test_fbs_cancellation_reversal_records_cancelling_user_actor(
             movement_type="system_seed",
             actor_user_id=None,
         )
-        await inventory_service.apply_fbs_supply_write_off(
+        # Списание физического остатка теперь происходит на подтверждённой
+        # доставке, и там же в расписку кладётся номер движения. Раньше это
+        # делала упаковка, поэтому расписка в тесте оставалась без движения —
+        # и отмена не находила, что возвращать.
+        shipment_movement = await inventory_service.apply_fbs_supply_write_off(
             session,
             tenant_id=tenant_id,
             product_id=product_id,
@@ -392,12 +406,14 @@ async def test_fbs_cancellation_reversal_records_cancelling_user_actor(
             quantity=1,
             actor_user_id=None,
         )
+        await session.flush()
         ledger = FbsShipmentReversalLedger(
             tenant_id=tenant_id,
             fbs_order_id=order.id,
             product_id=product_id,
             storage_location_id=source_location_id,
             quantity=1,
+            shipment_movement_id=shipment_movement.id,
         )
         session.add(ledger)
         await session.commit()
@@ -607,7 +623,7 @@ async def test_explicit_system_reversal_is_the_only_null_actor_path(
             movement_type="system_seed",
             actor_user_id=None,
         )
-        await inventory_service.apply_fbs_supply_write_off(
+        shipment_movement = await inventory_service.apply_fbs_supply_write_off(
             session,
             tenant_id=tenant_id,
             product_id=product_id,
@@ -615,6 +631,7 @@ async def test_explicit_system_reversal_is_the_only_null_actor_path(
             quantity=1,
             actor_user_id=None,
         )
+        await session.flush()
         session.add(
             FbsShipmentReversalLedger(
                 tenant_id=tenant_id,
@@ -622,6 +639,7 @@ async def test_explicit_system_reversal_is_the_only_null_actor_path(
                 product_id=product_id,
                 storage_location_id=source_location_id,
                 quantity=1,
+                shipment_movement_id=shipment_movement.id,
             )
         )
         await session.flush()
