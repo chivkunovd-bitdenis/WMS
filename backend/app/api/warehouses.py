@@ -1,17 +1,23 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_cells_access, require_fulfillment_admin
+from app.api.deps import (
+    get_current_user,
+    require_catalog_cells_read_access,
+    require_cells_access,
+    require_fulfillment_admin,
+)
 from app.db.session import get_db
 from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.models.warehouse import Warehouse
+from app.services import warehouse_map_service
 from app.services.catalog_service import (
     CatalogError,
     create_location,
@@ -36,6 +42,7 @@ from app.services.sorting_location_service import (
     SORTING_LOCATION_LABEL,
     get_or_create_sorting_location,
 )
+from app.services.warehouse_map_service import WarehouseMapError
 
 router = APIRouter(prefix="/warehouses", tags=["warehouses"])
 
@@ -84,6 +91,266 @@ class LocationOut(BaseModel):
     code: str
     warehouse_id: str
     barcode: str
+
+
+class WarehouseMapProductOut(BaseModel):
+    kind: Literal["product"]
+    id: str
+    product_id: str
+    name: str
+    seller_name: str | None
+    category: str | None
+    barcode: str | None
+    photo_url: str | None
+    qty: int
+
+
+class WarehouseMapContainerOut(BaseModel):
+    kind: Literal["pallet", "box", "cargo_place"]
+    id: str
+    code: str
+    barcode: str | None
+    seller_name: str | None
+    qty: int
+    children: list[WarehouseMapProductOut | WarehouseMapContainerOut]
+
+
+class WarehouseMapCellOut(BaseModel):
+    id: str
+    code: str
+    barcode: str | None
+    qty: int
+    children: list[WarehouseMapProductOut | WarehouseMapContainerOut]
+
+
+class WarehouseMapJournalOut(BaseModel):
+    id: str
+    at: str
+    actor_name: str
+    subject: str
+    qty: int | None
+    from_label: str
+    to_label: str
+
+
+class WarehouseOptionOut(BaseModel):
+    id: str
+    name: str
+
+
+class WarehouseMapOut(BaseModel):
+    warehouses: list[WarehouseOptionOut]
+    sellers: list[str]
+    categories: list[str]
+    cells: list[WarehouseMapCellOut]
+    unassigned: list[WarehouseMapProductOut | WarehouseMapContainerOut]
+    journal: list[WarehouseMapJournalOut]
+
+
+class WarehouseMapMoveIn(BaseModel):
+    kind: Literal["product", "pallet", "box", "cargo_place"]
+    id: uuid.UUID
+    to_kind: Literal["cell", "unassigned", "sorting", "pallet", "box", "cargo_place"]
+    to_id: uuid.UUID | None = None
+    qty: int = Field(gt=0)
+
+
+class WarehouseMapMoveOut(BaseModel):
+    id: str
+    moved_qty: int | None
+
+
+class WarehouseMapDisbandIn(BaseModel):
+    id: uuid.UUID | None = None
+    pallet_id: uuid.UUID | None = None
+
+
+class WarehouseMapDisbandOut(BaseModel):
+    id: str
+    disbanded: bool
+
+
+class SortingObjectOut(BaseModel):
+    id: str
+    kind: Literal["pallet", "box", "cargo_place"]
+    code: str
+    barcode: str
+    holder: str | None
+
+
+class SortingGoodsLineOut(BaseModel):
+    id: str
+    productId: str
+    qty: int
+    holder: str | None
+
+
+class SortingAlreadyAtOut(BaseModel):
+    cellId: str
+    code: str
+    qty: int
+
+
+class SortingProductOut(BaseModel):
+    id: str
+    name: str
+    sku: str
+    seller: str
+    barcode: str
+    photo: str
+    size: str | None
+    alreadyAt: list[SortingAlreadyAtOut]
+
+
+class SortingCellOut(BaseModel):
+    id: str
+    code: str
+    barcode: str
+
+
+class SortingObjectsOut(BaseModel):
+    objects: list[SortingObjectOut]
+    lines: list[SortingGoodsLineOut]
+    products: list[SortingProductOut]
+    cells: list[SortingCellOut]
+
+
+class SortingPlaceIn(BaseModel):
+    kind: Literal["product", "pallet", "box", "cargo_place"]
+    id: uuid.UUID
+    cell_id: uuid.UUID | None = None
+    to_id: uuid.UUID | None = None
+    qty: int = Field(gt=0)
+
+
+def _map_error(exc: WarehouseMapError) -> HTTPException:
+    if exc.code in {
+        "warehouse_not_found",
+        "object_not_found",
+        "destination_not_found",
+        "cell_not_found",
+        "pallet_not_found",
+    }:
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
+    if exc.code in {
+        "address_storage_disabled",
+        "container_cycle",
+        "invalid_container_destination",
+        "insufficient_stock",
+        "pallet_disbanded",
+    }:
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
+    return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.code)
+
+
+@router.get("/{warehouse_id}/map", response_model=WarehouseMapOut)
+async def get_warehouse_map_route(
+    warehouse_id: uuid.UUID,
+    user: Annotated[User, Depends(require_catalog_cells_read_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> WarehouseMapOut:
+    try:
+        data = await warehouse_map_service.get_warehouse_map(session, user.tenant_id, warehouse_id)
+    except WarehouseMapError as exc:
+        raise _map_error(exc) from None
+    return WarehouseMapOut.model_validate(data)
+
+
+@router.post("/{warehouse_id}/map/move", response_model=WarehouseMapMoveOut)
+async def move_warehouse_map_object_route(
+    warehouse_id: uuid.UUID,
+    body: WarehouseMapMoveIn,
+    user: Annotated[User, Depends(require_cells_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> WarehouseMapMoveOut:
+    try:
+        result = await warehouse_map_service.move_object(
+            session,
+            tenant_id=user.tenant_id,
+            warehouse_id=warehouse_id,
+            actor_user_id=user.id,
+            kind=body.kind,
+            object_id=body.id,
+            to_kind=body.to_kind,
+            to_id=body.to_id,
+            quantity=body.qty,
+        )
+    except WarehouseMapError as exc:
+        await session.rollback()
+        raise _map_error(exc) from None
+    return WarehouseMapMoveOut.model_validate(result)
+
+
+@router.post("/{warehouse_id}/map/disband", response_model=WarehouseMapDisbandOut)
+async def disband_warehouse_map_pallet_route(
+    warehouse_id: uuid.UUID,
+    body: WarehouseMapDisbandIn,
+    user: Annotated[User, Depends(require_cells_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> WarehouseMapDisbandOut:
+    pallet_id = body.id or body.pallet_id
+    if pallet_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="pallet_id_required",
+        )
+    try:
+        result = await warehouse_map_service.disband_pallet(
+            session,
+            tenant_id=user.tenant_id,
+            warehouse_id=warehouse_id,
+            actor_user_id=user.id,
+            pallet_id=pallet_id,
+        )
+    except WarehouseMapError as exc:
+        await session.rollback()
+        raise _map_error(exc) from None
+    return WarehouseMapDisbandOut.model_validate(result)
+
+
+@router.get("/{warehouse_id}/sorting-objects", response_model=SortingObjectsOut)
+async def get_sorting_objects_route(
+    warehouse_id: uuid.UUID,
+    user: Annotated[User, Depends(require_catalog_cells_read_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> SortingObjectsOut:
+    try:
+        data = await warehouse_map_service.get_sorting_objects(
+            session, user.tenant_id, warehouse_id
+        )
+    except WarehouseMapError as exc:
+        raise _map_error(exc) from None
+    return SortingObjectsOut.model_validate(data)
+
+
+@router.post("/{warehouse_id}/sorting-objects/place", response_model=WarehouseMapMoveOut)
+async def place_sorting_object_route(
+    warehouse_id: uuid.UUID,
+    body: SortingPlaceIn,
+    user: Annotated[User, Depends(require_cells_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> WarehouseMapMoveOut:
+    cell_id = body.cell_id or body.to_id
+    if cell_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="cell_id_required",
+        )
+    try:
+        result = await warehouse_map_service.place_sorting_object(
+            session,
+            tenant_id=user.tenant_id,
+            warehouse_id=warehouse_id,
+            actor_user_id=user.id,
+            kind=body.kind,
+            object_id=body.id,
+            cell_id=cell_id,
+            quantity=body.qty,
+        )
+    except WarehouseMapError as exc:
+        await session.rollback()
+        raise _map_error(exc) from None
+    return WarehouseMapMoveOut.model_validate(result)
 
 
 @router.get("", response_model=list[WarehouseOut])

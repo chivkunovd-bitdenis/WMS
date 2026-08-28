@@ -115,7 +115,11 @@ def test_positive_balance_upsert_compiles_for_postgresql() -> None:
         )
     )
 
-    assert "ON CONFLICT (storage_location_id, product_id) DO UPDATE" in sql
+    assert (
+        "ON CONFLICT (storage_location_id, product_id, "
+        "coalesce(container_id, '00000000-0000-0000-0000-000000000000')) DO UPDATE"
+        in sql
+    )
     assert "quantity_unpacked" in sql
     assert "quantity_packed" in sql
 

@@ -182,6 +182,22 @@ async def mark_box_label_printed(
     return loaded
 
 
+async def update_box_free_text(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    box_id: uuid.UUID,
+    *,
+    free_text: str | None,
+) -> InboundIntakeBox:
+    box = await _load_box(session, box_id)
+    if box.tenant_id != tenant_id or box.request_id != request_id:
+        raise InboundIntakeBoxError("box_not_found")
+    box.free_text = free_text.strip() if free_text and free_text.strip() else None
+    await session.commit()
+    return await _load_box(session, box_id)
+
+
 async def _get_request_for_intake(
     session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID
 ) -> InboundIntakeRequest:

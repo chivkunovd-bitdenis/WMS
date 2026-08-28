@@ -13,6 +13,7 @@ from app.models.inbound_intake import (
     InboundIntakeBox,
     InboundIntakeBoxLine,
     InboundIntakeCargoPlace,
+    InboundIntakeCargoPlaceLine,
     InboundIntakeRequest,
 )
 from app.models.product import Product
@@ -62,6 +63,10 @@ class InboundPackageCatalogItem:
 
 
 def _box_line_remaining_qty(line: InboundIntakeBoxLine) -> int:
+    return max(0, int(line.quantity) - int(line.posted_qty))
+
+
+def _cargo_place_line_remaining_qty(line: InboundIntakeCargoPlaceLine) -> int:
     return max(0, int(line.quantity) - int(line.posted_qty))
 
 
@@ -129,6 +134,22 @@ def _cargo_place_item(
     *,
     warehouse_name: str | None,
 ) -> InboundPackageCatalogItem:
+    lines = tuple(
+        InboundPackageCatalogLine(
+            product_id=line.product_id,
+            remaining_qty=remaining,
+            name=line.product.name,
+            sku_code=line.product.sku_code,
+            wb_vendor_code=line.product.wb_vendor_code,
+            wb_barcode=line.product.wb_barcode,
+            wb_size=line.product.wb_size,
+            seller_name=(
+                line.product.seller.name if line.product.seller is not None else None
+            ),
+        )
+        for line in place.lines
+        if (remaining := _cargo_place_line_remaining_qty(line)) > 0
+    )
     return InboundPackageCatalogItem(
         id=place.id,
         kind="cargo_place",
@@ -138,10 +159,12 @@ def _cargo_place_item(
         request_display_number=_request_display_number(request),
         warehouse_name=warehouse_name,
         intake_status=request.status,
-        composition_tracked=False,
-        fully_distributed=False,
-        remaining_qty=None,
-        lines=(),
+        composition_tracked=True,
+        fully_distributed=bool(place.lines) and all(
+            _cargo_place_line_remaining_qty(line) == 0 for line in place.lines
+        ),
+        remaining_qty=sum(line.remaining_qty for line in lines),
+        lines=lines,
         request_created_at=request.created_at,
         source_document=_inbound_source_document(request),
     )
@@ -194,7 +217,12 @@ async def _load_tenant_packages(
             InboundIntakeCargoPlace.tenant_id == tenant_id,
             InboundIntakeRequest.status != "done",
         )
-        .options(selectinload(InboundIntakeCargoPlace.request))
+        .options(
+            selectinload(InboundIntakeCargoPlace.request),
+            selectinload(InboundIntakeCargoPlace.lines)
+            .selectinload(InboundIntakeCargoPlaceLine.product)
+            .selectinload(Product.seller),
+        )
     )
     warehouse_names = await _warehouse_names_for_tenant(session, tenant_id)
     return (
@@ -244,13 +272,13 @@ async def list_current_packages(
         request = place.request
         if request is None or request.status == "done":
             continue
-        items.append(
-            _cargo_place_item(
-                place,
-                request,
-                warehouse_name=_conditional_warehouse_name(request, warehouse_names),
-            )
+        item = _cargo_place_item(
+            place,
+            request,
+            warehouse_name=_conditional_warehouse_name(request, warehouse_names),
         )
+        if (item.remaining_qty is not None and item.remaining_qty > 0) or not place.lines:
+            items.append(item)
     return _sort_items(items)
 
 
@@ -290,7 +318,12 @@ async def lookup_package_by_barcode(
             InboundIntakeCargoPlace.tenant_id == tenant_id,
             InboundIntakeCargoPlace.internal_barcode == normalized,
         )
-        .options(selectinload(InboundIntakeCargoPlace.request))
+        .options(
+            selectinload(InboundIntakeCargoPlace.request),
+            selectinload(InboundIntakeCargoPlace.lines)
+            .selectinload(InboundIntakeCargoPlaceLine.product)
+            .selectinload(Product.seller),
+        )
     )
     cargo_place = cargo_place_result.scalar_one_or_none()
     if cargo_place is None or cargo_place.request is None:

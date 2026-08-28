@@ -4,7 +4,17 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, UniqueConstraint, Uuid, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Uuid,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -20,10 +30,30 @@ class InventoryBalance(Base):
 
     __tablename__ = "inventory_balances"
     __table_args__ = (
-        UniqueConstraint(
+        CheckConstraint(
+            "(container_kind IS NULL AND container_id IS NULL) OR "
+            "(container_kind IS NOT NULL AND container_id IS NOT NULL)",
+            name="ck_inventory_balance_container_pair",
+        ),
+        CheckConstraint(
+            "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+            name="ck_inventory_balance_container_kind",
+        ),
+        CheckConstraint("quantity >= 0", name="ck_inventory_balance_quantity_nonnegative"),
+        CheckConstraint(
+            "quantity_unpacked >= 0",
+            name="ck_inventory_balance_quantity_unpacked_nonnegative",
+        ),
+        CheckConstraint(
+            "quantity_packed >= 0",
+            name="ck_inventory_balance_quantity_packed_nonnegative",
+        ),
+        Index(
+            "uq_inventory_balance_loc_product_container",
             "storage_location_id",
             "product_id",
-            name="uq_inventory_balance_loc_product",
+            text("coalesce(container_id, '00000000-0000-0000-0000-000000000000')"),
+            unique=True,
         ),
     )
 
@@ -42,6 +72,12 @@ class InventoryBalance(Base):
         Uuid(as_uuid=True),
         ForeignKey("products.id", ondelete="CASCADE"),
         index=True,
+    )
+    container_kind: Mapped[str | None] = mapped_column(
+        String(32), nullable=True, index=True
+    )
+    container_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True, index=True
     )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     quantity_unpacked: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
