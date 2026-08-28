@@ -297,6 +297,7 @@ async def scan_pick_product(
                 to_storage_location_id=sorting_location.id,
                 product_id=product.id,
                 quantity=1,
+                actor_user_id=actor.id,
             )
         except ValueError as exc:
             if str(exc) == "insufficient stock":
@@ -327,6 +328,7 @@ async def scan_pick_product(
             storage_location_id=sorting_location.id,
             quantity_delta=1,
             movement_type="fbs_order_pick",
+            actor_user_id=actor.id,
         )
         if supply.marketplace != "ozon":
             await _ensure_order_reservation(session, target_order, supply)
@@ -532,6 +534,7 @@ async def undo_pick(
                 storage_location_id=position_pick.sorting_storage_location_id,
                 quantity_delta=-1,
                 movement_type="fbs_order_pick_undo",
+                actor_user_id=actor.id,
             )
         elif position_pick.inventory_movement_id is not None:
             await inventory_service.transfer_on_hand_between_locations(
@@ -541,6 +544,7 @@ async def undo_pick(
                 to_storage_location_id=position_pick.source_storage_location_id,
                 product_id=position_pick.product_id,
                 quantity=1,
+                actor_user_id=actor.id,
             )
         position_pick.undo_idempotency_key = idempotency_key
         position_pick.undone_at = datetime.now(tz=UTC)
@@ -622,6 +626,7 @@ async def undo_pick(
                 storage_location_id=pick.sorting_storage_location_id,
                 quantity_delta=-1,
                 movement_type="fbs_order_pick_undo",
+                actor_user_id=actor.id,
             )
             await session.flush()
             movement_id = movement.id
@@ -633,6 +638,7 @@ async def undo_pick(
                 to_storage_location_id=pick.source_storage_location_id,
                 product_id=pick.product_id,
                 quantity=1,
+                actor_user_id=actor.id,
             )
             movement_id = await inventory_service.transfer_out_movement_id(
                 session, tenant_id, transfer_group_id

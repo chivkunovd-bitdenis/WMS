@@ -1917,6 +1917,7 @@ async def preflight_fbs_delivery(
                 user.tenant_id,
                 supply_id,
                 http_client,
+                actor_user_id=user.id,
             )
         except shipment_svc.FbsShipmentError as exc:
             _raise_from_shipment_service(exc)
@@ -1940,6 +1941,7 @@ async def deliver_fbs_supply(
                 supply_id,
                 http_client,
                 idempotency_key=body.idempotency_key,
+                actor_user_id=user.id,
                 confirmed_preflight_version=body.confirmed_preflight_version,
             )
         except shipment_svc.FbsShipmentError as exc:
@@ -1968,6 +1970,7 @@ async def sync_fbs_supply_tracking(
                 user.tenant_id,
                 supply_id,
                 http_client,
+                actor_user_id=user.id,
             )
         except FbsTrackingError as exc:
             if exc.code == "supply_not_found":

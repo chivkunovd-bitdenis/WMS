@@ -454,7 +454,7 @@ async def test_fbs_and_marketplace_unload_status_sequences(
             supply.packaging_task_id = None
             await session.flush()
             promoted = await fbs_packaging_svc.try_promote_fbs_supply_if_ready(
-                session, tenant_id, supply.id
+                session, tenant_id, supply.id, actor_user_id=actor_id
             )
             assert promoted is not None
             assert promoted.status == FBS_SUPPLY_STATUS_PACKED
@@ -921,7 +921,7 @@ async def test_fbs_detach_reverse_status_edges(async_client: AsyncClient) -> Non
             for order in cancel_orders:
                 order.status = FBS_ORDER_STATUS_CANCELLED
                 await fbs_packaging_svc.detach_cancelled_order_from_supply(
-                    session, tenant_id, order
+                    session, tenant_id, order, actor_user_id=actor_id
                 )
                 await session.commit()
 

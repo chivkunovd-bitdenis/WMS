@@ -29,6 +29,7 @@ from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.services import inventory_service
 from app.services.fbs_worklist_service import build_worklist_items
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 
 async def _setup_ff_admin_with_stock(
@@ -127,6 +128,7 @@ async def _setup_ff_admin_with_stock(
             storage_location_id=location_id,
             quantity_delta=50,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         now = datetime.now(tz=UTC)
         order_ids: list[uuid.UUID] = []
@@ -409,6 +411,7 @@ async def test_fbs_worklist_filters_new_orders_by_warehouse(async_client: AsyncC
             storage_location_id=location_b_id,
             quantity_delta=20,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         now = datetime.now(tz=UTC)
         order_b = FbsOrder(

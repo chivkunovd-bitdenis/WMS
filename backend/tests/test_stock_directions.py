@@ -16,6 +16,7 @@ from app.models.stock_direction import StockMonthlySnapshot
 from app.services import inventory_service, stock_direction_service
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
 from app.services.marketplace_unload_service import list_available_products
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 
 @pytest.fixture(autouse=True)
@@ -82,6 +83,7 @@ async def _seed_stocked_product(
             storage_location_id=location_id,
             quantity_delta=10,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, row.tenant_id),
         )
         await session.commit()
 
@@ -359,6 +361,7 @@ async def test_monthly_stock_snapshot_captures_distribution(
             storage_location_id=location_id,
             quantity_delta=5,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, product.tenant_id),
         )
         await session.commit()
 
@@ -396,6 +399,7 @@ async def test_monthly_stock_snapshot_captures_distribution(
             storage_location_id=location_id,
             quantity_delta=7,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, late.tenant_id),
         )
         await session.commit()
 

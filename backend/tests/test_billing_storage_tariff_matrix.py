@@ -192,7 +192,6 @@ async def test_report_prices_storage_by_the_matrix_and_prefers_the_seller_rate(
 
     from app.models.inventory_movement import InventoryMovement
     from app.models.product import Product
-    from app.models.warehouse import Warehouse
     from app.services.sorting_location_service import get_or_create_sorting_location
     from app.services.storage_measurement_service import MOSCOW
 

@@ -317,6 +317,8 @@ async def _sync_supply_orders_from_wb(
     supply: FbsSupply,
     http_client: httpx.AsyncClient,
     token: str,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> list[FbsOrder]:
     orders = await _load_supply_orders_read(session, tenant_id, supply.id)
     if not orders:
@@ -355,11 +357,18 @@ async def _sync_supply_orders_from_wb(
                     order,
                     wb_status,
                     supplier_status=supplier_status,
+                    actor_user_id=actor_user_id,
                 )
 
     for order in orders:
         with suppress(marking_svc.FbsMarkingError):
-            await marking_svc.sync_order_marking_statuses(session, tenant_id, order.id, http_client)
+            await marking_svc.sync_order_marking_statuses(
+                session,
+                tenant_id,
+                order.id,
+                http_client,
+                actor_user_id=actor_user_id,
+            )
 
     supply.last_wb_sync_at = datetime.now(UTC)
     await session.flush()
@@ -602,8 +611,16 @@ async def _sync_and_validate_deliver(
     token: str,
     *,
     confirmed_preflight_version: str | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> tuple[list[FbsOrder], bool]:
-    orders = await _sync_supply_orders_from_wb(session, tenant_id, supply, http_client, token)
+    orders = await _sync_supply_orders_from_wb(
+        session,
+        tenant_id,
+        supply,
+        http_client,
+        token,
+        actor_user_id=actor_user_id,
+    )
     cargo_qr_ready = True
     if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ:
         cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(session, tenant_id, supply)
@@ -659,6 +676,8 @@ async def preflight_delivery(
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
     http_client: httpx.AsyncClient,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> DeliveryPreflightResult:
     supply = await _get_supply_read(session, tenant_id, supply_id, with_trbxes=True)
     if supply is None:
@@ -692,7 +711,14 @@ async def preflight_delivery(
         )
 
     token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
-    orders = await _sync_supply_orders_from_wb(session, tenant_id, supply, http_client, token)
+    orders = await _sync_supply_orders_from_wb(
+        session,
+        tenant_id,
+        supply,
+        http_client,
+        token,
+        actor_user_id=actor_user_id,
+    )
     cargo_qr_ready = True
     if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ:
         cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(session, tenant_id, supply)
@@ -1006,6 +1032,7 @@ async def deliver_supply(
     http_client: httpx.AsyncClient,
     *,
     idempotency_key: str,
+    actor_user_id: uuid.UUID | None,
     confirmed_preflight_version: str | None = None,
     ozon_provider: OzonMarketplaceProvider | None = None,
 ) -> FbsSupply:
@@ -1076,6 +1103,7 @@ async def deliver_supply(
                 http_client,
                 token,
                 confirmed_preflight_version=confirmed_preflight_version,
+                actor_user_id=actor_user_id,
             )
             if reconcile_state == WB_OPERATION_STATE_CONFIRMED:
                 orders = await _load_locked_supply_orders(session, tenant_id, supply.id)
@@ -1180,6 +1208,7 @@ async def deliver_supply(
         http_client,
         token,
         confirmed_preflight_version=confirmed_preflight_version,
+        actor_user_id=actor_user_id,
     )
 
     operation = existing

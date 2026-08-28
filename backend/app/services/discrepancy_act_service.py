@@ -157,6 +157,8 @@ async def approve_act(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     act_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> DiscrepancyAct:
     act = await get_act(session, tenant_id, act_id)
     if act is None:
@@ -185,6 +187,7 @@ async def approve_act(
                 quantity_delta=line.quantity,
                 movement_type=MOVEMENT_TYPE_DISCREPANCY_ACT,
                 inbound_intake_line_id=line.inbound_intake_line_id,
+                actor_user_id=actor_user_id,
             )
         except ValueError as exc:
             if str(exc) == "insufficient stock":

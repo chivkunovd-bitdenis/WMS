@@ -55,11 +55,16 @@ async def update_tenant_settings(
     separate_marking_print_enabled: bool | None = None,
     fbs_shipment_cutoff_time: time | None = None,
     set_fbs_shipment_cutoff_time: bool = False,
+    actor_user_id: uuid.UUID | None,
 ) -> TenantSettingsData:
     tenant = await get_tenant(session, tenant_id)
     if address_storage_enabled is not None:
         if tenant.address_storage_enabled and not address_storage_enabled:
-            await inv_svc.migrate_all_address_balances_to_sorting(session, tenant_id)
+            await inv_svc.migrate_all_address_balances_to_sorting(
+                session,
+                tenant_id,
+                actor_user_id=actor_user_id,
+            )
         tenant.address_storage_enabled = address_storage_enabled
     if separate_marking_print_enabled is not None:
         tenant.separate_marking_print_enabled = separate_marking_print_enabled

@@ -41,6 +41,7 @@ from app.services.wb_marketplace_orders_service import (
     upsert_order_from_wb_row,
 )
 from app.services.wildberries_client import WildberriesClientError
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 WB_WAREHOUSE_A = 501001
 WB_WAREHOUSE_B = 501002
@@ -473,6 +474,7 @@ async def test_fbs_order_reserve_and_no_stock(
             storage_location_id=sorting.id,
             quantity_delta=1,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, prod.tenant_id),
         )
         await session.commit()
 
@@ -1014,6 +1016,7 @@ async def test_fbs_order_status_sync_releases_reserve_on_cancel(
             storage_location_id=sorting.id,
             quantity_delta=2,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         order, _created = await upsert_order_from_wb_row(
             session,
@@ -1320,6 +1323,7 @@ async def test_fbs_cancelled_order_not_re_reserved_on_upsert(
             storage_location_id=sorting.id,
             quantity_delta=1,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         order, _created = await upsert_order_from_wb_row(
             session,
@@ -2023,6 +2027,7 @@ async def test_fbs_sole_warehouse_auto_binds_and_reserves(
             storage_location_id=sorting.id,
             quantity_delta=1,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, prod.tenant_id),
         )
         await session.commit()
 
@@ -2083,6 +2088,7 @@ async def test_fbs_order_status_sync_releases_reserve_on_defect(
             storage_location_id=sorting.id,
             quantity_delta=1,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         order, _created = await upsert_order_from_wb_row(
             session,
@@ -2163,6 +2169,7 @@ async def test_fbs_order_reservation_conflict_keeps_warehouse(
             storage_location_id=sorting.id,
             quantity_delta=1,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await _seed_binding(
             session, tenant_id, seller_uuid, WB_WAREHOUSE_A, warehouse_a_uuid
@@ -2253,6 +2260,7 @@ async def test_fbs_order_wb_warehouse_remap_conflict_on_resync(
             storage_location_id=sorting.id,
             quantity_delta=1,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await _seed_binding(
             session, tenant_id, seller_uuid, WB_WAREHOUSE_A, warehouse_a_uuid

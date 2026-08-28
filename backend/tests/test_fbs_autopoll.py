@@ -661,7 +661,10 @@ async def test_fbs_statuses_autopoll_all_sellers(
         tid: uuid.UUID,
         sid: uuid.UUID,
         http_client: object,
+        *,
+        actor_user_id: uuid.UUID | None,
     ) -> int:
+        assert actor_user_id is None
         return 3
 
     monkeypatch.setattr(

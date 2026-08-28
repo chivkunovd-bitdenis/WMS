@@ -24,6 +24,7 @@ from app.services.fbs_stock_availability_service import (
 )
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import available_qty_for_fbs_reserve
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 
 async def _setup_tenant_product(
@@ -101,6 +102,7 @@ async def test_fbs_availability_without_direction_uses_physical_stock(
             storage_location_id=storage_loc_id,
             quantity_delta=5,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await inventory_service.record_movement_and_adjust_balance(
             session,
@@ -109,6 +111,7 @@ async def test_fbs_availability_without_direction_uses_physical_stock(
             storage_location_id=sorting.id,
             quantity_delta=2,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
 
         outbound = OutboundShipmentRequest(
@@ -203,6 +206,7 @@ async def test_fbo_reserve_does_not_reduce_fbs_publish(async_client: AsyncClient
             storage_location_id=storage_loc_id,
             quantity_delta=10,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await inventory_service.record_movement_and_adjust_balance(
             session,
@@ -211,6 +215,7 @@ async def test_fbo_reserve_does_not_reduce_fbs_publish(async_client: AsyncClient
             storage_location_id=sorting.id,
             quantity_delta=5,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await stock_direction_service.create_stock_direction(
             session,
@@ -283,6 +288,7 @@ async def test_inventory_summary_includes_fbs_reserve(async_client: AsyncClient)
             storage_location_id=storage_loc_id,
             quantity_delta=3,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
 
         order = FbsOrder(
@@ -343,6 +349,7 @@ async def test_negative_computed_amount_clamps_to_zero(async_client: AsyncClient
             storage_location_id=storage_loc_id,
             quantity_delta=1,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
 
         for idx in range(3):
@@ -412,6 +419,7 @@ async def test_fbs_availability_batch_query_count_bounded(
                 storage_location_id=storage_loc_id,
                 quantity_delta=1,
                 movement_type="inbound_intake",
+                actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
             )
         await session.commit()
 
@@ -465,6 +473,7 @@ async def test_sold_release_does_not_resurrect_available_after_fbs_write_off(
             storage_location_id=storage_loc_id,
             quantity_delta=5,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         # No stock direction here: under the new model availability comes
         # straight from physical stock, so a direction is not needed to
@@ -512,6 +521,7 @@ async def test_sold_release_does_not_resurrect_available_after_fbs_write_off(
             product_id=product_id,
             storage_location_id=storage_loc_id,
             quantity=1,
+            actor_user_id=None,
         )
 
         from app.services.wb_marketplace_orders_service import _release_reservation

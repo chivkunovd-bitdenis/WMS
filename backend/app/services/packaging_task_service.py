@@ -1175,7 +1175,7 @@ async def complete_task(
     task_id: uuid.UUID,
     *,
     acknowledge_all_packed: bool = False,
-    acting_user_id: uuid.UUID | None = None,
+    acting_user_id: uuid.UUID | None,
 ) -> PackagingTask:
     task = await get_task(session, tenant_id, task_id)
     if task is None:
@@ -1223,7 +1223,12 @@ async def complete_task(
         sync_fbs_supply_on_packaging_done,
     )
 
-    await sync_fbs_supply_on_packaging_done(session, tenant_id, task.id)
+    await sync_fbs_supply_on_packaging_done(
+        session,
+        tenant_id,
+        task.id,
+        actor_user_id=acting_user_id,
+    )
     await session.commit()
     loaded = await get_task(session, tenant_id, task_id)
     assert loaded is not None

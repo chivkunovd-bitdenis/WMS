@@ -226,6 +226,8 @@ async def _sync_supply_orders_from_wb(
     supply: FbsSupply,
     http_client: httpx.AsyncClient,
     token: str,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> int:
     orders = list(supply.orders)
     if not orders:
@@ -263,6 +265,7 @@ async def _sync_supply_orders_from_wb(
                 order,
                 wb_status,
                 supplier_status=supplier_status,
+                actor_user_id=actor_user_id,
             )
             order.last_wb_sync_at = datetime.now(tz=UTC)
             processed += 1
@@ -285,6 +288,8 @@ async def sync_supply_tracking(
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
     http_client: httpx.AsyncClient,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> TrackingSyncResult:
     stmt = (
         select(FbsSupply)
@@ -302,7 +307,11 @@ async def sync_supply_tracking(
     token = await _resolve_marketplace_api_token(session, tenant_id, supply.seller_id)
     try:
         updated = await _sync_supply_orders_from_wb(
-            session, supply, http_client, token
+            session,
+            supply,
+            http_client,
+            token,
+            actor_user_id=actor_user_id,
         )
     except FbsTrackingError:
         raise
@@ -335,7 +344,11 @@ async def sync_in_delivery_supplies(
     for supply in supplies:
         try:
             result = await sync_supply_tracking(
-                session, tenant_id, supply.id, http_client
+                session,
+                tenant_id,
+                supply.id,
+                http_client,
+                actor_user_id=None,
             )
             supplies_synced += 1
             orders_updated += result.orders_updated

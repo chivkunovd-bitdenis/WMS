@@ -35,6 +35,11 @@ async def _register_admin(
     return ah, tenant_id
 
 
+def _actor_user_id(headers: dict[str, str]) -> uuid.UUID:
+    token = headers["Authorization"].removeprefix("Bearer ")
+    return uuid.UUID(str(decode_access_token(token)["sub"]))
+
+
 async def _submitted_request(
     async_client: AsyncClient,
     ah: dict[str, str],
@@ -333,6 +338,8 @@ async def test_loose_scan_stays_loose_and_completion_does_not_require_close(
         boxes = await box_svc.list_boxes_with_lines(session, tenant_id, rid)
         assert all(not b.lines for b in boxes)
 
-        done = await intake_svc.complete_receiving(session, tenant_id, rid)
+        done = await intake_svc.complete_receiving(
+            session, tenant_id, rid, actor_user_id=_actor_user_id(ah)
+        )
         assert done.status == intake_svc.STATUS_SORTING
         assert done.lines[0].actual_qty == 1

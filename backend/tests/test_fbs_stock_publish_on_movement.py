@@ -18,6 +18,7 @@ from app.db.session import SessionLocal
 from app.models.product import Product
 from app.services import fbs_stock_publish_service, inventory_service
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 
 @pytest.mark.asyncio
@@ -93,6 +94,7 @@ async def test_movement_publishes_stock_once_per_seller(
                 storage_location_id=location_id,
                 quantity_delta=5,
                 movement_type="inbound_intake",
+                actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
             )
         assert dispatched == [], "публикация не должна уходить до коммита транзакции"
         await session.commit()

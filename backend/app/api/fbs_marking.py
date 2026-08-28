@@ -97,6 +97,7 @@ async def get_fbs_order_metadata(
                 user.tenant_id,
                 order_id,
                 http_client,
+                actor_user_id=user.id,
             )
         except marking_svc.FbsMarkingError as exc:
             _raise_from_service(exc)
@@ -130,6 +131,7 @@ async def sync_fbs_order_markings(
                 user.tenant_id,
                 order_id,
                 http_client,
+                actor_user_id=user.id,
             )
         except marking_svc.FbsMarkingError as exc:
             _raise_from_service(exc)

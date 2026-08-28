@@ -541,6 +541,7 @@ async def record_movement_and_adjust_balance(
     outbound_shipment_line_id: uuid.UUID | None = None,
     transfer_group_id: uuid.UUID | None = None,
     marketplace_unload_request_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
     deduct_prefer: DeductPrefer = "unpacked",
 ) -> InventoryMovement:
     """Запись в журнал и изменение остатка (delta может быть отрицательным)."""
@@ -570,6 +571,7 @@ async def record_movement_and_adjust_balance(
         outbound_shipment_line_id=outbound_shipment_line_id,
         transfer_group_id=transfer_group_id,
         marketplace_unload_request_id=marketplace_unload_request_id,
+        actor_user_id=actor_user_id,
     )
     session.add(movement)
 
@@ -757,6 +759,7 @@ async def apply_inbound_receive(
     quantity: int,
     movement_type: str,
     inbound_intake_line_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
 ) -> None:
     """Приход по строке приёмки (положительный delta)."""
     if quantity <= 0:
@@ -770,6 +773,7 @@ async def apply_inbound_receive(
         quantity_delta=quantity,
         movement_type=movement_type or MOVEMENT_TYPE_INBOUND_INTAKE,
         inbound_intake_line_id=inbound_intake_line_id,
+        actor_user_id=actor_user_id,
     )
 
 
@@ -781,6 +785,7 @@ async def reverse_inbound_receive(
     storage_location_id: uuid.UUID,
     quantity: int,
     inbound_intake_line_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
 ) -> None:
     """Сторно прихода по строке приёмки (отрицательный delta в зоне сортировки)."""
     if quantity <= 0:
@@ -794,6 +799,7 @@ async def reverse_inbound_receive(
         quantity_delta=-quantity,
         movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
         inbound_intake_line_id=inbound_intake_line_id,
+        actor_user_id=actor_user_id,
     )
 
 
@@ -806,6 +812,7 @@ async def apply_putaway_from_sorting(
     product_id: uuid.UUID,
     quantity: int,
     inbound_intake_line_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
 ) -> None:
     """Перемещение из зоны сортировки в ячейку хранения (привязка к строке приёмки)."""
     if quantity < 1:
@@ -846,6 +853,7 @@ async def apply_putaway_from_sorting(
         movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_OUT,
         transfer_group_id=group_id,
         inbound_intake_line_id=inbound_intake_line_id,
+        actor_user_id=actor_user_id,
     )
     await record_movement_and_adjust_balance(
         session,
@@ -856,6 +864,7 @@ async def apply_putaway_from_sorting(
         movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_IN,
         transfer_group_id=group_id,
         inbound_intake_line_id=inbound_intake_line_id,
+        actor_user_id=actor_user_id,
     )
 
 
@@ -868,6 +877,7 @@ async def apply_return_defect_putaway(
     product_id: uuid.UUID,
     quantity: int,
     inbound_intake_line_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
 ) -> None:
     """Move inspected defective return stock into the tenant's service warehouse."""
     if quantity < 1:
@@ -898,6 +908,7 @@ async def apply_return_defect_putaway(
         movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_OUT,
         transfer_group_id=group_id,
         inbound_intake_line_id=inbound_intake_line_id,
+        actor_user_id=actor_user_id,
     )
     await record_movement_and_adjust_balance(
         session,
@@ -908,6 +919,7 @@ async def apply_return_defect_putaway(
         movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_IN,
         transfer_group_id=group_id,
         inbound_intake_line_id=inbound_intake_line_id,
+        actor_user_id=actor_user_id,
     )
 
 
@@ -919,6 +931,7 @@ async def apply_stock_transfer(
     to_storage_location_id: uuid.UUID,
     product_id: uuid.UUID,
     quantity: int,
+    actor_user_id: uuid.UUID | None,
 ) -> None:
     """Перемещение между ячейками одного склада."""
     if quantity < 1:
@@ -958,6 +971,7 @@ async def apply_stock_transfer(
         quantity_delta=-quantity,
         movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_OUT,
         transfer_group_id=group_id,
+        actor_user_id=actor_user_id,
     )
     await record_movement_and_adjust_balance(
         session,
@@ -967,6 +981,7 @@ async def apply_stock_transfer(
         quantity_delta=quantity,
         movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_IN,
         transfer_group_id=group_id,
+        actor_user_id=actor_user_id,
     )
 
 
@@ -1048,6 +1063,7 @@ async def apply_fbs_supply_write_off(
     product_id: uuid.UUID,
     storage_location_id: uuid.UUID,
     quantity: int,
+    actor_user_id: uuid.UUID | None,
 ) -> InventoryMovement:
     """Списание упакованного FBS-товара при завершении упаковки поставки."""
     if quantity < 1:
@@ -1078,6 +1094,7 @@ async def apply_fbs_supply_write_off(
         storage_location_id=storage_location_id,
         quantity_delta=-quantity,
         movement_type=MOVEMENT_TYPE_FBS_SHIPMENT,
+        actor_user_id=actor_user_id,
         deduct_prefer="packed",
     )
 
@@ -1090,6 +1107,7 @@ async def apply_marketplace_unload_pick(
     storage_location_id: uuid.UUID,
     quantity: int,
     marketplace_unload_request_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
 ) -> None:
     if quantity < 1:
         msg = "quantity must be positive"
@@ -1106,6 +1124,7 @@ async def apply_marketplace_unload_pick(
         quantity_delta=-quantity,
         movement_type=MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
         marketplace_unload_request_id=marketplace_unload_request_id,
+        actor_user_id=actor_user_id,
         deduct_prefer="packed",
     )
 
@@ -1118,6 +1137,7 @@ async def reverse_marketplace_unload_pick(
     storage_location_id: uuid.UUID,
     quantity: int,
     marketplace_unload_request_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
 ) -> None:
     """DEC-016: restore on_hand when removing qty from shipment box."""
     if quantity < 1:
@@ -1131,6 +1151,7 @@ async def reverse_marketplace_unload_pick(
         quantity_delta=quantity,
         movement_type=MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
         marketplace_unload_request_id=marketplace_unload_request_id,
+        actor_user_id=actor_user_id,
     )
 
 
@@ -1142,6 +1163,7 @@ async def apply_outbound_shipment_line(
     storage_location_id: uuid.UUID,
     quantity: int,
     outbound_shipment_line_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
 ) -> None:
     """Списание по строке отгрузки (отрицательный delta)."""
     if quantity < 1:
@@ -1155,6 +1177,7 @@ async def apply_outbound_shipment_line(
         quantity_delta=-quantity,
         movement_type=MOVEMENT_TYPE_OUTBOUND_SHIPMENT,
         outbound_shipment_line_id=outbound_shipment_line_id,
+        actor_user_id=actor_user_id,
     )
 
 
@@ -1217,6 +1240,7 @@ async def transfer_on_hand_between_locations(
     to_storage_location_id: uuid.UUID,
     product_id: uuid.UUID,
     quantity: int,
+    actor_user_id: uuid.UUID | None,
 ) -> uuid.UUID:
     """Перемещение фактического on_hand между ячейками (DEC-019 migration).
 
@@ -1257,6 +1281,7 @@ async def transfer_on_hand_between_locations(
         quantity_delta=-quantity,
         movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_OUT,
         transfer_group_id=group_id,
+        actor_user_id=actor_user_id,
     )
     await record_movement_and_adjust_balance(
         session,
@@ -1266,6 +1291,7 @@ async def transfer_on_hand_between_locations(
         quantity_delta=quantity,
         movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_IN,
         transfer_group_id=group_id,
+        actor_user_id=actor_user_id,
     )
     return group_id
 
@@ -1291,6 +1317,8 @@ async def transfer_out_movement_id(
 async def migrate_all_address_balances_to_sorting(
     session: AsyncSession,
     tenant_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> None:
     """DEC-019: move all address-cell on_hand balances to sorting virtual zone."""
     from app.services import sorting_location_service as sort_loc_svc
@@ -1324,4 +1352,5 @@ async def migrate_all_address_balances_to_sorting(
             to_storage_location_id=sorting_by_wh[wh_id],
             product_id=bal.product_id,
             quantity=qty,
+            actor_user_id=actor_user_id,
         )

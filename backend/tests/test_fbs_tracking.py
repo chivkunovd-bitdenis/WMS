@@ -133,11 +133,11 @@ async def test_tc22_partial_acceptance_mixed_orders_preserved(
 
     async with SessionLocal() as session, httpx.AsyncClient() as http_client:
         first = await sync_supply_tracking(
-            session, tenant_id, supply_id, http_client
+            session, tenant_id, supply_id, http_client, actor_user_id=None
         )
         await session.commit()
         second = await sync_supply_tracking(
-            session, tenant_id, supply_id, http_client
+            session, tenant_id, supply_id, http_client, actor_user_id=None
         )
         await session.commit()
 

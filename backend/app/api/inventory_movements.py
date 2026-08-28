@@ -36,6 +36,7 @@ class InventoryMovementRowOut(BaseModel):
     storage_location_id: str
     quantity_delta: int
     movement_type: str
+    actor_user_id: str | None = None
     created_at: str
 
 
@@ -60,6 +61,7 @@ async def list_inventory_movements(
             storage_location_id=str(m.storage_location_id),
             quantity_delta=m.quantity_delta,
             movement_type=m.movement_type,
+            actor_user_id=str(m.actor_user_id) if m.actor_user_id else None,
             created_at=m.created_at.isoformat(),
         )
         for m, p in rows

@@ -187,6 +187,8 @@ async def detach_cancelled_order_from_supply(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     order: FbsOrder,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> FbsSupply | None:
     """Remove cancelled order from FBS supply and fix packaging task totals."""
     if order.supply_id is None:
@@ -238,7 +240,12 @@ async def detach_cancelled_order_from_supply(
         return supply
 
     if supply.status == FBS_SUPPLY_STATUS_ASSEMBLING:
-        return await try_promote_fbs_supply_if_ready(session, tenant_id, supply.id)
+        return await try_promote_fbs_supply_if_ready(
+            session,
+            tenant_id,
+            supply.id,
+            actor_user_id=actor_user_id,
+        )
     return supply
 
 
@@ -668,6 +675,8 @@ async def _write_off_active_orders_once(
     tenant_id: uuid.UUID,
     supply: FbsSupply,
     task: PackagingTask,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> None:
     """Write off each packed order once and leave an auditable reversal unit."""
     order_ids = [
@@ -716,7 +725,12 @@ async def _write_off_active_orders_once(
             continue
         if order.marketplace == "ozon":
             try:
-                await _write_off_ozon_order(session, tenant_id=tenant_id, order=order)
+                await _write_off_ozon_order(
+                    session,
+                    tenant_id=tenant_id,
+                    order=order,
+                    actor_user_id=actor_user_id,
+                )
             except OzonPackagingError as exc:
                 raise FbsPackagingIntegrationError(str(exc)) from exc
             continue
@@ -749,6 +763,7 @@ async def _write_off_active_orders_once(
                 product_id=order.product_id,
                 storage_location_id=storage_location_id,
                 quantity=1,
+                actor_user_id=actor_user_id,
             )
         except ValueError as exc:
             if str(exc) != "insufficient stock":
@@ -766,6 +781,8 @@ async def try_promote_fbs_supply_if_ready(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> FbsSupply | None:
     supply = await _load_supply(
         session,
@@ -790,7 +807,13 @@ async def try_promote_fbs_supply_if_ready(
         return supply
 
     if task is not None:
-        await _write_off_active_orders_once(session, tenant_id, supply, task)
+        await _write_off_active_orders_once(
+            session,
+            tenant_id,
+            supply,
+            task,
+            actor_user_id=actor_user_id,
+        )
 
     supply.status = FBS_SUPPLY_STATUS_PACKED
     for order in supply.orders:
@@ -806,24 +829,38 @@ async def sync_fbs_supply_on_packaging_done(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     packaging_task_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> FbsSupply | None:
     supply = await _load_supply_by_packaging_task(
         session, tenant_id, packaging_task_id, with_orders=True
     )
     if supply is None:
         return None
-    return await try_promote_fbs_supply_if_ready(session, tenant_id, supply.id)
+    return await try_promote_fbs_supply_if_ready(
+        session,
+        tenant_id,
+        supply.id,
+        actor_user_id=actor_user_id,
+    )
 
 
 async def sync_fbs_supply_after_order_marking_update(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     order_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> FbsSupply | None:
     order = await session.get(FbsOrder, order_id)
     if order is None or order.tenant_id != tenant_id or order.supply_id is None:
         return None
-    return await try_promote_fbs_supply_if_ready(session, tenant_id, order.supply_id)
+    return await try_promote_fbs_supply_if_ready(
+        session,
+        tenant_id,
+        order.supply_id,
+        actor_user_id=actor_user_id,
+    )
 
 
 async def _load_supply_by_packaging_task(
