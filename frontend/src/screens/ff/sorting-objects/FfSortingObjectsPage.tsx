@@ -36,6 +36,16 @@ export function FfSortingObjectsPage({ token, warehouses }: Props) {
   // Склад выбирается руками, как на карте: раскладка идёт на конкретном складе,
   // и молча показывать первый попавшийся значит врать оператору.
   const [warehouseId, setWarehouseId] = useState<string | null>(warehouses[0]?.id ?? null)
+
+  // Список складов грузится в App отдельно и приезжает после первого рендера.
+  // Состояние, заведённое пустым списком, так бы и осталось пустым, и экран
+  // навсегда показывал бы «Нет складов» при живых складах.
+  useEffect(() => {
+    setWarehouseId((current) => {
+      if (current && warehouses.some((one) => one.id === current)) return current
+      return warehouses[0]?.id ?? null
+    })
+  }, [warehouses])
   const [data, setData] = useState<ApiSorting | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Счётчик загрузок нужен как ключ экрана.
