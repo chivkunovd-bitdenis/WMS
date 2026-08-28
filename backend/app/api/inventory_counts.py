@@ -22,7 +22,15 @@ require_inventory_access = require_ff_permission(PERM_INVENTORY)
 
 
 class InventoryCountObjectIn(BaseModel):
-    type: Literal["product", "storage_location", "location", "cell"]
+    type: Literal[
+        "product",
+        "storage_location",
+        "location",
+        "cell",
+        "pallet",
+        "box",
+        "cargo_place",
+    ]
     id: uuid.UUID
     storage_location_id: uuid.UUID | None = None
 
@@ -360,6 +368,7 @@ def _http_error(exc: service.InventoryCountError) -> HTTPException:
         "already_posted",
         "not_cancellable",
         "empty_count",
+        "container_has_no_stock",
         "balance_changed_during_post",
     }:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)

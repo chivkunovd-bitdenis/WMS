@@ -8,10 +8,16 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
+from app.models.inbound_intake import (
+    InboundIntakeCargoPlace,
+    InboundIntakeRequest,
+)
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
+from app.models.pallet import Pallet
 from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
+from app.models.warehouse_box import WarehouseBox
 
 
 @dataclass(frozen=True)
@@ -92,6 +98,8 @@ async def _balance(
     quantity: int,
     *,
     location_id: uuid.UUID | None = None,
+    container_kind: str | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> None:
     async with SessionLocal() as session:
         session.add(
@@ -99,12 +107,57 @@ async def _balance(
                 tenant_id=setup.tenant_id,
                 storage_location_id=location_id or setup.location_id,
                 product_id=product_id,
+                container_kind=container_kind,
+                container_id=container_id,
                 quantity=quantity,
                 quantity_unpacked=quantity,
                 quantity_packed=0,
             )
         )
         await session.commit()
+
+
+async def _containers(
+    setup: TenantSetup,
+) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID]:
+    async with SessionLocal() as session:
+        request = InboundIntakeRequest(
+            tenant_id=setup.tenant_id,
+            warehouse_id=setup.warehouse_id,
+            status="receiving",
+        )
+        pallet = Pallet(
+            tenant_id=setup.tenant_id,
+            warehouse_id=setup.warehouse_id,
+            code=f"П-{uuid.uuid4().hex[:8]}",
+            barcode=f"PLT-{uuid.uuid4().hex}",
+            storage_location_id=setup.location_id,
+        )
+        session.add_all([request, pallet])
+        await session.flush()
+        warehouse_box = WarehouseBox(
+            tenant_id=setup.tenant_id,
+            warehouse_id=setup.warehouse_id,
+            internal_barcode=f"BOX-{uuid.uuid4().hex}",
+            storage_location_id=setup.location_id,
+            pallet_id=pallet.id,
+        )
+        empty_box = WarehouseBox(
+            tenant_id=setup.tenant_id,
+            warehouse_id=setup.warehouse_id,
+            internal_barcode=f"EMPTY-{uuid.uuid4().hex}",
+            storage_location_id=setup.location_id,
+        )
+        cargo_place = InboundIntakeCargoPlace(
+            tenant_id=setup.tenant_id,
+            request_id=request.id,
+            place_number=1,
+            internal_barcode=f"CARGO-{uuid.uuid4().hex}",
+            pallet_id=pallet.id,
+        )
+        session.add_all([warehouse_box, empty_box, cargo_place])
+        await session.commit()
+        return pallet.id, warehouse_box.id, cargo_place.id, empty_box.id
 
 
 async def _create_all(async_client: AsyncClient, setup: TenantSetup) -> dict[str, object]:
@@ -186,7 +239,7 @@ async def test_inventory_count_seller_and_category_filters_do_not_leak_other_pro
 
 
 @pytest.mark.asyncio
-async def test_inventory_count_object_step_one_supports_location_and_product_only(
+async def test_inventory_count_object_keeps_existing_location_and_product_scopes(
     async_client: AsyncClient,
 ) -> None:
     setup = await _tenant(async_client, "Object")
@@ -204,15 +257,178 @@ async def test_inventory_count_object_step_one_supports_location_and_product_onl
     assert by_location.status_code == 201, by_location.text
     assert [line["product_id"] for line in by_location.json()["lines"]] == [str(product)]
 
-    unsupported = await async_client.post(
+    by_product = await async_client.post(
         "/operations/inventory-counts",
         headers=setup.headers,
         json={
             "source": "object",
-            "object": {"type": "box", "id": str(uuid.uuid4())},
+            "object": {"type": "product", "id": str(product)},
         },
     )
-    assert unsupported.status_code == 422
+    assert by_product.status_code == 201, by_product.text
+    assert [line["product_id"] for line in by_product.json()["lines"]] == [str(product)]
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_by_box_uses_exact_box_balances(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "BoxCount")
+    first_product = await _product(async_client, setup, name="Товар 18")
+    second_product = await _product(async_client, setup, name="Товар 7")
+    _pallet_id, box_id, _cargo_place_id, _empty_box_id = await _containers(setup)
+    await _balance(
+        setup,
+        first_product,
+        18,
+        container_kind="box",
+        container_id=box_id,
+    )
+    await _balance(
+        setup,
+        second_product,
+        7,
+        container_kind="box",
+        container_id=box_id,
+    )
+    # Тот же SKU лежит россыпью в той же ячейке. Пересчёт короба не должен
+    # смешивать этот остаток с 18 штуками внутри короба.
+    await _balance(setup, first_product, 99)
+
+    response = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={
+            "source": "object",
+            "object": {"type": "box", "id": str(box_id)},
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    lines = {
+        line["product_id"]: (
+            line["expected_quantity"],
+            line["container_kind"],
+            line["container_id"],
+        )
+        for line in response.json()["lines"]
+    }
+    assert lines == {
+        str(first_product): (18, "box", str(box_id)),
+        str(second_product): (7, "box", str(box_id)),
+    }
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_by_cargo_place_uses_exact_cargo_place_balances(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "CargoCount")
+    product = await _product(async_client, setup, name="Товар в грузоместе")
+    _pallet_id, _box_id, cargo_place_id, _empty_box_id = await _containers(setup)
+    await _balance(
+        setup,
+        product,
+        11,
+        container_kind="cargo_place",
+        container_id=cargo_place_id,
+    )
+
+    response = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={
+            "source": "object",
+            "object": {"type": "cargo_place", "id": str(cargo_place_id)},
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assert [
+        (
+            line["product_id"],
+            line["expected_quantity"],
+            line["container_kind"],
+            line["container_id"],
+        )
+        for line in response.json()["lines"]
+    ] == [(str(product), 11, "cargo_place", str(cargo_place_id))]
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_by_pallet_includes_nested_container_balances(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "PalletCount")
+    pallet_product = await _product(async_client, setup, name="Товар на палете")
+    box_product = await _product(async_client, setup, name="Товар во вложенном коробе")
+    cargo_product = await _product(
+        async_client, setup, name="Товар во вложенном грузоместе"
+    )
+    pallet_id, box_id, cargo_place_id, _empty_box_id = await _containers(setup)
+    await _balance(
+        setup,
+        pallet_product,
+        3,
+        container_kind="pallet",
+        container_id=pallet_id,
+    )
+    await _balance(
+        setup,
+        box_product,
+        5,
+        container_kind="box",
+        container_id=box_id,
+    )
+    await _balance(
+        setup,
+        cargo_product,
+        9,
+        container_kind="cargo_place",
+        container_id=cargo_place_id,
+    )
+
+    response = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={
+            "source": "object",
+            "object": {"type": "pallet", "id": str(pallet_id)},
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    lines = {
+        (line["container_kind"], line["container_id"], line["product_id"]): line[
+            "expected_quantity"
+        ]
+        for line in response.json()["lines"]
+    }
+    assert lines == {
+        ("pallet", str(pallet_id), str(pallet_product)): 3,
+        ("box", str(box_id), str(box_product)): 5,
+        ("cargo_place", str(cargo_place_id), str(cargo_product)): 9,
+    }
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_by_empty_container_returns_clear_conflict(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "EmptyContainer")
+    _pallet_id, _box_id, _cargo_place_id, empty_box_id = await _containers(setup)
+
+    response = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={
+            "source": "object",
+            "object": {"type": "box", "id": str(empty_box_id)},
+        },
+    )
+
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"] == "container_has_no_stock"
 
 
 @pytest.mark.asyncio
