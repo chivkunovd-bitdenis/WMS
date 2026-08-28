@@ -44,6 +44,7 @@ import { HonestSignProductPage } from './screens/shared/HonestSignProductPage'
 import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
 import { FfStoragePage } from './screens/ff/FfStoragePage'
 import { FfInventoryPage } from './screens/ff/inventory/FfInventoryPage'
+import { FfProductsFbsPage } from './screens/ff/products-fbs/FfProductsFbsPage'
 import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff/FfInboundRequestView'
 import { FfInboundQueuePage } from './screens/ff/FfInboundQueuePage'
 import { FfProductsCatalogScreen } from './screens/v2/FfProductsCatalogScreen'
@@ -3172,6 +3173,23 @@ export default function App() {
           <Route
             path="ff/inventory"
             element={token && canInventoryOps ? <FfStoragePage isFulfillmentAdmin={isFulfillmentAdmin} token={token} /> : ffAccessDenied}
+          />
+
+          {/* Управление остатком FBS: доля свободного остатка вместо числа штук.
+              Отдельный адрес, потому что «ff/products» — существующий каталог,
+              а этот экран про правила публикации, а не про карточки товара. */}
+          <Route
+            path="ff/fbs-stock"
+            element={
+              token && isFulfillmentAdmin ? (
+                <FfProductsFbsPage
+                  token={token}
+                  sellers={sellers.map((seller) => ({ id: seller.id, name: seller.name }))}
+                />
+              ) : (
+                ffAccessDenied
+              )
+            }
           />
 
           {/* Пересчёт живёт отдельным адресом: «ff/inventory» занят экраном

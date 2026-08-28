@@ -23,9 +23,9 @@ import {
   freeStock,
   publishedQty,
   ruleFor,
-  sellerById,
   type FbsRule,
   type Product,
+  type Seller,
 } from './stub'
 
 // Экран «Товары» — бывший «Каталог».
@@ -37,8 +37,46 @@ import {
 
 type Row = { product: Product; rule: FbsRule }
 
-export function ProductsScreen({ onNote }: { onNote: (note: string) => void }) {
-  const [rules, setRules] = useState<FbsRule[]>(INITIAL_RULES)
+/**
+ * Экран умеет работать и от сервера, и от заглушки.
+ *
+ * Данные приходят пропсами, а если их не передали — берутся выдуманные. Это не
+ * запасной путь на всякий случай: превью макета обязано открываться без сервера,
+ * иначе смотреть на экран можно будет только после того, как бэк готов, а
+ * смотреть надо раньше.
+ */
+type ProductsScreenProps = {
+  onNote: (note: string) => void
+  products?: Product[]
+  sellers?: Seller[]
+  rules?: FbsRule[]
+  loading?: boolean
+  /** Сохранить правило для перечисленных товаров. Без него экран правит только себя. */
+  onSaveRule?: (productIds: string[], rule: FbsRule) => void
+  onBindWarehouse?: (sellerId: string, warehouseId: string, wbWarehouseId: string) => void
+}
+
+export function ProductsScreen({
+  onNote,
+  products: productsProp,
+  sellers: sellersProp,
+  rules: rulesProp,
+  loading = false,
+  onSaveRule,
+  onBindWarehouse,
+}: ProductsScreenProps) {
+  const products = productsProp ?? PRODUCTS
+  const sellers = sellersProp ?? SELLERS
+  const [localRules, setLocalRules] = useState<FbsRule[]>(INITIAL_RULES)
+  const rules = rulesProp ?? localRules
+  const setRules = setLocalRules
+  const sellerById = useMemo(() => {
+    const byId = new Map(sellers.map((one) => [one.id, one]))
+    // Товар без известного продавца на экране всё равно показываем: спрятать
+    // строку значит спрятать остаток, а он есть.
+    return (id: string): Seller =>
+      byId.get(id) ?? { id, name: '—', warehouses: [], wbWarehouses: [] }
+  }, [sellers])
   const [query, setQuery] = useState('')
   const [sellerId, setSellerId] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -47,16 +85,16 @@ export function ProductsScreen({ onNote }: { onNote: (note: string) => void }) {
 
   const rows: Row[] = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    return PRODUCTS.filter((product) => {
+    return products.filter((product) => {
       if (sellerId && product.sellerId !== sellerId) return false
       if (!needle) return true
       return [product.name, product.sku, product.barcode].some((value) =>
         value.toLowerCase().includes(needle),
       )
     }).map((product) => ({ product, rule: ruleFor(rules, product.id) }))
-  }, [query, rules, sellerId])
+  }, [products, query, rules, sellerId])
 
-  const chosen = PRODUCTS.filter((product) => selected.has(product.id))
+  const chosen = products.filter((product) => selected.has(product.id))
   // Условие владельца: массово задавать процент можно только внутри одного
   // продавца. У разных продавцов разные склады, и «применить ко всем» тихо
   // разложило бы проценты не туда.
@@ -214,7 +252,7 @@ export function ProductsScreen({ onNote }: { onNote: (note: string) => void }) {
               setSelected(new Set())
               setBulkError(null)
             }}
-            options={SELLERS.map((one) => ({ value: one.id, label: one.name }))}
+            options={sellers.map((one) => ({ value: one.id, label: one.name }))}
             emptyLabel="Все продавцы"
             testId="products-filter-seller"
           />
@@ -227,6 +265,7 @@ export function ProductsScreen({ onNote }: { onNote: (note: string) => void }) {
         testId="products-table"
         columns={columns}
         rows={rows}
+        loading={loading}
         getRowKey={({ product }) => product.id}
         empty={{ title: 'Ничего не нашлось', hint: 'Измените поиск или фильтр по продавцу.' }}
       />
@@ -239,21 +278,29 @@ export function ProductsScreen({ onNote }: { onNote: (note: string) => void }) {
           rule={ruleFor(rules, editing[0]!.id)}
           onClose={() => setEditing(null)}
           onSave={(rule) => {
-            setRules((current) => {
-              const ids = editing.map((one) => one.id)
-              const rest = current.filter((one) => !ids.includes(one.productId))
-              return [...rest, ...ids.map((productId) => ({ ...rule, productId }))]
-            })
-            onNote(
-              editing.length > 1
-                ? `Заглушка: правило применено к ${editing.length} товарам`
-                : 'Заглушка: правило сохранено',
-            )
+            const ids = editing.map((one) => one.id)
+            if (onSaveRule) {
+              onSaveRule(ids, rule)
+            } else {
+              setRules((current) => [
+                ...current.filter((one) => !ids.includes(one.productId)),
+                ...ids.map((productId) => ({ ...rule, productId })),
+              ])
+              onNote(
+                ids.length > 1
+                  ? `Заглушка: правило применено к ${ids.length} товарам`
+                  : 'Заглушка: правило сохранено',
+              )
+            }
             setEditing(null)
           }}
-          onBind={(warehouseId, wbWarehouseId) =>
+          onBind={(warehouseId, wbWarehouseId) => {
+            if (onBindWarehouse) {
+              onBindWarehouse(editing[0]!.sellerId, warehouseId, wbWarehouseId)
+              return
+            }
             onNote(`Заглушка: склад сопоставлен (${warehouseId} → ${wbWarehouseId || 'сброшено'})`)
-          }
+          }}
         />
       ) : null}
     </Box>
