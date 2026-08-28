@@ -358,7 +358,16 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
         onPrintCell={printCell}
         onInventory={(row: MapRow) => void openInventory(row)}
         historyFor={(row: MapRow) =>
-          data?.journal.filter((entry) => entry.subject === row.title) ?? []
+          // История строки — это не только то, что двигали саму строку, но и
+          // то, что клали в неё и забирали из неё. Иначе у короба, в который
+          // только что положили товар, история пустая: переезжал товар, а не
+          // короб, и по одному названию строки запись не находится.
+          data?.journal.filter(
+            (entry) =>
+              entry.subject === row.title ||
+              entry.from_label === row.title ||
+              entry.to_label === row.title,
+          ) ?? []
         }
       />
       <InventoryCountDialog
