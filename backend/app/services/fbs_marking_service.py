@@ -157,23 +157,56 @@ def normalize_check_status(raw: Any) -> str | None:
     return None
 
 
+def _normalize_decision(decision: str | None) -> str:
+    """Ключ вердикта WB без разделителей: sgtinApplied, sgtin_applied и
+    sgtin-applied — один и тот же ответ, и расходиться на этом нельзя."""
+    if decision is None:
+        return ""
+    key = decision.strip().lower()
+    for separator in ("-", "_", " "):
+        key = key.replace(separator, "")
+    return key
+
+
 def map_wb_decision_to_meta_status(decision: str | None) -> str | None:
     if decision is None:
         return None
-    key = decision.strip().lower().replace("-", "_").replace(" ", "_")
+    key = _normalize_decision(decision)
     mapping = {
         "accepted": META_STATUS_ACCEPTED,
         "filled": META_STATUS_ACCEPTED,
+        # Вердикты WB по sgtin. Перечень собран разбором боевых ответов WB
+        # 20.08.2026 и записан в docs/BACKLOG-2026-08-19-CHAT-RU.md, раздел H.
+        # Раньше их не было в словаре вообще: любой из них считался неизвестным,
+        # а неизвестное — «WB ещё не подтвердил», и сдача вставала намертво,
+        # хотя ответ WB уже окончательный и ждать нечего.
+        #
+        # Сдавать можно:
+        "sgtinintroduced": META_STATUS_ACCEPTED,  # введён в оборот
+        "sgtinsoldb2b": META_STATUS_ACCEPTED,  # продан по B2B, оборот закрыт
+        "deadlineexceeded": META_STATUS_ACCEPTED,  # WB не дождался ЧЗ и пропустил
+        # Сдавать нельзя — это отказ, а не «подождите»:
+        "sgtinemitted": META_STATUS_REJECTED,  # код только эмитирован
+        "sgtinapplied": META_STATUS_REJECTED,  # нанесён, но не введён в оборот
+        "sgtinappliednotpaid": META_STATUS_REJECTED,
+        "sgtinwrittenoff": META_STATUS_REJECTED,
+        "sgtinwithdrawn": META_STATUS_REJECTED,
+        "sgtinretired": META_STATUS_REJECTED,
+        "sgtindisaggregated": META_STATUS_REJECTED,
+        "sgtindisaggregation": META_STATUS_REJECTED,
+        "sgtinnotfound": META_STATUS_REJECTED,
+        "sgtinnogs": META_STATUS_REJECTED,  # потерян разделитель (см. fbs_kiz_service)
+        "sgtininvalidformat": META_STATUS_REJECTED,
+        "sgtininvalidpattern": META_STATUS_REJECTED,
+        "sgtinhasinvalidsymbols": META_STATUS_REJECTED,
+        "sgtinhasnonlatinsymbols": META_STATUS_REJECTED,
         "rejected": META_STATUS_REJECTED,
         "invalid": META_STATUS_REJECTED,
         "pending": META_STATUS_PENDING,
         "allowedwithoutcheck": META_STATUS_ALLOWED_WITHOUT_CHECK,
-        "allowed_without_check": META_STATUS_ALLOWED_WITHOUT_CHECK,
         "replacementrequired": META_STATUS_REPLACEMENT_REQUIRED,
-        "replacement_required": META_STATUS_REPLACEMENT_REQUIRED,
         "optional": META_STATUS_ALLOWED_WITHOUT_CHECK,
         "notrequired": META_STATUS_ALLOWED_WITHOUT_CHECK,
-        "not_required": META_STATUS_ALLOWED_WITHOUT_CHECK,
     }
     return mapping.get(key)
 
@@ -289,6 +322,48 @@ def _meta_details_from_wb(details: tuple[MarketplaceMetaDetail, ...]) -> dict[st
     return out
 
 
+# Решения WB, при которых заказ можно сдавать: код принят или не требуется.
+_DELIVERY_OK_DECISIONS = frozenset(
+    {
+        "accepted",
+        "filled",
+        "optional",
+        "notrequired",
+        "sgtinintroduced",
+        "sgtinsoldb2b",
+        "deadlineexceeded",
+    }
+)
+
+# Вердикты, у которых своя причина: оператору важно знать, что делать, а
+# «WB не принял маркировку» не подсказывает ничего.
+_DECISION_MESSAGES = {
+    "sgtinapplied": (
+        "Код нанесён, но не введён в оборот в Честном знаке — "
+        "вводит селлер, мы на это повлиять не можем."
+    ),
+    "sgtinappliednotpaid": "Код не оплачен в Честном знаке — на стороне селлера.",
+    "sgtinnogs": "Код без разделителей — отсканируйте Честный знак заново целиком.",
+    "sgtinnotfound": "Честный знак не знает такого кода.",
+    "sgtinwrittenoff": "Код уже выведен из оборота.",
+    "sgtinwithdrawn": "Код отозван в Честном знаке.",
+}
+
+
+def _same_marking_value(local: str | None, remote: str | None) -> bool:
+    """Один ли это код с точностью до невидимых разделителей.
+
+    Сканер, работающий как клавиатура, не передаёт GS-разделители (0x1D): у нас
+    код оседает склеенным, а WB возвращает его со всеми разделителями. Побайтное
+    сравнение объявляло такую пару разными кодами, помечало маркировку как
+    «WB подтвердил другой код» и намертво блокировало сдачу — при том, что WB
+    код принял (бой 28.08.2026, ИП Рябов, десять заказов).
+    """
+    if local is None or remote is None:
+        return local == remote
+    return local.replace("\x1d", "") == remote.replace("\x1d", "")
+
+
 def compute_delivery_allowed(
     order: FbsOrder,
     markings: list[FbsOrderMarking],
@@ -310,13 +385,13 @@ def compute_delivery_allowed(
         if isinstance(reason, str) and reason.strip():
             return False
         remote_value = details.get("value")
-        if isinstance(remote_value, str) and remote_value != mark.value:
+        if isinstance(remote_value, str) and not _same_marking_value(mark.value, remote_value):
             return False
         decision = details.get("decision")
         if not isinstance(decision, str):
             return False
-        normalized = decision.strip().lower().replace("-", "_").replace(" ", "_")
-        if normalized not in {"accepted", "filled", "optional", "notrequired", "not_required"}:
+        normalized = _normalize_decision(decision)
+        if normalized not in _DELIVERY_OK_DECISIONS:
             return False
     return True
 
@@ -339,18 +414,19 @@ def delivery_marking_message(
         if mark.meta_status == META_STATUS_REPLACEMENT_REQUIRED:
             return "WB подтвердил другой код маркировки."
         if mark.meta_status == META_STATUS_REJECTED:
-            return "WB не принял маркировку."
+            named = _DECISION_MESSAGES.get(_normalize_decision(details.get("decision")))
+            return named if named else "WB не принял маркировку."
         reason = details.get("reason") if "reason" in details else mark.reason
         if isinstance(reason, str) and reason.strip():
             return f"WB не принял маркировку: {reason.strip()}"
         remote_value = details.get("value")
-        if isinstance(remote_value, str) and remote_value != mark.value:
+        if isinstance(remote_value, str) and not _same_marking_value(mark.value, remote_value):
             return "WB подтвердил другой код маркировки."
         decision = details.get("decision")
         if not isinstance(decision, str):
             return "WB ещё не подтвердил маркировку."
-        normalized = decision.strip().lower().replace("-", "_").replace(" ", "_")
-        if normalized not in {"accepted", "filled", "optional", "notrequired", "not_required"}:
+        normalized = _normalize_decision(decision)
+        if normalized not in _DELIVERY_OK_DECISIONS:
             return "WB ещё не подтвердил маркировку."
     return "WB: маркировка подтверждена."
 
@@ -662,7 +738,9 @@ async def _sync_order_meta_from_wb(
             decision = meta_detail.decision.strip().lower()
             if decision == "required" and not meta_detail.value:
                 marking.meta_status = META_STATUS_MISSING
-            elif meta_detail.value and meta_detail.value != marking.value:
+            elif meta_detail.value and not _same_marking_value(
+                marking.value, meta_detail.value
+            ):
                 marking.meta_status = META_STATUS_REPLACEMENT_REQUIRED
             elif map_wb_decision_to_meta_status(meta_detail.decision) is None:
                 marking.meta_status = META_STATUS_UNKNOWN
