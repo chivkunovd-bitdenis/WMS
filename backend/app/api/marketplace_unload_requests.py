@@ -48,6 +48,7 @@ from app.services import marketplace_unload_collect_service as collect_svc
 from app.services import marketplace_unload_pick_service as pick_svc
 from app.services import marketplace_unload_service as svc
 from app.services import packaging_task_service as pkg_svc
+from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import get_warehouse
 from app.services.marketplace_unload_box_service import MarketplaceUnloadBoxError
 from app.services.marketplace_unload_pick_service import MarketplaceUnloadPickError
@@ -215,8 +216,8 @@ class MarketplaceUnloadPickAllocationOut(BaseModel):
     product_id: str
     sku_code: str
     product_name: str
-    storage_location_id: str
-    location_code: str
+    storage_location_id: str | None
+    location_code: str | None
     quantity: int
 
 
@@ -311,14 +312,18 @@ class MarketplaceUnloadRequestDetailOut(BaseModel):
     linked_packaging_task: LinkedPackagingTaskOut | None = None
 
 
-def _box_scan_out(result: box_svc.BoxScanResult) -> MarketplaceUnloadBoxScanOut:
+def _box_scan_out(
+    result: box_svc.BoxScanResult,
+    *,
+    reveal_storage: bool,
+) -> MarketplaceUnloadBoxScanOut:
     if result.kind == "location":
         return MarketplaceUnloadBoxScanOut(
             kind="location",
             storage_location_id=str(result.storage_location_id)
-            if result.storage_location_id is not None
+            if reveal_storage and result.storage_location_id is not None
             else None,
-            location_code=result.location_code,
+            location_code=result.location_code if reveal_storage else None,
         )
     if result.kind == "ready_box":
         return MarketplaceUnloadBoxScanOut(
@@ -332,7 +337,7 @@ def _box_scan_out(result: box_svc.BoxScanResult) -> MarketplaceUnloadBoxScanOut:
     return MarketplaceUnloadBoxScanOut(
         kind="product",
         storage_location_id=str(result.storage_location_id)
-        if result.storage_location_id is not None
+        if reveal_storage and result.storage_location_id is not None
         else None,
         id=str(ln.id),
         product_id=str(ln.product_id),
@@ -422,7 +427,11 @@ def _summary_out(
     )
 
 
-def _pick_alloc_out(alloc: MarketplaceUnloadPickAllocation) -> MarketplaceUnloadPickAllocationOut:
+def _pick_alloc_out(
+    alloc: MarketplaceUnloadPickAllocation,
+    *,
+    reveal_storage: bool,
+) -> MarketplaceUnloadPickAllocationOut:
     p = alloc.product
     loc = alloc.storage_location
     return MarketplaceUnloadPickAllocationOut(
@@ -430,8 +439,8 @@ def _pick_alloc_out(alloc: MarketplaceUnloadPickAllocation) -> MarketplaceUnload
         product_id=str(alloc.product_id),
         sku_code=p.sku_code,
         product_name=p.name,
-        storage_location_id=str(alloc.storage_location_id),
-        location_code=loc.code,
+        storage_location_id=str(alloc.storage_location_id) if reveal_storage else None,
+        location_code=loc.code if reveal_storage else None,
         quantity=int(alloc.quantity),
     )
 
@@ -455,12 +464,16 @@ def _detail_out(
     seller_name: str | None,
     linked_packaging_task: LinkedPackagingTaskOut | None = None,
     seller_plan_only: bool = False,
+    reveal_storage: bool = True,
 ) -> MarketplaceUnloadRequestDetailOut:
     boxes = [] if seller_plan_only else [_box_out(b) for b in getattr(r, "boxes", []) or []]
     picks = (
         []
         if seller_plan_only
-        else [_pick_alloc_out(a) for a in getattr(r, "pick_allocations", []) or []]
+        else [
+            _pick_alloc_out(a, reveal_storage=reveal_storage)
+            for a in getattr(r, "pick_allocations", []) or []
+        ]
     )
     picked_map = {} if seller_plan_only else _picked_by_product(r)
     show_pick_discrepancy = (not seller_plan_only) and r.status in (
@@ -534,6 +547,9 @@ async def _detail_with_packaging(
         seller_name=seller_name,
         linked_packaging_task=linked,
         seller_plan_only=seller_plan_only,
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, tenant_id
+        ),
     )
 
 
@@ -969,6 +985,9 @@ async def update_marketplace_unload(
         warehouse_name=r.warehouse.name,
         seller_name=r.seller.name if r.seller is not None else None,
         seller_plan_only=_seller_plan_only(user),
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, user.tenant_id
+        ),
     )
 
 
@@ -1028,6 +1047,9 @@ async def replace_marketplace_unload_lines(
         warehouse_name=r.warehouse.name,
         seller_name=r.seller.name if r.seller is not None else None,
         seller_plan_only=_seller_plan_only(user),
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, user.tenant_id
+        ),
     )
 
 
@@ -1053,6 +1075,9 @@ async def plan_marketplace_unload(
         warehouse_name=r.warehouse.name,
         seller_name=r.seller.name if r.seller is not None else None,
         seller_plan_only=_seller_plan_only(user),
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, user.tenant_id
+        ),
     )
 
 
@@ -1078,6 +1103,9 @@ async def unplan_marketplace_unload(
         warehouse_name=r.warehouse.name,
         seller_name=r.seller.name if r.seller is not None else None,
         seller_plan_only=_seller_plan_only(user),
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, user.tenant_id
+        ),
     )
 
 
@@ -1108,6 +1136,9 @@ async def cancel_marketplace_unload(
         r,
         warehouse_name=r.warehouse.name,
         seller_name=r.seller.name if r.seller is not None else None,
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, user.tenant_id
+        ),
     )
 
 
@@ -1135,6 +1166,9 @@ async def confirm_marketplace_unload(
         r,
         warehouse_name=r.warehouse.name,
         seller_name=r.seller.name if r.seller is not None else None,
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, user.tenant_id
+        ),
     )
 
 
@@ -1152,6 +1186,9 @@ async def get_marketplace_unload_pick_options(
         opts = await pick_svc.get_pick_options(session, user.tenant_id, request_id)
     except MarketplaceUnloadPickError as exc:
         raise _map_pick_err(exc) from None
+    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(
+        session, user.tenant_id
+    )
     return [
         MarketplaceUnloadPickOptionProductOut(
             product_id=str(o.product_id),
@@ -1169,7 +1206,9 @@ async def get_marketplace_unload_pick_options(
                     picked=loc.picked,
                 )
                 for loc in o.locations
-            ],
+            ]
+            if reveal_storage
+            else [],
         )
         for o in opts
     ]
@@ -1199,12 +1238,15 @@ async def scan_marketplace_unload_pick(
         )
     except MarketplaceUnloadPickError as exc:
         raise _map_pick_err(exc) from None
+    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(
+        session, user.tenant_id
+    )
     return MarketplaceUnloadPickScanOut(
         kind=result.kind,
         storage_location_id=str(result.storage_location_id)
-        if result.storage_location_id is not None
+        if reveal_storage and result.storage_location_id is not None
         else None,
-        location_code=result.location_code,
+        location_code=result.location_code if reveal_storage else None,
         product_id=str(result.product_id) if result.product_id is not None else None,
         sku_code=result.sku_code,
         product_name=result.product_name,
@@ -1236,7 +1278,12 @@ async def add_marketplace_unload_pick_qty(
         )
     except MarketplaceUnloadPickError as exc:
         raise _map_pick_err(exc) from None
-    return _pick_alloc_out(alloc)
+    return _pick_alloc_out(
+        alloc,
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, user.tenant_id
+        ),
+    )
 
 
 @router.post(
@@ -1262,13 +1309,16 @@ async def set_marketplace_unload_pick_qty(
         )
     except MarketplaceUnloadPickError as exc:
         raise _map_pick_err(exc) from None
+    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(
+        session, user.tenant_id
+    )
     return MarketplaceUnloadPickAllocationOut(
         id=str(result.id),
         product_id=str(body.product_id),
         sku_code=result.product.sku_code,
         product_name=result.product.name,
-        storage_location_id=str(result.storage_location_id),
-        location_code=result.location_code,
+        storage_location_id=(str(result.storage_location_id) if reveal_storage else None),
+        location_code=result.location_code if reveal_storage else None,
         quantity=result.quantity,
     )
 
@@ -1304,7 +1354,13 @@ async def save_marketplace_unload_pick_allocations(
         )
     except MarketplaceUnloadPickError as exc:
         raise _map_pick_err(exc) from None
-    return [_pick_alloc_out(a) for a in allocs]
+    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(
+        session, user.tenant_id
+    )
+    return [
+        _pick_alloc_out(a, reveal_storage=reveal_storage)
+        for a in allocs
+    ]
 
 
 @router.post(
@@ -1328,6 +1384,9 @@ async def submit_marketplace_unload(
         r,
         warehouse_name=r.warehouse.name,
         seller_name=r.seller.name if r.seller is not None else None,
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, user.tenant_id
+        ),
     )
 
 
@@ -1384,6 +1443,9 @@ async def ship_marketplace_unload(
         r,
         warehouse_name=r.warehouse.name,
         seller_name=r.seller.name if r.seller is not None else None,
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, user.tenant_id
+        ),
     )
 
 
@@ -1594,7 +1656,12 @@ async def scan_marketplace_unload_box(
         )
     except MarketplaceUnloadBoxError as exc:
         raise _map_box_err(exc) from None
-    return _box_scan_out(result)
+    return _box_scan_out(
+        result,
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, user.tenant_id
+        ),
+    )
 
 
 @router.post(

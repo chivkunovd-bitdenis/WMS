@@ -18,6 +18,7 @@ from app.models.marketplace_unload import (
 from app.models.storage_location import StorageLocation
 from app.services import inventory_service
 from app.services import marketplace_unload_service as mu_svc
+from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
 PICK_EDITABLE_STATUSES = mu_svc.EXECUTION_STATUSES
@@ -297,15 +298,19 @@ async def pick_scan(
 
     req = await _request_for_picking(session, tenant_id, request_id)
 
-    loc = await find_location_by_barcode(session, tenant_id, req.warehouse_id, raw)
-    if loc is not None:
-        return PickScanResult(
-            kind="location",
-            storage_location_id=loc.id,
-            location_code=loc.code,
-        )
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(
+        session, tenant_id
+    )
+    if address_enabled:
+        loc = await find_location_by_barcode(session, tenant_id, req.warehouse_id, raw)
+        if loc is not None:
+            return PickScanResult(
+                kind="location",
+                storage_location_id=loc.id,
+                location_code=loc.code,
+            )
 
-    if storage_location_id is None:
+    if address_enabled and storage_location_id is None:
         raise MarketplaceUnloadPickError("location_required")
 
     from app.services import marketplace_unload_collect_service as collect_svc

@@ -25,6 +25,7 @@ from app.models.product import Product
 from app.models.user import User
 from app.services import marking_code_service as mc_svc
 from app.services import print_template_service as pt_svc
+from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import get_product
 from app.services.marking_label_artifact_service import pdf_bytes_to_png
 from app.services.seller_staff_permissions_service import PERM_HONEST_SIGN
@@ -204,7 +205,7 @@ class PendingMarkingLineOut(BaseModel):
     product_id: str
     sku_code: str
     product_name: str
-    storage_location_code: str
+    storage_location_code: str | None
     qty_need: int
     qty_marking_printed: int
     qty_remaining: int
@@ -1474,6 +1475,9 @@ async def list_pending_marking(
         limit=limit,
         offset=offset,
     )
+    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(
+        session, user.tenant_id
+    )
     return PendingMarkingOut(
         total=total,
         rows=[
@@ -1487,7 +1491,9 @@ async def list_pending_marking(
                 product_id=str(row.product_id),
                 sku_code=row.sku_code,
                 product_name=row.product_name,
-                storage_location_code=row.storage_location_code,
+                storage_location_code=(
+                    row.storage_location_code if reveal_storage else None
+                ),
                 qty_need=row.qty_need,
                 qty_marking_printed=row.qty_marking_printed,
                 qty_remaining=row.qty_remaining,

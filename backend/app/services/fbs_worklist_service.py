@@ -46,6 +46,7 @@ from app.models.seller_wildberries_imported_card import SellerWildberriesImporte
 from app.models.storage_location import StorageLocation
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.models.warehouse import Warehouse
+from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.fbs_stock_availability_service import fbs_available_qty_by_product
 from app.services.inventory_service import OUTBOUND_RESERVE_STATUSES
 from app.services.wb_card_enrichment import (
@@ -368,7 +369,14 @@ async def _load_worklist_context(
     products = await _load_products(session, tenant_id, product_ids)
     cards = await _load_imported_cards(session, tenant_id, seller_nm_pairs)
     availability = await _load_availability_by_warehouse_product(session, tenant_id, orders)
-    locations = await _load_location_balances(session, tenant_id, orders)
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(
+        session, tenant_id
+    )
+    locations = (
+        await _load_location_balances(session, tenant_id, orders)
+        if address_enabled
+        else {}
+    )
     markings = await _load_markings(session, order_ids)
     picks = await _load_active_picks(session, tenant_id, order_ids)
     sticker_assets = await _load_sticker_assets(session, tenant_id, order_ids)
@@ -384,6 +392,7 @@ async def _load_worklist_context(
         "markings": markings,
         "picks": picks,
         "sticker_assets": sticker_assets,
+        "address_storage_enabled": address_enabled,
     }
 
 
@@ -729,7 +738,11 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     sticker_url = print_asset_content_url(sticker_asset.id) if sticker_asset is not None else None
     applied_at = order.sticker_applied_at or (sticker_asset.applied_at if sticker_asset else None)
     pick_location = None
-    if pick_row and pick_row.source_storage_location is not None:
+    if (
+        ctx["address_storage_enabled"]
+        and pick_row
+        and pick_row.source_storage_location is not None
+    ):
         pick_location = pick_row.source_storage_location.code
     picked_at = order.picked_at or (pick_row.picked_at if pick_row else None)
     return {
