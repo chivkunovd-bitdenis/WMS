@@ -13,6 +13,10 @@ from app.models.storage_location import StorageLocation
 # Код в БД; в UI показываем SORTING_LOCATION_LABEL.
 SORTING_LOCATION_CODE = "__SORTING__"
 SORTING_LOCATION_LABEL = "Сортировка"
+# На карте склада остатки из системной sorting-ячейки показаны как объекты,
+# которые ещё не разложили по адресным ячейкам. Эту же подпись должны видеть
+# все операторские документы вместо технического кода из БД.
+UNASSIGNED_LABEL = "Без ячеек"
 
 
 def is_sorting_location(loc: StorageLocation) -> bool:

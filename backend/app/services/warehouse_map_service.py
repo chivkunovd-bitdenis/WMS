@@ -27,6 +27,7 @@ from app.services import inventory_service, pallet_service
 from app.services.inventory_container_service import ContainerKind, validate_container
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
+    UNASSIGNED_LABEL,
     get_or_create_sorting_location,
 )
 from app.services.tenant_settings_service import is_address_storage_enabled
@@ -502,7 +503,7 @@ async def _destination(
         return location.id, None, None, f"Ячейка {location.code}"
     if to_kind in {"unassigned", "sorting"}:
         sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
-        return sorting.id, None, None, "Без ячеек"
+        return sorting.id, None, None, UNASSIGNED_LABEL
     if to_id is None:
         raise WarehouseMapError("destination_required")
     container_kind = cast(ContainerKind, to_kind)
@@ -564,7 +565,7 @@ async def _container_code(
 async def _location_label(session: AsyncSession, location_id: uuid.UUID) -> str:
     location = await session.get(StorageLocation, location_id)
     if location is None or location.code == SORTING_LOCATION_CODE:
-        return "Без ячеек"
+        return UNASSIGNED_LABEL
     return f"Ячейка {location.code}"
 
 
@@ -852,7 +853,7 @@ async def disband_pallet(
     from_label = (
         await _location_label(session, pallet.storage_location_id)
         if pallet.storage_location_id is not None
-        else "Без ячеек"
+        else UNASSIGNED_LABEL
     )
     code = pallet.code
     try:
@@ -866,7 +867,7 @@ async def disband_pallet(
         subject=_container_title("pallet", code),
         quantity=None,
         from_label=from_label,
-        to_label="Без ячеек",
+        to_label=UNASSIGNED_LABEL,
     )
     session.add(event)
     await session.commit()

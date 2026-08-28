@@ -18,6 +18,11 @@ from app.models.pallet import Pallet
 from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.warehouse_box import WarehouseBox
+from app.services.sorting_location_service import (
+    SORTING_LOCATION_CODE,
+    UNASSIGNED_LABEL,
+    get_or_create_sorting_location,
+)
 
 
 @dataclass(frozen=True)
@@ -267,6 +272,39 @@ async def test_inventory_count_object_keeps_existing_location_and_product_scopes
     )
     assert by_product.status_code == 201, by_product.text
     assert [line["product_id"] for line in by_product.json()["lines"]] == [str(product)]
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_uses_human_label_for_sorting_location(
+    async_client: AsyncClient,
+) -> None:
+    # TC-NEW-INVENTORY-SORTING-LABEL-001
+    # Дано: товар ещё лежит в системной sorting-зоне. Когда оператор открывает
+    # документ пересчёта, тогда заголовок группы говорит «Без ячеек», а не
+    # раскрывает технический код, по которому backend находит эту зону.
+    setup = await _tenant(async_client, "SortingLabel")
+    product = await _product(async_client, setup, name="Товар без ячейки")
+    async with SessionLocal() as session:
+        sorting = await get_or_create_sorting_location(
+            session, setup.tenant_id, setup.warehouse_id
+        )
+        sorting_id = sorting.id
+        await session.commit()
+    await _balance(setup, product, 4, location_id=sorting_id)
+
+    response = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={
+            "source": "object",
+            "object": {"type": "product", "id": str(product)},
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    cells = response.json()["cells"]
+    assert cells[0]["label"] == UNASSIGNED_LABEL
+    assert cells[0]["label"] != SORTING_LOCATION_CODE
 
 
 @pytest.mark.asyncio

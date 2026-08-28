@@ -15,6 +15,7 @@ from app.models.inventory_count import InventoryCount, InventoryCountLine
 from app.models.user import User
 from app.services import inventory_count_service as service
 from app.services import tenant_settings_service
+from app.services.sorting_location_service import SORTING_LOCATION_CODE, UNASSIGNED_LABEL
 from app.services.staff_permissions_service import PERM_INVENTORY
 
 router = APIRouter(prefix="/operations/inventory-counts", tags=["operations"])
@@ -289,7 +290,12 @@ async def _detail_out(
             current_quantity=current[line.id],
         )
         if address_storage and location is not None:
-            nodes_by_cell[(str(location.id), location.code)].append(node)
+            label = (
+                UNASSIGNED_LABEL
+                if location.code == SORTING_LOCATION_CODE
+                else location.code
+            )
+            nodes_by_cell[(str(location.id), label)].append(node)
         else:
             no_address_nodes.append(node)
         line_rows.append(
