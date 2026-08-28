@@ -93,6 +93,7 @@ type Props = {
   supplyId: string | null
   initialWorkspace?: FbsWorkspace | null
   open: boolean
+  addressStorageEnabled?: boolean
   onClose: () => void
 }
 
@@ -273,6 +274,7 @@ export function FfFbsSupplyWorkspace({
   supplyId,
   initialWorkspace,
   open,
+  addressStorageEnabled = true,
   onClose,
 }: Props) {
   const [workspace, setWorkspace] = useState<FbsWorkspace | null>(initialWorkspace ?? null)
@@ -1244,6 +1246,7 @@ export function FfFbsSupplyWorkspace({
       routeLabel: workspace.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ',
       deadlineLabel: new Date(workspace.supply.nearest_deadline_at).toLocaleString('ru-RU'),
       printedAtLabel: new Date().toLocaleString('ru-RU'),
+      addressStorageEnabled,
       rows: pickingRows,
     }))
     printWindow.document.close()
@@ -1682,7 +1685,7 @@ export function FfFbsSupplyWorkspace({
           {workspace && stage === 'picking' ? (
             <Stack spacing={2}>
               {!stageIsCurrent ? <Alert severity="success">Подбор завершён. Этот этап доступен только для просмотра.</Alert> : null}
-              <Paper variant="outlined" sx={{ p: 2 }}>
+              {addressStorageEnabled ? <Paper variant="outlined" sx={{ p: 2 }}>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'flex-start' }, mb: 2 }}>
                   <Box>
                     <Typography variant="h6">Сканирование подбора</Typography>
@@ -1702,8 +1705,14 @@ export function FfFbsSupplyWorkspace({
                 </Stack>
                 {pickLocation ? <Alert severity="success" sx={{ mt: 2 }}>Ячейка {pickLocation.code} подтверждена · {pickLocation.warehouse_name}</Alert> : null}
                 {allPicked ? <Alert severity="success" sx={{ mt: 2 }}>Все товары подобраны. Перейдите к упаковке.</Alert> : null}
-              </Paper>
-              <Paper variant="outlined" sx={{ p: 2 }} data-testid="fbs-manual-picking">
+              </Paper> : (
+                <Alert severity={allPicked ? 'success' : 'info'} data-testid="fbs-picking-without-cells">
+                  {allPicked
+                    ? 'Все товары подобраны. Перейдите к упаковке.'
+                    : 'Адресное хранение выключено: подбор выполняется по товару без выбора места.'}
+                </Alert>
+              )}
+              {addressStorageEnabled ? <Paper variant="outlined" sx={{ p: 2 }} data-testid="fbs-manual-picking">
                 <Typography variant="h6">Подбор из ячеек</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>Сканер остаётся доступен выше. Здесь можно снять требуемое количество из конкретной ячейки вручную.</Typography>
                 {manualPickRows.length === 0 ? <Alert severity="info">Нет товаров, ожидающих ручного подбора из ячеек.</Alert> : (
@@ -1775,7 +1784,7 @@ export function FfFbsSupplyWorkspace({
                     ))}
                   </Stack>
                 )}
-              </Paper>
+              </Paper> : null}
               {nextStageControl('picking')}
             </Stack>
           ) : null}
@@ -2449,8 +2458,8 @@ export function FfFbsSupplyWorkspace({
       </Dialog>
       <Dialog open={Boolean(undoOrderId)} onClose={() => setUndoOrderId(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Отменить подбор?</DialogTitle>
-        <DialogContent><Typography>Товар будет возвращён в исходную ячейку. Отменяйте только если в подборе действительно ошибка.</Typography></DialogContent>
-        <DialogActions><Button onClick={() => setUndoOrderId(null)}>Не отменять</Button><Button color="error" variant="contained" onClick={() => { const orderId = undoOrderId; setUndoOrderId(null); if (orderId && workspace) void run(() => undoFbsPick(token, authHeaders, workspace.supply.id, orderId, createFbsIdempotencyKey()), 'Подбор отменён, остаток возвращён в исходную ячейку.') }}>Вернуть в ячейку</Button></DialogActions>
+        <DialogContent><Typography>{addressStorageEnabled ? 'Товар будет возвращён в исходную ячейку.' : 'Товар будет возвращён в остаток.'} Отменяйте только если в подборе действительно ошибка.</Typography></DialogContent>
+        <DialogActions><Button onClick={() => setUndoOrderId(null)}>Не отменять</Button><Button color="error" variant="contained" onClick={() => { const orderId = undoOrderId; setUndoOrderId(null); if (orderId && workspace) void run(() => undoFbsPick(token, authHeaders, workspace.supply.id, orderId, createFbsIdempotencyKey()), addressStorageEnabled ? 'Подбор отменён, остаток возвращён в исходную ячейку.' : 'Подбор отменён, товар возвращён в остаток.') }}>{addressStorageEnabled ? 'Вернуть в ячейку' : 'Вернуть в остаток'}</Button></DialogActions>
       </Dialog>
       <Dialog open={deliverConfirmOpen} onClose={() => setDeliverConfirmOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Передать поставку в {providerName}?</DialogTitle>

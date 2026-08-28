@@ -2739,6 +2739,7 @@ export function FfSuppliesShipmentsPage({
                     authHeaders={authHeaders}
                     requestId={unloadDetail.id}
                     disabled={modalBusy}
+                    addressStorageEnabled={addressStorageEnabled}
                     onChanged={() => void loadDocDetail()}
                     catalogById={catalogById}
                   />
@@ -2755,6 +2756,7 @@ export function FfSuppliesShipmentsPage({
                     <FfPackagingTaskPanel
                       token={token}
                       task={packagingTask}
+                      addressStorageEnabled={addressStorageEnabled}
                       hideDocumentHeader
                       compactLayout
                       // Пункт 10 итерации 2026-08-14: единое поле скана на упаковке различает

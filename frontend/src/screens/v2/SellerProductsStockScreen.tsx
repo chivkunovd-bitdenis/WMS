@@ -107,11 +107,13 @@ function matchesCatalogSearch(
 type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
+  addressStorageEnabled?: boolean
 }
 
 export function SellerProductsStockScreen({
   token,
   authHeaders,
+  addressStorageEnabled = true,
 }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -666,7 +668,7 @@ export function SellerProductsStockScreen({
                 </TableCell>
                 <TableCell align="right">
                   <Stack spacing={0.15} sx={{ minWidth: 0, alignItems: 'flex-end' }}>
-                    <Typography
+                    {addressStorageEnabled ? <Typography
                       variant="caption"
                       sx={{ fontSize: '0.65rem' }}
                       data-testid={`seller-catalog-stock-in-storage-${p.id}`}
@@ -674,7 +676,7 @@ export function SellerProductsStockScreen({
                       noWrap
                     >
                       В ячейках {p.stock_in_storage}
-                    </Typography>
+                    </Typography> : null}
                     <Typography
                       variant="caption"
                       color="text.secondary"

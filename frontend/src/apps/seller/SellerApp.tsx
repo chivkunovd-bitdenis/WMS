@@ -464,6 +464,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   key={catalogScopeKey}
                   token={token}
                   authHeaders={authHeaders}
+                  addressStorageEnabled={me.address_storage_enabled !== false}
                 />
               ) : (
                 accessDenied

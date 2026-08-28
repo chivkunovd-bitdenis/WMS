@@ -28,6 +28,7 @@ import { useMarkingCodePrint, type PrintLineArgs } from '../../utils/useMarkingC
 
 type Props = {
   token: string
+  addressStorageEnabled?: boolean
 }
 
 function rowPrintable(row: PendingMarkingLine): boolean {
@@ -39,7 +40,7 @@ function locationLabel(code?: string | null): string {
   return code === '__SORTING__' ? 'Сортировка' : code
 }
 
-export function FfPendingMarkingPage({ token }: Props) {
+export function FfPendingMarkingPage({ token, addressStorageEnabled = true }: Props) {
   const [rows, setRows] = useState<PendingMarkingLine[]>([])
   const [lineCount, setLineCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -200,7 +201,7 @@ export function FfPendingMarkingPage({ token }: Props) {
                 </TableCell>
                 <TableCell>Документ</TableCell>
                 <TableCell>Товар</TableCell>
-                <TableCell>Ячейка</TableCell>
+                {addressStorageEnabled ? <TableCell>Ячейка</TableCell> : null}
                 <TableCell align="right">Осталось</TableCell>
                 <TableCell align="right">Доступно в пуле</TableCell>
                 <TableCell align="right">Действия</TableCell>
@@ -226,7 +227,9 @@ export function FfPendingMarkingPage({ token }: Props) {
                       {row.sku_code}
                     </Typography>
                   </TableCell>
-                  <TableCell>{locationLabel(row.storage_location_code)}</TableCell>
+                  {addressStorageEnabled ? (
+                    <TableCell>{locationLabel(row.storage_location_code)}</TableCell>
+                  ) : null}
                   <TableCell align="right">
                     <Badge
                       badgeContent={row.qty_remaining}

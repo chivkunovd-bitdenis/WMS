@@ -62,6 +62,7 @@ type Props = {
   authHeaders: Record<string, string>
   requestId: string
   disabled?: boolean
+  addressStorageEnabled?: boolean
   onChanged?: () => void
   /** Каталог WB для фото/ШК/размера в строке товара — тот же, что уже грузит родительская страница. */
   catalogById: Map<string, WbProductCatalogRow>
@@ -72,6 +73,7 @@ export function FfMpUnloadPickPanel({
   authHeaders,
   requestId,
   disabled,
+  addressStorageEnabled = true,
   onChanged,
   catalogById,
 }: Props) {
@@ -198,7 +200,7 @@ export function FfMpUnloadPickPanel({
 
       const scanRes = (await res.json()) as ScanResponse
 
-      if (scanRes.kind === 'location') {
+      if (addressStorageEnabled && scanRes.kind === 'location') {
         setActiveLocationId(scanRes.storage_location_id ?? null)
         setActiveLocationCode(scanRes.location_code ?? null)
         setScanMessage(
@@ -227,11 +229,11 @@ export function FfMpUnloadPickPanel({
           )
           setLastScannedProductId(scanRes.product_id)
         }
-        setScanMessage(
-          `Принято: ${scanRes.product_name} → ${
-            scanRes.location_code ? storageLocationLabel(scanRes.location_code) : 'без ячейки'
-          }`,
-        )
+        setScanMessage(addressStorageEnabled
+          ? `Принято: ${scanRes.product_name} → ${
+              scanRes.location_code ? storageLocationLabel(scanRes.location_code) : 'без ячейки'
+            }`
+          : `Принято: ${scanRes.product_name ?? 'товар'}`)
       }
 
       setScanBarcode('')
@@ -250,6 +252,7 @@ export function FfMpUnloadPickPanel({
     onChanged,
     pickOptions,
     catalogById,
+    addressStorageEnabled,
   ])
 
   const handleScanKeyDown = (e: React.KeyboardEvent) => {
@@ -304,20 +307,20 @@ export function FfMpUnloadPickPanel({
   return (
     <Box>
       {/* Чип активной ячейки */}
-      {activeLocationLabel ? (
+      {addressStorageEnabled && activeLocationLabel ? (
         <Chip
           color="info"
           label={`Ячейка ${activeLocationLabel}`}
           data-testid="ff-mp-pick-active-location"
           sx={{ mb: 1 }}
         />
-      ) : (
+      ) : addressStorageEnabled ? (
         <Chip
           label="Ячейка не выбрана"
           data-testid="ff-mp-pick-active-location"
           sx={{ mb: 1 }}
         />
-      )}
+      ) : null}
 
       {/* Ошибки */}
       {error && (
@@ -331,7 +334,7 @@ export function FfMpUnloadPickPanel({
         <TextField
           inputRef={scanInputRef}
           size="small"
-          label="Штрихкод ячейки или товара"
+          label={addressStorageEnabled ? 'Штрихкод ячейки или товара' : 'Штрихкод товара'}
           value={scanBarcode}
           onChange={(e) => setScanBarcode(e.target.value)}
           onKeyDown={handleScanKeyDown}
@@ -359,6 +362,8 @@ export function FfMpUnloadPickPanel({
       >
         {scanMessage
           ? scanMessage
+          : !addressStorageEnabled
+            ? 'Сканер активен — пикните ШК товара.'
           : activeLocationLabel
             ? `Сканер активен — пикните ШК товара для ячейки ${activeLocationLabel}.`
             : 'Сканер активен — пикните ШК ячейки или товара.'}
@@ -402,12 +407,12 @@ export function FfMpUnloadPickPanel({
                 key={product.product_id}
                 variant="outlined"
                 disableGutters
-                expanded={isExpanded}
+                expanded={addressStorageEnabled ? isExpanded : false}
                 onChange={(_e, nextExpanded) =>
-                  setExpandedByProductId((prev) => ({
-                    ...prev,
-                    [product.product_id]: nextExpanded,
-                  }))
+                  addressStorageEnabled && setExpandedByProductId((prev) => ({
+                      ...prev,
+                      [product.product_id]: nextExpanded,
+                    }))
                 }
                 sx={{
                   minWidth: 0,
@@ -427,7 +432,7 @@ export function FfMpUnloadPickPanel({
                 data-product-id={product.product_id}
               >
                 <AccordionSummary
-                  expandIcon={<ExpandMoreOutlined />}
+                  expandIcon={addressStorageEnabled ? <ExpandMoreOutlined /> : undefined}
                   data-testid={`ff-mp-pick-toggle-${product.product_id}`}
                   sx={{
                     '& .MuiAccordionSummary-content': { minWidth: 0, overflow: 'hidden' },
@@ -468,7 +473,7 @@ export function FfMpUnloadPickPanel({
                     </Table>
                   </TableContainer>
                 </AccordionSummary>
-                <AccordionDetails
+                {addressStorageEnabled ? <AccordionDetails
                   sx={{
                     pt: 0,
                     pl: { xs: 2, sm: 4 },
@@ -586,7 +591,7 @@ export function FfMpUnloadPickPanel({
                       </Typography>
                     )}
                   </Box>
-                </AccordionDetails>
+                </AccordionDetails> : null}
               </Accordion>
             )
           })}
