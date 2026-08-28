@@ -185,27 +185,20 @@ export function PreviewHarness() {
         open={countDialog !== null}
         title={countDialog?.title ?? ''}
         place={countDialog?.place ?? null}
-        count={countDialog?.count ?? null}
-        onChange={(next) =>
-          setCountDialog((current) => (current ? { ...current, count: next } : current))
-        }
+        initialCount={countDialog?.count ?? null}
         onClose={() => setCountDialog(null)}
-        onSave={() => {
-          const t = countDialog ? totals(countDialog.count) : null
+        onSave={(done) => {
+          const t = totals(done)
           setCountDialog(null)
           setNote(
-            t
-              ? `Заглушка: черновик пересчёта сохранён, посчитано ${t.counted} из ${t.lines}. Остатки не тронуты.`
-              : null,
+            `Заглушка: черновик пересчёта сохранён, посчитано ${t.counted} из ${t.lines}. Остатки не тронуты.${done.comment ? ` Комментарий: «${done.comment}».` : ''}`,
           )
         }}
-        onPost={() => {
-          const t = countDialog ? totals(countDialog.count) : null
+        onPost={(done) => {
+          const t = totals(done)
           setCountDialog(null)
           setNote(
-            t
-              ? `Заглушка: проведено ${t.discrepancies} движений, излишек ${t.surplus}, недостача ${t.shortage}. В макете остаток на карте не меняется.`
-              : null,
+            `Заглушка: проведено ${t.discrepancies} движений, излишек ${t.surplus}, недостача ${t.shortage}. В макете остаток на карте не меняется.${done.comment ? ` Комментарий: «${done.comment}».` : ''}`,
           )
         }}
       />

@@ -16,6 +16,7 @@ import {
   WarningNotice,
 } from '../../../ui-kit'
 import type { ReportMetricItem, StatusTone } from '../../../ui-kit'
+import { CommentField } from './CommentField'
 import { InventoryTree } from './InventoryTree'
 import {
   EMPTY_FILTERS,
@@ -143,12 +144,24 @@ export function FfInventoryCountScreen({
         <Typography variant="body2" color="text.secondary">
           Создал {count.createdBy}, {count.createdAt}
         </Typography>
-        {count.comment ? (
-          <Typography variant="body2" color="text.secondary">
-            · {count.comment}
-          </Typography>
-        ) : null}
       </Stack>
+
+      {/* Свободная строка про причину: «пересорт», «после потопа», «считали вдвоём».
+          Пишется при пересчёте и остаётся видной, когда документ откроют потом —
+          через месяц цифры без причины ничего не объясняют. */}
+      <Box sx={{ maxWidth: 640, mb: 2 }}>
+        <CommentField
+          value={count.comment}
+          onCommit={(comment) => onChange({ ...count, comment })}
+          disabled={readOnly}
+          helperText={
+            readOnly
+              ? 'Проведённый документ не правится'
+              : 'Зачем считаем и что заметили: пересорт, повреждение, чужой товар'
+          }
+          testId="inv-comment"
+        />
+      </Box>
 
       {error ? <ErrorNotice testId="inv-error">{error}</ErrorNotice> : null}
       {note ? <WarningNotice testId="inv-note">{note}</WarningNotice> : null}

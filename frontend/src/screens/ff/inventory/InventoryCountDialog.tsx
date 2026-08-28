@@ -1,6 +1,7 @@
 import { Box, Stack, Typography } from '@mui/material'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AppDialog, PrimaryAction, SecondaryAction, WarningNotice } from '../../../ui-kit'
+import { CommentField } from './CommentField'
 import { InventoryTree } from './InventoryTree'
 import {
   EMPTY_FILTERS,
@@ -34,24 +35,36 @@ type Props = {
   title: string
   /** Где это лежит. Пусто, когда пересчитываем саму ячейку. */
   place?: string | null
-  count: InventoryCount | null
-  onChange: (next: InventoryCount) => void
+  /**
+   * Документ, каким он открылся. Дальше правки живут внутри диалога.
+   *
+   * Иначе каждая набранная цифра поднимала бы документ наверх, а оттуда
+   * перерисовывалась вся карта склада — три десятка строк с перетаскиванием.
+   * Печатать в такое поле нельзя: буквы догоняют через секунду.
+   */
+  initialCount: InventoryCount | null
   onClose: () => void
-  onSave: () => void
-  onPost: () => void
+  onSave: (count: InventoryCount) => void
+  onPost: (count: InventoryCount) => void
 }
 
 export function InventoryCountDialog({
   open,
   title,
   place,
-  count,
-  onChange,
+  initialCount,
   onClose,
   onSave,
   onPost,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
+  const [count, setCount] = useState<InventoryCount | null>(initialCount)
+
+  // Открыли другой объект — начинаем с чистого документа, а не дописываем чужой.
+  useEffect(() => {
+    setCount(initialCount)
+    setCollapsed(new Set())
+  }, [initialCount])
 
   const rows = useMemo(
     () => (count ? buildRows(count, EMPTY_FILTERS, collapsed) : []),
@@ -72,7 +85,7 @@ export function InventoryCountDialog({
   }
 
   function handleActual(row: InvRow, value: number | null) {
-    if (count) onChange(setActual(count, row.id, value))
+    setCount((current) => (current ? setActual(current, row.id, value) : current))
   }
 
   const postReason =
@@ -91,13 +104,17 @@ export function InventoryCountDialog({
             Закрыть
           </SecondaryAction>
           <SecondaryAction
-            onClick={onSave}
+            onClick={() => count && onSave(count)}
             disabledReason={t.counted === 0 ? 'Нечего сохранять' : undefined}
             data-testid="inv-dialog-save"
           >
             Сохранить
           </SecondaryAction>
-          <PrimaryAction onClick={onPost} disabledReason={postReason} data-testid="inv-dialog-post">
+          <PrimaryAction
+            onClick={() => count && onPost(count)}
+            disabledReason={postReason}
+            data-testid="inv-dialog-post"
+          >
             Провести
           </PrimaryAction>
         </>
@@ -142,6 +159,17 @@ export function InventoryCountDialog({
             </Typography>
           ) : null}
         </Stack>
+
+        {/* Свободная строка про причину. Та же, что на экране документа: человек
+            пишет «пересорт» у полки, а видит это тот, кто откроет документ потом. */}
+        <CommentField
+          value={count?.comment ?? ''}
+          onCommit={(comment) =>
+            setCount((current) => (current ? { ...current, comment } : current))
+          }
+          helperText="Пересорт, повреждение, чужой товар — что угодно своими словами"
+          testId="inv-dialog-comment"
+        />
 
         {/* Высоту держим: у короба три строки, у ячейки может быть сорок, и диалог
             не должен прыгать от одного нажатия к другому. */}
