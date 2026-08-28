@@ -78,14 +78,19 @@ export const CELLS: Cell[] = [
   { id: 'c-b12', code: 'Б 1.2', barcode: '2000000000428' },
 ]
 
+// Номера коробов — строго в той форме, в которой их отдаёт Wildberries:
+// идентификатор грузоместа выдаёт сам маркетплейс ответом на POST .../trbx, и
+// выглядит он как WB-TRBX-1234567 (см. docs/research/20260827-wb-box-barcodes.md).
+// Свой номер мы коробу не назначаем — он приезжает готовым и попадает на стикер.
+//
 // Что пришло с шага упаковки: палета с двумя коробами уже собрана, один короб и
 // одно грузоместо стоят отдельно, часть товара приехала россыпью.
 export const INITIAL_OBJECTS: WarehouseObject[] = [
   { id: 'plt-131', kind: 'pallet', code: 'П-000131', barcode: '2100000001311', holder: null },
-  { id: 'box-472', kind: 'box', code: 'КР-000472', barcode: '2200000004723', holder: objRef('plt-131') },
-  { id: 'box-473', kind: 'box', code: 'КР-000473', barcode: '2200000004730', holder: objRef('plt-131') },
-  { id: 'box-480', kind: 'box', code: 'КР-000480', barcode: '2200000004807', holder: null },
-  { id: 'cp-318', kind: 'cargo_place', code: 'ГМ-000318', barcode: '2300000003185', holder: null },
+  { id: 'box-472', kind: 'box', code: 'WB-TRBX-1240517', barcode: '2200000004723', holder: objRef('plt-131') },
+  { id: 'box-473', kind: 'box', code: 'WB-TRBX-1240518', barcode: '2200000004730', holder: objRef('plt-131') },
+  { id: 'box-480', kind: 'box', code: 'WB-TRBX-1240524', barcode: '2200000004807', holder: null },
+  { id: 'cp-318', kind: 'cargo_place', code: 'WB-TRBX-1240531', barcode: '2300000003185', holder: null },
 ]
 
 export const INITIAL_LINES: GoodsLine[] = [

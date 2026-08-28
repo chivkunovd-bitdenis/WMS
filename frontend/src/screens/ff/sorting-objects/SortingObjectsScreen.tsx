@@ -6,11 +6,15 @@ import {
   AppDialog,
   NumberInput,
   PrimaryAction,
+  PrintAction,
   ScannerField,
   ScreenHeader,
   SecondaryAction,
   SelectInput,
 } from '../../../ui-kit'
+import { CreateCellDialog } from '../warehouse-map/WarehouseMapToolbar'
+import { BoxLabelPrintDialog } from '../../../components/BoxLabelPrintDialog'
+import { LinearProgress } from '@mui/material'
 import { ObjectsTree } from './ObjectsTree'
 import {
   CELLS,
@@ -22,6 +26,7 @@ import {
   productById,
   type GoodsLine,
   type Holder,
+  whereIs,
   type ObjKind,
   type WarehouseObject,
 } from './objectsStub'
@@ -60,10 +65,18 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
   const [askTarget, setAskTarget] = useState('')
   const [askQty, setAskQty] = useState<number | null>(null)
   const [created, setCreated] = useState(0)
+  const [printing, setPrinting] = useState<string | null>(null)
+  const [cellDialogOpen, setCellDialogOpen] = useState(false)
+  const [extraCells, setExtraCells] = useState<typeof CELLS>([])
 
-  const activeCell = CELLS.find((one) => one.id === activeCellId) ?? null
+  const cells = [...CELLS, ...extraCells]
+  const activeCell = cells.find((one) => one.id === activeCellId) ?? null
   const loose = lines.filter((line) => line.holder === null)
   const unplaced = objects.filter((one) => one.holder === null)
+  const totalQty = lines.reduce((sum, line) => sum + line.qty, 0)
+  const leftQty = lines
+    .filter((line) => !whereIs(line.holder, objects, cells).cell)
+    .reduce((sum, line) => sum + line.qty, 0)
 
   function toggle(objectId: string) {
     setCollapsed((current) => {
@@ -94,7 +107,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
   function labelOf(target: Holder): string {
     if (!target) return 'россыпь'
     if (target.startsWith('cell:')) {
-      const cell = CELLS.find((one) => cellRef(one.id) === target)
+      const cell = cells.find((one) => cellRef(one.id) === target)
       return cell ? `ячейку ${cell.code}` : 'ячейку'
     }
     const object = objects.find((one) => `obj:${one.id}` === target)
@@ -160,7 +173,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
 
   function handleScan(code: string) {
     setScanValue('')
-    const cell = CELLS.find((one) => one.barcode === code || one.code.toLowerCase() === code.toLowerCase())
+    const cell = cells.find((one) => one.barcode === code || one.code.toLowerCase() === code.toLowerCase())
     if (cell) {
       setActiveCellId(cell.id)
       setScanError(null)
@@ -183,7 +196,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
     setScanError(`Штрихкод ${code} — ни ячейка, ни объект этой приёмки`)
   }
 
-  const destinations = asking ? destinationsFor(asking, objects, CELLS) : []
+  const destinations = asking ? destinationsFor(asking, objects, cells) : []
 
   return (
     <Box data-testid="sorting-objects-screen">
@@ -211,15 +224,30 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ alignItems: 'flex-start' }}>
         <Box sx={{ flexGrow: 1, minWidth: 0, width: '100%' }}>
+          <Stack spacing={1} sx={{ mb: 1.5 }}>
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'baseline' }}>
+              <Typography variant="h5" data-testid="objects-left-qty">
+                {leftQty.toLocaleString('ru-RU')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                штук осталось поставить из {totalQty.toLocaleString('ru-RU')} принятых —
+                это {unplaced.length} объектов и {loose.length} позиций россыпью
+              </Typography>
+            </Stack>
+            <LinearProgress
+              variant="determinate"
+              value={totalQty === 0 ? 0 : ((totalQty - leftQty) / totalQty) * 100}
+              sx={{ height: 8, borderRadius: 4 }}
+            />
+          </Stack>
           <Stack
             direction="row"
             spacing={1}
-            sx={{ mb: 1.5, alignItems: 'center', flexWrap: 'wrap', gap: 1 }}
+            sx={{ mb: 1.5, alignItems: 'center', flexWrap: 'wrap', gap: 1, justifyContent: 'flex-end' }}
           >
-            <Typography variant="body2" color="text.secondary">
-              Осталось поставить: {unplaced.length} объектов и {loose.length} позиций россыпью
-            </Typography>
-            <Box sx={{ flexGrow: 1 }} />
+            <SecondaryAction onClick={() => setCellDialogOpen(true)} data-testid="objects-create-cell">
+              Создать ячейку
+            </SecondaryAction>
             <SecondaryAction onClick={() => createObject('pallet')} data-testid="objects-create-pallet">
               Новая палета
             </SecondaryAction>
@@ -256,17 +284,18 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
             onDragEnd={() => setCarried(null)}
             onDropOn={drop}
             onTakeOut={takeOut}
+            onPrint={(row) => setPrinting(row.kind === 'object' ? objectTitle(row.object) : row.name)}
             onPickCell={setActiveCellId}
           />
         </Box>
 
-        <Stack spacing={2} sx={{ width: { lg: 552 }, flexShrink: 0, minWidth: 0 }}>
+        <Stack spacing={2} sx={{ width: { lg: 480 }, flexShrink: 0, minWidth: 0 }}>
           <Paper variant="outlined" sx={{ p: 2 }} data-testid="objects-cells">
             <Typography variant="subtitle1" sx={{ mb: 1.5 }}>
               Ячейки склада
             </Typography>
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-              {CELLS.map((cell) => {
+              {cells.map((cell) => {
                 const active = activeCellId === cell.id
                 const qty = cellQty(cell.id, objects, lines)
                 const target = Boolean(carried && canPut(carried, cellRef(cell.id), objects))
@@ -328,11 +357,26 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
               onDrop={() => drop(cellRef(activeCell.id))}
               data-testid="objects-active-cell"
             >
-              <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'baseline' }}>
-                <Typography variant="h6">{activeCell.code}</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {cellQty(activeCell.id, objects, lines)} шт — считается по составу того, что стоит
+              <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
+                {/* Код ячейки не переносится на вторую строку (канон R-36):
+                    заголовок, разорванный пополам, перестаёт читаться как код. */}
+                <Typography variant="h6" sx={{ whiteSpace: 'nowrap' }}>
+                  {activeCell.code}
                 </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                >
+                  {cellQty(activeCell.id, objects, lines)} шт — по составу того, что стоит
+                </Typography>
+                <Box sx={{ flexGrow: 1 }} />
+                <PrintAction
+                  what="ШК ячейки"
+                  placement="row"
+                  onClick={() => setPrinting(`ячейка ${activeCell.code}`)}
+                  testId="objects-print-cell"
+                />
               </Stack>
               <ObjectsTree
                 rows={cellRows(activeCell, objects, lines, collapsed)}
@@ -359,13 +403,53 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
                 onDragEnd={() => setCarried(null)}
                 onDropOn={drop}
                 onTakeOut={takeOut}
+                onPrint={(row) => setPrinting(row.kind === 'object' ? objectTitle(row.object) : row.name)}
                 onPickCell={setActiveCellId}
               />
+              <Stack direction="row" sx={{ mt: 1.5, justifyContent: 'flex-end' }}>
+                <PrimaryAction
+                  onClick={() => onNote(`Заглушка: ячейка ${activeCell.code} записана`)}
+                  disabledReason={
+                    cellQty(activeCell.id, objects, lines) === 0
+                      ? 'На ячейку ничего не поставлено'
+                      : undefined
+                  }
+                  data-testid="objects-commit"
+                >
+                  Записать ячейку
+                </PrimaryAction>
+              </Stack>
             </Paper>
           ) : null}
         </Stack>
       </Stack>
 
+      <BoxLabelPrintDialog
+        open={printing !== null}
+        title={printing ? `Печать стикера: ${printing}` : ''}
+        description="Выберите размер этикетки. Напечатанное не отменить."
+        scope="label"
+        onClose={() => setPrinting(null)}
+        onConfirm={(size) => {
+          onNote(`Заглушка: ${printing}, этикетка ${size.label} — принтера в макете нет`)
+          setPrinting(null)
+        }}
+        testId="objects-print-dialog"
+      />
+      <CreateCellDialog
+        open={cellDialogOpen}
+        warehouseName="Ярцево"
+        existingCodes={cells.map((one) => one.code)}
+        onClose={() => setCellDialogOpen(false)}
+        onCreate={(code) => {
+          setExtraCells((current) => [
+            ...current,
+            { id: `new-cell-${current.length + 1}`, code, barcode: `29${String(current.length + 1).padStart(11, '0')}` },
+          ])
+          setCellDialogOpen(false)
+          onNote(`Заглушка: ячейка ${code} создана только в макете`)
+        }}
+      />
       <AppDialog
         open={asking !== null}
         onClose={() => setAsking(null)}
