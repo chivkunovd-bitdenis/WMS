@@ -20,6 +20,9 @@ export type Seller = {
   wbWarehouses: Array<{ id: string; name: string }>
 }
 
+/** Остаток лежит на конкретном складе, а не «вообще». */
+export type StockAt = { onHand: number; reserved: number }
+
 export type Product = {
   id: string
   name: string
@@ -28,10 +31,12 @@ export type Product = {
   barcode: string
   sellerId: string
   category: string
-  /** Всего на складе. */
-  onHand: number
-  /** Занято: другие пулы и то, что уже в отгрузке. */
-  reserved: number
+  /**
+   * Остаток по складам. Общего числа у товара нет намеренно: доля склада
+   * считается от того, что лежит на этом складе, а не от суммы по всем. Иначе
+   * 100% на одном складе и 70% на другом дают в сумме больше, чем есть.
+   */
+  stock: Record<string, StockAt>
 }
 
 /** Настройка публикации остатка в FBS по товару. */
@@ -79,13 +84,13 @@ export const SELLERS: Seller[] = [
 ]
 
 export const PRODUCTS: Product[] = [
-  { id: 'p1', name: 'Футболка хлопок белая', sku: 'TS-WHT-M', size: 'M', barcode: '4680123456789', sellerId: 's-gor', category: 'Футболки', onHand: 420, reserved: 96 },
-  { id: 'p2', name: 'Футболка хлопок белая', sku: 'TS-WHT-L', size: 'L', barcode: '4680123456772', sellerId: 's-gor', category: 'Футболки', onHand: 260, reserved: 20 },
-  { id: 'p3', name: 'Худи оверсайз серое', sku: 'HD-GRY-L', size: 'L', barcode: '4680123456796', sellerId: 's-gor', category: 'Худи и свитшоты', onHand: 180, reserved: 0 },
-  { id: 'p4', name: 'Кроссовки беговые', sku: 'SN-RUN-42', size: '42', barcode: '4600987654321', sellerId: 's-city', category: 'Кроссовки', onHand: 96, reserved: 36 },
-  { id: 'p5', name: 'Носки спортивные, 3 пары', sku: 'SK-SPT-3', size: null, barcode: '4600987654338', sellerId: 's-city', category: 'Носки', onHand: 640, reserved: 120 },
-  { id: 'p6', name: 'Термокружка 450 мл', sku: 'MG-450', size: null, barcode: '4601122334455', sellerId: 's-larin', category: 'Посуда', onHand: 74, reserved: 0 },
-  { id: 'p7', name: 'Ремень кожаный', sku: 'BL-110', size: '110', barcode: '4601122334462', sellerId: 's-larin', category: 'Ремни', onHand: 132, reserved: 12 },
+  { id: 'p1', name: 'Футболка хлопок белая', sku: 'TS-WHT-M', size: 'M', barcode: '4680123456789', sellerId: 's-gor', category: 'Футболки', stock: { 'w-gor-1': { onHand: 280, reserved: 76 }, 'w-gor-2': { onHand: 140, reserved: 20 } } },
+  { id: 'p2', name: 'Футболка хлопок белая', sku: 'TS-WHT-L', size: 'L', barcode: '4680123456772', sellerId: 's-gor', category: 'Футболки', stock: { 'w-gor-1': { onHand: 180, reserved: 20 }, 'w-gor-2': { onHand: 80, reserved: 0 } } },
+  { id: 'p3', name: 'Худи оверсайз серое', sku: 'HD-GRY-L', size: 'L', barcode: '4680123456796', sellerId: 's-gor', category: 'Худи и свитшоты', stock: { 'w-gor-1': { onHand: 120, reserved: 0 }, 'w-gor-2': { onHand: 60, reserved: 0 } } },
+  { id: 'p4', name: 'Кроссовки беговые', sku: 'SN-RUN-42', size: '42', barcode: '4600987654321', sellerId: 's-city', category: 'Кроссовки', stock: { 'w-city-1': { onHand: 96, reserved: 36 } } },
+  { id: 'p5', name: 'Носки спортивные, 3 пары', sku: 'SK-SPT-3', size: null, barcode: '4600987654338', sellerId: 's-city', category: 'Носки', stock: { 'w-city-1': { onHand: 640, reserved: 120 } } },
+  { id: 'p6', name: 'Термокружка 450 мл', sku: 'MG-450', size: null, barcode: '4601122334455', sellerId: 's-larin', category: 'Посуда', stock: { 'w-lar-1': { onHand: 50, reserved: 0 }, 'w-lar-2': { onHand: 24, reserved: 0 } } },
+  { id: 'p7', name: 'Ремень кожаный', sku: 'BL-110', size: '110', barcode: '4601122334462', sellerId: 's-larin', category: 'Ремни', stock: { 'w-lar-1': { onHand: 92, reserved: 12 }, 'w-lar-2': { onHand: 40, reserved: 0 } } },
 ]
 
 export const INITIAL_RULES: FbsRule[] = [
@@ -94,9 +99,27 @@ export const INITIAL_RULES: FbsRule[] = [
   { productId: 'p5', publish: false, sameEverywhere: true, percent: 20, byWarehouse: {} },
 ]
 
-/** Свободный остаток: из него и считается процент. Пересчитывается всегда. */
+/** Свободный остаток на конкретном складе: из него и считается доля этого склада. */
+export function freeStockAt(product: Product, warehouseId: string): number {
+  const at = product.stock[warehouseId]
+  if (!at) return 0
+  return Math.max(0, at.onHand - at.reserved)
+}
+
+/** Свободный остаток по всем складам продавца — сумма, а не отдельное число. */
 export function freeStock(product: Product): number {
-  return Math.max(0, product.onHand - product.reserved)
+  return Object.keys(product.stock).reduce(
+    (sum, warehouseId) => sum + freeStockAt(product, warehouseId),
+    0,
+  )
+}
+
+export function onHandTotal(product: Product): number {
+  return Object.values(product.stock).reduce((sum, at) => sum + at.onHand, 0)
+}
+
+export function reservedTotal(product: Product): number {
+  return Object.values(product.stock).reduce((sum, at) => sum + at.reserved, 0)
 }
 
 export function sellerById(id: string): Seller {
@@ -117,11 +140,10 @@ export function ruleFor(rules: FbsRule[], productId: string): FbsRule {
 
 /** Сколько уйдёт в Wildberries по этому правилу прямо сейчас. */
 export function publishedQty(product: Product, rule: FbsRule, seller: Seller): number {
-  const base = freeStock(product)
   if (!rule.publish) return 0
-  if (rule.sameEverywhere) return Math.floor((base * rule.percent) / 100)
-  return seller.warehouses.reduce(
-    (sum, warehouse) => sum + Math.floor((base * (rule.byWarehouse[warehouse.id] ?? 0)) / 100),
-    0,
-  )
+  return seller.warehouses.reduce((sum, warehouse) => {
+    const base = freeStockAt(product, warehouse.id)
+    const percent = rule.sameEverywhere ? rule.percent : (rule.byWarehouse[warehouse.id] ?? 0)
+    return sum + Math.floor((base * percent) / 100)
+  }, 0)
 }

@@ -12,7 +12,10 @@ import {
 } from '../../../ui-kit'
 import {
   freeStock,
+  freeStockAt,
+  onHandTotal,
   publishedQty,
+  reservedTotal,
   type FbsRule,
   type Product,
   type Seller,
@@ -80,8 +83,13 @@ function FbsStockDialogBody({
   // При нескольких товарах свободный остаток у каждого свой; показываем сумму,
   // чтобы процент не выглядел числом, взятым с потолка.
   const base = products.reduce((sum, product) => sum + freeStock(product), 0)
-  const onHand = products.reduce((sum, product) => sum + product.onHand, 0)
-  const reserved = products.reduce((sum, product) => sum + product.reserved, 0)
+  const onHand = products.reduce((sum, product) => sum + onHandTotal(product), 0)
+  const reserved = products.reduce((sum, product) => sum + reservedTotal(product), 0)
+  // Доля склада считается от того, что лежит НА ЭТОМ складе. Считать её от общего
+  // остатка нельзя: 100% на одном складе и 70% на другом дали бы в сумме больше,
+  // чем есть на самом деле, — товар нельзя опубликовать дважды.
+  const baseAt = (warehouseId: string) =>
+    products.reduce((sum, product) => sum + freeStockAt(product, warehouseId), 0)
   const willPublish = products.reduce(
     (sum, product) => sum + publishedQty(product, draft, seller),
     0,
@@ -183,7 +191,7 @@ function FbsStockDialogBody({
                     byWarehouse: { ...one.byWarehouse, [warehouse.id]: percent },
                   }))
                 }
-                base={base}
+                base={baseAt(warehouse.id)}
                 disabled={draft.sameEverywhere}
                 disabledReason="Включено «одинаково по всем складам»"
                 testId={`fbs-stock-percent-${warehouse.id}`}
