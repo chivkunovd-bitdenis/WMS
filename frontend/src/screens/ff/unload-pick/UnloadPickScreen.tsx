@@ -24,11 +24,11 @@ import {
   PLAN,
   PRODUCTS,
   SELLER,
-  STOCK,
   cellRef,
   objRef,
 } from './pickStub'
 import {
+  ALL_STOCK,
   pickKey,
   placeLabel,
   placesUnder,
@@ -69,7 +69,7 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
   const [scanNotice, setScanNotice] = useState<string | null>(null)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
-  const rows = rowsOf(PLAN, STOCK, OBJECTS, PICK_CELLS, picked)
+  const rows = rowsOf(PLAN, ALL_STOCK, OBJECTS, PICK_CELLS, picked)
   const planQty = rows.reduce((sum, row) => sum + row.plan, 0)
   const pickedQty = rows.reduce((sum, row) => sum + Math.min(row.picked, row.plan), 0)
   const leftQty = planQty - pickedQty
