@@ -347,7 +347,7 @@ async def combine_into_pallet(
         pallet.warehouse_id,
         refs=[
             *(("box", box.id) for box in inbound_boxes),
-            *(("box", box.id) for box in warehouse_boxes),
+            *((box.container_kind, box.id) for box in warehouse_boxes),
             *(("cargo_place", place.id) for place in cargo_places),
         ],
         destination_location_id=destination,
@@ -410,7 +410,7 @@ async def disband_pallet(
         pallet.warehouse_id,
         refs=[
             *(("box", box.id) for box in inbound_boxes),
-            *(("box", box.id) for box in warehouse_boxes),
+            *((box.container_kind, box.id) for box in warehouse_boxes),
             *(("cargo_place", place.id) for place in cargo_places),
         ],
         destination_location_id=sorting.id,

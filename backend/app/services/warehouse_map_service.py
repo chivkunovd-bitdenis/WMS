@@ -23,7 +23,7 @@ from app.models.user import User
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
 from app.models.warehouse_map_event import WarehouseMapEvent
-from app.services import inventory_service, pallet_service
+from app.services import inventory_service, pallet_service, warehouse_box_service
 from app.services.inventory_container_service import ContainerKind, validate_container
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
@@ -259,9 +259,9 @@ async def get_warehouse_map(
         }
         holders[key] = pallet.storage_location_id
     for box in warehouse_boxes:
-        key = ("box", box.id)
+        key = (box.container_kind, box.id)
         nodes[key] = {
-            "kind": "box",
+            "kind": box.container_kind,
             "id": str(box.id),
             "code": box.internal_barcode,
             "barcode": box.internal_barcode,
@@ -454,13 +454,32 @@ async def _container_location_id(
             return pallet.storage_location_id
     if kind == "box":
         box = await session.get(WarehouseBox, container_id)
-        if box is not None and box.tenant_id == tenant_id:
+        if (
+            box is not None
+            and box.tenant_id == tenant_id
+            and box.warehouse_id == warehouse_id
+            and box.container_kind == kind
+        ):
             if box.pallet_id is not None:
                 pallet = await session.get(Pallet, box.pallet_id)
                 if pallet is not None and pallet.storage_location_id is not None:
                     return pallet.storage_location_id
             if box.storage_location_id is not None:
                 return box.storage_location_id
+    if kind == "cargo_place":
+        cargo_place = await session.get(WarehouseBox, container_id)
+        if (
+            cargo_place is not None
+            and cargo_place.tenant_id == tenant_id
+            and cargo_place.warehouse_id == warehouse_id
+            and cargo_place.container_kind == kind
+        ):
+            if cargo_place.pallet_id is not None:
+                pallet = await session.get(Pallet, cargo_place.pallet_id)
+                if pallet is not None and pallet.storage_location_id is not None:
+                    return pallet.storage_location_id
+            if cargo_place.storage_location_id is not None:
+                return cargo_place.storage_location_id
     balance_location = await session.scalar(
         select(InventoryBalance.storage_location_id)
         .where(
@@ -534,6 +553,7 @@ async def _container_code(
             warehouse_box is not None
             and warehouse_box.tenant_id == tenant_id
             and warehouse_box.warehouse_id == warehouse_id
+            and warehouse_box.container_kind == "box"
         ):
             return warehouse_box.internal_barcode
         inbound = await session.scalar(
@@ -548,6 +568,14 @@ async def _container_code(
         if inbound is not None:
             return f"КР-{inbound.box_number:06d}"
     else:
+        warehouse_cargo_place = await session.get(WarehouseBox, container_id)
+        if (
+            warehouse_cargo_place is not None
+            and warehouse_cargo_place.tenant_id == tenant_id
+            and warehouse_cargo_place.warehouse_id == warehouse_id
+            and warehouse_cargo_place.container_kind == "cargo_place"
+        ):
+            return warehouse_cargo_place.internal_barcode
         cargo = await session.scalar(
             select(InboundIntakeCargoPlace)
             .join(InboundIntakeRequest)
@@ -620,7 +648,11 @@ async def _container_balances(
         warehouse_boxes, inbound_boxes, cargo_places = await _load_boxes(
             session, tenant_id, warehouse_id
         )
-        refs.extend(("box", row.id) for row in warehouse_boxes if row.pallet_id == container_id)
+        refs.extend(
+            (row.container_kind, row.id)
+            for row in warehouse_boxes
+            if row.pallet_id == container_id
+        )
         refs.extend(("box", row.id) for row in inbound_boxes if row.pallet_id == container_id)
         refs.extend(
             ("cargo_place", row.id) for row in cargo_places if row.pallet_id == container_id
@@ -681,6 +713,7 @@ async def _place_container(
             warehouse_box is not None
             and warehouse_box.tenant_id == tenant_id
             and warehouse_box.warehouse_id == warehouse_id
+            and warehouse_box.container_kind == "box"
         ):
             warehouse_box.pallet_id = pallet_id
             warehouse_box.storage_location_id = (
@@ -699,6 +732,18 @@ async def _place_container(
         if inbound is None:
             raise WarehouseMapError("object_not_found")
         inbound.pallet_id = pallet_id
+        return
+    warehouse_cargo_place = await session.get(WarehouseBox, container_id)
+    if (
+        warehouse_cargo_place is not None
+        and warehouse_cargo_place.tenant_id == tenant_id
+        and warehouse_cargo_place.warehouse_id == warehouse_id
+        and warehouse_cargo_place.container_kind == "cargo_place"
+    ):
+        warehouse_cargo_place.pallet_id = pallet_id
+        warehouse_cargo_place.storage_location_id = (
+            destination_location_id if to_kind == "cell" else None
+        )
         return
     cargo = await session.scalar(
         select(InboundIntakeCargoPlace)
@@ -831,6 +876,52 @@ async def move_object(
     session.add(event)
     await session.commit()
     return {"id": str(event.id), "moved_qty": moved_quantity}
+
+
+async def create_sorting_object(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    *,
+    kind: Literal["pallet", "box", "cargo_place"],
+) -> dict[str, str | None]:
+    await _assert_warehouse(session, tenant_id, warehouse_id)
+    if kind == "pallet":
+        try:
+            pallet = await pallet_service.create_pallet(
+                session,
+                tenant_id,
+                warehouse_id=warehouse_id,
+            )
+        except pallet_service.PalletServiceError as exc:
+            raise WarehouseMapError(exc.code) from exc
+        return {
+            "id": str(pallet.id),
+            "kind": kind,
+            "code": pallet.code,
+            "barcode": pallet.barcode,
+            "holder": None,
+        }
+
+    try:
+        container = await warehouse_box_service.create_warehouse_box(
+            session,
+            tenant_id,
+            warehouse_id=warehouse_id,
+            container_kind=kind,
+        )
+        await session.commit()
+        await session.refresh(container)
+    except warehouse_box_service.WarehouseBoxError as exc:
+        await session.rollback()
+        raise WarehouseMapError(exc.code) from exc
+    return {
+        "id": str(container.id),
+        "kind": kind,
+        "code": container.internal_barcode,
+        "barcode": container.internal_barcode,
+        "holder": None,
+    }
 
 
 async def disband_pallet(

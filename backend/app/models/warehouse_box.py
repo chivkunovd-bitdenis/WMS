@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, Uuid, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -21,6 +21,10 @@ class WarehouseBox(Base):
 
     __tablename__ = "warehouse_boxes"
     __table_args__ = (
+        CheckConstraint(
+            "container_kind IN ('box', 'cargo_place')",
+            name="ck_warehouse_boxes_container_kind",
+        ),
         UniqueConstraint(
             "tenant_id",
             "internal_barcode",
@@ -40,6 +44,9 @@ class WarehouseBox(Base):
         index=True,
     )
     internal_barcode: Mapped[str] = mapped_column(String(64), nullable=False)
+    container_kind: Mapped[Literal["box", "cargo_place"]] = mapped_column(
+        String(32), nullable=False, default="box", server_default="box"
+    )
     storage_location_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("storage_locations.id", ondelete="SET NULL"),

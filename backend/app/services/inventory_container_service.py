@@ -37,24 +37,34 @@ async def validate_container(
         )
     elif container_kind == "cargo_place":
         found_id = await session.scalar(
-            select(InboundIntakeCargoPlace.id)
-            .join(
-                InboundIntakeRequest,
-                InboundIntakeRequest.id == InboundIntakeCargoPlace.request_id,
-            )
-            .where(
-                InboundIntakeCargoPlace.id == container_id,
-                InboundIntakeCargoPlace.tenant_id == tenant_id,
-                InboundIntakeRequest.tenant_id == tenant_id,
-                InboundIntakeRequest.warehouse_id == warehouse_id,
+            select(WarehouseBox.id).where(
+                WarehouseBox.id == container_id,
+                WarehouseBox.tenant_id == tenant_id,
+                WarehouseBox.warehouse_id == warehouse_id,
+                WarehouseBox.container_kind == "cargo_place",
             )
         )
+        if found_id is None:
+            found_id = await session.scalar(
+                select(InboundIntakeCargoPlace.id)
+                .join(
+                    InboundIntakeRequest,
+                    InboundIntakeRequest.id == InboundIntakeCargoPlace.request_id,
+                )
+                .where(
+                    InboundIntakeCargoPlace.id == container_id,
+                    InboundIntakeCargoPlace.tenant_id == tenant_id,
+                    InboundIntakeRequest.tenant_id == tenant_id,
+                    InboundIntakeRequest.warehouse_id == warehouse_id,
+                )
+            )
     else:
         found_id = await session.scalar(
             select(WarehouseBox.id).where(
                 WarehouseBox.id == container_id,
                 WarehouseBox.tenant_id == tenant_id,
                 WarehouseBox.warehouse_id == warehouse_id,
+                WarehouseBox.container_kind == "box",
             )
         )
         if found_id is None:
