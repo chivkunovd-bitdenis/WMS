@@ -46,6 +46,7 @@ import { FfStoragePage } from './screens/ff/FfStoragePage'
 import { FfInventoryPage } from './screens/ff/inventory/FfInventoryPage'
 import { FfProductsFbsPage } from './screens/ff/products-fbs/FfProductsFbsPage'
 import { FfSortingObjectsPage } from './screens/ff/sorting-objects/FfSortingObjectsPage'
+import { FfUnloadPickPage } from './screens/ff/unload-pick/FfUnloadPickPage'
 import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff/FfInboundRequestView'
 import { FfInboundQueuePage } from './screens/ff/FfInboundQueuePage'
 import { FfProductsCatalogScreen } from './screens/v2/FfProductsCatalogScreen'
@@ -2902,6 +2903,17 @@ export default function App() {
                   onCreateMpShipment={onCreateFfMpShipment}
                   onCreateDiverge={onCreateFfDiscrepancyAct}
                 />
+              ) : (
+                ffAccessDenied
+              )
+            }
+          />
+
+          <Route
+            path="ff/unload-pick/:requestId"
+            element={
+              token && canMpShipmentOps ? (
+                <FfUnloadPickPage token={token} />
               ) : (
                 ffAccessDenied
               )
