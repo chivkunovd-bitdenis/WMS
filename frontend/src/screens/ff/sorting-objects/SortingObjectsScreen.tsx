@@ -358,79 +358,78 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
               })}
             </Stack>
           </Paper>
+          {activeCell ? (
+            <Paper
+          variant="outlined"
+          sx={{
+            p: 2,
+            outline:
+              carried && canPut(carried, cellRef(activeCell.id), objects)
+                ? `2px dashed ${alpha(theme.palette.primary.main, 0.5)}`
+                : 'none',
+            outlineOffset: '-4px',
+          }}
+          onDragOver={(event) => {
+            if (carried && canPut(carried, cellRef(activeCell.id), objects)) event.preventDefault()
+          }}
+          onDrop={() => drop(cellRef(activeCell.id))}
+          data-testid="objects-active-cell"
+            >
+          <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
+            {/* Код ячейки не переносится на вторую строку (канон R-36):
+                заголовок, разорванный пополам, перестаёт читаться как код. */}
+            <Typography variant="h6" sx={{ whiteSpace: 'nowrap' }}>
+              {activeCell.code}
+            </Typography>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            >
+              {cellQty(activeCell.id, objects, lines)} шт — по составу того, что стоит
+            </Typography>
+            <Box sx={{ flexGrow: 1 }} />
+            <PrintAction
+              what="ШК ячейки"
+              placement="row"
+              onClick={() => setPrinting(`ячейка ${activeCell.code}`)}
+              testId="objects-print-cell"
+            />
+          </Stack>
+          <ObjectsTree
+            rows={cellRows(activeCell, objects, lines, collapsed)}
+            objects={objects}
+            carried={carried}
+            testId="objects-cell-tree"
+            compact
+            empty={{ title: 'На ячейке пусто', hint: 'Перетащите сюда объект или нажмите плюс в списке.' }}
+            onToggle={toggle}
+            onPlace={(row: ObjectRow) =>
+              openDialog(
+                row.kind === 'goods'
+                  ? { kind: 'goods', line: row.line }
+                  : { kind: 'object', object: row.object },
+              )
+            }
+            onDragStart={(row: ObjectRow) =>
+              setCarried(
+                row.kind === 'goods'
+                  ? { kind: 'goods', line: row.line }
+                  : { kind: 'object', object: row.object },
+              )
+            }
+            onDragEnd={() => setCarried(null)}
+            onDropOn={drop}
+            onTakeOut={takeOut}
+            onMinus={minusOne}
+            onPrint={(row) => setPrinting(row.kind === 'object' ? objectTitle(row.object) : row.name)}
+            onPickCell={setActiveCellId}
+          />
+            </Paper>
+          ) : null}
 
         </Stack>
       </Stack>
-
-      {activeCell ? (
-        <Paper
-      variant="outlined"
-      sx={{
-        p: 2,
-        outline:
-          carried && canPut(carried, cellRef(activeCell.id), objects)
-            ? `2px dashed ${alpha(theme.palette.primary.main, 0.5)}`
-            : 'none',
-        outlineOffset: '-4px',
-      }}
-      onDragOver={(event) => {
-        if (carried && canPut(carried, cellRef(activeCell.id), objects)) event.preventDefault()
-      }}
-      onDrop={() => drop(cellRef(activeCell.id))}
-      data-testid="objects-active-cell"
-        >
-      <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
-        {/* Код ячейки не переносится на вторую строку (канон R-36):
-            заголовок, разорванный пополам, перестаёт читаться как код. */}
-        <Typography variant="h6" sx={{ whiteSpace: 'nowrap' }}>
-          {activeCell.code}
-        </Typography>
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-        >
-          {cellQty(activeCell.id, objects, lines)} шт — по составу того, что стоит
-        </Typography>
-        <Box sx={{ flexGrow: 1 }} />
-        <PrintAction
-          what="ШК ячейки"
-          placement="row"
-          onClick={() => setPrinting(`ячейка ${activeCell.code}`)}
-          testId="objects-print-cell"
-        />
-      </Stack>
-      <ObjectsTree
-        rows={cellRows(activeCell, objects, lines, collapsed)}
-        objects={objects}
-        carried={carried}
-        testId="objects-cell-tree"
-        compact
-        empty={{ title: 'На ячейке пусто', hint: 'Перетащите сюда объект или нажмите плюс в списке.' }}
-        onToggle={toggle}
-        onPlace={(row: ObjectRow) =>
-          openDialog(
-            row.kind === 'goods'
-              ? { kind: 'goods', line: row.line }
-              : { kind: 'object', object: row.object },
-          )
-        }
-        onDragStart={(row: ObjectRow) =>
-          setCarried(
-            row.kind === 'goods'
-              ? { kind: 'goods', line: row.line }
-              : { kind: 'object', object: row.object },
-          )
-        }
-        onDragEnd={() => setCarried(null)}
-        onDropOn={drop}
-        onTakeOut={takeOut}
-        onMinus={minusOne}
-        onPrint={(row) => setPrinting(row.kind === 'object' ? objectTitle(row.object) : row.name)}
-        onPickCell={setActiveCellId}
-      />
-        </Paper>
-      ) : null}
 
       {/* Сортировка — это документ, и заканчивается он так же, как остальные
           документы приёмки: сохранить черновик, завершить распределение, закрыть.
