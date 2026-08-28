@@ -15,7 +15,8 @@ import logging
 import time
 import types
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from email.utils import format_datetime
 from typing import Any
 
 import httpx
@@ -43,6 +44,10 @@ from app.services.wb_marketplace_orders_service import (
     upsert_order_from_wb_row,
 )
 from app.services.wildberries_client import WildberriesClientError
+from app.services.wildberries_fbs_client import (
+    MAX_RETRY_AFTER_WAIT_SECONDS,
+    _retry_after_seconds,
+)
 from tests.fbs_seed_helpers import seed_fbs_warehouse_binding
 from tests.test_fbs_shipment_warehouse_sc import (
     _register_ff_admin,
@@ -65,16 +70,23 @@ class WbSuppliesStub:
         *,
         pages: list[dict[str, Any]] | None = None,
         list_status: int = 200,
+        list_statuses: list[int] | None = None,
+        list_retry_after: str | None = None,
         detail_done: dict[str, bool] | None = None,
         detail_status: int = 200,
         retry_after: str | None = "0",
     ) -> None:
         self.pages = pages if pages is not None else [{"supplies": [], "next": None}]
         self.list_status = list_status
+        # Последовательность кодов по номеру запроса — чтобы проверить, что
+        # повтор после 429 действительно спасает проход, а не просто случается.
+        self.list_statuses = list_statuses
+        self.list_retry_after = list_retry_after
         self.detail_done = detail_done or {}
         self.detail_status = detail_status
         self.retry_after = retry_after
         self.list_calls = 0
+        self.list_pages_served = 0
         self.detail_calls: list[str] = []
         self.list_cursors: list[str | None] = []
 
@@ -83,9 +95,23 @@ class WbSuppliesStub:
         if path == "/api/v3/supplies":
             self.list_calls += 1
             self.list_cursors.append(request.url.params.get("next"))
-            if self.list_status != 200:
-                return httpx.Response(self.list_status, json={"code": "TooManyRequests"})
-            index = min(self.list_calls - 1, len(self.pages) - 1)
+            if self.list_statuses is not None:
+                status = self.list_statuses[
+                    min(self.list_calls - 1, len(self.list_statuses) - 1)
+                ]
+            else:
+                status = self.list_status
+            if status != 200:
+                headers = (
+                    {"Retry-After": self.list_retry_after}
+                    if self.list_retry_after is not None
+                    else {}
+                )
+                return httpx.Response(
+                    status, json={"code": "TooManyRequests"}, headers=headers
+                )
+            index = min(self.list_pages_served, len(self.pages) - 1)
+            self.list_pages_served += 1
             return httpx.Response(200, json=self.pages[index])
         if path.startswith("/api/v3/supplies/"):
             supply_id = path[len("/api/v3/supplies/") :]
@@ -326,10 +352,11 @@ async def test_list_unavailable_and_detail_429_twice_leaves_supply_and_logs_skip
     assert result.supplies_synced == 0
     # Один повтор после Retry-After — ровно два похода в ручку.
     assert stub.detail_calls == ["WB-GI-402", "WB-GI-402"]
-    # А вот у ручки списка повтора нет: её 429 сразу роняет карту в пустую,
-    # и проход скатывается ровно в тот поштучный опрос, от которого уходили.
-    assert stub.list_calls == 1
-    assert slept == [0.0]
+    # Список тоже повторяется, но ровно один раз: два запроса, не десять
+    # страниц и не бесконечный цикл повторов.
+    assert stub.list_calls == 2
+    # Ожидание перед каждым повтором: список, потом поштучная ручка.
+    assert slept == [0.0, 0.0]
     assert await _supply_status(supply_id) == FBS_SUPPLY_STATUS_ASSEMBLING
 
     tracking_warnings = [
@@ -761,9 +788,9 @@ async def test_same_wb_supply_id_in_two_tenants_is_isolated(
     assert await _supply_status(supply_b) == FBS_SUPPLY_STATUS_ASSEMBLING
 
 
-# TC-NEW-412 — Retry-After берётся у WB без верхней границы
+# TC-NEW-412 — ожидание после 429 ограничено сверху, проход не встаёт колом
 @pytest.mark.asyncio
-async def test_retry_after_is_not_capped_and_blocks_the_pass(
+async def test_retry_after_is_capped_so_one_pass_cannot_stall(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -784,18 +811,89 @@ async def test_retry_after_is_not_capped_and_blocks_the_pass(
     _patch_orders_status(monkeypatch)
     slept = _record_sleeps(monkeypatch)
 
-    # Список не доехал → все три поставки идут поштучно и получают 429.
-    stub = WbSuppliesStub(list_status=429, detail_status=429, retry_after="600")
+    # WB просит подождать четверть часа: список — 900 секунд, каждая поставка —
+    # 600. Список не доехал даже с повтором, поэтому все три поставки идут
+    # поштучно и тоже получают 429 — худший случай прохода.
+    stub = WbSuppliesStub(
+        list_status=429,
+        list_retry_after="900",
+        detail_status=429,
+        retry_after="600",
+    )
     started = time.monotonic()
     async with SessionLocal() as session, stub.client() as http_client:
         await sync_in_delivery_supplies(session, tenant_id, seller_id, http_client)
         await session.commit()
     assert time.monotonic() - started < 30, "тест не должен ждать по-настоящему"
 
-    # Находка: ожидание не ограничено сверху и суммируется по поставкам —
-    # проход держит транзакцию с `with_for_update` всё это время.
-    assert slept == [600.0, 600.0, 600.0]
-    assert sum(slept) > 60
+    # Один повтор списка + по одному на каждую поставку, и ни одного ожидания
+    # длиннее потолка, сколько бы WB ни просил.
+    assert stub.list_calls == 2
+    assert len(stub.detail_calls) == 6
+    assert slept == [MAX_RETRY_AFTER_WAIT_SECONDS] * 4
+    assert max(slept) <= MAX_RETRY_AFTER_WAIT_SECONDS
+    # Суммарное ожидание прохода ограничено: строки поставок держатся под
+    # SELECT ... FOR UPDATE, и раньше здесь набегало 30 минут.
+    assert sum(slept) <= MAX_RETRY_AFTER_WAIT_SECONDS * (1 + 3)
+
+
+# TC-NEW-412b — потолок действует и на дату в Retry-After, и на мусор в ней
+def test_retry_after_seconds_never_exceeds_the_cap() -> None:
+    far_future = format_datetime(datetime.now(tz=UTC) + timedelta(hours=3))
+    assert _retry_after_seconds("600") == MAX_RETRY_AFTER_WAIT_SECONDS
+    assert _retry_after_seconds(far_future) == MAX_RETRY_AFTER_WAIT_SECONDS
+    assert _retry_after_seconds("5") == 5.0
+    assert _retry_after_seconds(None) == 0.0
+    assert _retry_after_seconds("-10") == 0.0
+    assert _retry_after_seconds("nonsense") == 0.0
+    assert _retry_after_seconds("inf") == 0.0
+
+
+# TC-NEW-412c — 429 на списке лечится повтором: карта доезжает, поштучных нет
+@pytest.mark.asyncio
+async def test_list_429_recovers_on_retry_and_keeps_per_supply_calls_at_zero(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _ = async_client
+    _disable_wb_mocks(monkeypatch)
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    warehouse_id = uuid.uuid4()
+    wb_ids = [f"WB-GI-412C-{i}" for i in range(8)]
+    supply_ids = [
+        await _seed_supply(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            warehouse_id=warehouse_id,
+            wb_supply_id=wb_id,
+            wb_order_ids=[412200 + index],
+        )
+        for index, wb_id in enumerate(wb_ids)
+    ]
+    _patch_token(monkeypatch)
+    _patch_orders_status(monkeypatch)
+    slept = _record_sleeps(monkeypatch)
+
+    # Первый запрос списка отбит лимитом, повтор проходит.
+    stub = WbSuppliesStub(
+        pages=[_page(*[(wb_id, True) for wb_id in wb_ids], next_cursor=None)],
+        list_statuses=[429, 200],
+        list_retry_after="5",
+        detail_status=429,
+    )
+    async with SessionLocal() as session, stub.client() as http_client:
+        result = await sync_in_delivery_supplies(
+            session, tenant_id, seller_id, http_client
+        )
+        await session.commit()
+
+    assert stub.list_calls == 2
+    assert slept == [5.0]
+    assert stub.detail_calls == [], "повтор списка спас проход — поштучные не нужны"
+    assert result.supplies_synced == 8
+    for supply_id in supply_ids:
+        assert await _supply_status(supply_id) == FBS_SUPPLY_STATUS_DONE
 
 
 # TC-NEW-413 — токен селлера резолвится не один раз, а на каждую поставку
