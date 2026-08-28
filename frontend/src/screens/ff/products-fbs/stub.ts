@@ -10,6 +10,14 @@ export type SellerWarehouse = {
   name: string
   /** Склад продавца в кабинете WB, с которым сопоставлен наш. */
   boundTo: string | null
+  /**
+   * Обслуживаем ли мы этот склад по FBS.
+   *
+   * У селлера складов может быть много, а фулфилмент обычно обслуживает один.
+   * Галочка ставится один раз в настройках селлера и решает сразу две вещи:
+   * какие заказы вообще наши и по каким складам раздаётся остаток.
+   */
+  fbsEnabled: boolean
 }
 
 export type Seller = {
@@ -54,8 +62,8 @@ export const SELLERS: Seller[] = [
     id: 's-gor',
     name: 'ИП Горячкина',
     warehouses: [
-      { id: 'w-gor-1', name: 'Ярцево', boundTo: 'wb-koledino' },
-      { id: 'w-gor-2', name: 'Химки', boundTo: null },
+      { id: 'w-gor-1', name: 'Ярцево', boundTo: 'wb-koledino', fbsEnabled: true },
+      { id: 'w-gor-2', name: 'Химки', boundTo: null, fbsEnabled: true },
     ],
     wbWarehouses: [
       { id: 'wb-koledino', name: 'Коледино' },
@@ -66,7 +74,7 @@ export const SELLERS: Seller[] = [
   {
     id: 's-city',
     name: 'ООО Ситипак',
-    warehouses: [{ id: 'w-city-1', name: 'Ярцево', boundTo: 'wb-kazan' }],
+    warehouses: [{ id: 'w-city-1', name: 'Ярцево', boundTo: 'wb-kazan', fbsEnabled: true }],
     wbWarehouses: [
       { id: 'wb-kazan', name: 'Казань' },
       { id: 'wb-tula', name: 'Тула' },
@@ -76,8 +84,8 @@ export const SELLERS: Seller[] = [
     id: 's-larin',
     name: 'ИП Ларин',
     warehouses: [
-      { id: 'w-lar-1', name: 'Ярцево', boundTo: null },
-      { id: 'w-lar-2', name: 'Подольск', boundTo: null },
+      { id: 'w-lar-1', name: 'Ярцево', boundTo: null, fbsEnabled: true },
+      { id: 'w-lar-2', name: 'Подольск', boundTo: null, fbsEnabled: false },
     ],
     wbWarehouses: [{ id: 'wb-nevinnomyssk', name: 'Невинномысск' }],
   },
@@ -120,6 +128,11 @@ export function onHandTotal(product: Product): number {
 
 export function reservedTotal(product: Product): number {
   return Object.values(product.stock).reduce((sum, at) => sum + at.reserved, 0)
+}
+
+/** Склады, которые мы обслуживаем по FBS. Только они участвуют в раздаче остатка. */
+export function servedWarehouses(seller: Seller): SellerWarehouse[] {
+  return seller.warehouses.filter((one) => one.fbsEnabled)
 }
 
 export function sellerById(id: string): Seller {

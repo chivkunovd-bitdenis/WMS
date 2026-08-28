@@ -4,12 +4,13 @@ import { Box, CssBaseline, Stack, ThemeProvider, Typography } from '@mui/materia
 import { muiTheme } from '../../../mui/theme'
 import { ProductsScreen } from './ProductsScreen'
 import { FbsMetricScreen } from './FbsMetricScreen'
+import { SellerSettingsScreen } from './SellerSettingsScreen'
 import { ToggleButton, ToggleButtonGroup } from '@mui/material'
 import '../../../index.css'
 
 export function ProductsHarness() {
   const [note, setNote] = useState<string | null>(null)
-  const [screen, setScreen] = useState<'products' | 'fbs'>('products')
+  const [screen, setScreen] = useState<'products' | 'fbs' | 'seller'>('products')
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Box sx={{ px: 3, py: 1.5, bgcolor: 'text.primary', color: 'common.white' }}>
@@ -24,7 +25,7 @@ export function ProductsHarness() {
             exclusive
             size="small"
             value={screen}
-            onChange={(_event, value: 'products' | 'fbs' | null) => {
+            onChange={(_event, value: 'products' | 'fbs' | 'seller' | null) => {
               if (value) setScreen(value)
             }}
             data-testid="harness-screen"
@@ -34,6 +35,12 @@ export function ProductsHarness() {
               sx={{ textTransform: 'none', color: 'common.white', borderColor: 'rgba(255,255,255,0.35)', '&.Mui-selected': { color: 'common.white', bgcolor: 'rgba(255,255,255,0.22)' } }}
             >
               Товары
+            </ToggleButton>
+            <ToggleButton
+              value="seller"
+              sx={{ textTransform: 'none', color: 'common.white', borderColor: 'rgba(255,255,255,0.35)', '&.Mui-selected': { color: 'common.white', bgcolor: 'rgba(255,255,255,0.22)' } }}
+            >
+              Настройки продавца
             </ToggleButton>
             <ToggleButton
               value="fbs"
@@ -52,7 +59,13 @@ export function ProductsHarness() {
       <Box sx={{ display: 'flex' }}>
         <Box sx={{ width: 260, flexShrink: 0, bgcolor: 'background.paper' }} />
         <Box sx={{ flexGrow: 1, minWidth: 0, p: 3 }}>
-          {screen === 'products' ? <ProductsScreen onNote={setNote} /> : <FbsMetricScreen />}
+          {screen === 'products' ? (
+            <ProductsScreen onNote={setNote} />
+          ) : screen === 'seller' ? (
+            <SellerSettingsScreen onNote={setNote} />
+          ) : (
+            <FbsMetricScreen />
+          )}
         </Box>
       </Box>
     </Box>

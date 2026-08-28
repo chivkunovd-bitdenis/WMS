@@ -15,6 +15,7 @@ import {
   onHandTotal,
   publishedQty,
   reservedTotal,
+  servedWarehouses,
   type FbsRule,
   type Product,
   type Seller,
@@ -89,7 +90,12 @@ function FbsStockDialogBody({
   // мы его выставляем. Поэтому сумма долей не может превысить сто процентов:
   // отдать половину одному складу и половину другому можно, а по половине
   // каждому из трёх — уже нет, столько товара просто нет.
-  const spent = seller.warehouses.reduce(
+  // Раздаём остаток только по складам, которые обслуживаем. Если он один —
+  // делить не с кем, и выбор складов на экране только мешает: один ползунок.
+  const served = servedWarehouses(seller)
+  const single = served.length <= 1
+
+  const spent = served.reduce(
     (sum, warehouse) => sum + (draft.byWarehouse[warehouse.id] ?? 0),
     0,
   )
@@ -98,7 +104,7 @@ function FbsStockDialogBody({
     (sum, product) => sum + publishedQty(product, draft, seller),
     0,
   )
-  const unbound = seller.warehouses.filter((one) => one.boundTo === null)
+  const unbound = served.filter((one) => one.boundTo === null)
 
   return (
     <AppDialog
@@ -145,22 +151,25 @@ function FbsStockDialogBody({
           value={draft.percent}
           onChange={(percent) => setDraft((one) => ({ ...one, percent }))}
           base={base}
-          disabled={!draft.sameEverywhere}
+          disabled={!single && !draft.sameEverywhere}
           disabledReason="Сейчас доля задаётся по каждому складу отдельно"
           testId="fbs-stock-percent"
         />
 
-        <Divider />
+        {single ? null : (
+          <>
+            <Divider />
+            <CheckboxInput
+              label="Одинаково по всем складам"
+              checked={draft.sameEverywhere}
+              onChange={(sameEverywhere) => setDraft((one) => ({ ...one, sameEverywhere }))}
+              helperText="Выключите, чтобы задать свою долю каждому складу"
+              testId="fbs-stock-same"
+            />
+          </>
+        )}
 
-        <CheckboxInput
-          label="Одинаково по всем складам"
-          checked={draft.sameEverywhere}
-          onChange={(sameEverywhere) => setDraft((one) => ({ ...one, sameEverywhere }))}
-          helperText="Выключите, чтобы задать свою долю каждому складу"
-          testId="fbs-stock-same"
-        />
-
-        {draft.sameEverywhere ? null : (
+        {single || draft.sameEverywhere ? null : (
           <Typography variant="body2" color="text.secondary" data-testid="fbs-stock-rest">
             Нераспределено: {freePercent}% — это{' '}
             {Math.floor((base * freePercent) / 100).toLocaleString('ru-RU')} шт. Склады делят один
@@ -169,7 +178,7 @@ function FbsStockDialogBody({
         )}
 
         <Stack spacing={2}>
-          {seller.warehouses.map((warehouse) => (
+          {(single ? [] : served).map((warehouse) => (
             <Stack key={warehouse.id} spacing={1}>
               <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                 <Typography variant="subtitle2">{warehouse.name}</Typography>
@@ -225,6 +234,16 @@ function FbsStockDialogBody({
               : 'передача выключена — в Wildberries не уйдёт ничего'}
           </Typography>
         </Stack>
+
+        {single && served[0] ? (
+          <Typography variant="body2" color="text.secondary">
+            Склад {served[0].name}
+            {served[0].boundTo
+              ? ` — сопоставлен со складом продавца в Wildberries.`
+              : ` пока не сопоставлен со складом продавца, остаток по нему не уйдёт.`}{' '}
+            Список складов настраивается в карточке продавца.
+          </Typography>
+        ) : null}
 
         {unbound.length > 0 && draft.publish ? (
           <Typography variant="body2" color="text.secondary">
