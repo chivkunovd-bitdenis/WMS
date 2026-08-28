@@ -53,6 +53,7 @@ type Props = {
   isFulfillmentAdmin: boolean
   isFulfillmentSeller: boolean
   canEditOutboundDraft: boolean
+  addressStorageEnabled?: boolean
 
   warehouses: WarehouseRow[]
   selectedWarehouseId: string | null
@@ -81,6 +82,7 @@ export function OutboundScreen(props: Props) {
     isFulfillmentAdmin,
     isFulfillmentSeller,
     canEditOutboundDraft,
+    addressStorageEnabled = true,
     warehouses,
     selectedWarehouseId,
     products,
@@ -114,7 +116,9 @@ export function OutboundScreen(props: Props) {
           <Card className="card" data-testid="outbound-section">
             <h3 style={{ margin: 0, fontSize: 16 }}>Заявки на отгрузку</h3>
             <p className="subtle">
-              Резерв при отправке — по складу; ячейку назначают для подбора и списания.
+              {addressStorageEnabled
+                ? 'Резерв при отправке — по складу; ячейку назначают для подбора и списания. '
+                : 'Резерв и списание выполняются по складу. '}
               Отгрузка по строке частями; «Провести весь остаток» списывает всё неотгруженное.
             </p>
 
@@ -235,16 +239,18 @@ export function OutboundScreen(props: Props) {
                           product_name: ln.product_name,
                           quantity: ln.quantity,
                           shipped_qty: ln.shipped_qty,
-                          storage_location_code: ln.storage_location_code,
+                          storage_location_code: addressStorageEnabled
+                            ? ln.storage_location_code
+                            : null,
                         })),
-                        pickAllocations: outboundDetail.lines
+                        pickAllocations: addressStorageEnabled ? outboundDetail.lines
                           .filter((ln) => ln.storage_location_code)
                           .map((ln) => ({
                             location_code: ln.storage_location_code!,
                             sku_code: ln.sku_code,
                             quantity: ln.quantity - ln.shipped_qty,
                           }))
-                          .filter((x) => x.quantity > 0),
+                          .filter((x) => x.quantity > 0) : [],
                       })
                     }}
                   >
@@ -256,8 +262,13 @@ export function OutboundScreen(props: Props) {
                   {outboundDetail.lines.map((ln) => (
                     <li key={ln.id} data-testid="outbound-detail-line" data-line-id={ln.id}>
                       {ln.product_name} ({ln.sku_code}) — отгружено {ln.shipped_qty} из {ln.quantity}
-                      {ln.storage_location_code ? ` · ячейка: ${ln.storage_location_code}` : ' · ячейка не назначена'}
-                      {outboundDetail.status === 'draft' &&
+                      {addressStorageEnabled
+                        ? ln.storage_location_code
+                          ? ` · ячейка: ${ln.storage_location_code}`
+                          : ' · ячейка не назначена'
+                        : ''}
+                      {addressStorageEnabled &&
+                      outboundDetail.status === 'draft' &&
                       isFulfillmentAdmin &&
                       !ln.storage_location_id &&
                       ln.shipped_qty < ln.quantity ? (
@@ -340,7 +351,7 @@ export function OutboundScreen(props: Props) {
                         required
                       />
                     </label>
-                    {outboundRequestLocations.length > 0 ? (
+                    {addressStorageEnabled && outboundRequestLocations.length > 0 ? (
                       <label>
                         Ячейка (можно позже)
                         <Select
@@ -392,7 +403,7 @@ export function OutboundScreen(props: Props) {
                                 {ln.sku_code} — осталось отгрузить {ln.quantity - ln.shipped_qty} из{' '}
                                 {ln.quantity}
                               </p>
-                              <form
+                              {addressStorageEnabled ? <form
                                 data-testid="outbound-line-storage-form"
                                 data-line-id={ln.id}
                                 noValidate
@@ -423,7 +434,7 @@ export function OutboundScreen(props: Props) {
                                 >
                                   Сохранить ячейку
                                 </Button>
-                              </form>
+                              </form> : null}
                               <form
                                 data-testid="outbound-line-ship-form"
                                 data-line-id={ln.id}

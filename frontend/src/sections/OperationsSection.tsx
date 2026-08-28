@@ -94,6 +94,7 @@ type Props = {
   isFulfillmentSeller: boolean
   canEditInboundDraft: boolean
   canEditOutboundDraft: boolean
+  addressStorageEnabled?: boolean
 
   warehouses: WarehouseRow[]
   selectedWarehouseId: string | null
@@ -148,6 +149,7 @@ export function OperationsSection(props: Props) {
     isFulfillmentSeller,
     canEditInboundDraft,
     canEditOutboundDraft,
+    addressStorageEnabled = true,
     warehouses,
     selectedWarehouseId,
     locations,
@@ -225,9 +227,10 @@ export function OperationsSection(props: Props) {
       <Card className="card">
         <h2>Приёмка</h2>
         <p className="subtle">
-          Ячейку можно указать при добавлении строки или позже. Частичный приём —
-          по строке; «Провести весь остаток» оприходует всё непринятое по строкам
-          с назначенной ячейкой. Движения пишутся в журнал.
+          {addressStorageEnabled
+            ? 'Ячейку можно указать при добавлении строки или позже. Частичный приём — по строке; «Провести весь остаток» оприходует всё непринятое по строкам с назначенной ячейкой. '
+            : 'Частичный приём выполняется по строке; «Провести весь остаток» оприходует всё непринятое. '}
+          Движения пишутся в журнал.
         </p>
 
         {canEditInboundDraft ? (
@@ -301,7 +304,7 @@ export function OperationsSection(props: Props) {
                 <li key={ln.id} data-testid="inbound-detail-line">
                   {ln.product_name} ({ln.sku_code}) — принято {ln.posted_qty} из{' '}
                   {ln.expected_qty}
-                  {ln.storage_location_code
+                  {addressStorageEnabled && ln.storage_location_code
                     ? ` · ячейка: ${ln.storage_location_code}`
                     : ''}
                 </li>
@@ -342,7 +345,7 @@ export function OperationsSection(props: Props) {
                     required
                   />
                 </label>
-                {inboundRequestLocations.length > 0 ? (
+                {addressStorageEnabled && inboundRequestLocations.length > 0 ? (
                   <label>
                     Ячейка (необязательно)
                     <Select
@@ -399,7 +402,7 @@ export function OperationsSection(props: Props) {
                             {ln.sku_code} — осталось {ln.expected_qty - ln.posted_qty}{' '}
                             из {ln.expected_qty}
                           </p>
-                          <form
+                          {addressStorageEnabled ? <form
                             data-testid="inbound-line-storage-form"
                             data-line-id={ln.id}
                             noValidate
@@ -430,7 +433,7 @@ export function OperationsSection(props: Props) {
                             >
                               Сохранить ячейку
                             </Button>
-                          </form>
+                          </form> : null}
                           <form
                             data-testid="inbound-line-receive-form"
                             data-line-id={ln.id}
@@ -531,7 +534,7 @@ export function OperationsSection(props: Props) {
         </ul>
       </Card>
 
-      {isFulfillmentAdmin ? (
+      {isFulfillmentAdmin && addressStorageEnabled ? (
         <Card className="card" data-testid="stock-transfer-section">
           <h2>Перемещение между ячейками</h2>
           <p className="subtle">
@@ -601,7 +604,9 @@ export function OperationsSection(props: Props) {
       <Card className="card" data-testid="outbound-section">
         <h2>Отгрузка</h2>
         <p className="subtle">
-          Заявка на списание остатков из выбранных ячеек. Назначьте ячейку на строке;
+          {addressStorageEnabled
+            ? 'Заявка на списание остатков из выбранных ячеек. Назначьте ячейку на строке; '
+            : 'Заявка на списание остатков со склада; '}
           отгрузка по строке частями; «Провести весь остаток» списывает всё неотгруженное.
         </p>
         {canEditOutboundDraft ? (
@@ -671,7 +676,7 @@ export function OperationsSection(props: Props) {
                 <li key={ln.id} data-testid="outbound-detail-line" data-line-id={ln.id}>
                   {ln.product_name} ({ln.sku_code}) — отгружено {ln.shipped_qty} из{' '}
                   {ln.quantity}
-                  {ln.storage_location_code
+                  {addressStorageEnabled && ln.storage_location_code
                     ? ` · ячейка: ${ln.storage_location_code}`
                     : ''}
                   {outboundDetail.status === 'draft' && isFulfillmentAdmin ? (
@@ -720,7 +725,7 @@ export function OperationsSection(props: Props) {
                     required
                   />
                 </label>
-                {outboundRequestLocations.length > 0 ? (
+                {addressStorageEnabled && outboundRequestLocations.length > 0 ? (
                   <label>
                     Ячейка (необязательно)
                     <Select
@@ -777,7 +782,7 @@ export function OperationsSection(props: Props) {
                             {ln.sku_code} — осталось отгрузить {ln.quantity - ln.shipped_qty}{' '}
                             из {ln.quantity}
                           </p>
-                          <form
+                          {addressStorageEnabled ? <form
                             data-testid="outbound-line-storage-form"
                             data-line-id={ln.id}
                             noValidate
@@ -808,7 +813,7 @@ export function OperationsSection(props: Props) {
                             >
                               Сохранить ячейку
                             </Button>
-                          </form>
+                          </form> : null}
                           <form
                             data-testid="outbound-line-ship-form"
                             data-line-id={ln.id}

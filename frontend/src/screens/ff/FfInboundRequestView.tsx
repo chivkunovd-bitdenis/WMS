@@ -2297,14 +2297,17 @@ export function FfInboundRequestView({
             <>
               {isDoneStatus(detail.status) ? (
                 <Alert severity="success" sx={{ mb: 2 }} data-testid="ff-sorting-posted-done">
-                  Оприходовано — весь товар разложен по ячейкам хранения.
+                  {addressStorageEnabled
+                    ? 'Оприходовано — весь товар разложен по ячейкам хранения.'
+                    : 'Оприходовано — весь товар принят на склад.'}
                 </Alert>
               ) : null}
-              <FfInboundSortingPanel
+              {addressStorageEnabled ? <FfInboundSortingPanel
                 token={token}
                 requestId={requestId}
                 warehouseId={detail.warehouse_id}
                 completed={isDoneStatus(detail.status)}
+                addressStorageEnabled={addressStorageEnabled}
                 lines={(detail.lines ?? []).map((ln) => ({
                   product_id: ln.product_id,
                   sku_code: ln.sku_code,
@@ -2328,7 +2331,7 @@ export function FfInboundRequestView({
                 }}
                 onDirtyChange={onDirtyChange}
                 toolbarElement={sortingToolbarElement}
-              />
+              /> : null}
             </>
           ) : null}
 

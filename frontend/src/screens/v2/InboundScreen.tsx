@@ -87,6 +87,7 @@ type Props = {
   isFulfillmentAdmin: boolean
   isFulfillmentSeller: boolean
   canEditInboundDraft: boolean
+  addressStorageEnabled?: boolean
 
   warehouses: WarehouseRow[]
   selectedWarehouseId: string | null
@@ -121,6 +122,7 @@ export function InboundScreen(props: Props) {
     isFulfillmentAdmin,
     isFulfillmentSeller,
     canEditInboundDraft,
+    addressStorageEnabled = true,
     warehouses,
     selectedWarehouseId,
     products,
@@ -316,7 +318,9 @@ export function InboundScreen(props: Props) {
                       {typeof ln.actual_qty === 'number' ? ` · факт ${ln.actual_qty}` : ''}
                       {' · '}
                       принято {ln.posted_qty}
-                      {ln.storage_location_code ? ` · ячейка: ${ln.storage_location_code}` : ''}
+                      {addressStorageEnabled && ln.storage_location_code
+                        ? ` · ячейка: ${ln.storage_location_code}`
+                        : ''}
                     </li>
                   ))}
                 </ul>
@@ -362,7 +366,7 @@ export function InboundScreen(props: Props) {
                         required
                       />
                     </label>
-                    {inboundRequestLocations.length > 0 ? (
+                    {addressStorageEnabled && inboundRequestLocations.length > 0 ? (
                       <label>
                         Ячейка (необязательно)
                         <Select
@@ -574,7 +578,7 @@ export function InboundScreen(props: Props) {
                               <p className="subtle" style={{ marginTop: 0 }}>
                                 {ln.sku_code} — осталось {remaining} из {target}
                               </p>
-                              <form
+                              {addressStorageEnabled ? <form
                                 data-testid="inbound-line-storage-form"
                                 data-line-id={ln.id}
                                 noValidate
@@ -605,7 +609,7 @@ export function InboundScreen(props: Props) {
                                 >
                                   Сохранить ячейку
                                 </Button>
-                              </form>
+                              </form> : null}
                               <form
                                 data-testid="inbound-line-receive-form"
                                 data-line-id={ln.id}
