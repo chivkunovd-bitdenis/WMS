@@ -84,6 +84,19 @@ async def test_pending_marking_lists_unprinted_lines(async_client: AsyncClient) 
     assert body["rows"][0]["qty_remaining"] == 1
     assert body["rows"][0]["seller_name"] == "Pending Seller"
 
+    disabled = await async_client.patch(
+        "/tenant/settings",
+        headers=h,
+        json={"address_storage_enabled": False},
+    )
+    assert disabled.status_code == 200, disabled.text
+    pending_without_addresses = await async_client.get(
+        "/operations/marking-codes/pending-marking",
+        headers=h,
+    )
+    assert pending_without_addresses.status_code == 200, pending_without_addresses.text
+    assert pending_without_addresses.json()["rows"][0]["storage_location_code"] is None
+
     printed = await async_client.post(
         f"/operations/marking-codes/packaging-lines/{line_id}/print",
         headers=h,

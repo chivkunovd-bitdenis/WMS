@@ -246,6 +246,8 @@ async def _inject_order_pick_fallback(
 ) -> None:
     if not worklist_items:
         return
+    if not await tenant_settings_svc.is_address_storage_enabled(session, tenant_id):
+        return
     sorting_location = await get_or_create_sorting_location(session, tenant_id, supply.warehouse_id)
     orders_by_id = {str(order.id): order for order in supply.orders}
     for item in worklist_items:

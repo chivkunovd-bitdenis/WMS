@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 import time
+import uuid
 
 import pytest
 from httpx import AsyncClient
+
+from app.db.session import SessionLocal
+from app.models.product import Product
+from app.services import inventory_service
+from app.services.sorting_location_service import get_sorting_location
 
 
 async def _register_admin(async_client: AsyncClient, slug: str) -> str:
@@ -219,16 +225,22 @@ async def test_disable_address_storage_migrates_stock_to_sorting(
         headers=headers,
         params={"storage_location_id": loc_id},
     )
-    assert after_cell.status_code == 200, after_cell.text
-    assert sum(row["quantity"] for row in after_cell.json()) == 0
+    assert after_cell.status_code == 409, after_cell.text
+    assert after_cell.json()["detail"] == "address_storage_disabled"
 
     locs = await async_client.get(f"/warehouses/{wid}/locations", headers=headers)
     assert locs.status_code == 200, locs.text
-    sorting = next(row for row in locs.json() if row["code"] == "__SORTING__")
-    after_sort = await async_client.get(
-        "/operations/inventory-balances",
-        headers=headers,
-        params={"storage_location_id": sorting["id"]},
-    )
-    assert after_sort.status_code == 200, after_sort.text
-    assert sum(row["quantity"] for row in after_sort.json()) == 5
+    assert locs.json() == []
+    async with SessionLocal() as session:
+        product = await session.get(Product, uuid.UUID(pid))
+        assert product is not None
+        sorting = await get_sorting_location(
+            session, product.tenant_id, uuid.UUID(wid)
+        )
+        assert sorting is not None
+        sorting_id = str(sorting.id)
+        rows = await inventory_service.list_balances_at_location(
+            session, product.tenant_id, uuid.UUID(sorting_id)
+        )
+        assert rows is not None
+        assert sum(int(balance.quantity) for balance, _product, _reserved in rows) == 5

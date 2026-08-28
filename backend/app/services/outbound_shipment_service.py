@@ -13,6 +13,8 @@ from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentR
 from app.models.product import Product
 from app.models.seller import Seller
 from app.services import inventory_service as inv_svc
+from app.services import sorting_location_service as sorting_loc_svc
+from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import (
     get_storage_location_in_warehouse,
     get_warehouse,
@@ -165,8 +167,16 @@ async def add_line(
         req.seller_id = product.seller_id
     elif product.seller_id != req.seller_id:
         raise OutboundShipmentError("mixed_seller_lines")
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(
+        session, tenant_id
+    )
     loc_id: uuid.UUID | None = None
-    if storage_location_id is not None:
+    if not address_enabled:
+        sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+            session, tenant_id, req.warehouse_id
+        )
+        loc_id = sorting_loc.id
+    elif storage_location_id is not None:
         loc = await get_storage_location_in_warehouse(
             session, tenant_id, req.warehouse_id, storage_location_id
         )
@@ -213,12 +223,21 @@ async def set_line_storage_location(
         raise OutboundShipmentError("not_editable")
     if line.shipped_qty >= line.quantity:
         raise OutboundShipmentError("line_closed")
-    loc = await get_storage_location_in_warehouse(
-        session, tenant_id, req.warehouse_id, storage_location_id
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(
+        session, tenant_id
     )
-    if loc is None:
-        raise OutboundShipmentError("location_not_found")
-    line.storage_location_id = storage_location_id
+    if address_enabled:
+        loc = await get_storage_location_in_warehouse(
+            session, tenant_id, req.warehouse_id, storage_location_id
+        )
+        if loc is None:
+            raise OutboundShipmentError("location_not_found")
+        line.storage_location_id = storage_location_id
+    else:
+        sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+            session, tenant_id, req.warehouse_id
+        )
+        line.storage_location_id = sorting_loc.id
     try:
         await inv_svc.sync_outbound_line_reservation(session, tenant_id, req, line)
         await session.commit()
@@ -279,8 +298,20 @@ async def submit_request(
         raise OutboundShipmentError("not_draft")
     if len(req.lines) == 0:
         raise OutboundShipmentError("submit_empty")
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(
+        session, tenant_id
+    )
+    sorting_location_id: uuid.UUID | None = None
+    if not address_enabled:
+        sorting_location_id = (
+            await sorting_loc_svc.get_or_create_sorting_location(
+                session, tenant_id, req.warehouse_id
+            )
+        ).id
     try:
         for ln in req.lines:
+            if sorting_location_id is not None:
+                ln.storage_location_id = sorting_location_id
             await inv_svc.sync_outbound_line_reservation(session, tenant_id, req, ln)
     except ValueError as exc:
         await session.rollback()
@@ -325,7 +356,13 @@ async def ship_line(
     if remaining <= 0:
         raise OutboundShipmentError("nothing_to_ship")
     if line.storage_location_id is None:
-        raise OutboundShipmentError("storage_not_assigned")
+        if await tenant_settings_svc.is_address_storage_enabled(session, tenant_id):
+            raise OutboundShipmentError("storage_not_assigned")
+        line.storage_location_id = (
+            await sorting_loc_svc.get_or_create_sorting_location(
+                session, tenant_id, req.warehouse_id
+            )
+        ).id
     if quantity < 1 or quantity > remaining:
         raise OutboundShipmentError("invalid_qty")
     sid = line.storage_location_id
@@ -366,11 +403,23 @@ async def post_request(
         raise OutboundShipmentError("already_posted")
     if req.status != STATUS_SUBMITTED:
         raise OutboundShipmentError("not_submitted")
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(
+        session, tenant_id
+    )
+    sorting_location_id: uuid.UUID | None = None
+    if not address_enabled:
+        sorting_location_id = (
+            await sorting_loc_svc.get_or_create_sorting_location(
+                session, tenant_id, req.warehouse_id
+            )
+        ).id
     to_ship: list[tuple[OutboundShipmentLine, int]] = []
     for line in req.lines:
         rem = line.quantity - line.shipped_qty
         if rem <= 0:
             continue
+        if sorting_location_id is not None:
+            line.storage_location_id = sorting_location_id
         if line.storage_location_id is None:
             raise OutboundShipmentError("lines_missing_storage")
         to_ship.append((line, rem))

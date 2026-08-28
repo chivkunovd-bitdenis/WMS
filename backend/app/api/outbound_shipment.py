@@ -21,6 +21,7 @@ from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentR
 from app.models.product import Product
 from app.models.user import User
 from app.services import outbound_shipment_service as svc
+from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.outbound_shipment_service import OutboundShipmentError
 
 router = APIRouter(
@@ -87,14 +88,19 @@ class OutboundShipmentRequestSubmitBody(BaseModel):
 class OutboundMovementOut(BaseModel):
     id: str
     product_id: str
-    storage_location_id: str
+    storage_location_id: str | None
     quantity_delta: int
     movement_type: str
     outbound_shipment_line_id: str
     created_at: str
 
 
-def _line_out(line: OutboundShipmentLine, product: Product) -> OutboundShipmentLineOut:
+def _line_out(
+    line: OutboundShipmentLine,
+    product: Product,
+    *,
+    reveal_storage: bool,
+) -> OutboundShipmentLineOut:
     loc = line.storage_location
     return OutboundShipmentLineOut(
         id=str(line.id),
@@ -104,13 +110,17 @@ def _line_out(line: OutboundShipmentLine, product: Product) -> OutboundShipmentL
         quantity=line.quantity,
         shipped_qty=line.shipped_qty,
         storage_location_id=str(line.storage_location_id)
-        if line.storage_location_id
+        if reveal_storage and line.storage_location_id
         else None,
-        storage_location_code=loc.code if loc is not None else None,
+        storage_location_code=loc.code if reveal_storage and loc is not None else None,
     )
 
 
-def _request_out(r: OutboundShipmentRequest) -> OutboundShipmentRequestOut:
+def _request_out(
+    r: OutboundShipmentRequest,
+    *,
+    reveal_storage: bool,
+) -> OutboundShipmentRequestOut:
     return OutboundShipmentRequestOut(
         id=str(r.id),
         warehouse_id=str(r.warehouse_id),
@@ -118,18 +128,25 @@ def _request_out(r: OutboundShipmentRequest) -> OutboundShipmentRequestOut:
         planned_shipment_date=r.planned_shipment_date.isoformat()
         if r.planned_shipment_date is not None
         else None,
-        lines=[_line_out(ln, ln.product) for ln in r.lines],
+        lines=[
+            _line_out(ln, ln.product, reveal_storage=reveal_storage)
+            for ln in r.lines
+        ],
     )
 
 
-def _movement_out(m: InventoryMovement) -> OutboundMovementOut:
+def _movement_out(
+    m: InventoryMovement,
+    *,
+    reveal_storage: bool,
+) -> OutboundMovementOut:
     if m.outbound_shipment_line_id is None:
         msg = "outbound movement missing line ref"
         raise RuntimeError(msg)
     return OutboundMovementOut(
         id=str(m.id),
         product_id=str(m.product_id),
-        storage_location_id=str(m.storage_location_id),
+        storage_location_id=str(m.storage_location_id) if reveal_storage else None,
         quantity_delta=m.quantity_delta,
         movement_type=m.movement_type,
         outbound_shipment_line_id=str(m.outbound_shipment_line_id),
@@ -280,7 +297,12 @@ async def get_outbound_request(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="request_not_found",
         )
-    return _request_out(r)
+    return _request_out(
+        r,
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, user.tenant_id
+        ),
+    )
 
 
 @router.get(
@@ -310,7 +332,10 @@ async def list_outbound_movements(
         request_id,
         seller_product_owner_id=seller_scope,
     )
-    return [_movement_out(m) for m in movements]
+    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(
+        session, user.tenant_id
+    )
+    return [_movement_out(m, reveal_storage=reveal_storage) for m in movements]
 
 
 @router.post(
@@ -352,7 +377,13 @@ async def add_outbound_line(
             detail="product_missing",
         )
     await session.refresh(line, attribute_names=["storage_location"])
-    return _line_out(line, prod)
+    return _line_out(
+        line,
+        prod,
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, user.tenant_id
+        ),
+    )
 
 
 @router.post(
@@ -382,7 +413,12 @@ async def ship_outbound_line(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(r2)
+    return _request_out(
+        r2,
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, user.tenant_id
+        ),
+    )
 
 
 @router.delete(
@@ -399,7 +435,12 @@ async def delete_outbound_line(
         r = await svc.delete_line(session, user.tenant_id, request_id, line_id)
     except OutboundShipmentError as exc:
         raise _map_out_err(exc) from None
-    return _request_out(r)
+    return _request_out(
+        r,
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, user.tenant_id
+        ),
+    )
 
 
 @router.patch(
@@ -430,7 +471,13 @@ async def patch_outbound_line_storage(
             detail="product_missing",
         )
     await session.refresh(line, attribute_names=["storage_location"])
-    return _line_out(line, prod)
+    return _line_out(
+        line,
+        prod,
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, user.tenant_id
+        ),
+    )
 
 
 @router.post("/{request_id}/submit", response_model=OutboundShipmentRequestOut)
@@ -456,7 +503,12 @@ async def submit_outbound_request(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(r2)
+    return _request_out(
+        r2,
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, user.tenant_id
+        ),
+    )
 
 
 @router.post("/{request_id}/post", response_model=OutboundShipmentRequestOut)
@@ -475,4 +527,9 @@ async def post_outbound_request(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(r2)
+    return _request_out(
+        r2,
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, user.tenant_id
+        ),
+    )

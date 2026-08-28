@@ -26,6 +26,7 @@ from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.services import inventory_service as inv_svc
 from app.services import sorting_location_service as sorting_loc_svc
+from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.billing_ledger_service import (
     BillingLedgerError,
     product_billing_lines,
@@ -136,6 +137,7 @@ async def _apply_line_putaway(
     sorting_location_id: uuid.UUID,
     normal_location_id: uuid.UUID | None,
     quantity: int,
+    keep_good_in_sorting: bool = False,
 ) -> None:
     """Put good units into the chosen cell and defective units into service stock."""
     defective_total = min(max(0, line.defective_qty), _accepted_qty_for_line(line))
@@ -143,17 +145,20 @@ async def _apply_line_putaway(
     good_quantity = min(quantity, max(0, good_total - line.posted_qty))
     defective_quantity = quantity - good_quantity
     if good_quantity:
-        if normal_location_id is None:
+        if keep_good_in_sorting:
+            pass
+        elif normal_location_id is None:
             raise InboundIntakeError("lines_missing_storage")
-        await inv_svc.apply_putaway_from_sorting(
-            session,
-            tenant_id,
-            from_storage_location_id=sorting_location_id,
-            to_storage_location_id=normal_location_id,
-            product_id=line.product_id,
-            quantity=good_quantity,
-            inbound_intake_line_id=line.id,
-        )
+        else:
+            await inv_svc.apply_putaway_from_sorting(
+                session,
+                tenant_id,
+                from_storage_location_id=sorting_location_id,
+                to_storage_location_id=normal_location_id,
+                product_id=line.product_id,
+                quantity=good_quantity,
+                inbound_intake_line_id=line.id,
+            )
     if defective_quantity:
         defect_location = await get_or_create_defect_location(session, tenant_id)
         await inv_svc.apply_return_defect_putaway(
@@ -391,8 +396,11 @@ async def add_line(
         req.seller_id = product.seller_id
     elif product.seller_id != req.seller_id:
         raise InboundIntakeError("mixed_seller_lines")
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(
+        session, tenant_id
+    )
     loc_id: uuid.UUID | None = None
-    if storage_location_id is not None:
+    if address_enabled and storage_location_id is not None:
         loc = await get_storage_location_in_warehouse(
             session, tenant_id, req.warehouse_id, storage_location_id
         )
@@ -581,6 +589,11 @@ async def set_line_storage_location(
         line
     ):
         raise InboundIntakeError("line_closed")
+    if not await tenant_settings_svc.is_address_storage_enabled(session, tenant_id):
+        line.storage_location_id = None
+        await session.commit()
+        await session.refresh(line)
+        return line
     loc = await get_storage_location_in_warehouse(
         session, tenant_id, req.warehouse_id, storage_location_id
     )
@@ -1107,13 +1120,17 @@ async def receive_line(
     remaining = accepted - line.posted_qty
     if remaining <= 0:
         raise InboundIntakeError("nothing_to_receive")
-    if line.storage_location_id is None:
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(
+        session, tenant_id
+    )
+    if address_enabled and line.storage_location_id is None:
         raise InboundIntakeError("storage_not_assigned")
     if quantity < 1 or quantity > remaining:
         raise InboundIntakeError("invalid_qty")
-    target_loc = await session.get(StorageLocation, line.storage_location_id)
-    if target_loc is None or sorting_loc_svc.is_sorting_location(target_loc):
-        raise InboundIntakeError("sorting_location_reserved")
+    if address_enabled:
+        target_loc = await session.get(StorageLocation, line.storage_location_id)
+        if target_loc is None or sorting_loc_svc.is_sorting_location(target_loc):
+            raise InboundIntakeError("sorting_location_reserved")
     sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
         session, tenant_id, req.warehouse_id
     )
@@ -1124,6 +1141,7 @@ async def receive_line(
         sorting_location_id=sorting_loc.id,
         normal_location_id=line.storage_location_id,
         quantity=quantity,
+        keep_good_in_sorting=not address_enabled,
     )
     line.posted_qty += quantity
     _maybe_complete_request(req)
@@ -1147,6 +1165,9 @@ async def post_all_remaining(
         raise InboundIntakeError("already_posted")
     if req.status != STATUS_SORTING:
         raise InboundIntakeError("not_verified")
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(
+        session, tenant_id
+    )
     to_receive: list[tuple[InboundIntakeLine, int]] = []
     for line in req.lines:
         accepted = _accepted_qty_for_line(line)
@@ -1157,9 +1178,9 @@ async def post_all_remaining(
             0,
             accepted - min(line.defective_qty, accepted) - line.posted_qty,
         )
-        if line.storage_location_id is None and good_remaining > 0:
+        if address_enabled and line.storage_location_id is None and good_remaining > 0:
             raise InboundIntakeError("lines_missing_storage")
-        if line.storage_location_id is not None:
+        if address_enabled and line.storage_location_id is not None:
             target_loc = await session.get(StorageLocation, line.storage_location_id)
             if target_loc is None or sorting_loc_svc.is_sorting_location(target_loc):
                 raise InboundIntakeError("sorting_location_reserved")
@@ -1183,6 +1204,7 @@ async def post_all_remaining(
             sorting_location_id=sorting_loc.id,
             normal_location_id=line.storage_location_id,
             quantity=rem,
+            keep_good_in_sorting=not address_enabled,
         )
         line.posted_qty += rem
     _maybe_complete_request(req)

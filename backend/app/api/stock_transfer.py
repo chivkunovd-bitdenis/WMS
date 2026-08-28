@@ -11,6 +11,7 @@ from app.api.deps import require_fulfillment_admin
 from app.db.session import get_db
 from app.models.user import User
 from app.services import inventory_service as inv_svc
+from app.services import tenant_settings_service as tenant_settings_svc
 
 router = APIRouter(
     prefix="/operations/stock-transfers",
@@ -73,6 +74,13 @@ async def create_stock_transfer(
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> StockTransferOut:
+    if not await tenant_settings_svc.is_address_storage_enabled(
+        session, user.tenant_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="address_storage_disabled",
+        )
     try:
         await inv_svc.apply_stock_transfer(
             session,

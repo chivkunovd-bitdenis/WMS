@@ -49,14 +49,6 @@ async def _confirmed_unload_with_box(
     wid = wh.json()["id"]
     sid, wb_wid = await _seller_wb_mp_warehouse(async_client, h, monkeypatch)
 
-    if address_storage_enabled is not None:
-        patch = await async_client.patch(
-            "/tenant/settings",
-            headers=h,
-            json={"address_storage_enabled": address_storage_enabled},
-        )
-        assert patch.status_code == 200, patch.text
-
     pr = await async_client.post(
         "/products",
         headers=h,
@@ -85,6 +77,14 @@ async def _confirmed_unload_with_box(
     await _inventory_in_sorting_zone(
         async_client, h, warehouse_id=wid, product_id=pid, qty=10
     )
+
+    if address_storage_enabled is not None:
+        patch = await async_client.patch(
+            "/tenant/settings",
+            headers=h,
+            json={"address_storage_enabled": address_storage_enabled},
+        )
+        assert patch.status_code == 200, patch.text
 
     mu = await async_client.post(
         BASE,
@@ -125,10 +125,10 @@ async def test_collect_without_location_when_address_storage_off(
     manual = await async_client.post(
         f"{BASE}/{mid}/boxes/{box_id}/manual-line",
         headers=h,
-        json={"product_id": pid, "quantity": 2},
+        json={"product_id": pid, "quantity": 1},
     )
     assert manual.status_code == 200, manual.text
-    assert manual.json()["quantity"] == 2
+    assert manual.json()["quantity"] == 1
 
     scan = await async_client.post(
         f"{BASE}/{mid}/boxes/{box_id}/scan",
@@ -136,6 +136,31 @@ async def test_collect_without_location_when_address_storage_off(
         json={"barcode": E2E_BARCODE, "quantity": 1},
     )
     assert scan.status_code == 200, scan.text
+    assert scan.json()["storage_location_id"] is None
+    assert scan.json()["location_code"] is None
+
+    legacy_scan = await async_client.post(
+        f"{BASE}/{mid}/pick/scan",
+        headers=h,
+        json={"barcode": E2E_BARCODE},
+    )
+    assert legacy_scan.status_code == 200, legacy_scan.text
+    assert legacy_scan.json()["kind"] == "product"
+    assert legacy_scan.json()["storage_location_id"] is None
+    assert legacy_scan.json()["location_code"] is None
+
+    detail = await async_client.get(f"{BASE}/{mid}", headers=h)
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["pick_allocations"]
+    assert all(
+        row["storage_location_id"] is None
+        and row["location_code"] is None
+        for row in detail.json()["pick_allocations"]
+    )
+
+    options = await async_client.get(f"{BASE}/{mid}/pick-options", headers=h)
+    assert options.status_code == 200, options.text
+    assert all(row["locations"] == [] for row in options.json())
 
 
 @pytest.mark.asyncio

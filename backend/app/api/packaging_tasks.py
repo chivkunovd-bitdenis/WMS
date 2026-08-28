@@ -20,6 +20,7 @@ from app.models.seller import Seller
 from app.models.user import User
 from app.services import marking_code_service as mc_svc
 from app.services import packaging_task_service as pkg_svc
+from app.services import tenant_settings_service as tenant_settings_svc
 
 router = APIRouter(
     prefix="/operations/packaging-tasks",
@@ -86,8 +87,8 @@ class PackagingTaskLineOut(BaseModel):
     seller_name: str | None = None
     sku_code: str
     product_name: str
-    storage_location_id: str
-    storage_location_code: str
+    storage_location_id: str | None
+    storage_location_code: str | None
     packaging_instructions: str | None
     requires_honest_sign: bool
     qty_total: int
@@ -148,6 +149,7 @@ def _line_out(
     seller_names: dict[uuid.UUID, str],
     marking_available: int = 0,
     product_label_printed: int = 0,
+    reveal_storage: bool = True,
 ) -> PackagingTaskLineOut:
     p = ln.product
     loc = ln.storage_location
@@ -159,8 +161,8 @@ def _line_out(
         seller_name=seller_name,
         sku_code=p.sku_code,
         product_name=p.name,
-        storage_location_id=str(ln.storage_location_id),
-        storage_location_code=loc.code,
+        storage_location_id=str(ln.storage_location_id) if reveal_storage else None,
+        storage_location_code=loc.code if reveal_storage else None,
         packaging_instructions=p.packaging_instructions,
         requires_honest_sign=bool(p.requires_honest_sign),
         qty_total=int(ln.qty_total),
@@ -177,7 +179,7 @@ def _line_out(
     )
 
 
-def _event_out(event: object) -> PackagingTaskEventOut:
+def _event_out(event: object, *, reveal_storage: bool) -> PackagingTaskEventOut:
     from app.models.packaging_task import PackagingTaskEvent
 
     assert isinstance(event, PackagingTaskEvent)
@@ -188,8 +190,16 @@ def _event_out(event: object) -> PackagingTaskEventOut:
         line_id=str(event.line_id) if event.line_id else None,
         product_id=str(event.product_id) if event.product_id else None,
         product_name=event.product.name if event.product else None,
-        storage_location_id=str(event.storage_location_id) if event.storage_location_id else None,
-        storage_location_code=event.storage_location.code if event.storage_location else None,
+        storage_location_id=(
+            str(event.storage_location_id)
+            if reveal_storage and event.storage_location_id
+            else None
+        ),
+        storage_location_code=(
+            event.storage_location.code
+            if reveal_storage and event.storage_location
+            else None
+        ),
         quantity=int(event.quantity),
         note=event.note,
         created_by_user_id=str(event.created_by_user_id) if event.created_by_user_id else None,
@@ -207,6 +217,9 @@ async def _task_out(
     pick_resync_warning: bool = False,
     reload: bool = True,
 ) -> PackagingTaskOut:
+    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(
+        session, tenant_id
+    )
     if reload:
         loaded = await pkg_svc.get_task(session, tenant_id, task.id)
         if loaded is None:
@@ -246,6 +259,7 @@ async def _task_out(
                 seller_names=seller_names,
                 marking_available=available,
                 product_label_printed=product_label_printed_by_line.get(ln.id, 0),
+                reveal_storage=reveal_storage,
             )
         )
     sellers: set[tuple[uuid.UUID | None, str | None]] = set()
@@ -292,7 +306,10 @@ async def _task_out(
             str(task.completed_by_user_id) if task.completed_by_user_id else None
         ),
         lines=line_outs,
-        events=[_event_out(event) for event in task.events],
+        events=[
+            _event_out(event, reveal_storage=reveal_storage)
+            for event in task.events
+        ],
     )
 
 

@@ -17,6 +17,7 @@ from app.db.session import get_db
 from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.models.warehouse import Warehouse
+from app.services import tenant_settings_service as tenant_settings_svc
 from app.services import warehouse_map_service
 from app.services.catalog_service import (
     CatalogError,
@@ -45,6 +46,17 @@ from app.services.sorting_location_service import (
 from app.services.warehouse_map_service import WarehouseMapError
 
 router = APIRouter(prefix="/warehouses", tags=["warehouses"])
+
+
+async def _require_address_storage(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+) -> None:
+    if not await tenant_settings_svc.is_address_storage_enabled(session, tenant_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="address_storage_disabled",
+        )
 
 
 class WarehouseCreate(BaseModel):
@@ -455,6 +467,7 @@ async def resolve_scan(
             type=kind, id=str(item.id), warehouse_id=str(item.id), name=item.name, code=item.code
         )
     assert isinstance(item, StorageLocation)
+    await _require_address_storage(session, user.tenant_id)
     return WarehouseScanOut(
         type=kind, id=str(item.id), warehouse_id=str(item.warehouse_id), code=item.code
     )
@@ -492,6 +505,7 @@ async def get_sorting_location(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> LocationOut:
+    await _require_address_storage(session, user.tenant_id)
     wh = await get_warehouse(session, user.tenant_id, warehouse_id)
     if wh is None:
         raise HTTPException(
@@ -521,6 +535,10 @@ async def list_locations(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="warehouse_not_found",
         )
+    if not await tenant_settings_svc.is_address_storage_enabled(
+        session, user.tenant_id
+    ):
+        return []
     rows = await list_locs_svc(
         session,
         user.tenant_id,
@@ -545,6 +563,7 @@ async def post_location(
     user: Annotated[User, Depends(require_cells_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> LocationOut:
+    await _require_address_storage(session, user.tenant_id)
     try:
         if body.rack_name is not None:
             if body.side is None:
@@ -605,6 +624,7 @@ async def patch_location(
     user: Annotated[User, Depends(require_cells_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> LocationOut:
+    await _require_address_storage(session, user.tenant_id)
     try:
         loc = await rename_location(
             session,
@@ -654,6 +674,7 @@ async def delete_location_route(
     session: Annotated[AsyncSession, Depends(get_db)],
     move_stock_to: Annotated[str | None, Query()] = None,
 ) -> None:
+    await _require_address_storage(session, user.tenant_id)
     try:
         await delete_location(
             session,
@@ -682,6 +703,7 @@ async def get_racks(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[RackOut]:
+    await _require_address_storage(session, user.tenant_id)
     wh = await get_warehouse(session, user.tenant_id, warehouse_id)
     if wh is None:
         raise HTTPException(
@@ -700,6 +722,7 @@ async def suggest_location(
     rack_name: str = Query(min_length=1, max_length=32),
     side: int = Query(ge=1, le=2),
 ) -> LocationSuggestOut:
+    await _require_address_storage(session, user.tenant_id)
     wh = await get_warehouse(session, user.tenant_id, warehouse_id)
     if wh is None:
         raise HTTPException(

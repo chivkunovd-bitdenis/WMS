@@ -44,6 +44,7 @@ from app.services import box_import_service as box_import_svc
 from app.services import inbound_intake_box_service as inbound_box_svc
 from app.services import inbound_intake_service as svc
 from app.services import inventory_service as inv_svc
+from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import volume_liters_from_mm
 from app.services.inbound_intake_box_service import InboundIntakeBoxError
 from app.services.inbound_intake_service import InboundIntakeError
@@ -289,7 +290,7 @@ class InboundIntakeRequestOut(BaseModel):
 class InventoryMovementOut(BaseModel):
     id: str
     product_id: str
-    storage_location_id: str
+    storage_location_id: str | None
     quantity_delta: int
     movement_type: str
     inbound_intake_line_id: str | None
@@ -509,6 +510,7 @@ def _line_out_from_orm(
     product: Product,
     *,
     effective_actual_qty: int | None = None,
+    reveal_storage: bool = True,
 ) -> InboundIntakeLineOut:
     loc = line.storage_location
     return InboundIntakeLineOut(
@@ -534,14 +536,15 @@ def _line_out_from_orm(
         defective_qty=int(line.defective_qty or 0),
         posted_qty=line.posted_qty,
         storage_location_id=str(line.storage_location_id)
-        if line.storage_location_id
+        if reveal_storage and line.storage_location_id
         else None,
-        storage_location_code=loc.code if loc is not None else None,
+        storage_location_code=loc.code if reveal_storage and loc is not None else None,
     )
 
 
 async def _line_out_for_request(
     session: AsyncSession,
+    tenant_id: uuid.UUID,
     request_id: uuid.UUID,
     request_status: str,
     line: InboundIntakeLine,
@@ -552,14 +555,25 @@ async def _line_out_for_request(
         effective = await svc.effective_actual_qty(
             session, request_id, line, request_status=request_status
         )
-    return _line_out_from_orm(line, product, effective_actual_qty=effective)
+    return _line_out_from_orm(
+        line,
+        product,
+        effective_actual_qty=effective,
+        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
+            session, tenant_id
+        ),
+    )
 
 
-def _movement_out(m: InventoryMovement) -> InventoryMovementOut:
+def _movement_out(
+    m: InventoryMovement,
+    *,
+    reveal_storage: bool,
+) -> InventoryMovementOut:
     return InventoryMovementOut(
         id=str(m.id),
         product_id=str(m.product_id),
-        storage_location_id=str(m.storage_location_id),
+        storage_location_id=str(m.storage_location_id) if reveal_storage else None,
         quantity_delta=m.quantity_delta,
         movement_type=m.movement_type,
         inbound_intake_line_id=str(m.inbound_intake_line_id)
@@ -579,8 +593,8 @@ class InboundDistributionLineIn(BaseModel):
 class InboundDistributionLineOut(BaseModel):
     id: str
     product_id: str
-    storage_location_id: str
-    storage_location_code: str
+    storage_location_id: str | None
+    storage_location_code: str | None
     quantity: int
     created_at: str
     box_id: str | None = None
@@ -600,12 +614,14 @@ def _dist_out(
     row: InboundIntakeDistributionLine,
     loc: StorageLocation,
     box: InboundIntakeBox | None = None,
+    *,
+    reveal_storage: bool = True,
 ) -> InboundDistributionLineOut:
     return InboundDistributionLineOut(
         id=str(row.id),
         product_id=str(row.product_id),
-        storage_location_id=str(row.storage_location_id),
-        storage_location_code=loc.code,
+        storage_location_id=str(row.storage_location_id) if reveal_storage else None,
+        storage_location_code=loc.code if reveal_storage else None,
         quantity=row.quantity,
         created_at=row.created_at.isoformat(),
         box_id=str(row.box_id) if row.box_id is not None else None,
@@ -766,7 +782,9 @@ async def get_inbound_request(
     for ln in r.lines:
         p = ln.product
         lines_out.append(
-            await _line_out_for_request(session, request_id, r.status, ln, p)
+            await _line_out_for_request(
+                session, user.tenant_id, request_id, r.status, ln, p
+            )
         )
     boxes = await inbound_box_svc.list_boxes_with_lines(
         session, user.tenant_id, request_id
@@ -1040,7 +1058,7 @@ async def scan_barcode_to_loose_intake(
     request_status = await svc.get_request_status(session, user.tenant_id, request_id)
     assert request_status is not None
     return await _line_out_for_request(
-        session, request_id, request_status, line, prod
+        session, user.tenant_id, request_id, request_status, line, prod
     )
 
 
@@ -1074,7 +1092,9 @@ async def add_received_product_line(
     await session.refresh(line, attribute_names=["storage_location"])
     req = await svc.get_request(session, user.tenant_id, request_id)
     assert req is not None
-    return await _line_out_for_request(session, request_id, req.status, line, prod)
+    return await _line_out_for_request(
+        session, user.tenant_id, request_id, req.status, line, prod
+    )
 
 
 @router.post(
@@ -1470,7 +1490,7 @@ async def patch_inbound_line_actual(
     req = await svc.get_request(session, user.tenant_id, request_id)
     assert req is not None
     return await _line_out_for_request(
-        session, request_id, req.status, line, prod
+        session, user.tenant_id, request_id, req.status, line, prod
     )
 
 
@@ -1519,7 +1539,9 @@ async def patch_inbound_line_defective(
     await session.refresh(line, attribute_names=["storage_location"])
     request_status = await svc.get_request_status(session, user.tenant_id, request_id)
     assert request_status is not None
-    return await _line_out_for_request(session, request_id, request_status, line, product)
+    return await _line_out_for_request(
+        session, user.tenant_id, request_id, request_status, line, product
+    )
 
 
 @router.post("/{request_id}/verify", response_model=InboundIntakeRequestOut)
@@ -1569,7 +1591,10 @@ async def list_inbound_movements(
         request_id,
         seller_product_owner_id=seller_scope,
     )
-    return [_movement_out(m) for m in movements]
+    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(
+        session, user.tenant_id
+    )
+    return [_movement_out(m, reveal_storage=reveal_storage) for m in movements]
 
 
 @router.post(
@@ -1649,7 +1674,7 @@ async def add_inbound_line(
     req = await svc.get_request(session, user.tenant_id, request_id)
     assert req is not None
     return await _line_out_for_request(
-        session, request_id, req.status, line, prod
+        session, user.tenant_id, request_id, req.status, line, prod
     )
 
 
@@ -1709,7 +1734,7 @@ async def patch_inbound_line_expected(
     req = await svc.get_request(session, user.tenant_id, request_id)
     assert req is not None
     return await _line_out_for_request(
-        session, request_id, req.status, line, prod
+        session, user.tenant_id, request_id, req.status, line, prod
     )
 
 
@@ -1806,7 +1831,7 @@ async def patch_inbound_line_storage(
     req = await svc.get_request(session, user.tenant_id, request_id)
     assert req is not None
     return await _line_out_for_request(
-        session, request_id, req.status, line, prod
+        session, user.tenant_id, request_id, req.status, line, prod
     )
 
 
@@ -2000,13 +2025,16 @@ async def list_distribution_lines(
                 detail="request_not_found",
             ) from None
         raise
+    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(
+        session, user.tenant_id
+    )
     out: list[InboundDistributionLineOut] = []
     for r in rows:
         loc = await session.get(StorageLocation, r.storage_location_id)
         if loc is None:
             continue
         box = await session.get(InboundIntakeBox, r.box_id) if r.box_id is not None else None
-        out.append(_dist_out(r, loc, box))
+        out.append(_dist_out(r, loc, box, reveal_storage=reveal_storage))
     return out
 
 
@@ -2031,23 +2059,26 @@ async def scan_distribution_barcode(
     except InboundIntakeError as exc:
         raise _map_inbound_svc_err(exc) from None
 
+    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(
+        session, user.tenant_id
+    )
     out: list[InboundDistributionLineOut] = []
     for r in result.rows:
         loc = await session.get(StorageLocation, r.storage_location_id)
         if loc is None:
             continue
         box = await session.get(InboundIntakeBox, r.box_id) if r.box_id is not None else None
-        out.append(_dist_out(r, loc, box))
+        out.append(_dist_out(r, loc, box, reveal_storage=reveal_storage))
 
     kind: Literal["location", "product"]
     kind = "location" if result.kind == "location" else "product"
     return InboundDistributionScanOut(
         kind=kind,
         active_storage_location_id=str(result.active_location.id)
-        if result.active_location is not None
+        if reveal_storage and result.active_location is not None
         else None,
         active_storage_location_code=result.active_location.code
-        if result.active_location is not None
+        if reveal_storage and result.active_location is not None
         else None,
         product_id=str(result.product_id) if result.product_id is not None else None,
         lines=out,
@@ -2114,13 +2145,16 @@ async def replace_distribution_lines(
                 detail=exc.code,
             ) from None
         raise
+    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(
+        session, user.tenant_id
+    )
     out: list[InboundDistributionLineOut] = []
     for r in rows:
         loc = await session.get(StorageLocation, r.storage_location_id)
         if loc is None:
             continue
         box = await session.get(InboundIntakeBox, r.box_id) if r.box_id is not None else None
-        out.append(_dist_out(r, loc, box))
+        out.append(_dist_out(r, loc, box, reveal_storage=reveal_storage))
     return out
 
 

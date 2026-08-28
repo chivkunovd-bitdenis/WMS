@@ -202,6 +202,31 @@ async def test_fbs_worklist_happy_path(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_fbs_worklist_hides_locations_when_address_storage_disabled(
+    async_client: AsyncClient,
+) -> None:
+    headers, seller_id, _warehouse_id, _product_id, _location_id, _order_ids = (
+        await _setup_ff_admin_with_stock(async_client, order_count=1)
+    )
+    disabled = await async_client.patch(
+        "/tenant/settings",
+        headers=headers,
+        json={"address_storage_enabled": False},
+    )
+    assert disabled.status_code == 200, disabled.text
+
+    response = await async_client.get(
+        "/operations/fbs-orders/worklist",
+        headers=headers,
+        params={"seller_id": str(seller_id), "status_group": "new", "limit": 10},
+    )
+    assert response.status_code == 200, response.text
+    item = response.json()["items"][0]
+    assert item["inventory"]["locations"] == []
+    assert item["pick"]["location_code"] is None
+
+
+@pytest.mark.asyncio
 async def test_fbs_worklist_searches_operator_identifiers(async_client: AsyncClient) -> None:
     """TC-NEW-FBS-SEARCH-001: backend search covers title, category, SKU, chrtId and WB ids."""
     headers, seller_id, _warehouse_id, _product_id, _location_id, order_ids = (

@@ -17,6 +17,7 @@ from app.core.roles import FULFILLMENT_ADMIN
 from app.db.session import get_db
 from app.models.user import User
 from app.services import inventory_service as inv_svc
+from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.inventory_movement_report_service import (
     REPORT_GROUP_LABELS,
     REPORT_GROUP_ORDER,
@@ -33,7 +34,7 @@ class InventoryMovementRowOut(BaseModel):
     id: str
     product_id: str
     sku_code: str
-    storage_location_id: str
+    storage_location_id: str | None
     quantity_delta: int
     movement_type: str
     created_at: str
@@ -52,12 +53,15 @@ async def list_inventory_movements(
         limit=limit,
         seller_product_owner_id=seller_scope,
     )
+    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(
+        session, user.tenant_id
+    )
     return [
         InventoryMovementRowOut(
             id=str(m.id),
             product_id=str(m.product_id),
             sku_code=p.sku_code,
-            storage_location_id=str(m.storage_location_id),
+            storage_location_id=str(m.storage_location_id) if reveal_storage else None,
             quantity_delta=m.quantity_delta,
             movement_type=m.movement_type,
             created_at=m.created_at.isoformat(),
