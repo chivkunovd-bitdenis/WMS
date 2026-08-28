@@ -75,6 +75,7 @@ export default defineConfig({
         warehouseMap: 'warehouse-map.html',
         moveLab: 'move-lab.html',
         sortingObjects: 'sorting-objects.html',
+        products: 'products.html',
       },
     },
   },
