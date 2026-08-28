@@ -5,11 +5,8 @@ from datetime import UTC, datetime
 from typing import Literal, cast
 
 from sqlalchemy import and_, case, delete, func, or_, select, update
-from sqlalchemy.dialects.postgresql import insert as postgresql_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from sqlalchemy.sql.dml import Insert
 
 from app.models.fbs_order import FbsOrderReservation
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
@@ -30,6 +27,10 @@ from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentR
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
+from app.services.inventory_balance_upsert import (
+    build_positive_balance_upsert as _build_positive_balance_upsert,
+)
+from app.services.inventory_container_service import ContainerKind, validate_container
 from app.services.marketplace_unload_status import RESERVE_STATUSES
 from app.services.sorting_location_service import SORTING_LOCATION_CODE
 
@@ -38,60 +39,13 @@ RESERVATION_ERROR = "insufficient_available"
 DeductPrefer = Literal["packed", "unpacked"]
 
 
-def _build_positive_balance_upsert(
-    *,
-    dialect_name: str,
-    tenant_id: uuid.UUID,
-    product_id: uuid.UUID,
-    storage_location_id: uuid.UUID,
-    quantity_delta: int,
-) -> Insert:
-    values = {
-        "id": uuid.uuid4(),
-        "tenant_id": tenant_id,
-        "product_id": product_id,
-        "storage_location_id": storage_location_id,
-        "quantity": quantity_delta,
-        "quantity_unpacked": quantity_delta,
-        "quantity_packed": 0,
-        "updated_at": datetime.now(UTC),
-    }
-    update_values = {
-        "quantity_unpacked": InventoryBalance.quantity_unpacked + quantity_delta,
-        "quantity": (
-            InventoryBalance.quantity_unpacked + InventoryBalance.quantity_packed + quantity_delta
-        ),
-        "updated_at": datetime.now(UTC),
-    }
-    if dialect_name == "postgresql":
-        stmt = postgresql_insert(InventoryBalance).values(**values)
-        return stmt.on_conflict_do_update(
-            index_elements=[
-                InventoryBalance.storage_location_id,
-                InventoryBalance.product_id,
-            ],
-            set_=update_values,
-        )
-    elif dialect_name == "sqlite":
-        sqlite_stmt = sqlite_insert(InventoryBalance).values(**values)
-        return sqlite_stmt.on_conflict_do_update(
-            index_elements=[
-                InventoryBalance.storage_location_id,
-                InventoryBalance.product_id,
-            ],
-            set_=update_values,
-        )
-    msg = f"unsupported inventory balance dialect: {dialect_name}"
-    raise RuntimeError(msg)
-
-
 async def _physical_on_hand(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     product_id: uuid.UUID,
     storage_location_id: uuid.UUID,
 ) -> int:
-    stmt = select(InventoryBalance.quantity).where(
+    stmt = select(func.coalesce(func.sum(InventoryBalance.quantity), 0)).where(
         InventoryBalance.tenant_id == tenant_id,
         InventoryBalance.product_id == product_id,
         InventoryBalance.storage_location_id == storage_location_id,
@@ -542,10 +496,15 @@ async def record_movement_and_adjust_balance(
     transfer_group_id: uuid.UUID | None = None,
     marketplace_unload_request_id: uuid.UUID | None = None,
     deduct_prefer: DeductPrefer = "unpacked",
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> InventoryMovement:
     """Запись в журнал и изменение остатка (delta может быть отрицательным)."""
     if quantity_delta == 0:
         msg = "quantity_delta must be non-zero"
+        raise ValueError(msg)
+    if (container_kind is None) != (container_id is None):
+        msg = "container kind and id must be set together"
         raise ValueError(msg)
 
     loc = await session.get(StorageLocation, storage_location_id)
@@ -557,6 +516,14 @@ async def record_movement_and_adjust_balance(
     if prod is None or prod.tenant_id != tenant_id:
         msg = "product not found"
         raise ValueError(msg)
+    if container_kind is not None and container_id is not None:
+        await validate_container(
+            session,
+            tenant_id,
+            loc.warehouse_id,
+            container_kind,
+            container_id,
+        )
 
     movement = InventoryMovement(
         tenant_id=tenant_id,
@@ -587,6 +554,8 @@ async def record_movement_and_adjust_balance(
                 product_id=product_id,
                 storage_location_id=storage_location_id,
                 quantity_delta=quantity_delta,
+                container_kind=container_kind,
+                container_id=container_id,
             )
         )
         return movement
@@ -611,6 +580,8 @@ async def record_movement_and_adjust_balance(
             InventoryBalance.tenant_id == tenant_id,
             InventoryBalance.product_id == product_id,
             InventoryBalance.storage_location_id == storage_location_id,
+            InventoryBalance.container_kind == container_kind,
+            InventoryBalance.container_id == container_id,
             unpacked + packed >= quantity_to_deduct,
         )
         .values(
@@ -670,6 +641,8 @@ async def apply_packaging_convert(
                 InventoryBalance.tenant_id == tenant_id,
                 InventoryBalance.product_id == product_id,
                 InventoryBalance.storage_location_id == storage_location_id,
+                InventoryBalance.container_kind.is_(None),
+                InventoryBalance.container_id.is_(None),
                 unpacked >= quantity,
             )
             .values(
@@ -687,6 +660,8 @@ async def apply_packaging_convert(
                 InventoryBalance.tenant_id == tenant_id,
                 InventoryBalance.product_id == product_id,
                 InventoryBalance.storage_location_id == storage_location_id,
+                InventoryBalance.container_kind.is_(None),
+                InventoryBalance.container_id.is_(None),
                 unpacked + packed >= quantity,
             )
             .values(
@@ -732,6 +707,8 @@ async def reverse_packaging_convert(
             InventoryBalance.tenant_id == tenant_id,
             InventoryBalance.product_id == product_id,
             InventoryBalance.storage_location_id == storage_location_id,
+            InventoryBalance.container_kind.is_(None),
+            InventoryBalance.container_id.is_(None),
             packed >= quantity,
         )
         .values(
@@ -984,7 +961,7 @@ async def list_location_balances_for_products_in_warehouse(
             InventoryBalance.product_id,
             StorageLocation.id,
             StorageLocation.code,
-            InventoryBalance.quantity,
+            func.sum(InventoryBalance.quantity),
         )
         .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
         .where(
@@ -993,6 +970,11 @@ async def list_location_balances_for_products_in_warehouse(
             StorageLocation.warehouse_id == warehouse_id,
             InventoryBalance.product_id.in_(product_ids),
             InventoryBalance.quantity > 0,
+        )
+        .group_by(
+            InventoryBalance.product_id,
+            StorageLocation.id,
+            StorageLocation.code,
         )
         .order_by(StorageLocation.code.asc())
     )
@@ -1035,6 +1017,8 @@ async def _lock_inventory_balance(
             InventoryBalance.tenant_id == tenant_id,
             InventoryBalance.product_id == product_id,
             InventoryBalance.storage_location_id == storage_location_id,
+            InventoryBalance.container_kind.is_(None),
+            InventoryBalance.container_id.is_(None),
         )
         .with_for_update()
     )
@@ -1302,6 +1286,8 @@ async def migrate_all_address_balances_to_sorting(
             InventoryBalance.tenant_id == tenant_id,
             InventoryBalance.quantity > 0,
             StorageLocation.code != SORTING_LOCATION_CODE,
+            InventoryBalance.container_kind.is_(None),
+            InventoryBalance.container_id.is_(None),
         )
     )
     rows = (await session.execute(stmt)).all()

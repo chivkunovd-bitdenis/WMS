@@ -309,9 +309,9 @@ async def test_catalog_list_and_lookup_are_tenant_scoped_read_only(
     assert rows[1]["remaining_qty"] == 0
     assert rows[1]["fully_distributed"] is False
     assert rows[2]["kind"] == "cargo_place"
-    assert rows[2]["composition_tracked"] is False
+    assert rows[2]["composition_tracked"] is True
     assert rows[2]["fully_distributed"] is False
-    assert rows[2]["remaining_qty"] is None
+    assert rows[2]["remaining_qty"] == 0
     assert rows[3]["warehouse_name"] == "Резерв"
 
     done_box = await async_client.get(

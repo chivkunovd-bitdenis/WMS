@@ -44,6 +44,8 @@ from app.models.ff_staff_permissions import FfStaffPermissions
 from app.models.inbound_intake import (
     InboundIntakeBox,
     InboundIntakeBoxLine,
+    InboundIntakeCargoPlace,
+    InboundIntakeCargoPlaceLine,
     InboundIntakeLine,
     InboundIntakeRequest,
 )
@@ -73,6 +75,7 @@ from app.models.operation_fact import OperationFact, OperationFactCutover, Opera
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.ozon_return import InboundOzonReturnGiveout, InboundOzonReturnItem
 from app.models.packaging_task import PackagingTask, PackagingTaskEvent, PackagingTaskLine
+from app.models.pallet import Pallet
 from app.models.print_template import PrintTemplate
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
@@ -140,6 +143,8 @@ __all__ = [
     "FfStaffPermissions",
     "InboundIntakeBox",
     "InboundIntakeBoxLine",
+    "InboundIntakeCargoPlace",
+    "InboundIntakeCargoPlaceLine",
     "InboundIntakeLine",
     "InboundIntakeRequest",
     "InboundOzonReturnGiveout",
@@ -170,6 +175,7 @@ __all__ = [
     "PackagingTask",
     "PackagingTaskEvent",
     "PackagingTaskLine",
+    "Pallet",
     "PrintTemplate",
     "Product",
     "ProductDimensionEvent",
