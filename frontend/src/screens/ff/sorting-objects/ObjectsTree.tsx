@@ -30,16 +30,19 @@ const ROW_HEIGHT = 30
 const GUIDE = 'rgba(15, 23, 42, 0.11)'
 
 /**
- * Товар внутри короба нельзя переложить одним движением — сначала его надо
- * вынуть. Это не придирка интерфейса, а порядок работы руками: короб закрыт, и
- * «переложить из закрытого короба сразу на палету» на складе не происходит.
- * Поэтому у такой строки нет ни плюса, ни возможности утащить её мышкой —
- * доступно только «вынуть».
+ * Товар внутри закрытой тары нельзя переложить одним движением — сначала его
+ * надо вынуть. Это не придирка интерфейса, а порядок работы руками: короб и
+ * грузоместо закрыты, и «переложить из закрытого короба сразу на палету» на
+ * складе не происходит. Поэтому у такой строки нет ни плюса, ни возможности
+ * утащить её мышкой — доступно только «вынуть».
+ *
+ * С палеты брать напрямую можно: там вещи лежат открыто, ничего не вскрывают.
  */
-function insideBox(row: ObjectRow, objects: WarehouseObject[]): boolean {
+function insideClosed(row: ObjectRow, objects: WarehouseObject[]): boolean {
   const holder = row.kind === 'object' ? row.object.holder : row.line.holder
   if (row.kind !== 'goods' || !holder || !holder.startsWith('obj:')) return false
-  return objects.find((one) => objRef(one.id) === holder)?.kind === 'box'
+  const host = objects.find((one) => objRef(one.id) === holder)
+  return host?.kind === 'box' || host?.kind === 'cargo_place'
 }
 
 export function ObjectsTree({
@@ -205,7 +208,7 @@ export function ObjectsTree({
               Нарисованная ручка у строки, которая не тащится, — прямой обман:
               оператор тянет, ничего не происходит, и он решает, что сломалось. */}
           <Box sx={{ width: 16, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
-            {insideBox(row, objects) ? null : (
+            {insideClosed(row, objects) ? null : (
               <Tooltip title="Можно перетащить в другой объект или на ячейку">
                 <DragIndicator sx={{ color: 'text.disabled', fontSize: 16 }} />
               </Tooltip>
@@ -318,7 +321,7 @@ export function ObjectsTree({
                 title="Положить в место"
                 onClick={() => onPlace(row)}
                 disabledReason={
-                  insideBox(row, objects) ? 'Сначала вытащите товар из короба' : undefined
+                  insideClosed(row, objects) ? 'Сначала вытащите товар из тары' : undefined
                 }
                 testId={`${testId}-place-${row.key}`}
               >
@@ -344,7 +347,7 @@ export function ObjectsTree({
       fixedLayout={compact}
       drag={{
         active: carried !== null,
-        canDrag: (row) => !insideBox(row, objects),
+        canDrag: (row) => !insideClosed(row, objects),
         canDrop: (row) =>
           row.kind === 'object' && carried !== null && canPut(carried, objRef(row.object.id), objects),
         onDragStart,
