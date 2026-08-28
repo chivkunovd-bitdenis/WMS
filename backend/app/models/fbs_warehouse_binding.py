@@ -74,6 +74,12 @@ class FbsWarehouseBinding(Base):
     stock_sync_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
     )
+    # Обслуживаем ли мы этот склад продавца. Галочка ставится один раз в карточке
+    # продавца и решает сразу две вещи: какие заказы FBS наши и по каким складам
+    # раздаётся остаток.
+    served: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     lease_until: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

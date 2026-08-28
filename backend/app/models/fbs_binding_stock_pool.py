@@ -62,6 +62,10 @@ class FbsBindingStockPool(Base):
     quantity: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    # Доля свободного остатка для этого склада WB, когда у товара доли разные.
+    # NULL — «отдельная доля не задана», и это не то же самое, что ноль: ноль
+    # означает осознанное «на этот склад не публикуем».
+    percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
     updated_by: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),

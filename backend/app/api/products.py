@@ -51,6 +51,12 @@ from app.services.catalog_service import (
     update_product_fbs_stock_sync,
     volume_liters_from_mm,
 )
+from app.services.fbs_stock_rule_service import (
+    FbsRule,
+    FbsStockRuleError,
+    get_rule_view,
+    set_rule_for_products,
+)
 from app.services.product_tz_import_service import (
     ProductTzImportError,
     apply_product_tz_import,
@@ -321,6 +327,43 @@ class ProductFbsStockSyncPatch(BaseModel):
 
     fbs_stock_sync_enabled: bool | None = None
     fbs_stock_limit: int | None = Field(default=None, ge=0)
+
+
+class ProductFbsRuleBody(BaseModel):
+    """Правило публикации остатка: доля свободного остатка, а не число штук."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    publish: bool
+    same_everywhere: bool
+    percent: int = Field(ge=0, le=100)
+    # Ключ — идентификатор склада в кабинете WB (он приходит числом, но в JSON
+    # ключи объекта всегда строки).
+    by_warehouse: dict[str, int] = Field(default_factory=dict)
+
+
+class ProductFbsRuleOut(ProductFbsRuleBody):
+    """То же правило плюс три числа, из которых видно, откуда взялось количество.
+
+    `published_now` считает сервер тем же кодом, что и публикация: если бы экран
+    пересчитывал долю своей формулой, две формулы однажды разошлись бы.
+    """
+
+    free_stock: int
+    on_hand: int
+    reserved: int
+    published_now: int
+
+
+class ProductsFbsRuleBulkBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    product_ids: list[uuid.UUID]
+    rule: ProductFbsRuleBody
+
+
+class ProductsFbsRuleBulkOut(BaseModel):
+    updated_count: int
 
 
 class ProductFbsStockSyncBulkPatch(BaseModel):
@@ -1231,6 +1274,117 @@ async def patch_product_fbs_stock_sync(
             ) from None
         raise
     return _product_out(updated)
+
+
+def _rule_error_status(code: str) -> int:
+    if code in {"product_not_found", "warehouse_not_found"}:
+        return status.HTTP_404_NOT_FOUND
+    return status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+async def _assert_product_rule_access(
+    session: AsyncSession,
+    user: User,
+    product_id: uuid.UUID,
+    effective_seller_id: uuid.UUID | None,
+) -> None:
+    """Правило остатка правит фулфилмент или сам продавец — но только свой товар."""
+    await assert_seller_permission(session, user, PERM_PRODUCTS)
+    product = await get_product(session, user.tenant_id, product_id)
+    if product is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
+    if user.role == FULFILLMENT_SELLER:
+        owner_id = user.seller_id
+        if user_can_manage_seller_shops(user) and effective_seller_id is not None:
+            owner_id = effective_seller_id
+        if owner_id is None or product.seller_id != owner_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    elif user.role != FULFILLMENT_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+
+def _rule_from_body(body: ProductFbsRuleBody) -> FbsRule:
+    return FbsRule(
+        publish=body.publish,
+        same_everywhere=body.same_everywhere,
+        percent=body.percent,
+        by_warehouse={int(key): value for key, value in body.by_warehouse.items()},
+    )
+
+
+@router.get("/{product_id}/fbs-rule", response_model=ProductFbsRuleOut)
+async def get_product_fbs_rule(
+    product_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> ProductFbsRuleOut:
+    await _assert_product_rule_access(session, user, product_id, effective_seller_id)
+    try:
+        view = await get_rule_view(session, user.tenant_id, product_id)
+    except FbsStockRuleError as exc:
+        raise HTTPException(
+            status_code=_rule_error_status(exc.code), detail=exc.message
+        ) from None
+    return ProductFbsRuleOut(
+        publish=view.rule.publish,
+        same_everywhere=view.rule.same_everywhere,
+        percent=view.rule.percent,
+        by_warehouse={str(key): value for key, value in view.rule.by_warehouse.items()},
+        free_stock=view.free_stock,
+        on_hand=view.on_hand,
+        reserved=view.reserved,
+        published_now=view.published_now,
+    )
+
+
+@router.put("/{product_id}/fbs-rule", response_model=ProductFbsRuleOut)
+async def put_product_fbs_rule(
+    product_id: uuid.UUID,
+    body: ProductFbsRuleBody,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> ProductFbsRuleOut:
+    await _assert_product_rule_access(session, user, product_id, effective_seller_id)
+    try:
+        await set_rule_for_products(
+            session,
+            user.tenant_id,
+            [product_id],
+            _rule_from_body(body),
+            updated_by=user.id,
+        )
+    except FbsStockRuleError as exc:
+        raise HTTPException(
+            status_code=_rule_error_status(exc.code), detail=exc.message
+        ) from None
+    return await get_product_fbs_rule(product_id, user, session, effective_seller_id)
+
+
+@router.put("/fbs-rule", response_model=ProductsFbsRuleBulkOut)
+async def put_products_fbs_rule(
+    body: ProductsFbsRuleBulkBody,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> ProductsFbsRuleBulkOut:
+    """Одна доля сразу на несколько товаров — но только внутри одного продавца."""
+    for product_id in body.product_ids:
+        await _assert_product_rule_access(session, user, product_id, effective_seller_id)
+    try:
+        await set_rule_for_products(
+            session,
+            user.tenant_id,
+            list(body.product_ids),
+            _rule_from_body(body.rule),
+            updated_by=user.id,
+        )
+    except FbsStockRuleError as exc:
+        raise HTTPException(
+            status_code=_rule_error_status(exc.code), detail=exc.message
+        ) from None
+    return ProductsFbsRuleBulkOut(updated_count=len(body.product_ids))
 
 
 @router.patch("/fbs-stock-sync/bulk", response_model=ProductFbsStockSyncBulkOut)

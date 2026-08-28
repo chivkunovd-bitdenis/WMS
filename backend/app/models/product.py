@@ -79,6 +79,13 @@ class Product(Base):
         Boolean, nullable=False, default=False, server_default="false"
     )
     fbs_stock_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Правило вместо снимка: доля свободного остатка, которую отдаём в FBS.
+    # Само число считается на момент публикации, поэтому не устаревает от прихода
+    # новой партии. Старая `fbs_stock_limit` пока остаётся ради безопасного отката.
+    fbs_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fbs_same_everywhere: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

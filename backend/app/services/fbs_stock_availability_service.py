@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 
 from sqlalchemy import case, func, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -143,15 +144,29 @@ async def _storage_and_sorting_on_hand_by_product(
     return {pid: (int(storage or 0), int(sorting or 0)) for pid, storage, sorting in res.all()}
 
 
-async def fbs_available_qty_by_product(
+@dataclass(frozen=True)
+class FbsStockBreakdown:
+    """Три числа вместо одного: сколько лежит, сколько занято, сколько свободно.
+
+    Экран настройки доли показывает все три, потому что без «занято» непонятно,
+    почему процент дал меньше, чем ожидалось от общего остатка. Числа приходят
+    из одного расчёта, а не из двух похожих: иначе они однажды разойдутся.
+    """
+
+    on_hand: int
+    reserved: int
+    free: int
+
+
+async def fbs_stock_breakdown_by_product(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     warehouse_id: uuid.UUID,
     product_ids: list[uuid.UUID],
     *,
     exclude_fbs_order_ids: frozenset[uuid.UUID] | None = None,
-) -> dict[uuid.UUID, int]:
-    """Фактический остаток минус то, что уже занято.
+) -> dict[uuid.UUID, FbsStockBreakdown]:
+    """Фактический остаток и то, что уже занято, по каждому товару.
 
     Направления хранения — это резервы («двести штук под комплекты»), а не отдельный
     FBS-пул: галки «FBS» у них больше нет. Поэтому доступное под FBS считается от
@@ -183,19 +198,42 @@ async def fbs_available_qty_by_product(
     direction_map = await stock_direction_service.direction_totals_by_product(
         session, tenant_id, product_ids
     )
-    result: dict[uuid.UUID, int] = {}
+    result: dict[uuid.UUID, FbsStockBreakdown] = {}
     for pid in product_ids:
         storage, sorting = on_hand_map.get(pid, (0, 0))
         directions = direction_map.get(pid)
         reserved_by_directions = int(directions.total) if directions is not None else 0
-        result[pid] = clamp_nonneg(
-            storage
-            + sorting
-            - int(outbound_map.get(pid, 0))
-            - reserved_by_directions
-            - int(fbs_map.get(pid, 0))
+        on_hand = storage + sorting
+        reserved = (
+            int(outbound_map.get(pid, 0))
+            + reserved_by_directions
+            + int(fbs_map.get(pid, 0))
+        )
+        result[pid] = FbsStockBreakdown(
+            on_hand=on_hand,
+            reserved=reserved,
+            free=clamp_nonneg(on_hand - reserved),
         )
     return result
+
+
+async def fbs_available_qty_by_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+    *,
+    exclude_fbs_order_ids: frozenset[uuid.UUID] | None = None,
+) -> dict[uuid.UUID, int]:
+    """Только свободное количество — тонкая обёртка над разложением на три числа."""
+    breakdown = await fbs_stock_breakdown_by_product(
+        session,
+        tenant_id,
+        warehouse_id,
+        product_ids,
+        exclude_fbs_order_ids=exclude_fbs_order_ids,
+    )
+    return {pid: row.free for pid, row in breakdown.items()}
 
 
 async def fbs_available_qty_for_product(

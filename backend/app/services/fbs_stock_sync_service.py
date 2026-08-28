@@ -210,6 +210,38 @@ async def _load_pool_quantities(
     return {row.product_id: row.quantity for row in res.all()}
 
 
+async def _resolve_publish_quantities(
+    session: AsyncSession,
+    binding: FbsWarehouseBinding,
+    products: list[Product],
+) -> dict[uuid.UUID, int]:
+    """Источник числа для публикации: доля свободного остатка, со страховкой.
+
+    Сам механизм отправки не переписан — он как был событийным, так и остался.
+    Поменялось только то, откуда берётся число: у товара с настроенной долей оно
+    считается от свободного остатка на этот момент, а не берётся из сохранённого
+    распределения.
+
+    Товары без доли продолжают публиковаться по-старому, поэтому выкатка не
+    требует, чтобы правило успели настроить всем сразу. И если новая ветка расчёта
+    упадёт, публикация не прекращается молча: WB иначе продолжил бы продавать по
+    последнему числу, которое у него осталось.
+    """
+    stored = await _load_pool_quantities(session, binding.id)
+    try:
+        from app.services.fbs_stock_rule_service import publish_amounts_for_binding
+
+        by_rule = await publish_amounts_for_binding(session, binding, products)
+    except Exception:
+        logger.exception(
+            "fbs stock rule failed for binding %s, falling back to stored pool quantities",
+            binding.id,
+        )
+        return stored
+    stored.update(by_rule)
+    return stored
+
+
 def _build_publish_plan(
     products: list[Product],
     pool_quantities: dict[uuid.UUID, int],
@@ -599,7 +631,7 @@ async def sync_binding_stocks(
             return FbsStockSyncResult(errors=1, error_code=exc.code)
 
         products = await _load_seller_products(session, tenant_id, seller_id)
-        pool_quantities = await _load_pool_quantities(session, binding.id)
+        pool_quantities = await _resolve_publish_quantities(session, binding, products)
         product_block_errors: dict[uuid.UUID, str] = {}
         existing_items = await _load_existing_sync_items(session, binding.id)
 
