@@ -230,6 +230,99 @@ export function placesOf(
     .map((entry) => entry.place)
 }
 
+/**
+ * Строки раскрывающейся структуры: тара как строка-заголовок, товар внутри неё.
+ *
+ * Ровно тот же вид, что на принятой раскладке: палета, в ней короб, в нём товар.
+ * Иначе один и тот же склад на трёх экранах выглядел бы тремя разными способами,
+ * и оператору пришлось бы каждый раз заново понимать, что во что вложено.
+ */
+export type PlaceNode =
+  | {
+      kind: 'container'
+      key: string
+      depth: number
+      title: string
+      caption: string | null
+      barcode: string | null
+      icon: PlaceKind
+      inside: number
+    }
+  | { kind: 'goods'; key: string; depth: number; place: PickPlace }
+
+export function placeNodesOf(
+  places: PickPlace[],
+  objects: WarehouseObject[],
+  cells: Cell[],
+): PlaceNode[] {
+  const nodes: PlaceNode[] = []
+  const seen = new Map<string, number>()
+
+  // Сколько этого товара лежит внутри объекта или ячейки — для подписи «внутри N».
+  const insideOf = (ref: string): number =>
+    places
+      .filter((place) => place.key === ref || isInside(place.holder, ref, objects))
+      .reduce((sum, place) => sum + place.qty, 0)
+
+  for (const place of places) {
+    const { cell, chain } = chainOf(place.holder, objects, cells)
+    let depth = 0
+    // Ячейка — верхняя ступень структуры, ровно как полка на раскладке.
+    if (cell) {
+      const key = cellRef(cell.id)
+      if (!seen.has(key)) {
+        seen.set(key, depth)
+        nodes.push({
+          kind: 'container',
+          key,
+          depth,
+          title: cell.code,
+          caption: null,
+          barcode: cell.barcode ?? null,
+          icon: 'loose',
+          inside: insideOf(key),
+        })
+      }
+      depth += 1
+    } else if (chain.length > 0) {
+      const key = 'no-cell'
+      if (!seen.has(key)) {
+        seen.set(key, depth)
+        nodes.push({
+          kind: 'container',
+          key,
+          depth,
+          title: 'Без ячейки',
+          caption: null,
+          barcode: null,
+          icon: 'loose',
+          inside: 0,
+        })
+      }
+      depth += 1
+    }
+    for (const object of chain) {
+      const key = objRef(object.id)
+      if (!seen.has(key)) {
+        seen.set(key, depth)
+        nodes.push({
+          kind: 'container',
+          key,
+          depth,
+          title: `${KIND_TITLE[object.kind]} ${object.code}`,
+          caption: null,
+          barcode: object.barcode,
+          icon: object.kind,
+          inside: insideOf(key),
+        })
+      }
+      depth = (seen.get(key) ?? depth) + 1
+    }
+    nodes.push({ kind: 'goods', key: `goods-${place.key}`, depth, place })
+  }
+  return nodes
+}
+
 export function rowsOf(
   plan: PlanLine[],
   stock: GoodsLine[],

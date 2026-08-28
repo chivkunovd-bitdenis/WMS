@@ -2,33 +2,65 @@ import { Box, Stack, Typography } from '@mui/material'
 import Inventory2Outlined from '@mui/icons-material/Inventory2Outlined'
 import LayersOutlined from '@mui/icons-material/LayersOutlined'
 import WidgetsOutlined from '@mui/icons-material/WidgetsOutlined'
+import GridViewOutlined from '@mui/icons-material/GridViewOutlined'
 import type { ReactNode } from 'react'
 import { DataTable, EmptyState, NumberInput, QtyCell } from '../../../ui-kit'
+import { ProductPhotoThumb } from '../../../components/ProductPhotoThumb'
 import type { Column } from '../../../ui-kit'
-import type { PickPlace, PickRow, PlaceKind } from './pickRows'
+import { placeNodesOf } from './pickRows'
+import type { PickPlace, PickRow, PlaceKind, PlaceNode } from './pickRows'
+import { OBJECTS, PICK_CELLS } from './pickStub'
 
-// Содержимое раскрывашки товара: плоский список мест, а не дерево.
+// Содержимое раскрывашки товара: раскрывающаяся структура склада, а не список.
 //
-// Владелец посмотрел раскрывашку-дерево (ячейка → палета → короб со ступенькой
-// отступа и структурными строками) и отменил её дословно (28.08): «у тебя
-// раздел — россыпь, короба, паллета, каждый на своей ячейке, вот откуда я
-// выбрал оттуда и взял». Раздел мест — это те места, откуда физически можно
-// взять товар: одна строка — одно место, у каждой есть число «Лежит» и поле
-// «Снять». Строк-заголовков без числа и без поля («ячейка целиком», «палета
-// целиком, если в ней есть короб») здесь нет — считать в них нечего, а
-// сортировка сама показывает, что стоит рядом (ячейка сначала, «Без ячейки»
-// потом).
+// Ровно тот же вид, что на принятой раскладке: ячейка, на ней палета, на палете
+// короб, в коробе товар. Владелец потребовал этого прямо: «ну ты же это делал в
+// сортировке, у тебя в паллете может быть короб а в нём товары». Один и тот же
+// склад обязан выглядеть одинаково на всех экранах — иначе оператор каждый раз
+// заново разбирается, что во что вложено.
+//
+// Снимают всегда со строки товара, а не с тары: количество и поле есть только у
+// листа. Поле на таре означало бы, что экран сам решает, из какого короба взяли.
 
-// Ступенька и направляющая — те же, что в принятой раскладке: на втором
-// уровне глаз перестаёт понимать, на чём стоит короб, и линия отвечает на это
-// без единого лишнего слова.
-const INDENT_STEP = 32
-const GUIDE = 'rgba(15, 23, 42, 0.26)'
+const INDENT_STEP = 24
+const GUIDE = 'rgba(15, 23, 42, 0.22)'
 
-const KIND_ICON: Partial<Record<PlaceKind, ReactNode>> = {
-  pallet: <LayersOutlined fontSize="small" color="action" />,
-  box: <Inventory2Outlined fontSize="small" color="action" />,
-  cargo_place: <WidgetsOutlined fontSize="small" color="action" />,
+const KIND_ICON: Record<PlaceKind, ReactNode> = {
+  loose: <GridViewOutlined fontSize="small" sx={{ color: 'text.secondary' }} />,
+  pallet: <LayersOutlined fontSize="small" sx={{ color: 'text.secondary' }} />,
+  box: <Inventory2Outlined fontSize="small" sx={{ color: 'text.secondary' }} />,
+  cargo_place: <WidgetsOutlined fontSize="small" sx={{ color: 'text.secondary' }} />,
+}
+
+function Indent({ depth, children }: { depth: number; children: ReactNode }) {
+  return (
+    <Stack
+      direction="row"
+      spacing={1}
+      sx={{
+        alignItems: 'center',
+        minHeight: 34,
+        pl: `${depth * INDENT_STEP}px`,
+        // Направляющие вместо голого отступа: на третьей ступени глаз перестаёт
+        // понимать, чьё это содержимое, и линия отвечает на это без слов.
+        backgroundImage:
+          depth === 0
+            ? 'none'
+            : Array.from({ length: depth })
+                .map(() => `linear-gradient(to bottom, ${GUIDE} 0 100%)`)
+                .join(', '),
+        backgroundRepeat: 'no-repeat',
+        backgroundSize: Array.from({ length: depth })
+          .map(() => '1px 100%')
+          .join(', '),
+        backgroundPosition: Array.from({ length: depth })
+          .map((_, level) => `${level * INDENT_STEP + 11}px 0`)
+          .join(', '),
+      }}
+    >
+      {children}
+    </Stack>
+  )
 }
 
 export function PickPlacesTree({
@@ -50,64 +82,55 @@ export function PickPlacesTree({
     )
   }
 
-  const columns: Column<PickPlace>[] = [
+  const nodes = placeNodesOf(row.places, OBJECTS, PICK_CELLS)
+
+  const columns: Column<PlaceNode>[] = [
     {
-      key: 'source',
-      header: 'Откуда снимаем',
-      width: 320,
-      render: (place) => (
-        <Stack
-          direction="row"
-          spacing={1}
-          sx={{
-            alignItems: 'center',
-            minHeight: 36,
-            pl: `${place.depth * INDENT_STEP}px`,
-            backgroundImage:
-              place.depth === 0
-                ? 'none'
-                : Array.from({ length: place.depth })
-                    .map(() => `linear-gradient(to bottom, ${GUIDE} 0 100%)`)
-                    .join(', '),
-            backgroundRepeat: 'no-repeat',
-            backgroundSize: Array.from({ length: place.depth })
-              .map(() => '1px 100%')
-              .join(', '),
-            backgroundPosition: Array.from({ length: place.depth })
-              .map((_, level) => `${level * INDENT_STEP + 10}px 0`)
-              .join(', '),
-          }}
-        >
-          <Box sx={{ width: 22, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
-            {KIND_ICON[place.kind] ?? null}
-          </Box>
-          <Stack sx={{ minWidth: 0 }}>
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              {place.sourceTitle}
-            </Typography>
-            {/* Вложенному месту адрес не повторяем: на чём оно стоит, видно по
-                ступеньке и по строке родителя прямо над ним. */}
-            {place.depth > 0 ? null : place.cellCode ? (
+      key: 'what',
+      header: 'Где лежит и что снимаем',
+      render: (node) =>
+        node.kind === 'container' ? (
+          <Indent depth={node.depth}>
+            <Box sx={{ width: 22, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+              {KIND_ICON[node.icon]}
+            </Box>
+            <Stack sx={{ minWidth: 0 }}>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {node.title}
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: node.title === 'Без ячейки' ? 'warning.main' : 'text.secondary',
+                  fontWeight: node.title === 'Без ячейки' ? 600 : 400,
+                }}
+              >
+                {node.inside > 0 ? `внутри ${node.inside} шт` : 'стоит не на ячейке'}
+              </Typography>
+            </Stack>
+          </Indent>
+        ) : (
+          <Indent depth={node.depth}>
+            <Box sx={{ width: 22, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+              <ProductPhotoThumb src={row.product.photo} alt={row.product.name} size={24} />
+            </Box>
+            <Stack sx={{ minWidth: 0 }}>
+              <Typography variant="body2">{row.product.name}</Typography>
               <Typography variant="caption" color="text.secondary">
-                {place.standing}
+                {row.product.sku}
+                {row.product.size ? ` · ${row.product.size}` : ''}
               </Typography>
-            ) : (
-              // «Без ячейки» — нормальное состояние склада, а не ошибка данных,
-              // и его надо выделить, а не спрятать в приглушённый текст (R-21).
-              <Typography variant="caption" sx={{ fontWeight: 600, color: 'warning.main' }}>
-                {place.standing}
-              </Typography>
-            )}
-          </Stack>
-        </Stack>
-      ),
+            </Stack>
+          </Indent>
+        ),
     },
     {
       key: 'barcode',
       header: 'ШК',
       width: 134,
-      render: (place) =>
-        place.barcode ? (
+      render: (node) => {
+        const code = node.kind === 'container' ? node.barcode : row.product.barcode
+        return code ? (
           <Typography
             variant="body2"
             sx={{
@@ -115,41 +138,39 @@ export function PickPlacesTree({
               fontSize: 12.5,
               color: 'text.secondary',
               whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
             }}
           >
-            {place.barcode}
+            {code}
           </Typography>
-        ) : null,
+        ) : null
+      },
     },
     {
       key: 'lying',
       header: 'Лежит',
       align: 'right',
-      width: 88,
-      render: (place) => <QtyCell value={place.qty} />,
+      width: 76,
+      render: (node) => (node.kind === 'goods' ? <QtyCell value={node.place.qty} /> : null),
     },
     {
       key: 'take',
       header: 'Снять',
       align: 'right',
-      width: 120,
-      render: (place) => {
-        // Потолок поля: не больше физического остатка и не больше того, что ещё
-        // осталось по плану товара (контракт §4). Когда план закрыт, потолок
-        // равен уже снятому — поле не растёт, а «Лежит» рядом объясняет почему.
-        // Это временный обход отсутствия у NumberInput своей disabledReason.
-        const ceiling = Math.min(place.qty, place.picked + row.left)
+      width: 116,
+      render: (node) => {
+        if (node.kind !== 'goods') return null
+        // Потолок: не больше того, что лежит здесь, и не больше того, что ещё
+        // осталось по плану товара. Когда план закрыт, потолок равен уже снятому.
+        const ceiling = Math.min(node.place.qty, node.place.picked + row.left)
         return (
           <NumberInput
             label="Снять"
             hideLabel
-            value={place.picked}
-            onChange={(next) => onQtyChange(place, next)}
+            value={node.place.picked}
+            onChange={(next) => onQtyChange(node.place, next)}
             min={0}
             max={ceiling}
-            testId={`pick-place-qty-${row.product.id}-${place.key}`}
+            testId={`pick-place-qty-${row.product.id}-${node.place.key}`}
           />
         )
       },
@@ -160,8 +181,8 @@ export function PickPlacesTree({
   return (
     <DataTable
       columns={columns}
-      rows={row.places}
-      getRowKey={(place) => place.key}
+      rows={nodes}
+      getRowKey={(node) => node.key}
       testId={`pick-places-${row.product.id}`}
       highlightedKey={highlightedKey}
     />
