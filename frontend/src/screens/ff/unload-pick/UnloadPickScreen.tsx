@@ -226,7 +226,33 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
     {
       key: 'name',
       header: 'Наименование',
-      render: (row) => <TextCell value={row.product.name} />,
+      render: (row) => (
+        <Stack sx={{ minWidth: 0 }}>
+          <TextCell value={row.product.name} />
+          {/* Штрихкод товара подписью, а не колонкой: своей колонкой он на 1280
+              выдавливал «Осталось» за край экрана. */}
+          <Typography
+            variant="caption"
+            sx={{
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              color: 'text.secondary',
+            }}
+          >
+            {row.product.barcode}
+          </Typography>
+        </Stack>
+      ),
+    },
+    {
+      key: 'size',
+      header: 'Размер',
+      width: 72,
+      render: (row) =>
+        row.product.size ? (
+          <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+            {row.product.size}
+          </Typography>
+        ) : null,
     },
     {
       key: 'places',

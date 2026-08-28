@@ -1,9 +1,9 @@
-import { Stack, Typography } from '@mui/material'
+import { Box, Stack, Typography } from '@mui/material'
 import Inventory2Outlined from '@mui/icons-material/Inventory2Outlined'
 import LayersOutlined from '@mui/icons-material/LayersOutlined'
 import WidgetsOutlined from '@mui/icons-material/WidgetsOutlined'
 import type { ReactNode } from 'react'
-import { DataTable, EmptyState, NumberInput, QtyCell, TextCell } from '../../../ui-kit'
+import { DataTable, EmptyState, NumberInput, QtyCell } from '../../../ui-kit'
 import type { Column } from '../../../ui-kit'
 import type { PickPlace, PickRow, PlaceKind } from './pickRows'
 
@@ -18,6 +18,12 @@ import type { PickPlace, PickRow, PlaceKind } from './pickRows'
 // целиком, если в ней есть короб») здесь нет — считать в них нечего, а
 // сортировка сама показывает, что стоит рядом (ячейка сначала, «Без ячейки»
 // потом).
+
+// Ступенька и направляющая — те же, что в принятой раскладке: на втором
+// уровне глаз перестаёт понимать, на чём стоит короб, и линия отвечает на это
+// без единого лишнего слова.
+const INDENT_STEP = 32
+const GUIDE = 'rgba(15, 23, 42, 0.26)'
 
 const KIND_ICON: Partial<Record<PlaceKind, ReactNode>> = {
   pallet: <LayersOutlined fontSize="small" color="action" />,
@@ -48,12 +54,51 @@ export function PickPlacesTree({
     {
       key: 'source',
       header: 'Откуда снимаем',
+      width: 320,
       render: (place) => (
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-          {KIND_ICON[place.kind] ?? null}
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            {place.sourceTitle}
-          </Typography>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: 'center',
+            minHeight: 36,
+            pl: `${place.depth * INDENT_STEP}px`,
+            backgroundImage:
+              place.depth === 0
+                ? 'none'
+                : Array.from({ length: place.depth })
+                    .map(() => `linear-gradient(to bottom, ${GUIDE} 0 100%)`)
+                    .join(', '),
+            backgroundRepeat: 'no-repeat',
+            backgroundSize: Array.from({ length: place.depth })
+              .map(() => '1px 100%')
+              .join(', '),
+            backgroundPosition: Array.from({ length: place.depth })
+              .map((_, level) => `${level * INDENT_STEP + 10}px 0`)
+              .join(', '),
+          }}
+        >
+          <Box sx={{ width: 22, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+            {KIND_ICON[place.kind] ?? null}
+          </Box>
+          <Stack sx={{ minWidth: 0 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {place.sourceTitle}
+            </Typography>
+            {/* Вложенному месту адрес не повторяем: на чём оно стоит, видно по
+                ступеньке и по строке родителя прямо над ним. */}
+            {place.depth > 0 ? null : place.cellCode ? (
+              <Typography variant="caption" color="text.secondary">
+                {place.standing}
+              </Typography>
+            ) : (
+              // «Без ячейки» — нормальное состояние склада, а не ошибка данных,
+              // и его надо выделить, а не спрятать в приглушённый текст (R-21).
+              <Typography variant="caption" sx={{ fontWeight: 600, color: 'warning.main' }}>
+                {place.standing}
+              </Typography>
+            )}
+          </Stack>
         </Stack>
       ),
     },
@@ -77,20 +122,6 @@ export function PickPlacesTree({
             {place.barcode}
           </Typography>
         ) : null,
-    },
-    {
-      key: 'standing',
-      header: 'Где стоит',
-      render: (place) =>
-        place.cellCode ? (
-          <TextCell value={place.standing} />
-        ) : (
-          // «Без ячейки» — нормальное состояние склада, а не ошибка данных, и
-          // его надо выделить, а не спрятать в общий приглушённый текст (R-21).
-          <Typography variant="body2" sx={{ fontWeight: 600, color: 'warning.main' }}>
-            {place.standing}
-          </Typography>
-        ),
     },
     {
       key: 'lying',
@@ -123,6 +154,7 @@ export function PickPlacesTree({
         )
       },
     },
+    { key: 'tail', header: '', render: () => null },
   ]
 
   return (
@@ -132,7 +164,6 @@ export function PickPlacesTree({
       getRowKey={(place) => place.key}
       testId={`pick-places-${row.product.id}`}
       highlightedKey={highlightedKey}
-      hideHeader
     />
   )
 }

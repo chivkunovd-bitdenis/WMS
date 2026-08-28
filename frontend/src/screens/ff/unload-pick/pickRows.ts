@@ -49,6 +49,8 @@ export type PickPlace = {
   standing: string
   /** Ячейка есть или объект стоит без ячейки. Нужно для порядка сортировки. */
   cellCode: string | null
+  /** На сколько ступеней это место вложено: короб на палете — одна ступень. */
+  depth: number
   /** Сколько физически лежит. */
   qty: number
   /** Сколько уже снято в этом подборе. */
@@ -187,6 +189,7 @@ export function placesOf(
       place: {
         key,
         holder,
+        depth: 0,
         label: placeLabel(holder, objects, cells),
         kind,
         sourceTitle,
@@ -199,13 +202,29 @@ export function placesOf(
       },
     })
   }
+  // Ступенька рисуется только под тем родителем, который сам есть в списке.
+  // У худи короб стоит на палете, но самой палеты в списке нет — этого товара на
+  // ней не лежит. Без этой поправки короб уезжал вправо, а направляющая указывала
+  // в пустоту, и строка читалась как сломанная.
+  const visible = new Set(decorated.map((entry) => entry.place.key))
+  for (const entry of decorated) {
+    let seen = 0
+    let cursor: Holder = entry.place.holder
+    while (cursor && !isCellRef(cursor)) {
+      const object = objects.find((one) => one.id === refId(cursor as string))
+      if (!object) break
+      cursor = object.holder
+      if (cursor && !isCellRef(cursor) && visible.has(cursor)) seen += 1
+    }
+    entry.place.depth = seen
+  }
+
   return decorated
     .sort((a, b) => {
       const aCell = a.place.cellCode
       const bCell = b.place.cellCode
       if (Boolean(aCell) !== Boolean(bCell)) return aCell ? -1 : 1
       if (aCell && bCell && aCell !== bCell) return aCell.localeCompare(bCell, 'ru')
-      if (a.depth !== b.depth) return a.depth - b.depth
       return a.place.label.localeCompare(b.place.label, 'ru')
     })
     .map((entry) => entry.place)
