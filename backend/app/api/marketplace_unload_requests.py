@@ -1235,6 +1235,7 @@ async def scan_marketplace_unload_pick(
             barcode=body.barcode,
             product_id_hint=body.product_id,
             storage_location_id=body.storage_location_id,
+            actor_user_id=user.id,
         )
     except MarketplaceUnloadPickError as exc:
         raise _map_pick_err(exc) from None
@@ -1275,6 +1276,7 @@ async def add_marketplace_unload_pick_qty(
             storage_location_id=body.storage_location_id,
             product_id=body.product_id,
             quantity=body.quantity,
+            actor_user_id=user.id,
         )
     except MarketplaceUnloadPickError as exc:
         raise _map_pick_err(exc) from None
@@ -1304,6 +1306,7 @@ async def set_marketplace_unload_pick_qty(
             product_id=body.product_id,
             storage_location_id=body.storage_location_id,
             quantity=body.quantity,
+            actor_user_id=user.id,
         )
     except MarketplaceUnloadPickError as exc:
         raise _map_pick_err(exc) from None
@@ -1348,7 +1351,11 @@ async def save_marketplace_unload_pick_allocations(
     ]
     try:
         allocs = await pick_svc.save_pick_allocations(
-            session, user.tenant_id, request_id, rows
+            session,
+            user.tenant_id,
+            request_id,
+            rows,
+            actor_user_id=user.id,
         )
     except MarketplaceUnloadPickError as exc:
         raise _map_pick_err(exc) from None
@@ -1515,6 +1522,7 @@ async def apply_marketplace_box_import_route(
             preview,
             ignore_errors=ignore_errors,
             box_preset=box_preset,
+            actor_user_id=user.id,
         )
     except box_import_svc.BoxImportError as exc:
         raise http_from_box_import_error(exc) from exc
@@ -1615,6 +1623,7 @@ async def attach_marketplace_unload_box(
             barcode=body.barcode,
             box_preset=body.box_preset,
             allow_over_plan=body.allow_over_plan,
+            actor_user_id=user.id,
         )
     except MarketplaceUnloadBoxError as exc:
         raise _map_box_err(exc) from None
@@ -1651,6 +1660,7 @@ async def scan_marketplace_unload_box(
             storage_location_id=body.storage_location_id,
             quantity=body.quantity,
             allow_over_plan=body.allow_over_plan,
+            actor_user_id=user.id,
         )
     except MarketplaceUnloadBoxError as exc:
         raise _map_box_err(exc) from None
@@ -1684,6 +1694,7 @@ async def manual_marketplace_unload_box_line(
             product_id=body.product_id,
             storage_location_id=body.storage_location_id,
             quantity=body.quantity,
+            actor_user_id=user.id,
         )
     except MarketplaceUnloadBoxError as exc:
         raise _map_box_err(exc) from None
@@ -1737,7 +1748,12 @@ async def copy_marketplace_unload_box(
     if bx is None or bx.request_id != request_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="box_not_found")
     try:
-        b = await box_svc.copy_box(session, user.tenant_id, box_id)
+        b = await box_svc.copy_box(
+            session,
+            user.tenant_id,
+            box_id,
+            actor_user_id=user.id,
+        )
     except MarketplaceUnloadBoxError as exc:
         raise _map_box_err(exc) from None
     r = await svc.get_request(session, user.tenant_id, request_id)
@@ -1791,6 +1807,7 @@ async def remove_marketplace_unload_box_line(
             box_id,
             line_id,
             quantity=body.quantity,
+            actor_user_id=user.id,
         )
     except MarketplaceUnloadBoxError as exc:
         raise _map_box_err(exc) from None

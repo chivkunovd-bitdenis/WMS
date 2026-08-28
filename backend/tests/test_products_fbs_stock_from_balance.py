@@ -132,6 +132,7 @@ async def test_apply_from_balance_sets_limit_to_actual_stock(async_client: Async
             storage_location_id=uuid.UUID(location_id),
             quantity_delta=10,
             movement_type="inbound_intake",
+            actor_user_id=None,
         )
         await session.commit()
 
@@ -180,6 +181,7 @@ async def test_apply_from_balance_subtracts_reserved(async_client: AsyncClient) 
             storage_location_id=uuid.UUID(location_id),
             quantity_delta=10,
             movement_type="inbound_intake",
+            actor_user_id=None,
         )
         order = FbsOrder(
             tenant_id=tenant_id,
@@ -255,6 +257,7 @@ async def test_apply_from_balance_resets_pool_to_zero_without_deleting(
             storage_location_id=uuid.UUID(location_id),
             quantity_delta=5,
             movement_type="inbound_intake",
+            actor_user_id=None,
         )
         binding = FbsWarehouseBinding(
             tenant_id=tenant_id,
@@ -337,6 +340,7 @@ async def test_apply_from_balance_reports_reset_warehouses_count(
             storage_location_id=uuid.UUID(location_1),
             quantity_delta=20,
             movement_type="inbound_intake",
+            actor_user_id=None,
         )
         await inventory_service.record_movement_and_adjust_balance(
             session,
@@ -345,6 +349,7 @@ async def test_apply_from_balance_reports_reset_warehouses_count(
             storage_location_id=uuid.UUID(location_1),
             quantity_delta=4,
             movement_type="inbound_intake",
+            actor_user_id=None,
         )
 
         binding_1 = FbsWarehouseBinding(
@@ -432,6 +437,7 @@ async def test_apply_from_balance_does_not_touch_other_tenant_product(
             storage_location_id=uuid.UUID(location_b),
             quantity_delta=9,
             movement_type="inbound_intake",
+            actor_user_id=None,
         )
         await session.commit()
 
@@ -481,6 +487,7 @@ async def test_apply_from_balance_sums_across_warehouses(async_client: AsyncClie
             storage_location_id=uuid.UUID(location_1),
             quantity_delta=4,
             movement_type="inbound_intake",
+            actor_user_id=None,
         )
         await inventory_service.record_movement_and_adjust_balance(
             session,
@@ -489,6 +496,7 @@ async def test_apply_from_balance_sums_across_warehouses(async_client: AsyncClie
             storage_location_id=uuid.UUID(location_2),
             quantity_delta=6,
             movement_type="inbound_intake",
+            actor_user_id=None,
         )
         await session.commit()
 

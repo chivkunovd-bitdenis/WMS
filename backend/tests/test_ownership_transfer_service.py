@@ -85,6 +85,7 @@ async def _seed_transfer_case() -> dict[str, uuid.UUID]:
             storage_location_id=location.id,
             quantity_delta=5,
             movement_type="test_seed",
+            actor_user_id=None,
         )
         outbound = OutboundShipmentRequest(
             tenant_id=tenant.id,
@@ -193,6 +194,7 @@ async def test_transfer_is_atomic_keeps_cell_receives_shortage_and_is_idempotent
             session,
             approved_token=plan.approval_token,
             plan=plan,
+            actor_user_id=None,
         )
         await session.commit()
         request_id = request.id
@@ -309,6 +311,7 @@ async def test_stale_dry_run_token_does_not_write_anything(async_client: Any) ->
             storage_location_id=ids["location"],
             quantity_delta=1,
             movement_type="state_changed_after_dry_run",
+            actor_user_id=None,
         )
         await session.commit()
 
@@ -328,6 +331,7 @@ async def test_stale_dry_run_token_does_not_write_anything(async_client: Any) ->
                 session,
                 approved_token=old_token,
                 plan=current_plan,
+                actor_user_id=None,
             )
         await session.rollback()
 
@@ -364,6 +368,7 @@ async def test_missing_target_product_blocks_whole_plan(async_client: Any) -> No
                 session,
                 approved_token=plan.approval_token,
                 plan=plan,
+                actor_user_id=None,
             )
 
 

@@ -138,6 +138,7 @@ async def _apply_line_putaway(
     normal_location_id: uuid.UUID | None,
     quantity: int,
     keep_good_in_sorting: bool = False,
+    actor_user_id: uuid.UUID | None,
 ) -> None:
     """Put good units into the chosen cell and defective units into service stock."""
     defective_total = min(max(0, line.defective_qty), _accepted_qty_for_line(line))
@@ -158,6 +159,7 @@ async def _apply_line_putaway(
                 product_id=line.product_id,
                 quantity=good_quantity,
                 inbound_intake_line_id=line.id,
+                actor_user_id=actor_user_id,
             )
     if defective_quantity:
         defect_location = await get_or_create_defect_location(session, tenant_id)
@@ -169,6 +171,7 @@ async def _apply_line_putaway(
             product_id=line.product_id,
             quantity=defective_quantity,
             inbound_intake_line_id=line.id,
+            actor_user_id=actor_user_id,
         )
 
 
@@ -715,6 +718,8 @@ async def begin_receiving(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
     req = await get_request(session, tenant_id, request_id)
     if req is None:
@@ -729,7 +734,12 @@ async def begin_receiving(
         await session.commit()
         await session.refresh(req)
         if req.operation_type == OPERATION_TYPE_RETURN and req.marketplace in (None, "wildberries"):
-            return await complete_receiving(session, tenant_id, request_id)
+            return await complete_receiving(
+                session,
+                tenant_id,
+                request_id,
+                actor_user_id=actor_user_id,
+            )
         return req
     return await primary_accept_request(session, tenant_id, request_id, actual_box_count=None)
 
@@ -1053,6 +1063,8 @@ async def complete_receiving(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
     req = await get_request(session, tenant_id, request_id)
     if req is None:
@@ -1084,6 +1096,7 @@ async def complete_receiving(
             quantity=qty,
             movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
             inbound_intake_line_id=line.id,
+            actor_user_id=actor_user_id,
         )
     await session.commit()
     await session.refresh(req)
@@ -1094,9 +1107,16 @@ async def complete_verification(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
     """Legacy alias for complete_receiving."""
-    return await complete_receiving(session, tenant_id, request_id)
+    return await complete_receiving(
+        session,
+        tenant_id,
+        request_id,
+        actor_user_id=actor_user_id,
+    )
 
 
 async def receive_line(
@@ -1106,7 +1126,7 @@ async def receive_line(
     line_id: uuid.UUID,
     *,
     quantity: int,
-    performer_id: uuid.UUID | None = None,
+    performer_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
     pair = await _line_on_request(session, tenant_id, request_id, line_id)
     if pair is None:
@@ -1142,6 +1162,7 @@ async def receive_line(
         normal_location_id=line.storage_location_id,
         quantity=quantity,
         keep_good_in_sorting=not address_enabled,
+        actor_user_id=performer_id,
     )
     line.posted_qty += quantity
     _maybe_complete_request(req)
@@ -1156,7 +1177,7 @@ async def post_all_remaining(
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
     *,
-    performer_id: uuid.UUID | None = None,
+    performer_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
     req = await get_request(session, tenant_id, request_id)
     if req is None:
@@ -1205,6 +1226,7 @@ async def post_all_remaining(
             normal_location_id=line.storage_location_id,
             quantity=rem,
             keep_good_in_sorting=not address_enabled,
+            actor_user_id=performer_id,
         )
         line.posted_qty += rem
     _maybe_complete_request(req)
@@ -1327,6 +1349,7 @@ async def _top_up_sorting_for_putaway(
     line: InboundIntakeLine,
     product_id: uuid.UUID,
     qty: int,
+    actor_user_id: uuid.UUID | None,
 ) -> None:
     """Служебный буфер: перед разкладкой в ячейку гарантируем остаток по строке заявки."""
     accepted = _accepted_qty_for_line(line)
@@ -1349,6 +1372,7 @@ async def _top_up_sorting_for_putaway(
         quantity=shortfall,
         movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
         inbound_intake_line_id=line.id,
+        actor_user_id=actor_user_id,
     )
 
 
@@ -1360,7 +1384,7 @@ async def apply_box_putaway(
     *,
     storage_location_id: uuid.UUID,
     line_items: list[tuple[uuid.UUID, int]] | None = None,
-    performer_id: uuid.UUID | None = None,
+    performer_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
     """
     Разложить принятый по заявке товар из короба в ячейку хранения.
@@ -1415,7 +1439,15 @@ async def apply_box_putaway(
         if line.posted_qty + qty > accepted:
             raise InboundIntakeError("qty_exceeds_accepted")
 
-        await _top_up_sorting_for_putaway(session, tenant_id, sorting_loc.id, line, product_id, qty)
+        await _top_up_sorting_for_putaway(
+            session,
+            tenant_id,
+            sorting_loc.id,
+            line,
+            product_id,
+            qty,
+            actor_user_id=performer_id,
+        )
 
         # FOR UPDATE защищает PostgreSQL. Условные UPDATE ниже дополнительно
         # делают операцию идемпотентной в SQLite-тестах и при повторе запроса:
@@ -1460,6 +1492,7 @@ async def apply_box_putaway(
                 sorting_location_id=sorting_loc.id,
                 normal_location_id=storage_location_id,
                 quantity=qty,
+                actor_user_id=performer_id,
             )
         except ValueError as exc:
             if str(exc) == "insufficient stock":
@@ -1489,6 +1522,8 @@ async def resync_sorting_stock_for_request(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
     """
     Довести остаток в зоне «Сортировка» до (принято - уже разложено) по каждому SKU.
@@ -1522,6 +1557,7 @@ async def resync_sorting_stock_for_request(
             line,
             line.product_id,
             need,
+            actor_user_id=actor_user_id,
         )
     await session.commit()
     reloaded = await get_request(session, tenant_id, request_id)
@@ -1795,7 +1831,7 @@ async def complete_distribution(
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
     *,
-    performer_id: uuid.UUID | None = None,
+    performer_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
     req = await get_request(session, tenant_id, request_id)
     if req is None:
@@ -1916,6 +1952,7 @@ async def complete_distribution(
                 sorting_location_id=sorting_loc.id,
                 normal_location_id=r.storage_location_id,
                 quantity=quantity_to_post,
+                actor_user_id=performer_id,
             )
         except ValueError as exc:
             await session.rollback()
@@ -1939,6 +1976,8 @@ async def reopen_receiving(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
     """Return request to receiving; reverse sorting-zone stock and clear distribution."""
     req = await get_request(session, tenant_id, request_id)
@@ -1964,6 +2003,7 @@ async def reopen_receiving(
                 storage_location_id=sorting_loc.id,
                 quantity=qty,
                 inbound_intake_line_id=line.id,
+                actor_user_id=actor_user_id,
             )
         except ValueError as exc:
             if str(exc) == "insufficient stock":

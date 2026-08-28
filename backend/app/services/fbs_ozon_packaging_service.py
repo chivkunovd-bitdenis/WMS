@@ -151,6 +151,7 @@ async def write_off_order(
     *,
     tenant_id: uuid.UUID,
     order: FbsOrder,
+    actor_user_id: uuid.UUID | None,
 ) -> None:
     fulfillment = await active_order_fulfillment(session, order.id)
     units = packed_units(fulfillment)
@@ -194,6 +195,7 @@ async def write_off_order(
                 product_id=product_id,
                 storage_location_id=storage_location_id,
                 quantity=quantity,
+                actor_user_id=actor_user_id,
             )
         except ValueError as exc:
             if str(exc) != "insufficient stock":

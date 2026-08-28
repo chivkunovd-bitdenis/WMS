@@ -98,6 +98,9 @@ async def reconcile(
                     product_id=ledger.product_id,
                     storage_location_id=ledger.storage_location_id,
                     quantity=int(ledger.quantity),
+                    # Сверочный скрипт запускают из консоли: пользователя системы
+                    # здесь нет, и выдумывать автора движению нельзя.
+                    actor_user_id=None,
                 )
                 await session.flush()
                 ledger.shipment_movement_id = movement.id

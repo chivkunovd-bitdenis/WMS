@@ -32,6 +32,7 @@ from app.services.wb_marketplace_orders_service import (
 )
 from app.services.wildberries_client import WildberriesClientError
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 
 def _assert_fbs_error(
@@ -156,6 +157,7 @@ async def _seed_reserved_order(
             storage_location_id=sorting.id,
             quantity_delta=2,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
 
         row = _wb_order_row(
@@ -431,6 +433,7 @@ async def test_sync_defect_sets_status_defect(
                 seller_uuid,
                 http_client,
                 "token",
+                actor_user_id=None,
             )
         await session.commit()
     assert updated == 1

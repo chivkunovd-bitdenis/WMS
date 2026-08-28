@@ -1133,7 +1133,7 @@ async def start_supply_work(
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
     *,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
     http_client: httpx.AsyncClient | None = None,
 ) -> dict[str, Any]:
     supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
@@ -1777,7 +1777,7 @@ async def add_orders_to_existing_supply(
     order_ids: list[uuid.UUID],
     *,
     idempotency_key: str,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
     http_client: httpx.AsyncClient,
 ) -> dict[str, Any]:
     if not idempotency_key.strip():

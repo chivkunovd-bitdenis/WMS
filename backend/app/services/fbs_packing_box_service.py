@@ -95,7 +95,7 @@ async def create_boxes(
     idempotency_key: str,
     http_client: httpx.AsyncClient | None = None,
     *,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
     without_distribution: bool = False,
 ) -> list[FbsPackingBox]:
     if not idempotency_key.strip():

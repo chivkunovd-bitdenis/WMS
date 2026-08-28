@@ -16,6 +16,7 @@ from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentR
 from app.models.product import Product
 from app.services import inventory_service, stock_direction_service
 from app.services.sorting_location_service import get_or_create_sorting_location
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 
 async def _seller_headers(
@@ -111,6 +112,7 @@ async def test_mp_availability_includes_sorting_reserves_and_isolation(
                 storage_location_id=sorting.id,
                 quantity_delta=10,
                 movement_type="inbound_intake",
+                actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
             )
 
         outbound = OutboundShipmentRequest(
@@ -332,6 +334,7 @@ async def test_mp_availability_uses_free_fbo_after_directions_and_active_reserve
             storage_location_id=location_id,
             quantity_delta=1000,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await session.commit()
         await stock_direction_service.create_stock_direction(

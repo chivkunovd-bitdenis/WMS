@@ -23,6 +23,7 @@ from app.models.inventory_movement import (
 from app.models.product import Product
 from app.services import inventory_service
 from app.services.sorting_location_service import get_or_create_sorting_location
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 
 @dataclass(frozen=True)
@@ -81,6 +82,7 @@ async def _seed_unpacked(context: InventoryContext, quantity: int) -> None:
             storage_location_id=context.storage_location_id,
             quantity_delta=quantity,
             movement_type=MOVEMENT_TYPE_PRODUCT_TZ_IMPORT,
+            actor_user_id=await resolve_test_actor_user_id(session, context.tenant_id),
         )
         await session.commit()
 
@@ -170,6 +172,7 @@ async def test_concurrent_positive_movements_do_not_lose_balance(
             storage_location_id=sorting_id,
             quantity_delta=10,
             movement_type=MOVEMENT_TYPE_PRODUCT_TZ_IMPORT,
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await inventory_service.apply_packaging_convert(
             session,
@@ -189,6 +192,7 @@ async def test_concurrent_positive_movements_do_not_lose_balance(
                 storage_location_id=sorting_id,
                 quantity_delta=quantity,
                 movement_type=MOVEMENT_TYPE_PRODUCT_TZ_IMPORT,
+                actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
             )
             await session.commit()
 
@@ -246,6 +250,7 @@ async def test_import_and_pack_overlap_without_lost_bucket_update(
                 storage_location_id=context.storage_location_id,
                 quantity_delta=7,
                 movement_type=MOVEMENT_TYPE_PRODUCT_TZ_IMPORT,
+                actor_user_id=await resolve_test_actor_user_id(session, context.tenant_id),
             )
             await session.commit()
 
@@ -323,6 +328,7 @@ async def test_import_and_deduct_overlap_without_lost_bucket_update(
                 storage_location_id=context.storage_location_id,
                 quantity_delta=7,
                 movement_type=MOVEMENT_TYPE_PRODUCT_TZ_IMPORT,
+                actor_user_id=await resolve_test_actor_user_id(session, context.tenant_id),
             )
             await session.commit()
 
@@ -338,6 +344,7 @@ async def test_import_and_deduct_overlap_without_lost_bucket_update(
                 quantity_delta=-4,
                 movement_type=MOVEMENT_TYPE_OUTBOUND_SHIPMENT,
                 deduct_prefer="unpacked",
+                actor_user_id=await resolve_test_actor_user_id(session, context.tenant_id),
             )
             await session.commit()
 

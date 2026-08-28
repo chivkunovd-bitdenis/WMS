@@ -527,7 +527,7 @@ async def create_cargo_places(
     idempotency_key: str,
     http_client: httpx.AsyncClient,
     *,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
     confirmation_source: str = MEASUREMENTS_CONFIRMATION_SOURCE_OPERATOR,
 ) -> list[dict[str, Any]]:
     if not idempotency_key.strip():
@@ -986,7 +986,7 @@ async def create_trbxes(
     width_mm: int | None = None,
     height_mm: int | None = None,
     weight_g: int | None = None,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> list[FbsTrbx]:
     boxes = [
         CargoPlaceDraft(

@@ -48,6 +48,7 @@ from app.services import inventory_service
 from app.services.fbs_autopoll_service import SellerStockSyncResult, sync_seller_stocks
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import sync_seller_orders
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 EMU_BASE = "http://emu"
 EMU_TOKEN = "cycle-test-token"
@@ -411,6 +412,7 @@ async def test_wms_emulator_fbs_stock_full_cycle(
             storage_location_id=uuid.UUID(storage_loc_id),
             quantity_delta=1,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
 
         unload = MarketplaceUnloadRequest(

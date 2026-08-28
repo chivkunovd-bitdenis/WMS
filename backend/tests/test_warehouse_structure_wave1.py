@@ -140,6 +140,7 @@ async def test_tenant_b_cannot_add_product_to_tenant_a_pallet_or_list_it(
                 movement_type=MOVEMENT_TYPE_OUTBOUND_SHIPMENT,
                 container_kind="pallet",
                 container_id=pallet_a.id,
+                actor_user_id=None,
             )
 
         with pytest.raises(PalletServiceError, match="pallet_not_found"):
@@ -308,6 +309,7 @@ async def test_service_refuses_to_take_stock_below_zero(async_client: AsyncClien
             storage_location_id=location.id,
             quantity_delta=5,
             movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
+            actor_user_id=None,
         )
         await session.commit()
         with pytest.raises(ValueError, match="insufficient stock"):
@@ -318,6 +320,7 @@ async def test_service_refuses_to_take_stock_below_zero(async_client: AsyncClien
                 storage_location_id=location.id,
                 quantity_delta=-6,
                 movement_type=MOVEMENT_TYPE_OUTBOUND_SHIPMENT,
+                actor_user_id=None,
             )
 
 
@@ -340,6 +343,7 @@ async def test_confirmed_fbs_delivery_is_allowed_to_go_negative(
             product_id=product.id,
             storage_location_id=location.id,
             quantity=3,
+            actor_user_id=None,
         )
         await session.commit()
         balance = (
@@ -398,6 +402,7 @@ async def test_two_concurrent_deductions_of_30_from_40_write_off_only_30(
                     storage_location_id=location_id,
                     quantity_delta=-30,
                     movement_type=MOVEMENT_TYPE_OUTBOUND_SHIPMENT,
+                    actor_user_id=None,
                 )
                 await session.commit()
             except ValueError as exc:

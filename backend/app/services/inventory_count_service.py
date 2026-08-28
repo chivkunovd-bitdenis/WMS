@@ -217,18 +217,25 @@ def _balance_query(
     if not address_storage_enabled:
         stmt = stmt.where(StorageLocation.code == SORTING_LOCATION_CODE)
     if category is not None:
+        # Категория товара приходит из двух мест: собственное поле каталога и
+        # карточка Wildberries. У импортированных товаров заполнено одно, у
+        # заведённых руками — другое, поэтому ищем по обоим. Смотреть только в
+        # собственное поле значит потерять всё, что приехало импортом.
+        stmt = stmt.outerjoin(
+            SellerWildberriesImportedCard,
+            and_(
+                SellerWildberriesImportedCard.tenant_id == tenant_id,
+                SellerWildberriesImportedCard.seller_id == Product.seller_id,
+                SellerWildberriesImportedCard.nm_id == Product.wb_nm_id,
+            ),
+        )
+        card_matches = _card_category_expression() == category
         category_column = _product_category_column()
-        if category_column is not None:
-            stmt = stmt.where(category_column == category)
-        else:
-            stmt = stmt.join(
-                SellerWildberriesImportedCard,
-                and_(
-                    SellerWildberriesImportedCard.tenant_id == tenant_id,
-                    SellerWildberriesImportedCard.seller_id == Product.seller_id,
-                    SellerWildberriesImportedCard.nm_id == Product.wb_nm_id,
-                ),
-            ).where(_card_category_expression() == category)
+        stmt = stmt.where(
+            or_(category_column == category, card_matches)
+            if category_column is not None
+            else card_matches
+        )
     return stmt
 
 

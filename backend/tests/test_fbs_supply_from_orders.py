@@ -33,6 +33,7 @@ from app.services import inventory_service
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import WildberriesClientError
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
@@ -140,6 +141,7 @@ async def _create_ready_order(
             storage_location_id=location_id,
             quantity_delta=3,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         order, _ = await upsert_order_from_wb_row(
             session,

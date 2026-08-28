@@ -69,6 +69,7 @@ async def patch_tenant_settings(
             separate_marking_print_enabled=body.separate_marking_print_enabled,
             fbs_shipment_cutoff_time=body.fbs_shipment_cutoff_time,
             set_fbs_shipment_cutoff_time="fbs_shipment_cutoff_time" in fields,
+            actor_user_id=user.id,
         )
     except LookupError:
         raise HTTPException(

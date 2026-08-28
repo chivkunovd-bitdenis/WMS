@@ -1103,6 +1103,7 @@ async def scan_barcode_into_box(
     *,
     barcode: str,
     storage_location_id: uuid.UUID | None,
+    actor_user_id: uuid.UUID | None,
     quantity: int = 1,
     allow_over_plan: bool = False,
 ) -> BoxScanResult:
@@ -1116,6 +1117,7 @@ async def scan_barcode_into_box(
             box_id,
             barcode=barcode,
             storage_location_id=storage_location_id,
+            actor_user_id=actor_user_id,
             quantity=quantity,
             allow_over_plan=allow_over_plan,
         )
@@ -1131,6 +1133,7 @@ async def add_manual_qty_to_box(
     product_id: uuid.UUID,
     storage_location_id: uuid.UUID | None,
     quantity: int,
+    actor_user_id: uuid.UUID | None,
 ) -> MarketplaceUnloadBoxLine:
     """Parity entry point with inbound manual qty — delegates to box service."""
     from app.services import marketplace_unload_box_service as box_svc
@@ -1143,6 +1146,7 @@ async def add_manual_qty_to_box(
             product_id=product_id,
             storage_location_id=storage_location_id,
             quantity=quantity,
+            actor_user_id=actor_user_id,
         )
     except box_svc.MarketplaceUnloadBoxError as exc:
         raise MarketplaceUnloadError(exc.code) from None
@@ -1190,7 +1194,11 @@ async def cancel_request(
         from app.services import marketplace_unload_collect_service as collect_svc
 
         await collect_svc.rollback_all_collected_for_cancel(
-            session, tenant_id, req.warehouse_id, request_id
+            session,
+            tenant_id,
+            req.warehouse_id,
+            request_id,
+            actor_user_id=performer_id,
         )
         await _release_reservations(session, request_id)
         req.status = STATUS_CANCELLED

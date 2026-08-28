@@ -22,7 +22,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
-from app.models.billing import BillingLedgerEntry, BillingTariffVersion
+from app.models.billing import BillingLedgerEntry, BillingTariffVersion, BillingTariffVersionV2
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.seller import Seller
@@ -115,17 +115,19 @@ async def _create_inventory_staff(
 
 @pytest.mark.asyncio
 async def test_admin_creates_warehouse_tariff(async_client: AsyncClient) -> None:
-    """POST warehouse tariff → 201, one billing_tariff_versions row, seller_id IS NULL."""
+    """POST common rate → one V2 row and no legacy warehouse tariff."""
     suffix = str(time.time_ns())
     headers = await _register_admin(async_client, suffix)
     warehouse_id = await _create_warehouse(async_client, headers, suffix, "common")
     valid_from = datetime.now(MOSCOW).date()
+    matrix = await async_client.get("/billing/tariff-matrix", headers=headers)
+    assert matrix.status_code == 200, matrix.text
 
     resp = await async_client.post(
         "/operations/storage/tariffs",
         headers=headers,
         json={
-            "warehouse_id": str(warehouse_id),
+            "revision": matrix.json()["revision"],
             "amount": "5.00",
             "valid_from": valid_from.isoformat(),
         },
@@ -134,20 +136,31 @@ async def test_admin_creates_warehouse_tariff(async_client: AsyncClient) -> None
 
     body = resp.json()
     assert body["warehouse_tariff"]["seller_id"] is None
-    assert body["warehouse_tariff"]["warehouse_id"] == str(warehouse_id)
+    assert body["warehouse_tariff"]["warehouse_id"] is None
     assert body["warehouse_tariff"]["amount"] == "5.00"
     assert body["warehouse_tariff"]["valid_from"] == valid_from.isoformat()
     assert body["seller_exception"] is None
 
     async with SessionLocal() as session:
         count = await session.scalar(
-            select(func.count(BillingTariffVersion.id)).where(
-                BillingTariffVersion.warehouse_id == warehouse_id,
-                BillingTariffVersion.seller_id.is_(None),
-                BillingTariffVersion.service_code == "storage_liter_day",
+            select(func.count(BillingTariffVersionV2.id)).where(
+                BillingTariffVersionV2.tenant_id
+                == select(Warehouse.tenant_id)
+                .where(Warehouse.id == warehouse_id)
+                .scalar_subquery(),
+                BillingTariffVersionV2.seller_id.is_(None),
+                BillingTariffVersionV2.service_code == "storage",
             )
         )
     assert count == 1
+    async with SessionLocal() as session:
+        legacy_count = await session.scalar(
+            select(func.count(BillingTariffVersion.id)).where(
+                BillingTariffVersion.warehouse_id == warehouse_id,
+                BillingTariffVersion.service_code == "storage_liter_day",
+            )
+        )
+    assert legacy_count == 0
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +177,8 @@ async def test_admin_creates_tariff_with_seller_exception(async_client: AsyncCli
     today = datetime.now(MOSCOW).date()
     warehouse_valid_from = today + timedelta(days=1)
     seller_valid_from = today + timedelta(days=2)
+    matrix = await async_client.get("/billing/tariff-matrix", headers=headers)
+    assert matrix.status_code == 200, matrix.text
 
     # Resolve tenant_id and create a seller directly via DB
     seller_id: uuid.UUID
@@ -183,7 +198,7 @@ async def test_admin_creates_tariff_with_seller_exception(async_client: AsyncCli
         "/operations/storage/tariffs",
         headers=headers,
         json={
-            "warehouse_id": str(warehouse_id),
+            "revision": matrix.json()["revision"],
             "amount": "5.00",
             "valid_from": warehouse_valid_from.isoformat(),
             "seller_exception": {
@@ -201,17 +216,14 @@ async def test_admin_creates_tariff_with_seller_exception(async_client: AsyncCli
 
     async with SessionLocal() as session:
         total = await session.scalar(
-            select(func.count(BillingTariffVersion.id)).where(
-                BillingTariffVersion.warehouse_id == warehouse_id,
-                BillingTariffVersion.tenant_id == tenant_id,
-                BillingTariffVersion.service_code == "storage_liter_day",
+            select(func.count(BillingTariffVersionV2.id)).where(
+                BillingTariffVersionV2.tenant_id == tenant_id,
+                BillingTariffVersionV2.service_code == "storage",
             )
         )
     assert total == 2
 
-    # --- Atomicity: pre-seed a conflicting seller tariff, then POST again ---
-    # Use a fresh warehouse so the warehouse tariff INSERT itself is not a conflict.
-    warehouse2_id = await _create_warehouse(async_client, headers, suffix, "atom")
+    # --- Atomicity: pre-seed a conflicting V2 seller tariff, then POST again ---
     atomic_warehouse_valid_from = today + timedelta(days=3)
     atomic_seller_valid_from = today + timedelta(days=4)
 
@@ -222,14 +234,18 @@ async def test_admin_creates_tariff_with_seller_exception(async_client: AsyncCli
         seller2_id = seller2.id
         # Pre-seed a dated seller tariff that will conflict with the POST below.
         session.add(
-            BillingTariffVersion(
+            BillingTariffVersionV2(
                 tenant_id=tenant_id,
                 seller_id=seller2_id,
-                warehouse_id=warehouse2_id,
-                service_code="storage_liter_day",
+                product_id=None,
+                employee_user_id=None,
+                service_code="storage",
                 unit="liter_day",
-                amount=200,
-                valid_from=atomic_seller_valid_from,
+                enabled=True,
+                rate=200,
+                    valid_from_at=datetime.combine(
+                        atomic_seller_valid_from, datetime_time.min, MOSCOW
+                    ).astimezone(UTC),
             )
         )
         await session.commit()
@@ -239,7 +255,7 @@ async def test_admin_creates_tariff_with_seller_exception(async_client: AsyncCli
         "/operations/storage/tariffs",
         headers=headers,
         json={
-            "warehouse_id": str(warehouse2_id),
+            "revision": matrix.json()["revision"] + 1,
             "amount": "5.00",
             "valid_from": atomic_warehouse_valid_from.isoformat(),
             "seller_exception": {
@@ -254,11 +270,14 @@ async def test_admin_creates_tariff_with_seller_exception(async_client: AsyncCli
     # Verify the warehouse tariff (first INSERT) was also rolled back.
     async with SessionLocal() as session:
         wh2_common_count = await session.scalar(
-            select(func.count(BillingTariffVersion.id)).where(
-                BillingTariffVersion.warehouse_id == warehouse2_id,
-                BillingTariffVersion.seller_id.is_(None),
-                BillingTariffVersion.service_code == "storage_liter_day",
-                BillingTariffVersion.valid_from == atomic_warehouse_valid_from,
+            select(func.count(BillingTariffVersionV2.id)).where(
+                BillingTariffVersionV2.tenant_id == tenant_id,
+                BillingTariffVersionV2.seller_id.is_(None),
+                BillingTariffVersionV2.service_code == "storage",
+                BillingTariffVersionV2.valid_from_at
+                == datetime.combine(
+                    atomic_warehouse_valid_from, datetime_time.min, MOSCOW
+                ).astimezone(UTC),
             )
         )
     assert wh2_common_count == 0, (
@@ -326,9 +345,11 @@ async def test_tariff_amount_must_be_positive(
     suffix = str(time.time_ns())
     headers = await _register_admin(async_client, suffix)
     warehouse_id = await _create_warehouse(async_client, headers, suffix, "amount")
+    matrix = await async_client.get("/billing/tariff-matrix", headers=headers)
+    assert matrix.status_code == 200, matrix.text
     today = datetime.now(MOSCOW).date().isoformat()
     payload: dict[str, object] = {
-        "warehouse_id": str(warehouse_id),
+        "revision": matrix.json()["revision"],
         "amount": amount if target == "warehouse" else "5.00",
         "valid_from": today,
     }
@@ -358,12 +379,20 @@ async def test_tariff_amount_must_be_positive(
     assert response.json()["detail"][0]["loc"] == expected_location
     assert reprice_called is False
     async with SessionLocal() as session:
-        count = await session.scalar(
+        legacy_count = await session.scalar(
             select(func.count(BillingTariffVersion.id)).where(
                 BillingTariffVersion.warehouse_id == warehouse_id
             )
         )
-    assert count == 0
+        warehouse = await session.get(Warehouse, warehouse_id)
+        assert warehouse is not None
+        v2_count = await session.scalar(
+            select(func.count(BillingTariffVersionV2.id)).where(
+                BillingTariffVersionV2.tenant_id == warehouse.tenant_id,
+                BillingTariffVersionV2.service_code == "storage",
+            )
+        )
+    assert legacy_count == v2_count == 0
 
 
 @pytest.mark.asyncio
@@ -386,7 +415,6 @@ async def test_storage_tariff_service_rejects_amount_rounding_to_zero(
         unexpected_reprice,
     )
     tenant_id = uuid.uuid4()
-    warehouse_id = uuid.uuid4()
     seller_exception = (
         (uuid.uuid4(), Decimal("0.001"), datetime.now(MOSCOW).date())
         if target == "seller_exception"
@@ -402,9 +430,9 @@ async def test_storage_tariff_service_rejects_amount_rounding_to_zero(
         await create_storage_tariff(
             session,
             tenant_id,
-            warehouse_id,
             warehouse_amount,
             datetime.now(MOSCOW).date(),
+            0,
             seller_exception,
         )
 
@@ -424,6 +452,8 @@ async def test_tariff_amount_rounding_that_stays_positive_is_saved(
     headers = await _register_admin(async_client, suffix)
     warehouse_id = await _create_warehouse(async_client, headers, suffix, "rounded")
     today = datetime.now(MOSCOW).date()
+    matrix = await async_client.get("/billing/tariff-matrix", headers=headers)
+    assert matrix.status_code == 200, matrix.text
 
     async with SessionLocal() as session:
         warehouse = await session.get(Warehouse, warehouse_id)
@@ -438,7 +468,7 @@ async def test_tariff_amount_rounding_that_stays_positive_is_saved(
         "/operations/storage/tariffs",
         headers=headers,
         json={
-            "warehouse_id": str(warehouse_id),
+            "revision": matrix.json()["revision"],
             "amount": "0.005",
             "valid_from": today.isoformat(),
             "seller_exception": {
@@ -456,13 +486,21 @@ async def test_tariff_amount_rounding_that_stays_positive_is_saved(
         stored_amounts = list(
             (
                 await session.scalars(
-                    select(BillingTariffVersion.amount).where(
-                        BillingTariffVersion.warehouse_id == warehouse_id
+                    select(BillingTariffVersionV2.rate).where(
+                        BillingTariffVersionV2.tenant_id == warehouse.tenant_id,
+                        BillingTariffVersionV2.service_code == "storage",
                     )
                 )
             ).all()
         )
     assert stored_amounts == [1, 1]
+    async with SessionLocal() as session:
+        legacy_count = await session.scalar(
+            select(func.count(BillingTariffVersion.id)).where(
+                BillingTariffVersion.warehouse_id == warehouse_id
+            )
+        )
+    assert legacy_count == 0
 
 
 @pytest.mark.asyncio
@@ -474,9 +512,11 @@ async def test_tariff_valid_from_cannot_be_in_the_past(
     suffix = str(time.time_ns())
     headers = await _register_admin(async_client, suffix)
     warehouse_id = await _create_warehouse(async_client, headers, suffix, "past")
+    matrix = await async_client.get("/billing/tariff-matrix", headers=headers)
+    assert matrix.status_code == 200, matrix.text
     today = datetime.now(MOSCOW).date()
     payload: dict[str, object] = {
-        "warehouse_id": str(warehouse_id),
+        "revision": matrix.json()["revision"],
         "amount": "5.00",
         "valid_from": (
             today - timedelta(days=1) if target == "warehouse" else today
@@ -505,12 +545,20 @@ async def test_tariff_valid_from_cannot_be_in_the_past(
     assert response.status_code == 422, response.text
     assert response.json()["detail"] == "tariff_valid_from_in_past"
     async with SessionLocal() as session:
-        count = await session.scalar(
+        legacy_count = await session.scalar(
             select(func.count(BillingTariffVersion.id)).where(
                 BillingTariffVersion.warehouse_id == warehouse_id
             )
         )
-    assert count == 0
+        warehouse = await session.get(Warehouse, warehouse_id)
+        assert warehouse is not None
+        v2_count = await session.scalar(
+            select(func.count(BillingTariffVersionV2.id)).where(
+                BillingTariffVersionV2.tenant_id == warehouse.tenant_id,
+                BillingTariffVersionV2.service_code == "storage",
+            )
+        )
+    assert legacy_count == v2_count == 0
 
 
 @pytest.mark.asyncio
@@ -523,7 +571,7 @@ async def test_tariff_scope_must_belong_to_tenant_and_operational_warehouse(
     service_warehouse_id = await _create_warehouse(
         async_client, headers, suffix, "service"
     )
-    operational_warehouse_id = await _create_warehouse(
+    _operational_warehouse_id = await _create_warehouse(
         async_client, headers, suffix, "operational"
     )
     foreign_headers = await _register_admin(async_client, f"foreign-{suffix}")
@@ -552,22 +600,16 @@ async def test_tariff_scope_must_belong_to_tenant_and_operational_warehouse(
         owner_seller_id = owner_seller.id
         foreign_seller_id = foreign_seller.id
 
-    missing_warehouse_id = uuid.uuid4()
     missing_seller_id = uuid.uuid4()
-    invalid_scopes = [
-        (foreign_warehouse_id, owner_seller_id, 404, "warehouse_not_found"),
-        (missing_warehouse_id, owner_seller_id, 404, "warehouse_not_found"),
-        (service_warehouse_id, owner_seller_id, 422, "warehouse_not_operational"),
-        (operational_warehouse_id, foreign_seller_id, 404, "seller_not_found"),
-        (operational_warehouse_id, missing_seller_id, 404, "seller_not_found"),
-    ]
+    matrix = await async_client.get("/billing/tariff-matrix", headers=headers)
+    assert matrix.status_code == 200, matrix.text
 
-    for target_warehouse_id, target_seller_id, status_code, detail in invalid_scopes:
+    for target_seller_id in (foreign_seller_id, missing_seller_id):
         response = await async_client.post(
             "/operations/storage/tariffs",
             headers=headers,
             json={
-                "warehouse_id": str(target_warehouse_id),
+                "revision": matrix.json()["revision"],
                 "amount": "5.00",
                 "valid_from": today,
                 "seller_exception": {
@@ -577,13 +619,13 @@ async def test_tariff_scope_must_belong_to_tenant_and_operational_warehouse(
                 },
             },
         )
-        assert response.status_code == status_code, response.text
-        assert response.json()["detail"] == detail
+        assert response.status_code == 404, response.text
 
         async with SessionLocal() as session:
             count = await session.scalar(
-                select(func.count(BillingTariffVersion.id)).where(
-                    BillingTariffVersion.tenant_id == tenant_id
+                select(func.count(BillingTariffVersionV2.id)).where(
+                    BillingTariffVersionV2.tenant_id == tenant_id,
+                    BillingTariffVersionV2.service_code == "storage",
                 )
             )
         assert count == 0
@@ -592,7 +634,7 @@ async def test_tariff_scope_must_belong_to_tenant_and_operational_warehouse(
         "/operations/storage/tariffs",
         headers=headers,
         json={
-            "warehouse_id": str(operational_warehouse_id),
+            "revision": matrix.json()["revision"],
             "amount": "5.00",
             "valid_from": today,
             "seller_exception": {
@@ -608,14 +650,13 @@ async def test_tariff_scope_must_belong_to_tenant_and_operational_warehouse(
         tariffs = list(
             (
                 await session.scalars(
-                    select(BillingTariffVersion)
-                    .where(BillingTariffVersion.tenant_id == tenant_id)
-                    .order_by(BillingTariffVersion.seller_id)
+                    select(BillingTariffVersionV2)
+                    .where(BillingTariffVersionV2.tenant_id == tenant_id)
+                    .order_by(BillingTariffVersionV2.seller_id)
                 )
             ).all()
         )
     assert len(tariffs) == 2
-    assert {tariff.warehouse_id for tariff in tariffs} == {operational_warehouse_id}
     assert {tariff.seller_id for tariff in tariffs} == {None, owner_seller_id}
 
 
@@ -842,12 +883,14 @@ async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClien
     before_by_id = {item["id"]: item for item in before.json()["statements"]}
     before_amount = Decimal(before_by_id[str(draft_statement_id)]["total_amount"])
     assert before_by_id[str(fixed_statement_id)]["total_amount"] == "1.00"
+    matrix = await async_client.get("/billing/tariff-matrix", headers=headers)
+    assert matrix.status_code == 200, matrix.text
 
     created = await async_client.post(
         "/operations/storage/tariffs",
         headers=headers,
         json={
-            "warehouse_id": str(warehouse_id),
+            "revision": matrix.json()["revision"],
             "amount": "10.00",
             "valid_from": today.isoformat(),
         },
@@ -856,12 +899,16 @@ async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClien
     recalculated = {
         item["id"]: item for item in created.json()["recalculated_statements"]
     }
-    assert set(recalculated) == {str(draft_statement_id), str(zero_statement_id)}
+    assert set(recalculated) == {
+        str(draft_statement_id),
+        str(zero_statement_id),
+        str(unrelated_statement_id),
+    }
     assert Decimal(recalculated[str(draft_statement_id)]["total_amount"]) > before_amount
     assert Decimal(recalculated[str(zero_statement_id)]["total_amount"]) == 0
     assert recalculated[str(zero_statement_id)]["measurements"][0]["rate_snapshot"] == "10.00"
     assert str(fixed_statement_id) not in recalculated
-    assert str(unrelated_statement_id) not in recalculated
+    assert str(unrelated_statement_id) in recalculated
     assert str(past_statement_id) not in recalculated
 
     after = await async_client.get(
@@ -882,7 +929,7 @@ async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClien
         "/operations/storage/tariffs",
         headers=headers,
         json={
-            "warehouse_id": str(warehouse_id),
+            "revision": created.json()["tariff_revision"],
             "amount": "20.00",
             "valid_from": today.isoformat(),
         },
@@ -915,10 +962,9 @@ async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClien
         new_tariffs = list(
             (
                 await session.scalars(
-                    select(BillingTariffVersion).where(
-                        BillingTariffVersion.tenant_id == tenant_id,
-                        BillingTariffVersion.warehouse_id == warehouse_id,
-                        BillingTariffVersion.valid_from == today,
+                    select(BillingTariffVersionV2).where(
+                        BillingTariffVersionV2.tenant_id == tenant_id,
+                        BillingTariffVersionV2.service_code == "storage",
                     )
                 )
             ).all()
@@ -928,7 +974,7 @@ async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClien
     assert ledger_rows[0].rate == 100
     assert ledger_rows[0].amount == 100
     assert len(new_tariffs) == 1
-    assert new_tariffs[0].amount == 1000
+    assert new_tariffs[0].rate == 1000
 
 
 @pytest.mark.asyncio
@@ -938,12 +984,14 @@ async def test_tariff_rejects_rubles_above_postgres_kopeck_limit_without_write(
     suffix = str(time.time_ns())
     headers = await _register_admin(async_client, suffix)
     warehouse_id = await _create_warehouse(async_client, headers, suffix, "overflow")
+    matrix = await async_client.get("/billing/tariff-matrix", headers=headers)
+    assert matrix.status_code == 200, matrix.text
 
     response = await async_client.post(
         "/operations/storage/tariffs",
         headers=headers,
         json={
-            "warehouse_id": str(warehouse_id),
+            "revision": matrix.json()["revision"],
             "amount": "21474836.48",
             "valid_from": datetime.now(MOSCOW).date().isoformat(),
         },
@@ -951,10 +999,18 @@ async def test_tariff_rejects_rubles_above_postgres_kopeck_limit_without_write(
 
     assert response.status_code == 422, response.text
     async with SessionLocal() as session:
-        tariff_count = await session.scalar(
+        legacy_count = await session.scalar(
             select(func.count(BillingTariffVersion.id)).where(
                 BillingTariffVersion.warehouse_id == warehouse_id,
                 BillingTariffVersion.service_code == "storage_liter_day",
             )
         )
-    assert tariff_count == 0
+        warehouse = await session.get(Warehouse, warehouse_id)
+        assert warehouse is not None
+        v2_count = await session.scalar(
+            select(func.count(BillingTariffVersionV2.id)).where(
+                BillingTariffVersionV2.tenant_id == warehouse.tenant_id,
+                BillingTariffVersionV2.service_code == "storage",
+            )
+        )
+    assert legacy_count == v2_count == 0

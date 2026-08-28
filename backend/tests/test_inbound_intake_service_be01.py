@@ -16,7 +16,7 @@ from app.services.catalog_service import create_product, create_warehouse
 from app.services.tokens import decode_access_token
 
 
-async def _tenant_id(async_client: AsyncClient) -> uuid.UUID:
+async def _auth_ids(async_client: AsyncClient) -> tuple[uuid.UUID, uuid.UUID]:
     email = f"inbe01-{uuid.uuid4().hex[:8]}@example.com"
     reg = await async_client.post(
         "/auth/register",
@@ -29,7 +29,8 @@ async def _tenant_id(async_client: AsyncClient) -> uuid.UUID:
     )
     assert reg.status_code in (200, 201), reg.text
     token = reg.json()["access_token"]
-    return uuid.UUID(str(decode_access_token(token)["tenant_id"]))
+    payload = decode_access_token(token)
+    return uuid.UUID(str(payload["tenant_id"])), uuid.UUID(str(payload["sub"]))
 
 
 async def _setup_request(
@@ -75,20 +76,24 @@ async def _setup_request(
 
 @pytest.mark.asyncio
 async def test_loose_only_receiving_no_boxes(async_client: AsyncClient) -> None:
-    tenant_id = await _tenant_id(async_client)
+    tenant_id, actor_user_id = await _auth_ids(async_client)
     request_id, _pid = await _setup_request(async_client, tenant_id, expected_qty=5)
     async with SessionLocal() as session:
         req = await svc.get_request(session, tenant_id, request_id)
         assert req is not None
         assert req.status == svc.STATUS_SUBMITTED
-        await svc.begin_receiving(session, tenant_id, request_id)
+        await svc.begin_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         req = await svc.get_request(session, tenant_id, request_id)
         assert req is not None
         line = req.lines[0]
         await svc.set_line_actual_qty(
             session, tenant_id, request_id, line.id, actual_qty=5
         )
-        done = await svc.complete_receiving(session, tenant_id, request_id)
+        done = await svc.complete_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         assert done.status == svc.STATUS_SORTING
         assert done.has_discrepancy is False
         assert done.lines[0].actual_qty == 5
@@ -97,7 +102,7 @@ async def test_loose_only_receiving_no_boxes(async_client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_mixed_box_then_loose_fact_is_sum(async_client: AsyncClient) -> None:
     """REV-IN-BE-01: box scan first, then loose — total = box + loose, no double count."""
-    tenant_id = await _tenant_id(async_client)
+    tenant_id, actor_user_id = await _auth_ids(async_client)
     request_id, product_id = await _setup_request(async_client, tenant_id, expected_qty=10)
     async with SessionLocal() as session:
         req_loaded = await svc.get_request(session, tenant_id, request_id)
@@ -125,17 +130,21 @@ async def test_mixed_box_then_loose_fact_is_sum(async_client: AsyncClient) -> No
         await svc.set_line_actual_qty(
             session, tenant_id, request_id, line.id, actual_qty=4
         )
-        done = await svc.complete_receiving(session, tenant_id, request_id)
+        done = await svc.complete_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         assert done.lines[0].actual_qty == 10
         assert done.has_discrepancy is False
 
 
 @pytest.mark.asyncio
 async def test_mixed_loose_then_box_fact_is_sum(async_client: AsyncClient) -> None:
-    tenant_id = await _tenant_id(async_client)
+    tenant_id, actor_user_id = await _auth_ids(async_client)
     request_id, product_id = await _setup_request(async_client, tenant_id, expected_qty=10)
     async with SessionLocal() as session:
-        await svc.begin_receiving(session, tenant_id, request_id)
+        await svc.begin_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         req_loaded = await svc.get_request(session, tenant_id, request_id)
         assert req_loaded is not None
         line = req_loaded.lines[0]
@@ -152,7 +161,9 @@ async def test_mixed_loose_then_box_fact_is_sum(async_client: AsyncClient) -> No
         )
         await session.flush()
         await svc.sync_request_actuals_from_boxes(session, req_loaded)
-        done = await svc.complete_receiving(session, tenant_id, request_id)
+        done = await svc.complete_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         assert done.lines[0].actual_qty == 10
         assert done.has_discrepancy is False
 
@@ -161,17 +172,21 @@ async def test_mixed_loose_then_box_fact_is_sum(async_client: AsyncClient) -> No
 async def test_under_receive_sets_has_discrepancy_but_completes(
     async_client: AsyncClient,
 ) -> None:
-    tenant_id = await _tenant_id(async_client)
+    tenant_id, actor_user_id = await _auth_ids(async_client)
     request_id, _pid = await _setup_request(async_client, tenant_id, expected_qty=10)
     async with SessionLocal() as session:
-        await svc.begin_receiving(session, tenant_id, request_id)
+        await svc.begin_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         req = await svc.get_request(session, tenant_id, request_id)
         assert req is not None
         line = req.lines[0]
         await svc.set_line_actual_qty(
             session, tenant_id, request_id, line.id, actual_qty=7
         )
-        done = await svc.complete_receiving(session, tenant_id, request_id)
+        done = await svc.complete_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         assert done.has_discrepancy is True
         assert done.status == svc.STATUS_SORTING
         assert done.lines[0].actual_qty == 7
@@ -179,30 +194,36 @@ async def test_under_receive_sets_has_discrepancy_but_completes(
 
 @pytest.mark.asyncio
 async def test_over_receive_sets_has_discrepancy(async_client: AsyncClient) -> None:
-    tenant_id = await _tenant_id(async_client)
+    tenant_id, actor_user_id = await _auth_ids(async_client)
     request_id, _pid = await _setup_request(async_client, tenant_id, expected_qty=5)
     async with SessionLocal() as session:
-        await svc.begin_receiving(session, tenant_id, request_id)
+        await svc.begin_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         req = await svc.get_request(session, tenant_id, request_id)
         assert req is not None
         line = req.lines[0]
         await svc.set_line_actual_qty(
             session, tenant_id, request_id, line.id, actual_qty=8
         )
-        done = await svc.complete_receiving(session, tenant_id, request_id)
+        done = await svc.complete_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         assert done.has_discrepancy is True
         assert done.lines[0].actual_qty == 8
 
 
 @pytest.mark.asyncio
 async def test_status_transitions_collapsed_chain(async_client: AsyncClient) -> None:
-    tenant_id = await _tenant_id(async_client)
+    tenant_id, actor_user_id = await _auth_ids(async_client)
     request_id, _pid = await _setup_request(async_client, tenant_id, expected_qty=1)
     async with SessionLocal() as session:
         req = await svc.get_request(session, tenant_id, request_id)
         assert req is not None
         assert req.status == svc.STATUS_SUBMITTED
-        await svc.begin_receiving(session, tenant_id, request_id)
+        await svc.begin_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         mid = await svc.get_request(session, tenant_id, request_id)
         assert mid is not None
         assert mid.status == svc.STATUS_RECEIVING
@@ -213,17 +234,21 @@ async def test_status_transitions_collapsed_chain(async_client: AsyncClient) -> 
         still = await svc.get_request(session, tenant_id, request_id)
         assert still is not None
         assert still.status == svc.STATUS_RECEIVING
-        done = await svc.complete_receiving(session, tenant_id, request_id)
+        done = await svc.complete_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         assert done.status == svc.STATUS_SORTING
 
 
 @pytest.mark.asyncio
 async def test_box_only_under_receive_sets_discrepancy(async_client: AsyncClient) -> None:
     """REV-IN-BE-01: box=6, loose=0, planned=10 → total=6, discrepancy=true."""
-    tenant_id = await _tenant_id(async_client)
+    tenant_id, actor_user_id = await _auth_ids(async_client)
     request_id, product_id = await _setup_request(async_client, tenant_id, expected_qty=10)
     async with SessionLocal() as session:
-        await svc.begin_receiving(session, tenant_id, request_id)
+        await svc.begin_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         req_loaded = await svc.get_request(session, tenant_id, request_id)
         assert req_loaded is not None
         boxes = await box_svc.create_boxes_for_request(
@@ -233,14 +258,16 @@ async def test_box_only_under_receive_sets_discrepancy(async_client: AsyncClient
             InboundIntakeBoxLine(box_id=boxes[0].id, product_id=product_id, quantity=6)
         )
         await session.flush()
-        done = await svc.complete_receiving(session, tenant_id, request_id)
+        done = await svc.complete_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         assert done.lines[0].actual_qty == 6
         assert done.has_discrepancy is True
 
 
 @pytest.mark.asyncio
 async def test_primary_accept_does_not_create_boxes(async_client: AsyncClient) -> None:
-    tenant_id = await _tenant_id(async_client)
+    tenant_id, _actor_user_id = await _auth_ids(async_client)
     request_id, _pid = await _setup_request(async_client, tenant_id)
     async with SessionLocal() as session:
         accepted = await svc.primary_accept_request(

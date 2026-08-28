@@ -13,6 +13,7 @@ from app.models.product import Product
 from app.models.seller import Seller
 from app.services import inventory_service
 from app.services.sorting_location_service import get_or_create_sorting_location
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 
 @pytest.mark.asyncio
@@ -76,6 +77,9 @@ async def test_movement_keeps_seller_and_warehouse_at_write_time(
             storage_location_id=location.id,
             quantity_delta=3,
             movement_type="reporting_test",
+            actor_user_id=await resolve_test_actor_user_id(
+                session, product.tenant_id
+            ),
         )
         await session.flush()
         original_seller_id = seller.id

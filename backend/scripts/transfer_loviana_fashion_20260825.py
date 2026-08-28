@@ -223,6 +223,8 @@ async def _run(args: argparse.Namespace) -> int:
                 session,
                 approved_token=args.approval_token,
                 plan=plan,
+                # Разовый скрипт переноса: запускается из консоли, автора нет.
+                actor_user_id=None,
             )
             await session.commit()
             report["applied"] = True

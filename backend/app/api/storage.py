@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated, Any
 
@@ -14,13 +14,14 @@ from sqlalchemy.orm import joinedload
 from app.api.deps import require_ff_or_seller_with_permission, require_fulfillment_admin
 from app.core.settings import settings
 from app.db.session import get_db
-from app.models.billing import BillingTariffVersion
+from app.models.billing import BillingTariffVersionV2
 from app.models.storage_measurement import StorageMeasurement
 from app.models.storage_statement import StorageStatement
 from app.models.user import User
 from app.models.warehouse import Warehouse
 from app.services import background_job_service as job_svc
 from app.services.background_job_service import JOB_TYPE_STORAGE_MEASUREMENT_REBUILD
+from app.services.billing_tariff_matrix_service import get_tariff_matrix
 from app.services.staff_packaging_billing_service import kopecks_to_rub_str
 from app.services.staff_permissions_service import PERM_INVENTORY
 from app.services.storage_measurement_service import (
@@ -72,6 +73,7 @@ class StorageStatementOut(BaseModel):
 
 class StorageStatementsOut(BaseModel):
     tariff_configured: bool
+    tariff_revision: int
     warehouses: list[dict[str, object]]
     statements: list[StorageStatementOut]
 
@@ -90,7 +92,7 @@ class SellerExceptionBody(BaseModel):
 
 
 class TariffCreateBody(BaseModel):
-    warehouse_id: uuid.UUID
+    revision: int = Field(ge=0)
     amount: StorageTariffAmount
     valid_from: date
     seller_exception: SellerExceptionBody | None = None
@@ -107,6 +109,7 @@ class TariffVersionOut(BaseModel):
 class TariffCreateOut(BaseModel):
     warehouse_tariff: TariffVersionOut
     seller_exception: TariffVersionOut | None = None
+    tariff_revision: int
     recalculated_statements: list[StorageStatementOut] = Field(default_factory=list)
 
 
@@ -130,6 +133,16 @@ def _rate_snapshot(value: object) -> str:
         return f"{rendered}.00"
     whole, fraction = rendered.split(".", 1)
     return f"{whole}.{fraction.ljust(2, '0')}"
+
+
+def _matrix_date_in_moscow(value: datetime) -> str:
+    """SQLite drops tzinfo from V2 datetimes; persisted values are UTC instants."""
+    local = (
+        value.replace(tzinfo=UTC).astimezone(MOSCOW)
+        if value.tzinfo is None
+        else value.astimezone(MOSCOW)
+    )
+    return local.date().isoformat()
 
 
 def _statement_out(
@@ -232,7 +245,7 @@ def _apply_ledger_snapshot(
 def _apply_draft_pricing(
     output: StorageStatementOut,
     rows: list[StorageMeasurement],
-    pricing: dict[uuid.UUID, tuple[Decimal, Decimal, BillingTariffVersion]],
+    pricing: dict[uuid.UUID, tuple[Decimal, Decimal, BillingTariffVersionV2]],
 ) -> None:
     """Attach a freshly calculated tariff preview without publishing ledger rows."""
     total_quantity = Decimal(0)
@@ -243,7 +256,7 @@ def _apply_draft_pricing(
             continue
         quantity, amount, tariff = row_pricing
         effective_rate = (
-            amount / quantity if quantity else Decimal(tariff.amount) / Decimal(100)
+            amount / quantity if quantity else Decimal(tariff.rate) / Decimal(100)
         ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         public_row["liter_days"] = str(quantity)
         public_row["rate_snapshot"] = _rate_snapshot(effective_rate)
@@ -284,10 +297,17 @@ async def list_statements(
         )
         .order_by(Warehouse.name, Warehouse.id)
     )
-    if warehouse_id is not None:
-        warehouse_query = warehouse_query.where(Warehouse.id == warehouse_id)
-    warehouses = list((await session.scalars(warehouse_query)).all())
-    operational_ids = {warehouse.id for warehouse in warehouses}
+    all_operational_warehouses = list(
+        (await session.scalars(warehouse_query)).all()
+    )
+    operational_ids = {
+        warehouse.id for warehouse in all_operational_warehouses
+    }
+    warehouses = [
+        warehouse
+        for warehouse in all_operational_warehouses
+        if warehouse_id is None or warehouse.id == warehouse_id
+    ]
 
     statement_query = (
         select(StorageStatement)
@@ -327,34 +347,55 @@ async def list_statements(
     for row in (await session.scalars(measurement_query)).all():
         rows_by_scope.setdefault((row.seller_id, row.warehouse_id), []).append(row)
 
-    tariff_warehouse_ids = set(
-        (
-            await session.scalars(
-                select(BillingTariffVersion.warehouse_id).where(
-                    BillingTariffVersion.tenant_id == user.tenant_id,
-                    BillingTariffVersion.warehouse_id.in_(operational_ids or {uuid.UUID(int=0)}),
-                    BillingTariffVersion.service_code == "storage_liter_day",
-                    BillingTariffVersion.unit == "liter_day",
-                    BillingTariffVersion.valid_from <= period_end,
+    matrix = await get_tariff_matrix(session, tenant_id=user.tenant_id)
+    period_start_at = datetime.combine(period_start, datetime.min.time(), MOSCOW)
+    period_end_at = datetime.combine(period_end, datetime.max.time(), MOSCOW)
+    tariff_configured = bool(
+        await session.scalar(
+            select(BillingTariffVersionV2.id).where(
+                BillingTariffVersionV2.tenant_id == user.tenant_id,
+                BillingTariffVersionV2.service_code == "storage",
+                BillingTariffVersionV2.unit == "liter_day",
+                BillingTariffVersionV2.enabled.is_(True),
+                BillingTariffVersionV2.employee_user_id.is_(None),
+                BillingTariffVersionV2.product_id.is_(None),
+                BillingTariffVersionV2.valid_from_at < period_end_at,
+                or_(
+                    BillingTariffVersionV2.valid_to_at.is_(None),
+                    BillingTariffVersionV2.valid_to_at > period_start_at,
+                ),
+                (
                     or_(
-                        BillingTariffVersion.valid_to.is_(None),
-                        BillingTariffVersion.valid_to >= period_start,
-                    ),
-                    (
-                        or_(
-                            BillingTariffVersion.seller_id.is_(None),
-                            BillingTariffVersion.seller_id == user.seller_id,
-                        )
-                        if user.role == "fulfillment_seller"
-                        else BillingTariffVersion.seller_id.is_(None)
-                    ),
-                )
+                        BillingTariffVersionV2.seller_id.is_(None),
+                        BillingTariffVersionV2.seller_id == user.seller_id,
+                    )
+                    if user.role == "fulfillment_seller"
+                    else BillingTariffVersionV2.seller_id.is_(None)
+                ),
             )
-        ).all()
+        )
     )
-    tariff_configured = bool(operational_ids) and tariff_warehouse_ids == operational_ids
+    rounding_scopes_by_seller: dict[
+        uuid.UUID,
+        list[tuple[StorageStatement, list[StorageMeasurement]]],
+    ] = {}
+    for statement in statements:
+        priceable_rows = [
+            row
+            for row in rows_by_scope.get(
+                (statement.seller_id, statement.warehouse_id), []
+            )
+            if row.status == "calculated"
+        ]
+        if priceable_rows:
+            rounding_scopes_by_seller.setdefault(statement.seller_id, []).append(
+                (statement, priceable_rows)
+            )
+
     statement_outputs: list[StorageStatementOut] = []
     for statement in statements:
+        if warehouse_id is not None and statement.warehouse_id != warehouse_id:
+            continue
         rows = rows_by_scope.get((statement.seller_id, statement.warehouse_id), [])
         output = _statement_out(statement, rows)
         if statement.status == "fixed":
@@ -362,7 +403,14 @@ async def list_statements(
             _apply_ledger_snapshot(output, rows, ledger)
         elif priceable_rows := [row for row in rows if row.status == "calculated"]:
             try:
-                pricing = await get_storage_draft_pricing(session, statement, priceable_rows)
+                pricing = await get_storage_draft_pricing(
+                    session,
+                    statement,
+                    priceable_rows,
+                    rounding_scopes=rounding_scopes_by_seller.get(
+                        statement.seller_id, []
+                    ),
+                )
             except StorageStatementError as exc:
                 if str(exc) != "tariff_not_found":
                     raise
@@ -372,6 +420,7 @@ async def list_statements(
 
     return StorageStatementsOut(
         tariff_configured=tariff_configured,
+        tariff_revision=matrix.revision,
         warehouses=[{"id": warehouse.id, "name": warehouse.name} for warehouse in warehouses],
         statements=statement_outputs,
     )
@@ -400,12 +449,12 @@ async def create_tariff(
         else None
     )
     try:
-        wh_tariff, sel_tariff, repriced_drafts = await create_storage_tariff(
+        wh_tariff, sel_tariff, repriced_drafts, tariff_revision = await create_storage_tariff(
             session,
             user.tenant_id,
-            body.warehouse_id,
             body.amount,
             body.valid_from,
+            body.revision,
             seller_ex,
         )
     except StorageStatementError as exc:
@@ -418,10 +467,10 @@ async def create_tariff(
                     "tariff_amount_must_be_positive",
                     "tariff_amount_out_of_range",
                     "tariff_valid_from_in_past",
-                    "warehouse_not_operational",
+                    "billing_tariff_matrix_rate_invalid",
                 }
                 else 404
-                if code in {"warehouse_not_found", "seller_not_found"}
+                if code in {"seller_not_found", "billing_tariff_matrix_seller_not_found"}
                 else 409
             ),
             detail=code,
@@ -431,10 +480,10 @@ async def create_tariff(
     if sel_tariff is not None and body.seller_exception is not None:
         seller_exception_out = TariffVersionOut(
             id=sel_tariff.id,
-            warehouse_id=body.warehouse_id,
+            warehouse_id=None,
             seller_id=body.seller_exception.seller_id,
-            amount=kopecks_to_rub_str(sel_tariff.amount),
-            valid_from=sel_tariff.valid_from.isoformat(),
+            amount=kopecks_to_rub_str(sel_tariff.rate),
+            valid_from=_matrix_date_in_moscow(sel_tariff.valid_from_at),
         )
 
     recalculated_statements: list[StorageStatementOut] = []
@@ -446,12 +495,13 @@ async def create_tariff(
     return TariffCreateOut(
         warehouse_tariff=TariffVersionOut(
             id=wh_tariff.id,
-            warehouse_id=body.warehouse_id,
+            warehouse_id=None,
             seller_id=None,
-            amount=kopecks_to_rub_str(wh_tariff.amount),
-            valid_from=wh_tariff.valid_from.isoformat(),
+            amount=kopecks_to_rub_str(wh_tariff.rate),
+            valid_from=_matrix_date_in_moscow(wh_tariff.valid_from_at),
         ),
         seller_exception=seller_exception_out,
+        tariff_revision=tariff_revision,
         recalculated_statements=recalculated_statements,
     )
 

@@ -293,6 +293,7 @@ class InventoryMovementOut(BaseModel):
     storage_location_id: str | None
     quantity_delta: int
     movement_type: str
+    actor_user_id: str | None = None
     inbound_intake_line_id: str | None
     created_at: str
 
@@ -576,6 +577,7 @@ def _movement_out(
         storage_location_id=str(m.storage_location_id) if reveal_storage else None,
         quantity_delta=m.quantity_delta,
         movement_type=m.movement_type,
+        actor_user_id=str(m.actor_user_id) if m.actor_user_id else None,
         inbound_intake_line_id=str(m.inbound_intake_line_id)
         if m.inbound_intake_line_id
         else None,
@@ -748,7 +750,12 @@ async def begin_inbound_receiving(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
     try:
-        r = await svc.begin_receiving(session, user.tenant_id, request_id)
+        r = await svc.begin_receiving(
+            session,
+            user.tenant_id,
+            request_id,
+            actor_user_id=user.id,
+        )
     except InboundIntakeError as exc:
         raise _map_inbound_svc_err(exc) from None
     r2 = await svc.get_request(session, user.tenant_id, r.id)
@@ -1107,7 +1114,12 @@ async def complete_inbound_receiving(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
     try:
-        r = await svc.complete_receiving(session, user.tenant_id, request_id)
+        r = await svc.complete_receiving(
+            session,
+            user.tenant_id,
+            request_id,
+            actor_user_id=user.id,
+        )
     except InboundIntakeError as exc:
         raise _map_inbound_svc_err(exc) from None
     r2 = await svc.get_request(session, user.tenant_id, r.id)
@@ -1129,7 +1141,12 @@ async def reopen_inbound_receiving(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
     try:
-        r = await svc.reopen_receiving(session, user.tenant_id, request_id)
+        r = await svc.reopen_receiving(
+            session,
+            user.tenant_id,
+            request_id,
+            actor_user_id=user.id,
+        )
     except InboundIntakeError as exc:
         code = exc.code
         if code == "request_not_found":
@@ -1398,7 +1415,10 @@ async def resync_inbound_sorting_stock(
 ) -> InboundIntakeRequestOut:
     try:
         r = await svc.resync_sorting_stock_for_request(
-            session, user.tenant_id, request_id
+            session,
+            user.tenant_id,
+            request_id,
+            actor_user_id=user.id,
         )
     except InboundIntakeError as exc:
         if exc.code == "request_not_found":
@@ -1552,7 +1572,12 @@ async def complete_inbound_verification(
 ) -> InboundIntakeRequestOut:
     """Legacy alias for POST .../complete-receiving."""
     try:
-        r = await svc.complete_receiving(session, user.tenant_id, request_id)
+        r = await svc.complete_receiving(
+            session,
+            user.tenant_id,
+            request_id,
+            actor_user_id=user.id,
+        )
     except InboundIntakeError as exc:
         raise _map_inbound_svc_err(exc) from None
     r2 = await svc.get_request(session, user.tenant_id, r.id)

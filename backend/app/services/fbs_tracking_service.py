@@ -235,6 +235,7 @@ async def _sync_supply_orders_from_wb(
     *,
     sync_orders: bool = True,
     wb_done_hint: bool | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> int:
     wb_supply_done: bool | None = wb_done_hint
     if wb_supply_done is None:
@@ -305,6 +306,7 @@ async def _sync_supply_orders_from_wb(
                 order,
                 wb_status,
                 supplier_status=supplier_status,
+                actor_user_id=actor_user_id,
             )
             order.last_wb_sync_at = datetime.now(tz=UTC)
             processed += 1
@@ -333,6 +335,7 @@ async def sync_supply_tracking(
     *,
     sync_orders: bool | None = None,
     wb_done_hint: bool | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> TrackingSyncResult:
     stmt = (
         select(FbsSupply)
@@ -358,6 +361,7 @@ async def sync_supply_tracking(
             token,
             sync_orders=sync_orders,
             wb_done_hint=wb_done_hint,
+            actor_user_id=actor_user_id,
         )
     except FbsTrackingError:
         raise
@@ -423,6 +427,7 @@ async def sync_in_delivery_supplies(
                 http_client,
                 sync_orders=supply.status == FBS_SUPPLY_STATUS_IN_DELIVERY,
                 wb_done_hint=None if wb_entry is None else wb_entry[1],
+                actor_user_id=None,
             )
             supplies_synced += 1
             orders_updated += result.orders_updated

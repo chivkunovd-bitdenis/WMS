@@ -578,6 +578,7 @@ async def _transfer_balance(
     destination_container_kind: ContainerKind | None,
     destination_container_id: uuid.UUID | None,
     transfer_group_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
 ) -> None:
     source_kind = cast(ContainerKind | None, balance.container_kind)
     await inventory_service.record_movement_and_adjust_balance(
@@ -590,6 +591,7 @@ async def _transfer_balance(
         transfer_group_id=transfer_group_id,
         container_kind=source_kind,
         container_id=balance.container_id,
+        actor_user_id=actor_user_id,
     )
     await inventory_service.record_movement_and_adjust_balance(
         session,
@@ -601,6 +603,7 @@ async def _transfer_balance(
         transfer_group_id=transfer_group_id,
         container_kind=destination_container_kind,
         container_id=destination_container_id,
+        actor_user_id=actor_user_id,
     )
 
 
@@ -769,6 +772,7 @@ async def move_object(
             destination_container_kind=destination_kind,
             destination_container_id=destination_id,
             transfer_group_id=transfer_group_id,
+            actor_user_id=actor_user_id,
         )
         subject = product.name
         moved_quantity: int | None = quantity
@@ -798,6 +802,7 @@ async def move_object(
                 destination_container_kind=cast(ContainerKind, balance.container_kind),
                 destination_container_id=balance.container_id,
                 transfer_group_id=transfer_group_id,
+                actor_user_id=actor_user_id,
             )
         await _place_container(
             session,

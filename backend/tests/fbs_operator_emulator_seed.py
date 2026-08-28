@@ -18,6 +18,7 @@ from app.models.product import Product
 from app.services import inventory_service
 from app.services.sorting_location_service import get_or_create_sorting_location
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _TEMPLATES_PATH = _REPO_ROOT / "wb_emulator" / "seed" / "order_templates.json"
@@ -200,6 +201,7 @@ async def seed_operator_emulator_wms(
                     storage_location_id=storage_location_id,
                     quantity_delta=inventory_qty,
                     movement_type="inbound_intake",
+                    actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
                 )
                 await session.commit()
 

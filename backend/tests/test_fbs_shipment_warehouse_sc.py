@@ -484,6 +484,7 @@ async def test_fbs_delivery_writes_zero_stock_negative_once_and_releases_reserve
             storage_location_id=ledger.storage_location_id,
             quantity_delta=1,
             movement_type="inbound_intake",
+            actor_user_id=None,
         )
         await session.flush()
         await session.refresh(balance)

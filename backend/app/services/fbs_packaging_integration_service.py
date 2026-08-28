@@ -187,6 +187,8 @@ async def detach_cancelled_order_from_supply(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     order: FbsOrder,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> FbsSupply | None:
     """Remove cancelled order from FBS supply and fix packaging task totals."""
     if order.supply_id is None:
@@ -238,7 +240,12 @@ async def detach_cancelled_order_from_supply(
         return supply
 
     if supply.status == FBS_SUPPLY_STATUS_ASSEMBLING:
-        return await try_promote_fbs_supply_if_ready(session, tenant_id, supply.id)
+        return await try_promote_fbs_supply_if_ready(
+            session,
+            tenant_id,
+            supply.id,
+            actor_user_id=actor_user_id,
+        )
     return supply
 
 
@@ -688,6 +695,8 @@ async def try_promote_fbs_supply_if_ready(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> FbsSupply | None:
     supply = await _load_supply(
         session,
@@ -725,24 +734,38 @@ async def sync_fbs_supply_on_packaging_done(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     packaging_task_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> FbsSupply | None:
     supply = await _load_supply_by_packaging_task(
         session, tenant_id, packaging_task_id, with_orders=True
     )
     if supply is None:
         return None
-    return await try_promote_fbs_supply_if_ready(session, tenant_id, supply.id)
+    return await try_promote_fbs_supply_if_ready(
+        session,
+        tenant_id,
+        supply.id,
+        actor_user_id=actor_user_id,
+    )
 
 
 async def sync_fbs_supply_after_order_marking_update(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     order_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> FbsSupply | None:
     order = await session.get(FbsOrder, order_id)
     if order is None or order.tenant_id != tenant_id or order.supply_id is None:
         return None
-    return await try_promote_fbs_supply_if_ready(session, tenant_id, order.supply_id)
+    return await try_promote_fbs_supply_if_ready(
+        session,
+        tenant_id,
+        order.supply_id,
+        actor_user_id=actor_user_id,
+    )
 
 
 async def _load_supply_by_packaging_task(

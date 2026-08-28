@@ -170,6 +170,9 @@ async def reconcile(*, apply: bool) -> dict[str, object]:
                         movement_type=MOVEMENT_TYPE_FBS_SHIPMENT,
                         transfer_group_id=group_id,
                         deduct_prefer="packed",
+                        # Сверочный скрипт запускают из консоли: пользователя
+                        # системы здесь нет, автора выдумывать нельзя.
+                        actor_user_id=None,
                     )
                     remaining -= deduct
                 if remaining != 0:

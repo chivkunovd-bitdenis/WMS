@@ -398,6 +398,7 @@ async def test_scan_barcode_into_box_service_wrapper_parity(
     )
     reg = await async_client.get("/auth/me", headers=h)
     tenant_id = uuid.UUID(reg.json()["tenant_id"])
+    actor_user_id = uuid.UUID(reg.json()["id"])
 
     box = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes",
@@ -420,6 +421,7 @@ async def test_scan_barcode_into_box_service_wrapper_parity(
             box_id,
             barcode=loc_barcode,
             storage_location_id=None,
+            actor_user_id=actor_user_id,
         )
         assert loc_result.kind == "location"
 
@@ -429,6 +431,7 @@ async def test_scan_barcode_into_box_service_wrapper_parity(
             box_id,
             barcode=E2E_BARCODE,
             storage_location_id=uuid.UUID(loc_id),
+            actor_user_id=actor_user_id,
         )
         assert prod_result.kind == "product"
         assert prod_result.picked_qty == 1

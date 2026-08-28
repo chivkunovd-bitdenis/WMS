@@ -682,6 +682,7 @@ async def delete_location_route(
             warehouse_id,
             location_id,
             move_stock_to=move_stock_to,
+            actor_user_id=user.id,
         )
     except CatalogError as exc:
         if exc.code == "location_not_found":

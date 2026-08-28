@@ -38,6 +38,7 @@ from app.services import inventory_service
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str, uuid.UUID]:
@@ -154,6 +155,7 @@ async def _seed_pick_for_order(
         from_storage_location_id=source_location_id,
         to_storage_location_id=sorting.id,
         quantity=1,
+        actor_user_id=None,
     )
     now = datetime.now(UTC)
     session.add(
@@ -227,6 +229,7 @@ async def test_fbs_pack_picked_item_keeps_packed_stock_until_delivery(
             storage_location_id=source_location_id,
             quantity_delta=1,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await session.commit()
         order_id = order.id
@@ -365,6 +368,7 @@ async def test_fbs_pack_rejected_without_pick(
             storage_location_id=sorting.id,
             quantity_delta=1,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await session.commit()
 
@@ -425,6 +429,7 @@ async def test_fbs_pack_same_sku_two_orders_third_rejected(
             storage_location_id=source_location_id,
             quantity_delta=2,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         for idx, wb_id in enumerate((930021, 930022)):
             order, _ = await upsert_order_from_wb_row(
@@ -564,6 +569,7 @@ async def test_fbs_pack_succeeds_when_line_balance_already_marked_packed(
             storage_location_id=source_location_id,
             quantity_delta=1,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await session.commit()
         order_id = order.id
@@ -684,6 +690,7 @@ async def test_fbs_pack_continues_when_location_has_no_stock_at_all(
             storage_location_id=source_location_id,
             quantity_delta=1,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await session.commit()
         order_id = order.id
@@ -852,6 +859,7 @@ async def test_ozon_multi_product_packaging_requires_all_posting_units(
                 storage_location_id=source_location_id,
                 quantity_delta=quantity,
                 movement_type="inbound_intake",
+                actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
             )
         await session.commit()
         supply_id = supply.id

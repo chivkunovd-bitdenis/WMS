@@ -61,6 +61,7 @@ from app.services.wb_marketplace_orders_service import (
     upsert_order_from_wb_row,
 )
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
@@ -77,6 +78,14 @@ async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str],
     assert reg.status_code == 200, reg.text
     headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
     return headers, suffix
+
+
+async def _actor_user_id(
+    async_client: AsyncClient, headers: dict[str, str]
+) -> uuid.UUID:
+    response = await async_client.get("/auth/me", headers=headers)
+    assert response.status_code == 200, response.text
+    return uuid.UUID(response.json()["id"])
 
 
 async def _setup_seller_with_token(
@@ -178,6 +187,7 @@ async def test_cancel_in_assembling_detaches_and_adjusts_packaging(
             storage_location_id=sorting.id,
             quantity_delta=10,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await seed_fbs_warehouse_binding(
             session,
@@ -420,6 +430,7 @@ async def test_concurrent_reserve_only_one_succeeds(
             storage_location_id=sorting.id,
             quantity_delta=1,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await seed_fbs_warehouse_binding(
             session,
@@ -471,6 +482,7 @@ async def test_sync_order_statuses_paginates_past_500(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     headers, suffix = await _register_ff_admin(async_client)
+    actor_user_id = await _actor_user_id(async_client, headers)
     seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
         async_client, headers, suffix
     )
@@ -524,7 +536,12 @@ async def test_sync_order_statuses_paginates_past_500(
     async with SessionLocal() as session:
         async with httpx.AsyncClient() as http_client:
             updated = await sync_order_statuses(
-                session, tenant_id, seller_uuid, http_client, "token"
+                session,
+                tenant_id,
+                seller_uuid,
+                http_client,
+                "token",
+                actor_user_id=actor_user_id,
             )
         await session.commit()
 
@@ -555,6 +572,7 @@ async def test_promote_packed_requires_marking_ok(
     async_client: AsyncClient,
 ) -> None:
     headers, suffix = await _register_ff_admin(async_client)
+    actor_user_id = await _actor_user_id(async_client, headers)
     seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
         async_client, headers, suffix
     )
@@ -594,6 +612,7 @@ async def test_promote_packed_requires_marking_ok(
             storage_location_id=sorting.id,
             quantity_delta=1,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         session.add(
             PackagingTaskLine(
@@ -658,7 +677,9 @@ async def test_promote_packed_requires_marking_ok(
         )
         await session.flush()
 
-        blocked = await try_promote_fbs_supply_if_ready(session, tenant_id, supply_id)
+        blocked = await try_promote_fbs_supply_if_ready(
+            session, tenant_id, supply_id, actor_user_id=actor_user_id
+        )
         assert blocked is not None
         assert blocked.status == FBS_SUPPLY_STATUS_ASSEMBLING
 
@@ -670,7 +691,9 @@ async def test_promote_packed_requires_marking_ok(
         marking.meta_status = META_STATUS_ACCEPTED
         await session.flush()
 
-        promoted = await try_promote_fbs_supply_if_ready(session, tenant_id, supply_id)
+        promoted = await try_promote_fbs_supply_if_ready(
+            session, tenant_id, supply_id, actor_user_id=actor_user_id
+        )
         assert promoted is not None
         assert promoted.status == "packed"
 
@@ -681,6 +704,7 @@ async def test_cancel_in_packed_supply_demotes_to_assembling(
     async_client: AsyncClient,
 ) -> None:
     headers, suffix = await _register_ff_admin(async_client)
+    actor_user_id = await _actor_user_id(async_client, headers)
     seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
         async_client, headers, suffix
     )
@@ -750,7 +774,9 @@ async def test_cancel_in_packed_supply_demotes_to_assembling(
         order = await session.get(FbsOrder, cancel_order_id)
         assert order is not None
         order.status = FBS_ORDER_STATUS_CANCELLED
-        await detach_cancelled_order_from_supply(session, tenant_id, order)
+        await detach_cancelled_order_from_supply(
+            session, tenant_id, order, actor_user_id=actor_user_id
+        )
         await session.commit()
 
     async with SessionLocal() as session:
@@ -770,6 +796,7 @@ async def test_sync_order_statuses_advances_sorted_to_sold(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     headers, suffix = await _register_ff_admin(async_client)
+    actor_user_id = await _actor_user_id(async_client, headers)
     seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
         async_client, headers, suffix
     )
@@ -815,7 +842,12 @@ async def test_sync_order_statuses_advances_sorted_to_sold(
     async with SessionLocal() as session:
         async with httpx.AsyncClient() as http_client:
             updated = await sync_order_statuses(
-                session, tenant_id, seller_uuid, http_client, "token"
+                session,
+                tenant_id,
+                seller_uuid,
+                http_client,
+                "token",
+                actor_user_id=actor_user_id,
             )
         await session.commit()
 
@@ -837,6 +869,7 @@ async def test_fbs_shipment_uses_each_order_fulfillment_location(
     async_client: AsyncClient,
 ) -> None:
     headers, suffix = await _register_ff_admin(async_client)
+    actor_user_id = await _actor_user_id(async_client, headers)
     seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
         async_client, headers, suffix
     )
@@ -922,6 +955,7 @@ async def test_fbs_shipment_uses_each_order_fulfillment_location(
                 storage_location_id=location.id,
                 quantity_delta=1,
                 movement_type="inbound_intake",
+                actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
             )
             orders.append(order)
         await session.flush()
@@ -933,7 +967,7 @@ async def test_fbs_shipment_uses_each_order_fulfillment_location(
                 .options(selectinload(FbsSupply.orders))
             )
         ).scalar_one()
-        await _write_off_delivered_orders_once(session, supply, orders)
+        await _write_off_delivered_orders_once(session, supply, orders, None)
         ledgers = list(
             (
                 await session.execute(
@@ -948,8 +982,12 @@ async def test_fbs_shipment_uses_each_order_fulfillment_location(
         }
         assert all(ledger.shipment_movement_id is not None for ledger in ledgers)
 
-        await _apply_wb_status_to_order(session, orders[0], "canceled")
-        await _apply_wb_status_to_order(session, orders[0], "canceled")
+        await _apply_wb_status_to_order(
+            session, orders[0], "canceled", actor_user_id=actor_user_id
+        )
+        await _apply_wb_status_to_order(
+            session, orders[0], "canceled", actor_user_id=actor_user_id
+        )
         await session.flush()
         movements = list(
             (

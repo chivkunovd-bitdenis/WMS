@@ -8,7 +8,7 @@ import hmac
 import json
 import uuid
 from collections import defaultdict
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, cast
 
@@ -52,7 +52,7 @@ def moscow_interval(date_from: date, date_to: date, *, today: date | None = None
 
 
 def _as_moscow(value: datetime) -> datetime:
-    return value.replace(tzinfo=MOSCOW) if value.tzinfo is None else value.astimezone(MOSCOW)
+    return value.replace(tzinfo=UTC).astimezone(MOSCOW) if value.tzinfo is None else value.astimezone(MOSCOW)
 
 
 def _source_target(source_type: str, source_id: uuid.UUID) -> dict[str, str] | None:
@@ -354,7 +354,9 @@ async def _storage_matrix_rates(
     return list(rows.all())
 
 
-def _storage_rate_for_day(rates: list[BillingTariffVersionV2], day: date) -> int | None:
+def storage_tariff_for_day(
+    rates: list[BillingTariffVersionV2], day: date
+) -> BillingTariffVersionV2 | None:
     """Ставка на конкретный день: своя у селлера бьёт общую независимо от дат.
 
     Внутри одного уровня точности решает дата: побеждает последняя версия,
@@ -363,7 +365,7 @@ def _storage_rate_for_day(rates: list[BillingTariffVersionV2], day: date) -> int
     day_end = datetime.combine(day, time.max, MOSCOW)
     day_start = datetime.combine(day, time.min, MOSCOW)
     best: tuple[int, datetime] | None = None
-    best_rate: int | None = None
+    best_row: BillingTariffVersionV2 | None = None
     for row in rates:
         started = _as_moscow(row.valid_from_at)
         if started > day_end:
@@ -374,8 +376,14 @@ def _storage_rate_for_day(rates: list[BillingTariffVersionV2], day: date) -> int
         candidate = (specificity, started)
         if best is None or (specificity, -started.timestamp()) < (best[0], -best[1].timestamp()):
             best = candidate
-            best_rate = row.rate
-    return best_rate
+            best_row = row
+    return best_row
+
+
+def _storage_rate_for_day(rates: list[BillingTariffVersionV2], day: date) -> int | None:
+    """Compatibility wrapper for the report's integer amount calculation."""
+    tariff = storage_tariff_for_day(rates, day)
+    return tariff.rate if tariff is not None else None
 
 
 async def _storage_row(

@@ -69,6 +69,8 @@ class FbsCancellationError(Exception):
 async def reverse_fbs_shipment_if_needed(
     session: AsyncSession,
     order: FbsOrder,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> bool:
     """Reverse one physically written-off unit exactly once; caller owns the order lock."""
     stmt = (
@@ -109,6 +111,7 @@ async def reverse_fbs_shipment_if_needed(
             storage_location_id=storage_location_id,
             quantity_delta=quantity,
             movement_type=MOVEMENT_TYPE_FBS_SHIPMENT,
+            actor_user_id=actor_user_id,
         )
         if reversal_movement is None:
             reversal_movement = movement
@@ -146,6 +149,8 @@ async def cancel_order(
     tenant_id: uuid.UUID,
     order_id: uuid.UUID,
     http_client: httpx.AsyncClient,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> FbsOrder:
     stmt = (
         select(FbsOrder)
@@ -213,12 +218,21 @@ async def cancel_order(
 
     order.status = FBS_ORDER_STATUS_CANCELLED
     order.wb_status = "cancelled"
-    await reverse_fbs_shipment_if_needed(session, order)
+    await reverse_fbs_shipment_if_needed(
+        session,
+        order,
+        actor_user_id=actor_user_id,
+    )
     from app.services.fbs_packaging_integration_service import (
         detach_cancelled_order_from_supply,
     )
 
-    await detach_cancelled_order_from_supply(session, tenant_id, order)
+    await detach_cancelled_order_from_supply(
+        session,
+        tenant_id,
+        order,
+        actor_user_id=actor_user_id,
+    )
     await _release_reservation(session, order)
     await session.flush()
     return order
@@ -229,6 +243,8 @@ async def sync_seller_order_statuses(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     http_client: httpx.AsyncClient,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> int:
     try:
         api_token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
@@ -240,7 +256,14 @@ async def sync_seller_order_statuses(
             retryable=exc.retryable,
         ) from exc
     try:
-        updated = await sync_order_statuses(session, tenant_id, seller_id, http_client, api_token)
+        updated = await sync_order_statuses(
+            session,
+            tenant_id,
+            seller_id,
+            http_client,
+            api_token,
+            actor_user_id=actor_user_id,
+        )
         await session.flush()
         return updated
     except WbMarketplaceOrdersError as exc:

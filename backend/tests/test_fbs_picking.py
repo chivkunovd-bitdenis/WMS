@@ -32,6 +32,7 @@ from app.models.storage_location import StorageLocation
 from app.services import inventory_service
 from app.services.sorting_location_service import get_or_create_sorting_location
 from tests.fbs_seed_helpers import seed_fbs_warehouse_binding
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str, uuid.UUID]:
@@ -138,6 +139,7 @@ async def _seed_pick_supply(
                 storage_location_id=location_id,
                 quantity_delta=stock_qty,
                 movement_type="inbound_intake",
+                actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
             )
         await get_or_create_sorting_location(session, tenant_id, warehouse_id)
         supply = FbsSupply(
@@ -624,6 +626,7 @@ async def test_fbs_pick_rejects_cross_seller_product(async_client: AsyncClient) 
             storage_location_id=location_id,
             quantity_delta=5,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await session.commit()
 

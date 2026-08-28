@@ -393,7 +393,12 @@ async def sync_marking_statuses_for_assembling_supplies(
                 if not returned_rows:
                     logger.warning("fbs autopoll marking response missed order %s", order.id)
                     continue
-                await _notify_supply_marking_update(session, target.tenant_id, order.id)
+                await _notify_supply_marking_update(
+                    session,
+                    target.tenant_id,
+                    order.id,
+                    actor_user_id=None,
+                )
                 synced += 1
             except (FbsMarkingError, WildberriesClientError) as exc:
                 logger.warning("fbs autopoll marking sync skipped order %s: %s", order.id, exc)
@@ -439,6 +444,7 @@ async def sync_fbs_order_statuses_for_seller(
         target.tenant_id,
         target.seller_id,
         http_client,
+        actor_user_id=None,
     )
     await sync_marking_statuses_for_assembling_supplies(session, target, http_client)
     await repair_pending_supplies(session, target, http_client)

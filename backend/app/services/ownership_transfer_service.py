@@ -605,6 +605,9 @@ async def apply_ownership_transfer_plan(
     *,
     approved_token: str,
     plan: OwnershipTransferPlan,
+    # Автор указывается явно и без значения по умолчанию: маршрута под передачу
+    # владения ещё нет, и когда он появится, забыть про автора будет нельзя.
+    actor_user_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
     if plan.blockers:
         raise OwnershipTransferError("plan_has_blockers")
@@ -688,6 +691,7 @@ async def apply_ownership_transfer_plan(
                     quantity_delta=-allocation.quantity,
                     movement_type=MOVEMENT_TYPE_OWNERSHIP_OUT,
                     transfer_group_id=group_id,
+                    actor_user_id=actor_user_id,
                 )
                 await inventory_service.record_movement_and_adjust_balance(
                     session,
@@ -697,6 +701,7 @@ async def apply_ownership_transfer_plan(
                     quantity_delta=allocation.quantity,
                     movement_type=MOVEMENT_TYPE_OWNERSHIP_IN,
                     transfer_group_id=group_id,
+                    actor_user_id=actor_user_id,
                 )
                 await _move_packed_credit(
                     session,
@@ -717,6 +722,7 @@ async def apply_ownership_transfer_plan(
                 quantity_delta=row.receipt_quantity,
                 movement_type=MOVEMENT_TYPE_OWNERSHIP_RECEIPT,
                 inbound_intake_line_id=line.id,
+                actor_user_id=actor_user_id,
             )
 
         for code_id in row.marking_code_ids:
