@@ -80,7 +80,7 @@ export function ObjectsTree({
   const alreadyColumn: Column<ObjectRow> = {
       key: 'already',
       header: 'Уже лежит',
-      width: 104,
+      width: 96,
       render: (row) => {
         if (row.kind !== 'goods') return null
         if (row.alreadyAt.length === 0) {
@@ -114,7 +114,7 @@ export function ObjectsTree({
   const barcodeColumn: Column<ObjectRow> = {
       key: 'barcode',
       header: 'ШК',
-      width: 104,
+      width: 116,
       render: (row) => (
         <Typography
           variant="body2"
@@ -139,7 +139,7 @@ export function ObjectsTree({
       render: (row) => (
         <Stack
           direction="row"
-          spacing={0.75}
+          spacing={0.5}
           sx={{
             alignItems: 'center',
             minHeight: ROW_HEIGHT,
@@ -162,7 +162,7 @@ export function ObjectsTree({
               .join(', '),
           }}
         >
-          <Box sx={{ width: 24, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+          <Box sx={{ width: 22, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
             {row.kind === 'object' && row.expandable ? (
               <IconAction
                 title={row.expanded ? `Свернуть ${objectTitle(row.object)}` : `Раскрыть ${objectTitle(row.object)}`}
@@ -186,7 +186,7 @@ export function ObjectsTree({
               </Tooltip>
             )}
           </Box>
-          <Box sx={{ width: 24, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+          <Box sx={{ width: 22, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
             {row.kind === 'object' ? (
               row.object.kind === 'pallet' ? (
                 <LayersOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
@@ -240,7 +240,7 @@ export function ObjectsTree({
     {
       key: 'actions',
       header: '',
-      width: compact ? 78 : 104,
+      width: compact ? 74 : 96,
       align: 'right',
       render: (row) => {
         const holder = row.kind === 'object' ? row.object.holder : row.line.holder
