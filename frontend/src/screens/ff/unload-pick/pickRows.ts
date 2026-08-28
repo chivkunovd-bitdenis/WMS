@@ -1,6 +1,7 @@
 import { isCellRef, refId } from '../sorting-objects/objectsStub'
 import {
   KIND_TITLE,
+  PRODUCTS,
   cellRef,
   objRef,
   productById,
@@ -337,13 +338,15 @@ export function rowsOf(
   objects: WarehouseObject[],
   cells: Cell[],
   picked: PickedMap,
+  products: PickProduct[] = PRODUCTS,
 ): PickRow[] {
   return plan.map((line) => {
     const places = placesOf(line.productId, stock, objects, cells, picked)
     const taken = places.reduce((sum, place) => sum + place.picked, 0)
     return {
       key: line.id,
-      product: productById(line.productId),
+      product:
+        products.find((product) => product.id === line.productId) ?? productById(line.productId),
       plan: line.plan,
       picked: taken,
       left: Math.max(0, line.plan - taken),

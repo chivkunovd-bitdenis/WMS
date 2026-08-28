@@ -38,6 +38,13 @@ import {
   type PickRow,
   type PickedMap,
 } from './pickRows'
+import type {
+  Cell,
+  GoodsLine,
+  PickProduct,
+  PlanLine,
+  WarehouseObject,
+} from './pickStub'
 
 // Подбор на отгрузку.
 //
@@ -54,26 +61,89 @@ import {
 
 type PickOp = { productId: string; placeKey: string; qty: number }
 
+export type UnloadPickScanResult =
+  | {
+      kind: 'location'
+      storageLocationId: string
+      locationCode: string
+    }
+  | {
+      kind: 'product'
+      storageLocationId: string | null
+      productId: string
+      sku: string
+      productName: string
+      pickedQty: number
+      allocationQuantity: number
+    }
+
+type UnloadPickScreenProps = {
+  onNote: (note: string) => void
+  document?: string
+  seller?: string
+  products?: PickProduct[]
+  plan?: PlanLine[]
+  stock?: GoodsLine[]
+  objects?: WarehouseObject[]
+  cells?: Cell[]
+  initialPicked?: PickedMap
+  busy?: boolean
+  onSetPicked?: (payload: {
+    productId: string
+    place: PickPlace
+    quantity: number
+  }) => void | Promise<void>
+  onScan?: (payload: {
+    barcode: string
+    sourceKey: string | null
+  }) => Promise<UnloadPickScanResult>
+  onPause?: () => void
+  onComplete?: () => void
+}
+
 /** «В 3 местах», «В 1 месте», «Нет на складе» — колонка «Где лежит» (§2). */
 function placesCountLabel(count: number): string {
   if (count === 0) return 'Нет на складе'
   return count === 1 ? 'В 1 месте' : `В ${count} местах`
 }
 
-export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void }) {
-  const [picked, setPicked] = useState<PickedMap>({})
+export function UnloadPickScreen({
+  onNote,
+  document: documentProp,
+  seller: sellerProp,
+  products: productsProp,
+  plan: planProp,
+  stock: stockProp,
+  objects: objectsProp,
+  cells: cellsProp,
+  initialPicked,
+  busy = false,
+  onSetPicked,
+  onScan,
+  onPause,
+  onComplete,
+}: UnloadPickScreenProps) {
+  const document = documentProp ?? DOCUMENT
+  const seller = sellerProp ?? SELLER
+  const products = productsProp ?? PRODUCTS
+  const plan = planProp ?? PLAN
+  const stock = stockProp ?? ALL_STOCK
+  const objects = objectsProp ?? OBJECTS
+  const cells = cellsProp ?? PICK_CELLS
+  const [picked, setPicked] = useState<PickedMap>(() => ({ ...(initialPicked ?? {}) }))
   const [history, setHistory] = useState<PickOp[]>([])
   const [source, setSource] = useState<string | null>(null)
+  const [sourceLabel, setSourceLabel] = useState<string | null>(null)
   const [scanValue, setScanValue] = useState('')
   const [scanError, setScanError] = useState<string | null>(null)
   const [scanNotice, setScanNotice] = useState<string | null>(null)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
-  const rows = rowsOf(PLAN, ALL_STOCK, OBJECTS, PICK_CELLS, picked)
+  const rows = rowsOf(plan, stock, objects, cells, picked, products)
   const planQty = rows.reduce((sum, row) => sum + row.plan, 0)
   const pickedQty = rows.reduce((sum, row) => sum + Math.min(row.picked, row.plan), 0)
   const leftQty = planQty - pickedQty
-  const sourceText = source ? placeLabel(source, OBJECTS, PICK_CELLS) : null
+  const sourceText = source ? (sourceLabel ?? placeLabel(source, objects, cells)) : null
 
   function expandRow(rowKey: string) {
     setExpandedIds((current) => (current.has(rowKey) ? current : new Set(current).add(rowKey)))
@@ -113,17 +183,19 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
   ) {
     if (delta === 0) return
     const key = pickKey(row.product.id, place.key)
-    setPicked((current) => ({ ...current, [key]: Math.max(0, (current[key] ?? 0) + delta) }))
+    const nextQuantity = Math.max(0, place.picked + delta)
+    setPicked((current) => ({ ...current, [key]: nextQuantity }))
+    void onSetPicked?.({ productId: row.product.id, place, quantity: nextQuantity })
     setScanError(null)
     if (delta > 0) {
       // Только снятие ложится в историю отмены: ручное уменьшение — это уже
       // сама по себе поправка оператора, отменять поправку поправкой незачем.
       setHistory((current) => [...current, { productId: row.product.id, placeKey: place.key, qty: delta }])
       if (fromScan) setScanNotice(`${row.product.sku}: снято ${delta} шт — ${place.label}`)
-      onNote(`Заглушка: ${row.product.sku}, снято ${delta} шт — ${place.label}`)
+      onNote(`${row.product.sku}: снято ${delta} шт — ${place.label}`)
     } else {
       if (fromScan) setScanNotice(`${row.product.sku}: возврат ${Math.abs(delta)} шт — ${place.label}`)
-      onNote(`Заглушка: возврат ${Math.abs(delta)} шт — ${place.label}`)
+      onNote(`${row.product.sku}: возврат ${Math.abs(delta)} шт — ${place.label}`)
     }
   }
 
@@ -145,38 +217,95 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
     if (index < 0) return
     const operation = history[index]
     const key = pickKey(operation.productId, operation.placeKey)
-    setPicked((current) => ({ ...current, [key]: Math.max(0, (current[key] ?? 0) - operation.qty) }))
-    setHistory((current) => current.filter((_, position) => position !== index))
     const place = row.places.find((one) => one.key === operation.placeKey)
+    if (!place) return
+    const nextQuantity = Math.max(0, place.picked - operation.qty)
+    setPicked((current) => ({ ...current, [key]: nextQuantity }))
+    void onSetPicked?.({ productId: row.product.id, place, quantity: nextQuantity })
+    setHistory((current) => current.filter((_, position) => position !== index))
     setScanNotice(`${row.product.sku}: снятие ${operation.qty} шт отменено`)
-    onNote(`Заглушка: возврат ${operation.qty} шт — ${place?.label ?? 'место не найдено'}`)
+    onNote(`Возврат ${operation.qty} шт — ${place.label}`)
   }
 
-  function handleScan(code: string) {
+  async function handleServerScan(code: string) {
+    if (!onScan) return false
+    try {
+      const result = await onScan({ barcode: code, sourceKey: source })
+      if (result.kind === 'location') {
+        const reference = cellRef(result.storageLocationId)
+        setSource(reference)
+        setSourceLabel(result.locationCode)
+        setScanError(null)
+        setScanNotice(`Ячейка ${result.locationCode} — пикните товар, который снимаете`)
+        expandRows(rowsWithin(rows, reference, objects).map((one) => one.key))
+        return true
+      }
+
+      const row = rows.find((one) => one.product.id === result.productId)
+      if (!row) {
+        setScanNotice(null)
+        setScanError(`${result.sku} нет в плане этой отгрузки`)
+        return true
+      }
+      const place = result.storageLocationId
+        ? row.places.find((one) => one.key === cellRef(result.storageLocationId))
+        : row.places[0]
+      if (!place) {
+        setScanNotice(null)
+        setScanError(`${result.sku} — сервер не вернул место снятия`)
+        return true
+      }
+      const previous = place.picked
+      const key = pickKey(result.productId, place.key)
+      setPicked((current) => ({ ...current, [key]: result.allocationQuantity }))
+      const added = Math.max(0, result.allocationQuantity - previous)
+      if (added > 0) {
+        setHistory((current) => [
+          ...current,
+          { productId: result.productId, placeKey: place.key, qty: added },
+        ])
+      }
+      expandRow(row.key)
+      setScanError(null)
+      setScanNotice(`${result.sku}: снято ${added || 1} шт — ${place.label}`)
+      onNote(`${result.sku}: снято ${added || 1} шт — ${place.label}`)
+      return true
+    } catch (err) {
+      setScanNotice(null)
+      setScanError(err instanceof Error ? err.message : 'Не удалось выполнить скан')
+      return true
+    }
+  }
+
+  async function handleScan(code: string) {
     setScanValue('')
-    const cell = PICK_CELLS.find(
+    if (await handleServerScan(code)) return
+
+    const cell = cells.find(
       (one) => one.barcode === code || one.code.toLowerCase() === code.toLowerCase(),
     )
     if (cell) {
       const reference = cellRef(cell.id)
       setSource(reference)
+      setSourceLabel(cell.code)
       setScanError(null)
       setScanNotice(`Ячейка ${cell.code} — пикните товар, который снимаете`)
-      expandRows(rowsWithin(rows, reference, OBJECTS).map((one) => one.key))
+      expandRows(rowsWithin(rows, reference, objects).map((one) => one.key))
       return
     }
-    const object = OBJECTS.find(
+    const object = objects.find(
       (one) => one.barcode === code || one.code.toLowerCase() === code.toLowerCase(),
     )
     if (object) {
       const reference = objRef(object.id)
       setSource(reference)
+      setSourceLabel(placeLabel(reference, objects, cells))
       setScanError(null)
-      setScanNotice(`${placeLabel(reference, OBJECTS, PICK_CELLS)} — пикните товар`)
-      expandRows(rowsWithin(rows, reference, OBJECTS).map((one) => one.key))
+      setScanNotice(`${placeLabel(reference, objects, cells)} — пикните товар`)
+      expandRows(rowsWithin(rows, reference, objects).map((one) => one.key))
       return
     }
-    const product = PRODUCTS.find(
+    const product = products.find(
       (one) => one.barcode === code || one.sku.toLowerCase() === code.toLowerCase(),
     )
     if (!product) {
@@ -195,7 +324,7 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
       setScanError(`${product.sku} — по плану уже всё снято`)
       return
     }
-    const found = placesUnder(row.places, source, OBJECTS)
+    const found = placesUnder(row.places, source, objects)
     if (found.length === 0) {
       setScanNotice(null)
       setScanError(
@@ -312,7 +441,7 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
     <Box data-testid="unload-pick-screen">
       <ScreenHeader
         title="Подбор на отгрузку"
-        purpose={`${DOCUMENT}. Продавец ${SELLER}. Снимаем товар с ячеек, палет, коробов и грузомест.`}
+        purpose={`${document}. Продавец ${seller}. Снимаем товар с ячеек, палет, коробов и грузомест.`}
       />
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
@@ -325,6 +454,7 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
             }}
             onScan={handleScan}
             expects={source ? 'товар, который снимаете' : 'место или товар'}
+            busy={busy}
             error={scanError}
             notice={scanNotice}
             testId="pick-scan"
@@ -341,6 +471,7 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
                 title="Забыть место — искать товар по всему складу"
                 onClick={() => {
                   setSource(null)
+                  setSourceLabel(null)
                   setScanNotice(null)
                 }}
                 testId="pick-source-clear"
@@ -394,6 +525,9 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
               row={row}
               highlightedKey={source}
               onQtyChange={(place, next) => handlePlaceQtyChange(row, place, next)}
+              objects={objects}
+              cells={cells}
+              busy={busy}
             />
           ),
         }}
@@ -401,12 +535,28 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
 
       <Stack direction="row" sx={{ mt: 2, justifyContent: 'flex-end' }}>
         <ActionGroup>
-          <SecondaryAction onClick={() => onNote('Заглушка: подбор отложен')} data-testid="pick-pause">
+          <SecondaryAction
+            onClick={() => {
+              onNote('Подбор отложен')
+              onPause?.()
+            }}
+            disabled={busy}
+            data-testid="pick-pause"
+          >
             Отложить
           </SecondaryAction>
           <PrimaryAction
-            onClick={() => onNote('Заглушка: подбор завершён')}
-            disabledReason={leftQty > 0 ? 'Собран не весь план отгрузки' : undefined}
+            onClick={() => {
+              onNote('Подбор завершён')
+              onComplete?.()
+            }}
+            disabledReason={
+              busy
+                ? 'Сохраняем последнее снятие'
+                : leftQty > 0
+                  ? 'Собран не весь план отгрузки'
+                  : undefined
+            }
             data-testid="pick-complete"
           >
             Завершить подбор
