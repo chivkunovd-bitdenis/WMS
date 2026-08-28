@@ -18,7 +18,11 @@ from app.api.deps import (
 from app.core.roles import FULFILLMENT_ADMIN
 from app.db.session import get_db
 from app.models.user import User
-from app.services import inventory_service, stock_direction_service
+from app.services import (
+    inventory_service,
+    stock_direction_service,
+    tenant_settings_service,
+)
 from app.services.sorting_location_service import SORTING_LOCATION_CODE
 from app.services.staff_permissions_service import PERM_INVENTORY
 
@@ -128,6 +132,9 @@ async def get_inventory_balances_summary(
         product_ids,
         warehouse_id=warehouse_id,
     )
+    address_enabled = await tenant_settings_service.is_address_storage_enabled(
+        session, user.tenant_id
+    )
     return [
         (
             lambda fbo_reserved, dist: InventoryBalanceRowOut(
@@ -141,13 +148,15 @@ async def get_inventory_balances_summary(
                 quantity=qty,
                 quantity_unpacked=unp,
                 quantity_packed=pck,
-                quantity_in_sorting=sort_qty,
-                quantity_in_storage=max(0, qty - sort_qty),
+                quantity_in_sorting=sort_qty if address_enabled else 0,
+                quantity_in_storage=(
+                    max(0, qty - sort_qty) if address_enabled else qty
+                ),
                 reserved=rsv,
                 available=(
                     max(0, dist.quantity_free_fbo - fbo_reserved)
                     if dist.quantity_fbs > 0 or dist.quantity_reserved > 0
-                    else max(0, qty - sort_qty - rsv)
+                    else max(0, qty - (sort_qty if address_enabled else 0) - rsv)
                 ),
                 quantity_fbs=dist.quantity_fbs,
                 quantity_reserved_directions=dist.quantity_reserved,
@@ -220,6 +229,10 @@ async def get_product_locations_in_warehouse(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="forbidden",
         )
+    if not await tenant_settings_service.is_address_storage_enabled(
+        session, user.tenant_id
+    ):
+        return []
     rows = await inventory_service.list_locations_for_product_in_warehouse(
         session,
         user.tenant_id,
@@ -246,6 +259,13 @@ async def get_inventory_balances(
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
 ) -> list[InventoryBalanceRowOut]:
     await assert_inventory_read_access(session, user)
+    if not await tenant_settings_service.is_address_storage_enabled(
+        session, user.tenant_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="address_storage_disabled",
+        )
     rows = await inventory_service.list_balances_at_location(
         session,
         user.tenant_id,
