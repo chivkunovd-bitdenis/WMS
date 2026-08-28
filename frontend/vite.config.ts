@@ -74,8 +74,6 @@ export default defineConfig({
         uiKit: 'ui-kit.html',
         warehouseMap: 'warehouse-map.html',
         moveLab: 'move-lab.html',
-        sorting: 'sorting.html',
-        sortingScale: 'sorting-scale.html',
         sortingObjects: 'sorting-objects.html',
       },
     },
