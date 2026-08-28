@@ -1301,15 +1301,25 @@ def _empty_supply_link_result(**overrides: Any) -> dict[str, Any]:
     return result
 
 
-async def link_confirmed_orders_to_wb_supplies(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    seller_id: uuid.UUID,
+async def fetch_seller_supplies_map(
     http_client: httpx.AsyncClient,
+    *,
     api_token: str,
-) -> dict[str, Any]:
-    # Fetch all supplies from WB once, cache in a dictionary
-    supplies_dict: dict[str, tuple[str | None, bool]] = {}
+    seller_id: uuid.UUID,
+) -> dict[str, tuple[str | None, bool]]:
+    """Все поставки селлера одним списком: `{wb_supply_id: (имя, закрыта ли)}`.
+
+    У WB два способа узнать, закрыта ли поставка: спросить про каждую отдельно
+    (`GET /supplies/{id}`) или забрать список целиком. Поштучный опрос упирается
+    в лимит запросов: на бою у селлера с восемью незакрытыми поставками часть
+    ответов приходила как 429, и эти поставки висели «в работе» сутками, потому
+    что следующий проход повторял ту же очередь. Список стоит один запрос на
+    селлера независимо от числа поставок, поэтому он и есть основной источник.
+
+    Список может не доехать (сеть, лимит, ошибка WB) — тогда возвращается пустая
+    карта, а вызывающий сам решает, спрашивать ли про поставку поштучно.
+    """
+    supplies_map: dict[str, tuple[str | None, bool]] = {}
     try:
         next_cursor: int | None = None
         for _page in range(MAX_SUPPLIES_PAGES):
@@ -1319,7 +1329,7 @@ async def link_confirmed_orders_to_wb_supplies(
                     api_token=api_token,
                     next_cursor=next_cursor,
                 )
-                supplies_dict.update(page.supplies)
+                supplies_map.update(page.supplies)
                 # WB отдаёт курсор всегда, даже когда данные кончились: по одному
                 # только курсору цикл крутил все MAX_SUPPLIES_PAGES страниц на каждого
                 # селлера. На бою это 10 запросов × 20 селлеров за проход и 429
@@ -1343,6 +1353,19 @@ async def link_confirmed_orders_to_wb_supplies(
             type(exc).__name__,
             exc_info=True,
         )
+    return supplies_map
+
+
+async def link_confirmed_orders_to_wb_supplies(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    http_client: httpx.AsyncClient,
+    api_token: str,
+) -> dict[str, Any]:
+    supplies_dict = await fetch_seller_supplies_map(
+        http_client, api_token=api_token, seller_id=seller_id
+    )
 
     # Periodic sync: update non-terminal supplies that are done in WB
     # using supplies_dict

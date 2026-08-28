@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from contextlib import suppress
 from dataclasses import dataclass
@@ -32,6 +33,7 @@ from app.services.wb_marketplace_orders_service import (
     _apply_wb_status_to_order,
     _supplier_status_from_row,
     _wb_status_from_row,
+    fetch_seller_supplies_map,
 )
 from app.services.wildberries_client import (
     WildberriesClientError,
@@ -43,6 +45,8 @@ from app.services.wildberries_credentials_service import (
     get_decrypted_marketplace_token,
 )
 from app.services.wildberries_fbs_client import split_marketplace_order_id_batches
+
+logger = logging.getLogger(__name__)
 
 TRACKING_STATUS_ACCEPTED = "accepted"
 TRACKING_STATUS_SORTED = "sorted"
@@ -230,18 +234,20 @@ async def _sync_supply_orders_from_wb(
     token: str,
     *,
     sync_orders: bool = True,
+    wb_done_hint: bool | None = None,
 ) -> int:
-    wb_supply_done: bool | None = None
-    # Supply details are an additional reconciliation signal. A temporary
-    # failure here must not regress the existing per-order status sync.
-    with suppress(WildberriesClientError):
-        wb_supply_done = (
-            await fetch_marketplace_supply_details(
-                http_client,
-                api_token=token,
-                supply_id=supply.wb_supply_id,
-            )
-        ).done
+    wb_supply_done: bool | None = wb_done_hint
+    if wb_supply_done is None:
+        # Supply details are an additional reconciliation signal. A temporary
+        # failure here must not regress the existing per-order status sync.
+        with suppress(WildberriesClientError):
+            wb_supply_done = (
+                await fetch_marketplace_supply_details(
+                    http_client,
+                    api_token=token,
+                    supply_id=supply.wb_supply_id,
+                )
+            ).done
 
     # The seller autopoll has already synchronized all order statuses in one
     # batch. For draft/assembling/packed supplies this pass only reconciles the
@@ -326,6 +332,7 @@ async def sync_supply_tracking(
     http_client: httpx.AsyncClient,
     *,
     sync_orders: bool | None = None,
+    wb_done_hint: bool | None = None,
 ) -> TrackingSyncResult:
     stmt = (
         select(FbsSupply)
@@ -350,6 +357,7 @@ async def sync_supply_tracking(
             http_client,
             token,
             sync_orders=sync_orders,
+            wb_done_hint=wb_done_hint,
         )
     except FbsTrackingError:
         raise
@@ -365,6 +373,14 @@ async def sync_in_delivery_supplies(
     seller_id: uuid.UUID,
     http_client: httpx.AsyncClient,
 ) -> InDeliverySyncResult:
+    """Сверить все незакрытые поставки селлера с тем, что о них думает WB.
+
+    Список поставок берётся одним запросом на селлера. Раньше проход спрашивал WB
+    про каждую поставку отдельно, и у селлера с восемью незакрытыми поставками
+    часть запросов возвращала 429: флаг «закрыта» оставался неизвестным, поставка
+    молча пропускалась, и через десять минут очередь повторялась ровно так же.
+    Оператор видел переданные в WB поставки в «В работе» сутками.
+    """
     stmt = (
         select(FbsSupply)
         .where(
@@ -376,9 +392,28 @@ async def sync_in_delivery_supplies(
         .order_by(FbsSupply.delivered_at.asc())
     )
     supplies = list((await session.execute(stmt)).scalars().all())
+    if not supplies:
+        return InDeliverySyncResult(supplies_synced=0, orders_updated=0)
+
+    wb_supplies: dict[str, tuple[str | None, bool]] = {}
+    try:
+        token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
+    except FbsTrackingError as exc:
+        # Токена нет — поштучный путь всё равно упрётся в ту же ошибку,
+        # но пусть она будет видна одной строкой, а не двадцатью.
+        logger.warning(
+            "fbs tracking sync skipped seller %s: %s", seller_id, exc.code
+        )
+        return InDeliverySyncResult(supplies_synced=0, orders_updated=0)
+    wb_supplies = await fetch_seller_supplies_map(
+        http_client, api_token=token, seller_id=seller_id
+    )
+
     supplies_synced = 0
     orders_updated = 0
+    skipped: list[str] = []
     for supply in supplies:
+        wb_entry = wb_supplies.get(supply.wb_supply_id)
         try:
             result = await sync_supply_tracking(
                 session,
@@ -386,11 +421,22 @@ async def sync_in_delivery_supplies(
                 supply.id,
                 http_client,
                 sync_orders=supply.status == FBS_SUPPLY_STATUS_IN_DELIVERY,
+                wb_done_hint=None if wb_entry is None else wb_entry[1],
             )
             supplies_synced += 1
             orders_updated += result.orders_updated
-        except FbsTrackingError:
+        except FbsTrackingError as exc:
+            # Пропуск больше не немой: именно так зависание и не находилось,
+            # пока не полезли в живой лог WB.
+            skipped.append(f"{supply.wb_supply_id}:{exc.code}")
             continue
+    if skipped:
+        logger.warning(
+            "fbs tracking sync skipped %s supplies for seller %s: %s",
+            len(skipped),
+            seller_id,
+            ", ".join(skipped),
+        )
     return InDeliverySyncResult(
         supplies_synced=supplies_synced,
         orders_updated=orders_updated,
