@@ -15,7 +15,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
@@ -332,6 +332,50 @@ async def set_rule_for_products(
             pool.percent = percent
             pool.updated_by = updated_by
     await session.commit()
+
+
+async def reset_legacy_limits_for_products(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+) -> int:
+    """Явно обнулить старые абсолютные лимиты после настройки нового правила.
+
+    Это намеренно отдельная операция, а не побочный эффект сохранения правила и
+    не data migration. До её вызова товар без доли продолжает публиковаться по
+    старому безопасному пути.
+    """
+    unique_ids = list(dict.fromkeys(product_ids))
+    if not unique_ids:
+        raise FbsStockRuleError("empty_selection", message="Не выбрано ни одного товара.")
+    stmt = select(Product).where(
+        Product.tenant_id == tenant_id,
+        Product.id.in_(unique_ids),
+    )
+    products = list((await session.execute(stmt)).scalars().all())
+    if len(products) != len(unique_ids):
+        raise FbsStockRuleError("product_not_found", message="Товар не найден.")
+    if any(product.fbs_percent is None for product in products):
+        raise FbsStockRuleError(
+            "rule_not_configured",
+            message="Сначала настройте правило доли для каждого выбранного товара.",
+        )
+
+    await session.execute(
+        update(Product)
+        .where(Product.id.in_(unique_ids), Product.tenant_id == tenant_id)
+        .values(fbs_stock_limit=0)
+    )
+    await session.execute(
+        update(FbsBindingStockPool)
+        .where(
+            FbsBindingStockPool.tenant_id == tenant_id,
+            FbsBindingStockPool.product_id.in_(unique_ids),
+        )
+        .values(quantity=0)
+    )
+    await session.commit()
+    return len(unique_ids)
 
 
 async def publish_amounts_for_binding(

@@ -23,6 +23,7 @@ from app.api.deps import (
     require_fulfillment_admin,
     seller_line_product_scope,
 )
+from app.api.fbs_stock_rule_reset import router as fbs_stock_rule_reset_router
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER, FULFILLMENT_STAFF
 from app.db.session import get_db
 from app.models.marketplace_account import MarketplaceAccount
@@ -1536,3 +1537,5 @@ async def patch_products_fbs_stock_limit_from_balance_bulk(
         ],
         pool_reset_products_count=result.reset_products_count,
     )
+
+router.routes.extend(fbs_stock_rule_reset_router.routes)

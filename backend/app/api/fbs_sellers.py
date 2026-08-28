@@ -36,9 +36,13 @@ from app.services.fbs_stock_sync_service import (
 from app.services.wb_card_enrichment import first_photo_url_from_card
 
 router = APIRouter(prefix="/operations/fbs-sellers", tags=["operations"])
+contract_router = APIRouter(prefix="/fbs-sellers", tags=["operations"])
 
 
 class FbsSellerWarehouseOut(BaseModel):
+    wb_warehouse_id: int
+    served: bool
+    wms_warehouse_id: str | None
     id: int | None = None
     name: str | None = None
     address: str | None = None
@@ -97,6 +101,11 @@ class FbsWarehouseBindingUpsert(BaseModel):
     stock_sync_enabled: bool = True
 
 
+class FbsSellerWarehouseConfigure(BaseModel):
+    served: bool
+    wms_warehouse_id: uuid.UUID | None = None
+
+
 def _binding_out(row: FbsWarehouseBinding, allocated_pool_total: int = 0) -> FbsWarehouseBindingOut:
     return FbsWarehouseBindingOut(
         id=str(row.id),
@@ -124,6 +133,8 @@ def _raise_from_binding_service(exc: binding_svc.FbsWarehouseBindingError) -> No
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
     if exc.code in {"invalid_wb_warehouse_id", "invalid_quantity"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+    if exc.code == "wms_warehouse_required":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
     if exc.code in {
         "wms_warehouse_already_bound",
         "wb_warehouse_already_bound",
@@ -184,6 +195,7 @@ class FbsStockSyncStatusOut(BaseModel):
     items: list[FbsStockSyncStatusItemOut]
 
 
+@contract_router.get("/{seller_id}/warehouses", response_model=list[FbsSellerWarehouseOut])
 @router.get("/{seller_id}/warehouses", response_model=list[FbsSellerWarehouseOut])
 async def list_fbs_seller_warehouses(
     seller_id: uuid.UUID,
@@ -198,6 +210,41 @@ async def list_fbs_seller_warehouses(
         except wh_svc.FbsSellerWarehouseError as exc:
             _raise_from_service(exc)
     return [_map_warehouse(row) for row in rows]
+
+
+@contract_router.put(
+    "/{seller_id}/warehouses/{wb_warehouse_id}",
+    response_model=FbsSellerWarehouseOut,
+)
+async def configure_fbs_seller_warehouse(
+    seller_id: uuid.UUID,
+    wb_warehouse_id: Annotated[int, Path(gt=0)],
+    body: FbsSellerWarehouseConfigure,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsSellerWarehouseOut:
+    try:
+        row = await binding_svc.configure_seller_warehouse(
+            session,
+            user.tenant_id,
+            seller_id,
+            wb_warehouse_id,
+            served=body.served,
+            wms_warehouse_id=body.wms_warehouse_id,
+        )
+    except binding_svc.FbsWarehouseBindingError as exc:
+        _raise_from_binding_service(exc)
+
+    if row is not None and not body.served:
+        schedule_explicit_zero_publish(user.tenant_id, seller_id, row.id)
+
+    return FbsSellerWarehouseOut(
+        id=wb_warehouse_id,
+        wb_warehouse_id=wb_warehouse_id,
+        name=None,
+        served=bool(row and row.is_active and row.served),
+        wms_warehouse_id=(str(row.wms_warehouse_id) if row is not None else None),
+    )
 
 
 @router.get("/{seller_id}/offices", response_model=list[FbsSellerOfficeOut])
@@ -489,6 +536,11 @@ async def set_fbs_binding_stock_pool_quantity(
         allocated_total=summary["allocated_total"],
         available=summary["available"],
     )
+
+
+# ``main.py`` уже включает этот модуль одним роутером. Контрактный короткий
+# путь добавляем тем же объектом, не меняя глобальную сборку приложения.
+router.routes.extend(contract_router.routes)
 
 
 @router.post(

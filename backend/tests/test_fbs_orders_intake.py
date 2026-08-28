@@ -1470,13 +1470,15 @@ async def test_fbs_orders_bind_to_correct_wms_warehouse(
 
 
 @pytest.mark.asyncio
-async def test_fbs_orders_auto_bind_all_wb_warehouses_to_sole_operational_warehouse(
+async def test_fbs_orders_keep_unmapped_wb_warehouses_unbound(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """TC-NEW-04-001: one physical warehouse maps every new WB route once."""
+    """TC-NEW-FBS-SHARE-W2-002: unknown WB routes await an operator decision."""
     headers, suffix = await _register_ff_admin(async_client)
-    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    seller_id, _warehouse_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
     product = await async_client.post(
         "/products",
         headers=headers,
@@ -1516,8 +1518,10 @@ async def test_fbs_orders_auto_bind_all_wb_warehouses_to_sole_operational_wareho
     listed = await async_client.get("/operations/fbs-orders", headers=headers)
     assert listed.status_code == 200, listed.text
     by_wb = {order["wb_order_id"]: order for order in listed.json()}
-    assert by_wb[800651]["warehouse_id"] == warehouse_id
-    assert by_wb[800652]["warehouse_id"] == warehouse_id
+    assert by_wb[800651]["warehouse_id"] is None
+    assert by_wb[800652]["warehouse_id"] is None
+    assert by_wb[800651]["reserve_status"] == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+    assert by_wb[800652]["reserve_status"] == RESERVE_STATUS_WAREHOUSE_UNMAPPED
 
     async with SessionLocal() as session:
         bindings = list(
@@ -1531,12 +1535,7 @@ async def test_fbs_orders_auto_bind_all_wb_warehouses_to_sole_operational_wareho
             .scalars()
             .all()
         )
-        assert {(binding.wb_warehouse_id, binding.wms_warehouse_id) for binding in bindings} == {
-            (WB_WAREHOUSE_A, uuid.UUID(warehouse_id)),
-            (WB_WAREHOUSE_B, uuid.UUID(warehouse_id)),
-        }
-        assert all(binding.is_active for binding in bindings)
-        assert all(not binding.stock_sync_enabled for binding in bindings)
+        assert bindings == []
 
 
 @pytest.mark.asyncio
@@ -1988,9 +1987,9 @@ async def test_fbs_order_without_local_stock_is_selectable(
     assert preflight.json()["compatible"] is True
 
 
-# A single operational warehouse binds immediately and reserves.
+# An unknown WB warehouse stays unmapped even when WMS has one warehouse.
 @pytest.mark.asyncio
-async def test_fbs_sole_warehouse_auto_binds_and_reserves(
+async def test_fbs_sole_warehouse_keeps_unmapped_order_unreserved(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2041,8 +2040,8 @@ async def test_fbs_sole_warehouse_auto_binds_and_reserves(
 
     listed = await async_client.get("/operations/fbs-orders", headers=headers)
     order = listed.json()[0]
-    assert order["warehouse_id"] == warehouse_id
-    assert order["reserve_status"] == RESERVE_STATUS_RESERVED
+    assert order["warehouse_id"] is None
+    assert order["reserve_status"] == RESERVE_STATUS_WAREHOUSE_UNMAPPED
 
 
 # TC-NEW-FBS-STOCK-008 — defect releases reservation like cancel/sold
