@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Box } from '@mui/material'
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
@@ -85,6 +85,14 @@ type Props = {
 }
 
 export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
+  // Список продавцов приходит сверху новым массивом на каждую перерисовку.
+  // Если держать загрузку зависимой от самого массива, она перезапускает себя
+  // бесконечно: загрузила — обновила состояние — перерисовка — новый массив —
+  // загрузила снова. На боевых данных это давало сотни повторных запросов и
+  // экран, который никогда не догружался. Держимся за состав, а не за ссылку.
+  const sellerKey = sellerList.map((one) => `${one.id}:${one.name}`).join('|')
+  const sellerRef = useRef(sellerList)
+  sellerRef.current = sellerList
   const [products, setProducts] = useState<Product[]>([])
   const [rules, setRules] = useState<FbsRule[]>([])
   const [sellers, setSellers] = useState<Seller[]>([])
@@ -122,7 +130,7 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
         }
       }
 
-      const known = new Map(sellerList.map((one) => [one.id, one.name]))
+      const known = new Map(sellerRef.current.map((one) => [one.id, one.name]))
       const withSeller = page.items.filter((row) => row.seller_id !== null)
       setProducts(
         withSeller.map((row) => toProduct(row, loadedRules.get(row.id), row.seller_id as string)),
@@ -159,7 +167,7 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
     } finally {
       setLoading(false)
     }
-  }, [token, sellerList])
+  }, [token, sellerKey])
 
   useEffect(() => {
     void load()

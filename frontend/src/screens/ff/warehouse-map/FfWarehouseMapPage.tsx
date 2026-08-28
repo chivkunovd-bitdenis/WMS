@@ -51,6 +51,17 @@ const MAP_ERROR_MESSAGES: Record<string, string> = {
   invalid_container_destination: 'Этот объект нельзя положить в выбранное место.',
   insufficient_stock: 'На исходном месте уже нет указанного количества товара.',
   pallet_disbanded: 'Эту палету уже расформировали.',
+  // Ошибки пересчёта приходят с той же карты, поэтому переводим их здесь же.
+  container_has_no_stock: 'В этой таре сейчас пусто — пересчитывать нечего.',
+  object_not_available_without_address_storage:
+    'Пересчёт по ячейке доступен только при включённом адресном хранении.',
+  count_already_posted: 'Этот пересчёт уже проведён.',
+}
+
+/** Человеческий текст вместо кода ошибки, пришедшего с сервера. */
+function humanError(err: unknown, fallback: string): string {
+  const raw = err instanceof Error ? err.message : ''
+  return MAP_ERROR_MESSAGES[raw] ?? (raw || fallback)
 }
 
 async function mapErrorMessage(res: Response): Promise<string> {
@@ -241,7 +252,7 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
       if (!res.ok) throw new Error(await mapErrorMessage(res))
       await load({ preserveOperationError: true })
     } catch (err) {
-      setOperationError(err instanceof Error ? err.message : 'Не удалось создать ячейку')
+      setOperationError(humanError(err, 'Не удалось создать ячейку'))
     }
   }
 
@@ -259,7 +270,7 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
       // переключаемся на новый: перечитывание запустит useEffect загрузки.
       selectWarehouse(created.id)
     } catch (err) {
-      setOperationError(err instanceof Error ? err.message : 'Не удалось создать склад')
+      setOperationError(humanError(err, 'Не удалось создать склад'))
     }
   }
 
@@ -304,7 +315,7 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
       setCountTarget(target)
       setCount(created)
     } catch (err) {
-      setOperationError(err instanceof Error ? err.message : 'Не удалось открыть пересчёт')
+      setOperationError(humanError(err, 'Не удалось открыть пересчёт'))
     }
   }
 
@@ -312,7 +323,7 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
     try {
       setCount(await saveCountActuals(token, edited))
     } catch (err) {
-      setOperationError(err instanceof Error ? err.message : 'Не удалось сохранить пересчёт')
+      setOperationError(humanError(err, 'Не удалось сохранить пересчёт'))
     }
   }
 
@@ -326,7 +337,7 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
       setOperationError(postResultNote(result))
       await load({ preserveOperationError: true })
     } catch (err) {
-      setOperationError(err instanceof Error ? err.message : 'Не удалось провести пересчёт')
+      setOperationError(humanError(err, 'Не удалось провести пересчёт'))
     }
   }
 

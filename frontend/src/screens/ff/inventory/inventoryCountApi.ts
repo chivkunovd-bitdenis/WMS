@@ -10,6 +10,28 @@ import type { CountListItem, CountStatus, InventoryCount, ProductNode } from './
 
 export const INVENTORY_BASE = '/operations/inventory-counts'
 
+/**
+ * Дата документа в человеческом виде: «28.08.2026 23:39».
+ *
+ * Экраны инвентаризации приняты по макету, где дата уже была строкой, и про
+ * машинный формат сервера они не знают. Переводим на границе, иначе оператор
+ * видит «2026-08-28T20:39:37.982702+00:00».
+ */
+function humanMoment(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (!Number.isFinite(d.getTime())) return iso
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+    .format(d)
+    .replace(', ', ' ')
+}
+
 export function inventoryAuthHeaders(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}` }
 }
@@ -100,9 +122,9 @@ export function toCount(detail: ApiDetail): InventoryCount {
         : detail.fill.mode === 'all'
           ? { mode: 'all' }
           : { mode: 'filters', seller: detail.fill.seller_id, category: detail.fill.category },
-    createdAt: detail.created_at,
+    createdAt: humanMoment(detail.created_at),
     createdBy: detail.created_by,
-    postedAt: detail.posted_at,
+    postedAt: detail.posted_at === null ? null : humanMoment(detail.posted_at),
     postedBy: detail.posted_by,
     comment: detail.comment,
     addressStorage: detail.address_storage,
@@ -121,7 +143,7 @@ export function toListItem(row: ApiSummary): CountListItem {
     status: row.status as CountStatus,
     warehouseName: row.warehouse_name,
     fillLabel: row.fill_label,
-    createdAt: row.created_at,
+    createdAt: humanMoment(row.created_at),
     createdBy: row.created_by,
     lines: row.lines,
     counted: row.counted,
