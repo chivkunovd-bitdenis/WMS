@@ -185,7 +185,7 @@ test('S-11-TC-002 keeps a previous month without a tariff after saving a later r
     page.getByTestId('storage-rate-save').click(),
   ])
   expect(tariffResponse.status()).toBe(201)
-  expect(tariffBody).toEqual({ warehouse_id: 'warehouse-1', amount: 0.7, valid_from: validFrom })
+  expect(tariffBody).toEqual({ revision: 0, amount: 0.7, valid_from: validFrom })
   expect(await refreshedStatements.json()).toMatchObject({ tariff_configured: false, statements: [] })
   expect(refreshGets).toBe(1)
 
@@ -301,6 +301,9 @@ test('S-11-TC-002 administrator saves a future warehouse rate and seller excepti
   })
 
   await page.getByRole('button', { name: 'Задать тариф' }).click()
+  const storageScope = page.getByLabel('Операционный склад')
+  await expect(storageScope).toHaveValue('Все операционные склады')
+  await expect(storageScope).toBeDisabled()
   const warehouseValidFrom = page.getByTestId('storage-rate-valid-from')
   const saveRate = page.getByTestId('storage-rate-save')
   await expect(warehouseValidFrom).toHaveValue(moscowToday)
@@ -332,7 +335,7 @@ test('S-11-TC-002 administrator saves a future warehouse rate and seller excepti
   ])
   expect(tariffResponse.status()).toBe(201)
   const tariffResult = await tariffResponse.json() as {
-    warehouse_tariff: { id: string; warehouse_id: string; amount: string; valid_from: string }
+    warehouse_tariff: { id: string; warehouse_id: string | null; amount: string; valid_from: string }
     seller_exception: { id: string; seller_id: string; amount: string; valid_from: string } | null
     recalculated_statements: Array<{
       id: string
@@ -341,7 +344,7 @@ test('S-11-TC-002 administrator saves a future warehouse rate and seller excepti
     }>
   }
   expect(tariffResult.warehouse_tariff.id).toMatch(uuidPattern)
-  expect(tariffResult.warehouse_tariff.warehouse_id).toBe(seed.warehouseId)
+  expect(tariffResult.warehouse_tariff.warehouse_id).toBeNull()
   expect(tariffResult.seller_exception).not.toBeNull()
   if (!tariffResult.seller_exception) throw new Error('seller exception was not created atomically')
   expect(tariffResult.seller_exception.id).toMatch(uuidPattern)
@@ -368,7 +371,7 @@ test('S-11-TC-002 administrator saves a future warehouse rate and seller excepti
   expect(tariffPosts).toBe(1)
   expect(rebuildPosts).toBe(0)
   expect(tariffBody).toEqual({
-    warehouse_id: seed.warehouseId,
+    revision: 0,
     amount: 0.7,
     valid_from: validFrom,
     seller_exception: { seller_id: seed.sellerId, amount: 0.65, valid_from: moscowToday },

@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 
 from app.api.storage import _apply_draft_pricing, _print_measurements, _rate_snapshot
 from app.db.session import SessionLocal
-from app.models.billing import BillingLedgerEntry, BillingTariffVersion
+from app.models.billing import BillingLedgerEntry, BillingTariffVersion, BillingTariffVersionV2
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
@@ -24,6 +24,7 @@ from app.models.storage_measurement import StorageMeasurement
 from app.models.storage_statement import StorageStatement
 from app.models.warehouse import Warehouse
 from app.services import storage_statement_service
+from app.services.billing_seller_report_service import _storage_row
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.staff_packaging_billing_service import rub_to_kopecks
 from app.services.storage_measurement_service import MOSCOW
@@ -43,14 +44,18 @@ def _tariff(
     valid_to: date | None = None,
     seller_id: uuid.UUID | None = None,
     warehouse_id: uuid.UUID | None = None,
-) -> BillingTariffVersion:
+) -> BillingTariffVersionV2:
     return cast(
-        BillingTariffVersion,
+        BillingTariffVersionV2,
         SimpleNamespace(
             id=uuid.uuid4(),
-            amount=rub_to_kopecks(Decimal(amount)),
-            valid_from=valid_from,
-            valid_to=valid_to,
+            rate=rub_to_kopecks(Decimal(amount)),
+            valid_from_at=datetime.combine(valid_from, datetime.min.time(), MOSCOW),
+            valid_to_at=(
+                datetime.combine(valid_to + timedelta(days=1), datetime.min.time(), MOSCOW)
+                if valid_to is not None
+                else None
+            ),
             seller_id=seller_id,
             warehouse_id=warehouse_id,
         ),
@@ -275,14 +280,16 @@ async def _seed_storage_statement(
         session.add(statement)
         if with_tariff:
             session.add(
-                BillingTariffVersion(
-                    tenant_id=warehouse.tenant_id,
-                    seller_id=None,
-                    warehouse_id=warehouse.id,
-                    service_code="storage_liter_day",
-                    unit="liter_day",
-                    amount=200,
-                    valid_from=period_start,
+            BillingTariffVersionV2(
+                tenant_id=warehouse.tenant_id,
+                seller_id=None,
+                product_id=None,
+                employee_user_id=None,
+                service_code="storage",
+                unit="liter_day",
+                enabled=True,
+                rate=200,
+                valid_from_at=datetime.combine(period_start, datetime.min.time(), MOSCOW),
                 )
             )
         if not zero:
@@ -399,7 +406,7 @@ async def test_concurrent_fix_publishes_one_immutable_ledger_and_repeatable_prin
     assert payload["fixed_at"]
     assert payload["measurements"][0]["rate_snapshot"] == "2.00"
     assert payload["measurements"][0]["liter_days"] == payload["total_liter_days"]
-    assert payload["measurements"][0]["service_code"] == "storage_liter_day"
+    assert payload["measurements"][0]["service_code"] == "storage"
     assert payload["measurements"][0]["unit"] == "liter_day"
     period_start = date.fromisoformat(payload["period_start"])
     listed = await async_client.get(
@@ -432,7 +439,7 @@ async def test_concurrent_fix_publishes_one_immutable_ledger_and_repeatable_prin
         },
     )
     assert without_tariff.status_code == 200
-    assert without_tariff.json()["tariff_configured"] is False
+    assert without_tariff.json()["tariff_configured"] is True
 
     async with SessionLocal() as session:
         statement = await session.get(StorageStatement, statement_id)
@@ -459,7 +466,7 @@ async def test_concurrent_fix_publishes_one_immutable_ledger_and_repeatable_prin
         },
     )
     assert personal_only.status_code == 200
-    assert personal_only.json()["tariff_configured"] is False
+    assert personal_only.json()["tariff_configured"] is True
 
 
 @pytest.mark.asyncio
@@ -529,6 +536,75 @@ async def test_problem_current_month_and_zero_statement_fix_rules(
 
 
 @pytest.mark.asyncio
+async def test_statement_uses_the_same_seller_override_as_the_invoice_report(
+    async_client: AsyncClient,
+) -> None:
+    """TC-NEW-A1-001/002: a deliberately different legacy rate cannot affect storage."""
+    _headers, statement_id, measurement_id = await _seed_storage_statement(async_client)
+    assert measurement_id is not None
+    async with SessionLocal() as session:
+        statement = await session.get(StorageStatement, statement_id)
+        assert statement is not None
+        session.add_all(
+            [
+                # This was the old statement source.  Its wildly different rate
+                # must not leak into either financial calculation.
+                BillingTariffVersion(
+                    tenant_id=statement.tenant_id,
+                    seller_id=None,
+                    warehouse_id=statement.warehouse_id,
+                    service_code="storage_liter_day",
+                    unit="liter_day",
+                    amount=9900,
+                    valid_from=statement.period_start,
+                ),
+                BillingTariffVersionV2(
+                    tenant_id=statement.tenant_id,
+                    seller_id=statement.seller_id,
+                    product_id=None,
+                    employee_user_id=None,
+                    service_code="storage",
+                    unit="liter_day",
+                    enabled=True,
+                    rate=300,
+                    valid_from_at=datetime.combine(
+                        statement.period_start, datetime.min.time(), MOSCOW
+                    ),
+                ),
+            ]
+        )
+        await session.commit()
+        measurements = list(
+            (
+                await session.scalars(
+                    select(StorageMeasurement).where(StorageMeasurement.id == measurement_id)
+                )
+            ).all()
+        )
+        pricing = await storage_statement_service.get_storage_draft_pricing(
+            session, statement, measurements
+        )
+        report = await _storage_row(
+            session,
+            tenant_id=statement.tenant_id,
+            seller_id=statement.seller_id,
+            date_from=statement.period_start,
+            date_to=statement.period_end,
+            start=datetime.combine(statement.period_start, datetime.min.time(), MOSCOW),
+            end=datetime.combine(
+                statement.period_end + timedelta(days=1), datetime.min.time(), MOSCOW
+            ),
+            include_finance=True,
+        )
+    statement_kopecks = sum(
+        int((amount * 100).quantize(Decimal("1")))
+        for _, amount, _ in pricing.values()
+    )
+    assert statement_kopecks == report["amount_kopecks"]
+    assert {tariff.rate for _, _, tariff in pricing.values()} == {300}
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("quantity", "amount", "detail"),
     [
@@ -551,8 +627,8 @@ async def test_fix_rejects_unrepresentable_ledger_values_without_partial_state(
         _session: object,
         _statement: StorageStatement,
         measurements: list[StorageMeasurement],
-        tariffs: list[BillingTariffVersion],
-    ) -> dict[uuid.UUID, tuple[Decimal, Decimal, BillingTariffVersion]]:
+        tariffs: list[BillingTariffVersionV2],
+    ) -> dict[uuid.UUID, tuple[Decimal, Decimal, BillingTariffVersionV2]]:
         assert [row.id for row in measurements] == [measurement_id]
         return {measurement_id: (quantity, amount, tariffs[0])}
 
