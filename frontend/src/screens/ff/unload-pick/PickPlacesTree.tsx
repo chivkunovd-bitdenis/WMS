@@ -3,8 +3,10 @@ import Inventory2Outlined from '@mui/icons-material/Inventory2Outlined'
 import LayersOutlined from '@mui/icons-material/LayersOutlined'
 import WidgetsOutlined from '@mui/icons-material/WidgetsOutlined'
 import GridViewOutlined from '@mui/icons-material/GridViewOutlined'
+import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { DataTable, EmptyState, NumberInput, QtyCell } from '../../../ui-kit'
+import ExpandMore from '@mui/icons-material/ExpandMore'
+import { DataTable, EmptyState, IconAction, NumberInput, QtyCell } from '../../../ui-kit'
 import { ProductPhotoThumb } from '../../../components/ProductPhotoThumb'
 import type { Column } from '../../../ui-kit'
 import { placeNodesOf } from './pickRows'
@@ -72,6 +74,7 @@ export function PickPlacesTree({
   highlightedKey: string | null
   onQtyChange: (place: PickPlace, next: number | null) => void
 }) {
+  const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(() => new Set())
   if (row.places.length === 0) {
     return (
       <EmptyState
@@ -82,7 +85,18 @@ export function PickPlacesTree({
     )
   }
 
-  const nodes = placeNodesOf(row.places, OBJECTS, PICK_CELLS)
+  const all = placeNodesOf(row.places, OBJECTS, PICK_CELLS)
+  // Свёрнутое хранится списком, а не «раскрытым»: по умолчанию структура открыта
+  // целиком, иначе оператор при каждом заходе кликал бы, чтобы увидеть работу.
+  const collapsed = collapsedKeys
+  const hidden = new Set<string>()
+  for (const node of all) {
+    if (node.parentKey && (collapsed.has(node.parentKey) || hidden.has(node.parentKey))) {
+      hidden.add(node.key)
+    }
+  }
+  const hasChildren = new Set(all.map((node) => node.parentKey).filter(Boolean) as string[])
+  const nodes = all.filter((node) => !hidden.has(node.key))
 
   const columns: Column<PlaceNode>[] = [
     {
@@ -91,6 +105,32 @@ export function PickPlacesTree({
       render: (node) =>
         node.kind === 'container' ? (
           <Indent depth={node.depth}>
+            <Box sx={{ width: 24, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+              {hasChildren.has(node.key) ? (
+                <IconAction
+                  title={
+                    collapsed.has(node.key) ? `Раскрыть ${node.title}` : `Свернуть ${node.title}`
+                  }
+                  onClick={() =>
+                    setCollapsedKeys((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(node.key)) next.delete(node.key)
+                      else next.add(node.key)
+                      return next
+                    })
+                  }
+                  testId={`pick-level-${row.product.id}-${node.key}`}
+                >
+                  <ExpandMore
+                    fontSize="small"
+                    sx={{
+                      transition: 'transform 120ms',
+                      transform: collapsed.has(node.key) ? 'rotate(-90deg)' : 'none',
+                    }}
+                  />
+                </IconAction>
+              ) : null}
+            </Box>
             <Box sx={{ width: 22, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
               {KIND_ICON[node.icon]}
             </Box>
@@ -111,6 +151,7 @@ export function PickPlacesTree({
           </Indent>
         ) : (
           <Indent depth={node.depth}>
+            <Box sx={{ width: 24, flexShrink: 0 }} />
             <Box sx={{ width: 22, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
               <ProductPhotoThumb src={row.product.photo} alt={row.product.name} size={24} />
             </Box>

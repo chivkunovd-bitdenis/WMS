@@ -101,7 +101,16 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
    * зовут эту же функцию — экран не решает разными путями одно и то же
    * (контракт §4, §5).
    */
-  function applyDelta(row: PickRow, place: PickPlace, delta: number) {
+  function applyDelta(
+    row: PickRow,
+    place: PickPlace,
+    delta: number,
+    // Подсказку сканера меняет только сам сканер. Поле сканера возвращает себе
+    // фокус на каждое изменение подсказки — это правильно, когда пикают, и
+    // невыносимо, когда вписывают число рукой: курсор выбрасывало из поля на
+    // первой же цифре.
+    { fromScan = true }: { fromScan?: boolean } = {},
+  ) {
     if (delta === 0) return
     const key = pickKey(row.product.id, place.key)
     setPicked((current) => ({ ...current, [key]: Math.max(0, (current[key] ?? 0) + delta) }))
@@ -110,17 +119,17 @@ export function UnloadPickScreen({ onNote }: { onNote: (note: string) => void })
       // Только снятие ложится в историю отмены: ручное уменьшение — это уже
       // сама по себе поправка оператора, отменять поправку поправкой незачем.
       setHistory((current) => [...current, { productId: row.product.id, placeKey: place.key, qty: delta }])
-      setScanNotice(`${row.product.sku}: снято ${delta} шт — ${place.label}`)
+      if (fromScan) setScanNotice(`${row.product.sku}: снято ${delta} шт — ${place.label}`)
       onNote(`Заглушка: ${row.product.sku}, снято ${delta} шт — ${place.label}`)
     } else {
-      setScanNotice(`${row.product.sku}: возврат ${Math.abs(delta)} шт — ${place.label}`)
+      if (fromScan) setScanNotice(`${row.product.sku}: возврат ${Math.abs(delta)} шт — ${place.label}`)
       onNote(`Заглушка: возврат ${Math.abs(delta)} шт — ${place.label}`)
     }
   }
 
   /** Поле места — сразу факт: новое значение и есть снятое количество. */
   function handlePlaceQtyChange(row: PickRow, place: PickPlace, next: number | null) {
-    applyDelta(row, place, (next ?? 0) - place.picked)
+    applyDelta(row, place, (next ?? 0) - place.picked, { fromScan: false })
   }
 
   /**

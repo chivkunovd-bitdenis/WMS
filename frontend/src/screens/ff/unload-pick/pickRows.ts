@@ -241,6 +241,7 @@ export type PlaceNode =
   | {
       kind: 'container'
       key: string
+      parentKey: string | null
       depth: number
       title: string
       caption: string | null
@@ -248,7 +249,7 @@ export type PlaceNode =
       icon: PlaceKind
       inside: number
     }
-  | { kind: 'goods'; key: string; depth: number; place: PickPlace }
+  | { kind: 'goods'; key: string; parentKey: string | null; depth: number; place: PickPlace }
 
 export function placeNodesOf(
   places: PickPlace[],
@@ -267,6 +268,7 @@ export function placeNodesOf(
   for (const place of places) {
     const { cell, chain } = chainOf(place.holder, objects, cells)
     let depth = 0
+    let parent: string | null = null
     // Ячейка — верхняя ступень структуры, ровно как полка на раскладке.
     if (cell) {
       const key = cellRef(cell.id)
@@ -275,6 +277,7 @@ export function placeNodesOf(
         nodes.push({
           kind: 'container',
           key,
+          parentKey: parent,
           depth,
           title: cell.code,
           caption: null,
@@ -283,6 +286,7 @@ export function placeNodesOf(
           inside: insideOf(key),
         })
       }
+      parent = key
       depth += 1
     } else if (chain.length > 0) {
       const key = 'no-cell'
@@ -291,6 +295,7 @@ export function placeNodesOf(
         nodes.push({
           kind: 'container',
           key,
+          parentKey: parent,
           depth,
           title: 'Без ячейки',
           caption: null,
@@ -299,6 +304,7 @@ export function placeNodesOf(
           inside: 0,
         })
       }
+      parent = key
       depth += 1
     }
     for (const object of chain) {
@@ -308,6 +314,7 @@ export function placeNodesOf(
         nodes.push({
           kind: 'container',
           key,
+          parentKey: parent,
           depth,
           title: `${KIND_TITLE[object.kind]} ${object.code}`,
           caption: null,
@@ -316,9 +323,10 @@ export function placeNodesOf(
           inside: insideOf(key),
         })
       }
+      parent = key
       depth = (seen.get(key) ?? depth) + 1
     }
-    nodes.push({ kind: 'goods', key: `goods-${place.key}`, depth, place })
+    nodes.push({ kind: 'goods', key: `goods-${place.key}`, parentKey: parent, depth, place })
   }
   return nodes
 }
