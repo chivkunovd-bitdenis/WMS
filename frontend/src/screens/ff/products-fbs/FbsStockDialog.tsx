@@ -12,7 +12,6 @@ import {
 } from '../../../ui-kit'
 import {
   freeStock,
-  freeStockAt,
   onHandTotal,
   publishedQty,
   reservedTotal,
@@ -85,11 +84,16 @@ function FbsStockDialogBody({
   const base = products.reduce((sum, product) => sum + freeStock(product), 0)
   const onHand = products.reduce((sum, product) => sum + onHandTotal(product), 0)
   const reserved = products.reduce((sum, product) => sum + reservedTotal(product), 0)
-  // Доля склада считается от того, что лежит НА ЭТОМ складе. Считать её от общего
-  // остатка нельзя: 100% на одном складе и 70% на другом дали бы в сумме больше,
-  // чем есть на самом деле, — товар нельзя опубликовать дважды.
-  const baseAt = (warehouseId: string) =>
-    products.reduce((sum, product) => sum + freeStockAt(product, warehouseId), 0)
+  // Склады делят между собой ОДИН свободный остаток, а не имеют каждый свой.
+  // Товар лежит у нас, а склады продавца в кабинете WB — это направления, куда
+  // мы его выставляем. Поэтому сумма долей не может превысить сто процентов:
+  // отдать половину одному складу и половину другому можно, а по половине
+  // каждому из трёх — уже нет, столько товара просто нет.
+  const spent = seller.warehouses.reduce(
+    (sum, warehouse) => sum + (draft.byWarehouse[warehouse.id] ?? 0),
+    0,
+  )
+  const freePercent = Math.max(0, 100 - spent)
   const willPublish = products.reduce(
     (sum, product) => sum + publishedQty(product, draft, seller),
     0,
@@ -156,6 +160,14 @@ function FbsStockDialogBody({
           testId="fbs-stock-same"
         />
 
+        {draft.sameEverywhere ? null : (
+          <Typography variant="body2" color="text.secondary" data-testid="fbs-stock-rest">
+            Нераспределено: {freePercent}% — это{' '}
+            {Math.floor((base * freePercent) / 100).toLocaleString('ru-RU')} шт. Склады делят один
+            и тот же остаток, поэтому больше ста процентов раздать нельзя.
+          </Typography>
+        )}
+
         <Stack spacing={2}>
           {seller.warehouses.map((warehouse) => (
             <Stack key={warehouse.id} spacing={1}>
@@ -191,7 +203,8 @@ function FbsStockDialogBody({
                     byWarehouse: { ...one.byWarehouse, [warehouse.id]: percent },
                   }))
                 }
-                base={baseAt(warehouse.id)}
+                base={base}
+                max={(draft.byWarehouse[warehouse.id] ?? 0) + freePercent}
                 disabled={draft.sameEverywhere}
                 disabledReason="Включено «одинаково по всем складам»"
                 testId={`fbs-stock-percent-${warehouse.id}`}

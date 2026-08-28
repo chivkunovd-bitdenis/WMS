@@ -14,6 +14,7 @@ export function PercentSlider({
   /** Из чего считается доля — свободный остаток. */
   base,
   step = 10,
+  max = 100,
   testId,
 }: {
   label: string
@@ -23,6 +24,8 @@ export function PercentSlider({
   disabledReason?: string
   base: number
   step?: number
+  /** Потолок доли: больше нераспределённого отдать нельзя. */
+  max?: number
   testId?: string
 }) {
   const result = Math.floor((base * value) / 100)
@@ -41,7 +44,12 @@ export function PercentSlider({
       </Stack>
       <Slider
         value={value}
-        onChange={(_event, next) => onChange(Array.isArray(next) ? next[0]! : next)}
+        onChange={(_event, next) => {
+          const value = Array.isArray(next) ? next[0]! : next
+          // Отдать больше нераспределённого нельзя: обещать один и тот же товар
+          // двум складам — это обещать то, чего нет.
+          onChange(Math.min(value, max))
+        }}
         min={0}
         max={100}
         step={step}

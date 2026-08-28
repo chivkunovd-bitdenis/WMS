@@ -141,9 +141,13 @@ export function ruleFor(rules: FbsRule[], productId: string): FbsRule {
 /** Сколько уйдёт в Wildberries по этому правилу прямо сейчас. */
 export function publishedQty(product: Product, rule: FbsRule, seller: Seller): number {
   if (!rule.publish) return 0
-  return seller.warehouses.reduce((sum, warehouse) => {
-    const base = freeStockAt(product, warehouse.id)
-    const percent = rule.sameEverywhere ? rule.percent : (rule.byWarehouse[warehouse.id] ?? 0)
-    return sum + Math.floor((base * percent) / 100)
-  }, 0)
+  const base = freeStock(product)
+  if (rule.sameEverywhere) return Math.floor((base * rule.percent) / 100)
+  // Доли складов делят один и тот же свободный остаток, поэтому суммируются
+  // проценты, а не посчитанные по отдельности количества.
+  const percent = Math.min(
+    100,
+    seller.warehouses.reduce((sum, warehouse) => sum + (rule.byWarehouse[warehouse.id] ?? 0), 0),
+  )
+  return Math.floor((base * percent) / 100)
 }
