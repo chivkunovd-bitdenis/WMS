@@ -79,6 +79,7 @@ export default defineConfig({
         unloadPick: 'unload-pick.html',
         unloadPick2: 'unload-pick-2.html',
         inventory: 'inventory.html',
+        fbsSpeed: 'fbs-speed.html',
       },
     },
   },

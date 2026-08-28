@@ -19,7 +19,8 @@ export function ProductsHarness() {
             ЭТО НЕ ЭКРАН
           </Typography>
           <Typography variant="body2" sx={{ opacity: 0.75 }}>
-            Лента макета: данные выдуманные, сервера нет.
+            Товары и склады выдуманы. А цифры времени сборки на вкладке FBS —
+            настоящие: сняты с боевой базы 28.08.2026, ИП Чжоу и все продавцы.
           </Typography>
           <ToggleButtonGroup
             exclusive

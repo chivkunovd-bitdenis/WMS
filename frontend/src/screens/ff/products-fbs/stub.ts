@@ -58,6 +58,16 @@ export type FbsRule = {
 }
 
 export const SELLERS: Seller[] = [
+  // ИП Чжоу — настоящий продавец с боевой базы: по нему снята метрика времени
+  // сборки. Остальные продавцы в списке выдуманы, они здесь ради вида списка.
+  {
+    id: 's-zhou',
+    name: 'ИП Чжоу',
+    warehouses: [
+      { id: 'w-zhou-1', name: 'Ярцево', boundTo: 'wb-1', fbsEnabled: true },
+    ],
+    wbWarehouses: [{ id: 'wb-1', name: 'Склад WB' }],
+  },
   {
     id: 's-gor',
     name: 'ИП Горячкина',
