@@ -9,6 +9,7 @@ import {
   IconAction,
   PrimaryAction,
   ReportMetricStrip,
+  ScannerField,
   ScreenHeader,
   SecondaryAction,
   SelectInput,
@@ -17,6 +18,7 @@ import {
 } from '../../../ui-kit'
 import type { ReportMetricItem, StatusTone } from '../../../ui-kit'
 import { CommentField } from './CommentField'
+import { applyScan, containerName, type ScanTone } from './InventoryScan'
 import { InventoryTree } from './InventoryTree'
 import {
   EMPTY_FILTERS,
@@ -79,6 +81,18 @@ export function FfInventoryCountScreen({
 }: Props) {
   const [filters, setFilters] = useState<InvFilters>(EMPTY_FILTERS)
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
+  const [scanValue, setScanValue] = useState('')
+  // Память сканера на одну вещь: какую тару открыли. Пока открыта, пики идут в неё.
+  const [openContainerId, setOpenContainerId] = useState<string | null>(null)
+  const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
+
+  function handleScan(code: string) {
+    setScanValue('')
+    const result = applyScan(count, code, openContainerId)
+    setOpenContainerId(result.activeContainerId)
+    setScanNote({ text: result.message, tone: result.tone })
+    if (result.count !== count) onChange(result.count)
+  }
 
   const readOnly = count.status !== 'draft'
   const rows = useMemo(() => buildRows(count, filters, collapsed), [count, filters, collapsed])
@@ -172,6 +186,26 @@ export function FfInventoryCountScreen({
       ) : null}
 
       <ReportMetricStrip items={metrics} loading={loading} testId="inv-metrics" />
+
+      {/* Сканер: пикнул тару — она открылась, дальше каждый пик товара кладёт в неё
+          штуку. Тара не открыта — считаем то, что лежит в ячейке россыпью. */}
+      {!readOnly ? (
+        <Box sx={{ maxWidth: 640, mb: 2 }}>
+          <ScannerField
+            value={scanValue}
+            onChange={setScanValue}
+            onScan={handleScan}
+            expects={
+              openContainerId
+                ? `товар в ${containerName(count, openContainerId)}`
+                : 'ШК тары или товара'
+            }
+            error={scanNote?.tone === 'error' ? scanNote.text : null}
+            notice={scanNote && scanNote.tone !== 'error' ? scanNote.text : null}
+            testId="inv-scan"
+          />
+        </Box>
+      ) : null}
 
       <FilterBar
         search={filters.query}

@@ -44,7 +44,8 @@ function box(code: string, barcode: string, children: InventoryNode[]): Inventor
 }
 
 function pallet(code: string, children: InventoryNode[]): InventoryNode {
-  return { kind: 'pallet', id: nextId(), code, barcode: null, children }
+  // Штрихкод у палеты есть: её тоже пикают, чтобы открыть и считать внутрь.
+  return { kind: 'pallet', id: nextId(), code, barcode: `21000000${code.slice(-4)}`, children }
 }
 
 function cargoPlace(code: string, barcode: string, children: InventoryNode[]): InventoryNode {

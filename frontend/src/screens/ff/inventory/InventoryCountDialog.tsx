@@ -1,7 +1,14 @@
 import { Box, Stack, Typography } from '@mui/material'
 import { useEffect, useMemo, useState } from 'react'
-import { AppDialog, PrimaryAction, SecondaryAction, WarningNotice } from '../../../ui-kit'
+import {
+  AppDialog,
+  PrimaryAction,
+  ScannerField,
+  SecondaryAction,
+  WarningNotice,
+} from '../../../ui-kit'
 import { CommentField } from './CommentField'
+import { applyScan, containerName, type ScanTone } from './InventoryScan'
 import { InventoryTree } from './InventoryTree'
 import {
   EMPTY_FILTERS,
@@ -59,12 +66,30 @@ export function InventoryCountDialog({
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const [count, setCount] = useState<InventoryCount | null>(initialCount)
+  const [scanValue, setScanValue] = useState('')
+  // Память сканера на одну вещь: какую тару открыли. Пока открыта, пики идут в неё.
+  const [openContainerId, setOpenContainerId] = useState<string | null>(null)
+  const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
 
   // Открыли другой объект — начинаем с чистого документа, а не дописываем чужой.
   useEffect(() => {
     setCount(initialCount)
     setCollapsed(new Set())
+    setOpenContainerId(null)
+    setScanNote(null)
+    setScanValue('')
   }, [initialCount])
+
+  function handleScan(code: string) {
+    setScanValue('')
+    setCount((current) => {
+      if (!current) return current
+      const result = applyScan(current, code, openContainerId)
+      setOpenContainerId(result.activeContainerId)
+      setScanNote({ text: result.message, tone: result.tone })
+      return result.count
+    })
+  }
 
   const rows = useMemo(
     () => (count ? buildRows(count, EMPTY_FILTERS, collapsed) : []),
@@ -121,6 +146,20 @@ export function InventoryCountDialog({
       }
     >
       <Stack spacing={1.5}>
+        <ScannerField
+          value={scanValue}
+          onChange={setScanValue}
+          onScan={handleScan}
+          expects={
+            openContainerId && count
+              ? `товар в ${containerName(count, openContainerId)}`
+              : 'ШК тары или товара'
+          }
+          error={scanNote?.tone === 'error' ? scanNote.text : null}
+          notice={scanNote && scanNote.tone !== 'error' ? scanNote.text : null}
+          testId="inv-dialog-scan"
+        />
+
         {place ? (
           <Typography variant="body2" color="text.secondary">
             Лежит в ячейке <strong>{place}</strong>
