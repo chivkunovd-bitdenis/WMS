@@ -2,6 +2,7 @@ import { Box, Stack, Tooltip, Typography } from '@mui/material'
 import ExpandMore from '@mui/icons-material/ExpandMore'
 import AddOutlined from '@mui/icons-material/AddOutlined'
 import ArrowUpwardOutlined from '@mui/icons-material/ArrowUpwardOutlined'
+import RemoveOutlined from '@mui/icons-material/RemoveOutlined'
 import DragIndicator from '@mui/icons-material/DragIndicator'
 import Inventory2Outlined from '@mui/icons-material/Inventory2Outlined'
 import LayersOutlined from '@mui/icons-material/LayersOutlined'
@@ -53,6 +54,7 @@ export function ObjectsTree({
   onDragEnd,
   onDropOn,
   onTakeOut,
+  onMinus,
   onPrint,
   onPickCell,
   compact = false,
@@ -66,6 +68,8 @@ export function ObjectsTree({
   onDragEnd: () => void
   onDropOn: (target: Holder) => void
   onTakeOut: (row: ObjectRow) => void
+  /** Убрать одну штуку с места — обратный ход к «положить». */
+  onMinus: (row: ObjectRow) => void
   onPrint: (row: ObjectRow) => void
   onPickCell: (cellId: string) => void
   /**
@@ -262,7 +266,7 @@ export function ObjectsTree({
     {
       key: 'actions',
       header: '',
-      width: compact ? 74 : 88,
+      width: compact ? 92 : 88,
       align: 'right',
       render: (row) => {
         const holder = row.kind === 'object' ? row.object.holder : row.line.holder
@@ -290,6 +294,15 @@ export function ObjectsTree({
                 onClick={() => onPrint(row)}
                 testId={`${testId}-print-${row.key}`}
               />
+            ) : null}
+            {compact && row.kind === 'goods' ? (
+              <IconAction
+                title="Убрать одну штуку"
+                onClick={() => onMinus(row)}
+                testId={`${testId}-minus-${row.key}`}
+              >
+                <RemoveOutlined fontSize="small" />
+              </IconAction>
             ) : null}
             {host ? (
               <IconAction
