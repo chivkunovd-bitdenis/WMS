@@ -43,6 +43,8 @@ type Props = {
   onCreateCell: (code: string) => void
   onCreateWarehouse: (name: string, code: string) => void
   onPrintCell: (row: MapRow, size: LabelSize) => void
+  /** Пересчитать содержимое строки: открыть инвентаризацию по этому объекту. */
+  onInventory: (row: MapRow) => void
   /** История одной строки. Пока сервера нет — журнал целиком. */
   historyFor: (row: MapRow) => MovementEntry[]
 }
@@ -57,6 +59,7 @@ export function FfWarehouseMapScreen({
   onCreateCell,
   onCreateWarehouse,
   onPrintCell,
+  onInventory,
   historyFor,
 }: Props) {
   // Держим не «что раскрыто», а «что свёрнуто»: владелец просил, чтобы по
@@ -242,6 +245,7 @@ export function FfWarehouseMapScreen({
             onDisband={(row) => openIntent('disband', row, UNASSIGNED_ID, UNASSIGNED_LABEL)}
             onHistory={setHistoryRow}
             onPrintCell={setPrintRow}
+            onInventory={onInventory}
             onDragStart={setCarried}
             onDragEnd={() => setCarried(null)}
             onDrop={(target) => {
