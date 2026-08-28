@@ -8,6 +8,7 @@ from httpx import AsyncClient
 
 from app.db.session import SessionLocal
 from app.models.marketplace_account import MarketplaceAccount
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.services.integration_fernet import encrypt_secret
@@ -139,6 +140,89 @@ async def test_products_search_and_marketplace_filter_include_ozon_links(
     unlinked_row = next(row for row in all_products.json() if row["id"] == unlinked["id"])
     assert unlinked_row["ozon_sku"] is None
     assert unlinked_row["ozon_offer_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_ff_catalog_page_searches_ozon_sku_and_offer_id(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, f"page-search-{suffix}")
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Seller"})
+    assert seller.status_code == 201, seller.text
+    linked = await _create_product(
+        async_client,
+        headers,
+        name="Ozon searchable product",
+        sku_code=f"LOCAL-PAGE-{suffix}",
+        seller_id=seller.json()["id"],
+        ozon_sku=f"OZON-PAGE-SKU-{suffix}",
+        ozon_offer_id=f"OZON-PAGE-OFFER-{suffix}",
+    )
+
+    for search in (f"OZON-PAGE-SKU-{suffix}", f"OZON-PAGE-OFFER-{suffix}"):
+        response = await async_client.get(
+            "/products/ff-catalog-page",
+            headers=headers,
+            params={"search": search},
+        )
+
+        assert response.status_code == 200, response.text
+        page = response.json()
+        assert [row["id"] for row in page["items"]] == [linked["id"]]
+        assert page["total"] == 1
+
+
+@pytest.mark.asyncio
+async def test_ff_catalog_page_ozon_search_keeps_unique_rows_and_total(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, f"page-total-{suffix}")
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Seller"})
+    assert seller.status_code == 201, seller.text
+    seller_id = seller.json()["id"]
+    linked = await _create_product(
+        async_client,
+        headers,
+        name="Product with multiple marketplace links",
+        sku_code=f"MULTI-LINK-{suffix}",
+        seller_id=seller_id,
+        ozon_sku=f"OZON-MULTI-{suffix}",
+    )
+    await _create_product(
+        async_client,
+        headers,
+        name="Unmatched product",
+        sku_code=f"UNMATCHED-{suffix}",
+        seller_id=seller_id,
+    )
+
+    async with SessionLocal() as session:
+        seller_row = await session.get(Seller, uuid.UUID(seller_id))
+        assert seller_row is not None
+        session.add(
+            ProductMarketplaceLink(
+                tenant_id=seller_row.tenant_id,
+                seller_id=seller_row.id,
+                product_id=uuid.UUID(str(linked["id"])),
+                marketplace="wildberries",
+                external_sku=f"WB-MULTI-{suffix}",
+            )
+        )
+        await session.commit()
+
+    response = await async_client.get(
+        "/products/ff-catalog-page",
+        headers=headers,
+        params={"search": f"OZON-MULTI-{suffix}"},
+    )
+
+    assert response.status_code == 200, response.text
+    page = response.json()
+    assert [row["id"] for row in page["items"]] == [linked["id"]]
+    assert page["total"] == 1
+    assert page["scope_total"] == 2
 
 
 @pytest.mark.asyncio
