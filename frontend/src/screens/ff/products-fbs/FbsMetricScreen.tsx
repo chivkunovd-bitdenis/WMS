@@ -65,7 +65,10 @@ const IN_24: Record<string, number> = {
 
 export function FbsMetricScreen() {
   const [preset, setPreset] = useState<Preset>('week')
-  const [sellerId, setSellerId] = useState('')
+  // По умолчанию открываем на ИП Чжоу: макет делался под разбор его цифр, и
+  // общий свод сбивает с толку — 12,7 часа по всем продавцам легко принять за
+  // цифру Чжоу, у которого на самом деле 22,6.
+  const [sellerId, setSellerId] = useState('s-zhou')
   const [range, setRange] = useState<MoscowDateRangeValue>({
     start: '2026-08-01',
     end: '2026-08-28',
@@ -123,9 +126,11 @@ export function FbsMetricScreen() {
                   за двое суток. */}
               <Stack spacing={0.25}>
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline' }}>
+                  {/* Без окраски в тревожный цвет: число говорит само, а красный
+                      на метрике превращает сводку в приговор ещё до разбора. */}
                   <Typography
                     variant="h5"
-                    sx={{ fontWeight: 700, color: in12 >= 60 ? 'success.main' : 'error.main' }}
+                    sx={{ fontWeight: 700 }}
                     data-testid="fbs-metric-in12"
                   >
                     {in12}%
@@ -139,7 +144,7 @@ export function FbsMetricScreen() {
               <Stack spacing={0.25}>
                 <Typography
                   variant="h5"
-                  sx={{ fontWeight: 700, color: in24 >= 85 ? 'success.main' : 'warning.main' }}
+                  sx={{ fontWeight: 700 }}
                   data-testid="fbs-metric-in24"
                 >
                   {in24}%
