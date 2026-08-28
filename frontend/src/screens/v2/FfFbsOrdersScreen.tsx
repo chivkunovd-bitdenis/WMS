@@ -712,8 +712,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         const body = (await res.json()) as {
           hours: number
           orders: number
-          in_12h_percent?: number
-          in_24h_percent?: number
+          within_12_hours_percent?: number
+          within_24_hours_percent?: number
         }
         if (cancelled) return
         setMetric({
@@ -721,8 +721,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           orders: body.orders,
           // Пороги сервер отдаёт не всегда: пока их нет — не показываем, а не
           // рисуем нули, которые читаются как «ни один заказ не уложился».
-          in12: body.in_12h_percent ?? null,
-          in24: body.in_24h_percent ?? null,
+          in12: body.within_12_hours_percent ?? null,
+          in24: body.within_24_hours_percent ?? null,
         })
       } catch {
         if (!cancelled) setMetric({ hours: 0, orders: 0, in12: null, in24: null })

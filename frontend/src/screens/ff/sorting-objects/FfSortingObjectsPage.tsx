@@ -124,6 +124,22 @@ export function FfSortingObjectsPage({ token, warehouses }: Props) {
     }
   }
 
+  async function createObject(kind: 'pallet' | 'box' | 'cargo_place') {
+    if (!warehouseId) return
+    setError(null)
+    try {
+      const res = await fetch(apiUrl(`/warehouses/${warehouseId}/sorting-objects`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers(token) },
+        body: JSON.stringify({ kind }),
+      })
+      if (!res.ok) throw new Error(await readApiErrorMessage(res))
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось создать тару')
+    }
+  }
+
   function printLabel(title: string, barcode: string, size: LabelSize) {
     printBarcodeLabel({
       title,
@@ -175,6 +191,7 @@ export function FfSortingObjectsPage({ token, warehouses }: Props) {
           onCreateCell={(code) => void createCell(code)}
           onPrint={(title, barcode, size) => printLabel(title, barcode, size)}
           onClose={() => navigate('/app/ff/sorting')}
+          onCreateObject={(kind) => void createObject(kind)}
           savedImmediately
         />
       ) : (

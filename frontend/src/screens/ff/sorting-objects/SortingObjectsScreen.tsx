@@ -78,6 +78,8 @@ type SortingScreenProps = {
   onPrint?: (title: string, barcode: string, size: LabelSize) => void
   /** Уйти с экрана. Без него «Закрыть» остаётся заглушкой превью. */
   onClose?: () => void
+  /** Завести тару на сервере. Без него тара появляется только в превью. */
+  onCreateObject?: (kind: ObjKind) => void
   /**
    * Каждая постановка на полку уходит на сервер сразу.
    *
@@ -108,6 +110,7 @@ export function SortingObjectsScreen({
   onCreateCell,
   onPrint,
   onClose,
+  onCreateObject,
   savedImmediately,
 }: SortingScreenProps) {
   const theme = useTheme()
@@ -238,6 +241,13 @@ export function SortingObjectsScreen({
   }
 
   function createObject(kind: ObjKind) {
+    // На живом экране тару заводит сервер: он же выдаёт номер и штрихкод, по
+    // которому её потом найдёт сканер. Придумывать их на клиенте нельзя —
+    // разойдутся с настоящими.
+    if (onCreateObject) {
+      onCreateObject(kind)
+      return
+    }
     const number = created + 1
     setCreated(number)
     const code =
