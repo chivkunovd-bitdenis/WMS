@@ -77,6 +77,7 @@ export default defineConfig({
         sortingObjects: 'sorting-objects.html',
         products: 'products.html',
         unloadPick: 'unload-pick.html',
+        unloadPick2: 'unload-pick-2.html',
       },
     },
   },
