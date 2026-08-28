@@ -35,8 +35,19 @@ if TYPE_CHECKING:
 class Product(Base):
     __tablename__ = "products"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "sku_code", name="uq_products_tenant_sku"),
-        UniqueConstraint("tenant_id", "wb_barcode", name="uq_products_tenant_wb_barcode"),
+        # Артикул с размером уникален внутри продавца, а не на весь тенант: один и тот же
+        # товар (например J308-24/36) может числиться и за Loviana, и за ООО «Фэшн» — это
+        # разные юрлица и разные остатки. Тенантное ограничение молча резало импорт карточек
+        # WB второму продавцу: товар «уже есть», хотя есть он у чужого.
+        UniqueConstraint(
+            "tenant_id", "seller_id", "sku_code", name="uq_products_tenant_seller_sku"
+        ),
+        UniqueConstraint(
+            "tenant_id",
+            "seller_id",
+            "wb_barcode",
+            name="uq_products_tenant_wb_barcode",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)

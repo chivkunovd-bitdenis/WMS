@@ -14,6 +14,7 @@ from inbound_box_intake_helpers import (
 )
 
 from app.services.background_job_service import JOB_TYPE_WILDBERRIES_CARDS_SYNC
+from app.services.box_barcode_service import is_wb_compatible_box_barcode
 
 E2E_BARCODE = "2045526738950"
 
@@ -2338,6 +2339,7 @@ async def test_marketplace_unload_create_boxes_batch(
     assert len(boxes) == 3
     barcodes = {b["internal_barcode"] for b in boxes}
     assert len(barcodes) == 3
+    assert all(is_wb_compatible_box_barcode(barcode) for barcode in barcodes)
     assert all(b["closed_at"] is None for b in boxes)
     assert all(b["lines"] == [] for b in boxes)
 

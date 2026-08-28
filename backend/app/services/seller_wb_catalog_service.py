@@ -7,14 +7,19 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import false, select
+from sqlalchemy import Text, and_, cast, false, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.fbs_stock_sync_item import STOCK_SYNC_STATUS_CONFIRMED, FbsStockSyncItem
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
-from app.services.catalog_service import list_ozon_product_links, list_products
+from app.services.catalog_service import (
+    list_ozon_product_links,
+    list_products,
+    marketplace_scope_condition,
+)
 from app.services.wb_card_enrichment import (
     brand_from_card,
     collect_skus_from_card,
@@ -381,6 +386,21 @@ async def list_linked_wb_catalog_rows(
         search=search,
         marketplace=marketplace,
     )
+    return await _enrich_linked_products(
+        session,
+        tenant_id,
+        scoped_products,
+        seller_id=seller_id,
+    )
+
+
+async def _enrich_linked_products(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    scoped_products: list[Product],
+    *,
+    seller_id: uuid.UUID | None = None,
+) -> list[FfCatalogRow]:
     if not scoped_products:
         return []
     ozon_links = await list_ozon_product_links(
@@ -393,23 +413,22 @@ async def list_linked_wb_catalog_rows(
         seller_id=seller_id,
     )
 
-    seller_ids: set[uuid.UUID] = set()
-    for p in scoped_products:
-        if p.seller_id is not None:
-            seller_ids.add(p.seller_id)
-
-    card_stmt = select(SellerWildberriesImportedCard).where(
-        SellerWildberriesImportedCard.tenant_id == tenant_id,
-    )
-    if seller_id is not None:
-        card_stmt = card_stmt.where(SellerWildberriesImportedCard.seller_id == seller_id)
-    elif seller_ids:
-        card_stmt = card_stmt.where(SellerWildberriesImportedCard.seller_id.in_(seller_ids))
-    else:
-        card_stmt = card_stmt.where(false())
-
-    card_res = await session.execute(card_stmt)
-    cards = list(card_res.scalars().all())
+    card_keys = {
+        (p.seller_id, int(p.wb_nm_id))
+        for p in scoped_products
+        if p.seller_id is not None and p.wb_nm_id is not None
+    }
+    cards: list[SellerWildberriesImportedCard] = []
+    if card_keys:
+        card_stmt = select(SellerWildberriesImportedCard).where(
+            SellerWildberriesImportedCard.tenant_id == tenant_id,
+            tuple_(
+                SellerWildberriesImportedCard.seller_id,
+                SellerWildberriesImportedCard.nm_id,
+            ).in_(card_keys),
+        )
+        card_res = await session.execute(card_stmt)
+        cards = list(card_res.scalars().all())
     by_seller_nm: dict[tuple[uuid.UUID, int], dict[str, Any] | None] = {}
     for c in cards:
         raw = c.raw_json if isinstance(c.raw_json, dict) else None
@@ -471,6 +490,101 @@ async def list_linked_wb_catalog_rows(
             ),
         )
     return rows
+
+
+async def list_linked_wb_catalog_page_rows(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID | None = None,
+    search: str | None = None,
+    category: str | None = None,
+    marketplace: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> tuple[list[FfCatalogRow], int, int, list[str]]:
+    """Return one stable FF catalog page and the total before enrichment.
+
+    The legacy catalog endpoint intentionally remains unpaged.  This query is for
+    the operator table: it narrows the Product rows in SQL first and only then
+    parses WB card JSON for the current page.
+    """
+    card_join = and_(
+        SellerWildberriesImportedCard.tenant_id == tenant_id,
+        SellerWildberriesImportedCard.seller_id == Product.seller_id,
+        SellerWildberriesImportedCard.nm_id == Product.wb_nm_id,
+    )
+    scope_filters = [Product.tenant_id == tenant_id]
+    if seller_id is not None:
+        scope_filters.append(Product.seller_id == seller_id)
+    marketplace_condition = marketplace_scope_condition(tenant_id, marketplace)
+    if marketplace_condition is not None:
+        scope_filters.append(marketplace_condition)
+    filters = list(scope_filters)
+    normalized_search = (search or "").strip()
+    if normalized_search:
+        pattern = f"%{normalized_search}%"
+        filters.append(
+            or_(
+                Product.name.ilike(pattern),
+                Product.sku_code.ilike(pattern),
+                Product.wb_vendor_code.ilike(pattern),
+                Product.wb_barcode.ilike(pattern),
+                SellerWildberriesImportedCard.title.ilike(pattern),
+                SellerWildberriesImportedCard.vendor_code.ilike(pattern),
+                cast(SellerWildberriesImportedCard.raw_json, Text).ilike(pattern),
+            )
+        )
+    normalized_category = (category or "").strip()
+    if normalized_category:
+        filters.append(
+            SellerWildberriesImportedCard.raw_json["subjectName"].as_string()
+            == normalized_category
+        )
+
+    matched_ids = (
+        select(Product.id)
+        .select_from(Product)
+        .outerjoin(SellerWildberriesImportedCard, card_join)
+        .where(*filters)
+    )
+    total = int(
+        await session.scalar(select(func.count()).select_from(matched_ids.subquery())) or 0
+    )
+    scope_total = int(
+        await session.scalar(select(func.count(Product.id)).where(*scope_filters)) or 0
+    )
+    product_stmt = (
+        select(Product)
+        .outerjoin(SellerWildberriesImportedCard, card_join)
+        .where(*filters)
+        .options(selectinload(Product.seller))
+        .order_by(Product.sku_code, Product.id)
+        .limit(limit)
+        .offset(offset)
+    )
+    products = list((await session.execute(product_stmt)).scalars().unique().all())
+
+    category_filters = [Product.tenant_id == tenant_id]
+    if seller_id is not None:
+        category_filters.append(Product.seller_id == seller_id)
+    subject = SellerWildberriesImportedCard.raw_json["subjectName"].as_string()
+    category_stmt = (
+        select(subject)
+        .select_from(Product)
+        .join(SellerWildberriesImportedCard, card_join)
+        .where(*category_filters, subject.is_not(None), subject != "")
+        .distinct()
+        .order_by(subject)
+    )
+    categories = [str(value) for value in (await session.scalars(category_stmt)).all()]
+    rows = await _enrich_linked_products(
+        session,
+        tenant_id,
+        products,
+        seller_id=seller_id,
+    )
+    return rows, total, scope_total, categories
 
 
 async def list_ff_catalog_rows(

@@ -99,7 +99,15 @@ test('stab inbound sort outbound — receive, see sorting, ship from buffer with
     ]);
   }
   await expect(page.getByTestId('ff-inbound-box-add-manual-qty').first()).toHaveValue(String(BOX2_QTY));
-  await page.getByTestId('ff-inbound-box-add-close').click();
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'GET' &&
+        /\/operations\/inbound-intake-requests\/[^/]+$/.test(response.url()) &&
+        response.ok(),
+    ),
+    page.getByTestId('ff-inbound-box-add-dismiss').click(),
+  ]);
   await expect(page.getByTestId('ff-inbound-box-row').nth(1)).toContainText(seed.sku);
 
   for (let i = 0; i < LOOSE_QTY; i++) {

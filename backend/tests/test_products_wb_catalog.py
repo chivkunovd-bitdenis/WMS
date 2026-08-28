@@ -319,6 +319,55 @@ async def test_ff_catalog_lists_all_tenant_products(
     assert {r["id"] for r in filtered_rows} == {pid_b_private_only, pid_c}
     assert {r["seller_name"] for r in filtered_rows} == {"Seller B"}
 
+    page_res = await async_client.get(
+        "/products/ff-catalog-page?limit=2&offset=0",
+        headers=ah,
+    )
+    assert page_res.status_code == 200, page_res.text
+    page = page_res.json()
+    assert len(page["items"]) == 2
+    assert page["total"] == 3
+    assert page["scope_total"] == 3
+    assert page["limit"] == 2
+    assert page["offset"] == 0
+    assert "Брюки" in page["categories"]
+
+    seller_page_res = await async_client.get(
+        f"/products/ff-catalog-page?seller_id={sid_b}&limit=100&offset=0",
+        headers=ah,
+    )
+    assert seller_page_res.status_code == 200, seller_page_res.text
+    seller_page = seller_page_res.json()
+    assert {r["id"] for r in seller_page["items"]} == {pid_b_private_only, pid_c}
+    assert seller_page["total"] == 2
+    assert seller_page["scope_total"] == 2
+
+    search_page_res = await async_client.get(
+        "/products/ff-catalog-page?search=Private&limit=100&offset=0",
+        headers=ah,
+    )
+    assert search_page_res.status_code == 200, search_page_res.text
+    search_page = search_page_res.json()
+    assert [r["id"] for r in search_page["items"]] == [pid_b_private_only]
+    assert search_page["total"] == 1
+    assert search_page["scope_total"] == 3
+
+    category_page_res = await async_client.get(
+        "/products/ff-catalog-page?category=%D0%91%D1%80%D1%8E%D0%BA%D0%B8&limit=100&offset=0",
+        headers=ah,
+    )
+    assert category_page_res.status_code == 200, category_page_res.text
+    category_page = category_page_res.json()
+    assert [r["id"] for r in category_page["items"]] == [pid_a]
+    assert category_page["total"] == 1
+
+    stock_page_res = await async_client.get(
+        f"/operations/inventory-balances/summary?product_id={pid_a}&product_id={pid_c}",
+        headers=ah,
+    )
+    assert stock_page_res.status_code == 200, stock_page_res.text
+    assert {row["product_id"] for row in stock_page_res.json()} == {pid_a, pid_c}
+
 
 @pytest.mark.asyncio
 async def test_linked_wb_catalog_before_stock_movement(

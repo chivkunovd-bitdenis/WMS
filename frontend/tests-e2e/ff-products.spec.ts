@@ -3,10 +3,11 @@ import { expect, test } from '@playwright/test'
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
 
-// TC-CAT-01 — каталог FF показывает карточки товаров с актуальными полями каталога.
+// TC-CAT-01 — каталог FF показывает карточки товаров и краткий фактический остаток.
 // Given: FF admin и товары разных селлеров; When: открывает «Каталог»;
-// Then: название, артикул селлера, SKU, ШК и размер разнесены по отдельным колонкам;
-test('ff products: catalog separates product fields', async ({ page }) => {
+// Then: название, артикул продавца, SKU, ШК, размер и остаток разнесены по отдельным колонкам;
+// negative: нет устаревших технических колонок сортировки и упаковки.
+test('ff products: catalog separates product fields and shows compact stock', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   const email = `e2e-ff-products-${Date.now()}@example.com`
   const password = 'password123'
@@ -94,31 +95,56 @@ test('ff products: catalog separates product fields', async ({ page }) => {
   await expect(tableHead).toContainText('SKU')
   await expect(tableHead).toContainText('ШК')
   await expect(tableHead).toContainText('Размер')
+  await expect(tableHead).toContainText('Селлер')
+  await expect(tableHead).toContainText('Остаток')
   await expect(tableHead).toContainText('ТЗ')
-  await expect(tableHead).not.toContainText('Артикул WB')
+  await expect(tableHead).toContainText('ЧЗ')
+  await expect(tableHead).toContainText('Резервы')
+  await expect(tableHead).not.toContainText('WB/nmId')
+  await expect(tableHead).not.toContainText('Распределение')
+  await expect(tableHead).not.toContainText('Сортировка')
+  await expect(tableHead).not.toContainText('Не упаковано')
+  await expect(tableHead).not.toContainText('Упаковано')
+  await expect(tableHead).not.toContainText('Технический резерв')
+  await expect(page.getByTestId('ff-products-table')).not.toContainText('Сортировка')
+  await expect(page.getByTestId('ff-products-table')).not.toContainText('Не упаковано')
+  await expect(page.getByTestId('ff-products-table')).not.toContainText('Упаковано')
+  await expect(page.getByTestId('ff-products-table')).not.toContainText('Технический резерв')
+  await expect(page.getByTestId('ff-catalog-search')).toBeVisible()
+  await expect(page.getByTestId('ff-catalog-seller-filter')).toBeVisible()
+  await expect(page.getByText('Вручную', { exact: true })).toHaveCount(0)
   await expect(page.getByTestId('ff-product-row')).toHaveCount(3)
   await expect(page.getByTestId('ff-products-table')).toContainText(skuA)
   await expect(page.getByTestId('ff-products-table')).toContainText(skuB)
   await expect(page.getByTestId('ff-products-table')).toContainText(skuPrivate)
 
   const alphaRow = page.getByTestId('ff-product-row').filter({ hasText: skuA })
-  await expect(alphaRow.locator('td').nth(1)).toContainText('Alpha product')
-  await expect(alphaRow.locator('td').nth(1)).not.toContainText('ART-A')
-  await expect(alphaRow.locator('td').nth(1)).not.toContainText('46')
-  await expect(alphaRow.locator('td').nth(2)).toContainText('ART-A')
-  await expect(alphaRow.locator('td').nth(3)).toContainText(skuA)
-  await expect(alphaRow.locator('td').nth(4)).toContainText(barcodeA)
+  // Нулевая колонка — чекбокс массового выбора, поэтому фото идёт первым, а не нулевым.
+  await expect(alphaRow.locator('td').nth(2)).toContainText('Alpha product')
+  await expect(alphaRow.locator('td').nth(2)).not.toContainText('ART-A')
+  await expect(alphaRow.locator('td').nth(2)).not.toContainText('46')
+  await expect(alphaRow.locator('td').nth(3)).toContainText('ART-A')
+  await expect(alphaRow.locator('td').nth(4)).toContainText(skuA)
+  await expect(alphaRow.locator('td').nth(5)).toContainText(barcodeA)
+  await expect(alphaRow.getByTestId(/ff-catalog-stock-in-storage-/)).toHaveText('В ячейках 0')
+  await expect(alphaRow.getByTestId(/ff-catalog-stock-on-hand-/)).toHaveText('На ФФ 0')
+  await expect(alphaRow.getByTestId(/ff-catalog-stock-free-fbo-/)).toHaveText('Свободный FBO 0')
   // Размер ищем по строке, а не по номеру колонки: порядок колонок каталога
   // меняется, и позиционная проверка ломается при каждой перестановке.
   await expect(alphaRow).toContainText('46')
 
   // Photo cell exists even if WB photo is missing in mocks.
-  await expect(page.getByTestId('ff-product-row').first().locator('td').nth(0)).toBeVisible()
+  await expect(page.getByTestId('ff-product-row').first().locator('td').nth(1)).toBeVisible()
+  // Чекбокс массового выбора — первым в строке, им отмечают товары для простановки
+  // остатка FBS пачкой.
+  await expect(
+    page.getByTestId('ff-product-row').first().locator('td').nth(0).locator('input[type="checkbox"]'),
+  ).toBeVisible()
 })
 
 // TC-CAT-03 — строка каталога ведёт в карточку кодов маркировки одной иконкой.
 // Given: у товара есть доступные КМ; When: FF admin открывает каталог;
-// Then: перед печатью ШК видна иконка кодов со счётчиком и клик ведёт в карточку товара ЧЗ.
+// Then: видны признак ЧЗ и иконка кодов со счётчиком; клик ведёт в карточку товара ЧЗ.
 test('ff products: marking icon shows count and opens honest sign product card', async ({ page }) => {
   const email = `e2e-ff-catalog-chz-${Date.now()}@example.com`
   const password = 'password123'
@@ -182,6 +208,7 @@ test('ff products: marking icon shows count and opens honest sign product card',
   await expect(page.getByTestId('ff-products-list')).toBeVisible()
   const row = page.getByTestId('ff-product-row').filter({ hasText: sku })
   await expect(row).toBeVisible()
+  await expect(page.getByTestId(`ff-honest-sign-status-${productId}`)).toHaveText('ЧЗ')
   const markingLink = page.getByTestId(`ff-catalog-marking-link-${productId}`)
   await expect(markingLink).toBeVisible()
   await expect(markingLink).toContainText('2')
@@ -442,6 +469,11 @@ bad.save(${JSON.stringify(badXlsxPath)})
   expect(importedProducts.find((product) => product.sku_code === 'E2E-ART-46')?.wb_nm_id).toBe(
     123456789,
   )
+  const importedRow = page.getByTestId('ff-product-row').filter({ hasText: 'E2E-ART-46' })
+  await importedRow.getByRole('button', { name: 'Редактировать ТЗ' }).click()
+  await expect(page.getByTestId('ff-packaging-dialog')).toBeVisible()
+  await expect(page.getByTestId('ff-packaging-text')).toHaveValue('E2E merged TZ')
+  await page.getByTestId('ff-packaging-dialog').getByRole('button', { name: 'Отмена' }).click()
 
   await page.getByTestId('ff-products-import-tz').click()
   await page.getByTestId('ff-tz-import-seller').click()

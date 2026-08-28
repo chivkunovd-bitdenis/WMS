@@ -213,8 +213,8 @@ export function CatalogSection(props: Props) {
     const t = window.setTimeout(() => {
       try {
         const c = document.createElement('canvas')
-        c.width = 320
-        c.height = 80
+        c.width = 1200
+        c.height = 300
         const ctx = c.getContext('2d')
         if (!ctx) {
           setBarcodeRenderError('Canvas context недоступен.')
@@ -225,8 +225,9 @@ export function CatalogSection(props: Props) {
         draw(c, printLocation.barcode, {
           format: 'CODE128',
           displayValue: false,
-          height: 64,
-          margin: 8,
+          height: 240,
+          margin: 24,
+          width: 5,
           lineColor: '#111',
           background: '#fff',
         })
@@ -873,7 +874,7 @@ export function CatalogSection(props: Props) {
                   alt="barcode"
                   data-testid="barcode-image"
                   style={{
-                    width: 320,
+                    width: '100%',
                     maxWidth: '100%',
                     height: 'auto',
                     border: '1px dashed rgba(0,0,0,0.2)',
@@ -884,8 +885,8 @@ export function CatalogSection(props: Props) {
               ) : (
                 <Box
                   sx={{
-                    width: 320,
-                    height: 80,
+                    width: '100%',
+                    height: 180,
                     maxWidth: '100%',
                     border: '1px dashed',
                     borderColor: 'divider',
@@ -936,12 +937,12 @@ export function CatalogSection(props: Props) {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Print barcode</title>
     <style>
-      @page { margin: 10mm; }
+      @page { margin: 4mm; }
       body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 0; margin: 0; }
-      .wrap { display: grid; gap: 8px; justify-items: center; }
-      .title { font-size: 14px; font-weight: 700; }
-      .code { font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-      img { width: 320px; height: auto; }
+      .wrap { min-height: calc(100vh - 8mm); display: grid; gap: 4mm; justify-items: center; align-content: center; padding: 2mm; box-sizing: border-box; }
+      .title { font-size: 24pt; font-weight: 700; }
+      .code { font-size: 18pt; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+      img { width: 96%; max-width: 190mm; height: 48mm; object-fit: fill; }
     </style>
   </head>
   <body>
@@ -952,6 +953,15 @@ export function CatalogSection(props: Props) {
     </div>
   </body>
 </html>`
+
+              const captureWindow = window as unknown as {
+                __WMS_CAPTURE_PRINT_HTML__?: boolean
+                __WMS_LAST_PRINT_HTML__?: string
+              }
+              if (captureWindow.__WMS_CAPTURE_PRINT_HTML__) {
+                captureWindow.__WMS_LAST_PRINT_HTML__ = html
+                return
+              }
 
               const iframe = document.createElement('iframe')
               iframe.setAttribute('aria-hidden', 'true')

@@ -17,7 +17,12 @@ from app.services.wildberries_product_import_service import upsert_products_from
 async def test_wb_import_does_not_claim_orphan_product_by_sku(
     async_client: AsyncClient,
 ) -> None:
-    """Tenant-wide SKU lookup must not attach another seller's row (incl. seller_id NULL)."""
+    """Импорт не должен присваивать чужую строку — даже ничью (seller_id NULL).
+
+    Раньше такая строка вдобавок блокировала создание своей: артикул считался занятым
+    на весь тенант. Теперь артикул уникален внутри продавца, поэтому продавец получает
+    собственный товар, а ничья строка остаётся нетронутой.
+    """
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(
         "/auth/register",
@@ -61,8 +66,8 @@ async def test_wb_import_does_not_claim_orphan_product_by_sku(
 
     async with SessionLocal() as session:
         stats = await upsert_products_from_wb_cards(session, tenant_id, sid1, [card])
-        assert stats["products_created"] == 0
-        assert stats["products_skipped"] >= 1
+        assert stats["products_created"] == 1
+        assert stats["products_skipped"] == 0
 
         unchanged = await session.get(Product, orphan_id)
         assert unchanged is not None
@@ -75,4 +80,11 @@ async def test_wb_import_does_not_claim_orphan_product_by_sku(
                 Product.seller_id == sid1,
             )
         )
-        assert list(own_res.scalars().all()) == []
+        own = list(own_res.scalars().all())
+
+    # Продавец получил собственную строку с тем же артикулом и своим штрихкодом,
+    # а ничья строка осталась ничьей.
+    assert len(own) == 1
+    assert own[0].id != orphan_id
+    assert own[0].sku_code == shared_sku
+    assert own[0].wb_barcode == f"BAR-{suffix}-1"

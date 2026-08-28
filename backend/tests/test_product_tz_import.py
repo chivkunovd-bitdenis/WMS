@@ -1,6 +1,5 @@
 """Product TZ xlsx import parser and apply."""
 
-
 from __future__ import annotations
 
 import io

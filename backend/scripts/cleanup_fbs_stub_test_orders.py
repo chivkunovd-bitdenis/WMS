@@ -14,9 +14,11 @@ IMPORTANT SAFETY NOTES:
 - The script does NOT interact with Wildberries API — it only deletes local database
   records. Operator responsibility: confirm via WB cabinet that orders are fake before
   deleting them locally.
-- Related marking codes (fbs_marking_codes table) are NOT deleted — only the
-  fbs_order_markings associations are removed. This may leave marking codes in "used"
-  state; manual cleanup of the marking pool may be required separately.
+- Deletion is refused when an order belongs to a supply or has already debited an FBS
+  stock pool, shipment-reversal ledger, or marking association. Such records require
+  a dedicated accounting-aware recovery procedure.
+- Orders with marking associations are reported but cannot be deleted by this script.
+  They require a dedicated marking-aware recovery procedure.
 
 USAGE EXAMPLES:
 
@@ -67,6 +69,11 @@ from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_packing_box import FbsPackingBoxItem
 from app.models.fbs_print_asset import FbsPrintAsset
 from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
+from app.models.fbs_stock_pool_debit import FbsStockPoolDebit
+
+
+class CleanupBlockedError(RuntimeError):
+    """The selected orders cannot be safely deleted by this maintenance script."""
 
 
 async def count_related_records(
@@ -82,6 +89,7 @@ async def count_related_records(
         "packing_boxes": 0,
         "reversals": 0,
         "print_assets": 0,
+        "stock_pool_debits": 0,
     }
 
     if not fbs_order_ids:
@@ -133,6 +141,11 @@ async def count_related_records(
         FbsPrintAsset.fbs_order_id.in_(fbs_order_ids)
     )
     counts["print_assets"] = (await session.scalar(stmt)) or 0
+
+    stmt = select(func.count(FbsStockPoolDebit.id)).where(
+        FbsStockPoolDebit.order_id.in_(fbs_order_ids)
+    )
+    counts["stock_pool_debits"] = (await session.scalar(stmt)) or 0
 
     return counts
 
@@ -211,6 +224,7 @@ async def report_orders(
     print(f"  FbsPackingBoxItem:                {related_counts['packing_boxes']}")
     print(f"  FbsShipmentReversalLedger:        {related_counts['reversals']}")
     print(f"  FbsPrintAsset:                    {related_counts['print_assets']}")
+    print(f"  FbsStockPoolDebit:                {related_counts['stock_pool_debits']}")
 
     # Mark orders with supply_id
     orders_with_supply = [o for o in found_orders if o.supply_id]
@@ -218,7 +232,7 @@ async def report_orders(
         print(f"\n⚠️  {len(orders_with_supply)} order(s) are part of an active supply:")
         for order in orders_with_supply:
             print(f"    - WB Order ID {order.wb_order_id} → Supply ID {order.supply_id}")
-        print("    Deletion will not fail, but it may break supply accounting.")
+        print("    Deletion will be refused to preserve supply accounting.")
 
     # Check for missing orders
     found_wb_ids = {o.wb_order_id for o in found_orders}
@@ -230,10 +244,9 @@ async def report_orders(
 
     # Marking codes warning
     if related_counts['markings'] > 0:
-        print("\n⚠️  Marking code pools will NOT be deleted or freed:")
-        print(f"    Only {related_counts['markings']} marking association(s) will be removed.")
-        print("    The marking_codes table itself is not touched.")
-        print("    Manual cleanup may be needed if codes should not stay in 'used' state.")
+        print("\n⚠️  Marking associations require a marking-aware recovery:")
+        print(f"    Found {related_counts['markings']} association(s).")
+        print("    Deletion will be refused; marking codes and associations stay untouched.")
 
     total_related = (
         related_counts['markings']
@@ -243,9 +256,55 @@ async def report_orders(
         + related_counts['packing_boxes']
         + related_counts['reversals']
         + related_counts['print_assets']
+        + related_counts['stock_pool_debits']
     )
 
     return found_orders, total_related
+
+
+async def ensure_orders_are_safe_to_delete(
+    session: AsyncSession,
+    orders: Sequence[FbsOrder],
+) -> None:
+    """Fail closed before any DELETE that could corrupt supply or stock-pool accounting."""
+    linked_supply_ids = sorted(
+        {str(order.supply_id) for order in orders if order.supply_id is not None}
+    )
+    if linked_supply_ids:
+        raise CleanupBlockedError(
+            "selected orders belong to FBS supplies: " + ", ".join(linked_supply_ids)
+        )
+
+    order_ids = [order.id for order in orders]
+    debit_count = await session.scalar(
+        select(func.count(FbsStockPoolDebit.id)).where(
+            FbsStockPoolDebit.order_id.in_(order_ids)
+        )
+    )
+    if int(debit_count or 0) > 0:
+        raise CleanupBlockedError(
+            "selected orders have FBS stock-pool debits; use an accounting-aware recovery"
+        )
+
+    reversal_count = await session.scalar(
+        select(func.count(FbsShipmentReversalLedger.id)).where(
+            FbsShipmentReversalLedger.fbs_order_id.in_(order_ids)
+        )
+    )
+    if int(reversal_count or 0) > 0:
+        raise CleanupBlockedError(
+            "selected orders have shipment-reversal ledger entries; preserve audit history"
+        )
+
+    marking_count = await session.scalar(
+        select(func.count(FbsOrderMarking.id)).where(
+            FbsOrderMarking.order_id.in_(order_ids)
+        )
+    )
+    if int(marking_count or 0) > 0:
+        raise CleanupBlockedError(
+            "selected orders have marking associations; use a marking-aware recovery"
+        )
 
 
 async def delete_orders(
@@ -254,15 +313,16 @@ async def delete_orders(
 ) -> int:
     """Delete FBS orders and all related records in the correct order.
 
-    Deletion order (respects FK constraints):
+    Deletion order after all fail-closed accounting checks (respects FK constraints):
     1. FbsPrintAsset
-    2. FbsShipmentReversalLedger
-    3. FbsPackingBoxItem
-    4. FbsPackagingFulfillment
-    5. FbsOrderPick
-    6. FbsOrderReservation (frees warehouse reserved stock)
-    7. FbsOrderMarking
-    8. FbsOrder (the parent)
+    2. FbsPackingBoxItem
+    3. FbsPackagingFulfillment
+    4. FbsOrderPick
+    5. FbsOrderReservation (frees warehouse reserved stock)
+    6. FbsOrder (the parent)
+
+    Orders with a supply, stock-pool debit, reversal ledger, or marking association
+    are rejected before deletion.
 
     Args:
         session: Async database session
@@ -271,8 +331,22 @@ async def delete_orders(
     Returns:
         Total number of records deleted (including parents and children)
     """
-    order_ids = [o.id for o in orders]
-    wb_order_ids = [o.wb_order_id for o in orders]
+    requested_ids = {order.id for order in orders}
+    locked_stmt = (
+        select(FbsOrder)
+        .where(FbsOrder.id.in_(requested_ids))
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    locked_orders = list((await session.execute(locked_stmt)).scalars().all())
+    if {order.id for order in locked_orders} != requested_ids:
+        raise CleanupBlockedError("one or more selected orders disappeared before deletion")
+
+    orders = locked_orders
+    order_ids = [order.id for order in orders]
+    wb_order_ids = [order.wb_order_id for order in orders]
+
+    await ensure_orders_are_safe_to_delete(session, orders)
 
     print("\n" + "=" * 385)
     print(f"\n⚠️  FINAL CONFIRMATION: About to delete {len(orders)} FBS order(s) PERMANENTLY:")
@@ -287,75 +361,55 @@ async def delete_orders(
 
         # 1. Delete FbsPrintAsset
         stmt = delete(FbsPrintAsset).where(FbsPrintAsset.fbs_order_id.in_(order_ids))
-        result = await session.execute(stmt)
-        count = cast(CursorResult[Any], result).rowcount
+        result = cast(CursorResult[Any], await session.execute(stmt))
+        count = result.rowcount
         if count > 0:
             print(f"  ✓ Deleted {count} FbsPrintAsset record(s)")
             total_deleted += count
 
-        # 2. Delete FbsShipmentReversalLedger
-        stmt = delete(FbsShipmentReversalLedger).where(
-            FbsShipmentReversalLedger.fbs_order_id.in_(order_ids)
-        )
-        result = await session.execute(stmt)
-        count = cast(CursorResult[Any], result).rowcount
-        if count > 0:
-            print(f"  ✓ Deleted {count} FbsShipmentReversalLedger record(s)")
-            total_deleted += count
-
-        # 3. Delete FbsPackingBoxItem
+        # 2. Delete FbsPackingBoxItem
         stmt = delete(FbsPackingBoxItem).where(
             FbsPackingBoxItem.fbs_order_id.in_(order_ids)
         )
-        result = await session.execute(stmt)
-        count = cast(CursorResult[Any], result).rowcount
+        result = cast(CursorResult[Any], await session.execute(stmt))
+        count = result.rowcount
         if count > 0:
             print(f"  ✓ Deleted {count} FbsPackingBoxItem record(s)")
             total_deleted += count
 
-        # 4. Delete FbsPackagingFulfillment
+        # 3. Delete FbsPackagingFulfillment
         stmt = delete(FbsPackagingFulfillment).where(
             FbsPackagingFulfillment.fbs_order_id.in_(order_ids)
         )
-        result = await session.execute(stmt)
-        count = cast(CursorResult[Any], result).rowcount
+        result = cast(CursorResult[Any], await session.execute(stmt))
+        count = result.rowcount
         if count > 0:
             print(f"  ✓ Deleted {count} FbsPackagingFulfillment record(s)")
             total_deleted += count
 
-        # 5. Delete FbsOrderPick
+        # 4. Delete FbsOrderPick
         stmt = delete(FbsOrderPick).where(FbsOrderPick.fbs_order_id.in_(order_ids))
-        result = await session.execute(stmt)
-        count = cast(CursorResult[Any], result).rowcount
+        result = cast(CursorResult[Any], await session.execute(stmt))
+        count = result.rowcount
         if count > 0:
             print(f"  ✓ Deleted {count} FbsOrderPick record(s)")
             total_deleted += count
 
-        # 6. Delete FbsOrderReservation (frees warehouse reserved stock)
+        # 5. Delete FbsOrderReservation (frees warehouse reserved stock)
         stmt = delete(FbsOrderReservation).where(
             FbsOrderReservation.fbs_order_id.in_(order_ids)
         )
-        result = await session.execute(stmt)
-        count = cast(CursorResult[Any], result).rowcount
+        result = cast(CursorResult[Any], await session.execute(stmt))
+        count = result.rowcount
         if count > 0:
             print(f"  ✓ Deleted {count} FbsOrderReservation record(s) "
                   f"[warehouse reserves freed]")
             total_deleted += count
 
-        # 7. Delete FbsOrderMarking
-        stmt = delete(FbsOrderMarking).where(
-            FbsOrderMarking.order_id.in_(order_ids)
-        )
-        result = await session.execute(stmt)
-        count = cast(CursorResult[Any], result).rowcount
-        if count > 0:
-            print(f"  ✓ Deleted {count} FbsOrderMarking record(s)")
-            total_deleted += count
-
-        # 8. Delete FbsOrder (parent)
+        # 6. Delete FbsOrder (parent)
         stmt = delete(FbsOrder).where(FbsOrder.id.in_(order_ids))
-        result = await session.execute(stmt)
-        count = cast(CursorResult[Any], result).rowcount
+        result = cast(CursorResult[Any], await session.execute(stmt))
+        count = result.rowcount
         if count > 0:
             print(f"  ✓ Deleted {count} FbsOrder record(s)")
             total_deleted += count

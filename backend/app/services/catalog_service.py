@@ -3,15 +3,18 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import String, cast, exists, func, or_, select, update
+from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inbound_intake import InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
 from app.models.marketplace_account import MarketplaceAccount
@@ -23,6 +26,7 @@ from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.models.warehouse_storage_rack import WarehouseStorageRack
+from app.services import fbs_stock_availability_service
 from app.services import inventory_service as inv_svc
 from app.services import sorting_location_service as sorting_loc_svc
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
@@ -523,6 +527,40 @@ def volume_liters_from_mm(l_mm: int | None, w_mm: int | None, h_mm: int | None) 
     return float(l_mm * w_mm * h_mm) / 1_000_000.0
 
 
+def marketplace_scope_condition(
+    tenant_id: uuid.UUID, marketplace: str | None
+) -> ColumnElement[bool] | None:
+    """Условие «товар относится к этому маркетплейсу», одно на все выборки каталога.
+
+    Раньше жило внутри ``list_products``. Страничная выдача каталога умеет фильтровать
+    по селлеру и поиску, но про маркетплейс не знала — фильтр на экране молча ничего
+    не делал бы. Одна функция на оба пути, чтобы они не разъехались снова.
+    """
+    if marketplace == "ozon":
+        return exists(
+            select(ProductMarketplaceLink.id).where(
+                ProductMarketplaceLink.tenant_id == tenant_id,
+                ProductMarketplaceLink.product_id == Product.id,
+                ProductMarketplaceLink.marketplace == "ozon",
+                ProductMarketplaceLink.is_active.is_(True),
+            )
+        )
+    if marketplace == "wildberries":
+        return or_(
+            Product.wb_nm_id.is_not(None),
+            Product.wb_vendor_code.is_not(None),
+            exists(
+                select(ProductMarketplaceLink.id).where(
+                    ProductMarketplaceLink.tenant_id == tenant_id,
+                    ProductMarketplaceLink.product_id == Product.id,
+                    ProductMarketplaceLink.marketplace == "wildberries",
+                    ProductMarketplaceLink.is_active.is_(True),
+                )
+            ),
+        )
+    return None
+
+
 async def list_products(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -551,32 +589,9 @@ async def list_products(
         if not product_ids:
             return []
         stmt = stmt.where(Product.id.in_(product_ids))
-    if marketplace == "ozon":
-        stmt = stmt.where(
-            exists(
-                select(ProductMarketplaceLink.id).where(
-                    ProductMarketplaceLink.tenant_id == tenant_id,
-                    ProductMarketplaceLink.product_id == Product.id,
-                    ProductMarketplaceLink.marketplace == "ozon",
-                    ProductMarketplaceLink.is_active.is_(True),
-                )
-            )
-        )
-    elif marketplace == "wildberries":
-        stmt = stmt.where(
-            or_(
-                Product.wb_nm_id.is_not(None),
-                Product.wb_vendor_code.is_not(None),
-                exists(
-                    select(ProductMarketplaceLink.id).where(
-                        ProductMarketplaceLink.tenant_id == tenant_id,
-                        ProductMarketplaceLink.product_id == Product.id,
-                        ProductMarketplaceLink.marketplace == "wildberries",
-                        ProductMarketplaceLink.is_active.is_(True),
-                    )
-                ),
-            )
-        )
+    marketplace_condition = marketplace_scope_condition(tenant_id, marketplace)
+    if marketplace_condition is not None:
+        stmt = stmt.where(marketplace_condition)
     needle = (search or "").strip()
     if needle:
         like = f"%{needle}%"
@@ -1259,6 +1274,144 @@ async def bulk_update_products_fbs_stock_sync(
     schedule_seller_stock_publish(session, tenant_id, seller_id)
     await session.commit()
     return updated_count
+
+
+@dataclass(frozen=True)
+class FbsStockLimitFromBalanceUpdated:
+    product_id: uuid.UUID
+    fbs_stock_limit: int
+    reset_warehouses_count: int
+
+
+@dataclass(frozen=True)
+class FbsStockLimitFromBalanceSkipped:
+    product_id: uuid.UUID
+    reason: str
+
+
+@dataclass(frozen=True)
+class FbsStockLimitFromBalanceResult:
+    updated: list[FbsStockLimitFromBalanceUpdated]
+    skipped: list[FbsStockLimitFromBalanceSkipped]
+    reset_products_count: int
+
+
+async def _reset_fbs_binding_stock_pools_for_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> int:
+    """Обнуляет разнарядку товара по всем складам селлера, отдаёт число сброшенных складов.
+
+    Поменялся общий остаток под FBS — старая раскладка по складам недействительна
+    (решение владельца, см. наряд), её надо делать заново. Пишем quantity=0, а не
+    удаляем строку: сама строка — осознанное решение админа по этому складу, и
+    синхронизация публикует явный ноль в WB (см. is_explicit_zero в
+    fbs_stock_sync_service._build_publish_plan). Удаление строки увело бы товар из
+    публикации, и в кабинете WB завис бы старый остаток — фантом, по которому
+    продолжали бы идти заказы.
+    """
+    stmt = (
+        select(FbsBindingStockPool.id, FbsBindingStockPool.quantity)
+        .select_from(FbsBindingStockPool)
+        .join(FbsWarehouseBinding, FbsBindingStockPool.binding_id == FbsWarehouseBinding.id)
+        .where(
+            FbsWarehouseBinding.tenant_id == tenant_id,
+            FbsWarehouseBinding.seller_id == seller_id,
+            FbsBindingStockPool.product_id == product_id,
+        )
+    )
+    rows = (await session.execute(stmt)).all()
+    reset_ids = [pool_id for pool_id, quantity in rows if quantity != 0]
+    if reset_ids:
+        await session.execute(
+            update(FbsBindingStockPool)
+            .where(FbsBindingStockPool.id.in_(reset_ids))
+            .values(quantity=0)
+        )
+    return len(reset_ids)
+
+
+async def apply_products_fbs_stock_limit_from_balance(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    *,
+    product_ids: list[uuid.UUID],
+) -> FbsStockLimitFromBalanceResult:
+    """Проставляет fbs_stock_limit равным фактическому остатку по всем складам тенанта.
+
+    Пул под FBS у товара один на всех складах (см. fbs_binding_stock_pools), поэтому
+    остаток считается по каждому складу через fbs_available_qty_by_product и
+    складывается в общую цифру. Смена общего остатка обесценивает старую раскладку
+    по складам, поэтому она сбрасывается в ноль для каждого обновлённого товара —
+    без этого сумма по складам могла бы превысить новый пул. Окно-предупреждение
+    перед применением — забота фронта, здесь только сам сброс.
+    """
+    updated: list[FbsStockLimitFromBalanceUpdated] = []
+    skipped: list[FbsStockLimitFromBalanceSkipped] = []
+
+    # Порядок и уникальность запрошенных id сохраняем, чтобы ответ был предсказуем
+    # даже если фронт случайно прислал дубликаты.
+    unique_ids = list(dict.fromkeys(product_ids))
+
+    products_stmt = select(Product).where(
+        Product.tenant_id == tenant_id,
+        Product.seller_id == seller_id,
+        Product.id.in_(unique_ids),
+    )
+    products_res = await session.execute(products_stmt)
+    products_by_id = {p.id: p for p in products_res.scalars().all()}
+
+    found_ids = [pid for pid in unique_ids if pid in products_by_id]
+    for pid in unique_ids:
+        if pid not in products_by_id:
+            skipped.append(FbsStockLimitFromBalanceSkipped(product_id=pid, reason="not_found"))
+
+    if not found_ids:
+        return FbsStockLimitFromBalanceResult(
+            updated=updated, skipped=skipped, reset_products_count=0
+        )
+
+    warehouses_stmt = select(Warehouse.id).where(Warehouse.tenant_id == tenant_id)
+    warehouse_ids = [wid for (wid,) in (await session.execute(warehouses_stmt)).all()]
+
+    available_by_product: dict[uuid.UUID, int] = dict.fromkeys(found_ids, 0)
+    for warehouse_id in warehouse_ids:
+        per_warehouse = await fbs_stock_availability_service.fbs_available_qty_by_product(
+            session, tenant_id, warehouse_id, found_ids
+        )
+        for pid, qty in per_warehouse.items():
+            available_by_product[pid] = available_by_product.get(pid, 0) + qty
+
+    for pid in found_ids:
+        available_qty = available_by_product.get(pid, 0)
+        await update_product_fbs_stock_sync(
+            session,
+            tenant_id,
+            pid,
+            fbs_stock_limit=available_qty,
+            commit=False,
+        )
+        reset_warehouses_count = await _reset_fbs_binding_stock_pools_for_product(
+            session, tenant_id, seller_id, pid
+        )
+        updated.append(
+            FbsStockLimitFromBalanceUpdated(
+                product_id=pid,
+                fbs_stock_limit=available_qty,
+                reset_warehouses_count=reset_warehouses_count,
+            )
+        )
+
+    if updated:
+        await session.commit()
+
+    reset_products_count = sum(1 for item in updated if item.reset_warehouses_count > 0)
+    return FbsStockLimitFromBalanceResult(
+        updated=updated, skipped=skipped, reset_products_count=reset_products_count
+    )
 
 
 async def products_missing_packaging_instructions(

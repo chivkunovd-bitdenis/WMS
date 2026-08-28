@@ -19,6 +19,7 @@ from app.models.fbs_stock_sync_item import STOCK_SYNC_STATUS_PENDING
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller import Seller
+from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.user import User
 from app.services import background_job_service as job_svc
 from app.services import fbs_seller_warehouse_service as wh_svc
@@ -32,6 +33,7 @@ from app.services.fbs_stock_sync_service import (
     FbsStockSyncError,
     schedule_explicit_zero_publish,
 )
+from app.services.wb_card_enrichment import first_photo_url_from_card
 
 router = APIRouter(prefix="/operations/fbs-sellers", tags=["operations"])
 
@@ -305,11 +307,44 @@ async def disable_fbs_warehouse_binding(
     return _binding_out(row)
 
 
+async def _stock_pool_images_by_nm_id(
+    session: AsyncSession,
+    seller_id: uuid.UUID,
+    products: list[Product],
+) -> dict[int, str]:
+    """Фото товаров одним запросом: карточек на складе тысячи, поштучно нельзя."""
+    nm_ids = {int(p.wb_nm_id) for p in products if p.wb_nm_id is not None}
+    if not nm_ids:
+        return {}
+    stmt = select(
+        SellerWildberriesImportedCard.nm_id,
+        SellerWildberriesImportedCard.raw_json,
+    ).where(
+        SellerWildberriesImportedCard.seller_id == seller_id,
+        SellerWildberriesImportedCard.nm_id.in_(sorted(nm_ids)),
+    )
+    images: dict[int, str] = {}
+    for nm_id, raw in (await session.execute(stmt)).all():
+        if not isinstance(raw, dict):
+            continue
+        url = first_photo_url_from_card(raw)
+        if url:
+            images[int(nm_id)] = url
+    return images
+
+
 class FbsStockPoolProductOut(BaseModel):
     product_id: str
     sku_code: str
     name: str
     wb_chrt_id: int | None
+    # Оператор опознаёт товар глазами по фото, артикулу продавца и штрихкоду —
+    # внутренний код и название для этого не годятся: у одного товара десяток
+    # размеров с почти одинаковым названием.
+    wb_vendor_code: str | None = None
+    wb_barcode: str | None = None
+    wb_size: str | None = None
+    image_url: str | None = None
     pool_limit: int
     allocated_this_binding: int
     allocated_elsewhere: int
@@ -382,6 +417,8 @@ async def list_fbs_binding_stock_pool(
         for row in (await session.execute(elsewhere_stmt)).all()
     }
 
+    image_by_nm_id = await _stock_pool_images_by_nm_id(session, seller_id, products)
+
     out: list[FbsStockPoolProductOut] = []
     for product in products:
         limit = int(product.fbs_stock_limit) if product.fbs_stock_limit is not None else 0
@@ -393,6 +430,14 @@ async def list_fbs_binding_stock_pool(
                 sku_code=product.sku_code,
                 name=product.name,
                 wb_chrt_id=product.wb_chrt_id,
+                wb_vendor_code=product.wb_vendor_code,
+                wb_barcode=product.wb_barcode,
+                wb_size=product.wb_size,
+                image_url=(
+                    image_by_nm_id.get(int(product.wb_nm_id))
+                    if product.wb_nm_id is not None
+                    else None
+                ),
                 pool_limit=limit,
                 allocated_this_binding=allocated_this,
                 allocated_elsewhere=allocated_elsewhere,

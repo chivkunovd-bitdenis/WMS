@@ -220,20 +220,61 @@ describe('createScannerListener — GS-разделитель', () => {
   })
 })
 
-describe('createScannerListener — пауза внутри последовательности', () => {
-  it('пауза > maxIntervalMs внутри burst → сброс буфера, скан не распознан', () => {
+describe('createScannerListener — заминка сканера внутри пачки', () => {
+  // Реальный инцидент 23.08.2026: сканер задумался на 70 мс в середине кода,
+  // буфер обнулялся, и вместо `4630452635503` на сервер уходил `0452635503`.
+  const EAN = '4630452635503'
+  const asChars = (code: string) =>
+    code.split('').map((k) => ({ key: k, code: `Digit${k}` }))
+
+  it('заминка после первой цифры → уходит полный код, вызов один', () => {
     const onScan = vi.fn()
     const { listener, tick } = makeListener(onScan)
 
-    // Первые 4 символа быстро
-    sendChars(listener, [{key:'A'},{key:'B'},{key:'C'},{key:'D'}], tick, 10)
-    // Большая пауза
-    tick(200)
-    // Ещё 3 символа (новый burst < minLength=5)
-    sendChars(listener, [{key:'E'},{key:'F'},{key:'G'}], tick, 10)
+    sendChars(listener, asChars(EAN.slice(0, 1)), tick, 10)
+    tick(70)
+    sendChars(listener, asChars(EAN.slice(1)), tick, 10)
     sendEnter(listener)
 
+    expect(onScan).toHaveBeenCalledTimes(1)
+    expect(onScan).toHaveBeenCalledWith(EAN)
+  })
+
+  it('заминка после третьей цифры → уходит полный код, вызов один', () => {
+    const onScan = vi.fn()
+    const { listener, tick } = makeListener(onScan)
+
+    sendChars(listener, asChars(EAN.slice(0, 3)), tick, 10)
+    tick(200)
+    sendChars(listener, asChars(EAN.slice(3)), tick, 10)
+    sendEnter(listener)
+
+    expect(onScan).toHaveBeenCalledTimes(1)
+    expect(onScan).toHaveBeenCalledWith(EAN)
+  })
+
+  it('ручной ввод (все интервалы длинные) → не скан, Enter не перехвачен', () => {
+    const onScan = vi.fn()
+    const { listener, tick } = makeListener(onScan)
+
+    sendChars(listener, asChars('1234567'), tick, 250)
+    const enter = sendEnter(listener)
+
     expect(onScan).not.toHaveBeenCalled()
+    expect(enter.preventDefault).not.toHaveBeenCalled()
+  })
+
+  it('затишье больше секунды начинает новую пачку', () => {
+    const onScan = vi.fn()
+    const { listener, tick } = makeListener(onScan)
+
+    sendChars(listener, asChars('9999'), tick, 10)
+    tick(1500)
+    sendChars(listener, asChars(EAN), tick, 10)
+    sendEnter(listener)
+
+    expect(onScan).toHaveBeenCalledTimes(1)
+    expect(onScan).toHaveBeenCalledWith(EAN)
   })
 })
 

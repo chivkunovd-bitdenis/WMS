@@ -4,30 +4,13 @@ import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
 import { beginInboundReceiving } from './inbound-boxes-helpers';
 
-async function sortingRowByIdentity(
-  card: Locator,
-  identity: { sourceText: string; locationText: string },
-): Promise<Locator> {
-  const rows = card.getByTestId('ff-sorting-cell-row');
-  const count = await rows.count();
-  for (let i = 0; i < count; i++) {
-    const row = rows.nth(i);
-    const sourceText = (await row.getByTestId('ff-sorting-cell-source').textContent())?.replace(/\s+/g, ' ').trim() ?? '';
-    const locationText = (await row.getByTestId('ff-sorting-cell-location').textContent())?.replace(/\s+/g, ' ').trim() ?? '';
-    if (sourceText.includes(identity.sourceText) && locationText.includes(identity.locationText)) return row;
-  }
-  throw new Error(
-    `sorting row with source "${identity.sourceText}" and location "${identity.locationText}" not found`,
-  );
-}
-
 async function selectSortingLocation(page: Page, row: Locator, name: RegExp): Promise<void> {
   await row.getByTestId('ff-sorting-cell-location').getByRole('combobox').click();
   await page.getByRole('option', { name }).click();
 }
 
-// TC-NEW-SORT-01 — mixed loose + box distribution has one final action and applies correct sources.
-test('ff sorting product-centric: loose and box sources apply with one final action', async ({ page }) => {
+// TC-NEW-SORT-01 — box contents stay under the box; only loose goods remain below.
+test('ff sorting: box product rows and loose goods are separate', async ({ page }) => {
   const email = `e2e-sort-mix-${Date.now()}@example.com`;
   const sku = `SKU-SORT-MIX-${Date.now()}`;
   const whCode = `wh-sort-mix-${Date.now()}`;
@@ -59,8 +42,13 @@ test('ff sorting product-centric: loose and box sources apply with one final act
     headers: h,
     data: { code: 'BOX-1' },
   });
+  const locStale = await page.request.post(`/api/warehouses/${wid}/locations`, {
+    headers: h,
+    data: { code: 'STALE-BOX-DRAFT' },
+  });
   expect(locLoose.ok()).toBeTruthy();
   expect(locBox.ok()).toBeTruthy();
+  expect(locStale.ok()).toBeTruthy();
 
   const pr = await page.request.post('/api/products', {
     headers: h,
@@ -91,9 +79,6 @@ test('ff sorting product-centric: loose and box sources apply with one final act
     data: { quantity: 6 },
   });
   expect(putBox.ok()).toBeTruthy();
-  const closeBox = await page.request.post(`${base}/${rid}/boxes/${boxId}/close`, { headers: h });
-  expect(closeBox.ok()).toBeTruthy();
-
   const patchLoose = await page.request.patch(`${base}/${rid}/lines/${lineId}/actual`, {
     headers: { ...h, 'Content-Type': 'application/json' },
     data: { actual_qty: 4 },
@@ -102,6 +87,17 @@ test('ff sorting product-centric: loose and box sources apply with one final act
 
   const complete = await page.request.post(`${base}/${rid}/complete-receiving`, { headers: h });
   expect(complete.ok()).toBeTruthy();
+
+  const staleDraft = await page.request.put(`${base}/${rid}/distribution-lines`, {
+    headers: { ...h, 'Content-Type': 'application/json' },
+    data: [{
+      box_id: boxId,
+      product_id: pid,
+      storage_location_id: ((await locStale.json()) as { id: string }).id,
+      quantity: 6,
+    }],
+  });
+  expect(staleDraft.ok()).toBeTruthy();
 
   await page.goto('/app/ff/sorting');
   const [distributionRes] = await Promise.all([
@@ -112,26 +108,58 @@ test('ff sorting product-centric: loose and box sources apply with one final act
   ]);
   expect(distributionRes.ok()).toBeTruthy();
   await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
-  await expect(page.getByTestId('ff-sorting-product-accepted')).toHaveText('10');
+  const boxRow = page.getByTestId('ff-sorting-box-putaway-row').filter({ hasText: `Короб №${box.box_number}` });
+  await expect(boxRow).toBeVisible();
+  await expect(boxRow.getByTestId('ff-sorting-box-product-row')).toHaveCount(1);
+  await expect(boxRow.getByTestId('ff-sorting-box-product-sku')).toHaveText(sku);
+  await expect(boxRow.getByTestId('ff-sorting-box-product-qty')).toHaveText('6');
+  await expect(boxRow.getByTestId('ff-sorting-cell-location')).toHaveCount(0);
+  await expect(page.getByTestId('ff-sorting-toolbar-controls').getByTestId('ff-sorting-remaining-total'))
+    .toHaveText('Осталось: 10 шт');
+  await expect(page.getByTestId('ff-sorting-toolbar-controls').getByTestId('ff-sorting-apply'))
+    .toBeVisible();
+
+  await page.getByTestId('ff-sorting-boxes-toggle').click();
+  await expect(page.getByTestId('ff-sorting-box-putaway-row')).toHaveCount(0);
+  await page.getByTestId('ff-sorting-boxes-toggle').click();
+  await expect(boxRow).toBeVisible();
 
   const productCard = page.getByTestId('ff-sorting-product-card').first();
+  await expect(productCard.getByTestId('ff-sorting-product-accepted')).toHaveText('4');
+  await expect(productCard.getByTestId('ff-sorting-cell-row')).toHaveCount(1);
+  await expect(productCard).not.toContainText('Короб №');
+  await page.getByTestId('ff-sorting-loose-toggle').click();
+  await expect(page.getByTestId('ff-sorting-product-card')).toHaveCount(0);
+  await page.getByTestId('ff-sorting-loose-toggle').click();
+  await expect(productCard).toBeVisible();
+  await page.screenshot({
+    path: '../docs/evidence/20260824-box-contents-sorting/box-and-loose.png',
+    fullPage: true,
+  });
 
-  await expect(productCard.getByTestId('ff-sorting-cell-row')).toHaveCount(2);
-  let looseRow = productCard
-    .getByTestId('ff-sorting-cell-row')
-    .filter({ has: page.getByTestId('ff-sorting-cell-source').filter({ hasText: 'Россыпь' }) })
-    .first();
+  await boxRow.getByTestId('ff-sorting-box-location').getByRole('combobox').click();
+  await page.getByRole('option', { name: 'BOX-1' }).click();
+  await Promise.all([
+    page.waitForResponse(
+      (r) => r.request().method() === 'POST' && r.url().includes(`/boxes/${boxId}/putaway`) && r.ok(),
+    ),
+    boxRow.getByTestId('ff-sorting-box-putaway-submit').click(),
+  ]);
+  await expect(page.getByTestId('ff-sorting-box-putaway-row')).toHaveCount(1);
+  await expect(boxRow).toHaveAttribute('data-placed', 'true');
+  await expect(boxRow.getByTestId('ff-sorting-box-placed')).toHaveText('Разложен');
+  await expect(boxRow.getByTestId('ff-sorting-box-placed-location')).toHaveText('BOX-1');
+  await expect(boxRow.getByTestId('ff-sorting-box-product-row')).toHaveCount(1);
+  await expect(boxRow.getByTestId('ff-sorting-box-product-qty')).toHaveText('6');
+  await expect(page.getByTestId('ff-sorting-remaining-total')).toHaveText('Осталось: 4 шт');
+  await page.screenshot({
+    path: '../docs/evidence/20260824-box-contents-sorting/box-placed-visible.png',
+    fullPage: true,
+  });
+
+  const looseRow = page.getByTestId('ff-sorting-product-card').first().getByTestId('ff-sorting-cell-row').first();
   await selectSortingLocation(page, looseRow, /LOOSE-1/);
   await looseRow.getByTestId('ff-sorting-cell-qty').fill('4');
-
-  const boxRow = productCard
-    .getByTestId('ff-sorting-cell-row')
-    .filter({ has: page.getByTestId('ff-sorting-cell-source').filter({ hasText: 'Короб' }) })
-    .first();
-  await selectSortingLocation(page, boxRow, /BOX-1/);
-  await expect(boxRow.getByTestId('ff-sorting-cell-qty')).toHaveValue('6');
-  await expect(looseRow.getByTestId('ff-sorting-cell-source')).toContainText('Россыпь');
-  await expect(boxRow.getByTestId('ff-sorting-cell-source')).toContainText('Короб');
   await expect(page.getByTestId('ff-sorting-save')).toHaveCount(0);
   await expect(page.getByTestId('ff-sorting-apply')).toBeEnabled();
 
@@ -151,15 +179,18 @@ test('ff sorting product-centric: loose and box sources apply with one final act
   const distributionReadback = await page.request.get(`${base}/${rid}/distribution-lines`, { headers: h });
   expect(distributionReadback.ok()).toBeTruthy();
   const distributionRows = (await distributionReadback.json()) as {
+    box_id: string | null;
     storage_location_code: string;
     quantity: number;
   }[];
-  expect(distributionRows).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({ storage_location_code: 'LOOSE-1', quantity: 4 }),
-      expect.objectContaining({ storage_location_code: 'BOX-1', quantity: 6 }),
-    ]),
-  );
+  expect(distributionRows).toHaveLength(2);
+  expect(distributionRows).toEqual(expect.arrayContaining([
+    expect.objectContaining({ box_id: boxId, storage_location_code: 'BOX-1', quantity: 6 }),
+    expect.objectContaining({ box_id: null, storage_location_code: 'LOOSE-1', quantity: 4 }),
+  ]));
+  expect(distributionRows).not.toEqual(expect.arrayContaining([
+    expect.objectContaining({ storage_location_code: 'STALE-BOX-DRAFT' }),
+  ]));
 });
 
 // TC-REV-SORT-FE-02 — failed GET distribution-lines shows error and blocks apply.
@@ -393,6 +424,195 @@ test('ff sorting scanner-first: cell barcode then product scans apply distributi
   const row = ((await balances.json()) as { product_id: string; quantity_in_sorting: number; quantity_in_storage: number }[])
     .find((item) => item.product_id === pid);
   expect(row).toMatchObject({ quantity_in_sorting: 0, quantity_in_storage: 2 });
+});
+
+// TC-URG-SORT-BOX-01 — scan box -> cell places every SKU; second box is placed manually.
+test('ff sorting: whole boxes go to one cell by scan or one explicit row action', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const suffix = String(Date.now());
+  const email = `e2e-whole-box-${suffix}@example.com`;
+
+  await page.goto('/');
+  await openFulfillmentRegistration(page);
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Whole Box');
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
+  await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
+  const [regRes] = await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ]);
+  const token = ((await regRes.json()) as { access_token: string }).access_token;
+  const h = { Authorization: `Bearer ${token}` };
+
+  const warehouse = await page.request.post('/api/warehouses', {
+    headers: h,
+    data: { name: 'Склад коробов', code: `whole-box-${suffix}` },
+  });
+  expect(warehouse.ok()).toBeTruthy();
+  const warehouseId = ((await warehouse.json()) as { id: string }).id;
+  const scanLocationRes = await page.request.post(`/api/warehouses/${warehouseId}/locations`, {
+    headers: h,
+    data: { code: 'SCAN-BOX-A-01' },
+  });
+  const manualLocationRes = await page.request.post(`/api/warehouses/${warehouseId}/locations`, {
+    headers: h,
+    data: { code: 'MANUAL-BOX-A-02' },
+  });
+  expect(scanLocationRes.ok()).toBeTruthy();
+  expect(manualLocationRes.ok()).toBeTruthy();
+  const scanLocation = (await scanLocationRes.json()) as { id: string; barcode: string };
+  const manualLocation = (await manualLocationRes.json()) as { id: string; barcode: string };
+
+  const products: { id: string; qty: number }[] = [];
+  for (const [index, qty] of [[1, 2], [2, 3], [3, 4]] as const) {
+    const product = await page.request.post('/api/products', {
+      headers: h,
+      data: {
+        name: `Товар короба ${index}`,
+        sku_code: `WHOLE-BOX-${index}-${suffix}`,
+        length_mm: 10,
+        width_mm: 10,
+        height_mm: 10,
+      },
+    });
+    expect(product.ok()).toBeTruthy();
+    products.push({ id: ((await product.json()) as { id: string }).id, qty });
+  }
+
+  const base = '/api/operations/inbound-intake-requests';
+  const request = await page.request.post(base, {
+    headers: h,
+    data: { warehouse_id: warehouseId },
+  });
+  expect(request.ok()).toBeTruthy();
+  const requestId = ((await request.json()) as { id: string }).id;
+  for (const product of products) {
+    const line = await page.request.post(`${base}/${requestId}/lines`, {
+      headers: { ...h, 'Content-Type': 'application/json' },
+      data: { product_id: product.id, expected_qty: product.qty },
+    });
+    expect(line.ok()).toBeTruthy();
+  }
+  await page.request.post(`${base}/${requestId}/submit`, { headers: h });
+  await beginInboundReceiving(page.request, h, requestId);
+
+  const createFilledBox = async (contents: { id: string; qty: number }[]) => {
+    const boxResponse = await page.request.post(`${base}/${requestId}/boxes`, { headers: h });
+    expect(boxResponse.ok()).toBeTruthy();
+    const box = (await boxResponse.json()) as {
+      id: string;
+      box_number: number;
+      internal_barcode: string;
+    };
+    for (const product of contents) {
+      const filled = await page.request.put(`${base}/${requestId}/boxes/${box.id}/lines/${product.id}`, {
+        headers: { ...h, 'Content-Type': 'application/json' },
+        data: { quantity: product.qty },
+      });
+      expect(filled.ok()).toBeTruthy();
+    }
+    const closed = await page.request.post(`${base}/${requestId}/boxes/${box.id}/close`, { headers: h });
+    expect(closed.ok()).toBeTruthy();
+    return box;
+  };
+
+  const scannedBox = await createFilledBox(products.slice(0, 2));
+  const manualBox = await createFilledBox(products.slice(2));
+  const completed = await page.request.post(`${base}/${requestId}/complete-receiving`, { headers: h });
+  expect(completed.ok()).toBeTruthy();
+
+  await page.goto('/app/ff/sorting');
+  await page.getByTestId('ff-inbound-queue-row').first().click();
+  await expect(page.getByTestId('ff-sorting-box-putaway-row')).toHaveCount(2);
+
+  const scanInput = page.getByTestId('ff-sorting-scan-input');
+  // Ранее выбранная ячейка не должна молча примениться к следующему коробу.
+  await scanInput.fill(scanLocation.barcode);
+  await scanInput.press('Enter');
+  await expect(page.getByTestId('ff-sorting-scan-message')).toContainText('Активная ячейка');
+
+  let scannedBoxPutawayPosts = 0;
+  await page.route(`**/boxes/${scannedBox.id}/putaway`, async (route) => {
+    scannedBoxPutawayPosts += 1;
+    await route.continue();
+  });
+  await scanInput.fill(scannedBox.internal_barcode);
+  await scanInput.press('Enter');
+  await expect(page.getByTestId('ff-sorting-scan-message')).toContainText(
+    `Короб №${scannedBox.box_number} выбран`,
+  );
+  const selectedBoxRow = page
+    .getByTestId('ff-sorting-box-putaway-row')
+    .filter({ hasText: `Короб №${scannedBox.box_number}` });
+  await expect(selectedBoxRow).toHaveAttribute('aria-selected', 'true');
+  expect(scannedBoxPutawayPosts).toBe(0);
+  const untouchedRows = await page.request.get(`${base}/${requestId}/distribution-lines`, { headers: h });
+  expect(untouchedRows.ok()).toBeTruthy();
+  expect(await untouchedRows.json()).toEqual([]);
+
+  await scanInput.fill(scanLocation.barcode);
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.url().includes(`/boxes/${scannedBox.id}/putaway`) &&
+        response.ok(),
+    ),
+    scanInput.press('Enter'),
+  ]);
+  await expect(page.getByTestId('ff-sorting-scan-message')).toContainText(
+    `Короб №${scannedBox.box_number} полностью размещён в ячейке SCAN-BOX-A-01`,
+  );
+  await expect(page.getByTestId('ff-sorting-box-putaway-row')).toHaveCount(2);
+  await expect(selectedBoxRow).toHaveAttribute('data-placed', 'true');
+  await expect(selectedBoxRow.getByTestId('ff-sorting-box-placed-location')).toHaveText(
+    'SCAN-BOX-A-01',
+  );
+  expect(scannedBoxPutawayPosts).toBe(1);
+
+  const manualRow = page
+    .getByTestId('ff-sorting-box-putaway-row')
+    .filter({ hasText: `Короб №${manualBox.box_number}` });
+  await manualRow.getByTestId('ff-sorting-box-location').getByRole('combobox').click();
+  await page.getByRole('option', { name: 'MANUAL-BOX-A-02' }).click();
+  let manualBoxPutawayPosts = 0;
+  await page.route(`**/boxes/${manualBox.id}/putaway`, async (route) => {
+    manualBoxPutawayPosts += 1;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await route.continue();
+  });
+  const manualSubmit = manualRow.getByTestId('ff-sorting-box-putaway-submit');
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.url().includes(`/boxes/${manualBox.id}/putaway`) &&
+        response.ok(),
+    ),
+    manualSubmit.click(),
+    manualSubmit.click({ force: true }),
+  ]);
+  await expect(page.getByTestId('ff-sorting-posted-done')).toBeVisible();
+  expect(manualBoxPutawayPosts).toBe(1);
+
+  const distribution = await page.request.get(`${base}/${requestId}/distribution-lines`, { headers: h });
+  expect(distribution.ok()).toBeTruthy();
+  const rows = (await distribution.json()) as {
+    product_id: string;
+    storage_location_id: string;
+    quantity: number;
+  }[];
+  expect(rows).toHaveLength(3);
+  expect(rows.map((row) => ({
+    product_id: row.product_id,
+    storage_location_id: row.storage_location_id,
+    quantity: row.quantity,
+  })).sort((a, b) => a.product_id.localeCompare(b.product_id))).toEqual([
+    { product_id: products[0]!.id, storage_location_id: scanLocation.id, quantity: products[0]!.qty },
+    { product_id: products[1]!.id, storage_location_id: scanLocation.id, quantity: products[1]!.qty },
+    { product_id: products[2]!.id, storage_location_id: manualLocation.id, quantity: products[2]!.qty },
+  ].sort((a, b) => a.product_id.localeCompare(b.product_id)));
 });
 
 // TC-NEW-SORT-04 — sorting draft close/cross asks before losing unsaved manual corrections.

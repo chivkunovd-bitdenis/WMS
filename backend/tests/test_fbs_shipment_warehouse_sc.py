@@ -22,7 +22,9 @@ from app.models.fbs_order import (
     META_STATUS_ACCEPTED,
     FbsOrder,
     FbsOrderMarking,
+    FbsOrderReservation,
 )
+from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_IN_DELIVERY,
@@ -30,7 +32,10 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.fbs_wb_operation import WB_OPERATION_STATE_CONFIRMED, FbsWbOperation
+from app.models.inventory_balance import InventoryBalance
+from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryMovement
 from app.models.product import Product
+from app.services import inventory_service
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import WildberriesClientError
 from app.services.wildberries_errors import WildberriesBusinessError
@@ -362,6 +367,131 @@ async def test_fbs_shipment_deliver_ok_and_orders_not_ready(
     bad = await _deliver_with_preflight(async_client, headers, supply_bad["id"])
     assert bad.status_code == 400
     assert bad.json()["detail"]["code"] == "orders_not_ready"
+
+
+# TC-NEW-FBS-SHIP-STOCK-002, TC-NEW-FBS-SHIP-STOCK-003
+@pytest.mark.asyncio
+async def test_fbs_delivery_writes_zero_stock_negative_once_and_releases_reserve(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    async with SessionLocal() as session:
+        product = Product(
+            tenant_id=tenant_id,
+            seller_id=uuid.UUID(seller_id),
+            name="Negative FBS stock",
+            sku_code=f"NEG-FBS-{suffix[-8:]}",
+            wb_barcode=f"NEG-FBS-BAR-{suffix[-8:]}",
+        )
+        session.add(product)
+        await session.commit()
+
+    supply, order_ids = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[950091],
+        products=[product],
+        supply_name="Negative stock delivery",
+    )
+    order_id = order_ids[0]
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        order.reserve_status = "reserved"
+        session.add(
+            FbsOrderReservation(
+                tenant_id=tenant_id,
+                fbs_order_id=order.id,
+                product_id=product.id,
+                warehouse_id=uuid.UUID(warehouse_id),
+                quantity=1,
+            )
+        )
+        await session.commit()
+
+    await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
+    idempotency_key = f"negative-stock-{suffix}"
+    delivered = await _deliver_direct(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=idempotency_key,
+    )
+    assert delivered.status_code == 200, delivered.text
+    assert delivered.json()["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
+
+    repeated = await _deliver_direct(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=idempotency_key,
+    )
+    assert repeated.status_code == 200, repeated.text
+
+    async with SessionLocal() as session:
+        ledger = await session.scalar(
+            select(FbsShipmentReversalLedger).where(
+                FbsShipmentReversalLedger.fbs_order_id == order_id
+            )
+        )
+        assert ledger is not None
+        assert ledger.shipment_movement_id is not None
+        movements = list(
+            (
+                await session.execute(
+                    select(InventoryMovement).where(
+                        InventoryMovement.tenant_id == tenant_id,
+                        InventoryMovement.product_id == product.id,
+                        InventoryMovement.movement_type == MOVEMENT_TYPE_FBS_SHIPMENT,
+                    )
+                )
+            ).scalars()
+        )
+        assert [(row.id, row.quantity_delta) for row in movements] == [
+            (ledger.shipment_movement_id, -1)
+        ]
+        balance = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product.id,
+                InventoryBalance.storage_location_id == ledger.storage_location_id,
+            )
+        )
+        assert balance is not None
+        assert (balance.quantity, balance.quantity_unpacked, balance.quantity_packed) == (
+            -1,
+            -1,
+            0,
+        )
+        reservation = await session.scalar(
+            select(FbsOrderReservation).where(FbsOrderReservation.fbs_order_id == order_id)
+        )
+        assert reservation is None
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.reserve_status == "released"
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product.id,
+            storage_location_id=ledger.storage_location_id,
+            quantity_delta=1,
+            movement_type="inbound_intake",
+        )
+        await session.flush()
+        await session.refresh(balance)
+        assert (balance.quantity, balance.quantity_unpacked, balance.quantity_packed) == (
+            0,
+            0,
+            0,
+        )
 
 
 # TC-NEW-FBS-SHIPWH-006 — temporary WB dispatch rejection is actionable and retryable.

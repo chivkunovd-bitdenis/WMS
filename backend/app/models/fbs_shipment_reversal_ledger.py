@@ -21,7 +21,13 @@ class FbsShipmentReversalLedger(Base):
     """One physical FBS shipment unit and its at-most-once reversal."""
 
     __tablename__ = "fbs_shipment_reversal_ledger"
-    __table_args__ = (UniqueConstraint("fbs_order_id", name="uq_fbs_shipment_reversal_order"),)
+    __table_args__ = (
+        UniqueConstraint("fbs_order_id", name="uq_fbs_shipment_reversal_order"),
+        UniqueConstraint(
+            "shipment_movement_id",
+            name="uq_fbs_shipment_reversal_movement",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
@@ -38,6 +44,11 @@ class FbsShipmentReversalLedger(Base):
     )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     ozon_positions_json: Mapped[list[dict[str, object]] | None] = mapped_column(JSON, nullable=True)
+    shipment_movement_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("inventory_movements.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     reversed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reversal_movement_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("inventory_movements.id", ondelete="SET NULL"), nullable=True
@@ -50,4 +61,11 @@ class FbsShipmentReversalLedger(Base):
     order: Mapped[FbsOrder] = relationship("FbsOrder")
     product: Mapped[Product] = relationship("Product")
     storage_location: Mapped[StorageLocation] = relationship("StorageLocation")
-    reversal_movement: Mapped[InventoryMovement | None] = relationship("InventoryMovement")
+    shipment_movement: Mapped[InventoryMovement | None] = relationship(
+        "InventoryMovement",
+        foreign_keys=[shipment_movement_id],
+    )
+    reversal_movement: Mapped[InventoryMovement | None] = relationship(
+        "InventoryMovement",
+        foreign_keys=[reversal_movement_id],
+    )

@@ -64,7 +64,7 @@ import {
   type ProductLineDisplayMeta,
   type WbProductCatalogRow,
 } from '../../types/wbProductCatalog'
-import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
+import { printBarcodeLabel, printBarcodeLabels } from '../../utils/printBarcodeLabel'
 import { BoxLabelPrintDialog } from '../../components/BoxLabelPrintDialog'
 import type { LabelSize } from '../../utils/labelSize'
 import { printInboundReceivingSheet } from '../../utils/printInboundReceivingSheet'
@@ -438,6 +438,7 @@ export function FfInboundRequestView({
   const [catalog, setCatalog] = useState<WbCatalogRow[] | null>(null)
   const [locations, setLocations] = useState<LocationRow[]>([])
   const [busy, setBusy] = useState(false)
+  const [sortingToolbarElement, setSortingToolbarElement] = useState<HTMLDivElement | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [actualDraftByLineId, setActualDraftByLineId] = useState<Record<string, string>>({})
   const [actualDraftErrorByLineId, setActualDraftErrorByLineId] = useState<Record<string, string>>({})
@@ -1517,11 +1518,12 @@ export function FfInboundRequestView({
   const printDistributionLocationLabel = (locationId: string) => {
     const loc = locations.find((l) => l.id === locationId)
     if (!loc) return
-    const dataUrl = renderBarcodeDataUrl(loc.barcode)
+    const dataUrl = renderBarcodeDataUrl(loc.barcode, { variant: 'storageCell' })
     printBarcodeLabel({
       title: `Ячейка № ${loc.code}`,
       barcode: loc.barcode,
       barcodeDataUrl: dataUrl,
+      layout: 'storageCell',
     })
   }
 
@@ -1533,76 +1535,80 @@ export function FfInboundRequestView({
 
   const [boxPrintTarget, setBoxPrintTarget] = useState<InboundBoxPrintTarget | null>(null)
 
-  const printInboundBoxLabel = async (box: InboundBox, labelSize: LabelSize) => {
+  type InboundInternalLabelTarget =
+    | { kind: 'box'; id: string; number: number; barcode: string }
+    | { kind: 'cargo'; id: string; number: number; barcode: string }
+
+  const printInboundInternalLabels = async (
+    targets: InboundInternalLabelTarget[],
+    labelSize: LabelSize,
+  ) => {
+    if (targets.length === 0) return
     setBusy(true)
     setError(null)
     try {
-      const dataUrl = renderBarcodeDataUrl(box.internal_barcode)
-      printBarcodeLabel({
-        title: `Короб № ${box.box_number}`,
-        barcode: box.internal_barcode,
-        barcodeDataUrl: dataUrl,
+      // Один iframe = одно задание принтеру. Иначе «Печать коробов» открывает
+      // диалог принтера для каждого короба и рвёт непрерывную ленту.
+      printBarcodeLabels(targets.map((target) => ({
+        title: target.kind === 'box' ? `Короб № ${target.number}` : `Грузоместо № ${target.number}`,
+        barcode: target.barcode,
+        barcodeDataUrl: renderBarcodeDataUrl(target.barcode, { variant: 'internalBox' }),
         labelSize,
-      })
-      const res = await fetch(
-        apiUrl(
-          `/operations/inbound-intake-requests/${requestId}/boxes/${box.id}/mark-label-printed`,
-        ),
-        { method: 'POST', headers: authHeaders },
-      )
-      if (!res.ok) {
-        setError(await readApiErrorMessage(res))
-        return
+        layout: 'internalBox' as const,
+      })))
+      for (const target of targets) {
+        const path = target.kind === 'box'
+          ? `/operations/inbound-intake-requests/${requestId}/boxes/${target.id}/mark-label-printed`
+          : `/operations/inbound-intake-requests/${requestId}/cargo-places/${target.id}/mark-label-printed`
+        const res = await fetch(apiUrl(path), { method: 'POST', headers: authHeaders })
+        if (!res.ok) {
+          throw new Error(await readApiErrorMessage(res))
+        }
       }
       await loadDetail()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось напечатать этикетку короба.')
+      setError(e instanceof Error ? e.message : 'Не удалось напечатать этикетки.')
     } finally {
       setBusy(false)
     }
+  }
+
+  const printInboundBoxLabel = async (box: InboundBox, labelSize: LabelSize) => {
+    await printInboundInternalLabels([{
+      kind: 'box',
+      id: box.id,
+      number: box.box_number,
+      barcode: box.internal_barcode,
+    }], labelSize)
   }
 
   const printAllInboundBoxLabels = async (labelSize: LabelSize) => {
     if (!detail?.boxes?.length) return
-    for (const box of detail.boxes) {
-      await printInboundBoxLabel(box, labelSize)
-    }
+    await printInboundInternalLabels(detail.boxes.map((box) => ({
+      kind: 'box' as const,
+      id: box.id,
+      number: box.box_number,
+      barcode: box.internal_barcode,
+    })), labelSize)
   }
 
   const printInboundCargoPlaceLabel = async (place: InboundCargoPlace, labelSize: LabelSize) => {
-    setBusy(true)
-    setError(null)
-    try {
-      const dataUrl = renderBarcodeDataUrl(place.internal_barcode)
-      printBarcodeLabel({
-        title: `Грузоместо № ${place.place_number}`,
-        barcode: place.internal_barcode,
-        barcodeDataUrl: dataUrl,
-        labelSize,
-      })
-      const res = await fetch(
-        apiUrl(
-          `/operations/inbound-intake-requests/${requestId}/cargo-places/${place.id}/mark-label-printed`,
-        ),
-        { method: 'POST', headers: authHeaders },
-      )
-      if (!res.ok) {
-        setError(await readApiErrorMessage(res))
-        return
-      }
-      await loadDetail()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось напечатать этикетку грузоместа.')
-    } finally {
-      setBusy(false)
-    }
+    await printInboundInternalLabels([{
+      kind: 'cargo',
+      id: place.id,
+      number: place.place_number,
+      barcode: place.internal_barcode,
+    }], labelSize)
   }
 
   const printAllInboundCargoPlaceLabels = async (labelSize: LabelSize) => {
     if (!detail?.cargo_places?.length) return
-    for (const place of detail.cargo_places) {
-      await printInboundCargoPlaceLabel(place, labelSize)
-    }
+    await printInboundInternalLabels(detail.cargo_places.map((place) => ({
+      kind: 'cargo' as const,
+      id: place.id,
+      number: place.place_number,
+      barcode: place.internal_barcode,
+    })), labelSize)
   }
 
   const requestPrintInboundBox = (box: InboundBox) => {
@@ -2119,6 +2125,13 @@ export function FfInboundRequestView({
                 flexWrap: 'wrap',
               }}
             >
+              {sortingView && receptionClosed ? (
+                <Box
+                  ref={setSortingToolbarElement}
+                  data-testid="ff-sorting-toolbar-controls"
+                  sx={{ display: 'flex', alignItems: 'center' }}
+                />
+              ) : null}
               {isFulfillmentAdmin &&
               workspace !== 'sorting' &&
               receivingActive ? (
@@ -2314,6 +2327,7 @@ export function FfInboundRequestView({
                   await loadDetail()
                 }}
                 onDirtyChange={onDirtyChange}
+                toolbarElement={sortingToolbarElement}
               />
             </>
           ) : null}

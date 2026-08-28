@@ -1,6 +1,5 @@
 """Product TZ import idempotency constraint and scope coverage."""
 
-
 from __future__ import annotations
 
 import asyncio

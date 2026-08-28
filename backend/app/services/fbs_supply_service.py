@@ -18,6 +18,9 @@ from sqlalchemy.orm import selectinload
 from app.core.settings import settings
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_ASSEMBLING,
+    FBS_ORDER_STATUS_CANCELLED,
+    FBS_ORDER_STATUS_DEFECT,
+    FBS_ORDER_STATUS_DONE,
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
     PICK_STATUS_PENDING,
@@ -41,10 +44,12 @@ from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
+from app.models.fbs_trbx import FbsTrbx
 from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_CONFIRMED,
     WB_OPERATION_STATE_FAILED,
     WB_OPERATION_STATE_PENDING_CONFIRMATION,
+    FbsWbOperation,
 )
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
@@ -66,6 +71,7 @@ from app.services.fbs_sticker_code_service import (
 )
 from app.services.fbs_supply_reconcile_service import (
     create_pending_operation,
+    fetch_wb_supply_order_ids,
     get_operation_by_idempotency,
     mark_operation_confirmed,
     mark_operation_failed,
@@ -479,6 +485,7 @@ async def create_supply_from_orders(
     idempotency_key: str,
     http_client: httpx.AsyncClient,
     ozon_provider: OzonMarketplaceProvider | None = None,
+    created_by_user_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     if not idempotency_key.strip():
         raise FbsSupplyError("missing_idempotency_key", http_status=400)
@@ -615,6 +622,7 @@ async def create_supply_from_orders(
                 "planned_delivery_type": planned_delivery_type,
                 "marketplace": marketplace,
             },
+            created_by_user_id=created_by_user_id,
         )
 
         wb_office_id = None
@@ -846,6 +854,12 @@ async def create_supply_from_orders(
                 )
                 if workspace is not None:
                     return workspace
+            else:
+                # Запись состава прошла без ошибки — WB принял весь батч, отстаёт только
+                # читка. Раньше здесь не привязывался ни один заказ, и поставка оставалась
+                # пустой навсегда: фоновая привязка ищет заказы по их полю supplyId,
+                # которого у них ещё нет. Бой 20.08.2026, WB-GI-267345371.
+                await _bind_orders_to_supply(session, supply, orders)
             await mark_operation_pending_confirmation(
                 session,
                 operation,
@@ -1284,6 +1298,12 @@ async def list_supply_worklist(
         .group_by(FbsPackingBox.supply_id)
     )
     boxes_by_supply = {supply_id: int(count) for supply_id, count in box_rows.all()}
+    trbx_rows = await session.execute(
+        select(FbsTrbx.supply_id, func.count(FbsTrbx.id))
+        .where(FbsTrbx.supply_id.in_(supply_ids))
+        .group_by(FbsTrbx.supply_id)
+    )
+    trbxes_by_supply = {supply_id: int(count) for supply_id, count in trbx_rows.all()}
     wb_ids = {
         int(order.wb_warehouse_id)
         for supply in supplies
@@ -1328,7 +1348,13 @@ async def list_supply_worklist(
                 },
                 "orders_count": len(orders),
                 "units_count": len(orders),
-                "boxes_count": boxes_by_supply.get(supply.id, 0),
+                # A PVZ cargo place may already exist in WB before WMS has a
+                # local physical packing box. Show the greater count without
+                # double-counting linked representations of the same boxes.
+                "boxes_count": max(
+                    boxes_by_supply.get(supply.id, 0),
+                    trbxes_by_supply.get(supply.id, 0),
+                ),
                 "planned_shipment_date": (
                     supply.planned_shipment_date.isoformat()
                     if supply.planned_shipment_date is not None
@@ -1356,6 +1382,235 @@ async def update_planned_shipment_date(
     await session.refresh(supply)
     await session.refresh(supply, attribute_names=["orders"])
     return supply
+
+
+REPAIRABLE_SUPPLY_STATUSES = frozenset(
+    {FBS_SUPPLY_STATUS_DRAFT, FBS_SUPPLY_STATUS_ASSEMBLING}
+)
+TERMINAL_ORDER_STATUSES = frozenset(
+    {FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DONE, FBS_ORDER_STATUS_DEFECT}
+)
+# За один цикл автоопроса чиним не больше этого числа поставок на селлера.
+PENDING_SUPPLY_REPAIR_BATCH = 10
+
+
+async def _close_pending_operation_if_complete(
+    session: AsyncSession,
+    supply: FbsSupply,
+    *,
+    wb_order_ids: list[int],
+    unresolved: list[int],
+) -> None:
+    """Журнал операций не должен вечно висеть в «WB не подтвердил»."""
+    if unresolved:
+        return
+    stmt = select(FbsWbOperation).where(
+        FbsWbOperation.local_entity_type == "fbs_supply",
+        FbsWbOperation.local_entity_id == supply.id,
+        FbsWbOperation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION,
+    )
+    for operation in (await session.execute(stmt)).scalars().all():
+        await mark_operation_confirmed(
+            session,
+            operation,
+            wb_supply_id=supply.wb_supply_id,
+            local_supply_id=supply.id,
+            response_summary={"wb_order_ids": sorted(wb_order_ids), "source": "repair_from_wb"},
+        )
+
+
+async def repair_supply_composition_from_wb(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    http_client: httpx.AsyncClient,
+) -> dict[str, Any]:
+    """Перечитать состав поставки у WB и восстановить локальные связи.
+
+    Связь «заказ → поставка» строилась только в одну сторону: из поля supplyId в
+    карточке заказа. Если запись состава в WB прошла, а ответ до нас не дошёл,
+    поставка оставалась пустой навсегда — ни фоном, ни руками это не чинилось
+    (бой 20.08.2026, WB-GI-267345371: девять заказов в WB, пустая карточка в WMS).
+    Здесь спрашиваем у WB состав напрямую и приводим WMS к нему.
+    """
+    supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
+    if supply is None:
+        raise FbsSupplyError("supply_not_found")
+    wb_supply_id = (supply.wb_supply_id or "").strip()
+    if not wb_supply_id or wb_supply_id.startswith("PENDING-"):
+        raise FbsSupplyError(
+            "supply_without_wb_id",
+            message="У поставки ещё нет номера WB — восстанавливать нечего.",
+            retryable=False,
+            http_status=409,
+        )
+    if supply.status not in REPAIRABLE_SUPPLY_STATUSES:
+        raise FbsSupplyError(
+            "supply_not_repairable",
+            message="Состав восстанавливается только у поставки в сборке.",
+            context={"status": supply.status},
+            retryable=False,
+            http_status=409,
+        )
+
+    token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
+    try:
+        wb_order_ids = await fetch_wb_supply_order_ids(
+            http_client,
+            api_token=token,
+            wb_supply_id=wb_supply_id,
+        )
+    except WildberriesClientError as exc:
+        raise _fbs_supply_error_from_wb(
+            exc,
+            tenant_id=tenant_id,
+            seller_id=supply.seller_id,
+            local_entity_id=supply.id,
+            wb_supply_id=wb_supply_id,
+            event="fbs supply repair WB read failed",
+            retryable=True,
+            http_status=502,
+        ) from exc
+
+    if not wb_order_ids:
+        return {
+            "supply_id": str(supply.id),
+            "wb_supply_id": wb_supply_id,
+            "wb_orders": 0,
+            "linked": 0,
+            "skipped": [],
+            "missing_in_wms": [],
+        }
+
+    stmt = (
+        select(FbsOrder)
+        .where(
+            FbsOrder.tenant_id == tenant_id,
+            FbsOrder.seller_id == supply.seller_id,
+            FbsOrder.wb_order_id.in_(sorted(wb_order_ids)),
+        )
+        .with_for_update()
+    )
+    orders = list((await session.execute(stmt)).scalars().all())
+    found_wb_ids = {int(order.wb_order_id) for order in orders}
+
+    bound_status = (
+        FBS_ORDER_STATUS_IN_SUPPLY
+        if supply.status == FBS_SUPPLY_STATUS_DRAFT
+        else FBS_ORDER_STATUS_ASSEMBLING
+    )
+    to_bind: list[FbsOrder] = []
+    skipped: list[dict[str, Any]] = []
+    unresolved: list[int] = []
+    for order in orders:
+        # Прямой ответ WB — источник истины о том, в какой поставке лежит заказ.
+        order.wb_supply_id = wb_supply_id
+        if order.supply_id == supply.id:
+            continue
+        wb_order_id = int(order.wb_order_id)
+        if order.status in TERMINAL_ORDER_STATUSES:
+            # Отменённые и выкупленные из поставки выводятся, а не привязываются.
+            skipped.append({"wb_order_id": wb_order_id, "reason": order.status})
+            continue
+        if order.supply_id is not None:
+            skipped.append({"wb_order_id": wb_order_id, "reason": "other_supply"})
+            unresolved.append(wb_order_id)
+            continue
+        if order.warehouse_id != supply.warehouse_id:
+            skipped.append({"wb_order_id": wb_order_id, "reason": "warehouse_mismatch"})
+            unresolved.append(wb_order_id)
+            continue
+        to_bind.append(order)
+
+    for order in to_bind:
+        order.supply_id = supply.id
+        order.status = bound_status
+    if to_bind:
+        supply.cargo_type = to_bind[0].cargo_type
+    await session.flush()
+
+    missing_in_wms = sorted(set(wb_order_ids) - found_wb_ids)
+    unresolved.extend(missing_in_wms)
+    await _close_pending_operation_if_complete(
+        session,
+        supply,
+        wb_order_ids=wb_order_ids,
+        unresolved=unresolved,
+    )
+
+    if to_bind or missing_in_wms or skipped:
+        logger.info(
+            "fbs supply repair from WB: supply=%s wb_supply_id=%s wb_orders=%s "
+            "linked=%s skipped=%s missing_in_wms=%s",
+            supply.id,
+            wb_supply_id,
+            len(wb_order_ids),
+            len(to_bind),
+            len(skipped),
+            len(missing_in_wms),
+        )
+    return {
+        "supply_id": str(supply.id),
+        "wb_supply_id": wb_supply_id,
+        "wb_orders": len(wb_order_ids),
+        "linked": len(to_bind),
+        "skipped": skipped,
+        "missing_in_wms": missing_in_wms,
+    }
+
+
+async def repair_pending_supplies_for_seller(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    *,
+    http_client: httpx.AsyncClient,
+    limit: int = PENDING_SUPPLY_REPAIR_BATCH,
+) -> dict[str, int]:
+    """Фоном добрать состав поставок, у которых создание оборвалось на полпути."""
+    stmt = (
+        select(FbsWbOperation.local_entity_id)
+        .where(
+            FbsWbOperation.tenant_id == tenant_id,
+            FbsWbOperation.seller_id == seller_id,
+            FbsWbOperation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION,
+            FbsWbOperation.local_entity_type == "fbs_supply",
+            FbsWbOperation.local_entity_id.is_not(None),
+        )
+        .order_by(FbsWbOperation.created_at.desc())
+        .limit(limit)
+    )
+    candidate_ids = [row[0] for row in (await session.execute(stmt)).all() if row[0]]
+    if not candidate_ids:
+        return {"supplies_scanned": 0, "orders_linked": 0}
+
+    linked = 0
+    scanned = 0
+    async with wb_seller_lock(session, seller_id) as acquired:
+        if not acquired:
+            logger.info("fbs supply repair skipped: seller=%s reason=lock_busy", seller_id)
+            return {"supplies_scanned": 0, "orders_linked": 0}
+        for candidate_id in candidate_ids:
+            try:
+                result = await repair_supply_composition_from_wb(
+                    session,
+                    tenant_id,
+                    candidate_id,
+                    http_client=http_client,
+                )
+            except FbsSupplyError as exc:
+                # Отгруженная или уже закрытая поставка — не повод ронять цикл.
+                logger.info(
+                    "fbs supply repair skipped: supply=%s reason=%s",
+                    candidate_id,
+                    exc.code,
+                )
+                continue
+            scanned += 1
+            linked += int(result["linked"])
+        await session.commit()
+    return {"supplies_scanned": scanned, "orders_linked": linked}
 
 
 async def skip_honest_sign(

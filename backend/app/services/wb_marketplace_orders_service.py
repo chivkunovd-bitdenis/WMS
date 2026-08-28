@@ -1,3 +1,4 @@
+# ruff: noqa: RUF003
 """WB Marketplace FBS orders: sync, map products, reserve stock, status updates."""
 
 from __future__ import annotations
@@ -77,7 +78,16 @@ from app.services.wildberries_fbs_client import (
 )
 
 FBS_DEADLINE_HOURS = 120
-MAX_ORDERS_PAGES = 10
+MAX_ORDERS_PAGES = 20
+# Окно полного обхода заданий: столько дней назад просим у WB. Совпадает с
+# умолчанием WB и с его же ограничением «максимум 30 календарных дней за запрос».
+ORDERS_SWEEP_WINDOW_DAYS = 30
+# Размер страницы обхода. WB разрешает до 1000, но каждая страница разбирается
+# и пишется в одной транзакции: тысяча строк — это долгие блокировки на каждом
+# из трёх десятков селлеров. Берём середину — охват тот же за счёт числа страниц,
+# транзакция вдвое короче, а двадцать запросов на селлера укладываются в лимит WB
+# (300 запросов в минуту на аккаунт).
+ORDERS_SWEEP_PAGE_LIMIT = 500
 MAX_SUPPLIES_PAGES = 10
 
 RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT = "warehouse_remap_conflict"
@@ -1368,15 +1378,25 @@ def _empty_supply_link_result(**overrides: Any) -> dict[str, Any]:
     return result
 
 
-async def link_confirmed_orders_to_wb_supplies(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    seller_id: uuid.UUID,
+async def fetch_seller_supplies_map(
     http_client: httpx.AsyncClient,
+    *,
     api_token: str,
-) -> dict[str, Any]:
-    # Fetch all supplies from WB once, cache in a dictionary
-    supplies_dict: dict[str, tuple[str | None, bool]] = {}
+    seller_id: uuid.UUID,
+) -> dict[str, tuple[str | None, bool]]:
+    """Все поставки селлера одним списком: `{wb_supply_id: (имя, закрыта ли)}`.
+
+    У WB два способа узнать, закрыта ли поставка: спросить про каждую отдельно
+    (`GET /supplies/{id}`) или забрать список целиком. Поштучный опрос упирается
+    в лимит запросов: на бою у селлера с восемью незакрытыми поставками часть
+    ответов приходила как 429, и эти поставки висели «в работе» сутками, потому
+    что следующий проход повторял ту же очередь. Список стоит один запрос на
+    селлера независимо от числа поставок, поэтому он и есть основной источник.
+
+    Список может не доехать (сеть, лимит, ошибка WB) — тогда возвращается пустая
+    карта, а вызывающий сам решает, спрашивать ли про поставку поштучно.
+    """
+    supplies_map: dict[str, tuple[str | None, bool]] = {}
     try:
         next_cursor: int | None = None
         for _page in range(MAX_SUPPLIES_PAGES):
@@ -1386,10 +1406,10 @@ async def link_confirmed_orders_to_wb_supplies(
                     api_token=api_token,
                     next_cursor=next_cursor,
                 )
-                supplies_dict.update(page.supplies)
+                supplies_map.update(page.supplies)
                 # WB отдаёт курсор всегда, даже когда данные кончились: по одному
                 # только курсору цикл крутил все MAX_SUPPLIES_PAGES страниц на каждого
-                # селлера. На бою это 10 запросов × 20 селлеров за проход и 429  # noqa: RUF003
+                # селлера. На бою это 10 запросов × 20 селлеров за проход и 429
                 # от общего лимитера. Признак конца — пустая страница.
                 if not page.supplies or page.next_cursor is None:
                     break
@@ -1410,6 +1430,19 @@ async def link_confirmed_orders_to_wb_supplies(
             type(exc).__name__,
             exc_info=True,
         )
+    return supplies_map
+
+
+async def link_confirmed_orders_to_wb_supplies(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    http_client: httpx.AsyncClient,
+    api_token: str,
+) -> dict[str, Any]:
+    supplies_dict = await fetch_seller_supplies_map(
+        http_client, api_token=api_token, seller_id=seller_id
+    )
 
     # Periodic sync: update non-terminal supplies that are done in WB
     # using supplies_dict
@@ -1594,6 +1627,14 @@ async def sync_seller_orders(
         await session.commit()
 
     if include_history:
+        # WB и без dateFrom отдаёт последние 30 дней (это его умолчание), поэтому
+        # дело было не в диапазоне, а в глубине: страницами по сто штук обход
+        # прочитывал тысячу самых ранних заданий окна и до свежих не доходил —
+        # у крупного селлера их под четыре тысячи за месяц. Просим окно явно и
+        # увеличиваем охват до десяти тысяч заданий за проход.
+        sweep_date_from = int(
+            (datetime.now(tz=UTC) - timedelta(days=ORDERS_SWEEP_WINDOW_DAYS)).timestamp()
+        )
         next_token: int | None = None
         for _page in range(MAX_ORDERS_PAGES):
             try:
@@ -1601,6 +1642,8 @@ async def sync_seller_orders(
                     http_client,
                     api_token=api_token,
                     next_token=next_token,
+                    date_from=sweep_date_from,
+                    limit=ORDERS_SWEEP_PAGE_LIMIT,
                 )
             except WildberriesClientError as exc:
                 ref = wb_error_ref()

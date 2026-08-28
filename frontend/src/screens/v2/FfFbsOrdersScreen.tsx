@@ -34,12 +34,14 @@ import {
 import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined'
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined'
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
+import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined'
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined'
 import { FbsStatusChip } from '../../components/fbs/FbsChips'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { MarketplaceChip } from '../../ui-kit'
 import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
+import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import {
@@ -53,10 +55,16 @@ import {
   fetchFbsSellerWarehouses,
   fetchFbsSupplyWorklist,
   fetchFbsWorklist,
+  fetchFbsCargoPlaces,
   addFbsOrdersToSupply,
+  confirmFbsPrintApplied,
   createFbsIdempotencyKey,
+  retryFbsSupplyQr,
   runFbsOrdersSync,
   syncFbsOrderStatuses,
+  syncFbsSupplyTracking,
+  type FbsPrintAsset,
+  type FbsPrintBatch,
   type FbsSupplyWorklistItem,
   type FbsWorklistOrder,
   type FbsWorklistWarehouseOption,
@@ -536,6 +544,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [workspaceSeed, setWorkspaceSeed] = useState<FbsWorkspace | null>(null)
+  const [printingSupplyId, setPrintingSupplyId] = useState<string | null>(null)
+  const [supplyQrBatch, setSupplyQrBatch] = useState<FbsPrintBatch | null>(null)
+  const [supplyQrPreviewOpen, setSupplyQrPreviewOpen] = useState(false)
+  const [supplyQrWarning, setSupplyQrWarning] = useState<string | null>(null)
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
   const registerRow = useCallback((id: string, node: HTMLTableRowElement | null) => {
     rowRefs.current[id] = node
@@ -881,6 +893,80 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     setError(null)
   }, [])
 
+  const openSupplyQrPrint = useCallback(async (supplyId: string) => {
+    setPrintingSupplyId(supplyId)
+    setError(null)
+    setNotice(null)
+    setSupplyQrWarning(null)
+    const failures: string[] = []
+    let supplyAsset: FbsPrintAsset | null = null
+    let cargoAssets: FbsPrintAsset[] = []
+    let cargoPlacesCount = 0
+
+    try {
+      await syncFbsSupplyTracking(token, authHeaders, supplyId)
+    } catch (cause) {
+      failures.push(cause instanceof Error ? cause.message : 'Статус поставки не обновлён.')
+    }
+    try {
+      const refreshed = await retryFbsSupplyQr(token, authHeaders, supplyId)
+      supplyAsset = refreshed.supply.barcode_asset
+    } catch (cause) {
+      failures.push(cause instanceof Error ? cause.message : 'QR поставки не получен.')
+    }
+    try {
+      const cargoPlaces = await fetchFbsCargoPlaces(token, authHeaders, supplyId)
+      cargoPlacesCount = cargoPlaces.length
+      cargoAssets = cargoPlaces
+        .map((place) => place.qr_asset)
+        .filter((asset): asset is FbsPrintAsset => Boolean(asset))
+    } catch (cause) {
+      failures.push(cause instanceof Error ? cause.message : 'QR грузомест не получены.')
+    }
+
+    const assets = [...new Map(
+      [supplyAsset, ...cargoAssets]
+        .filter((asset): asset is FbsPrintAsset => Boolean(asset))
+        .map((asset) => [asset.id, asset]),
+    ).values()]
+    const ready = assets.filter((asset) => asset.status === 'ready' && asset.preview_url).length
+    const failed = assets.filter((asset) => asset.status === 'error').length
+    const requested = 1 + cargoPlacesCount
+    setSupplyQrBatch({
+      requested,
+      ready,
+      failed,
+      missing: Math.max(0, requested - ready - failed),
+      assets,
+      order_errors: [],
+    })
+    if (ready > 0) {
+      setSupplyQrPreviewOpen(true)
+      if (failures.length > 0) {
+        setSupplyQrWarning(`Часть QR не получена: ${failures.join(' · ')}`)
+      }
+    } else {
+      setError(failures.join(' · ') || 'WB не вернул готовые QR для этой поставки.')
+    }
+    setPrintingSupplyId(null)
+    await load()
+  }, [token, authHeaders, load])
+
+  const confirmSupplyQrApplied = useCallback(async (asset: FbsPrintAsset) => {
+    await confirmFbsPrintApplied(
+      token,
+      authHeaders,
+      asset.id,
+      createFbsIdempotencyKey(),
+    )
+    setSupplyQrBatch((current) => current ? {
+      ...current,
+      assets: current.assets.map((item) => item.id === asset.id
+        ? { ...item, applied_at: new Date().toISOString() }
+        : item),
+    } : current)
+  }, [token, authHeaders])
+
   const hasNewSelection = statusGroup === 'new' && selected.size > 0
 
   useEffect(() => {
@@ -1170,6 +1256,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                 <TableCell sx={{ minWidth: 64 }}>Короба</TableCell>
                 <TableCell sx={{ minWidth: 115 }}>Статус</TableCell>
                 <TableCell sx={{ minWidth: 135 }}>Дата отгрузки</TableCell>
+                <TableCell align="right" sx={{ minWidth: 105 }}>Печать</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1210,11 +1297,25 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                     />
                   </TableCell>
                   <TableCell>{formatNullableDateTime(supply.planned_shipment_date)}</TableCell>
+                  <TableCell align="right" onClick={(event) => event.stopPropagation()}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={printingSupplyId === supply.id
+                        ? <CircularProgress size={14} />
+                        : <PrintOutlinedIcon />}
+                      disabled={Boolean(printingSupplyId)}
+                      onClick={() => void openSupplyQrPrint(supply.id)}
+                      data-testid={`fbs-supply-qr-print-${supply.id}`}
+                    >
+                      QR
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
               {!busy && activeSupplies.length === 0 && isFbsSupplyGroup(statusGroup) ? (
                 <TableRow>
-                  <TableCell colSpan={7}>
+                  <TableCell colSpan={8}>
                     <Box sx={{ py: 8, textAlign: 'center' }}>
                       <Inventory2OutlinedIcon sx={{ fontSize: 42, color: 'text.disabled' }} />
                       <Typography variant="subtitle1" sx={{ mt: 1 }}>
@@ -1634,6 +1735,16 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           setWorkspaceSeed(null)
           void load()
         }}
+      />
+
+      <FbsPrintPreviewDialog
+        token={token}
+        authHeaders={authHeaders}
+        batch={supplyQrBatch}
+        warning={supplyQrWarning}
+        open={supplyQrPreviewOpen}
+        onClose={() => setSupplyQrPreviewOpen(false)}
+        onApplied={confirmSupplyQrApplied}
       />
 
     </Box>

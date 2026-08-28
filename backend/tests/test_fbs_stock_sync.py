@@ -858,7 +858,9 @@ async def test_sync_splits_1001_items_into_two_batches(db_session: AsyncSession)
     assert len(transport.put_calls[0]) == 1000
     assert len(transport.put_calls[1]) == 1
     merged = [entry.chrt_id for batch in transport.put_calls for entry in batch]
-    assert merged == list(range(1, 1002))
+    # Порядок в выборке товаров не задан (в запросе нет order_by) и зависит от того,
+    # какой индекс выберет БД. Гарантия здесь другая: каждый товар уходит ровно один раз.
+    assert sorted(merged) == list(range(1, 1002))
     assert len(merged) == len(set(merged))
 
 

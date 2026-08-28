@@ -30,7 +30,6 @@ from app.models.fbs_order import (
 )
 from app.models.fbs_order_pick import FbsOrderPick
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
-from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_DRAFT,
@@ -788,9 +787,6 @@ async def try_promote_fbs_supply_if_ready(
 
     if _supply_requires_marking(supply):
         return supply
-
-    if task is not None:
-        await _write_off_active_orders_once(session, tenant_id, supply, task)
 
     supply.status = FBS_SUPPLY_STATUS_PACKED
     for order in supply.orders:

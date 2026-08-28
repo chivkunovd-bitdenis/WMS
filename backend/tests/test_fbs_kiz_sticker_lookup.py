@@ -5,7 +5,11 @@ from __future__ import annotations
 import uuid
 
 from app.models.fbs_order import FbsOrder
-from app.services.fbs_kiz_service import _find_order_by_sticker, normalize_scanned_sticker
+from app.services.fbs_kiz_service import (
+    _find_order_by_sticker,
+    normalize_scanned_sticker,
+    sticker_scan_candidates,
+)
 from app.services.fbs_sticker_code_service import (
     sticker_barcode_from_wb_row,
     sticker_code_from_wb_row,
@@ -53,3 +57,30 @@ def test_human_number_still_works_for_manual_entry() -> None:
 def test_unknown_code_finds_nothing() -> None:
     target = _order(sticker_code="5694425 3074", sticker_barcode="*DUIkWJJF")
     assert _find_order_by_sticker([target], normalize_scanned_sticker("*ZZZZZZZZ")) is None
+
+
+def test_scan_in_russian_layout_finds_order() -> None:
+    """Сканер в русской раскладке печатает кириллицу — заказ всё равно должен найтись.
+
+    Бой 27.08.2026, поставка WB-GI-270121264: со стикера «*DVNdzDVg» сканер отправлял
+    «*ВМТвяВМп», сервер сравнивал буквально и отвечал «Стикер не найден в этой поставке».
+    Для Честного знака раскладка разворачивалась, для стикера — нет.
+    """
+    target = _order(sticker_code="5723323 0901", sticker_barcode="*DVNdzDVg")
+    other = _order(sticker_code="5723359 7116", sticker_barcode="*DVNjYrxp")
+
+    candidates = sticker_scan_candidates("*ВМТвяВМп")
+    found = next(
+        (
+            order
+            for candidate in candidates
+            if (order := _find_order_by_sticker([other, target], candidate)) is not None
+        ),
+        None,
+    )
+    assert found is target
+
+
+def test_latin_scan_is_not_touched_by_layout_repair() -> None:
+    """Нормальный латинский скан не должен «чиниться» — только один вариант."""
+    assert sticker_scan_candidates("*DVNdzDVg\n") == ["*DVNdzDVg"]

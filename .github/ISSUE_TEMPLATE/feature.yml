@@ -1,5 +1,5 @@
 name: Gated WMS task
-description: Any WMS task with BA feature cards, Product gate, acceptance criteria, and e2e scenarios
+description: Задача WMS: что делаем, как проверяем, какие сценарии e2e
 title: "[WMS] "
 labels: ["needs-spec"]
 body:
@@ -18,27 +18,6 @@ body:
       placeholder: |
         - Given ..., When ..., Then ...
         - Given ..., When ..., Then ...
-    validations:
-      required: true
-  - type: textarea
-    id: product_gate
-    attributes:
-      label: Product gate (mandatory)
-      description: "Заполнить по docs/WMS_FEATURE_GATE_PROTOCOL_RU.md: BA feature cards и Product before dev обязательны до разработки."
-      placeholder: |
-        BA feature cards:
-        - path: docs/feature-gates/YYYY-MM-DD-short-slug/FEATURE_CARDS_RU.md
-        - cards: F-001, F-002
-        - BA agent:
-        - verdicts: BA_READY / BA_REWORK / BA_BLOCKED
-
-        Product before dev:
-        - product agent:
-        - verdicts: PRODUCT_APPROVED_FOR_DEV / PRODUCT_REWORK_REQUIRED / PRODUCT_BLOCKED
-        - main objections / blockers:
-
-        Emergency bypass:
-        - EMERGENCY_BYPASS_USER_APPROVED: no
     validations:
       required: true
   - type: textarea

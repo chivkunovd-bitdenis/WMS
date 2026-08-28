@@ -123,6 +123,7 @@ async def create_pending_cargo_delete_operation(
     request_hash: str,
     request_summary: dict[str, Any],
     local_supply_id: uuid.UUID,
+    created_by_user_id: uuid.UUID | None = None,
 ) -> FbsWbOperation:
     op = FbsWbOperation(
         tenant_id=tenant_id,
@@ -134,6 +135,7 @@ async def create_pending_cargo_delete_operation(
         local_entity_type="fbs_supply",
         local_entity_id=local_supply_id,
         state=WB_OPERATION_STATE_PENDING,
+        created_by_user_id=created_by_user_id,
     )
     session.add(op)
     await session.flush()
@@ -195,6 +197,7 @@ async def create_pending_deliver_operation(
     request_hash: str,
     local_supply_id: uuid.UUID,
     confirmed_preflight_version: str | None,
+    created_by_user_id: uuid.UUID | None = None,
 ) -> FbsWbOperation:
     op = FbsWbOperation(
         tenant_id=tenant_id,
@@ -209,6 +212,7 @@ async def create_pending_deliver_operation(
         local_entity_type="fbs_supply",
         local_entity_id=local_supply_id,
         state=WB_OPERATION_STATE_PENDING,
+        created_by_user_id=created_by_user_id,
     )
     session.add(op)
     await session.flush()
@@ -242,6 +246,7 @@ async def create_pending_cargo_operation(
     request_hash: str,
     request_summary: dict[str, Any],
     local_supply_id: uuid.UUID,
+    created_by_user_id: uuid.UUID | None = None,
 ) -> FbsWbOperation:
     op = FbsWbOperation(
         tenant_id=tenant_id,
@@ -253,6 +258,7 @@ async def create_pending_cargo_operation(
         local_entity_type="fbs_supply",
         local_entity_id=local_supply_id,
         state=WB_OPERATION_STATE_PENDING,
+        created_by_user_id=created_by_user_id,
     )
     session.add(op)
     await session.flush()
@@ -287,6 +293,7 @@ async def create_pending_operation(
     idempotency_key: str,
     request_hash: str,
     request_summary: dict[str, Any],
+    created_by_user_id: uuid.UUID | None = None,
 ) -> FbsWbOperation:
     op = FbsWbOperation(
         tenant_id=tenant_id,
@@ -296,6 +303,7 @@ async def create_pending_operation(
         request_hash=request_hash,
         request_summary_json=request_summary,
         state=WB_OPERATION_STATE_PENDING,
+        created_by_user_id=created_by_user_id,
     )
     session.add(op)
     await session.flush()

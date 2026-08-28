@@ -1027,8 +1027,9 @@ export function FfSuppliesShipmentsPage({
     printBarcodeLabel({
       title: 'Короб отгрузки',
       barcode,
-      barcodeDataUrl: renderBarcodeDataUrl(barcode),
+      barcodeDataUrl: renderBarcodeDataUrl(barcode, { variant: 'internalBox' }),
       labelSize: size,
+      layout: 'internalBox',
     })
   }
 

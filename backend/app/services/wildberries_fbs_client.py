@@ -184,6 +184,12 @@ def _parse_meta_detail(entry: dict[str, Any]) -> MarketplaceMetaDetail | None:
     )
 
 
+# Дольше этого ждать внутри прохода нельзя: сверка держит строки поставок под
+# SELECT ... FOR UPDATE, а WB на 429 умеет просить и десять минут. Ждать столько
+# смысла нет — следующий проход всё равно через десять минут.
+MAX_RETRY_AFTER_WAIT_SECONDS = 30.0
+
+
 def _retry_after_seconds(value: str | None) -> float:
     if value is None:
         return 0.0
@@ -196,10 +202,13 @@ def _retry_after_seconds(value: str | None) -> float:
             return 0.0
         if retry_at.tzinfo is None:
             retry_at = retry_at.replace(tzinfo=UTC)
-        return max(0.0, (retry_at - datetime.now(UTC)).total_seconds())
+        return min(
+            MAX_RETRY_AFTER_WAIT_SECONDS,
+            max(0.0, (retry_at - datetime.now(UTC)).total_seconds()),
+        )
     if not isfinite(seconds):
         return 0.0
-    return max(0.0, seconds)
+    return min(MAX_RETRY_AFTER_WAIT_SECONDS, max(0.0, seconds))
 
 
 def _mock_meta_details(snapshot: dict[str, Any]) -> tuple[MarketplaceMetaDetail, ...]:
@@ -609,6 +618,12 @@ async def fetch_marketplace_supply_details(
         marketplace_api_base=marketplace_api_base,
     )
     response = await marketplace_request(client, "GET", url, api_token=api_token)
+    if response.status_code == 429:
+        # Запасной путь сверки: одиночная поставка спрашивается, когда её нет
+        # в общем списке. Без повтора один 429 оставлял поставку «в работе»
+        # до следующего прохода — и там повторялся снова.
+        await asyncio.sleep(_retry_after_seconds(response.headers.get("Retry-After")))
+        response = await marketplace_request(client, "GET", url, api_token=api_token)
     if response.status_code >= 400:
         raise map_upstream_error(response)
     try:
@@ -641,6 +656,18 @@ async def fetch_marketplace_supplies_page(
         api_token=api_token,
         params=params,
     )
+    if response.status_code == 429:
+        # Список — основной источник флага «поставка закрыта». Без повтора один
+        # отказ по лимиту откатывал сверку к поштучному опросу каждой поставки,
+        # то есть ровно к тому, из-за чего поставки и висели «в работе».
+        await asyncio.sleep(_retry_after_seconds(response.headers.get("Retry-After")))
+        response = await marketplace_request(
+            client,
+            "GET",
+            url,
+            api_token=api_token,
+            params=params,
+        )
     if response.status_code >= 400:
         raise map_upstream_error(response)
     try:

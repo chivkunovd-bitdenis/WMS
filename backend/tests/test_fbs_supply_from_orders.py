@@ -21,6 +21,7 @@ from app.models.fbs_order import (
     FbsOrder,
 )
 from app.models.fbs_supply import FbsSupply
+from app.models.fbs_trbx import FbsTrbx
 from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_CONFIRMED,
     WB_OPERATION_STATE_FAILED,
@@ -525,6 +526,9 @@ async def test_fbs_cutoff_autoplans_supply_manual_date_and_calendar(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
+    test_day = datetime.now(UTC).date() + timedelta(days=2)
+    next_day = test_day + timedelta(days=1)
+    moved_day = test_day + timedelta(days=2)
     headers, suffix = await _register_ff_admin(async_client)
     me = await async_client.get("/auth/me", headers=headers)
     tenant_id = uuid.UUID(me.json()["tenant_id"])
@@ -541,7 +545,6 @@ async def test_fbs_cutoff_autoplans_supply_manual_date_and_calendar(
     assert settings.status_code == 200, settings.text
     assert settings.json()["fbs_shipment_cutoff_time"] == "16:00"
 
-    shipment_date = (datetime.now(tz=UTC) + timedelta(days=1)).date()
     before_cutoff_order = await _create_ready_order(
         tenant_id,
         uuid.UUID(seller_id),
@@ -549,8 +552,10 @@ async def test_fbs_cutoff_autoplans_supply_manual_date_and_calendar(
         uuid.UUID(location_id),
         product,
         order_id=856101,
-        created_at=datetime.combine(shipment_date, datetime.min.time(), tzinfo=UTC)
-        + timedelta(hours=11, minutes=30),
+        created_at=datetime.combine(test_day, datetime.min.time(), tzinfo=UTC).replace(
+            hour=11,
+            minute=30,
+        ),
     )
     before = await async_client.post(
         "/operations/fbs-supplies/from-orders",
@@ -563,7 +568,7 @@ async def test_fbs_cutoff_autoplans_supply_manual_date_and_calendar(
         },
     )
     assert before.status_code == 201, before.text
-    assert before.json()["supply"]["planned_shipment_date"] == shipment_date.isoformat()
+    assert before.json()["supply"]["planned_shipment_date"] == test_day.isoformat()
 
     after_cutoff_order = await _create_ready_order(
         tenant_id,
@@ -572,8 +577,10 @@ async def test_fbs_cutoff_autoplans_supply_manual_date_and_calendar(
         uuid.UUID(location_id),
         product,
         order_id=856102,
-        created_at=datetime.combine(shipment_date, datetime.min.time(), tzinfo=UTC)
-        + timedelta(hours=14, minutes=30),
+        created_at=datetime.combine(test_day, datetime.min.time(), tzinfo=UTC).replace(
+            hour=14,
+            minute=30,
+        ),
     )
     after = await async_client.post(
         "/operations/fbs-supplies/from-orders",
@@ -587,29 +594,27 @@ async def test_fbs_cutoff_autoplans_supply_manual_date_and_calendar(
     )
     assert after.status_code == 201, after.text
     after_supply_id = after.json()["supply"]["id"]
-    next_shipment_date = shipment_date + timedelta(days=1)
-    assert after.json()["supply"]["planned_shipment_date"] == next_shipment_date.isoformat()
+    assert after.json()["supply"]["planned_shipment_date"] == next_day.isoformat()
 
-    moved_shipment_date = shipment_date + timedelta(days=2)
     moved = await async_client.patch(
         f"/operations/fbs-supplies/{after_supply_id}/planned-shipment-date",
         headers=headers,
-        json={"planned_shipment_date": moved_shipment_date.isoformat()},
+        json={"planned_shipment_date": moved_day.isoformat()},
     )
     assert moved.status_code == 200, moved.text
-    assert moved.json()["supply"]["planned_shipment_date"] == moved_shipment_date.isoformat()
+    assert moved.json()["supply"]["planned_shipment_date"] == moved_day.isoformat()
 
     calendar = await async_client.get(
-        "/operations/fbs-supplies/calendar"
-        f"?start_date={moved_shipment_date.isoformat()}&end_date={moved_shipment_date.isoformat()}",
+        "/operations/fbs-supplies/calendar",
         headers=headers,
+        params={"start_date": moved_day.isoformat(), "end_date": moved_day.isoformat()},
     )
     assert calendar.status_code == 200, calendar.text
     rows = calendar.json()
     assert rows == [
         {
             "id": after_supply_id,
-            "date": moved_shipment_date.isoformat(),
+            "date": moved_day.isoformat(),
             "direction": "WH",
             "boxes_count": 1,
             "shipment_type": "FBS",
@@ -1236,6 +1241,10 @@ async def test_supply_worklist_groups_active_orders_by_supply(
         },
     )
     assert create.status_code == 201, create.text
+    supply_id = uuid.UUID(create.json()["supply"]["id"])
+    async with SessionLocal() as session:
+        session.add(FbsTrbx(supply_id=supply_id, wb_trbx_id="WB-MP-WORKLIST-1"))
+        await session.commit()
 
     worklist = await async_client.get(
         "/operations/fbs-supplies/worklist?status_group=active",
@@ -1247,6 +1256,7 @@ async def test_supply_worklist_groups_active_orders_by_supply(
     assert rows[0]["name"] == "Grouped active supply"
     assert rows[0]["orders_count"] == 2
     assert rows[0]["units_count"] == 2
+    assert rows[0]["boxes_count"] == 1
     assert rows[0]["planned_shipment_date"] is None
 
 

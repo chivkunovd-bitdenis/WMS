@@ -474,8 +474,14 @@ async def fetch_marketplace_orders_page(
     marketplace_api_base: str | None = None,
     limit: int = 100,
     next_token: int | None = None,
+    date_from: int | None = None,
 ) -> tuple[list[dict[str, Any]], int | None]:
-    """GET /api/v3/orders — paginated order list (limit/next)."""
+    """GET /api/v3/orders — paginated order list (limit/next/dateFrom).
+
+    Без dateFrom WB отдаёт задания с самого первого, и обход упирается в предел
+    страниц раньше, чем доходит до свежих. Вместе с ними до WMS не доезжало поле
+    supplyId — единственный источник связи «заказ → поставка» для фоновой привязки.
+    """
     if settings.e2e_mock_wb_marketplace_orders:
         return [], None
     base = (marketplace_api_base or settings.wildberries_marketplace_api_base).rstrip("/")
@@ -485,6 +491,8 @@ async def fetch_marketplace_orders_page(
         "limit": min(max(limit, 1), 1000),
         "next": 0 if next_token is None else next_token,
     }
+    if date_from is not None:
+        params["dateFrom"] = date_from
     try:
         response = await client.get(url, headers=headers, params=params, timeout=60.0)
     except httpx.HTTPError as exc:

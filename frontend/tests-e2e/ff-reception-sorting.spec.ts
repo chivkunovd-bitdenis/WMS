@@ -331,25 +331,17 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
   await page.getByTestId('ff-inbound-queue-row').first().click();
   await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
 
-  // TC-NEW-PRINT-02 — печать в сортировке: единый диалог (как в отгрузке).
-  const productCard = page.getByTestId('ff-sorting-product-card').first();
-  await productCard.getByRole('button', { name: 'Печать ШК товара' }).click();
-  await expect(page.getByTestId('marking-print-dialog')).toBeVisible();
-  await expect(page.getByTestId('marking-print-qty')).toContainText('К упаковке: 4');
-  await expect(page.getByTestId('marking-print-wb-qty')).toBeVisible();
-  await page.getByTestId('marking-print-dialog').getByRole('button', { name: 'Отмена' }).click();
-  await expect(page.getByTestId('marking-print-dialog')).toBeHidden();
-
-  await expect(productCard.getByTestId('ff-sorting-cell-row')).toHaveCount(1);
-  const cellRow = productCard.getByTestId('ff-sorting-cell-row').first();
-  await expect(cellRow.getByTestId('ff-sorting-cell-source')).toContainText('Короб');
-  await cellRow.getByTestId('ff-sorting-cell-location').click();
+  // Товар принят целым коробом, поэтому раскладываем сам короб без повторной
+  // построчной раскладки его содержимого.
+  const boxRow = page.getByTestId('ff-sorting-box-putaway-row').first();
+  await expect(boxRow.getByTestId('ff-sorting-box-product-row')).toContainText(sku);
+  await boxRow.getByTestId('ff-sorting-box-location').getByRole('combobox').click();
   await page.getByRole('option', { name: /STORE-1/ }).click();
-  await expect(cellRow.getByTestId('ff-sorting-cell-qty')).toHaveValue('4');
   await Promise.all([
-    waitForPostOk(page, base, (u) => u.includes('/distribution-complete')),
-    page.getByTestId('ff-sorting-apply').click(),
+    waitForPostOk(page, base, (u) => u.includes('/boxes/') && u.includes('/putaway')),
+    boxRow.getByTestId('ff-sorting-box-putaway-submit').click(),
   ]);
+  await expect(boxRow.getByTestId('ff-sorting-box-placed')).toHaveText('Разложен');
   await expect(page.getByTestId('ff-sorting-all-done')).toBeVisible();
 
   const balDone = await page.request.get('/api/operations/inventory-balances/summary', { headers: h });

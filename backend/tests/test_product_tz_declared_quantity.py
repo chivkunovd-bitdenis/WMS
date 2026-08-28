@@ -4,7 +4,6 @@ The catalog import creates/updates product cards only. Stock intake belongs to
 warehouse documents, not to CAT-04.
 """
 
-
 from __future__ import annotations
 
 import io

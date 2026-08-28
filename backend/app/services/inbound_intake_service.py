@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.models.inbound_intake import (
     InboundIntakeBox,
@@ -1210,16 +1211,16 @@ def box_remaining_qty(box: InboundIntakeBox) -> int:
     return sum(box_line_remaining_qty(ln) for ln in box.lines)
 
 
-def _box_remainder_total_for_product(
+def _box_quantity_total_for_product(
     req: InboundIntakeRequest,
     product_id: uuid.UUID,
 ) -> int:
-    total = 0
-    for box in req.boxes:
-        for bl in box.lines:
-            if bl.product_id == product_id:
-                total += box_line_remaining_qty(bl)
-    return total
+    return sum(
+        int(bl.quantity)
+        for box in req.boxes
+        for bl in box.lines
+        if bl.product_id == product_id
+    )
 
 
 def _loose_pool_for_product(
@@ -1227,8 +1228,8 @@ def _loose_pool_for_product(
     product_id: uuid.UUID,
     accepted: int,
 ) -> int:
-    """Portion of accepted qty not tied to open box remainders (rosyp / loose)."""
-    return max(0, accepted - _box_remainder_total_for_product(req, product_id))
+    """Stable accepted quantity that was received outside boxes (rosyp / loose)."""
+    return max(0, accepted - _box_quantity_total_for_product(req, product_id))
 
 
 def _box_lines_by_key(
@@ -1260,23 +1261,40 @@ async def _get_box_for_putaway(
     request_id: uuid.UUID,
     box_id: uuid.UUID,
 ) -> tuple[InboundIntakeRequest, InboundIntakeBox]:
+    # Один запрос приёмки — одна транзакционная очередь раскладки. Это не даёт
+    # двум операторам одновременно списать общий остаток одного SKU из разных
+    # коробов и защищает повторный POST того же короба.
+    request_lock_stmt = (
+        select(InboundIntakeRequest.id)
+        .where(
+            InboundIntakeRequest.id == request_id,
+            InboundIntakeRequest.tenant_id == tenant_id,
+        )
+        .with_for_update()
+    )
+    locked_request_id = await session.scalar(request_lock_stmt)
+    if locked_request_id is None:
+        raise InboundIntakeError("request_not_found")
+
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.status != STATUS_SORTING:
         raise InboundIntakeError("not_distributable")
-    box = await session.get(InboundIntakeBox, box_id)
-    if box is None or box.request_id != request_id or box.tenant_id != tenant_id:
-        raise InboundIntakeError("box_not_found")
-    if box.intake_closed_at is None:
-        raise InboundIntakeError("box_not_closed")
     stmt = (
         select(InboundIntakeBox)
-        .where(InboundIntakeBox.id == box_id)
+        .where(
+            InboundIntakeBox.id == box_id,
+            InboundIntakeBox.request_id == request_id,
+            InboundIntakeBox.tenant_id == tenant_id,
+        )
         .options(selectinload(InboundIntakeBox.lines).selectinload(InboundIntakeBoxLine.product))
+        .with_for_update()
     )
     res = await session.execute(stmt)
-    loaded = res.scalar_one()
+    loaded = res.scalar_one_or_none()
+    if loaded is None:
+        raise InboundIntakeError("box_not_found")
     return req, loaded
 
 
@@ -1342,7 +1360,8 @@ async def apply_box_putaway(
     if sorting_loc_svc.is_sorting_location(loc):
         raise InboundIntakeError("sorting_location_reserved")
 
-    if line_items is None:
+    whole_box = line_items is None
+    if whole_box:
         line_items = [
             (bl.product_id, box_line_remaining_qty(bl))
             for bl in box.lines
@@ -1376,6 +1395,41 @@ async def apply_box_putaway(
 
         await _top_up_sorting_for_putaway(session, tenant_id, sorting_loc.id, line, product_id, qty)
 
+        # FOR UPDATE защищает PostgreSQL. Условные UPDATE ниже дополнительно
+        # делают операцию идемпотентной в SQLite-тестах и при повторе запроса:
+        # право на количество получает ровно одна транзакция.
+        box_claim = await session.execute(
+            sa.update(InboundIntakeBoxLine)
+            .where(
+                InboundIntakeBoxLine.id == bl.id,
+                InboundIntakeBoxLine.posted_qty == bl.posted_qty,
+                InboundIntakeBoxLine.quantity - InboundIntakeBoxLine.posted_qty >= qty,
+            )
+            .values(posted_qty=InboundIntakeBoxLine.posted_qty + qty)
+            .execution_options(synchronize_session=False)
+        )
+        if getattr(box_claim, "rowcount", 0) != 1:
+            await session.rollback()
+            raise InboundIntakeError(
+                "nothing_to_putaway" if whole_box else "qty_exceeds_box_remaining"
+            )
+
+        line_claim = await session.execute(
+            sa.update(InboundIntakeLine)
+            .where(
+                InboundIntakeLine.id == line.id,
+                InboundIntakeLine.posted_qty == line.posted_qty,
+                InboundIntakeLine.posted_qty + qty <= accepted,
+            )
+            .values(posted_qty=InboundIntakeLine.posted_qty + qty)
+            .execution_options(synchronize_session=False)
+        )
+        if getattr(line_claim, "rowcount", 0) != 1:
+            await session.rollback()
+            raise InboundIntakeError("qty_exceeds_accepted")
+        set_committed_value(bl, "posted_qty", bl.posted_qty + qty)
+        set_committed_value(line, "posted_qty", line.posted_qty + qty)
+
         try:
             await _apply_line_putaway(
                 session,
@@ -1389,8 +1443,6 @@ async def apply_box_putaway(
             if str(exc) == "insufficient stock":
                 raise InboundIntakeError("qty_exceeds_accepted") from None
             raise
-        line.posted_qty += qty
-        bl.posted_qty += qty
         session.add(
             InboundIntakeDistributionLine(
                 request_id=request_id,
@@ -1567,29 +1619,11 @@ async def scan_distribution_barcode(
     used_loose = sum(
         int(r.quantity) for r in rows if r.product_id == product_id and r.box_id is None
     )
-    used_by_box_product: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
-    for r in rows:
-        if r.box_id is None:
-            continue
-        key = (r.box_id, r.product_id)
-        used_by_box_product[key] = used_by_box_product.get(key, 0) + int(r.quantity)
-
-    source_box_id: uuid.UUID | None = None
     loose_capacity = _loose_pool_for_product(req, product_id, accepted)
     if used_loose >= loose_capacity:
-        source_box_id = None
-        for box in req.boxes:
-            for bl in box.lines:
-                if bl.product_id != product_id:
-                    continue
-                key = (box.id, product_id)
-                if used_by_box_product.get(key, 0) < box_line_remaining_qty(bl):
-                    source_box_id = box.id
-                    break
-            if source_box_id is not None:
-                break
-        if source_box_id is None:
-            raise InboundIntakeError("qty_exceeds_accepted")
+        raise InboundIntakeError("product_inside_box")
+
+    source_box_id: uuid.UUID | None = None
 
     existing = next(
         (
@@ -1645,6 +1679,36 @@ async def replace_distribution_lines(
 
     box_lines_by_key = _box_lines_by_key(req)
 
+    # Whole-box putaway is already committed when the operator later saves the
+    # loose draft. Keep only the part of existing box rows that is backed by
+    # box_line.posted_qty; discard old, unapplied box drafts from the former UI.
+    existing_stmt = (
+        select(InboundIntakeDistributionLine)
+        .where(InboundIntakeDistributionLine.request_id == request_id)
+        .order_by(
+            InboundIntakeDistributionLine.created_at.desc(),
+            InboundIntakeDistributionLine.id.desc(),
+        )
+    )
+    existing_rows = list((await session.execute(existing_stmt)).scalars().all())
+    preserved_box_rows: list[tuple[uuid.UUID, uuid.UUID, uuid.UUID, int]] = []
+    preserved_by_key: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
+    for row in existing_rows:
+        if row.box_id is None:
+            continue
+        key = (row.box_id, row.product_id)
+        box_line = box_lines_by_key.get(key)
+        if box_line is None:
+            continue
+        already_preserved = preserved_by_key.get(key, 0)
+        keep_qty = min(int(row.quantity), max(0, int(box_line.posted_qty) - already_preserved))
+        if keep_qty < 1:
+            continue
+        preserved_box_rows.append(
+            (row.box_id, row.product_id, row.storage_location_id, keep_qty)
+        )
+        preserved_by_key[key] = already_preserved + keep_qty
+
     accepted_by_product: dict[uuid.UUID, int] = {}
     for ln in req.lines:
         accepted_by_product[ln.product_id] = _accepted_qty_for_line(ln)
@@ -1690,7 +1754,7 @@ async def replace_distribution_lines(
             InboundIntakeDistributionLine.request_id == request_id
         )
     )
-    for box_id, product_id, storage_location_id, qty in lines:
+    for box_id, product_id, storage_location_id, qty in [*preserved_box_rows, *lines]:
         session.add(
             InboundIntakeDistributionLine(
                 request_id=request_id,
@@ -1757,7 +1821,7 @@ async def complete_distribution(
             if box_line is None:
                 raise InboundIntakeError("product_not_in_box")
             next_box_sum = sum_by_box_product.get((r.box_id, r.product_id), 0) + r.quantity
-            if next_box_sum > box_line_remaining_qty(box_line):
+            if next_box_sum > int(box_line.quantity):
                 raise InboundIntakeError("qty_exceeds_box_remaining")
             sum_by_box_product[(r.box_id, r.product_id)] = next_box_sum
         else:
@@ -1779,16 +1843,42 @@ async def complete_distribution(
         if max(line.posted_qty, sum_by_product[r.product_id]) > accepted:
             raise InboundIntakeError("qty_exceeds_accepted")
 
-    distributed_before_by_product: dict[uuid.UUID, int] = {}
+    initial_box_posted_by_key = {
+        key: int(box_line.posted_qty) for key, box_line in box_lines_by_key.items()
+    }
+    initial_box_posted_by_product: dict[uuid.UUID, int] = {}
+    for (_box_id, product_id), posted_qty in initial_box_posted_by_key.items():
+        initial_box_posted_by_product[product_id] = (
+            initial_box_posted_by_product.get(product_id, 0) + posted_qty
+        )
+    initial_loose_posted_by_product = {
+        product_id: max(
+            0,
+            int(line.posted_qty) - initial_box_posted_by_product.get(product_id, 0),
+        )
+        for product_id, line in lines_by_product.items()
+    }
+    distributed_loose_by_product: dict[uuid.UUID, int] = {}
+    distributed_box_by_key: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
     for r in rows:
         line = lines_by_product[r.product_id]
-        distributed_before = distributed_before_by_product.get(r.product_id, 0)
-        distributed_after = distributed_before + r.quantity
-        distributed_before_by_product[r.product_id] = distributed_after
-        quantity_to_post = min(
-            r.quantity,
-            max(0, distributed_after - line.posted_qty),
-        )
+        if r.box_id is None:
+            distributed_before = distributed_loose_by_product.get(r.product_id, 0)
+            distributed_after = distributed_before + r.quantity
+            distributed_loose_by_product[r.product_id] = distributed_after
+            quantity_to_post = min(
+                r.quantity,
+                max(0, distributed_after - initial_loose_posted_by_product.get(r.product_id, 0)),
+            )
+        else:
+            key = (r.box_id, r.product_id)
+            distributed_before = distributed_box_by_key.get(key, 0)
+            distributed_after = distributed_before + r.quantity
+            distributed_box_by_key[key] = distributed_after
+            quantity_to_post = min(
+                r.quantity,
+                max(0, distributed_after - initial_box_posted_by_key.get(key, 0)),
+            )
         if quantity_to_post < 1:
             continue
         if r.box_id is not None:

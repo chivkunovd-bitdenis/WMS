@@ -33,27 +33,36 @@ def is_legacy_old_sku(sku: str) -> bool:
     return sku.startswith(OLD_SKU_PREFIX)
 
 
-async def _sku_taken(session: AsyncSession, tenant_id: uuid.UUID, sku: str) -> bool:
+async def _sku_taken(
+    session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID, sku: str
+) -> bool:
+    # Занятость считается внутри продавца: одинаковый артикул у разных продавцов —
+    # норма, а не конфликт (см. uq_products_tenant_seller_sku).
     res = await session.execute(
-        select(Product.id).where(Product.tenant_id == tenant_id, Product.sku_code == sku)
+        select(Product.id).where(
+            Product.tenant_id == tenant_id,
+            Product.seller_id == seller_id,
+            Product.sku_code == sku,
+        )
     )
-    return res.scalar_one_or_none() is not None
+    return res.first() is not None
 
 
 async def _allocate_old_sku(
     session: AsyncSession,
     tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
     original_sku: str,
 ) -> str:
     base = original_sku.strip()
     if is_legacy_old_sku(base):
         return base[:128]
     candidate = f"{OLD_SKU_PREFIX}{base}"[:128]
-    if not await _sku_taken(session, tenant_id, candidate):
+    if not await _sku_taken(session, tenant_id, seller_id, candidate):
         return candidate
     for n in range(2, 100):
         alt = f"{OLD_SKU_PREFIX}{base}-{n}"[:128]
-        if not await _sku_taken(session, tenant_id, alt):
+        if not await _sku_taken(session, tenant_id, seller_id, alt):
             return alt
     return f"{OLD_SKU_PREFIX}{base[:8]}-{uuid.uuid4().hex[:6]}"[:128]
 
@@ -81,7 +90,7 @@ async def _mark_legacy_products_for_card(
     for p in rows:
         if is_legacy_old_sku(p.sku_code):
             continue
-        p.sku_code = await _allocate_old_sku(session, tenant_id, p.sku_code)
+        p.sku_code = await _allocate_old_sku(session, tenant_id, seller_id, p.sku_code)
         if not p.name.startswith(OLD_NAME_PREFIX):
             p.name = f"{OLD_NAME_PREFIX}{p.name}"[:255]
         marked += 1

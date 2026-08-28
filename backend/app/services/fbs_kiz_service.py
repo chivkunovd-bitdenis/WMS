@@ -222,6 +222,25 @@ def normalize_scanned_sticker(raw: str) -> str:
     return "".join(ch for ch in stripped if ch != "\ufeff" and not ch.isspace())
 
 
+def sticker_scan_candidates(raw: str) -> list[str]:
+    """Варианты прочтения стикера: как пришёл и с развёрнутой раскладкой.
+
+    Сканер работает как клавиатура: при активной русской раскладке он «печатает»
+    кириллицу вместо латиницы, и код стикера «*DVNdzDVg» приезжает как «*ВМТвяВМп».
+    Для Честного знака раскладка разворачивалась давно, для стикера — нет, и скан
+    не находил заказ (бой 27.08.2026, поставка WB-GI-270121264).
+    """
+    base = normalize_scanned_sticker(raw)
+    if not base:
+        return []
+    candidates = [base]
+    if _has_keyboard_layout_noise(base):
+        repaired = normalize_scanned_sticker(base.translate(_KEYBOARD_LAYOUT_TRANSLATION))
+        if repaired and repaired != base:
+            candidates.append(repaired)
+    return candidates
+
+
 def _match_gs1_ai(value: str, position: int) -> str | None:
     for ai in _GS1_AI_CODES:
         if value.startswith(ai, position):
@@ -418,7 +437,9 @@ async def _image_url_for_order(session: AsyncSession, order: FbsOrder) -> str | 
 
 def _product_payload(order: FbsOrder, image_url: str | None) -> FbsKizProduct:
     product: Product | None = order.product
-    barcode = order.wb_barcode or (product.wb_barcode if product is not None else None)
+    # Тот же порядок, что и в списке заказов: карточка товара главнее задания WB —
+    # иначе оператор видит внутренний код WB вместо штрихкода с коробки.
+    barcode = (product.wb_barcode if product is not None else None) or order.wb_barcode
     seller_article = product.sku_code if product is not None else order.wb_article
     name = (
         product.name
@@ -439,8 +460,8 @@ async def lookup_order_by_sticker(
     supply_id: uuid.UUID,
     sticker: str,
 ) -> FbsKizLookup:
-    normalized_sticker = normalize_scanned_sticker(sticker)
-    if not normalized_sticker:
+    candidates = sticker_scan_candidates(sticker)
+    if not candidates:
         raise FbsKizError("sticker_not_found")
 
     stmt = (
@@ -456,7 +477,14 @@ async def lookup_order_by_sticker(
         .order_by(FbsOrder.created_at, FbsOrder.id)
     )
     orders = list((await session.execute(stmt)).scalars().all())
-    order = _find_order_by_sticker(orders, normalized_sticker)
+    order = next(
+        (
+            found
+            for candidate in candidates
+            if (found := _find_order_by_sticker(orders, candidate)) is not None
+        ),
+        None,
+    )
     if order is None:
         raise FbsKizError("sticker_not_found")
 
