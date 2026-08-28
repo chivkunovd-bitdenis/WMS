@@ -2796,6 +2796,7 @@ export default function App() {
         meRole={me.role}
         ffPermissions={ffPermissions}
         portal={portal}
+        addressStorageEnabled={me.address_storage_enabled !== false}
       >
         <>
         <Routes>
@@ -2913,6 +2914,7 @@ export default function App() {
             element={
               token && canReceptionOps ? (
                 <FfInboundQueuePage
+                  addressStorageEnabled={me.address_storage_enabled !== false}
                   workspace="reception"
                   rows={inboundSummaries}
                   creatingDraft={opsBusy}
@@ -2952,6 +2954,7 @@ export default function App() {
             element={
               token && canReceptionOps ? (
                 <FfInboundQueuePage
+                  addressStorageEnabled={me.address_storage_enabled !== false}
                   workspace="sorting"
                   rows={inboundSummaries}
                   onOpen={(id) => {
@@ -2976,6 +2979,7 @@ export default function App() {
                   authHeaders={authHeaders}
                   sellers={sellers}
                   canManageCatalog={isFulfillmentAdmin}
+                  addressStorageEnabled={me.address_storage_enabled !== false}
                 />
               ) : (
                 ffAccessDenied
@@ -2992,6 +2996,7 @@ export default function App() {
                   authHeaders={authHeaders}
                   sellers={sellers}
                   isAdmin={isFulfillmentAdmin}
+                  addressStorageEnabled={me.address_storage_enabled !== false}
                 />
               ) : (
                 ffAccessDenied
@@ -3014,7 +3019,10 @@ export default function App() {
             path="ff/packaging"
             element={
               token && canPackagingOps ? (
-                <FfPackagingPage token={token} />
+                <FfPackagingPage
+                  token={token}
+                  addressStorageEnabled={me.address_storage_enabled !== false}
+                />
               ) : (
                 ffAccessDenied
               )
@@ -3024,7 +3032,10 @@ export default function App() {
             path="ff/packaging/:taskId"
             element={
               token && canPackagingOps ? (
-                <FfPackagingPage token={token} />
+                <FfPackagingPage
+                  token={token}
+                  addressStorageEnabled={me.address_storage_enabled !== false}
+                />
               ) : (
                 ffAccessDenied
               )
@@ -3034,7 +3045,10 @@ export default function App() {
             path="ff/packaging/pending-marking"
             element={
               token && canPackagingOps ? (
-                <FfPendingMarkingPage token={token} />
+                <FfPendingMarkingPage
+                  token={token}
+                  addressStorageEnabled={me.address_storage_enabled !== false}
+                />
               ) : (
                 ffAccessDenied
               )
@@ -3258,7 +3272,13 @@ export default function App() {
           />
           <Route
             path="ff/warehouses"
-            element={token && canCellsOps ? <Navigate to="/app/catalog" replace /> : ffAccessDenied}
+            element={
+              token && canCellsOps
+                ? me.address_storage_enabled !== false
+                  ? <Navigate to="/app/catalog" replace />
+                  : <Navigate to={`${base}/products`} replace />
+                : ffAccessDenied
+            }
           />
           <Route
             path="ff/integrations/wb"
@@ -3268,10 +3288,11 @@ export default function App() {
           <Route
             path="catalog"
             element={
-              token && canCellsOps && isFulfillmentAdmin ? (
+              token && canCellsOps && isFulfillmentAdmin && me.address_storage_enabled !== false ? (
                 <Screen title="Ячейки" subtitle="Склады и ячейки">
                   <CatalogSection
                     isFulfillmentAdmin={isFulfillmentAdmin || canCellsOps}
+                    addressStorageEnabled={me.address_storage_enabled !== false}
                     catalogBusy={catalogBusy}
                     catalogError={catalogError}
                     sellers={sellers}
@@ -3368,6 +3389,7 @@ export default function App() {
                   isFulfillmentAdmin={isFulfillmentAdmin}
                   isFulfillmentSeller={isFulfillmentSeller}
                   canEditInboundDraft={canReceptionOps}
+                  addressStorageEnabled={me.address_storage_enabled !== false}
                   warehouses={warehouses}
                   selectedWarehouseId={selectedWarehouseId}
                   products={products}
@@ -3407,6 +3429,7 @@ export default function App() {
                   isFulfillmentAdmin={isFulfillmentAdmin}
                   isFulfillmentSeller={isFulfillmentSeller}
                   canEditOutboundDraft={isFulfillmentAdmin}
+                  addressStorageEnabled={me.address_storage_enabled !== false}
                   warehouses={warehouses}
                   selectedWarehouseId={selectedWarehouseId}
                   products={products}
@@ -3452,11 +3475,12 @@ export default function App() {
           <Route
             path="ops/transfers"
             element={
-              token && isFulfillmentAdmin ? (
+              token && isFulfillmentAdmin && me.address_storage_enabled !== false ? (
                 <TransfersScreen
                   opsError={opsError}
                   opsBusy={opsBusy}
                   isFulfillmentAdmin={isFulfillmentAdmin}
+                  addressStorageEnabled={me.address_storage_enabled !== false}
                   locations={locations}
                   products={products}
                   onStockTransfer={(e) => void onStockTransfer(e)}
@@ -3553,6 +3577,7 @@ export default function App() {
                 isFulfillmentAdmin={isFulfillmentAdmin}
                 isFulfillmentSeller={isFulfillmentSeller}
                 canEditOutboundDraft={isFulfillmentAdmin}
+                addressStorageEnabled={me.address_storage_enabled !== false}
                 warehouses={warehouses}
                 selectedWarehouseId={selectedWarehouseId}
                 products={products}
