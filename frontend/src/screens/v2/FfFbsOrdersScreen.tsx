@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { apiUrl } from '../../api'
 import {
   Alert,
   Box,
@@ -43,6 +44,11 @@ import { MarketplaceChip } from '../../ui-kit'
 import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
+import {
+  FbsMetricPanel,
+  type MetricPreset,
+} from '../ff/products-fbs/FbsMetricPanel'
+import type { MoscowDateRangeValue } from '../../ui-kit'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import {
   buildFbsSyncTargets,
@@ -512,6 +518,20 @@ function downloadOrdersExcel(rows: FbsWorklistOrder[]): void {
 }
 
 export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false, addressStorageEnabled = true }: Props) {
+  // Блок среднего времени сборки над таблицей. Период и продавец свои: сводка
+  // отвечает на вопрос «как мы работаем», а фильтры таблицы — «где вот этот
+  // заказ», и связывать их значит ломать то и другое.
+  const [metricPreset, setMetricPreset] = useState<MetricPreset>('week')
+  const [metricSellerId, setMetricSellerId] = useState('')
+  const [metricRange, setMetricRange] = useState<MoscowDateRangeValue>({ start: '', end: '' })
+  const [metric, setMetric] = useState<{
+    hours: number
+    orders: number
+    in12: number | null
+    in24: number | null
+  }>({ hours: 0, orders: 0, in12: null, in24: null })
+  const [metricLoading, setMetricLoading] = useState(false)
+
   const location = useLocation()
   const navigate = useNavigate()
   const [statusGroup, setStatusGroup] = useState<(typeof TABS)[number]['key']>('new')
@@ -667,6 +687,53 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       })
     return () => { cancelled = true }
   }, [token, authHeaders, sellerId, statusGroup])
+
+  useEffect(() => {
+    let cancelled = false
+    const now = new Date()
+    const to = new Date(now)
+    const from = new Date(now)
+    if (metricPreset === 'week') from.setDate(from.getDate() - 7)
+    else if (metricPreset === 'month') from.setMonth(from.getMonth() - 1)
+    const useCustom =
+      metricPreset === 'custom' && metricRange.start !== '' && metricRange.end !== ''
+    const fromIso = useCustom ? `${metricRange.start}T00:00:00Z` : from.toISOString()
+    const toIso = useCustom ? `${metricRange.end}T23:59:59Z` : to.toISOString()
+
+    void (async () => {
+      setMetricLoading(true)
+      try {
+        const query = new URLSearchParams({ from: fromIso, to: toIso })
+        if (metricSellerId) query.set('seller_id', metricSellerId)
+        const res = await fetch(apiUrl(`/fbs/assembly-time?${query.toString()}`), {
+          headers: { ...authHeaders },
+        })
+        if (!res.ok) throw new Error('assembly_time_failed')
+        const body = (await res.json()) as {
+          hours: number
+          orders: number
+          in_12h_percent?: number
+          in_24h_percent?: number
+        }
+        if (cancelled) return
+        setMetric({
+          hours: body.hours,
+          orders: body.orders,
+          // Пороги сервер отдаёт не всегда: пока их нет — не показываем, а не
+          // рисуем нули, которые читаются как «ни один заказ не уложился».
+          in12: body.in_12h_percent ?? null,
+          in24: body.in_24h_percent ?? null,
+        })
+      } catch {
+        if (!cancelled) setMetric({ hours: 0, orders: 0, in12: null, in24: null })
+      } finally {
+        if (!cancelled) setMetricLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [authHeaders, metricPreset, metricSellerId, metricRange.start, metricRange.end])
 
   const syncTargets = useMemo(
     () => buildFbsSyncTargets(sellers.map((seller) => seller.id), sellerId),
@@ -1059,6 +1126,23 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       </Stack>
 
       <FfFbsSectionNav showStockSync={isAdmin} />
+
+      {/* Среднее время сборки крупной цифрой над таблицей — согласованный блок.
+          До сих пор он жил только в макете: экран его не показывал. */}
+      <FbsMetricPanel
+        hours={metric.hours}
+        orders={metric.orders}
+        in12={metric.in12}
+        in24={metric.in24}
+        sellers={sellers.map((one) => ({ id: one.id, name: one.name }))}
+        sellerId={metricSellerId}
+        onSellerChange={setMetricSellerId}
+        preset={metricPreset}
+        onPresetChange={setMetricPreset}
+        range={metricRange}
+        onRangeChange={setMetricRange}
+        loading={metricLoading}
+      />
 
       <Paper variant="outlined" sx={{ overflow: 'hidden', mt: 2 }}>
         <Tabs

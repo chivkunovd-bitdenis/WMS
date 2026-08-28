@@ -39,6 +39,9 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  // Категории для отбора приходят с сервера: ручка есть давно, экран её просто
+  // не спрашивал, и выпадающий список стоял пустым.
+  const [categories, setCategories] = useState<string[]>([])
 
   const loadList = useCallback(async () => {
     setLoading(true)
@@ -57,6 +60,21 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
   useEffect(() => {
     void loadList()
   }, [loadList])
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch(apiUrl('/products/categories'), {
+          headers: { ...authHeaders(token) },
+        })
+        if (!res.ok) return
+        setCategories((await res.json()) as string[])
+      } catch {
+        // Без категорий отбор по складу и продавцу продолжает работать —
+        // молча оставляем список пустым, а не роняем экран.
+      }
+    })()
+  }, [token])
 
   async function open(id: string) {
     setLoading(true)
@@ -202,7 +220,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         open={createOpen}
         warehouses={warehouses.map((w) => w.name)}
         sellers={sellers.map((s) => s.name)}
-        categories={[]}
+        categories={categories}
         onClose={() => setCreateOpen(false)}
         onCreate={(warehouse, fill, comment) => void create(warehouse, fill, comment)}
       />
