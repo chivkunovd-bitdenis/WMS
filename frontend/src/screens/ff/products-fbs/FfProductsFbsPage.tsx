@@ -109,25 +109,19 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
       const page = (await res.json()) as { items: ApiCatalogRow[] }
 
-      // Правило запрашивается по каждому товару: одного метода на пачку сервер
-      // не отдаёт. Идём пачками по восемь, чтобы не открыть двести соединений
-      // разом — браузер их всё равно поставит в очередь, а сервер получит удар.
+      // Правила забираем одним запросом на всю страницу каталога. Раньше здесь
+      // был запрос на каждый товар — на боевых данных это двести обращений на
+      // одно открытие экрана, и таблица заметно висела.
       const loadedRules = new Map<string, ApiRule>()
-      const batch = 8
-      for (let start = 0; start < page.items.length; start += batch) {
-        const slice = page.items.slice(start, start + batch)
-        const answers = await Promise.all(
-          slice.map(async (row) => {
-            const one = await fetch(apiUrl(`/products/${row.id}/fbs-rule`), {
-              headers: headers(token),
-            })
-            if (!one.ok) return null
-            return [row.id, (await one.json()) as ApiRule] as const
-          }),
-        )
-        for (const answer of answers) {
-          if (answer) loadedRules.set(answer[0], answer[1])
-        }
+      if (page.items.length > 0) {
+        const bulk = await fetch(apiUrl('/products/fbs-rule/bulk'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers(token) },
+          body: JSON.stringify({ product_ids: page.items.map((row) => row.id) }),
+        })
+        if (!bulk.ok) throw new Error(await readApiErrorMessage(bulk))
+        const answer = (await bulk.json()) as { items: Array<ApiRule & { product_id: string }> }
+        for (const item of answer.items) loadedRules.set(item.product_id, item)
       }
 
       const known = new Map(sellerRef.current.map((one) => [one.id, one.name]))
