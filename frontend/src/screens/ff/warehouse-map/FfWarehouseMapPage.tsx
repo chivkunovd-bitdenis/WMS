@@ -1,10 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Box } from '@mui/material'
-import { useNavigate } from 'react-router-dom'
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
+import { renderBarcodeDataUrl } from '../../../utils/renderBarcodeDataUrl'
+import { printBarcodeLabel } from '../../../utils/printBarcodeLabel'
+import type { LabelSize } from '../../../utils/labelSize'
 import { ErrorNotice } from '../../../ui-kit'
 import { FfWarehouseMapScreen } from './FfWarehouseMapScreen'
+import { InventoryCountDialog } from '../inventory/InventoryCountDialog'
+import { placeOf, targetTitle, type MapInventoryTarget } from '../inventory/fromWarehouseMap'
+import {
+  createObjectCount,
+  postCount,
+  postResultNote,
+  saveCountActuals,
+  type CountObjectType,
+} from '../inventory/inventoryCountApi'
+import type { InventoryCount } from '../inventory/InventoryTypes'
 import type { MoveIntent } from './WarehouseMapMoveDialog'
 import type { MapRow } from './WarehouseMapRows'
 import type { WarehouseMapData } from './WarehouseMapTypes'
@@ -56,7 +68,6 @@ type LoadOptions = {
 }
 
 export function FfWarehouseMapPage({ token, warehouses }: Props) {
-  const navigate = useNavigate()
   const [warehouseId, setWarehouseId] = useState<string | null>(warehouses[0]?.id ?? null)
   const [data, setData] = useState<WarehouseMapData | null>(
     warehouses.length === 0 ? EMPTY_MAP : null,
@@ -66,6 +77,10 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
   const [operationError, setOperationError] = useState<string | null>(null)
   const selectedWarehouseRef = useRef(warehouseId)
   const loadVersionRef = useRef(0)
+  // Пересчёт открывается прямо на карте: человек стоит у полки и не должен
+  // уходить со страницы, чтобы посчитать один короб.
+  const [count, setCount] = useState<InventoryCount | null>(null)
+  const [countTarget, setCountTarget] = useState<MapInventoryTarget | null>(null)
 
   // Список складов в App загружается отдельно и может приехать после первого
   // рендера страницы. Если выбранный склад исчез, переходим на первый доступный.
@@ -210,6 +225,111 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
     void persistMove(requestWarehouseId, intent, qty)
   }
 
+  async function createCell(code: string) {
+    const requestWarehouseId = selectedWarehouseRef.current
+    if (!requestWarehouseId) {
+      setOperationError('Сначала выберите склад: ячейка создаётся внутри склада.')
+      return
+    }
+    setOperationError(null)
+    try {
+      const res = await fetch(apiUrl(`/warehouses/${requestWarehouseId}/locations`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers(token) },
+        body: JSON.stringify({ code }),
+      })
+      if (!res.ok) throw new Error(await mapErrorMessage(res))
+      await load({ preserveOperationError: true })
+    } catch (err) {
+      setOperationError(err instanceof Error ? err.message : 'Не удалось создать ячейку')
+    }
+  }
+
+  async function createWarehouse(name: string, code: string) {
+    setOperationError(null)
+    try {
+      const res = await fetch(apiUrl('/warehouses'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers(token) },
+        body: JSON.stringify({ name, code }),
+      })
+      if (!res.ok) throw new Error(await mapErrorMessage(res))
+      const created = (await res.json()) as { id: string }
+      // Список складов на карте приезжает вместе с её составом, поэтому просто
+      // переключаемся на новый: перечитывание запустит useEffect загрузки.
+      selectWarehouse(created.id)
+    } catch (err) {
+      setOperationError(err instanceof Error ? err.message : 'Не удалось создать склад')
+    }
+  }
+
+  function printCell(row: MapRow, size: LabelSize) {
+    if (!row.barcode) {
+      setOperationError('У этой ячейки нет штрихкода — печатать нечего.')
+      return
+    }
+    setOperationError(null)
+    printBarcodeLabel({
+      title: `Ячейка № ${row.title}`,
+      barcode: row.barcode,
+      barcodeDataUrl: renderBarcodeDataUrl(row.barcode, { variant: 'storageCell' }),
+      labelSize: size,
+      layout: 'storageCell',
+    })
+  }
+
+  /** Виду строки карты соответствует вид объекта пересчёта на сервере. */
+  function countObjectType(kind: MapRow['kind']): CountObjectType | null {
+    if (kind === 'cell' || kind === 'product') return kind
+    if (kind === 'pallet' || kind === 'box' || kind === 'cargo_place') return kind
+    return null
+  }
+
+  async function openInventory(row: MapRow) {
+    const type = countObjectType(row.kind)
+    if (!type) {
+      setOperationError(
+        'Раздел «Без ячеек» пересчитывается с экрана инвентаризации: там документ заводится по складу целиком.',
+      )
+      return
+    }
+    setOperationError(null)
+    const target: MapInventoryTarget = {
+      kind: row.kind,
+      id: row.id,
+      title: targetTitle(row.kind, row.title),
+    }
+    try {
+      const created = await createObjectCount(token, { type, id: row.id })
+      setCountTarget(target)
+      setCount(created)
+    } catch (err) {
+      setOperationError(err instanceof Error ? err.message : 'Не удалось открыть пересчёт')
+    }
+  }
+
+  async function saveCount(edited: InventoryCount) {
+    try {
+      setCount(await saveCountActuals(token, edited))
+    } catch (err) {
+      setOperationError(err instanceof Error ? err.message : 'Не удалось сохранить пересчёт')
+    }
+  }
+
+  async function postAndClose(edited: InventoryCount) {
+    try {
+      const result = await postCount(token, edited)
+      setCount(null)
+      setCountTarget(null)
+      // Проведение меняет остаток, поэтому карту читаем заново: старая картинка
+      // после проводки больше не правда.
+      setOperationError(postResultNote(result))
+      await load({ preserveOperationError: true })
+    } catch (err) {
+      setOperationError(err instanceof Error ? err.message : 'Не удалось провести пересчёт')
+    }
+  }
+
   return (
     <Box>
       {operationError ? (
@@ -222,13 +342,25 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
         warehouseId={warehouseId}
         onWarehouseChange={selectWarehouse}
         onMove={move}
-        onCreateCell={() => undefined}
-        onCreateWarehouse={() => undefined}
-        onPrintCell={() => undefined}
-        onInventory={() => navigate('/app/ff/stocktaking')}
+        onCreateCell={(code: string) => void createCell(code)}
+        onCreateWarehouse={(name: string, code: string) => void createWarehouse(name, code)}
+        onPrintCell={printCell}
+        onInventory={(row: MapRow) => void openInventory(row)}
         historyFor={(row: MapRow) =>
           data?.journal.filter((entry) => entry.subject === row.title) ?? []
         }
+      />
+      <InventoryCountDialog
+        open={count !== null}
+        title={countTarget?.title ?? ''}
+        place={data && countTarget ? placeOf(data, countTarget) : null}
+        initialCount={count}
+        onClose={() => {
+          setCount(null)
+          setCountTarget(null)
+        }}
+        onSave={(edited: InventoryCount) => void saveCount(edited)}
+        onPost={(edited: InventoryCount) => void postAndClose(edited)}
       />
     </Box>
   )

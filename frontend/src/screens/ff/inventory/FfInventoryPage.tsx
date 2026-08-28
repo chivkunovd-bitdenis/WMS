@@ -4,7 +4,17 @@ import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { FfInventoryCountScreen } from './FfInventoryCountScreen'
 import { FfInventoryListScreen } from './FfInventoryListScreen'
 import { InventoryCreateDialog, type CreateFill } from './InventoryCreateDialog'
-import type { CountListItem, CountStatus, InventoryCount, ProductNode } from './InventoryTypes'
+import type { CountListItem, InventoryCount } from './InventoryTypes'
+import {
+  INVENTORY_BASE as BASE,
+  actualPayload,
+  inventoryAuthHeaders as authHeaders,
+  postResultNote,
+  toCount,
+  toListItem,
+  type ApiDetail,
+  type ApiSummary,
+} from './inventoryCountApi'
 
 // Экран инвентаризации, подключённый к серверу.
 //
@@ -12,134 +22,9 @@ import type { CountListItem, CountStatus, InventoryCount, ProductNode } from './
 // FfInventoryListScreen; здесь только загрузка, сохранение и проведение.
 // Разделено намеренно: те два экрана уже приняты владельцем по макету и не
 // должны знать про сеть, иначе их нельзя будет открыть в превью без сервера.
-
-const BASE = '/operations/inventory-counts'
-
-// Заголовок авторизации собираем здесь: в приложении он живёт локальной функцией
-// внутри App.tsx и наружу не отдаётся, а тащить его пропсом через два экрана
-// ради одной строки — лишний шов.
-function authHeaders(token: string): Record<string, string> {
-  return { Authorization: `Bearer ${token}` }
-}
-
-type ApiProduct = {
-  id: string
-  name: string
-  sku: string
-  seller: string
-  category: string | null
-  barcode: string | null
-  photo_url: string | null
-  expected: number
-  actual: number | null
-  expected_now: number | null
-}
-
-type ApiCell = { id: string; label: string; children: ApiProduct[] }
-
-type ApiDetail = {
-  id: string
-  number: string
-  status: string
-  warehouse_name: string
-  fill: { mode: 'object' | 'all' | 'filters'; seller_id: string | null; category: string | null; object_label: string | null }
-  created_at: string
-  created_by: string
-  posted_at: string | null
-  posted_by: string | null
-  comment: string
-  address_storage: boolean
-  cells: ApiCell[]
-}
-
-type ApiSummary = {
-  id: string
-  number: string
-  status: string
-  warehouse_name: string
-  fill_label: string
-  created_at: string
-  created_by: string
-  lines: number
-  counted: number
-  discrepancies: number
-  surplus: number
-  shortage: number
-}
-
-function toProduct(node: ApiProduct): ProductNode {
-  return {
-    kind: 'product',
-    id: node.id,
-    name: node.name,
-    sku: node.sku,
-    seller: node.seller,
-    category: node.category ?? '—',
-    barcode: node.barcode ?? '',
-    photoUrl: node.photo_url,
-    expected: node.expected,
-    actual: node.actual,
-    // Остаток уехал после наполнения документа — экран покажет предупреждение.
-    ...(node.expected_now === null || node.expected_now === node.expected
-      ? {}
-      : { expectedNow: node.expected_now }),
-  }
-}
-
-function toCount(detail: ApiDetail): InventoryCount {
-  return {
-    id: detail.id,
-    number: detail.number,
-    status: detail.status as CountStatus,
-    warehouseName: detail.warehouse_name,
-    fill:
-      detail.fill.mode === 'object'
-        ? { mode: 'object', objectLabel: detail.fill.object_label ?? 'По объекту' }
-        : detail.fill.mode === 'all'
-          ? { mode: 'all' }
-          : { mode: 'filters', seller: detail.fill.seller_id, category: detail.fill.category },
-    createdAt: detail.created_at,
-    createdBy: detail.created_by,
-    postedAt: detail.posted_at,
-    postedBy: detail.posted_by,
-    comment: detail.comment,
-    addressStorage: detail.address_storage,
-    cells: detail.cells.map((cell) => ({
-      id: cell.id,
-      label: cell.label,
-      children: cell.children.map(toProduct),
-    })),
-  }
-}
-
-function toListItem(row: ApiSummary): CountListItem {
-  return {
-    id: row.id,
-    number: row.number,
-    status: row.status as CountStatus,
-    warehouseName: row.warehouse_name,
-    fillLabel: row.fill_label,
-    createdAt: row.created_at,
-    createdBy: row.created_by,
-    lines: row.lines,
-    counted: row.counted,
-    discrepancies: row.discrepancies,
-    surplus: row.surplus,
-    shortage: row.shortage,
-  }
-}
-
-/** Введённые факты для отправки: сервер ждёт строку и число. */
-function actualPayload(count: InventoryCount) {
-  const lines: Array<{ line_id: string; actual_quantity: number | null }> = []
-  for (const cell of count.cells) {
-    for (const node of cell.children) {
-      if (node.kind !== 'product') continue
-      lines.push({ line_id: node.id, actual_quantity: node.actual })
-    }
-  }
-  return { lines }
-}
+//
+// Разбор ответов сервера и отправка факта живут в inventoryCountApi: тем же
+// путём документ заводится со строки карты склада, и расходиться им нельзя.
 
 type Props = {
   token: string
@@ -228,11 +113,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         posted_lines: number
         changed_balance_count: number
       }
-      setNote(
-        result.changed_balance_count > 0
-          ? `Проведено движений: ${result.posted_lines}. По ${result.changed_balance_count} строкам остаток успел измениться — посчитано от нового.`
-          : `Проведено движений: ${result.posted_lines}.`,
-      )
+      setNote(postResultNote(result))
       await open(count.id)
       await loadList()
     } catch (err) {
