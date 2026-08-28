@@ -26,6 +26,7 @@ from app.services.wildberries_errors import (
 )
 from app.services.wildberries_fbs_client import (
     MAX_MARKETPLACE_FBS_BATCH,
+    MAX_RETRY_AFTER_WAIT_SECONDS,
     WB_FBS_OPENAPI_VERIFIED_DATE,
     MarketplaceMetaDetail,
     add_orders_to_marketplace_supply_batch,
@@ -162,7 +163,11 @@ async def test_fetch_orders_meta_batch_retries_429_once_after_retry_after() -> N
             )
 
     assert calls == 2
-    sleep.assert_awaited_once_with(3600.0)
+    # WB на 429 умеет просить и час. Столько ждать внутри прохода нельзя: сверка
+    # держит строки поставок под блокировкой, а следующий проход и так через
+    # десять минут. Поэтому ожидание срезается потолком, а не берётся как есть.
+    assert calls == 2
+    sleep.assert_awaited_once_with(MAX_RETRY_AFTER_WAIT_SECONDS)
     assert rows[0].order_id == 123456
 
 
@@ -192,8 +197,10 @@ async def test_fetch_orders_meta_batch_honors_retry_after_http_date() -> None:
             )
 
     assert calls == 2
+    # Дата в Retry-After читается правильно, но ожидание всё равно срезается
+    # потолком: шестьдесят секунд под блокировкой строк поставки того не стоят.
     delay = sleep.await_args.args[0]
-    assert 58.0 <= delay <= 60.0
+    assert delay == MAX_RETRY_AFTER_WAIT_SECONDS
 
 
 @pytest.mark.asyncio
