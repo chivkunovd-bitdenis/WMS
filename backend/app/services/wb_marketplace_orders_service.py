@@ -1592,12 +1592,7 @@ async def sync_seller_orders(
     pool_debit_totals: dict[str, int] = {"debited": 0, "shortfall": 0}
 
     await import_wb_order_rows(
-        session,
-        tenant_id,
-        seller_id,
-        new_rows,
-        pool_debit_totals=pool_debit_totals,
-        stats=import_stats,
+        session, tenant_id, seller_id, new_rows, pool_debit_totals, import_stats
     )
     if import_stats.received:
         await session.commit()
@@ -1632,12 +1627,7 @@ async def sync_seller_orders(
             if not page_rows:
                 break
             await import_wb_order_rows(
-                session,
-                tenant_id,
-                seller_id,
-                page_rows,
-                pool_debit_totals=pool_debit_totals,
-                stats=import_stats,
+                session, tenant_id, seller_id, page_rows, pool_debit_totals, import_stats
             )
             await session.commit()
             if next_token is None:
