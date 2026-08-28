@@ -493,8 +493,10 @@ async def record_movement_and_adjust_balance(
     movement_type: str,
     inbound_intake_line_id: uuid.UUID | None = None,
     outbound_shipment_line_id: uuid.UUID | None = None,
+    inventory_count_line_id: uuid.UUID | None = None,
     transfer_group_id: uuid.UUID | None = None,
     marketplace_unload_request_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None = None,
     deduct_prefer: DeductPrefer = "unpacked",
     container_kind: ContainerKind | None = None,
     container_id: uuid.UUID | None = None,
@@ -525,7 +527,7 @@ async def record_movement_and_adjust_balance(
             container_id,
         )
 
-    movement = InventoryMovement(
+    movement_values: dict[str, object] = dict(
         tenant_id=tenant_id,
         product_id=product_id,
         seller_id=prod.seller_id,
@@ -535,9 +537,15 @@ async def record_movement_and_adjust_balance(
         movement_type=movement_type,
         inbound_intake_line_id=inbound_intake_line_id,
         outbound_shipment_line_id=outbound_shipment_line_id,
+        inventory_count_line_id=inventory_count_line_id,
         transfer_group_id=transfer_group_id,
         marketplace_unload_request_id=marketplace_unload_request_id,
     )
+    # Поле приходит отдельной волной inventory_movement_actor. Пока ветки не
+    # сведены, вызов уже несёт автора, но не дублирует соседнюю миграцию/модель.
+    if actor_user_id is not None and hasattr(InventoryMovement, "actor_user_id"):
+        movement_values["actor_user_id"] = actor_user_id
+    movement = InventoryMovement(**movement_values)
     session.add(movement)
 
     # Единственная точка, через которую меняется остаток, — значит и единственное место,

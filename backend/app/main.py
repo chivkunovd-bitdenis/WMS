@@ -25,6 +25,7 @@ from app.api.health import router as health_router
 from app.api.inbound_intake import router as inbound_intake_router
 from app.api.inbound_package_catalog import router as inbound_package_catalog_router
 from app.api.inventory_balances import router as inventory_balances_router
+from app.api.inventory_counts import router as inventory_counts_router
 from app.api.inventory_movements import router as inventory_movements_router
 from app.api.marketplace_unload_requests import router as marketplace_unload_requests_router
 from app.api.marking_codes import router as marking_codes_router
@@ -128,6 +129,7 @@ def create_app() -> FastAPI:
     app.include_router(inbound_intake_router)
     app.include_router(inbound_package_catalog_router)
     app.include_router(inventory_balances_router)
+    app.include_router(inventory_counts_router)
     app.include_router(inventory_movements_router)
     app.include_router(stock_transfer_router)
     app.include_router(outbound_shipment_router)

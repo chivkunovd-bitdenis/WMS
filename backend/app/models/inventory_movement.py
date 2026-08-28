@@ -18,9 +18,11 @@ MOVEMENT_TYPE_FBS_SHIPMENT = "fbs_shipment"
 MOVEMENT_TYPE_MARKETPLACE_UNLOAD = "marketplace_unload"
 MOVEMENT_TYPE_PRODUCT_TZ_IMPORT = "product_tz_import"
 MOVEMENT_TYPE_DISCREPANCY_ACT = "discrepancy_act"
+MOVEMENT_TYPE_INVENTORY_COUNT = "inventory_count"
 
 if TYPE_CHECKING:
     from app.models.inbound_intake import InboundIntakeLine
+    from app.models.inventory_count import InventoryCountLine
     from app.models.outbound_shipment import OutboundShipmentLine
     from app.models.product import Product
     from app.models.storage_location import StorageLocation
@@ -77,6 +79,12 @@ class InventoryMovement(Base):
         nullable=True,
         index=True,
     )
+    inventory_count_line_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("inventory_count_lines.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     transfer_group_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), nullable=True, index=True
     )
@@ -104,4 +112,8 @@ class InventoryMovement(Base):
     outbound_line: Mapped[OutboundShipmentLine | None] = relationship(
         "OutboundShipmentLine",
         back_populates="inventory_movements",
+    )
+    inventory_count_line: Mapped[InventoryCountLine | None] = relationship(
+        "InventoryCountLine",
+        back_populates="movements",
     )

@@ -50,6 +50,7 @@ from app.models.inbound_intake import (
     InboundIntakeRequest,
 )
 from app.models.inventory_balance import InventoryBalance
+from app.models.inventory_count import InventoryCount, InventoryCountLine
 from app.models.inventory_movement import InventoryMovement
 from app.models.inventory_reservation import InventoryReservation
 from app.models.marketplace_account import MarketplaceAccount
@@ -151,6 +152,8 @@ __all__ = [
     "InboundOzonReturnGiveout",
     "InboundOzonReturnItem",
     "InventoryBalance",
+    "InventoryCount",
+    "InventoryCountLine",
     "InventoryMovement",
     "InventoryReservation",
     "MarketplaceAccount",
