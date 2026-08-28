@@ -25,12 +25,11 @@ test('address storage off hides cell UI on marketplace unload', async ({ page })
   expect(token).toBeTruthy()
   const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
-  const patchOff = await page.request.patch(`${e2eApi}/tenant/settings`, {
-    headers: auth,
-    data: JSON.stringify({ address_storage_enabled: false }),
-  })
-  expect(patchOff.ok()).toBeTruthy()
-
+  // Адресное хранение выключаем ПОСЛЕ того, как заведём склад и ячейку.
+  // Сервер больше не даёт создавать ячейки при выключенной настройке — и это
+  // правильно: если адресного хранения нет, ячеек не должно быть нигде. Но сам
+  // экран проверяем именно на данных с ячейкой: она заведена раньше, а после
+  // выключения настройки её не должно быть видно.
   const whRes = await page.request.post(`${e2eApi}/warehouses`, {
     headers: auth,
     data: JSON.stringify({ name: 'W', code: `w-ui-${Date.now()}` }),
@@ -88,6 +87,12 @@ test('address storage off hides cell UI on marketplace unload', async ({ page })
     data: JSON.stringify({ code: 'UI-LOC' }),
   })
   const locId = String(((await locRes.json()) as { id: string }).id)
+
+  const patchOff = await page.request.patch(`${e2eApi}/tenant/settings`, {
+    headers: auth,
+    data: JSON.stringify({ address_storage_enabled: false }),
+  })
+  expect(patchOff.ok()).toBeTruthy()
 
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {

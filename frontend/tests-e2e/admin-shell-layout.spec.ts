@@ -4,7 +4,7 @@ import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
 
 // TC-S15-001 — навигация по разделам после входа (целостность shell: один корень, ключевые области).
-// TC-NEW-NAV-01 — FF меню: Приёмка на FF и Сортировка сверху, Календарь отгрузок и Настройки снизу, без видимой Инвентаризации.
+// TC-NEW-NAV-01 — FF меню: Приёмка на FF и Сортировка сверху, Календарь отгрузок и Настройки снизу; расчёт хранения называется «Хранение», а пересчёт — отдельный пункт «Инвентаризация».
 // TC-NEW-CAL-03 — настройки FF: опциональное время отсечки FBS сохраняется и очищается.
 // TC-S02-001 — успешный вход в контекст сессии с видимым дашбордом.
 test('admin shell: single app root, nav, dashboard and main sections visible', async ({ page }) => {
@@ -37,7 +37,13 @@ test('admin shell: single app root, nav, dashboard and main sections visible', a
   await expect(page.getByTestId('nav-catalog')).toBeVisible();
   await expect(page.getByTestId('nav-sellers')).toBeVisible();
   await expect(page.getByTestId('nav-dashboard')).toContainText('Календарь отгрузок');
-  await expect(page.getByTestId('app-sidebar')).not.toContainText('Инвентаризация');
+  // Раздел расчёта хранения называется «Хранение»: слово «Инвентаризация» у него
+  // отобрали в августе, чтобы не путали с пересчётом. Проверяем именно это, а не
+  // отсутствие слова во всём меню — пересчёт теперь стоит там отдельным пунктом
+  // и попасть на него иначе как набрав адрес руками было нельзя.
+  await expect(page.getByTestId('nav-ff-storage')).toContainText('Хранение');
+  await expect(page.getByTestId('nav-ff-storage')).not.toContainText('Инвентаризация');
+  await expect(page.getByTestId('nav-ff-stocktaking')).toContainText('Инвентаризация');
   const navLabels = await page.locator('[data-task-id="NAV-01"]').allTextContents();
   expect(navLabels.indexOf('Приёмка на FF')).toBeLessThan(navLabels.indexOf('Сортировка'));
   expect(navLabels.indexOf('Сортировка')).toBeLessThan(navLabels.indexOf('FBS'));
