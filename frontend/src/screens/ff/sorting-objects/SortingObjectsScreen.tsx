@@ -13,6 +13,7 @@ import {
   SelectInput,
 } from '../../../ui-kit'
 import { CreateCellDialog } from '../warehouse-map/WarehouseMapToolbar'
+import type { LabelSize } from '../../../utils/labelSize'
 import { BoxLabelPrintDialog } from '../../../components/BoxLabelPrintDialog'
 import { LinearProgress } from '@mui/material'
 import { ObjectsTree } from './ObjectsTree'
@@ -67,6 +68,14 @@ type SortingScreenProps = {
   initialLines?: GoodsLine[]
   products?: Product[]
   initialCells?: Cell[]
+  /** Подпись под заголовком: что за документ раскладываем. */
+  purpose?: string
+  /** Имя склада для диалога создания ячейки. */
+  warehouseName?: string
+  /** Завести ячейку на сервере. Без него экран заводит её только у себя. */
+  onCreateCell?: (code: string) => void
+  /** Напечатать штрихкод. Без него печать остаётся заглушкой превью. */
+  onPrint?: (title: string, barcode: string, size: LabelSize) => void
   /** Поставить объект или товар на ячейку. Без него экран двигает только себя. */
   onPlace?: (payload: {
     kind: ObjKind | 'product'
@@ -84,6 +93,10 @@ export function SortingObjectsScreen({
   products: productsProp,
   initialCells,
   onPlace,
+  purpose,
+  warehouseName,
+  onCreateCell,
+  onPrint,
 }: SortingScreenProps) {
   const theme = useTheme()
   const products = productsProp ?? PRODUCTS
@@ -259,7 +272,10 @@ export function SortingObjectsScreen({
     <Box data-testid="sorting-objects-screen">
       <ScreenHeader
         title="Раскладка по ячейкам"
-        purpose="Приёмка №1284 от 27.08.2026. Собираем объект и ставим готовый объект на полку."
+        purpose={
+          purpose ??
+          'Приёмка №1284 от 27.08.2026. Собираем объект и ставим готовый объект на полку.'
+        }
       />
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
@@ -512,17 +528,37 @@ export function SortingObjectsScreen({
         scope="label"
         onClose={() => setPrinting(null)}
         onConfirm={(size) => {
-          onNote(`Заглушка: ${printing}, этикетка ${size.label} — принтера в макете нет`)
+          const target = printing
           setPrinting(null)
+          if (!target) return
+          if (onPrint) {
+            // Штрихкод ищем среди того, что экран уже показывает: печатаем ровно
+            // то, что стоит в строке, а не собранный на клиенте код.
+            const object = objects.find((one) => objectTitle(one) === target)
+            const cell = cells.find((one) => one.code === target)
+            const barcode = object?.barcode ?? cell?.barcode ?? ''
+            if (!barcode) {
+              onNote(`У «${target}» нет штрихкода — печатать нечего.`)
+              return
+            }
+            onPrint(target, barcode, size)
+            return
+          }
+          onNote(`Заглушка: ${target}, этикетка ${size.label} — принтера в превью нет`)
         }}
         testId="objects-print-dialog"
       />
       <CreateCellDialog
         open={cellDialogOpen}
-        warehouseName="Ярцево"
+        warehouseName={warehouseName ?? 'Ярцево'}
         existingCodes={cells.map((one) => one.code)}
         onClose={() => setCellDialogOpen(false)}
         onCreate={(code) => {
+          if (onCreateCell) {
+            onCreateCell(code)
+            setCellDialogOpen(false)
+            return
+          }
           setExtraCells((current) => [
             ...current,
             { id: `new-cell-${current.length + 1}`, code, barcode: `29${String(current.length + 1).padStart(11, '0')}` },

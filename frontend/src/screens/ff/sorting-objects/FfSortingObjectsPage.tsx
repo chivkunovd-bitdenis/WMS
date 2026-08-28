@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Box } from '@mui/material'
+import { Box, Stack, ToggleButton, ToggleButtonGroup } from '@mui/material'
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
+import { renderBarcodeDataUrl } from '../../../utils/renderBarcodeDataUrl'
+import { printBarcodeLabel } from '../../../utils/printBarcodeLabel'
+import type { LabelSize } from '../../../utils/labelSize'
 import { EmptyState, ErrorNotice } from '../../../ui-kit'
 import { SortingObjectsScreen } from './SortingObjectsScreen'
 import type { Cell, GoodsLine, ObjKind, Product, WarehouseObject } from './objectsStub'
@@ -28,7 +31,9 @@ type Props = {
 }
 
 export function FfSortingObjectsPage({ token, warehouses }: Props) {
-  const warehouseId = warehouses[0]?.id ?? null
+  // Склад выбирается руками, как на карте: раскладка идёт на конкретном складе,
+  // и молча показывать первый попавшийся значит врать оператору.
+  const [warehouseId, setWarehouseId] = useState<string | null>(warehouses[0]?.id ?? null)
   const [data, setData] = useState<ApiSorting | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Счётчик загрузок нужен как ключ экрана.
@@ -99,9 +104,61 @@ export function FfSortingObjectsPage({ token, warehouses }: Props) {
     )
   }
 
+  const warehouseName = warehouses.find((one) => one.id === warehouseId)?.name ?? ''
+
+  async function createCell(code: string) {
+    if (!warehouseId) return
+    setError(null)
+    try {
+      const res = await fetch(apiUrl(`/warehouses/${warehouseId}/locations`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers(token) },
+        body: JSON.stringify({ code }),
+      })
+      if (!res.ok) throw new Error(await readApiErrorMessage(res))
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось создать ячейку')
+    }
+  }
+
+  function printLabel(title: string, barcode: string, size: LabelSize) {
+    printBarcodeLabel({
+      title,
+      barcode,
+      barcodeDataUrl: renderBarcodeDataUrl(barcode, { variant: 'storageCell' }),
+      labelSize: size,
+      layout: 'storageCell',
+    })
+  }
+
   return (
     <Box>
       {error ? <ErrorNotice testId="sorting-objects-error">{error}</ErrorNotice> : null}
+      <Stack direction="row" spacing={0.5} sx={{ mb: 2, flexWrap: 'wrap' }}>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={warehouseId}
+          onChange={(_event, value: string | null) => {
+            if (value) setWarehouseId(value)
+          }}
+          aria-label="Склад"
+          data-testid="sorting-objects-warehouses"
+          sx={{ flexWrap: 'wrap' }}
+        >
+          {warehouses.map((warehouse) => (
+            <ToggleButton
+              key={warehouse.id}
+              value={warehouse.id}
+              data-testid={`sorting-objects-warehouse-${warehouse.id}`}
+              sx={{ textTransform: 'none', fontWeight: 600, px: 1.75 }}
+            >
+              {warehouse.name}
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
+      </Stack>
       {data ? (
         <SortingObjectsScreen
           key={`${warehouseId}-${version}`}
@@ -111,6 +168,10 @@ export function FfSortingObjectsPage({ token, warehouses }: Props) {
           products={data.products}
           initialCells={data.cells}
           onPlace={(payload) => void place(payload)}
+          purpose={`Склад ${warehouseName}. Собираем объект и ставим готовый объект на полку.`}
+          warehouseName={warehouseName}
+          onCreateCell={(code) => void createCell(code)}
+          onPrint={(title, barcode, size) => printLabel(title, barcode, size)}
         />
       ) : (
         <EmptyState title="Загружаем склад" hint="Считаем, что где лежит." />
