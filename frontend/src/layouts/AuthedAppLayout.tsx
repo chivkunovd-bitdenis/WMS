@@ -29,6 +29,7 @@ type Props = {
   portal: 'seller' | 'ff'
   meRole?: string
   ffPermissions?: FfPermissions | null
+  addressStorageEnabled?: boolean
 }
 
 export function AuthedAppLayout({
@@ -39,6 +40,7 @@ export function AuthedAppLayout({
   portal,
   meRole = '',
   ffPermissions = null,
+  addressStorageEnabled = true,
 }: Props) {
   const base = portal === 'seller' ? '/app/seller' : '/app/ff'
   if (portal === 'seller') {
@@ -227,9 +229,9 @@ export function AuthedAppLayout({
                 <ListItemText primary="Отгрузки" />
               </ListItemButton>
             ) : null}
-            {canCatalogCells ? (
-              <ListItemButton component={NavLink} to="/app/catalog" data-testid="nav-catalog" data-task-id="NAV-01">
-                <ListItemText primary={isAdmin ? 'Ячейки' : 'Каталог и ячейки'} />
+            {canCatalogCells && (addressStorageEnabled || !isAdmin) ? (
+              <ListItemButton component={NavLink} to={addressStorageEnabled ? '/app/catalog' : `${base}/products`} data-testid="nav-catalog" data-task-id="NAV-01">
+                <ListItemText primary={addressStorageEnabled ? (isAdmin ? 'Ячейки' : 'Каталог и ячейки') : 'Каталог'} />
               </ListItemButton>
             ) : null}
             {isAdmin || can('inventory') ? (

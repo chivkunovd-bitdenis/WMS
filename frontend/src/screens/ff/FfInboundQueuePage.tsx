@@ -60,6 +60,7 @@ type Props = {
   loading?: boolean
   error?: string | null
   onRetry?: () => void | Promise<void>
+  addressStorageEnabled?: boolean
 }
 
 type SortKey = 'date' | 'number'
@@ -132,6 +133,7 @@ export function FfInboundQueuePage({
   loading = false,
   error = null,
   onRetry,
+  addressStorageEnabled = true,
 }: Props) {
   const [sellerFilter, setSellerFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -192,7 +194,9 @@ export function FfInboundQueuePage({
   const subtitle =
     workspace === 'reception'
       ? 'Список документов для складской приёмки.'
-      : 'Разложение принятого товара по ячейкам хранения. Доступно к резерву только то, что уже разложено.'
+      : addressStorageEnabled
+        ? 'Разложение принятого товара по ячейкам хранения. Доступно к резерву только то, что уже разложено.'
+        : 'Завершение обработки принятого товара.'
 
   const requestSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -389,7 +393,9 @@ export function FfInboundQueuePage({
         <Alert severity="info" data-testid="ff-inbound-queue-empty">
           {workspace === 'reception'
             ? 'Нет приёмок в очереди.'
-            : 'Нет приёмок в сортировке — всё разложено по ячейкам.'}
+            : addressStorageEnabled
+              ? 'Нет приёмок в сортировке — всё разложено по ячейкам.'
+              : 'Нет приёмок в сортировке.'}
         </Alert>
       ) : (
         <TableContainer component={Paper} variant="outlined" data-testid="ff-inbound-queue-table">

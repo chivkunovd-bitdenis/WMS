@@ -19,6 +19,7 @@ type Props = {
   opsError: string | null
   opsBusy: boolean
   isFulfillmentAdmin: boolean
+  addressStorageEnabled?: boolean
   locations: LocationRow[]
   products: ProductRow[]
   onStockTransfer: FormEventHandler<HTMLFormElement>
@@ -28,6 +29,7 @@ export function TransfersScreen({
   opsError,
   opsBusy,
   isFulfillmentAdmin,
+  addressStorageEnabled = true,
   locations,
   products,
   onStockTransfer,
@@ -85,6 +87,8 @@ export function TransfersScreen({
     }
     onStockTransfer(event)
   }
+
+  if (!addressStorageEnabled) return null
 
   return (
     <Screen title="Перемещения" subtitle="Перемещение между ячейками на одном складе">

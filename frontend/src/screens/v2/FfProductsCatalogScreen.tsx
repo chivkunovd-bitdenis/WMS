@@ -151,7 +151,7 @@ type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
   sellers: SellerRow[]
-  canManageCatalog?: boolean
+  canManageCatalog?: boolean; addressStorageEnabled?: boolean
 }
 
 function humanFfCatalogError(message: string): string {
@@ -203,7 +203,7 @@ export function FfProductsCatalogScreen({
   token,
   authHeaders,
   sellers,
-  canManageCatalog = false,
+  canManageCatalog = false, addressStorageEnabled = true,
 }: Props) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -1204,14 +1204,14 @@ export function FfProductsCatalogScreen({
                     </TableCell>
                     <TableCell align="right">
                       <Stack spacing={0.15} sx={{ minWidth: 0, alignItems: 'flex-end' }}>
-                        <Typography
+                        {addressStorageEnabled ? <Typography
                           variant="caption"
                           data-testid={`ff-catalog-stock-in-storage-${p.id}`}
                           title={`В ячейках ${p.stock_in_storage}`}
                           noWrap
                         >
                           В ячейках {p.stock_in_storage}
-                        </Typography>
+                        </Typography> : null}
                         <Typography
                           variant="caption"
                           color="text.secondary"

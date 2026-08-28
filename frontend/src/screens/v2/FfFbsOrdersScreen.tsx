@@ -77,7 +77,7 @@ type Props = {
   token: string
   authHeaders: (token: string) => Record<string, string>
   sellers: SellerRow[]
-  isAdmin?: boolean
+  isAdmin?: boolean; addressStorageEnabled?: boolean
 }
 
 // Порядок вкладок — единственный источник истины для UI; заказчик 16.08 попросил
@@ -511,7 +511,7 @@ function downloadOrdersExcel(rows: FbsWorklistOrder[]): void {
   URL.revokeObjectURL(url)
 }
 
-export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false }: Props) {
+export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false, addressStorageEnabled = true }: Props) {
   const location = useLocation()
   const navigate = useNavigate()
   const [statusGroup, setStatusGroup] = useState<(typeof TABS)[number]['key']>('new')
@@ -1729,7 +1729,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         authHeaders={authHeaders}
         supplyId={workspaceId}
         initialWorkspace={workspaceSeed}
-        open={workspaceOpen}
+        open={workspaceOpen} addressStorageEnabled={addressStorageEnabled}
         onClose={() => {
           setWorkspaceOpen(false)
           setWorkspaceSeed(null)

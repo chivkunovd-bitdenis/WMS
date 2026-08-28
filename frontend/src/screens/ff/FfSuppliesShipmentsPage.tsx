@@ -946,7 +946,7 @@ export function FfSuppliesShipmentsPage({
     }
     if (!raw.startsWith('WHB-') && !raw.startsWith('INB-')) {
       setModalError(
-        'На этой строке сканируют только готовый короб (WHB-…). Для ячейки или товара откройте «Добавить товары» у короба.',
+        addressStorageEnabled ? 'На этой строке сканируют только готовый короб (WHB-…). Для ячейки или товара откройте «Добавить товары» у короба.' : 'На этой строке сканируют только готовый короб (WHB-…). Для товара откройте «Добавить товары» у короба.',
       )
       return
     }
@@ -2738,7 +2738,7 @@ export function FfSuppliesShipmentsPage({
                     token={token}
                     authHeaders={authHeaders}
                     requestId={unloadDetail.id}
-                    disabled={modalBusy}
+                    disabled={modalBusy} addressStorageEnabled={addressStorageEnabled}
                     onChanged={() => void loadDocDetail()}
                     catalogById={catalogById}
                   />
@@ -2754,7 +2754,7 @@ export function FfSuppliesShipmentsPage({
                   {packagingTask && token ? (
                     <FfPackagingTaskPanel
                       token={token}
-                      task={packagingTask}
+                      task={packagingTask} addressStorageEnabled={addressStorageEnabled}
                       hideDocumentHeader
                       compactLayout
                       // Пункт 10 итерации 2026-08-14: единое поле скана на упаковке различает
@@ -3524,8 +3524,7 @@ export function FfSuppliesShipmentsPage({
         <DialogTitle>Отменить отгрузку?</DialogTitle>
         <DialogContent>
           <Typography variant="body2">
-            Товар из коробов вернётся на сортировку — его нужно будет заново распределить по
-            ячейкам или использовать в других документах.
+            {addressStorageEnabled ? 'Товар из коробов вернётся на сортировку — его нужно будет заново распределить по ячейкам или использовать в других документах.' : 'Товар из коробов вернётся в остаток — его можно будет использовать в других документах.'}
           </Typography>
         </DialogContent>
         <DialogActions>

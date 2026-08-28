@@ -72,6 +72,7 @@ export type FbsPickingListPrintInput = {
   routeLabel: string
   deadlineLabel: string
   printedAtLabel: string
+  addressStorageEnabled?: boolean
   rows: FbsPickingListPrintRow[]
 }
 
@@ -119,7 +120,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
           <div class="muted">${row.identifiers.length ? row.identifiers.map(escapePrintHtml).join(' · ') : 'Идентификаторы не указаны'}</div>
         </td>
         <td class="size">${row.size ? escapePrintHtml(row.size) : '—'}</td>
-        <td>${row.locations.length ? row.locations.map(escapePrintHtml).join('<br />') : 'Ячейка не назначена'}</td>
+        ${input.addressStorageEnabled === false ? '' : `<td>${row.locations.length ? row.locations.map(escapePrintHtml).join('<br />') : 'Ячейка не назначена'}</td>`}
         <td>${row.wbOrders.map((id) => `№${escapePrintHtml(id)}`).join('<br />')}</td>
         <td class="sticker">${stickerCodes}</td>
         <td class="quantity">${escapePrintHtml(row.required)}</td>
@@ -168,8 +169,8 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
       <div><span>Сдать до</span><strong>${escapePrintHtml(input.deadlineLabel)}</strong></div>
     </div>
     <table>
-      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th class="size">Размер</th><th>Ячейка</th><th>Заказы WB</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="10">В поставке нет товаров для подбора.</td></tr>'}</tbody>
+      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th class="size">Размер</th>${input.addressStorageEnabled === false ? '' : '<th>Ячейка</th>'}<th>Заказы WB</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="${input.addressStorageEnabled === false ? 9 : 10}">В поставке нет товаров для подбора.</td></tr>`}</tbody>
     </table>
     <div class="footer">Сформировано WMS: ${escapePrintHtml(input.printedAtLabel)} · Актуальное серверное состояние на момент печати.</div>
     <script>
