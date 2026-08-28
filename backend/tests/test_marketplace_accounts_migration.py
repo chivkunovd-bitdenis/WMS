@@ -5,7 +5,13 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-REVISION_PATH = Path(__file__).parents[1] / "alembic/versions/20260825_0101_marketplace_accounts.py"
+# Номер сменился при сведении веток: 20260825_0101 занимали сразу две ревизии —
+# уникальный артикул продавца (он на бою) и счета маркетплейсов из линии Ozon.
+# На бою остался исходный номер, линия Ozon переехала на 20260825_0111, иначе
+# накатка на боевую базу встала бы на неоднозначной ревизии.
+REVISION_PATH = (
+    Path(__file__).parents[1] / "alembic/versions/20260825_0111_marketplace_accounts.py"
+)
 
 
 def _migration() -> object:
@@ -18,7 +24,7 @@ def _migration() -> object:
 
 def test_tc_s32_ozon_013_revision_is_additive_and_has_the_required_parent() -> None:
     migration = _migration()
-    assert migration.revision == "20260825_0101"
+    assert migration.revision == "20260825_0111"
     assert migration.down_revision == "20260823_0100"
 
 

@@ -1278,12 +1278,10 @@ async def add_marketplace_unload_pick_qty(
         )
     except MarketplaceUnloadPickError as exc:
         raise _map_pick_err(exc) from None
-    return _pick_alloc_out(
-        alloc,
-        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
-            session, user.tenant_id
-        ),
-    )
+    # Флаг считаем ДО сборки ответа: если оставить await прямо в аргументе,
+    # объект догружает свои строки уже после него и падает вне контекста.
+    reveal = await tenant_settings_svc.is_address_storage_enabled(session, user.tenant_id)
+    return _pick_alloc_out(alloc, reveal_storage=reveal)
 
 
 @router.post(
@@ -1656,12 +1654,10 @@ async def scan_marketplace_unload_box(
         )
     except MarketplaceUnloadBoxError as exc:
         raise _map_box_err(exc) from None
-    return _box_scan_out(
-        result,
-        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
-            session, user.tenant_id
-        ),
-    )
+    # Флаг считаем ДО сборки ответа: если оставить await прямо в аргументе,
+    # объект догружает свои строки уже после него и падает вне контекста.
+    reveal = await tenant_settings_svc.is_address_storage_enabled(session, user.tenant_id)
+    return _box_scan_out(result, reveal_storage=reveal)
 
 
 @router.post(

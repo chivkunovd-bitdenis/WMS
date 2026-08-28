@@ -17,7 +17,10 @@ from app.models.inbound_intake import (
     InboundIntakeRequest,
 )
 from app.models.inventory_balance import InventoryBalance
-from app.models.inventory_movement import MOVEMENT_TYPE_OUTBOUND_SHIPMENT
+from app.models.inventory_movement import (
+    MOVEMENT_TYPE_INBOUND_INTAKE,
+    MOVEMENT_TYPE_OUTBOUND_SHIPMENT,
+)
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
@@ -287,31 +290,68 @@ async def test_container_reference_requires_kind_and_id_together(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("quantity", "quantity_unpacked", "quantity_packed"),
-    [(-1, 0, 0), (0, -1, 0), (0, 0, -1)],
-)
-async def test_database_rejects_negative_inventory_balance_quantities(
-    async_client: AsyncClient,
-    quantity: int,
-    quantity_unpacked: int,
-    quantity_packed: int,
-) -> None:
+async def test_service_refuses_to_take_stock_below_zero(async_client: AsyncClient) -> None:
+    """Обычное списание в минус не пускает.
+
+    Запрет переехал из базы в сервис по решению владельца: проверка в базе не
+    умеет спрашивать, кто её вызвал, а ровно одному пути минус нужен — см.
+    соседний тест про подтверждённую доставку FBS. Здесь проверяется, что для
+    всех остальных путей защита осталась.
+    """
     del async_client
     async with SessionLocal() as session:
         tenant, _warehouse, location, product = await _seed_tenant(session, "negative")
-        session.add(
-            InventoryBalance(
-                tenant_id=tenant.id,
-                storage_location_id=location.id,
-                product_id=product.id,
-                quantity=quantity,
-                quantity_unpacked=quantity_unpacked,
-                quantity_packed=quantity_packed,
-            )
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant.id,
+            product_id=product.id,
+            storage_location_id=location.id,
+            quantity_delta=5,
+            movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
         )
-        with pytest.raises(IntegrityError):
-            await session.commit()
+        await session.commit()
+        with pytest.raises(ValueError, match="insufficient stock"):
+            await inventory_service.record_movement_and_adjust_balance(
+                session,
+                tenant_id=tenant.id,
+                product_id=product.id,
+                storage_location_id=location.id,
+                quantity_delta=-6,
+                movement_type=MOVEMENT_TYPE_OUTBOUND_SHIPMENT,
+            )
+
+
+@pytest.mark.asyncio
+async def test_confirmed_fbs_delivery_is_allowed_to_go_negative(
+    async_client: AsyncClient,
+) -> None:
+    """Подтверждённая доставка FBS списывает даже то, чего по учёту нет.
+
+    Маркетплейс сказал, что товар уехал — значит на складе его нет, что бы ни
+    думал учёт. Отказ подвесил бы поставку навсегда и оставил призрачный
+    остаток; минус здесь — видимый след расхождения.
+    """
+    del async_client
+    async with SessionLocal() as session:
+        tenant, _warehouse, location, product = await _seed_tenant(session, "fbs-negative")
+        await inventory_service.apply_fbs_supply_write_off(
+            session,
+            tenant_id=tenant.id,
+            product_id=product.id,
+            storage_location_id=location.id,
+            quantity=3,
+        )
+        await session.commit()
+        balance = (
+            await session.execute(
+                select(InventoryBalance).where(
+                    InventoryBalance.tenant_id == tenant.id,
+                    InventoryBalance.product_id == product.id,
+                    InventoryBalance.storage_location_id == location.id,
+                )
+            )
+        ).scalar_one()
+        assert balance.quantity == -3
 
 
 @pytest.mark.asyncio

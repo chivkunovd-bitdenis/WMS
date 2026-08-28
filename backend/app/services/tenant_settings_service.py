@@ -4,6 +4,7 @@ import uuid
 from datetime import time
 from typing import TypedDict
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tenant import Tenant
@@ -27,8 +28,18 @@ async def is_address_storage_enabled(
     session: AsyncSession,
     tenant_id: uuid.UUID,
 ) -> bool:
-    tenant = await get_tenant(session, tenant_id)
-    return tenant.address_storage_enabled
+    """Включено ли адресное хранение у арендатора.
+
+    Читаем одну колонку запросом, а не через объект арендатора. После записи
+    сессия сбрасывает загруженные объекты, и обращение к полю у такого объекта
+    пытается втихую сходить в базу — в асинхронном коде это падает жалобой на
+    контекст, причём далеко от места настоящей причины. Этот флаг спрашивают
+    почти из каждого ответа API, поэтому цена ошибки высокая, а запрос дешёвый.
+    """
+    value = await session.scalar(
+        select(Tenant.address_storage_enabled).where(Tenant.id == tenant_id)
+    )
+    return bool(value)
 
 
 async def get_tenant_settings(

@@ -39,15 +39,19 @@ class InventoryBalance(Base):
             "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
             name="ck_inventory_balance_container_kind",
         ),
-        CheckConstraint("quantity >= 0", name="ck_inventory_balance_quantity_nonnegative"),
-        CheckConstraint(
-            "quantity_unpacked >= 0",
-            name="ck_inventory_balance_quantity_unpacked_nonnegative",
-        ),
-        CheckConstraint(
-            "quantity_packed >= 0",
-            name="ck_inventory_balance_quantity_packed_nonnegative",
-        ),
+        # Запрета на отрицательный остаток здесь НЕТ, и это решение владельца.
+        #
+        # Минус на полке бессмыслен, и защита от него нужна — но проверка в базе
+        # не умеет спрашивать, кто её вызвал, а ровно одному пути минус нужен:
+        # подтверждённой доставке FBS. Маркетплейс сказал, что товар уехал —
+        # значит на складе его нет, что бы ни думал учёт. Отказать значит
+        # подвесить поставку навсегда и оставить призрачный остаток.
+        #
+        # Поэтому защита переехала в сервис: `record_movement_and_adjust_balance`
+        # по умолчанию в минус не пускает, и делает это условием внутри самого
+        # запроса — то есть остаётся устойчивой к одновременным списаниям.
+        # Обойти её можно только явным `allow_negative=True`, и такой вызов в
+        # коде один.
         Index(
             "uq_inventory_balance_loc_product_container",
             "storage_location_id",

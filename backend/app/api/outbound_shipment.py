@@ -297,12 +297,10 @@ async def get_outbound_request(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="request_not_found",
         )
-    return _request_out(
-        r,
-        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
-            session, user.tenant_id
-        ),
-    )
+    # Флаг считаем ДО сборки ответа: если оставить await прямо в аргументе,
+    # объект догружает свои строки уже после него и падает вне контекста.
+    reveal = await tenant_settings_svc.is_address_storage_enabled(session, user.tenant_id)
+    return _request_out(r, reveal_storage=reveal)
 
 
 @router.get(
@@ -413,12 +411,10 @@ async def ship_outbound_line(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(
-        r2,
-        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
-            session, user.tenant_id
-        ),
-    )
+    # Флаг считаем ДО сборки ответа: если оставить await прямо в аргументе,
+    # объект догружает свои строки уже после него и падает вне контекста.
+    reveal = await tenant_settings_svc.is_address_storage_enabled(session, user.tenant_id)
+    return _request_out(r2, reveal_storage=reveal)
 
 
 @router.delete(
@@ -435,12 +431,10 @@ async def delete_outbound_line(
         r = await svc.delete_line(session, user.tenant_id, request_id, line_id)
     except OutboundShipmentError as exc:
         raise _map_out_err(exc) from None
-    return _request_out(
-        r,
-        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
-            session, user.tenant_id
-        ),
-    )
+    # Флаг считаем ДО сборки ответа: если оставить await прямо в аргументе,
+    # объект догружает свои строки уже после него и падает вне контекста.
+    reveal = await tenant_settings_svc.is_address_storage_enabled(session, user.tenant_id)
+    return _request_out(r, reveal_storage=reveal)
 
 
 @router.patch(
@@ -503,12 +497,10 @@ async def submit_outbound_request(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(
-        r2,
-        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
-            session, user.tenant_id
-        ),
-    )
+    # Флаг считаем ДО сборки ответа: если оставить await прямо в аргументе,
+    # объект догружает свои строки уже после него и падает вне контекста.
+    reveal = await tenant_settings_svc.is_address_storage_enabled(session, user.tenant_id)
+    return _request_out(r2, reveal_storage=reveal)
 
 
 @router.post("/{request_id}/post", response_model=OutboundShipmentRequestOut)
@@ -527,9 +519,7 @@ async def post_outbound_request(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(
-        r2,
-        reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
-            session, user.tenant_id
-        ),
-    )
+    # Флаг считаем ДО сборки ответа: если оставить await прямо в аргументе,
+    # объект догружает свои строки уже после него и падает вне контекста.
+    reveal = await tenant_settings_svc.is_address_storage_enabled(session, user.tenant_id)
+    return _request_out(r2, reveal_storage=reveal)

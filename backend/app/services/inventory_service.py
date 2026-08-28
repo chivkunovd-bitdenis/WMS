@@ -506,6 +506,13 @@ async def record_movement_and_adjust_balance(
     inventory_count_line_id: uuid.UUID | None = None,
     transfer_group_id: uuid.UUID | None = None,
     marketplace_unload_request_id: uuid.UUID | None = None,
+    # Разрешить остатку уйти в минус. По умолчанию НЕЛЬЗЯ: минус на полке —
+    # бессмыслица, и защита от него включена для всех путей. Исключение ровно
+    # одно — подтверждённая доставка FBS: маркетплейс сказал, что товар уехал,
+    # значит его на складе нет независимо от того, что думает учёт. Отказать
+    # там значит навсегда подвесить поставку и оставить призрачный остаток.
+    # Минус в этом случае — честная запись расхождения, а не поломка.
+    allow_negative: bool = False,
     actor_user_id: uuid.UUID | None = None,
     deduct_prefer: DeductPrefer = "unpacked",
     container_kind: ContainerKind | None = None,
@@ -600,7 +607,11 @@ async def record_movement_and_adjust_balance(
             InventoryBalance.storage_location_id == storage_location_id,
             InventoryBalance.container_kind == container_kind,
             InventoryBalance.container_id == container_id,
-            unpacked + packed >= quantity_to_deduct,
+            # Условие «хватает остатка» стоит внутри самого запроса, а не рядом
+            # с ним: два одновременных списания по 30 из 40 иначе оба прошли бы
+            # проверку и оба списали. Когда минус разрешён, условие снимается —
+            # но только для него.
+            *([] if allow_negative else [unpacked + packed >= quantity_to_deduct]),
         )
         .values(
             quantity_unpacked=next_unpacked,
@@ -612,8 +623,29 @@ async def record_movement_and_adjust_balance(
         .execution_options(synchronize_session=False)
     )
     if updated_balance_id is None:
-        msg = "insufficient stock"
-        raise ValueError(msg)
+        if not allow_negative:
+            msg = "insufficient stock"
+            raise ValueError(msg)
+        # Строки остатка нет вовсе: товар уехал с места, где по учёту его не
+        # числилось. Заводим строку в минус — это видимый след расхождения,
+        # который потом разбирают инвентаризацией.
+        session.add(
+            InventoryBalance(
+                tenant_id=tenant_id,
+                product_id=product_id,
+                storage_location_id=storage_location_id,
+                container_kind=container_kind,
+                container_id=container_id,
+                quantity=-quantity_to_deduct,
+                # Недостача всегда ложится в «не упаковано»: строки остатка не
+                # было вовсе, значит паковать было нечего. Записать минус в
+                # «упаковано» значило бы утверждать, что упаковка существовала.
+                quantity_unpacked=-quantity_to_deduct,
+                quantity_packed=0,
+                updated_at=datetime.now(UTC),
+            )
+        )
+        await session.flush()
     return movement
 
 
@@ -1051,13 +1083,14 @@ async def apply_fbs_supply_write_off(
     storage_location_id: uuid.UUID,
     quantity: int,
 ) -> InventoryMovement:
-    """Списание упакованного FBS-товара при завершении упаковки поставки."""
+    """Списать подтверждённую FBS-отгрузку, разрешая фактическую недостачу.
+
+    Предварительной проверки остатка здесь нет намеренно. Маркетплейс уже
+    подтвердил доставку — товар физически уехал. Отказать значит подвесить
+    поставку навсегда и оставить в системе остаток, которого на полке нет.
+    """
     if quantity < 1:
         msg = "quantity must be positive"
-        raise ValueError(msg)
-    bal = await _lock_inventory_balance(session, tenant_id, product_id, storage_location_id)
-    if bal is None or int(bal.quantity) < quantity:
-        msg = "insufficient stock"
         raise ValueError(msg)
     from app.services import stock_direction_service
 
@@ -1069,10 +1102,10 @@ async def apply_fbs_supply_write_off(
             quantity,
         )
     except stock_direction_service.StockDirectionError as exc:
-        if exc.code == "insufficient_fbs_pool":
-            msg = "insufficient_fbs_pool"
-            raise ValueError(msg) from exc
-        raise
+        # Пул кончился — это тоже расхождение, а не повод отказать в списании
+        # того, что уже уехало.
+        if exc.code != "insufficient_fbs_pool":
+            raise
     return await record_movement_and_adjust_balance(
         session,
         tenant_id=tenant_id,
@@ -1081,6 +1114,7 @@ async def apply_fbs_supply_write_off(
         quantity_delta=-quantity,
         movement_type=MOVEMENT_TYPE_FBS_SHIPMENT,
         deduct_prefer="packed",
+        allow_negative=True,
     )
 
 
