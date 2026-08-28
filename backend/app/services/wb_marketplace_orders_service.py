@@ -47,6 +47,7 @@ from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.warehouse import Warehouse
 from app.services.fbs_marking_service import apply_wb_meta_requirements_to_order
+from app.services.fbs_order_import_scope_service import FbsOrderImportStats, import_wb_order_rows
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
 from app.services.fbs_warehouse_binding_service import (
@@ -768,6 +769,7 @@ async def _apply_wb_row_to_existing(
     row: dict[str, Any],
     *,
     pool_debit_totals: dict[str, int] | None = None,
+    preserve_unmapped_warehouse: bool = False,
 ) -> None:
     wb_barcode = _first_barcode(row)
     wb_nm_id = row.get("nmId")
@@ -812,9 +814,13 @@ async def _apply_wb_row_to_existing(
             supplier_status=supplier_status,
         )
     apply_wb_meta_requirements_to_order(existing, row)
-    await _assign_wms_warehouse_from_binding(
-        session, tenant_id, seller_id, existing, existing.wb_warehouse_id
-    )
+    if preserve_unmapped_warehouse:
+        if existing.warehouse_id is None:
+            existing.reserve_status = RESERVE_STATUS_WAREHOUSE_UNMAPPED
+    else:
+        await _assign_wms_warehouse_from_binding(
+            session, tenant_id, seller_id, existing, existing.wb_warehouse_id
+        )
     if existing.product_id is None:
         product = await _map_product(
             session,
@@ -845,6 +851,7 @@ async def upsert_order_from_wb_row(
     row: dict[str, Any],
     *,
     pool_debit_totals: dict[str, int] | None = None,
+    preserve_unmapped_warehouse: bool = False,
 ) -> tuple[FbsOrder, bool]:
     """Returns (order, created).
 
@@ -876,6 +883,7 @@ async def upsert_order_from_wb_row(
             existing,
             row,
             pool_debit_totals=pool_debit_totals,
+            preserve_unmapped_warehouse=preserve_unmapped_warehouse,
         )
         return existing, False
 
@@ -889,9 +897,11 @@ async def upsert_order_from_wb_row(
     )
     mapping_status = MAPPING_STATUS_MAPPED if product is not None else MAPPING_STATUS_MISSING
     wb_warehouse_id = _wb_warehouse_id_from_row(row)
-    wms_warehouse_id = await _resolve_wms_warehouse_for_wb(
-        session, tenant_id, seller_id, wb_warehouse_id
-    )
+    wms_warehouse_id = None
+    if not preserve_unmapped_warehouse:
+        wms_warehouse_id = await _resolve_wms_warehouse_for_wb(
+            session, tenant_id, seller_id, wb_warehouse_id
+        )
     if product is None:
         reserve_status = RESERVE_STATUS_SKIPPED_NO_PRODUCT
     elif wms_warehouse_id is None:
@@ -947,6 +957,7 @@ async def upsert_order_from_wb_row(
             raced,
             row,
             pool_debit_totals=pool_debit_totals,
+            preserve_unmapped_warehouse=preserve_unmapped_warehouse,
         )
         return raced, False
     debit_result = await _debit_stock_pool_for_order(session, tenant_id, seller_id, order)
@@ -1574,23 +1585,21 @@ async def sync_seller_orders(
         )
         raise _wb_orders_error_from_client(exc, ref=ref) from exc
 
-    created = 0
-    upserted = 0
-    orders_received = 0
+    import_stats = FbsOrderImportStats()
     orders_page_error: str | None = None
     status_sync_error: str | None = None
     supply_link_result: dict[str, Any] = {}
     pool_debit_totals: dict[str, int] = {"debited": 0, "shortfall": 0}
 
-    for row in new_rows:
-        _order, was_created = await upsert_order_from_wb_row(
-            session, tenant_id, seller_id, row, pool_debit_totals=pool_debit_totals
-        )
-        upserted += 1
-        orders_received += 1
-        if was_created:
-            created += 1
-    if orders_received:
+    await import_wb_order_rows(
+        session,
+        tenant_id,
+        seller_id,
+        new_rows,
+        pool_debit_totals=pool_debit_totals,
+        stats=import_stats,
+    )
+    if import_stats.received:
         await session.commit()
 
     if include_history:
@@ -1614,7 +1623,7 @@ async def sync_seller_orders(
                 )
                 error = _wb_orders_error_from_client(exc, ref=ref)
                 code = error.code
-                if orders_received:
+                if import_stats.received:
                     orders_page_error = code
                     await session.rollback()
                     break
@@ -1622,14 +1631,14 @@ async def sync_seller_orders(
 
             if not page_rows:
                 break
-            for row in page_rows:
-                _order, was_created = await upsert_order_from_wb_row(
-                    session, tenant_id, seller_id, row, pool_debit_totals=pool_debit_totals
-                )
-                upserted += 1
-                orders_received += 1
-                if was_created:
-                    created += 1
+            await import_wb_order_rows(
+                session,
+                tenant_id,
+                seller_id,
+                page_rows,
+                pool_debit_totals=pool_debit_totals,
+                stats=import_stats,
+            )
             await session.commit()
             if next_token is None:
                 break
@@ -1643,7 +1652,7 @@ async def sync_seller_orders(
             await session.commit()
         except WbMarketplaceOrdersError as exc:
             await session.rollback()
-            if not orders_received:
+            if not import_stats.received:
                 raise
             status_sync_error = exc.code
         if status_sync_error is None:
@@ -1665,9 +1674,10 @@ async def sync_seller_orders(
 
     result: dict[str, Any] = {
         "seller_id": str(seller_id),
-        "orders_received": orders_received,
-        "orders_upserted": upserted,
-        "orders_created": created,
+        "orders_received": import_stats.received,
+        "orders_upserted": import_stats.upserted,
+        "orders_created": import_stats.created,
+        "orders_skipped_unserved": import_stats.skipped_unserved,
         "statuses_updated": statuses_updated,
         "stock_pool_debited_units": pool_debit_totals["debited"],
         "stock_pool_debit_shortfall_units": pool_debit_totals["shortfall"],

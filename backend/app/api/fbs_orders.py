@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Annotated, Any, Literal
 
 import httpx
@@ -23,6 +24,7 @@ from app.models.seller import Seller
 from app.models.user import User
 from app.services import background_job_service as job_svc
 from app.services.background_job_service import JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC
+from app.services.fbs_assembly_time_service import calculate_fbs_assembly_time
 from app.services.fbs_cancellation_service import (
     FbsCancellationError,
     cancel_order,
@@ -41,6 +43,7 @@ router = APIRouter(
     prefix="/operations/fbs-orders",
     tags=["operations"],
 )
+contract_router = APIRouter(prefix="/fbs", tags=["operations"])
 
 
 class FbsOrderSyncBody(BaseModel):
@@ -64,6 +67,11 @@ class FbsOrderSyncOut(BaseModel):
     status: str
 
 
+class FbsAssemblyTimeOut(BaseModel):
+    hours: float
+    orders: int
+
+
 async def _active_ozon_account_exists(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -76,6 +84,34 @@ async def _active_ozon_account_exists(
         MarketplaceAccount.is_active.is_(True),
     )
     return (await session.execute(stmt)).scalar_one_or_none() is not None
+
+
+@contract_router.get("/assembly-time", response_model=FbsAssemblyTimeOut)
+@router.get("/assembly-time", response_model=FbsAssemblyTimeOut)
+async def get_fbs_assembly_time(
+    period_from: Annotated[datetime, Query(alias="from")],
+    period_to: Annotated[datetime, Query(alias="to")],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+) -> FbsAssemblyTimeOut:
+    if seller_id is not None:
+        seller = await session.get(Seller, seller_id)
+        if seller is None or seller.tenant_id != user.tenant_id:
+            raise_fbs_http(status.HTTP_404_NOT_FOUND, "seller_not_found")
+    try:
+        result = await calculate_fbs_assembly_time(
+            session,
+            user.tenant_id,
+            period_from=period_from,
+            period_to=period_to,
+            seller_id=seller_id,
+        )
+    except ValueError as exc:
+        if str(exc) == "invalid_period":
+            raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+        raise
+    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
 
 
 async def _run_blocked_ozon_fake() -> None:
@@ -450,3 +486,8 @@ async def sync_fbs_order_statuses(
             _raise_cancellation_http(exc)
     await session.commit()
     return FbsOrderSyncStatusesOut(statuses_updated=updated)
+
+
+# Короткий путь из продуктового контракта добавляется тем же экспортируемым
+# роутером, поэтому менять глобальную сборку приложения не требуется.
+router.routes.extend(contract_router.routes)

@@ -282,6 +282,76 @@ async def upsert_binding(
     return row
 
 
+async def configure_seller_warehouse(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    wb_warehouse_id: int,
+    *,
+    served: bool,
+    wms_warehouse_id: uuid.UUID | None,
+) -> FbsWarehouseBinding | None:
+    """Настроить принадлежность склада продавца без создания ложной привязки.
+
+    Отсутствие строки означает «склад ещё не разобран»: его заказы импортируются
+    со статусом ``warehouse_unmapped``. Явная строка с ``served=false`` означает
+    склад другого фулфилмента, и его заказы отбрасываются до записи в базу.
+    """
+    if await _seller_in_tenant(session, tenant_id, seller_id) is None:
+        raise FbsWarehouseBindingError("seller_not_found")
+    if wb_warehouse_id <= 0:
+        raise FbsWarehouseBindingError("invalid_wb_warehouse_id")
+    if served and wms_warehouse_id is None:
+        raise FbsWarehouseBindingError(
+            "wms_warehouse_required",
+            message="Для обслуживаемого склада выберите склад WMS.",
+        )
+    if (
+        wms_warehouse_id is not None
+        and await get_warehouse(session, tenant_id, wms_warehouse_id) is None
+    ):
+        raise FbsWarehouseBindingError("warehouse_not_found")
+
+    existing = await _get_binding_row(
+        session, tenant_id, seller_id, wb_warehouse_id, for_update=True
+    )
+    if existing is None:
+        if not served and wms_warehouse_id is None:
+            # Это по-прежнему непривязанный склад, а не явно чужой. Не создаём
+            # фиктивную привязку: именно отсутствие строки сохраняет отдельный
+            # путь warehouse_unmapped при первом заказе.
+            return None
+        assert wms_warehouse_id is not None
+        existing = FbsWarehouseBinding(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            wb_warehouse_id=wb_warehouse_id,
+            wms_warehouse_id=wms_warehouse_id,
+            is_active=True,
+            stock_sync_enabled=served,
+            served=served,
+        )
+        session.add(existing)
+    else:
+        if wms_warehouse_id is not None and existing.wms_warehouse_id != wms_warehouse_id:
+            if await _has_active_fbs_reservations(
+                session, tenant_id, seller_id, existing.wms_warehouse_id
+            ):
+                raise FbsWarehouseBindingError("active_fbs_reservations")
+            existing.wms_warehouse_id = wms_warehouse_id
+        existing.is_active = True
+        existing.served = served
+        existing.stock_sync_enabled = served
+
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise FbsWarehouseBindingError("wb_warehouse_already_bound") from exc
+    await session.refresh(existing)
+    return existing
+
+
 async def disable_binding(
     session: AsyncSession,
     tenant_id: uuid.UUID,
