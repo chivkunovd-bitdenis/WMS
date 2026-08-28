@@ -72,7 +72,6 @@ type WbImportedSupplyRow = {
 
 type Props = {
   isFulfillmentAdmin: boolean
-  addressStorageEnabled?: boolean
   catalogBusy: boolean
   catalogError: string | null
   sellers: SellerRow[]
@@ -131,7 +130,6 @@ type Props = {
 export function CatalogSection(props: Props) {
   const {
     isFulfillmentAdmin,
-    addressStorageEnabled = true,
     catalogBusy,
     catalogError,
     warehouses,
@@ -285,8 +283,6 @@ export function CatalogSection(props: Props) {
     sideDraft,
     visibleLocations,
   ])
-
-  if (!addressStorageEnabled) return null
 
   return (
     <Box id="catalog-section" data-testid="catalog-section" sx={{ display: 'grid', gap: 2 }}>

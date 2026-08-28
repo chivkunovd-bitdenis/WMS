@@ -230,9 +230,7 @@ export function FfMpUnloadPickPanel({
           setLastScannedProductId(scanRes.product_id)
         }
         setScanMessage(addressStorageEnabled
-          ? `Принято: ${scanRes.product_name} → ${
-              scanRes.location_code ? storageLocationLabel(scanRes.location_code) : 'без ячейки'
-            }`
+          ? `Принято: ${scanRes.product_name} → ${scanRes.location_code ? storageLocationLabel(scanRes.location_code) : 'без ячейки'}`
           : `Принято: ${scanRes.product_name ?? 'товар'}`)
       }
 
@@ -409,10 +407,7 @@ export function FfMpUnloadPickPanel({
                 disableGutters
                 expanded={addressStorageEnabled ? isExpanded : false}
                 onChange={(_e, nextExpanded) =>
-                  addressStorageEnabled && setExpandedByProductId((prev) => ({
-                      ...prev,
-                      [product.product_id]: nextExpanded,
-                    }))
+                  addressStorageEnabled && setExpandedByProductId((prev) => ({ ...prev, [product.product_id]: nextExpanded }))
                 }
                 sx={{
                   minWidth: 0,

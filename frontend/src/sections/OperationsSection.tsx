@@ -93,8 +93,7 @@ type Props = {
   isFulfillmentAdmin: boolean
   isFulfillmentSeller: boolean
   canEditInboundDraft: boolean
-  canEditOutboundDraft: boolean
-  addressStorageEnabled?: boolean
+  canEditOutboundDraft: boolean; addressStorageEnabled?: boolean
 
   warehouses: WarehouseRow[]
   selectedWarehouseId: string | null
@@ -148,8 +147,7 @@ export function OperationsSection(props: Props) {
     isFulfillmentAdmin,
     isFulfillmentSeller,
     canEditInboundDraft,
-    canEditOutboundDraft,
-    addressStorageEnabled = true,
+    canEditOutboundDraft, addressStorageEnabled = true,
     warehouses,
     selectedWarehouseId,
     locations,
@@ -227,9 +225,7 @@ export function OperationsSection(props: Props) {
       <Card className="card">
         <h2>Приёмка</h2>
         <p className="subtle">
-          {addressStorageEnabled
-            ? 'Ячейку можно указать при добавлении строки или позже. Частичный приём — по строке; «Провести весь остаток» оприходует всё непринятое по строкам с назначенной ячейкой. '
-            : 'Частичный приём выполняется по строке; «Провести весь остаток» оприходует всё непринятое. '}
+          {addressStorageEnabled ? 'Ячейку можно указать при добавлении строки или позже. Частичный приём — по строке; «Провести весь остаток» оприходует всё непринятое по строкам с назначенной ячейкой. ' : 'Частичный приём выполняется по строке; «Провести весь остаток» оприходует всё непринятое. '}
           Движения пишутся в журнал.
         </p>
 
@@ -604,9 +600,7 @@ export function OperationsSection(props: Props) {
       <Card className="card" data-testid="outbound-section">
         <h2>Отгрузка</h2>
         <p className="subtle">
-          {addressStorageEnabled
-            ? 'Заявка на списание остатков из выбранных ячеек. Назначьте ячейку на строке; '
-            : 'Заявка на списание остатков со склада; '}
+          {addressStorageEnabled ? 'Заявка на списание остатков из выбранных ячеек. Назначьте ячейку на строке; ' : 'Заявка на списание остатков со склада; '}
           отгрузка по строке частями; «Провести весь остаток» списывает всё неотгруженное.
         </p>
         {canEditOutboundDraft ? (

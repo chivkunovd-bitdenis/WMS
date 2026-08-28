@@ -92,8 +92,7 @@ type Props = {
   authHeaders: (token: string) => Record<string, string>
   supplyId: string | null
   initialWorkspace?: FbsWorkspace | null
-  open: boolean
-  addressStorageEnabled?: boolean
+  open: boolean; addressStorageEnabled?: boolean
   onClose: () => void
 }
 
@@ -273,8 +272,7 @@ export function FfFbsSupplyWorkspace({
   authHeaders,
   supplyId,
   initialWorkspace,
-  open,
-  addressStorageEnabled = true,
+  open, addressStorageEnabled = true,
   onClose,
 }: Props) {
   const [workspace, setWorkspace] = useState<FbsWorkspace | null>(initialWorkspace ?? null)
@@ -1245,8 +1243,7 @@ export function FfFbsSupplyWorkspace({
       wmsWarehouseName: workspace.supply.wms_warehouse.name,
       routeLabel: workspace.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ',
       deadlineLabel: new Date(workspace.supply.nearest_deadline_at).toLocaleString('ru-RU'),
-      printedAtLabel: new Date().toLocaleString('ru-RU'),
-      addressStorageEnabled,
+      printedAtLabel: new Date().toLocaleString('ru-RU'), addressStorageEnabled,
       rows: pickingRows,
     }))
     printWindow.document.close()
@@ -1705,13 +1702,7 @@ export function FfFbsSupplyWorkspace({
                 </Stack>
                 {pickLocation ? <Alert severity="success" sx={{ mt: 2 }}>Ячейка {pickLocation.code} подтверждена · {pickLocation.warehouse_name}</Alert> : null}
                 {allPicked ? <Alert severity="success" sx={{ mt: 2 }}>Все товары подобраны. Перейдите к упаковке.</Alert> : null}
-              </Paper> : (
-                <Alert severity={allPicked ? 'success' : 'info'} data-testid="fbs-picking-without-cells">
-                  {allPicked
-                    ? 'Все товары подобраны. Перейдите к упаковке.'
-                    : 'Адресное хранение выключено: подбор выполняется по товару без выбора места.'}
-                </Alert>
-              )}
+              </Paper> : <Alert severity={allPicked ? 'success' : 'info'} data-testid="fbs-picking-without-cells">{allPicked ? 'Все товары подобраны. Перейдите к упаковке.' : 'Адресное хранение выключено: подбор выполняется по товару без выбора места.'}</Alert>}
               {addressStorageEnabled ? <Paper variant="outlined" sx={{ p: 2 }} data-testid="fbs-manual-picking">
                 <Typography variant="h6">Подбор из ячеек</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>Сканер остаётся доступен выше. Здесь можно снять требуемое количество из конкретной ячейки вручную.</Typography>

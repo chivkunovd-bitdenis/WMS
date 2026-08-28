@@ -104,7 +104,6 @@ type Props = {
   boxes: SortingBox[]
   sortingRemainingQty: number
   completed?: boolean
-  addressStorageEnabled?: boolean
   onReload: () => Promise<void>
   onDirtyChange?: (dirty: boolean) => void
   toolbarElement?: HTMLElement | null
@@ -256,7 +255,6 @@ export function FfInboundSortingPanel({
   boxes,
   sortingRemainingQty,
   completed = false,
-  addressStorageEnabled = true,
   onReload,
   onDirtyChange,
   toolbarElement = null,
@@ -939,8 +937,6 @@ export function FfInboundSortingPanel({
       </Alert>
     )
   }
-
-  if (!addressStorageEnabled) return null
 
   return (
     <FfProductMarkingPrintProvider token={token}>

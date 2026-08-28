@@ -86,8 +86,7 @@ type Props = {
   opsBusy: boolean
   isFulfillmentAdmin: boolean
   isFulfillmentSeller: boolean
-  canEditInboundDraft: boolean
-  addressStorageEnabled?: boolean
+  canEditInboundDraft: boolean; addressStorageEnabled?: boolean
 
   warehouses: WarehouseRow[]
   selectedWarehouseId: string | null
@@ -121,8 +120,7 @@ export function InboundScreen(props: Props) {
     opsBusy,
     isFulfillmentAdmin,
     isFulfillmentSeller,
-    canEditInboundDraft,
-    addressStorageEnabled = true,
+    canEditInboundDraft, addressStorageEnabled = true,
     warehouses,
     selectedWarehouseId,
     products,
@@ -318,9 +316,7 @@ export function InboundScreen(props: Props) {
                       {typeof ln.actual_qty === 'number' ? ` · факт ${ln.actual_qty}` : ''}
                       {' · '}
                       принято {ln.posted_qty}
-                      {addressStorageEnabled && ln.storage_location_code
-                        ? ` · ячейка: ${ln.storage_location_code}`
-                        : ''}
+                      {addressStorageEnabled && ln.storage_location_code ? ` · ячейка: ${ln.storage_location_code}` : ''}
                     </li>
                   ))}
                 </ul>

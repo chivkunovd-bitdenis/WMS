@@ -151,8 +151,7 @@ type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
   sellers: SellerRow[]
-  canManageCatalog?: boolean
-  addressStorageEnabled?: boolean
+  canManageCatalog?: boolean; addressStorageEnabled?: boolean
 }
 
 function humanFfCatalogError(message: string): string {
@@ -204,8 +203,7 @@ export function FfProductsCatalogScreen({
   token,
   authHeaders,
   sellers,
-  canManageCatalog = false,
-  addressStorageEnabled = true,
+  canManageCatalog = false, addressStorageEnabled = true,
 }: Props) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()

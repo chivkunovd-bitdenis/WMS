@@ -147,8 +147,7 @@ type PrintedMarkingCode = {
 
 type TaskPanelProps = {
   token: string
-  task: PackagingTask
-  addressStorageEnabled?: boolean
+  task: PackagingTask; addressStorageEnabled?: boolean
   unloadLabel?: string | null
   /** Hide status chip + «Упаковка» + document numbers when embedded in MP unload modal. */
   hideDocumentHeader?: boolean
@@ -195,8 +194,7 @@ function taskSellerLabel(task: PackagingTask): string {
 }
 
 function taskPlaceLabel(task: PackagingTask, addressStorageEnabled = true): string {
-  const warehouse = task.warehouse_name ?? task.warehouse_code ?? 'Склад'
-  if (!addressStorageEnabled) return warehouse
+  const warehouse = task.warehouse_name ?? task.warehouse_code ?? 'Склад'; if (!addressStorageEnabled) return warehouse
   const cells = Array.from(new Set(task.lines.map((line) => locationLabel(line.storage_location_code))))
   return `${warehouse} / ${cells.slice(0, 2).join(', ')}${cells.length > 2 ? ` +${cells.length - 2}` : ''}`
 }
@@ -285,8 +283,7 @@ async function readPackagingApiErrorMessage(res: Response): Promise<string> {
 
 export function FfPackagingTaskPanel({
   token,
-  task,
-  addressStorageEnabled = true,
+  task, addressStorageEnabled = true,
   unloadLabel,
   hideDocumentHeader = false,
   alwaysShowPrintAction = false,
@@ -340,9 +337,7 @@ export function FfPackagingTaskPanel({
   const isMpUnloadTask = Boolean(task.marketplace_unload_request_id)
   const pickResyncWarningText = isMpUnloadTask
     ? 'Состав коробов изменился. Количества в задании пересчитаны; уже упакованное в задании сохранено — проверьте строки.'
-    : addressStorageEnabled
-      ? 'Подбор по ячейкам изменился. Количества в задании пересчитаны; уже упакованное в задании сохранено — проверьте строки.'
-      : 'Состав подбора изменился. Количества в задании пересчитаны; уже упакованное в задании сохранено — проверьте строки.'
+    : addressStorageEnabled ? 'Подбор по ячейкам изменился. Количества в задании пересчитаны; уже упакованное в задании сохранено — проверьте строки.' : 'Состав подбора изменился. Количества в задании пересчитаны; уже упакованное в задании сохранено — проверьте строки.'
   const orderedEvents = (task.events ?? []).slice().sort(comparePackagingEventsAsc)
   const reversibleEvents = orderedEvents.filter(
     (event) =>
@@ -824,9 +819,7 @@ export function FfPackagingTaskPanel({
               </Typography>
             </Box>
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="caption" color="text.secondary">
-                {addressStorageEnabled ? 'Склад / ячейка' : 'Склад'}
-              </Typography>
+              <Typography variant="caption" color="text.secondary">{addressStorageEnabled ? 'Склад / ячейка' : 'Склад'}</Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }} data-testid="ff-packaging-task-place">
                 {taskPlaceLabel(task, addressStorageEnabled)}
               </Typography>
@@ -1124,8 +1117,7 @@ export function FfPackagingTaskPanel({
                         SKU: {displayMeta.sku_code} · ШК: {barcode}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflowWrap: 'anywhere' }}>
-                        Селлер: {ln.seller_name ?? displayMeta.seller_name ?? '—'}
-                        {addressStorageEnabled ? ` · Ячейка: ${locationLabel(ln.storage_location_code)}` : ''}
+                        Селлер: {ln.seller_name ?? displayMeta.seller_name ?? '—'}{addressStorageEnabled ? ` · Ячейка: ${locationLabel(ln.storage_location_code)}` : ''}
                       </Typography>
                     </Box>
                   </Stack>
@@ -1488,10 +1480,7 @@ export function FfPackagingTaskPanel({
   )
 }
 
-type PageProps = {
-  token: string
-  addressStorageEnabled?: boolean
-}
+type PageProps = { token: string; addressStorageEnabled?: boolean }
 
 type WarehouseRow = { id: string; name: string; code: string }
 
@@ -1938,9 +1927,7 @@ export function FfPackagingPage({ token, addressStorageEnabled = true }: PagePro
     <Box data-testid="ff-packaging-page" sx={{ minWidth: 0, maxWidth: '100%' }}>
       <PageHeader
         title="Упаковка"
-        description={addressStorageEnabled
-          ? 'Задания на маркировку и упаковку. Создайте из ячейки или сортировки, либо откройте из отгрузки на МП.'
-          : 'Задания на маркировку и упаковку. Создайте из принятого товара либо откройте из отгрузки на МП.'}
+        description={addressStorageEnabled ? 'Задания на маркировку и упаковку. Создайте из ячейки или сортировки, либо откройте из отгрузки на МП.' : 'Задания на маркировку и упаковку. Создайте из принятого товара либо откройте из отгрузки на МП.'}
       />
       <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', mb: 2, alignItems: 'center' }}>
         <Badge badgeContent={pendingMarkingCount} color="warning" data-testid="ff-packaging-pending-badge">
@@ -1965,8 +1952,7 @@ export function FfPackagingPage({ token, addressStorageEnabled = true }: PagePro
       {selected ? (
         <FfPackagingTaskPanel
           token={token}
-          task={selected}
-          addressStorageEnabled={addressStorageEnabled}
+          task={selected} addressStorageEnabled={addressStorageEnabled}
           onClose={closeTask}
           onUpdated={(t) => {
             setSelected(t)
@@ -1993,9 +1979,7 @@ export function FfPackagingPage({ token, addressStorageEnabled = true }: PagePro
             </Tabs>
             <TextField
               size="small"
-              label={addressStorageEnabled
-                ? 'Поиск по номеру, товару, селлеру или ячейке'
-                : 'Поиск по номеру, товару или селлеру'}
+              label={addressStorageEnabled ? 'Поиск по номеру, товару, селлеру или ячейке' : 'Поиск по номеру, товару или селлеру'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               data-testid="ff-packaging-history-search"
@@ -2020,9 +2004,7 @@ export function FfPackagingPage({ token, addressStorageEnabled = true }: PagePro
                   <TableCell sx={{ width: 130 }}>Номер</TableCell>
                   <TableCell sx={{ width: 104 }}>Статус</TableCell>
                   <TableCell sx={{ width: 150 }}>Селлер</TableCell>
-                  <TableCell sx={{ width: 180 }}>
-                    {addressStorageEnabled ? 'Склад / ячейка' : 'Склад'}
-                  </TableCell>
+                  <TableCell sx={{ width: 180 }}>{addressStorageEnabled ? 'Склад / ячейка' : 'Склад'}</TableCell>
                   <TableCell>Товар</TableCell>
                   <TableCell align="right" sx={{ width: 112 }}>Прогресс</TableCell>
                   <TableCell sx={{ width: 116 }}>Источник</TableCell>
