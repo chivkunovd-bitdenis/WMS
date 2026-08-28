@@ -244,6 +244,48 @@ export function AuthedAppLayout({
                 <ListItemText primary="Хранение" />
               </ListItemButton>
             ) : null}
+            {/* Новые экраны. Без ссылок сюда до них нельзя было добраться иначе
+                как набрав адрес руками — то есть для оператора их не было. */}
+            {canCatalogCells && addressStorageEnabled ? (
+              <ListItemButton
+                component={NavLink}
+                to={`${base}/warehouse-map`}
+                data-testid="nav-ff-warehouse-map"
+                data-task-id="NAV-01"
+              >
+                <ListItemText primary="Карта склада" />
+              </ListItemButton>
+            ) : null}
+            {canCatalogCells && addressStorageEnabled ? (
+              <ListItemButton
+                component={NavLink}
+                to={`${base}/sorting-objects`}
+                data-testid="nav-ff-sorting-objects"
+                data-task-id="NAV-01"
+              >
+                <ListItemText primary="Раскладка" />
+              </ListItemButton>
+            ) : null}
+            {canStorage ? (
+              <ListItemButton
+                component={NavLink}
+                to={`${base}/stocktaking`}
+                data-testid="nav-ff-stocktaking"
+                data-task-id="NAV-01"
+              >
+                <ListItemText primary="Инвентаризация" />
+              </ListItemButton>
+            ) : null}
+            {isAdmin ? (
+              <ListItemButton
+                component={NavLink}
+                to={`${base}/fbs-stock`}
+                data-testid="nav-ff-fbs-stock"
+                data-task-id="NAV-01"
+              >
+                <ListItemText primary="Остатки FBS" />
+              </ListItemButton>
+            ) : null}
             {isAdmin ? (
               <ListItemButton component={NavLink} to={`${base}/sellers`} data-testid="nav-sellers" data-task-id="NAV-01">
                 <ListItemText primary="Селлеры" />
