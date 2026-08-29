@@ -225,7 +225,7 @@ export function FfProductsCatalogScreen({
   // простор на широком экране и схлопывается в ноль на узком. Контейнер каталога
   // уже колонок (на 1440 — 1130px), таблица прокручивается вбок, поэтому колонка
   // действий липкая справа и из виду не уходит.
-  const tableMinWidth = 1336
+  const tableMinWidth = 1488
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [catalog, setCatalog] = useState<FfCatalogRow[]>([])
@@ -1125,17 +1125,17 @@ export function FfProductsCatalogScreen({
           >
             <colgroup>
               <col style={{ width: 44 }} />
-              <col style={{ width: 48 }} />
-              <col style={{ width: 142 }} />
-              <col style={{ width: 152 }} />{/* заголовку «Артикул продавца» нужен 151px, значению — 138 */}
-              <col style={{ width: 104 }} />
+              <col style={{ width: 56 }} />
+              <col style={{ width: 160 }} />
+              <col style={{ width: 170 }} />
               <col style={{ width: 118 }} />
-              <col style={{ width: 72 }} />{/* заголовку «Размер» нужен 71px; на 64 его резало и до правки */}
-              <col style={{ width: 88 }} />
-              <col style={{ width: 124 }} />
+              <col style={{ width: 130 }} />
+              <col style={{ width: 64 }} />
+              <col style={{ width: 110 }} />
+              <col style={{ width: 130 }} />
               <col style={{ width: 124 }} />{/* «В Wildberries»: на 70px заголовок резало до «В Wildberr», а значение до «не перед» */}
               <col style={{ width: 70 }} />
-              <col style={{ width: 48 }} />{/* «ЧЗ»: чип занимает 35px, 110 держали пустоту */}
+              <col style={{ width: 110 }} />
               <col style={{ width: 96 }} />
               <col style={{ width: 106 }} />{/* действия: без своей ширины колонка схлопывалась в ноль на узком экране и забирала весь остаток на широком */}
             </colgroup>
@@ -1162,16 +1162,12 @@ export function FfProductsCatalogScreen({
                 <TableCell>ТЗ</TableCell>
                 <TableCell>ЧЗ</TableCell>
                 <TableCell>Резервы</TableCell>
+                {/* Колонка значков не липкая: липкая она постоянно съедала 106px
+                    справа, и «В Wildberries» уходила под неё на узком экране.
+                    Теперь колонка едет вместе с таблицей, как «ЧЗ» и «Резервы». */}
                 <TableCell
                   align="center"
-                  sx={{
-                    position: 'sticky',
-                    right: 0,
-                    zIndex: 3,
-                    bgcolor: 'background.paper',
-                    borderLeft: '1px solid',
-                    borderLeftColor: 'divider',
-                  }}
+                  sx={{ borderLeft: '1px solid', borderLeftColor: 'divider' }}
                 />
               </TableRow>
             </TableHead>
@@ -1379,14 +1375,7 @@ export function FfProductsCatalogScreen({
                     </TableCell>
                     <TableCell
                       align="center"
-                      sx={{
-                        position: 'sticky',
-                        right: 0,
-                        zIndex: 1,
-                        bgcolor: 'background.paper',
-                        borderLeft: '1px solid',
-                        borderLeftColor: 'divider',
-                      }}
+                      sx={{ borderLeft: '1px solid', borderLeftColor: 'divider' }}
                     >
                       <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'center' }}>
                         {/* Настройка остатка FBS по одному товару — как на
