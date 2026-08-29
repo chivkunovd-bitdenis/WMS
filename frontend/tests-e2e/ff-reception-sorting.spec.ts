@@ -329,21 +329,44 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
   await expect(page.getByTestId('ff-inbound-queue-sorting-qty').first()).toHaveText('4');
 
   await page.getByTestId('ff-inbound-queue-row').first().click();
-  await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
+  // Экран сортировки внутри документа теста отстал от коммита 79fb36dd
+  // «раскладка по ячейкам внутри документа сортировки»: владелец дважды
+  // потребовал, чтобы это была именно раскладка объектами (FfSortingObjectsPage,
+  // /app/ff/sorting-objects), а не карточки FfInboundSortingPanel с выбором
+  // ячейки в select и кнопкой «Разложен» — тот компонент больше нигде не
+  // монтируется. Ищем сразу дерево объектов новой раскладки.
+  const objectsTree = page.getByTestId('objects-tree');
+  await expect(objectsTree).toBeVisible();
 
   // Товар принят целым коробом, поэтому раскладываем сам короб без повторной
   // построчной раскладки его содержимого.
-  const boxRow = page.getByTestId('ff-sorting-box-putaway-row').first();
-  await expect(boxRow.getByTestId('ff-sorting-box-product-row')).toContainText(sku);
-  await boxRow.getByTestId('ff-sorting-box-location').getByRole('combobox').click();
-  await page.getByRole('option', { name: /STORE-1/ }).click();
+  const boxRow = objectsTree.getByRole('row', { name: /Короб/ });
+  await expect(boxRow).toContainText('Короб');
+  // IconAction прячет доступное имя кнопки на обёртке Tooltip (role=generic),
+  // а не на самой кнопке — getByRole('button', { name }) её не находит.
+  // Кнопка помечена префиксным data-testid `objects-tree-place-<rowKey>`.
+  await boxRow.locator('[data-testid^="objects-tree-place-"]').click();
+  await expect(page.getByTestId('objects-qty-dialog')).toBeVisible();
+  await page.getByRole('combobox', { name: 'Место' }).selectOption({ label: 'Ячейка STORE-1' });
   await Promise.all([
-    waitForPostOk(page, base, (u) => u.includes('/boxes/') && u.includes('/putaway')),
-    boxRow.getByTestId('ff-sorting-box-putaway-submit').click(),
+    waitForPostOk(page, '/sorting-objects/place'),
+    page.getByTestId('objects-qty-confirm').click(),
   ]);
-  await expect(boxRow.getByTestId('ff-sorting-box-placed')).toHaveText('Разложен');
-  await expect(page.getByTestId('ff-sorting-all-done')).toBeVisible();
+  await expect(page.getByText('Всё расставлено по ячейкам')).toBeVisible();
 
+  // ПОДТВЕРЖДЁННЫЙ БЭКЕНД-ДЕФЕКТ (не тест устарел): POST /warehouses/{id}/sorting-objects/place
+  // для короба приёмки (InboundIntakeBox) отвечает 200 и moved_qty: 0 — «переставлено», а
+  // фактически ничего. Причина: warehouse_map_service._container_balances ищет
+  // InventoryBalance с container_kind='box' AND container_id=<box.id>, а приёмка
+  // (complete-receiving) кладёт отсканированный в короб товар в зону сортировки БЕЗ
+  // привязки container_kind/container_id к этому коробу (проверено прямым запросом к
+  // inventory_balances в e2e-базе: container_kind/container_id пустые). Экран считает
+  // короб «разложенным» (UI сам передвигает строку и показывает пустое состояние), но
+  // остаток физически остаётся в зоне сортировки. Это расхождение экрана и склада —
+  // ровно то, о чём предупреждает CLAUDE.md (учёт склада стоит денег и товара). Раньше
+  // это делала выделенная ручка POST .../boxes/{id}/putaway (см. git-историю
+  // FfInboundSortingPanel), она сюда не перенесена. Дальше assert намеренно ломается —
+  // не подгонять его под «moved_qty: 0», это будет ложным зелёным.
   const balDone = await page.request.get('/api/operations/inventory-balances/summary', { headers: h });
   const doneRow = ((await balDone.json()) as {
     product_id: string;
