@@ -7,13 +7,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Text, and_, cast, false, func, or_, select, tuple_
+from sqlalchemy import Text, and_, cast, exists, false, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.fbs_stock_sync_item import STOCK_SYNC_STATUS_CONFIRMED, FbsStockSyncItem
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.services.catalog_service import (
     list_ozon_product_links,
@@ -524,6 +525,18 @@ async def list_linked_wb_catalog_page_rows(
     normalized_search = (search or "").strip()
     if normalized_search:
         pattern = f"%{normalized_search}%"
+        ozon_link_matches = exists(
+            select(ProductMarketplaceLink.id).where(
+                ProductMarketplaceLink.tenant_id == tenant_id,
+                ProductMarketplaceLink.product_id == Product.id,
+                ProductMarketplaceLink.marketplace == "ozon",
+                ProductMarketplaceLink.is_active.is_(True),
+                or_(
+                    ProductMarketplaceLink.external_sku.ilike(pattern),
+                    ProductMarketplaceLink.external_offer_id.ilike(pattern),
+                ),
+            )
+        )
         filters.append(
             or_(
                 Product.name.ilike(pattern),
@@ -533,6 +546,7 @@ async def list_linked_wb_catalog_page_rows(
                 SellerWildberriesImportedCard.title.ilike(pattern),
                 SellerWildberriesImportedCard.vendor_code.ilike(pattern),
                 cast(SellerWildberriesImportedCard.raw_json, Text).ilike(pattern),
+                ozon_link_matches,
             )
         )
     normalized_category = (category or "").strip()
