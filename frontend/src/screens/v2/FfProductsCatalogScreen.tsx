@@ -38,6 +38,7 @@ import {
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined'
 import QrCode2OutlinedIcon from '@mui/icons-material/QrCode2Outlined'
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
+import TuneOutlined from '@mui/icons-material/TuneOutlined'
 import { apiUrl, applyFbsStockLimitFromBalance } from '../../api'
 import { FbsStockDialog } from '../ff/products-fbs/FbsStockDialog'
 import {
@@ -619,9 +620,10 @@ export function FfProductsCatalogScreen({
     })
   }, [])
 
-  const openFbsStockDialog = useCallback(async () => {
+  const openFbsStockDialog = useCallback(async (onlyIds?: string[]) => {
     setFbsDialogError(null)
-    const chosen = rows.filter((r) => selectedIds.has(r.id) && r.seller_id)
+    const pick = onlyIds ? new Set(onlyIds) : selectedIds
+    const chosen = rows.filter((r) => pick.has(r.id) && r.seller_id)
     if (chosen.length === 0) {
       setFbsDialogError('Выберите товары с продавцом: без него складов WB нет.')
       return
@@ -1434,6 +1436,22 @@ export function FfProductsCatalogScreen({
                       }}
                     >
                       <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'center' }}>
+                        {/* Настройка остатка FBS по одному товару — как на
+                            согласованном макете: значок в строке открывает ту же
+                            модалку с ползунками, что и массовая кнопка сверху. */}
+                        <Tooltip title="Остаток для FBS">
+                          <span>
+                            <IconButton
+                              size="small"
+                              aria-label={`Остаток для FBS ${p.sku_code}`}
+                              data-testid={`ff-catalog-fbs-row-${p.id}`}
+                              disabled={!canManageCatalog || !p.seller_id}
+                              onClick={() => void openFbsStockDialog([p.id])}
+                            >
+                              <TuneOutlined fontSize="small" />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
                         <Tooltip
                           title={`Коды маркировки: ${markingCount}`}
                         >
