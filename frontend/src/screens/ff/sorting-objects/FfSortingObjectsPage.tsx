@@ -34,9 +34,10 @@ type Props = {
    * выше — переключатель складов и собственная шапка здесь только мешают.
    */
   embedded?: boolean
+  inboundRequestId?: string
 }
 
-export function FfSortingObjectsPage({ token, warehouses, embedded }: Props) {
+export function FfSortingObjectsPage({ token, warehouses, embedded, inboundRequestId }: Props) {
   const navigate = useNavigate()
   // Склад выбирается руками, как на карте: раскладка идёт на конкретном складе,
   // и молча показывать первый попавшийся значит врать оператору.
@@ -66,7 +67,10 @@ export function FfSortingObjectsPage({ token, warehouses, embedded }: Props) {
     if (!warehouseId) return
     setError(null)
     try {
-      const res = await fetch(apiUrl(`/warehouses/${warehouseId}/sorting-objects`), {
+      const inboundQuery = embedded && inboundRequestId
+        ? `?inbound_request_id=${encodeURIComponent(inboundRequestId)}`
+        : ''
+      const res = await fetch(apiUrl(`/warehouses/${warehouseId}/sorting-objects${inboundQuery}`), {
         headers: headers(token),
       })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
@@ -75,7 +79,7 @@ export function FfSortingObjectsPage({ token, warehouses, embedded }: Props) {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить раскладку')
     }
-  }, [token, warehouseId])
+  }, [embedded, inboundRequestId, token, warehouseId])
 
   useEffect(() => {
     void load()

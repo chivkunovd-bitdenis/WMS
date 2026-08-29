@@ -332,10 +332,14 @@ async def get_sorting_objects_route(
     warehouse_id: uuid.UUID,
     user: Annotated[User, Depends(require_catalog_cells_read_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    inbound_request_id: Annotated[uuid.UUID | None, Query()] = None,
 ) -> SortingObjectsOut:
     try:
         data = await warehouse_map_service.get_sorting_objects(
-            session, user.tenant_id, warehouse_id
+            session,
+            user.tenant_id,
+            warehouse_id,
+            inbound_request_id=inbound_request_id,
         )
     except WarehouseMapError as exc:
         raise _map_error(exc) from None

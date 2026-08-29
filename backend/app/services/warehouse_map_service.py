@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.inbound_intake import (
     InboundIntakeBox,
     InboundIntakeCargoPlace,
+    InboundIntakeLine,
     InboundIntakeRequest,
 )
 from app.models.inventory_balance import InventoryBalance
@@ -1089,10 +1090,134 @@ def _sorting_tree_rows(
         _sorting_tree_rows(node["children"], holder=object_holder, objects=objects, lines=lines)
 
 
+async def _filter_sorting_map_by_inbound_request(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    inbound_request_id: uuid.UUID,
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    request = await session.get(InboundIntakeRequest, inbound_request_id)
+    if (
+        request is None
+        or request.tenant_id != tenant_id
+        or request.warehouse_id != warehouse_id
+    ):
+        raise WarehouseMapError("inbound_request_not_found")
+
+    accepted_rows = list(
+        (
+            await session.execute(
+                select(InboundIntakeLine.product_id, InboundIntakeLine.actual_qty).where(
+                    InboundIntakeLine.request_id == inbound_request_id,
+                )
+            )
+        ).all()
+    )
+    remaining_by_product = {
+        str(product_id): max(0, int(actual_qty or 0))
+        for product_id, actual_qty in accepted_rows
+    }
+
+    box_rows = list(
+        (
+            await session.execute(
+                select(InboundIntakeBox.id, InboundIntakeBox.pallet_id).where(
+                    InboundIntakeBox.request_id == inbound_request_id,
+                    InboundIntakeBox.tenant_id == tenant_id,
+                )
+            )
+        ).all()
+    )
+    cargo_place_rows = list(
+        (
+            await session.execute(
+                select(
+                    InboundIntakeCargoPlace.id,
+                    InboundIntakeCargoPlace.pallet_id,
+                ).where(
+                    InboundIntakeCargoPlace.request_id == inbound_request_id,
+                    InboundIntakeCargoPlace.tenant_id == tenant_id,
+                )
+            )
+        ).all()
+    )
+    allowed_containers = {
+        *(('box', str(container_id)) for container_id, _pallet_id in box_rows),
+        *(
+            ('cargo_place', str(container_id))
+            for container_id, _pallet_id in cargo_place_rows
+        ),
+        *(
+            ('pallet', str(pallet_id))
+            for _container_id, pallet_id in [*box_rows, *cargo_place_rows]
+            if pallet_id is not None
+        ),
+    }
+
+    def filter_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        filtered: list[dict[str, Any]] = []
+        for node in nodes:
+            if node["kind"] == "product":
+                product_id = node["product_id"]
+                remaining = remaining_by_product.get(product_id, 0)
+                quantity = min(int(node["qty"]), remaining)
+                if quantity > 0:
+                    filtered.append({**node, "qty": quantity})
+                    remaining_by_product[product_id] = remaining - quantity
+                continue
+
+            children = filter_nodes(node["children"])
+            if (node["kind"], node["id"]) not in allowed_containers:
+                # Тара другого документа не должна становиться владельцем товара
+                # выбранной приёмки: относящиеся к документу строки поднимаем выше.
+                filtered.extend(children)
+                continue
+            filtered.append(
+                _normalize_container(
+                    {
+                        **node,
+                        "children": children,
+                    }
+                )
+            )
+        return filtered
+
+    # Сначала расходуем документное количество в зоне сортировки. Это сохраняет
+    # только что принятую приёмку в «осталось поставить», даже если тот же SKU уже
+    # лежит в ячейках от прежних документов.
+    filtered_unassigned = filter_nodes(data["unassigned"])
+    filtered_cells = [
+        {
+            **cell,
+            "children": filter_nodes(cell["children"]),
+        }
+        for cell in data["cells"]
+    ]
+    return {
+        **data,
+        "unassigned": filtered_unassigned,
+        "cells": filtered_cells,
+    }
+
+
 async def get_sorting_objects(
-    session: AsyncSession, tenant_id: uuid.UUID, warehouse_id: uuid.UUID
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    *,
+    inbound_request_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     data = await get_warehouse_map(session, tenant_id, warehouse_id)
+    if inbound_request_id is not None:
+        data = await _filter_sorting_map_by_inbound_request(
+            session,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            inbound_request_id=inbound_request_id,
+            data=data,
+        )
     objects: list[dict[str, Any]] = []
     lines: list[dict[str, Any]] = []
     _sorting_tree_rows(data["unassigned"], holder=None, objects=objects, lines=lines)
