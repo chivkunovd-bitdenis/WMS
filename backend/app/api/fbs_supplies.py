@@ -5,7 +5,7 @@ from datetime import date
 from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +26,7 @@ from app.services import fbs_picking_service as picking_svc
 from app.services import fbs_shipment_pvz_service as pvz_svc
 from app.services import fbs_shipment_service as shipment_svc
 from app.services import fbs_supply_service as supply_svc
+from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.fbs_print_asset_service import (
     FbsPrintAssetError,
     map_print_asset,
@@ -184,6 +185,39 @@ class FbsPickOptionProductOut(BaseModel):
     planned_qty: int
     picked_qty: int
     locations: list[FbsPickOptionLocationOut]
+
+
+class FbsPickAllocationOut(BaseModel):
+    id: str
+    product_id: str
+    sku_code: str
+    product_name: str
+    storage_location_id: str | None
+    location_code: str | None
+    quantity: int
+
+
+class FbsPickScanBody(BaseModel):
+    barcode: str = Field(min_length=1, max_length=128)
+    product_id: uuid.UUID | None = None
+    storage_location_id: uuid.UUID | None = None
+
+
+class FbsPickScanOut(BaseModel):
+    kind: str
+    storage_location_id: str | None = None
+    location_code: str | None = None
+    product_id: str | None = None
+    sku_code: str | None = None
+    product_name: str | None = None
+    picked_qty: int | None = None
+    allocation_quantity: int | None = None
+
+
+class FbsPickSetBody(BaseModel):
+    product_id: uuid.UUID
+    storage_location_id: uuid.UUID
+    quantity: int = Field(ge=0, le=1_000_000_000)
 
 
 class FbsStickerMetaOut(BaseModel):
@@ -1140,6 +1174,88 @@ async def get_fbs_supply_pick_options(
         )
         for option in options
     ]
+
+
+@router.post("/{supply_id}/pick/scan", response_model=FbsPickScanOut)
+async def scan_fbs_supply_pick(
+    supply_id: uuid.UUID,
+    body: FbsPickScanBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    idempotency_key: Annotated[
+        str | None,
+        Header(alias="Idempotency-Key", min_length=1, max_length=128),
+    ] = None,
+) -> FbsPickScanOut:
+    try:
+        result = await picking_svc.pick_scan(
+            session,
+            user.tenant_id,
+            supply_id,
+            barcode=body.barcode,
+            product_id_hint=body.product_id,
+            storage_location_id=body.storage_location_id,
+            idempotency_key=idempotency_key or str(uuid.uuid4()),
+            actor=user,
+        )
+    except picking_svc.FbsPickingError as exc:
+        _raise_from_picking(exc)
+    await session.commit()
+    return FbsPickScanOut(
+        kind=result.kind,
+        storage_location_id=(
+            str(result.storage_location_id)
+            if result.storage_location_id is not None
+            else None
+        ),
+        location_code=result.location_code,
+        product_id=str(result.product_id) if result.product_id is not None else None,
+        sku_code=result.sku_code,
+        product_name=result.product_name,
+        picked_qty=result.picked_qty,
+        allocation_quantity=result.allocation_quantity,
+    )
+
+
+@router.post("/{supply_id}/pick/set", response_model=FbsPickAllocationOut)
+async def set_fbs_supply_pick_quantity(
+    supply_id: uuid.UUID,
+    body: FbsPickSetBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    idempotency_key: Annotated[
+        str | None,
+        Header(alias="Idempotency-Key", min_length=1, max_length=128),
+    ] = None,
+) -> FbsPickAllocationOut:
+    try:
+        result = await picking_svc.set_pick_quantity(
+            session,
+            user.tenant_id,
+            supply_id,
+            product_id=body.product_id,
+            storage_location_id=body.storage_location_id,
+            quantity=body.quantity,
+            idempotency_key=idempotency_key or str(uuid.uuid4()),
+            actor=user,
+        )
+    except picking_svc.FbsPickingError as exc:
+        _raise_from_picking(exc)
+    await session.commit()
+    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(
+        session, user.tenant_id
+    )
+    return FbsPickAllocationOut(
+        id=str(result.id),
+        product_id=str(body.product_id),
+        sku_code=result.product.sku_code,
+        product_name=result.product.name,
+        storage_location_id=(
+            str(result.storage_location_id) if reveal_storage else None
+        ),
+        location_code=result.location_code if reveal_storage else None,
+        quantity=result.quantity,
+    )
 
 
 @router.post("/{supply_id}/orders/batch", response_model=FbsWorkspaceOut)

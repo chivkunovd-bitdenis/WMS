@@ -15,6 +15,8 @@ REQUIRED_FBS_PATHS = (
     "/operations/fbs-supplies/preflight",
     "/operations/fbs-supplies/from-orders",
     "/operations/fbs-supplies/{supply_id}/workspace",
+    "/operations/fbs-supplies/{supply_id}/pick/set",
+    "/operations/fbs-supplies/{supply_id}/pick/scan",
     "/operations/fbs-supplies/{supply_id}/pick/scan-location",
     "/operations/fbs-supplies/{supply_id}/pick/scan-product",
     "/operations/fbs-supplies/{supply_id}/print-assets",

@@ -42,6 +42,11 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "seller_stock_mismatch": "Товар принадлежит другому селлеру.",
     "product_not_in_supply": "Товар не входит в состав поставки или уже подобран.",
     "order_already_picked": "Заказ уже подобран.",
+    "pick_quantity_exceeds_demand": (
+        "Количество больше, чем ждут неподобранные заказы поставки."
+    ),
+    "location_required": "Сначала отсканируйте место, из которого снимаете товар.",
+    "barcode_empty": "Штрихкод не может быть пустым.",
     "insufficient_unpacked": "Недостаточно неупакованного остатка.",
     "insufficient_packaging_stock": "Недостаточно остатка товара в ячейке упаковки.",
     "pick_undo_not_allowed": "Отмена подбора после упаковки запрещена.",
