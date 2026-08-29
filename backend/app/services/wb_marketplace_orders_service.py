@@ -978,6 +978,86 @@ async def upsert_order_from_wb_row(
     return order, True
 
 
+async def _write_off_sold_order(session: AsyncSession, order: FbsOrder) -> None:
+    """Снять со склада штуку по выкупленному заказу, если её ещё не списали.
+
+    Списание в системе жило в одном месте — в завершении упаковки поставки.
+    Заказ, который упаковку миновал (закрылся статусом от Wildberries, уехал
+    напрямую, оператор пропустил шаг), уходил физически, а в остатке висел
+    вечно. Это учёт товара, поэтому дыру закрываем на самом факте продажи.
+
+    Повторное списание невозможно: журнал `fbs_shipment_reversal_ledger`
+    хранит запись на заказ, и она же проверяется первой.
+    """
+    from app.models.fbs_order_pick import FbsOrderPick
+    from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
+    from app.services import inventory_service as inv_svc
+
+    if order.product_id is None:
+        return
+
+    already = await session.scalar(
+        select(FbsShipmentReversalLedger.id).where(
+            FbsShipmentReversalLedger.tenant_id == order.tenant_id,
+            FbsShipmentReversalLedger.fbs_order_id == order.id,
+        )
+    )
+    if already is not None:
+        return
+
+    # Списываем оттуда, куда штуку положил подбор. Без подбора со склада ничего
+    # не брали — списывать нечего.
+    location_id = await session.scalar(
+        select(FbsOrderPick.sorting_storage_location_id).where(
+            FbsOrderPick.tenant_id == order.tenant_id,
+            FbsOrderPick.fbs_order_id == order.id,
+            FbsOrderPick.undone_at.is_(None),
+        )
+    )
+    if location_id is None:
+        return
+
+    try:
+        await inv_svc.apply_fbs_supply_write_off(
+            session,
+            tenant_id=order.tenant_id,
+            product_id=order.product_id,
+            storage_location_id=location_id,
+            quantity=1,
+            # Списание инициировал не человек, а обход статусов от WB:
+            # заказ закрыт как проданный в обход упаковки.
+            actor_user_id=None,
+        )
+    except ValueError as exc:
+        # Остатка в ячейке нет — не роняем синхронизацию статусов из-за одного
+        # заказа. Записи в журнал не делаем: попытка повторится на следующем
+        # обходе, когда остаток появится.
+        logger.warning(
+            "fbs write-off on sold skipped (%s): tenant=%s order=%s product=%s location=%s",
+            exc,
+            order.tenant_id,
+            order.id,
+            order.product_id,
+            location_id,
+        )
+        return
+
+    # Запись в журнал — тот же, которым живёт списание при упаковке. У модели
+    # нет колонки на id движения списания (только reversal_movement_id — она
+    # заполняется позже, при фактическом сторнировании), поэтому здесь хранить
+    # больше нечего: сам факт записи в журнале и есть подтверждение списания.
+    session.add(
+        FbsShipmentReversalLedger(
+            tenant_id=order.tenant_id,
+            fbs_order_id=order.id,
+            product_id=order.product_id,
+            storage_location_id=location_id,
+            quantity=1,
+        )
+    )
+    await session.flush()
+
+
 async def _apply_wb_status_to_order(
     session: AsyncSession,
     order: FbsOrder,
@@ -1025,6 +1105,10 @@ async def _apply_wb_status_to_order(
         return
     if normalized_wb == "sold":
         order.status = FBS_ORDER_STATUS_DONE
+        # Товар уехал покупателю — значит его надо снять со склада. Раньше
+        # списание жило только внутри упаковки поставки, и заказ, который её
+        # миновал, уходил физически, а в учёте оставался навсегда.
+        await _write_off_sold_order(session, order)
         # Выкуплен: резерв больше не нужен (иначе available навсегда занижен).
         await _release_reservation(session, order)
         return
