@@ -218,6 +218,8 @@ class SortingCellOut(BaseModel):
     id: str
     code: str
     barcode: str
+    objects: list[SortingObjectOut]
+    lines: list[SortingGoodsLineOut]
 
 
 class SortingObjectsOut(BaseModel):
@@ -371,12 +373,6 @@ async def place_sorting_object_route(
     user: Annotated[User, Depends(require_cells_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> WarehouseMapMoveOut:
-    cell_id = body.cell_id or body.to_id
-    if cell_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="cell_id_required",
-        )
     try:
         result = await warehouse_map_service.place_sorting_object(
             session,
@@ -385,7 +381,8 @@ async def place_sorting_object_route(
             actor_user_id=user.id,
             kind=body.kind,
             object_id=body.id,
-            cell_id=cell_id,
+            cell_id=body.cell_id,
+            to_id=body.to_id,
             quantity=body.qty,
         )
     except WarehouseMapError as exc:

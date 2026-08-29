@@ -1096,6 +1096,27 @@ async def get_sorting_objects(
     objects: list[dict[str, Any]] = []
     lines: list[dict[str, Any]] = []
     _sorting_tree_rows(data["unassigned"], holder=None, objects=objects, lines=lines)
+    cells: list[dict[str, Any]] = []
+    for row in data["cells"]:
+        cell_objects: list[dict[str, Any]] = []
+        cell_lines: list[dict[str, Any]] = []
+        _sorting_tree_rows(
+            row["children"],
+            holder=f"cell:{row['id']}",
+            objects=cell_objects,
+            lines=cell_lines,
+        )
+        objects.extend(cell_objects)
+        lines.extend(cell_lines)
+        cells.append(
+            {
+                "id": row["id"],
+                "code": row["code"],
+                "barcode": row["barcode"],
+                "objects": cell_objects,
+                "lines": cell_lines,
+            }
+        )
     product_ids = {uuid.UUID(row["productId"]) for row in lines}
     products = (
         list(
@@ -1171,11 +1192,33 @@ async def get_sorting_objects(
         "objects": objects,
         "lines": lines,
         "products": product_data,
-        "cells": [
-            {"id": row["id"], "code": row["code"], "barcode": row["barcode"]}
-            for row in data["cells"]
-        ],
+        "cells": cells,
     }
+
+
+async def _sorting_destination_kind(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    container_id: uuid.UUID,
+) -> ContainerKind:
+    found: list[ContainerKind] = []
+    candidates: tuple[ContainerKind, ...] = ("pallet", "box", "cargo_place")
+    for candidate in candidates:
+        try:
+            await validate_container(
+                session,
+                tenant_id,
+                warehouse_id,
+                candidate,
+                container_id,
+            )
+        except ValueError:
+            continue
+        found.append(candidate)
+    if len(found) != 1:
+        raise WarehouseMapError("destination_not_found")
+    return found[0]
 
 
 async def place_sorting_object(
@@ -1186,9 +1229,26 @@ async def place_sorting_object(
     actor_user_id: uuid.UUID,
     kind: ObjectKind,
     object_id: uuid.UUID,
-    cell_id: uuid.UUID,
+    cell_id: uuid.UUID | None,
+    to_id: uuid.UUID | None,
     quantity: int,
 ) -> dict[str, Any]:
+    if cell_id is not None and to_id is not None:
+        raise WarehouseMapError("destination_conflict")
+    if cell_id is not None:
+        destination_kind: DestinationKind = "cell"
+        destination_id = cell_id
+    elif to_id is not None:
+        destination_kind = await _sorting_destination_kind(
+            session,
+            tenant_id,
+            warehouse_id,
+            to_id,
+        )
+        destination_id = to_id
+    else:
+        destination_kind = "unassigned"
+        destination_id = None
     return await move_object(
         session,
         tenant_id=tenant_id,
@@ -1196,7 +1256,7 @@ async def place_sorting_object(
         actor_user_id=actor_user_id,
         kind=kind,
         object_id=object_id,
-        to_kind="cell",
-        to_id=cell_id,
+        to_kind=destination_kind,
+        to_id=destination_id,
         quantity=quantity,
     )
