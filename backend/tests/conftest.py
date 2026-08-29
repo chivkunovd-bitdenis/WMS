@@ -28,14 +28,47 @@ from app.services.fbs_stock_publish_service import drain_background_stock_publis
 from app.services.fbs_stock_sync_service import drain_zero_publish_background_tasks
 
 
+_SCHEMA_READY = False
+
+
+async def _rebuild_schema() -> None:
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+
+
+async def _reset_database() -> None:
+    """Схему строим один раз за прогон, между тестами только вычищаем строки.
+
+    Снос и постройка 97 таблиц стоят 334 мс, очистка строк — 23 мс. На полном
+    прогоне это разница между 16 и 3 минутами, при той же изоляции: тест всё
+    так же начинает с пустой базы.
+
+    Часть тестовых файлов сносит схему собственными фикстурами и не
+    восстанавливает её. Поэтому очистку оборачиваем: пропала таблица —
+    пересобираем схему и продолжаем.
+    """
+    global _SCHEMA_READY
+    from sqlalchemy import text as _sql_text
+    from sqlalchemy.exc import OperationalError, ProgrammingError
+
+    if not _SCHEMA_READY:
+        await _rebuild_schema()
+        _SCHEMA_READY = True
+        return
+    try:
+        async with engine.begin() as conn:
+            for table in reversed(Base.metadata.sorted_tables):
+                await conn.execute(_sql_text(f'DELETE FROM "{table.name}"'))
+    except (OperationalError, ProgrammingError):
+        await _rebuild_schema()
+
+
 @pytest_asyncio.fixture
 async def async_client() -> AsyncIterator[AsyncClient]:
     await drain_background_stock_publish_tasks()
     await drain_zero_publish_background_tasks()
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    await _reset_database()
 
     async def override_get_db() -> AsyncIterator[AsyncSession]:
         async with SessionLocal() as session:
@@ -51,5 +84,4 @@ async def async_client() -> AsyncIterator[AsyncClient]:
     app.dependency_overrides.clear()
     await drain_background_stock_publish_tasks()
     await drain_zero_publish_background_tasks()
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+    await _reset_database()
