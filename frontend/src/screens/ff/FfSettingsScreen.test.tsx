@@ -33,15 +33,23 @@ describe('FfSettingsScreen tariff deep link owner', () => {
     expect(markup).not.toContain('ff-settings-tariffs-panel')
   })
 
+  // Владелец переделал панель 27.08 по живому экрану (коммит 8359f87a): цена на
+  // товар больше не отдельный блок «Товарные цены», а живёт внутри раскрытого
+  // селлера — приоритет «цена товара → ставка селлера → общая ставка». Тест
+  // проверяет именно эту, согласованную раскладку.
   it('keeps the complete tariff-matrix structure inside S-19 using ui-kit fields', () => {
     const markup = renderToStaticMarkup(
       <FfSettingsScreen {...props} isFulfillmentAdmin />,
     )
     expect(markup).toContain('Ставка, ₽')
-    expect(markup).toContain('Товарные цены')
+    expect(markup).toContain('Ставки селлеров')
     expect(markup).toContain('Ставки сотрудников')
-    expect(markup).toContain('Хранение')
-    expect(markup).toContain('ff-settings-tariff-product-id')
+    // «Хранение» и прочие услуги приходят с сервера, в статичной отрисовке их
+    // нет — проверяем каркас таблицы услуг, а не строку данных.
+    expect(markup).toContain('ff-settings-tariffs-services')
+    // Цена товара задаётся внутри раскрытого селлера, поэтому в свёрнутом виде
+    // от неё видна колонка-счётчик, а не отдельная секция.
+    expect(markup).toContain('Цен на товары')
     expect(markup).toContain('ff-settings-tariff-employee-rates')
   })
 })
