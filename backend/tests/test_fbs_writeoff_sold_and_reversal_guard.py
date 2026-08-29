@@ -480,6 +480,56 @@ async def test_reversal_blocked_for_delivered_supply_after_supplier_status_cance
         assert int(balance.quantity) == 0, "товар после передачи не должен вернуться"
 
 
+# TC-NEW-003 — у заказа нет поставки вовсе: возвращать можно, передавать было нечего
+@pytest.mark.asyncio
+async def test_reversal_happens_when_order_has_no_supply(
+    async_client: AsyncClient,
+) -> None:
+    """Given: заказ списан, поставка у него передана, но текстовый
+    `wb_supply_id` у заказа пуст — связи с поставкой нет вовсе, а
+    `supplier_status` пришёл как `cancel`.
+    When: сторож обрабатывает отмену.
+    Then: возврат проводится. Нет поставки — значит передавать было нечего, и
+    товар всё ещё лежит у нас на полке.
+    """
+    order_id, tenant_id, product_id, location_id = await _seed_order_with_existing_write_off(
+        async_client,
+        supplier_status="cancel",
+        supply_delivered=True,
+    )
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        # Рвём связь с поставкой: именно этот случай сторож блокировать не должен.
+        order.wb_supply_id = None
+        await session.flush()
+        reversed_flag = await reverse_fbs_shipment_if_needed(session, order)
+        await session.commit()
+
+    assert reversed_flag is True, "без поставки возврат должен проводиться"
+
+    async with SessionLocal() as session:
+        ledger = await session.scalar(
+            select(FbsShipmentReversalLedger).where(
+                FbsShipmentReversalLedger.fbs_order_id == order_id
+            )
+        )
+        assert ledger is not None
+        assert ledger.reversed_at is not None
+        assert ledger.reversal_movement_id is not None, "движение возврата должно быть записано"
+
+        balance = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+                InventoryBalance.storage_location_id == location_id,
+            )
+        )
+        assert balance is not None
+        assert int(balance.quantity) == 1, "товар должен вернуться на остаток"
+
+
 # TC-NEW-FBS-REVERSAL-COMPLETE-001 — отмена по complete-заказу не возвращает остаток
 @pytest.mark.asyncio
 async def test_reversal_blocked_when_supplier_status_complete(
