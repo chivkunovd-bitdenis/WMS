@@ -225,7 +225,7 @@ export function FfProductsCatalogScreen({
   // простор на широком экране и схлопывается в ноль на узком. Контейнер каталога
   // уже колонок (на 1440 — 1130px), таблица прокручивается вбок, поэтому колонка
   // действий липкая справа и из виду не уходит.
-  const tableMinWidth = 1406
+  const tableMinWidth = 1336
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [catalog, setCatalog] = useState<FfCatalogRow[]>([])
@@ -1125,17 +1125,17 @@ export function FfProductsCatalogScreen({
           >
             <colgroup>
               <col style={{ width: 44 }} />
-              <col style={{ width: 56 }} />
-              <col style={{ width: 130 }} />
-              <col style={{ width: 140 }} />
+              <col style={{ width: 48 }} />
+              <col style={{ width: 142 }} />
+              <col style={{ width: 152 }} />{/* заголовку «Артикул продавца» нужен 151px, значению — 138 */}
               <col style={{ width: 104 }} />
-              <col style={{ width: 130 }} />
-              <col style={{ width: 60 }} />
-              <col style={{ width: 106 }} />
-              <col style={{ width: 130 }} />
+              <col style={{ width: 118 }} />
+              <col style={{ width: 72 }} />{/* заголовку «Размер» нужен 71px; на 64 его резало и до правки */}
+              <col style={{ width: 88 }} />
+              <col style={{ width: 124 }} />
               <col style={{ width: 124 }} />{/* «В Wildberries»: на 70px заголовок резало до «В Wildberr», а значение до «не перед» */}
               <col style={{ width: 70 }} />
-              <col style={{ width: 110 }} />
+              <col style={{ width: 48 }} />{/* «ЧЗ»: чип занимает 35px, 110 держали пустоту */}
               <col style={{ width: 96 }} />
               <col style={{ width: 106 }} />{/* действия: без своей ширины колонка схлопывалась в ноль на узком экране и забирала весь остаток на широком */}
             </colgroup>
