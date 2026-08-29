@@ -281,6 +281,17 @@ class MarketplaceUnloadPickSetBody(BaseModel):
     product_id: uuid.UUID
     storage_location_id: uuid.UUID
     quantity: int = Field(ge=0, le=1_000_000_000)
+    # Из какой тары сняли. Пусто — сняли россыпью прямо с ячейки; так работают
+    # старые клиенты, поэтому поля необязательные.
+    container_kind: Literal["pallet", "box", "cargo_place"] | None = None
+    container_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _container_pair(self) -> MarketplaceUnloadPickSetBody:
+        if (self.container_kind is None) != (self.container_id is None):
+            msg = "container_kind and container_id must be set together"
+            raise ValueError(msg)
+        return self
 
 
 class MarketplaceUnloadAttachBoxBody(BaseModel):
@@ -1344,6 +1355,8 @@ async def set_marketplace_unload_pick_qty(
             storage_location_id=body.storage_location_id,
             quantity=body.quantity,
             actor_user_id=user.id,
+            container_kind=body.container_kind,
+            container_id=body.container_id,
         )
     except MarketplaceUnloadPickError as exc:
         raise _map_pick_err(exc) from None

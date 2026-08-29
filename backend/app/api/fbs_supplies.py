@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -233,6 +233,17 @@ class FbsPickSetBody(BaseModel):
     product_id: uuid.UUID
     storage_location_id: uuid.UUID
     quantity: int = Field(ge=0, le=1_000_000_000)
+    # Из какой тары сняли. Пусто — сняли россыпью прямо с ячейки; так работают
+    # старые клиенты, поэтому поля необязательные.
+    container_kind: Literal["pallet", "box", "cargo_place"] | None = None
+    container_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _container_pair(self) -> FbsPickSetBody:
+        if (self.container_kind is None) != (self.container_id is None):
+            msg = "container_kind and container_id must be set together"
+            raise ValueError(msg)
+        return self
 
 
 class FbsStickerMetaOut(BaseModel):
@@ -1270,6 +1281,8 @@ async def set_fbs_supply_pick_quantity(
             quantity=body.quantity,
             idempotency_key=idempotency_key or str(uuid.uuid4()),
             actor=user,
+            container_kind=body.container_kind,
+            container_id=body.container_id,
         )
     except picking_svc.FbsPickingError as exc:
         _raise_from_picking(exc)

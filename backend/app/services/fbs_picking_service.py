@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +41,7 @@ from app.services.fbs_cancelled_after_pack_service import (
     order_belonged_to_supply,
 )
 from app.services.fbs_workspace_service import FbsWorkspaceError, get_supply_workspace
+from app.services.inventory_container_service import ContainerKind
 from app.services.operation_fact_service import record_fbs_pick
 from app.services.pick_option_location_service import PickOptionLocation
 from app.services.sorting_location_service import (
@@ -312,6 +313,8 @@ async def set_pick_quantity(
     quantity: int,
     idempotency_key: str,
     actor: User,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> PickAllocationResult:
     """Set the final picked quantity using the existing per-order pick/undo path."""
     if quantity < 0:
@@ -400,6 +403,8 @@ async def set_pick_quantity(
                     ordinal=ordinal,
                 ),
                 actor=actor,
+                container_kind=container_kind,
+                container_id=container_id,
             )
     elif quantity < current_quantity:
         for ordinal, assignment in enumerate(
@@ -695,6 +700,8 @@ async def scan_pick_product(
     actor: User,
     order_id: uuid.UUID | None = None,
     product_id: uuid.UUID | None = None,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     existing = await _find_pick_by_scan_idempotency(session, tenant_id, supply_id, idempotency_key)
     if existing is not None:
@@ -837,12 +844,23 @@ async def scan_pick_product(
             context={"order_id": str(target_order.id)},
         )
 
-    available = await inventory_service.available_quantity_at_location(
-        session,
-        tenant_id,
-        product.id,
-        location.id,
-    )
+    if container_id is None:
+        available = await inventory_service.available_quantity_at_location(
+            session,
+            tenant_id,
+            product.id,
+            location.id,
+        )
+    else:
+        # Внутри тары брони не живут: резерв стоит на месте целиком.
+        available = await inventory_service.physical_on_hand_in_container(
+            session,
+            tenant_id,
+            product.id,
+            location.id,
+            container_kind,
+            container_id,
+        )
     sorting_location = await get_or_create_sorting_location(session, tenant_id, supply.warehouse_id)
     movement_id: uuid.UUID | None = None
     if available >= 1 and location.id != sorting_location.id:
@@ -855,6 +873,10 @@ async def scan_pick_product(
                 product_id=product.id,
                 quantity=1,
                 actor_user_id=actor.id,
+                # Снимаем из указанной тары; на сортировку штука уезжает
+                # россыпью — тары там нет, короб остаётся стоять в ячейке.
+                from_container_kind=container_kind,
+                from_container_id=container_id,
             )
         except ValueError as exc:
             if str(exc) == "insufficient stock":
@@ -932,6 +954,8 @@ async def scan_pick_product(
         fbs_order_id=target_order.id,
         fbs_supply_id=supply.id,
         source_storage_location_id=location.id,
+        source_container_kind=container_kind,
+        source_container_id=container_id,
         sorting_storage_location_id=sorting_location.id,
         product_id=product.id,
         scanned_product_barcode=product_barcode,
@@ -978,6 +1002,8 @@ async def manual_pick_product(
     order_id: uuid.UUID,
     idempotency_key: str,
     actor: User,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     """Pick the product already assigned to one explicit order without scanning."""
     existing = await _find_pick_by_scan_idempotency(session, tenant_id, supply_id, idempotency_key)
@@ -1003,6 +1029,8 @@ async def manual_pick_product(
         order_id=order_id,
         idempotency_key=idempotency_key,
         actor=actor,
+        container_kind=container_kind,
+        container_id=container_id,
     )
 
 
@@ -1196,6 +1224,9 @@ async def undo_pick(
                 product_id=pick.product_id,
                 quantity=1,
                 actor_user_id=actor.id,
+                # Возврат кладём ровно туда, откуда сняли: в тот же короб.
+                to_container_kind=cast("ContainerKind | None", pick.source_container_kind),
+                to_container_id=pick.source_container_id,
             )
             movement_id = await inventory_service.transfer_out_movement_id(
                 session, tenant_id, transfer_group_id

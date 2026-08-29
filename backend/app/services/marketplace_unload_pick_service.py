@@ -19,6 +19,7 @@ from app.models.storage_location import StorageLocation
 from app.services import marketplace_unload_service as mu_svc
 from app.services import pick_option_location_service as pick_location_svc
 from app.services import tenant_settings_service as tenant_settings_svc
+from app.services.inventory_container_service import ContainerKind
 from app.services.pick_option_location_service import PickOptionLocation
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
@@ -232,6 +233,8 @@ async def add_pick_qty(
     product_id: uuid.UUID,
     quantity: int,
     actor_user_id: uuid.UUID | None,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> MarketplaceUnloadPickAllocation:
     from app.services import marketplace_unload_collect_service as collect_svc
 
@@ -243,6 +246,8 @@ async def add_pick_qty(
         product_id=product_id,
         quantity=quantity,
         actor_user_id=actor_user_id,
+        container_kind=container_kind,
+        container_id=container_id,
     )
     # record_pick_allocation уже синхронизирует задание на упаковку сама —
     # отдельного вызова здесь не нужно.

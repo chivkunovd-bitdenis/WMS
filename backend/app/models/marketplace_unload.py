@@ -6,14 +6,17 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -207,11 +210,22 @@ class MarketplaceUnloadPickAllocation(Base):
 
     __tablename__ = "marketplace_unload_pick_allocations"
     __table_args__ = (
-        UniqueConstraint(
+        CheckConstraint(
+            "(container_kind IS NULL AND container_id IS NULL) OR "
+            "(container_kind IS NOT NULL AND container_id IS NOT NULL)",
+            name="ck_mp_unload_pick_container_pair",
+        ),
+        # Одно и то же место может дать несколько строк подбора: россыпь и по
+        # строке на каждую тару. Поэтому уникальность считается вместе с тарой,
+        # а NULL приводится к нулевому UUID — иначе в SQL два NULL не равны и
+        # ограничение перестало бы держать россыпь.
+        Index(
+            "uq_mp_unload_pick_req_product_loc_container",
             "request_id",
             "product_id",
             "storage_location_id",
-            name="uq_mp_unload_pick_req_product_loc",
+            text("coalesce(container_id, '00000000-0000-0000-0000-000000000000')"),
+            unique=True,
         ),
     )
 
@@ -230,6 +244,12 @@ class MarketplaceUnloadPickAllocation(Base):
         Uuid(as_uuid=True),
         ForeignKey("storage_locations.id", ondelete="CASCADE"),
         index=True,
+    )
+    # Из какой тары сняли: короб, палета, грузоместо. Пусто — сняли россыпью
+    # прямо с ячейки. Пара «вид + номер» заполняется только целиком.
+    container_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    container_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True, index=True
     )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

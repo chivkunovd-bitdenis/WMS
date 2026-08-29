@@ -70,6 +70,12 @@ class FbsOrderPick(Base):
         nullable=False,
         index=True,
     )
+    # Из какой тары сняли: короб, палета, грузоместо. Пусто — сняли россыпью.
+    # Нужно, чтобы отмена подбора вернула штуку в тот же короб, а не на полку.
+    source_container_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    source_container_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True, index=True
+    )
     source_storage_location_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("storage_locations.id", ondelete="RESTRICT"),

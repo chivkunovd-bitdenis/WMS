@@ -22,6 +22,7 @@ from app.services import inventory_service
 from app.services import marketplace_unload_service as mu_svc
 from app.services import sorting_location_service as sort_loc_svc
 from app.services import tenant_settings_service as tenant_settings_svc
+from app.services.inventory_container_service import ContainerKind
 from app.services.marketplace_unload_pick_service import (
     PICK_EDITABLE_STATUSES,
     MarketplaceUnloadPickError,
@@ -429,6 +430,8 @@ async def record_pick_allocation(
     quantity: int,
     allow_over_plan: bool = False,
     actor_user_id: uuid.UUID | None,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> PickAllocationResult:
     """Подбор двигает товар со склада в аллокацию подбора и НЕ трогает короба.
 
@@ -480,12 +483,17 @@ async def record_pick_allocation(
         increment_qty=quantity,
     )
 
+    # Строка подбора заводится на связку «место + тара»: из одной ячейки можно
+    # снять и россыпь, и содержимое короба, и это разные строки.
     alloc_stmt = (
         select(MarketplaceUnloadPickAllocation)
         .where(
             MarketplaceUnloadPickAllocation.request_id == request_id,
             MarketplaceUnloadPickAllocation.product_id == product_id,
             MarketplaceUnloadPickAllocation.storage_location_id == effective_location_id,
+            MarketplaceUnloadPickAllocation.container_id.is_(None)
+            if container_id is None
+            else MarketplaceUnloadPickAllocation.container_id == container_id,
         )
         .with_for_update()
     )
@@ -494,9 +502,21 @@ async def record_pick_allocation(
     current_pick = int(alloc.quantity) if alloc is not None else 0
     new_pick = current_pick + quantity
 
-    available = await inventory_service.available_at_location(
-        session, tenant_id, product_id, effective_location_id
-    )
+    if container_id is None:
+        available = await inventory_service.available_at_location(
+            session, tenant_id, product_id, effective_location_id
+        )
+    else:
+        # Внутри тары брони не живут: резерв стоит на месте целиком, поэтому
+        # потолок для короба — то, что в нём физически лежит.
+        available = await inventory_service.physical_on_hand_in_container(
+            session,
+            tenant_id,
+            product_id,
+            effective_location_id,
+            container_kind,
+            container_id,
+        )
     if available < new_pick:
         raise MarketplaceUnloadPickError("insufficient_available")
 
@@ -509,6 +529,8 @@ async def record_pick_allocation(
             quantity=quantity,
             marketplace_unload_request_id=request_id,
             actor_user_id=actor_user_id,
+            container_kind=container_kind,
+            container_id=container_id,
         )
     except ValueError as exc:
         if str(exc) == "insufficient stock":
@@ -524,6 +546,8 @@ async def record_pick_allocation(
             request_id=request_id,
             product_id=product_id,
             storage_location_id=effective_location_id,
+            container_kind=container_kind,
+            container_id=container_id,
             quantity=new_pick,
         )
         session.add(alloc)
@@ -567,6 +591,8 @@ async def set_pick_allocation(
     storage_location_id: uuid.UUID,
     quantity: int,
     actor_user_id: uuid.UUID | None,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> SetPickAllocationResult:
     """Задать итоговое количество подбора по паре товар+ячейка (не прибавку, а
     итог) — PICK-01. Разница > 0 идёт через record_pick_allocation как есть,
@@ -602,12 +628,17 @@ async def set_pick_allocation(
     )
     await session.execute(lock_stmt)
 
+    # Итог задаётся по конкретному месту снятия: россыпь и каждый короб — своя
+    # строка, иначе ввод в короб перетирал бы снятое россыпью.
     alloc_stmt = (
         select(MarketplaceUnloadPickAllocation)
         .where(
             MarketplaceUnloadPickAllocation.request_id == request_id,
             MarketplaceUnloadPickAllocation.product_id == product_id,
             MarketplaceUnloadPickAllocation.storage_location_id == storage_location_id,
+            MarketplaceUnloadPickAllocation.container_id.is_(None)
+            if container_id is None
+            else MarketplaceUnloadPickAllocation.container_id == container_id,
         )
         .with_for_update()
     )
@@ -625,6 +656,8 @@ async def set_pick_allocation(
             product_id=product_id,
             quantity=diff,
             actor_user_id=actor_user_id,
+            container_kind=container_kind,
+            container_id=container_id,
         )
         return SetPickAllocationResult(
             id=result.allocation.id,
@@ -664,6 +697,8 @@ async def set_pick_allocation(
         quantity=remove_qty,
         marketplace_unload_request_id=request_id,
         actor_user_id=actor_user_id,
+        container_kind=container_kind,
+        container_id=container_id,
     )
     await mu_svc.restore_reservation_for_remove(
         session,

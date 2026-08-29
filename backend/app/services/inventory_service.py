@@ -1077,19 +1077,53 @@ async def _lock_inventory_balance(
     tenant_id: uuid.UUID,
     product_id: uuid.UUID,
     storage_location_id: uuid.UUID,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> InventoryBalance | None:
+    """Строка остатка по месту. Без тары — россыпь, с тарой — конкретный короб.
+
+    Раньше здесь всегда стояло «тары нет», и подбор физически не мог снять товар,
+    который лежит в коробе или на палете: строка остатка у него другая.
+    """
     stmt = (
         select(InventoryBalance)
         .where(
             InventoryBalance.tenant_id == tenant_id,
             InventoryBalance.product_id == product_id,
             InventoryBalance.storage_location_id == storage_location_id,
-            InventoryBalance.container_kind.is_(None),
-            InventoryBalance.container_id.is_(None),
+            InventoryBalance.container_kind.is_(None)
+            if container_kind is None
+            else InventoryBalance.container_kind == container_kind,
+            InventoryBalance.container_id.is_(None)
+            if container_id is None
+            else InventoryBalance.container_id == container_id,
         )
         .with_for_update()
     )
     return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def physical_on_hand_in_container(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+    container_kind: ContainerKind | None,
+    container_id: uuid.UUID | None,
+) -> int:
+    """Сколько товара физически лежит в этой таре (или россыпью) на этом месте."""
+    stmt = select(func.coalesce(func.sum(InventoryBalance.quantity), 0)).where(
+        InventoryBalance.tenant_id == tenant_id,
+        InventoryBalance.product_id == product_id,
+        InventoryBalance.storage_location_id == storage_location_id,
+        InventoryBalance.container_kind.is_(None)
+        if container_kind is None
+        else InventoryBalance.container_kind == container_kind,
+        InventoryBalance.container_id.is_(None)
+        if container_id is None
+        else InventoryBalance.container_id == container_id,
+    )
+    return int(await session.scalar(stmt) or 0)
 
 
 async def apply_fbs_supply_write_off(
@@ -1146,11 +1180,20 @@ async def apply_marketplace_unload_pick(
     quantity: int,
     marketplace_unload_request_id: uuid.UUID,
     actor_user_id: uuid.UUID | None,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> None:
     if quantity < 1:
         msg = "quantity must be positive"
         raise ValueError(msg)
-    bal = await _lock_inventory_balance(session, tenant_id, product_id, storage_location_id)
+    bal = await _lock_inventory_balance(
+        session,
+        tenant_id,
+        product_id,
+        storage_location_id,
+        container_kind,
+        container_id,
+    )
     if bal is None or int(bal.quantity) < quantity:
         msg = "insufficient stock"
         raise ValueError(msg)
@@ -1164,6 +1207,8 @@ async def apply_marketplace_unload_pick(
         marketplace_unload_request_id=marketplace_unload_request_id,
         actor_user_id=actor_user_id,
         deduct_prefer="packed",
+        container_kind=container_kind,
+        container_id=container_id,
     )
 
 
@@ -1176,8 +1221,13 @@ async def reverse_marketplace_unload_pick(
     quantity: int,
     marketplace_unload_request_id: uuid.UUID,
     actor_user_id: uuid.UUID | None,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> None:
-    """DEC-016: restore on_hand when removing qty from shipment box."""
+    """DEC-016: restore on_hand when removing qty from shipment box.
+
+    Возврат кладём ровно туда, откуда сняли: в тот же короб или обратно россыпью.
+    """
     if quantity < 1:
         msg = "quantity must be positive"
         raise ValueError(msg)
@@ -1190,6 +1240,8 @@ async def reverse_marketplace_unload_pick(
         movement_type=MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
         marketplace_unload_request_id=marketplace_unload_request_id,
         actor_user_id=actor_user_id,
+        container_kind=container_kind,
+        container_id=container_id,
     )
 
 
@@ -1279,8 +1331,16 @@ async def transfer_on_hand_between_locations(
     product_id: uuid.UUID,
     quantity: int,
     actor_user_id: uuid.UUID | None,
+    from_container_kind: ContainerKind | None = None,
+    from_container_id: uuid.UUID | None = None,
+    to_container_kind: ContainerKind | None = None,
+    to_container_id: uuid.UUID | None = None,
 ) -> uuid.UUID:
     """Перемещение фактического on_hand между ячейками (DEC-019 migration).
+
+    Тара указывается отдельно для каждой стороны: снять можно из короба, а
+    положить россыпью — так работает подбор ФБС, где товар уезжает в зону
+    сортировки без тары. Пусто с обеих сторон — прежнее поведение.
 
     Returns transfer_group_id for audit linkage.
     """
@@ -1305,7 +1365,14 @@ async def transfer_on_hand_between_locations(
         msg = "locations must be in the same warehouse"
         raise ValueError(msg)
 
-    on_hand = await _physical_on_hand(session, tenant_id, product_id, from_storage_location_id)
+    on_hand = await physical_on_hand_in_container(
+        session,
+        tenant_id,
+        product_id,
+        from_storage_location_id,
+        from_container_kind,
+        from_container_id,
+    )
     if on_hand < quantity:
         msg = "insufficient stock"
         raise ValueError(msg)
@@ -1320,6 +1387,8 @@ async def transfer_on_hand_between_locations(
         movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_OUT,
         transfer_group_id=group_id,
         actor_user_id=actor_user_id,
+        container_kind=from_container_kind,
+        container_id=from_container_id,
     )
     await record_movement_and_adjust_balance(
         session,
@@ -1330,6 +1399,8 @@ async def transfer_on_hand_between_locations(
         movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_IN,
         transfer_group_id=group_id,
         actor_user_id=actor_user_id,
+        container_kind=to_container_kind,
+        container_id=to_container_id,
     )
     return group_id
 

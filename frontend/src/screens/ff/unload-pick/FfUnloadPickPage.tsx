@@ -214,10 +214,12 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
     const objectsById = new Map<string, WarehouseObject>()
     const stock: GoodsLine[] = []
     const picked: PickedMap = {}
-    // Какая ячейка стоит за каждой строкой места и какие ещё строки делят с ней
-    // ту же ячейку: сохранять всё равно надо сумму по ячейке.
-    const placeLocation = new Map<string, string>()
-    const placesOfLocation = new Map<string, string[]>()
+    // Что стоит за каждой строкой места: ячейка и тара, из которой снимаем.
+    // Сервер принимает эту пару и списывает остаток именно этой тары.
+    const placeSource = new Map<
+      string,
+      { locationId: string; containerKind: ObjKind | null; containerId: string | null }
+    >()
 
     for (const product of pickOptions) {
       for (const location of product.locations) {
@@ -229,7 +231,6 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
           barcode: location.location_code,
         })
         const cellHolder = cellRef(location.storage_location_id)
-        const group = `${product.product_id}|${location.storage_location_id}`
 
         // Остаток уже уменьшен предыдущими снятиями. Возвращаем picked к
         // доступному, чтобы поле могло показать и уменьшить сохранённый факт.
@@ -274,8 +275,12 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
             holder,
           })
           picked[pickKey(product.product_id, holder)] = takenHere
-          placeLocation.set(`${product.product_id}|${holder}`, location.storage_location_id)
-          placesOfLocation.set(group, [...(placesOfLocation.get(group) ?? []), holder])
+          const innermost = source.container_path.at(-1) ?? null
+          placeSource.set(holder, {
+            locationId: location.storage_location_id,
+            containerKind: innermost ? innermost.kind : null,
+            containerId: innermost ? innermost.id : null,
+          })
         }
       }
     }
@@ -291,8 +296,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
       objects: [...objectsById.values()],
       cells: [...cellsById.values()],
       picked,
-      placeLocation,
-      placesOfLocation,
+      placeSource,
     }
   }, [catalogById, detail, pickOptions])
 
@@ -328,26 +332,13 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
   const setPicked = useCallback(
     async (payload: { productId: string; place: { key: string }; quantity: number }) => {
       if (!requestId) return
-      const locationId =
-        screenData?.placeLocation.get(payload.place.key) ?? sourceLocationId(payload.place.key)
+      const source = screenData?.placeSource.get(payload.place.key)
+      const locationId = source?.locationId ?? sourceLocationId(payload.place.key)
       if (!locationId) {
         setError('Сервер не вернул ячейку, из которой снимается товар')
         await load()
         return
       }
-      // Ручка принимает только ячейку, а строк на ячейке может быть несколько —
-      // короб, грузоместо, россыпь. Поэтому отправляем сумму по всей ячейке,
-      // подставив в неё новое число текущей строки.
-      const group = `${payload.productId}|${locationId}`
-      const siblings = screenData?.placesOfLocation.get(group) ?? [payload.place.key]
-      const locationQuantity = siblings.reduce(
-        (sum, key) =>
-          sum +
-          (key === payload.place.key
-            ? payload.quantity
-            : (screenData?.picked[pickKey(payload.productId, key)] ?? 0)),
-        0,
-      )
       setBusy(true)
       setError(null)
       try {
@@ -357,7 +348,10 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
           body: JSON.stringify({
             product_id: payload.productId,
             storage_location_id: locationId,
-            quantity: locationQuantity,
+            quantity: payload.quantity,
+            // Тара, из которой снимаем. Пусто — снимаем россыпью с ячейки.
+            container_kind: source?.containerKind ?? null,
+            container_id: source?.containerId ?? null,
           }),
         })
         if (!res.ok) throw new Error(await readApiErrorMessage(res))
@@ -390,7 +384,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
         )
       })
       let locationId =
-        (sourceKey ? screenData?.placeLocation.get(sourceKey) : null) ??
+        (sourceKey ? screenData?.placeSource.get(sourceKey)?.locationId : null) ??
         sourceLocationId(sourceKey)
       if (matchedProduct && !locationId) {
         const option = pickOptions.find((one) => one.product_id === matchedProduct.id)
@@ -459,7 +453,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
       catalogById,
       pickOptions,
       requestId,
-      screenData?.placeLocation,
+      screenData?.placeSource,
       screenData?.products,
       token,
       updateOption,
