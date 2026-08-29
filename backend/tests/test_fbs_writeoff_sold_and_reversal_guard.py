@@ -14,6 +14,7 @@
 TC-NEW-FBS-WRITEOFF-SOLD-001 — sold-заказ в обход упаковки списывается один раз
 TC-NEW-FBS-REVERSAL-COMPLETE-001 — отмена по complete-заказу не возвращает остаток
 TC-NEW-FBS-REVERSAL-COMPLETE-002 — отмена по не-complete заказу остаток возвращает
+TC-NEW-FBS-REVERSAL-DELIVERED-001 — переданная поставка блокирует возврат после cancel
 """
 
 from __future__ import annotations
@@ -319,6 +320,7 @@ async def _seed_order_with_existing_write_off(
     async_client: AsyncClient,
     *,
     supplier_status: str,
+    supply_delivered: bool | None = None,
 ) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID]:
     """Заказ, уже списанный (как при упаковке поставки), готовый к отмене.
 
@@ -356,6 +358,23 @@ async def _seed_order_with_existing_write_off(
         )
         session.add(order)
         await session.flush()
+
+        if supply_delivered is not None:
+            supply = FbsSupply(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                warehouse_id=warehouse_id,
+                wb_supply_id=f"reversal-{suffix[-8:]}",
+                name="Поставка для проверки сторожа возврата",
+                delivery_type="warehouse_sc",
+                delivered_at=now if supply_delivered else None,
+            )
+            session.add(supply)
+            await session.flush()
+            # У отменённых заказов FK `supply_id` пустой: связь с переданной
+            # поставкой должна находиться именно по текстовому `wb_supply_id`.
+            order.wb_supply_id = supply.wb_supply_id
+            assert order.supply_id is None
 
         # Один экземпляр лежал в ячейке, упаковка списала его — то же самое,
         # что делает `apply_fbs_supply_write_off` при завершении поставки.
@@ -397,6 +416,70 @@ async def _seed_order_with_existing_write_off(
     return order_id, tenant_id, product_id, location_id
 
 
+# TC-NEW-FBS-REVERSAL-DELIVERED-001 — переданная поставка блокирует возврат после cancel
+@pytest.mark.asyncio
+async def test_reversal_blocked_for_delivered_supply_after_supplier_status_cancel(
+    async_client: AsyncClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Given: заказ списан, связанная по текстовому `wb_supply_id` поставка
+    передана (`delivered_at` заполнен), но WB уже сменил supplier status на
+    `cancel`; FK `order.supply_id` при этом пустой.
+    When: сторож обрабатывает отмену.
+    Then: функция возвращает False, складского движения нет, а журнал помечен
+    обработанным через `reversed_at`. Ограничение: связь через пустой FK не
+    используется, решение принимается по текстовому идентификатору поставки.
+    """
+    caplog.set_level("WARNING", logger="app.services.fbs_cancellation_service")
+    order_id, tenant_id, product_id, location_id = await _seed_order_with_existing_write_off(
+        async_client,
+        supplier_status="cancel",
+        supply_delivered=True,
+    )
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.supply_id is None
+        assert order.wb_supply_id is not None
+        reversed_flag = await reverse_fbs_shipment_if_needed(session, order)
+        await session.commit()
+
+    assert reversed_flag is False
+    assert "fbs_reversal_skipped_after_handover" in caplog.text
+    assert "delivered=True" in caplog.text
+    assert "status=cancel" in caplog.text
+
+    async with SessionLocal() as session:
+        ledger = await session.scalar(
+            select(FbsShipmentReversalLedger).where(
+                FbsShipmentReversalLedger.fbs_order_id == order_id
+            )
+        )
+        assert ledger is not None
+        assert ledger.reversed_at is not None
+        assert ledger.reversal_movement_id is None
+
+        movement_count = await session.scalar(
+            select(func.count(InventoryMovement.id)).where(
+                InventoryMovement.tenant_id == tenant_id,
+                InventoryMovement.product_id == product_id,
+                InventoryMovement.movement_type == MOVEMENT_TYPE_FBS_SHIPMENT,
+            )
+        )
+        assert movement_count == 1, "должно остаться только исходное списание"
+
+        balance = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+                InventoryBalance.storage_location_id == location_id,
+            )
+        )
+        assert balance is not None
+        assert int(balance.quantity) == 0, "товар после передачи не должен вернуться"
+
+
 # TC-NEW-FBS-REVERSAL-COMPLETE-001 — отмена по complete-заказу не возвращает остаток
 @pytest.mark.asyncio
 async def test_reversal_blocked_when_supplier_status_complete(
@@ -413,8 +496,8 @@ async def test_reversal_blocked_when_supplier_status_complete(
           `fbs_shipment` не меняются), запись журнала помечается обработанной
           (`reversed_at` проставлен), но без движения (`reversal_movement_id`
           пуст) — иначе она пыталась бы вернуться на каждом следующем обходе;
-          ограничение: в лог пишется предупреждение с номером заказа, продавцом
-          и товаром, чтобы такие случаи были видны.
+          ограничение: в лог пишется предупреждение с номером заказа, поставкой,
+          признаком передачи и статусом, чтобы такие случаи были видны.
     """
     caplog.set_level("WARNING", logger="app.services.fbs_cancellation_service")
     order_id, tenant_id, product_id, location_id = await _seed_order_with_existing_write_off(
@@ -429,8 +512,9 @@ async def test_reversal_blocked_when_supplier_status_complete(
         )
         await session.commit()
 
-    assert "already handed to WB" in caplog.text
-    assert str(order_id) in caplog.text
+    assert "fbs_reversal_skipped_after_handover" in caplog.text
+    assert "delivered=False" in caplog.text
+    assert "status=complete" in caplog.text
 
     async with SessionLocal() as session:
         order = await session.get(FbsOrder, order_id)
@@ -466,15 +550,15 @@ async def test_reversal_blocked_when_supplier_status_complete(
         assert int(balance.quantity) == 0, "остаток не должен вырасти — товара на складе нет"
 
 
-# TC-NEW-FBS-REVERSAL-COMPLETE-002 — отмена по не-complete заказу остаток возвращает
+# TC-NEW-FBS-REVERSAL-COMPLETE-002 — непереданная поставка возвращается на остаток
 @pytest.mark.asyncio
 @pytest.mark.parametrize("supplier_status", ["new", "confirm"])
 async def test_reversal_still_happens_when_supplier_status_not_complete(
     async_client: AsyncClient,
     supplier_status: str,
 ) -> None:
-    """Given: заказ уже списан, но `supplier_status` ещё не "complete"
-    (`new`/`confirm`) — посылка ещё у нас, WB её не забирал.
+    """Given: заказ уже списан, его поставка ещё не передана (`delivered_at`
+    пустой), а `supplier_status` равен `new`/`confirm`.
     When: WB присылает статус отмены.
     Then: остаток возвращается на склад (движение `fbs_shipment` +1, баланс
           растёт на 1), запись журнала помечена обработанной с заполненным
@@ -482,7 +566,9 @@ async def test_reversal_still_happens_when_supplier_status_not_complete(
           меняется.
     """
     order_id, tenant_id, product_id, location_id = await _seed_order_with_existing_write_off(
-        async_client, supplier_status=supplier_status
+        async_client,
+        supplier_status=supplier_status,
+        supply_delivered=False,
     )
 
     async with SessionLocal() as session:

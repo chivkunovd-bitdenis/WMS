@@ -19,6 +19,7 @@ from app.models.fbs_order import (
     FbsOrder,
 )
 from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
+from app.models.fbs_supply import FbsSupply
 from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT
 from app.services import inventory_service as inv_svc
 from app.services.wb_marketplace_orders_service import (
@@ -84,12 +85,10 @@ async def reverse_fbs_shipment_if_needed(
     `skip_if_supplier_complete` — параметр, а не жёстко зашитая проверка внутри,
     потому что у функции два вызывающих (ручная отмена оператором и обработка
     статусов от WB) и им может понадобиться разное поведение в будущем. Сейчас
-    оба вызова используют безопасное значение по умолчанию: если WB уже
-    подтвердил `supplier_status == "complete"`, посылка физически передана WB,
-    и возвращать штуку на склад нельзя, иначе остаток завышается на товар,
-    которого на складе нет. На бою так нашли 275 ложных возвратов — 257 из них
-    пришли позже чем через двое суток после упаковки, то есть посылка была уже
-    у WB.
+    оба вызова используют безопасное значение по умолчанию: если поставка уже
+    передана WB (`FbsSupply.delivered_at` заполнен) либо WB ещё сообщает
+    `supplier_status == "complete"`, возвращать штуку на склад нельзя, иначе
+    остаток завышается на товар, которого на складе нет.
     """
     stmt = (
         select(FbsShipmentReversalLedger)
@@ -107,19 +106,38 @@ async def reverse_fbs_shipment_if_needed(
     ):
         return False
 
+    # Факт передачи поставки — надёжный признак того, что товар физически
+    # покинул склад. `order.supplier_status` для этого недостаточен: WB после
+    # передачи меняет его на `cancel`/`confirm`, и проверка только на
+    # `complete` перестаёт срабатывать.
+    supply_delivered = False
+    if order.wb_supply_id:
+        supply = (
+            await session.execute(
+                select(FbsSupply).where(
+                    FbsSupply.tenant_id == order.tenant_id,
+                    FbsSupply.wb_supply_id == order.wb_supply_id,
+                )
+            )
+        ).scalar_one_or_none()
+        supply_delivered = supply is not None and supply.delivered_at is not None
+
     supplier_status = (order.supplier_status or "").strip().lower()
-    if skip_if_supplier_complete and supplier_status == SUPPLIER_STATUS_COMPLETE:
+    already_handed_over = (
+        supply_delivered or supplier_status == SUPPLIER_STATUS_COMPLETE
+    )
+    if skip_if_supplier_complete and already_handed_over:
         # Посылка уже у WB — трогать склад нельзя. Помечаем запись журнала
         # обработанной без движения по складу (reversal_movement_id остаётся
         # пустым), иначе она будет пытаться вернуться на каждом следующем
         # обходе синка статусов.
         logger.warning(
-            "fbs shipment reversal skipped: parcel already handed to WB "
-            "order_id=%s wb_order_id=%s seller_id=%s product_id=%s",
-            order.id,
+            "fbs_reversal_skipped_after_handover order=%s supply=%s "
+            "delivered=%s status=%s",
             order.wb_order_id,
-            order.seller_id,
-            ledger.product_id,
+            order.wb_supply_id,
+            supply_delivered,
+            supplier_status,
         )
         ledger.reversed_at = datetime.now(UTC)
         await session.flush()
