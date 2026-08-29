@@ -221,10 +221,12 @@ export function FfProductsCatalogScreen({
 }: Props) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  // Ширины колонок ужаты так, чтобы таблица целиком помещалась в контейнер —
-  // тогда липкой колонке действий физически некуда сдвигаться, и она
-  // не перекрывает соседей вовсе (тот же приём, что и в SellerInboundDraftScreen).
-  const tableMinWidth = 1328
+  // Сумма всех четырнадцати колонок из colgroup ниже. Держать в согласии с ним:
+  // при tableLayout: 'fixed' колонка без своей ширины забирает весь свободный
+  // простор на широком экране и схлопывается в ноль на узком. Контейнер каталога
+  // уже колонок (на 1440 — 1130px), таблица прокручивается вбок, поэтому колонка
+  // действий липкая справа и из виду не уходит.
+  const tableMinWidth = 1522
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [catalog, setCatalog] = useState<FfCatalogRow[]>([])
@@ -1181,10 +1183,11 @@ export function FfProductsCatalogScreen({
               <col style={{ width: 64 }} />
               <col style={{ width: 110 }} />
               <col style={{ width: 130 }} />
-              <col style={{ width: 70 }} />
+              <col style={{ width: 124 }} />{/* «В Wildberries»: на 70px заголовок резало до «В Wildberr», а значение до «не перед» */}
               <col style={{ width: 70 }} />
               <col style={{ width: 110 }} />
               <col style={{ width: 96 }} />
+              <col style={{ width: 140 }} />{/* действия: без своей ширины колонка схлопывалась в ноль на узком экране и забирала весь остаток на широком */}
             </colgroup>
             <TableHead>
               <TableRow>
@@ -1513,7 +1516,7 @@ export function FfProductsCatalogScreen({
               })}
               {filteredRows.length === 0 && !busy ? (
                 <TableRow>
-                  <TableCell colSpan={13}>
+                  <TableCell colSpan={14}>
                     {catalogScopeTotal === 0 ? (
                       canManageCatalog ? (
                         <Typography variant="body2" color="text.secondary" data-testid="ff-products-empty">
