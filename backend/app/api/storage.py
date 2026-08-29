@@ -35,8 +35,9 @@ from app.services.storage_statement_service import (
     create_storage_tariff,
     fix_storage_statement,
     get_fixed_storage_statement,
-    get_storage_draft_pricing,
+    get_storage_draft_pricing_batch,
     get_storage_ledger_rows,
+    get_storage_ledger_rows_batch,
     normalize_storage_tariff_amount,
 )
 
@@ -392,29 +393,52 @@ async def list_statements(
                 (statement, priceable_rows)
             )
 
+    rows_by_statement = {
+        statement.id: rows_by_scope.get(
+            (statement.seller_id, statement.warehouse_id),
+            [],
+        )
+        for statement in statements
+    }
+    fixed_statements = [
+        statement for statement in statements if statement.status == "fixed"
+    ]
+    ledger_by_statement = await get_storage_ledger_rows_batch(
+        session,
+        user.tenant_id,
+        fixed_statements,
+        rows_by_statement,
+    )
+    has_priceable_drafts = any(
+        statement.status == "draft"
+        and any(row.status == "calculated" for row in rows_by_statement[statement.id])
+        for statement in statements
+    )
+    pricing_by_statement = (
+        await get_storage_draft_pricing_batch(
+            session,
+            [
+                scope
+                for seller_scopes in rounding_scopes_by_seller.values()
+                for scope in seller_scopes
+            ],
+        )
+        if has_priceable_drafts
+        else {}
+    )
+
     statement_outputs: list[StorageStatementOut] = []
     for statement in statements:
         if warehouse_id is not None and statement.warehouse_id != warehouse_id:
             continue
-        rows = rows_by_scope.get((statement.seller_id, statement.warehouse_id), [])
+        rows = rows_by_statement[statement.id]
         output = _statement_out(statement, rows)
         if statement.status == "fixed":
-            ledger = await get_storage_ledger_rows(session, user.tenant_id, statement.id)
+            ledger = ledger_by_statement.get(statement.id, [])
             _apply_ledger_snapshot(output, rows, ledger)
         elif priceable_rows := [row for row in rows if row.status == "calculated"]:
-            try:
-                pricing = await get_storage_draft_pricing(
-                    session,
-                    statement,
-                    priceable_rows,
-                    rounding_scopes=rounding_scopes_by_seller.get(
-                        statement.seller_id, []
-                    ),
-                )
-            except StorageStatementError as exc:
-                if str(exc) != "tariff_not_found":
-                    raise
-            else:
+            pricing = pricing_by_statement.get(statement.id)
+            if pricing is not None:
                 _apply_draft_pricing(output, rows, pricing)
         statement_outputs.append(output)
 

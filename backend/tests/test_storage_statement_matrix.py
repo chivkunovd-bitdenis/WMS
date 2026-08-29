@@ -12,10 +12,14 @@ from typing import cast
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 
-from app.db.session import SessionLocal
-from app.models.billing import BillingTariffVersion, BillingTariffVersionV2
+from app.db.session import SessionLocal, engine
+from app.models.billing import (
+    BillingLedgerEntry,
+    BillingTariffVersion,
+    BillingTariffVersionV2,
+)
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
@@ -772,6 +776,48 @@ async def test_fractional_warehouse_statements_sum_to_seller_report_and_invoice(
 
 
 @pytest.mark.asyncio
+async def test_fix_waits_for_dimensions_in_the_whole_seller_rounding_scope(
+    async_client: AsyncClient,
+) -> None:
+    """P2: проводку нельзя фиксировать до расчёта всех складов продавца."""
+    headers, _seller_id, _warehouse_ids, statement_ids = (
+        await _create_cross_warehouse_fractional_storage_case(async_client)
+    )
+    async with SessionLocal() as session:
+        second_statement = await session.get(StorageStatement, statement_ids[1])
+        assert second_statement is not None
+        second_measurement = await session.scalar(
+            select(StorageMeasurement).where(
+                StorageMeasurement.seller_id == second_statement.seller_id,
+                StorageMeasurement.warehouse_id == second_statement.warehouse_id,
+                StorageMeasurement.period_start == second_statement.period_start,
+                StorageMeasurement.period_end == second_statement.period_end,
+            )
+        )
+        assert second_measurement is not None
+        second_measurement.status = "missing_dimensions"
+        await session.commit()
+
+    blocked = await async_client.post(
+        f"/operations/storage/statements/{statement_ids[0]}/fix",
+        headers=headers,
+    )
+
+    assert blocked.status_code == 409, blocked.text
+    assert blocked.json()["detail"] == "missing_dimensions"
+    async with SessionLocal() as session:
+        first_statement = await session.get(StorageStatement, statement_ids[0])
+        assert first_statement is not None
+        assert first_statement.status == "draft"
+        ledger_count = await session.scalar(
+            select(func.count(BillingLedgerEntry.id)).where(
+                BillingLedgerEntry.source_type == "storage_measurement",
+            )
+        )
+        assert ledger_count == 0
+
+
+@pytest.mark.asyncio
 async def test_warehouse_filter_preserves_cross_warehouse_fractional_allocation(
     async_client: AsyncClient,
 ) -> None:
@@ -853,6 +899,89 @@ async def test_warehouse_filter_preserves_cross_warehouse_fractional_allocation(
         == invoice.json()["total_amount_kopecks"]
         == 1
     )
+
+
+@pytest.mark.asyncio
+async def test_storage_statement_list_loads_pricing_and_ledgers_in_batches(
+    async_client: AsyncClient,
+) -> None:
+    """P2: число запросов не растёт по строке ведомости."""
+    headers, _seller_id, _warehouse_ids, statement_ids = (
+        await _create_cross_warehouse_fractional_storage_case(async_client)
+    )
+
+    def select_statements_for(
+        response_statements: list[dict[str, object]],
+    ) -> list[dict[str, object]]:
+        expected_ids = {str(statement_id) for statement_id in statement_ids}
+        return [row for row in response_statements if row["id"] in expected_ids]
+
+    draft_sql: list[str] = []
+
+    def capture_draft_sql(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        normalized = " ".join(statement.lower().split())
+        if normalized.startswith("select "):
+            draft_sql.append(normalized)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", capture_draft_sql)
+    try:
+        draft_response = await async_client.get(
+            "/operations/storage/statements",
+            headers=headers,
+            params={"year": 2026, "month": 7},
+        )
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", capture_draft_sql)
+
+    assert draft_response.status_code == 200, draft_response.text
+    assert len(select_statements_for(draft_response.json()["statements"])) == 2
+    assert sum(" from products " in sql for sql in draft_sql) == 1
+    assert sum(" from inventory_movements " in sql for sql in draft_sql) == 1
+    assert sum(" from product_dimension_events " in sql for sql in draft_sql) == 1
+
+    for statement_id in statement_ids:
+        fixed = await async_client.post(
+            f"/operations/storage/statements/{statement_id}/fix",
+            headers=headers,
+        )
+        assert fixed.status_code == 200, fixed.text
+
+    fixed_sql: list[str] = []
+
+    def capture_fixed_sql(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        normalized = " ".join(statement.lower().split())
+        if normalized.startswith("select "):
+            fixed_sql.append(normalized)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", capture_fixed_sql)
+    try:
+        fixed_response = await async_client.get(
+            "/operations/storage/statements",
+            headers=headers,
+            params={"year": 2026, "month": 7},
+        )
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", capture_fixed_sql)
+
+    assert fixed_response.status_code == 200, fixed_response.text
+    fixed_statements = select_statements_for(fixed_response.json()["statements"])
+    assert len(fixed_statements) == 2
+    assert {row["status"] for row in fixed_statements} == {"fixed"}
+    assert sum(" from billing_ledger_entries " in sql for sql in fixed_sql) == 1
 
 
 @pytest.mark.asyncio

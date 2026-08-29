@@ -26,6 +26,7 @@ from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
+from app.models.warehouse_box import WarehouseBox
 from app.services import (
     inbound_cargo_place_service,
     inbound_intake_box_service,
@@ -581,6 +582,41 @@ async def test_combine_and_disband_pallet_moves_contents_to_sorting_without_loss
         assert sum(row.quantity for row in balances) == 24
         assert sum(row.quantity_unpacked for row in balances) == 20
         assert sum(row.quantity_packed for row in balances) == 4
+
+
+@pytest.mark.asyncio
+async def test_warehouse_cargo_place_is_not_accepted_as_warehouse_box(
+    async_client: AsyncClient,
+) -> None:
+    del async_client
+    async with SessionLocal() as session:
+        tenant, warehouse, location, _product = await _seed_tenant(
+            session, "warehouse-cargo-kind"
+        )
+        cargo_place = WarehouseBox(
+            tenant_id=tenant.id,
+            warehouse_id=warehouse.id,
+            internal_barcode=f"WHB-CARGO-{uuid.uuid4().hex[:8]}",
+            container_kind="cargo_place",
+        )
+        session.add(cargo_place)
+        await session.commit()
+        pallet = await pallet_service.create_pallet(
+            session,
+            tenant.id,
+            warehouse_id=warehouse.id,
+            storage_location_id=location.id,
+        )
+
+        # Негатив: warehouse_box_ids — старый коробочный вход. Грузоместо в
+        # палету кладётся отдельным типизированным путём, а не маскируется коробом.
+        with pytest.raises(PalletServiceError, match="box_not_found"):
+            await pallet_service.combine_into_pallet(
+                session,
+                tenant.id,
+                pallet.id,
+                warehouse_box_ids=[cargo_place.id],
+            )
 
 
 async def _register_admin(async_client: AsyncClient) -> tuple[dict[str, str], uuid.UUID]:

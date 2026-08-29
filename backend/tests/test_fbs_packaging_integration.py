@@ -311,9 +311,16 @@ async def test_fbs_bind_packaging_box_to_trbx(
             warehouse_id=uuid.UUID(warehouse_id),
             internal_barcode=f"FBS-TRBX-{suffix[-8:]}",
         )
-        session.add(box)
+        cargo_place = WarehouseBox(
+            tenant_id=tenant_id,
+            warehouse_id=uuid.UUID(warehouse_id),
+            internal_barcode=f"FBS-CARGO-{suffix[-8:]}",
+            container_kind="cargo_place",
+        )
+        session.add_all([box, cargo_place])
         await session.commit()
         box_id = str(box.id)
+        cargo_place_id = str(cargo_place.id)
 
     bind = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/trbx/bind-box",
@@ -330,6 +337,14 @@ async def test_fbs_bind_packaging_box_to_trbx(
     )
     assert duplicate.status_code == 409, duplicate.text
     assert duplicate.json()["detail"]["code"] == "packaging_box_already_bound"
+
+    cargo_bind = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/trbx/bind-box",
+        headers=headers,
+        json={"trbx_id": other_trbx_id, "packaging_box_id": cargo_place_id},
+    )
+    assert cargo_bind.status_code == 404, cargo_bind.text
+    assert cargo_bind.json()["detail"]["code"] == "packaging_box_not_found"
 
     async with SessionLocal() as session:
         trbx = await session.get(FbsTrbx, uuid.UUID(trbx_id))

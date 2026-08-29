@@ -54,6 +54,8 @@ async def get_by_barcode(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     barcode: str,
+    *,
+    container_kind: Literal["box", "cargo_place"] = "box",
 ) -> WarehouseBox | None:
     raw = barcode.strip()
     if not raw:
@@ -61,6 +63,7 @@ async def get_by_barcode(
     stmt = select(WarehouseBox).where(
         WarehouseBox.tenant_id == tenant_id,
         WarehouseBox.internal_barcode == raw,
+        WarehouseBox.container_kind == container_kind,
     )
     res = await session.execute(stmt)
     return res.scalar_one_or_none()
@@ -71,11 +74,11 @@ async def resolve_barcode(
     tenant_id: uuid.UUID,
     barcode: str,
 ) -> tuple[WarehouseBox | None, InboundIntakeBox | None]:
-    """Warehouse box first, then inbound intake box by same barcode string."""
+    """Сначала обычный складской короб, затем короб конкретной приёмки."""
     raw = barcode.strip()
     if not raw:
         return None, None
-    wh = await get_by_barcode(session, tenant_id, raw)
+    wh = await get_by_barcode(session, tenant_id, raw, container_kind="box")
     if wh is not None:
         return wh, None
     stmt = select(InboundIntakeBox).where(
