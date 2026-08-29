@@ -334,40 +334,22 @@ test('ff manages stock directions and the product FBS limit from the catalog', a
 
   // Product-level FBS publication is separate from WB warehouse binding and sync.
   // Keep this flow here so a catalog regression cannot silently stop publishing stock.
-  await row.getByTestId(`ff-catalog-fbs-limit-${productId}`).click()
-  const fbsLimitDialog = page.getByTestId('ff-catalog-fbs-limit-dialog')
-  const fbsLimitInput = page.getByTestId('ff-catalog-fbs-limit-input')
-  await expect(fbsLimitDialog).toBeVisible()
-  await expect(fbsLimitInput).toHaveValue('')
-  await fbsLimitInput.fill('3')
-  const [setLimitRequest] = await Promise.all([
+  // TC-NEW-001 — Given каталог ФФ и товар с продавцом, When нажать значок настройки
+  // остатка FBS в строке, Then открывается модалка доли свободного остатка, а старой
+  // модалки абсолютного лимита в каталоге больше нет (negative: значок удалён).
+  await expect(row.getByTestId(`ff-catalog-fbs-limit-${productId}`)).toHaveCount(0)
+  await row.getByTestId(`ff-catalog-fbs-row-${productId}`).click()
+  const fbsRuleDialog = page.getByRole('dialog')
+  await expect(fbsRuleDialog).toBeVisible()
+  await expect(fbsRuleDialog).toContainText('Остаток для FBS')
+  await expect(page.getByTestId('fbs-stock-result')).toBeVisible()
+  const [saveRuleRequest] = await Promise.all([
     page.waitForRequest(
       (request) =>
-        request.method() === 'PATCH' &&
-        request.url().includes(`/api/products/${productId}/fbs-stock-sync`),
+        request.method() === 'PUT' && request.url().includes('/api/products/fbs-rule'),
     ),
-    page.getByTestId('ff-catalog-fbs-limit-save').click(),
+    page.getByTestId('fbs-stock-save').click(),
   ])
-  expect(setLimitRequest.postDataJSON()).toEqual({ fbs_stock_limit: 3 })
-  await expect(fbsLimitDialog).toBeHidden()
-  await expect(page.getByText(`Остаток FBS для «${sku}» обновлён: 3 шт.`)).toBeVisible()
-
-  await row.getByTestId(`ff-catalog-fbs-limit-${productId}`).click()
-  await expect(fbsLimitInput).toHaveValue('3')
-  await fbsLimitInput.fill('')
-  const [clearLimitRequest] = await Promise.all([
-    page.waitForRequest(
-      (request) =>
-        request.method() === 'PATCH' &&
-        request.url().includes(`/api/products/${productId}/fbs-stock-sync`),
-    ),
-    page.getByTestId('ff-catalog-fbs-limit-save').click(),
-  ])
-  expect(clearLimitRequest.postDataJSON()).toEqual({ fbs_stock_limit: null })
-  await expect(fbsLimitDialog).toBeHidden()
-  await expect(page.getByText(`Остаток FBS для «${sku}» сброшен.`)).toBeVisible()
-
-  await row.getByTestId(`ff-catalog-fbs-limit-${productId}`).click()
-  await expect(fbsLimitInput).toHaveValue('')
-  await fbsLimitDialog.getByRole('button', { name: 'Отмена' }).click()
+  expect(saveRuleRequest.postDataJSON().product_ids).toContain(productId)
+  await expect(fbsRuleDialog).toBeHidden()
 })

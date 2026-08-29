@@ -37,7 +37,6 @@ import {
 } from '@mui/material'
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined'
 import QrCode2OutlinedIcon from '@mui/icons-material/QrCode2Outlined'
-import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 import TuneOutlined from '@mui/icons-material/TuneOutlined'
 import { apiUrl, applyFbsStockLimitFromBalance } from '../../api'
 import { FbsStockDialog } from '../ff/products-fbs/FbsStockDialog'
@@ -226,7 +225,7 @@ export function FfProductsCatalogScreen({
   // простор на широком экране и схлопывается в ноль на узком. Контейнер каталога
   // уже колонок (на 1440 — 1130px), таблица прокручивается вбок, поэтому колонка
   // действий липкая справа и из виду не уходит.
-  const tableMinWidth = 1522
+  const tableMinWidth = 1488
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [catalog, setCatalog] = useState<FfCatalogRow[]>([])
@@ -239,10 +238,6 @@ export function FfProductsCatalogScreen({
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [importNotice, setImportNotice] = useState<string | null>(null)
-  const [fbsLimitProduct, setFbsLimitProduct] = useState<FfCatalogRow | null>(null)
-  const [fbsLimitDraft, setFbsLimitDraft] = useState('')
-  const [fbsLimitSaving, setFbsLimitSaving] = useState(false)
-  const [fbsLimitError, setFbsLimitError] = useState<string | null>(null)
   const fbsLimitAutoOpenedRef = useRef<string | null>(null)
   const [editProduct, setEditProduct] = useState<FfCatalogRow | null>(null)
   const [editText, setEditText] = useState('')
@@ -394,68 +389,6 @@ export function FfProductsCatalogScreen({
     await load()
   }, [load])
 
-  const openFbsLimitDialog = useCallback((product: FfCatalogRow) => {
-    setFbsLimitProduct(product)
-    setFbsLimitDraft(product.fbs_stock_limit != null ? String(product.fbs_stock_limit) : '')
-    setFbsLimitError(null)
-  }, [])
-
-  const closeFbsLimitDialog = useCallback(() => {
-    if (fbsLimitSaving) return
-    setFbsLimitProduct(null)
-    setFbsLimitError(null)
-  }, [fbsLimitSaving])
-
-  const saveFbsLimit = useCallback(async () => {
-    if (!fbsLimitProduct) return
-    const trimmed = fbsLimitDraft.trim()
-    let limitValue: number | null = null
-    if (trimmed) {
-      const parsed = Number(trimmed)
-      if (!Number.isInteger(parsed) || parsed < 0) {
-        setFbsLimitError('Введите целое число не меньше 0 или оставьте поле пустым.')
-        return
-      }
-      limitValue = parsed
-    }
-    setFbsLimitSaving(true)
-    setFbsLimitError(null)
-    try {
-      const res = await fetch(apiUrl(`/products/${fbsLimitProduct.id}/fbs-stock-sync`), {
-        method: 'PATCH',
-        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fbs_stock_limit: limitValue }),
-      })
-      if (!res.ok) {
-        throw new Error(humanFfCatalogError(await readApiErrorMessage(res)))
-      }
-      setImportNotice(
-        limitValue != null
-          ? `Остаток FBS для «${fbsLimitProduct.sku_code}» обновлён: ${limitValue} шт.`
-          : `Остаток FBS для «${fbsLimitProduct.sku_code}» сброшен.`,
-      )
-      setFbsLimitProduct(null)
-      await load()
-    } catch (e) {
-      setFbsLimitError(e instanceof Error ? e.message : 'Не удалось сохранить остаток FBS.')
-    } finally {
-      setFbsLimitSaving(false)
-    }
-  }, [authHeaders, fbsLimitDraft, fbsLimitProduct, load, token])
-
-  useEffect(() => {
-    const targetId = searchParams.get('fbs_limit')
-    if (!targetId || catalog.length === 0) return
-    if (fbsLimitAutoOpenedRef.current === targetId) return
-    const match = catalog.find((p) => p.id === targetId)
-    if (match) {
-      openFbsLimitDialog(match)
-    }
-    fbsLimitAutoOpenedRef.current = targetId
-    const next = new URLSearchParams(searchParams)
-    next.delete('fbs_limit')
-    setSearchParams(next, { replace: true })
-  }, [catalog, openFbsLimitDialog, searchParams, setSearchParams])
 
   useEffect(() => {
     if (sellers.length > 0) {
@@ -693,6 +626,23 @@ export function FfProductsCatalogScreen({
       setFbsDialogError(e instanceof Error ? e.message : 'Не удалось открыть настройку остатка')
     }
   }, [rows, selectedIds, token])
+
+  // Ссылка ?fbs_limit=<id> ведёт сюда из раскладки остатка по складам WB.
+  // Старая модалка абсолютного лимита убрана, ссылка открывает ту же модалку
+  // с долей, что и значок в строке. Эффект стоит после openFbsStockDialog:
+  // выше он попал бы в мёртвую зону объявления.
+  useEffect(() => {
+    const targetId = searchParams.get('fbs_limit')
+    if (!targetId || catalog.length === 0) return
+    if (fbsLimitAutoOpenedRef.current === targetId) return
+    if (catalog.some((p) => p.id === targetId)) {
+      void openFbsStockDialog([targetId])
+    }
+    fbsLimitAutoOpenedRef.current = targetId
+    const next = new URLSearchParams(searchParams)
+    next.delete('fbs_limit')
+    setSearchParams(next, { replace: true })
+  }, [catalog, openFbsStockDialog, searchParams, setSearchParams])
 
   const openFbsBulkConfirm = useCallback(() => {
     if (selectedIds.size === 0) return
@@ -1187,7 +1137,7 @@ export function FfProductsCatalogScreen({
               <col style={{ width: 70 }} />
               <col style={{ width: 110 }} />
               <col style={{ width: 96 }} />
-              <col style={{ width: 140 }} />{/* действия: без своей ширины колонка схлопывалась в ноль на узком экране и забирала весь остаток на широком */}
+              <col style={{ width: 106 }} />{/* действия: без своей ширины колонка схлопывалась в ноль на узком экране и забирала весь остаток на широком */}
             </colgroup>
             <TableHead>
               <TableRow>
@@ -1487,28 +1437,6 @@ export function FfProductsCatalogScreen({
                           requiresHonestSign={p.requires_honest_sign}
                           markingAvailable={markingCount}
                         />
-                        <Tooltip
-                          title={
-                            p.fbs_stock_limit != null
-                              ? `Остаток FBS: ${p.fbs_stock_limit} шт`
-                              : 'Остаток FBS не задан'
-                          }
-                        >
-                          <span>
-                            <IconButton
-                              size="small"
-                              aria-label={`Остаток FBS ${p.sku_code}`}
-                              data-testid={`ff-catalog-fbs-limit-${p.id}`}
-                              disabled={!canManageCatalog}
-                              onClick={() => openFbsLimitDialog(p)}
-                            >
-                              <Inventory2OutlinedIcon
-                                fontSize="small"
-                                color={p.fbs_stock_limit != null ? 'primary' : 'disabled'}
-                              />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
                       </Stack>
                     </TableCell>
                   </TableRow>
@@ -1590,56 +1518,6 @@ export function FfProductsCatalogScreen({
           </>
         ) : null}
 
-        <Dialog
-          open={fbsLimitProduct != null}
-          onClose={closeFbsLimitDialog}
-          maxWidth="xs"
-          fullWidth
-          data-testid="ff-catalog-fbs-limit-dialog"
-        >
-          <DialogTitle>Остаток FBS</DialogTitle>
-          <DialogContent>
-            {fbsLimitProduct ? (
-              <Stack spacing={2} sx={{ pt: 1 }}>
-                <Typography variant="body2" color="text.secondary">
-                  {fbsLimitProduct.sku_code} · {fbsLimitProduct.name}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Максимальное количество этого товара, доступное для продажи по FBS. От
-                  этого числа делится остаток по складам WB на экране «Остатки WB».
-                </Typography>
-                {fbsLimitError ? (
-                  <Alert severity="error" data-testid="ff-catalog-fbs-limit-error">
-                    {fbsLimitError}
-                  </Alert>
-                ) : null}
-                <TextField
-                  label="Остаток FBS (шт)"
-                  type="number"
-                  value={fbsLimitDraft}
-                  onChange={(e) => setFbsLimitDraft(e.target.value)}
-                  placeholder="Не задан"
-                  slotProps={{ htmlInput: { min: 0, 'data-testid': 'ff-catalog-fbs-limit-input' } }}
-                  fullWidth
-                  disabled={fbsLimitSaving}
-                />
-              </Stack>
-            ) : null}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={closeFbsLimitDialog} disabled={fbsLimitSaving}>
-              Отмена
-            </Button>
-            <Button
-              variant="contained"
-              onClick={() => void saveFbsLimit()}
-              disabled={fbsLimitSaving}
-              data-testid="ff-catalog-fbs-limit-save"
-            >
-              {fbsLimitSaving ? 'Сохраняем…' : 'Сохранить'}
-            </Button>
-          </DialogActions>
-        </Dialog>
 
         <Dialog
           open={fbsBulkConfirmOpen}
@@ -2019,12 +1897,17 @@ export function FfProductsCatalogScreen({
                   const res = await fetch(apiUrl('/products/fbs-rule'), {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+                    // PUT /products/fbs-rule ждёт правило вложенным в rule
+                    // (ProductsFbsRuleBulkBody, extra="forbid"). Плоское тело
+                    // отбивалось как «rule: Field required».
                     body: JSON.stringify({
                       product_ids: ids,
-                      publish: rule.publish,
-                      same_everywhere: rule.sameEverywhere,
-                      percent: rule.percent,
-                      by_warehouse: rule.byWarehouse,
+                      rule: {
+                        publish: rule.publish,
+                        same_everywhere: rule.sameEverywhere,
+                        percent: rule.percent,
+                        by_warehouse: rule.byWarehouse,
+                      },
                     }),
                   })
                   if (!res.ok) {
