@@ -72,14 +72,12 @@ export function PickPlacesTree({
   onQtyChange,
   objects = OBJECTS,
   cells = PICK_CELLS,
-  busy = false,
 }: {
   row: PickRow
   highlightedKey: string | null
   onQtyChange: (place: PickPlace, next: number | null) => void
   objects?: WarehouseObject[]
   cells?: Cell[]
-  busy?: boolean
 }) {
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(() => new Set())
   if (row.places.length === 0) {
@@ -218,7 +216,11 @@ export function PickPlacesTree({
             onChange={(next) => onQtyChange(node.place, next)}
             min={0}
             max={ceiling}
-            disabled={busy}
+            // Поле не гасим под запрос (§Ж-01, §Е-06): выключенный инпут
+            // теряет фокус в браузере сам по себе, и вторая цифра залпового
+            // ввода уходит в никуда. Сохранение теперь ждёт паузы в наборе
+            // (см. applyDelta в UnloadPickScreen), поэтому блокировать поле
+            // ради запроса, который уже не бьёт по каждой цифре, незачем.
             testId={`pick-place-qty-${row.product.id}-${node.place.key}`}
           />
         )

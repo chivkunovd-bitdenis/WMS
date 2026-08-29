@@ -1,5 +1,5 @@
 import { Box, LinearProgress, Paper, Stack, Typography } from '@mui/material'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import CloseOutlined from '@mui/icons-material/CloseOutlined'
 import UndoOutlined from '@mui/icons-material/UndoOutlined'
 import {
@@ -138,6 +138,20 @@ export function UnloadPickScreen({
   const [scanError, setScanError] = useState<string | null>(null)
   const [scanNotice, setScanNotice] = useState<string | null>(null)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  // Ручной ввод в поле места копится здесь, ключ — товар+место (§Ж-01, §Е-06).
+  // Списывается всё равно сразу и без «Провести»: значение видно в поле и в
+  // счётчике мгновенно, а на сервер уходит после паузы в наборе, а не на
+  // каждую цифру — иначе сканер, стреляющий «12» одним залпом, довозил бы
+  // только первую цифру.
+  const pendingSetPicked = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  useEffect(() => {
+    const timers = pendingSetPicked.current
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer))
+      timers.clear()
+    }
+  }, [])
 
   const rows = rowsOf(plan, stock, objects, cells, picked, products)
   const planQty = rows.reduce((sum, row) => sum + row.plan, 0)
@@ -185,7 +199,22 @@ export function UnloadPickScreen({
     const key = pickKey(row.product.id, place.key)
     const nextQuantity = Math.max(0, place.picked + delta)
     setPicked((current) => ({ ...current, [key]: nextQuantity }))
-    void onSetPicked?.({ productId: row.product.id, place, quantity: nextQuantity })
+    if (fromScan) {
+      // Скан — одно движение, один запрос: отправляем сразу же, как и раньше.
+      void onSetPicked?.({ productId: row.product.id, place, quantity: nextQuantity })
+    } else {
+      // Рука в поле места печатает цифру за цифрой: запрос ждёт паузы в
+      // наборе, чтобы поле не дёргалось disabled↔enabled на каждый символ —
+      // именно это снятие фокуса и съедало вторую цифру.
+      const timers = pendingSetPicked.current
+      const existing = timers.get(key)
+      if (existing) clearTimeout(existing)
+      const timer = setTimeout(() => {
+        timers.delete(key)
+        void onSetPicked?.({ productId: row.product.id, place, quantity: nextQuantity })
+      }, 400)
+      timers.set(key, timer)
+    }
     setScanError(null)
     if (delta > 0) {
       // Только снятие ложится в историю отмены: ручное уменьшение — это уже
@@ -530,7 +559,6 @@ export function UnloadPickScreen({
               onQtyChange={(place, next) => handlePlaceQtyChange(row, place, next)}
               objects={objects}
               cells={cells}
-              busy={busy}
             />
           ),
         }}
