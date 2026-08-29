@@ -71,7 +71,6 @@ import { printInboundReceivingSheet } from '../../utils/printInboundReceivingShe
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { inboundOperationTypeReceptionLabel } from '../../utils/inboundOperationType'
 import { FfInboundBoxAddDialog } from './FfInboundBoxAddDialog'
-import { FfInboundSortingPanel } from './FfInboundSortingPanel'
 import { FfSortingObjectsPage } from './sorting-objects/FfSortingObjectsPage'
 import { buildInboundScanProductMap, findInboundScanProductId } from './inboundScanLookup'
 import { BoxImportDialog } from '../../components/BoxImportDialog'
@@ -441,7 +440,7 @@ export function FfInboundRequestView({
   const [catalog, setCatalog] = useState<WbCatalogRow[] | null>(null)
   const [locations, setLocations] = useState<LocationRow[]>([])
   const [busy, setBusy] = useState(false)
-  const [sortingToolbarElement, setSortingToolbarElement] = useState<HTMLDivElement | null>(null)
+  const [_sortingToolbarElement, setSortingToolbarElement] = useState<HTMLDivElement | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [actualDraftByLineId, setActualDraftByLineId] = useState<Record<string, string>>({})
   const [actualDraftErrorByLineId, setActualDraftErrorByLineId] = useState<Record<string, string>>({})
@@ -548,16 +547,6 @@ export function FfInboundRequestView({
     return ''
   }, [detail?.boxes])
 
-  const sortingRemainingTotal = useMemo(() => {
-    if (!detail) return 0
-    if (detail.sorting_remaining_qty != null) {
-      return detail.sorting_remaining_qty
-    }
-    return detail.lines.reduce((sum, ln) => {
-      const accepted = ln.actual_qty ?? 0
-      return sum + Math.max(0, accepted - ln.posted_qty)
-    }, 0)
-  }, [detail])
 
   const processTitle = inboundWorkspaceTitle(workspace)
   const displayDocumentNumber = useMemo(
@@ -2320,35 +2309,6 @@ export function FfInboundRequestView({
                   />
                 </Box>
               ) : null}
-              {addressStorageEnabled ? <FfInboundSortingPanel
-                token={token}
-                requestId={requestId}
-                warehouseId={detail.warehouse_id}
-                completed={isDoneStatus(detail.status)}
-                lines={(detail.lines ?? []).map((ln) => ({
-                  product_id: ln.product_id,
-                  sku_code: ln.sku_code,
-                  product_name: ln.product_name,
-                  actual_qty: ln.actual_qty,
-                  posted_qty: ln.posted_qty ?? 0,
-                }))}
-                boxes={(detail.boxes ?? []).map((b) => ({
-                  ...b,
-                  remaining_qty: b.remaining_qty ?? 0,
-                  lines: (b.lines ?? []).map((ln) => ({
-                    ...ln,
-                    posted_qty: ln.posted_qty ?? 0,
-                    remaining_qty:
-                      ln.remaining_qty ?? Math.max(0, ln.quantity - (ln.posted_qty ?? 0)),
-                  })),
-                }))}
-                sortingRemainingQty={sortingRemainingTotal}
-                onReload={async () => {
-                  await loadDetail()
-                }}
-                onDirtyChange={onDirtyChange}
-                toolbarElement={sortingToolbarElement}
-              /> : null}
             </>
           ) : null}
 
