@@ -49,6 +49,12 @@ NON_CANCELLABLE_STATUSES = frozenset(
     }
 )
 
+# WB-статус поставщика "собрано и передано". Как только он появился на заказе,
+# посылка физически уехала на приёмку WB — вернуться она может только через
+# отдельный документ возврата (в системе пока нет), а не автоматическим
+# сторнированием списания.
+SUPPLIER_STATUS_COMPLETE = "complete"
+
 
 class FbsCancellationError(Exception):
     def __init__(
@@ -69,8 +75,21 @@ class FbsCancellationError(Exception):
 async def reverse_fbs_shipment_if_needed(
     session: AsyncSession,
     order: FbsOrder,
+    *,
+    skip_if_supplier_complete: bool = True,
 ) -> bool:
-    """Reverse one packed physical unit exactly once; caller owns the order lock."""
+    """Reverse one packed physical unit exactly once; caller owns the order lock.
+
+    `skip_if_supplier_complete` — параметр, а не жёстко зашитая проверка внутри,
+    потому что у функции два вызывающих (ручная отмена оператором и обработка
+    статусов от WB) и им может понадобиться разное поведение в будущем. Сейчас
+    оба вызова используют безопасное значение по умолчанию: если WB уже
+    подтвердил `supplier_status == "complete"`, посылка физически передана WB,
+    и возвращать штуку на склад нельзя, иначе остаток завышается на товар,
+    которого на складе нет. На бою так нашли 275 ложных возвратов — 257 из них
+    пришли позже чем через двое суток после упаковки, то есть посылка была уже
+    у WB.
+    """
     stmt = (
         select(FbsShipmentReversalLedger)
         .where(
@@ -82,6 +101,25 @@ async def reverse_fbs_shipment_if_needed(
     ledger = (await session.execute(stmt)).scalar_one_or_none()
     if ledger is None or ledger.reversed_at is not None:
         return False
+
+    supplier_status = (order.supplier_status or "").strip().lower()
+    if skip_if_supplier_complete and supplier_status == SUPPLIER_STATUS_COMPLETE:
+        # Посылка уже у WB — трогать склад нельзя. Помечаем запись журнала
+        # обработанной без движения по складу (reversal_movement_id остаётся
+        # пустым), иначе она будет пытаться вернуться на каждом следующем
+        # обходе синка статусов.
+        logger.warning(
+            "fbs shipment reversal skipped: parcel already handed to WB "
+            "order_id=%s wb_order_id=%s seller_id=%s product_id=%s",
+            order.id,
+            order.wb_order_id,
+            order.seller_id,
+            ledger.product_id,
+        )
+        ledger.reversed_at = datetime.now(UTC)
+        await session.flush()
+        return False
+
     reversal_movement = await inv_svc.record_movement_and_adjust_balance(
         session,
         tenant_id=order.tenant_id,
