@@ -41,6 +41,7 @@ import {
 import type {
   Cell,
   GoodsLine,
+  ObjKind,
   PickProduct,
   PlanLine,
   WarehouseObject,
@@ -66,6 +67,17 @@ export type UnloadPickScanResult =
       kind: 'location'
       storageLocationId: string
       locationCode: string
+    }
+  | {
+      // Скан тары (§Ж-03): выбирает конкретный короб/палету/грузоместо так же,
+      // как скан ячейки выбирает ячейку. Место за оператора не угадывается —
+      // следующий скан товара снимает именно из этой тары.
+      kind: 'container'
+      storageLocationId: string
+      locationCode: string | null
+      containerKind: ObjKind
+      containerId: string
+      containerCode: string | null
     }
   | {
       kind: 'product'
@@ -266,6 +278,20 @@ export function UnloadPickScreen({
         setSourceLabel(result.locationCode)
         setScanError(null)
         setScanNotice(`Ячейка ${result.locationCode} — пикните товар, который снимаете`)
+        expandRows(rowsWithin(rows, reference, objects).map((one) => one.key))
+        return true
+      }
+
+      if (result.kind === 'container') {
+        // Тот же выбор места, что и скан ячейки, только держателем становится
+        // сама тара — следующий скан товара уйдёт на сервер вместе с ней
+        // (см. onScan в FfUnloadPickPage), и спишет именно с неё.
+        const reference = objRef(result.containerId)
+        const label = result.containerCode ?? result.locationCode ?? 'тара'
+        setSource(reference)
+        setSourceLabel(label)
+        setScanError(null)
+        setScanNotice(`${label} — пикните товар, который снимаете`)
         expandRows(rowsWithin(rows, reference, objects).map((one) => one.key))
         return true
       }

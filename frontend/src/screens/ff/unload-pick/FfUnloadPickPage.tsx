@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Box } from '@mui/material'
 import { useNavigate, useParams } from 'react-router-dom'
 import { apiUrl } from '../../../api'
@@ -101,7 +101,7 @@ type ApiPickProduct = {
 }
 
 type ApiScanResult = {
-  kind: 'location' | 'product'
+  kind: 'location' | 'container' | 'product'
   storage_location_id: string | null
   location_code: string | null
   product_id: string | null
@@ -109,6 +109,9 @@ type ApiScanResult = {
   product_name: string | null
   picked_qty: number | null
   allocation_quantity: number | null
+  container_kind: ObjKind | null
+  container_id: string | null
+  container_code: string | null
 }
 
 type ApiPickAllocation = {
@@ -159,6 +162,15 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
+  // Тара, отсканированная как место снятия (§Ж-03), но пока не встретившаяся
+  // среди источников pick-options — например, короб только что подъехал и в
+  // pick-options ещё не попал. `screenData.placeSource` знает только про тару,
+  // которая уже держит товар этой отгрузки; этот кэш — про саму тару, ключ
+  // тот же `obj:<id>`, что и в `placeSource`, поэтому оба источника читаются
+  // одним и тем же кодом при следующем скане товара.
+  const scannedContainers = useRef<
+    Map<string, { locationId: string; containerKind: ObjKind; containerId: string }>
+  >(new Map())
   const {
     catalogById,
     error: catalogError,
@@ -417,9 +429,15 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
           catalog?.wb_barcodes.some((one) => one === barcode)
         )
       })
-      let locationId =
-        (sourceKey ? screenData?.placeSource.get(sourceKey)?.locationId : null) ??
-        sourceLocationId(sourceKey)
+      // Тара — источник, из которого спишется товар (§Ж-03): сначала ищем её
+      // среди уже известных pick-options источников, затем среди того, что
+      // оператор только что отсканировал сам (см. scannedContainers выше).
+      // Если выбрана просто ячейка, а не тара, containerSource останется
+      // пустым — сработает старая адресация по locationId.
+      const containerSource = sourceKey
+        ? (screenData?.placeSource.get(sourceKey) ?? scannedContainers.current.get(sourceKey))
+        : null
+      let locationId = containerSource?.locationId ?? sourceLocationId(sourceKey)
       if (matchedProduct && !locationId) {
         const option = pickOptions.find((one) => one.product_id === matchedProduct.id)
         const candidates = option?.locations.filter((one) => one.available > 0) ?? []
@@ -444,6 +462,9 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
             barcode,
             ...(matchedProduct ? { product_id: matchedProduct.id } : {}),
             storage_location_id: locationId,
+            // Тара, из которой снимаем. Пусто — сервер сам решает по ячейке.
+            container_kind: containerSource?.containerKind ?? null,
+            container_id: containerSource?.containerId ?? null,
           }),
         })
         if (!res.ok) throw new Error(await readApiErrorMessage(res))
@@ -456,6 +477,27 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
             kind: 'location',
             storageLocationId: result.storage_location_id,
             locationCode: result.location_code,
+          } satisfies UnloadPickScanResult
+        }
+        if (result.kind === 'container') {
+          if (!result.storage_location_id || !result.container_kind || !result.container_id) {
+            throw new Error('Сервер распознал тару, но не вернул её адрес')
+          }
+          // Запоминаем тару здесь же: следующий скан товара найдёт её по
+          // тому же ключу `obj:<id>`, даже если в pick-options источников
+          // с этой тарой ещё нет.
+          scannedContainers.current.set(objRef(result.container_id), {
+            locationId: result.storage_location_id,
+            containerKind: result.container_kind,
+            containerId: result.container_id,
+          })
+          return {
+            kind: 'container',
+            storageLocationId: result.storage_location_id,
+            locationCode: result.location_code,
+            containerKind: result.container_kind,
+            containerId: result.container_id,
+            containerCode: result.container_code,
           } satisfies UnloadPickScanResult
         }
         if (
