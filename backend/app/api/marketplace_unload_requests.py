@@ -221,6 +221,20 @@ class MarketplaceUnloadPickAllocationOut(BaseModel):
     quantity: int
 
 
+class MarketplaceUnloadPickContainerPathItemOut(BaseModel):
+    kind: str
+    id: str
+    code: str
+    label: str
+
+
+class MarketplaceUnloadPickOptionSourceOut(BaseModel):
+    quantity: int
+    is_loose: bool
+    source_label: str
+    container_path: list[MarketplaceUnloadPickContainerPathItemOut]
+
+
 class MarketplaceUnloadPickOptionLocationOut(BaseModel):
     storage_location_id: str
     location_code: str
@@ -228,6 +242,7 @@ class MarketplaceUnloadPickOptionLocationOut(BaseModel):
     reserved: int
     available: int
     picked: int
+    sources: list[MarketplaceUnloadPickOptionSourceOut]
 
 
 class MarketplaceUnloadPickOptionProductOut(BaseModel):
@@ -625,7 +640,12 @@ def _map_mu_err(exc: MarketplaceUnloadError) -> HTTPException:
 def _map_pick_err(exc: MarketplaceUnloadPickError) -> HTTPException:
     if exc.code == "not_found":
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
-    if exc.code in ("not_editable", "bad_status", "open_box_exists"):
+    if exc.code in (
+        "not_editable",
+        "bad_status",
+        "open_box_exists",
+        "invalid_container_reference",
+    ):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     if exc.code in {"provider_dispatch_blocked", "provider_dispatch_failed"}:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
@@ -1204,6 +1224,23 @@ async def get_marketplace_unload_pick_options(
                     reserved=loc.reserved,
                     available=loc.available,
                     picked=loc.picked,
+                    sources=[
+                        MarketplaceUnloadPickOptionSourceOut(
+                            quantity=source.quantity,
+                            is_loose=source.is_loose,
+                            source_label=source.source_label,
+                            container_path=[
+                                MarketplaceUnloadPickContainerPathItemOut(
+                                    kind=item.kind,
+                                    id=str(item.id),
+                                    code=item.code,
+                                    label=item.label,
+                                )
+                                for item in source.container_path
+                            ],
+                        )
+                        for source in loc.sources
+                    ],
                 )
                 for loc in o.locations
             ]

@@ -168,6 +168,20 @@ class FbsPickingListOut(BaseModel):
     items: list[FbsPickingListItemOut]
 
 
+class FbsPickContainerPathItemOut(BaseModel):
+    kind: str
+    id: str
+    code: str
+    label: str
+
+
+class FbsPickOptionSourceOut(BaseModel):
+    quantity: int
+    is_loose: bool
+    source_label: str
+    container_path: list[FbsPickContainerPathItemOut]
+
+
 class FbsPickOptionLocationOut(BaseModel):
     storage_location_id: str
     location_code: str
@@ -175,6 +189,7 @@ class FbsPickOptionLocationOut(BaseModel):
     reserved: int
     available: int
     picked: int
+    sources: list[FbsPickOptionSourceOut]
 
 
 class FbsPickOptionProductOut(BaseModel):
@@ -1134,6 +1149,23 @@ async def get_fbs_supply_pick_options(
                     reserved=location.reserved,
                     available=location.available,
                     picked=location.picked,
+                    sources=[
+                        FbsPickOptionSourceOut(
+                            quantity=source.quantity,
+                            is_loose=source.is_loose,
+                            source_label=source.source_label,
+                            container_path=[
+                                FbsPickContainerPathItemOut(
+                                    kind=item.kind,
+                                    id=str(item.id),
+                                    code=item.code,
+                                    label=item.label,
+                                )
+                                for item in source.container_path
+                            ],
+                        )
+                        for source in location.sources
+                    ],
                 )
                 for location in option.locations
             ],
