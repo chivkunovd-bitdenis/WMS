@@ -361,13 +361,15 @@ async def _seed_order_with_existing_write_off(
             quantity_delta=1,
             movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
         )
-        await inventory_service.apply_fbs_supply_write_off(
+        write_off = await inventory_service.apply_fbs_supply_write_off(
             session,
             tenant_id=tenant_id,
             product_id=product.id,
             storage_location_id=location_id,
             quantity=1,
         )
+        await session.flush()
+        shipment_movement_id = write_off.id
         session.add(
             FbsShipmentReversalLedger(
                 tenant_id=tenant_id,
@@ -375,6 +377,9 @@ async def _seed_order_with_existing_write_off(
                 product_id=product.id,
                 storage_location_id=location_id,
                 quantity=1,
+                # Возврат делается только по записи, которая помнит движение
+                # списания: без него сторнировать нечего.
+                shipment_movement_id=shipment_movement_id,
             )
         )
         await session.commit()
