@@ -109,6 +109,7 @@ RawStorageDraftPricing = dict[
     uuid.UUID,
     tuple[Decimal, dict[date, Decimal], BillingTariffVersionV2],
 ]
+StoragePricingScope = tuple[StorageStatement, list[StorageMeasurement]]
 
 
 @dataclass(frozen=True)
@@ -223,7 +224,6 @@ async def _measurement_pricing_raw(
     tariffs: list[BillingTariffVersionV2],
 ) -> RawStorageDraftPricing:
     product_ids = {measurement.product_id for measurement in measurements}
-    period_start_at = datetime.combine(statement.period_start, time.min, MOSCOW)
     period_end_at = calculation_end_exclusive(statement.period_start, statement.period_end)
     products = {
         product.id: product
@@ -231,7 +231,10 @@ async def _measurement_pricing_raw(
             await session.scalars(select(Product).where(Product.id.in_(product_ids)))
         ).all()
     }
-    movements_by_product: dict[uuid.UUID, list[InventoryMovement]] = {}
+    movements_by_scope: dict[
+        tuple[uuid.UUID | None, uuid.UUID, uuid.UUID],
+        list[InventoryMovement],
+    ] = {}
     movements = (
         await session.scalars(
             select(InventoryMovement)
@@ -246,7 +249,10 @@ async def _measurement_pricing_raw(
         )
     ).all()
     for movement in movements:
-        movements_by_product.setdefault(movement.product_id, []).append(movement)
+        movements_by_scope.setdefault(
+            (movement.seller_id, movement.warehouse_id, movement.product_id),
+            [],
+        ).append(movement)
     events_by_product: dict[uuid.UUID, list[ProductDimensionEvent]] = {}
     events = (
         await session.scalars(
@@ -262,11 +268,43 @@ async def _measurement_pricing_raw(
     for event in events:
         events_by_product.setdefault(event.product_id, []).append(event)
 
+    return _measurement_pricing_raw_from_loaded(
+        statement,
+        measurements,
+        tariffs,
+        products,
+        movements_by_scope,
+        events_by_product,
+    )
+
+
+def _measurement_pricing_raw_from_loaded(
+    statement: StorageStatement,
+    measurements: list[StorageMeasurement],
+    tariffs: list[BillingTariffVersionV2],
+    products: dict[uuid.UUID, Product],
+    movements_by_scope: dict[
+        tuple[uuid.UUID | None, uuid.UUID, uuid.UUID],
+        list[InventoryMovement],
+    ],
+    events_by_product: dict[uuid.UUID, list[ProductDimensionEvent]],
+) -> RawStorageDraftPricing:
+    """Рассчитать строки ведомости по уже пакетно загруженным исходным данным."""
+    period_start_at = datetime.combine(statement.period_start, time.min, MOSCOW)
+    period_end_at = calculation_end_exclusive(statement.period_start, statement.period_end)
+
     raw_pricing: RawStorageDraftPricing = {}
     for measurement in measurements:
         product = products[measurement.product_id]
         segments = _volume_segments(
-            movements_by_product.get(measurement.product_id, []),
+            movements_by_scope.get(
+                (
+                    statement.seller_id,
+                    statement.warehouse_id,
+                    measurement.product_id,
+                ),
+                [],
+            ),
             events_by_product.get(measurement.product_id, []),
             period_start_at,
             period_end_at,
@@ -285,6 +323,147 @@ async def _measurement_pricing_raw(
             raise StorageStatementError("tariff_not_found")
         raw_pricing[measurement.id] = (charged_quantity, amount_by_day, last_tariff)
     return raw_pricing
+
+
+async def get_storage_draft_pricing_batch(
+    session: AsyncSession,
+    rounding_scopes: Sequence[StoragePricingScope],
+) -> dict[uuid.UUID, StorageDraftPricing]:
+    """Рассчитать список ведомостей фиксированным числом запросов к БД."""
+    scopes = [(statement, rows) for statement, rows in rounding_scopes if rows]
+    if not scopes:
+        return {}
+
+    tenant_id = scopes[0][0].tenant_id
+    seller_ids = {statement.seller_id for statement, _rows in scopes}
+    product_ids = {row.product_id for _statement, rows in scopes for row in rows}
+    warehouse_ids = {statement.warehouse_id for statement, _rows in scopes}
+    period_start_at = min(
+        datetime.combine(statement.period_start, time.min, MOSCOW)
+        for statement, _rows in scopes
+    )
+    period_end_at = max(
+        calculation_end_exclusive(statement.period_start, statement.period_end)
+        for statement, _rows in scopes
+    )
+
+    tariffs = list(
+        (
+            await session.scalars(
+                select(BillingTariffVersionV2).where(
+                    BillingTariffVersionV2.tenant_id == tenant_id,
+                    BillingTariffVersionV2.service_code == "storage",
+                    BillingTariffVersionV2.unit == "liter_day",
+                    BillingTariffVersionV2.enabled.is_(True),
+                    BillingTariffVersionV2.employee_user_id.is_(None),
+                    BillingTariffVersionV2.product_id.is_(None),
+                    BillingTariffVersionV2.valid_from_at < period_end_at,
+                    or_(
+                        BillingTariffVersionV2.valid_to_at.is_(None),
+                        BillingTariffVersionV2.valid_to_at > period_start_at,
+                    ),
+                    or_(
+                        BillingTariffVersionV2.seller_id.is_(None),
+                        BillingTariffVersionV2.seller_id.in_(seller_ids),
+                    ),
+                )
+            )
+        ).all()
+    )
+    products = {
+        product.id: product
+        for product in (
+            await session.scalars(select(Product).where(Product.id.in_(product_ids)))
+        ).all()
+    }
+    movements = list(
+        (
+            await session.scalars(
+                select(InventoryMovement)
+                .where(
+                    InventoryMovement.tenant_id == tenant_id,
+                    InventoryMovement.seller_id.in_(seller_ids),
+                    InventoryMovement.warehouse_id.in_(warehouse_ids),
+                    InventoryMovement.product_id.in_(product_ids),
+                    InventoryMovement.created_at < period_end_at,
+                )
+                .order_by(InventoryMovement.created_at, InventoryMovement.id)
+            )
+        ).all()
+    )
+    movements_by_scope: dict[
+        tuple[uuid.UUID | None, uuid.UUID, uuid.UUID],
+        list[InventoryMovement],
+    ] = {}
+    for movement in movements:
+        movements_by_scope.setdefault(
+            (movement.seller_id, movement.warehouse_id, movement.product_id),
+            [],
+        ).append(movement)
+    events = list(
+        (
+            await session.scalars(
+                select(ProductDimensionEvent)
+                .where(
+                    ProductDimensionEvent.tenant_id == tenant_id,
+                    ProductDimensionEvent.product_id.in_(product_ids),
+                    ProductDimensionEvent.observed_at < period_end_at,
+                )
+                .order_by(ProductDimensionEvent.observed_at, ProductDimensionEvent.id)
+            )
+        ).all()
+    )
+    events_by_product: dict[uuid.UUID, list[ProductDimensionEvent]] = {}
+    for event in events:
+        events_by_product.setdefault(event.product_id, []).append(event)
+
+    scopes_by_seller_period: dict[
+        tuple[uuid.UUID, date, date],
+        list[StoragePricingScope],
+    ] = {}
+    for statement, rows in scopes:
+        key = (
+            statement.seller_id,
+            statement.period_start,
+            statement.period_end,
+        )
+        scopes_by_seller_period.setdefault(key, []).append((statement, rows))
+
+    result: dict[uuid.UUID, StorageDraftPricing] = {}
+    for (seller_id, _period_start, _period_end), seller_scopes in (
+        scopes_by_seller_period.items()
+    ):
+        seller_tariffs = [
+            tariff
+            for tariff in tariffs
+            if tariff.seller_id is None or tariff.seller_id == seller_id
+        ]
+        if not seller_tariffs:
+            continue
+        combined_raw: RawStorageDraftPricing = {}
+        try:
+            for statement, rows in seller_scopes:
+                combined_raw.update(
+                    _measurement_pricing_raw_from_loaded(
+                        statement,
+                        rows,
+                        seller_tariffs,
+                        products,
+                        movements_by_scope,
+                        events_by_product,
+                    )
+                )
+        except StorageStatementError as exc:
+            if str(exc) == "tariff_not_found":
+                continue
+            raise
+        combined_pricing = _allocate_storage_pricing(combined_raw)
+        for statement, rows in seller_scopes:
+            result[statement.id] = {
+                row.id: combined_pricing[row.id]
+                for row in rows
+            }
+    return result
 
 
 def _allocate_storage_pricing(
@@ -1020,3 +1199,42 @@ async def get_storage_ledger_rows(
             )
         ).all()
     )
+
+
+async def get_storage_ledger_rows_batch(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    statements: Sequence[StorageStatement],
+    rows_by_statement: dict[uuid.UUID, list[StorageMeasurement]],
+) -> dict[uuid.UUID, list[BillingLedgerEntry]]:
+    """Загрузить проводки списка ведомостей одним запросом."""
+    source_to_statement: dict[uuid.UUID, uuid.UUID] = {}
+    for statement in statements:
+        rows = rows_by_statement.get(statement.id, [])
+        for source_id in _statement_source_ids(statement, rows):
+            source_to_statement[source_id] = statement.id
+    if not source_to_statement:
+        return {}
+
+    ledger_rows = list(
+        (
+            await session.scalars(
+                select(BillingLedgerEntry)
+                .where(
+                    BillingLedgerEntry.tenant_id == tenant_id,
+                    BillingLedgerEntry.source_type == "storage_measurement",
+                    BillingLedgerEntry.service_code.in_(("storage", "storage_liter_day")),
+                    BillingLedgerEntry.source_id.in_(source_to_statement),
+                )
+                .order_by(BillingLedgerEntry.id)
+            )
+        ).all()
+    )
+    result: dict[uuid.UUID, list[BillingLedgerEntry]] = {
+        statement.id: [] for statement in statements
+    }
+    for ledger_row in ledger_rows:
+        statement_id = source_to_statement.get(ledger_row.source_id)
+        if statement_id is not None:
+            result[statement_id].append(ledger_row)
+    return result
