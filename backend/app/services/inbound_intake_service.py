@@ -1388,12 +1388,9 @@ async def apply_box_putaway(
     storage_location_id: uuid.UUID,
     line_items: list[tuple[uuid.UUID, int]] | None = None,
     performer_id: uuid.UUID | None,
-) -> InboundIntakeRequest:
-    """
-    Разложить принятый по заявке товар из короба в ячейку хранения.
-
-    line_items: (product_id, qty); None — весь остаток по коробу.
-    """
+    commit: bool = True,
+) -> tuple[InboundIntakeRequest, int]:
+    """Разложить весь короб или указанные (product_id, qty) из сортировки в ячейку."""
     from app.services import inbound_intake_box_service as inbound_box_svc
 
     req, box = await _get_box_for_putaway(session, tenant_id, request_id, box_id)
@@ -1418,6 +1415,7 @@ async def apply_box_putaway(
         ]
     if not line_items:
         raise InboundIntakeError("nothing_to_putaway")
+    moved_qty = sum(qty for _product_id, qty in line_items)
 
     lines_by_product = {ln.product_id: ln for ln in req.lines}
     box_lines_by_product = {bl.product_id: bl for bl in box.lines}
@@ -1484,9 +1482,6 @@ async def apply_box_putaway(
         if getattr(line_claim, "rowcount", 0) != 1:
             await session.rollback()
             raise InboundIntakeError("qty_exceeds_accepted")
-        set_committed_value(bl, "posted_qty", bl.posted_qty + qty)
-        set_committed_value(line, "posted_qty", line.posted_qty + qty)
-
         try:
             await _apply_line_putaway(
                 session,
@@ -1501,6 +1496,8 @@ async def apply_box_putaway(
             if str(exc) == "insufficient stock":
                 raise InboundIntakeError("qty_exceeds_accepted") from None
             raise
+        set_committed_value(bl, "posted_qty", bl.posted_qty + qty)
+        set_committed_value(line, "posted_qty", line.posted_qty + qty)
         session.add(
             InboundIntakeDistributionLine(
                 request_id=request_id,
@@ -1514,11 +1511,14 @@ async def apply_box_putaway(
     _maybe_set_distribution_completed(req)
     _maybe_complete_request(req)
     await _record_charge_if_done(session, req, performer_id=performer_id)
+    if not commit:
+        await session.flush()
+        return req, moved_qty
     await session.commit()
     reloaded = await get_request(session, tenant_id, request_id)
     if reloaded is None:
         raise InboundIntakeError("request_not_found")
-    return reloaded
+    return reloaded, moved_qty
 
 
 async def resync_sorting_stock_for_request(

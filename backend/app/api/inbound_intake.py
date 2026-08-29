@@ -1432,7 +1432,7 @@ async def putaway_inbound_box(
     if body.lines is not None:
         line_items = [(ln.product_id, ln.quantity) for ln in body.lines]
     try:
-        r = await svc.apply_box_putaway(
+        r, _moved_qty = await svc.apply_box_putaway(
             session,
             user.tenant_id,
             request_id,

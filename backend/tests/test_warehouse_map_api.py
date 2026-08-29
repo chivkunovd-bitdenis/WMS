@@ -583,6 +583,7 @@ async def test_map_shows_unposted_contents_of_unfinished_inbound_containers(
         await session.commit()
         warehouse_id = warehouse.id
         cell_id = cell.id
+        cargo_id = cargo.id
         expected = {str(box.id): 5, str(cargo.id): 4}
 
     response = await async_client.get(
@@ -603,3 +604,17 @@ async def test_map_shows_unposted_contents_of_unfinished_inbound_containers(
         assert children[0]["name"] == "Товар ещё не разложен"
         assert children[0]["seller_name"] == "Селлер незавершённой тары"
         assert children[0]["qty"] == remaining_qty
+
+    blocked_cargo = await async_client.post(
+        f"/warehouses/{warehouse_id}/sorting-objects/place",
+        headers=headers,
+        json={
+            "kind": "cargo_place",
+            "id": str(cargo_id),
+            "cell_id": str(cell_id),
+            "to_id": None,
+            "qty": 4,
+        },
+    )
+    assert blocked_cargo.status_code == 409, blocked_cargo.text
+    assert blocked_cargo.json()["detail"] == "container_stock_missing"

@@ -27,7 +27,12 @@ from app.models.user import User
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
 from app.models.warehouse_map_event import WarehouseMapEvent
-from app.services import inventory_service, pallet_service, warehouse_box_service
+from app.services import (
+    inbound_container_putaway_service,
+    inventory_service,
+    pallet_service,
+    warehouse_box_service,
+)
 from app.services.inventory_container_service import ContainerKind, validate_container
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
@@ -1130,6 +1135,24 @@ async def move_object(
             session, tenant_id, warehouse_id, container_kind, object_id
         )
         moved_total = sum(int(row.quantity) for row in balances)
+        if not balances:
+            try:
+                pending_moved = (
+                    await inbound_container_putaway_service.putaway_pending_container(
+                        session,
+                        tenant_id=tenant_id,
+                        warehouse_id=warehouse_id,
+                        actor_user_id=actor_user_id,
+                        kind=container_kind,
+                        container_id=object_id,
+                        destination_location_id=destination_location_id,
+                        destination_is_cell=to_kind == "cell",
+                    )
+                )
+            except inbound_container_putaway_service.InboundContainerPutawayError as exc:
+                raise WarehouseMapError(exc.code) from exc
+            if pending_moved is not None:
+                moved_total = pending_moved
         for balance in balances:
             await _transfer_balance(
                 session,
@@ -1154,7 +1177,7 @@ async def move_object(
         )
         code = await _container_code(session, tenant_id, warehouse_id, container_kind, object_id)
         subject = _container_title(container_kind, code)
-        moved_quantity = moved_total
+        moved_quantity = moved_total or None
 
     event = WarehouseMapEvent(
         tenant_id=tenant_id,

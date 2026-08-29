@@ -256,8 +256,11 @@ def _map_error(exc: WarehouseMapError) -> HTTPException:
     if exc.code in {
         "address_storage_disabled",
         "container_cycle",
+        "container_stock_missing",
         "invalid_container_destination",
         "insufficient_stock",
+        "not_distributable",
+        "nothing_to_move",
         "pallet_disbanded",
         "pallet_identifier_conflict",
     }:
