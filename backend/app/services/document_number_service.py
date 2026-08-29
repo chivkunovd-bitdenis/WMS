@@ -5,7 +5,7 @@ from datetime import date, datetime
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +20,7 @@ DOC_TYPE_PACKAGING = "packaging"
 DOC_TYPE_MARKING_IMPORT = "marking_import"
 DOC_TYPE_REMARK = "remark"
 DOC_TYPE_INVOICE = "invoice"
+DOC_TYPE_PALLET = "pallet"
 
 PREFIX_BY_DOC_TYPE: dict[str, str] = {
     DOC_TYPE_INBOUND: "ПРИЕМ",
@@ -28,6 +29,7 @@ PREFIX_BY_DOC_TYPE: dict[str, str] = {
     DOC_TYPE_MARKING_IMPORT: "ЗАГРКМ",
     DOC_TYPE_REMARK: "ПЕРЕМАРК",
     DOC_TYPE_INVOICE: "СЧЕТ",
+    DOC_TYPE_PALLET: "П",
 }
 
 DISPLAY_NUMBER_PREFIX = "№"
@@ -91,8 +93,22 @@ async def next_display_number(
     tenant_id: uuid.UUID,
     doc_type: str,
 ) -> str:
+    counter = await next_display_counter(session, tenant_id, doc_type)
+    return format_display_number(counter)
+
+
+async def next_display_counter(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    doc_type: str,
+    *,
+    minimum_counter: int = 1,
+) -> int:
+    """Atomically reserve a tenant/type counter, optionally after legacy rows."""
     if doc_type not in PREFIX_BY_DOC_TYPE:
         raise ValueError(f"unknown_doc_type:{doc_type}")
+    if minimum_counter < 1:
+        raise ValueError("minimum_counter_must_be_positive")
 
     conn = await session.connection()
     insert_cls = sqlite_insert if conn.dialect.name == "sqlite" else pg_insert
@@ -102,17 +118,24 @@ async def next_display_number(
             id=uuid.uuid4(),
             tenant_id=tenant_id,
             doc_type=doc_type,
-            counter=1,
+            counter=minimum_counter,
         )
         .on_conflict_do_update(
             index_elements=["tenant_id", "doc_type"],
-            set_={"counter": DocumentDisplaySequence.counter + 1},
+            set_={
+                "counter": case(
+                    (
+                        DocumentDisplaySequence.counter < minimum_counter,
+                        minimum_counter,
+                    ),
+                    else_=DocumentDisplaySequence.counter + 1,
+                )
+            },
         )
         .returning(DocumentDisplaySequence.counter)
     )
     result = await session.execute(stmt)
-    counter = int(result.scalar_one())
-    return format_display_number(counter)
+    return int(result.scalar_one())
 
 
 class HasDocumentNumber(Protocol):

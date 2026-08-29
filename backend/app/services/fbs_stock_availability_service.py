@@ -165,6 +165,7 @@ async def fbs_stock_breakdown_by_product(
     product_ids: list[uuid.UUID],
     *,
     exclude_fbs_order_ids: frozenset[uuid.UUID] | None = None,
+    include_global_direction_reserve: bool = True,
 ) -> dict[uuid.UUID, FbsStockBreakdown]:
     """Фактический остаток и то, что уже занято, по каждому товару.
 
@@ -195,8 +196,12 @@ async def fbs_stock_breakdown_by_product(
         product_ids,
         exclude_fbs_order_ids=exclude_fbs_order_ids,
     )
-    direction_map = await stock_direction_service.direction_totals_by_product(
-        session, tenant_id, product_ids
+    direction_map = (
+        await stock_direction_service.direction_totals_by_product(
+            session, tenant_id, product_ids
+        )
+        if include_global_direction_reserve
+        else {}
     )
     result: dict[uuid.UUID, FbsStockBreakdown] = {}
     for pid in product_ids:

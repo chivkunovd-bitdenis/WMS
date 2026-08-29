@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
+from app.services import stock_direction_service
 from app.services.fbs_stock_availability_service import fbs_stock_breakdown_by_product
 
 # Доли задаются ползунком с шагом в десять процентов: промежуточные значения
@@ -166,7 +167,11 @@ async def _free_stock_for_bindings(
     on_hand = reserved = free = 0
     for warehouse_id in sorted(warehouse_ids, key=str):
         breakdown = await fbs_stock_breakdown_by_product(
-            session, tenant_id, warehouse_id, [product_id]
+            session,
+            tenant_id,
+            warehouse_id,
+            [product_id],
+            include_global_direction_reserve=False,
         )
         row = breakdown.get(product_id)
         if row is None:
@@ -174,6 +179,14 @@ async def _free_stock_for_bindings(
         on_hand += row.on_hand
         reserved += row.reserved
         free += row.free
+    directions = (
+        await stock_direction_service.direction_totals_by_product(
+            session, tenant_id, [product_id]
+        )
+    ).get(product_id)
+    direction_reserved = int(directions.total) if directions is not None else 0
+    reserved += direction_reserved
+    free = max(0, free - direction_reserved)
     return on_hand, reserved, free
 
 
@@ -321,13 +334,31 @@ async def get_rule_views(
         warehouse_ids = sorted({binding.wms_warehouse_id for binding in bindings}, key=str)
         for warehouse_id in warehouse_ids:
             breakdown = await fbs_stock_breakdown_by_product(
-                session, tenant_id, warehouse_id, seller_product_ids
+                session,
+                tenant_id,
+                warehouse_id,
+                seller_product_ids,
+                include_global_direction_reserve=False,
             )
             for product_id, row in breakdown.items():
                 totals = stock_by_product[product_id]
                 totals[0] += row.on_hand
                 totals[1] += row.reserved
                 totals[2] += row.free
+
+        # StockDirection has no warehouse dimension: it reserves a product from
+        # the tenant-wide stock once.  Warehouse-specific outbound/FBS reserves
+        # above remain clamped inside their own physical warehouses; only this
+        # global reserve is applied after those warehouse results are summed.
+        direction_totals = await stock_direction_service.direction_totals_by_product(
+            session, tenant_id, seller_product_ids
+        )
+        for product_id in seller_product_ids:
+            directions = direction_totals.get(product_id)
+            direction_reserved = int(directions.total) if directions is not None else 0
+            totals = stock_by_product[product_id]
+            totals[1] += direction_reserved
+            totals[2] = max(0, totals[2] - direction_reserved)
 
         for product in seller_products:
             rule = rule_from_product(product, pools_by_product[product.id], bindings)

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import uuid
 from collections import defaultdict
 from datetime import datetime
@@ -22,8 +21,6 @@ from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_supply import FbsSupply
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.services import inventory_service as inv_svc
-
-logger = logging.getLogger(__name__)
 
 
 class OzonPackagingError(Exception):
@@ -152,7 +149,8 @@ async def write_off_order(
     tenant_id: uuid.UUID,
     order: FbsOrder,
     actor_user_id: uuid.UUID | None,
-) -> None:
+) -> FbsShipmentReversalLedger:
+    """Write off every packed Ozon unit and preserve its exact reversal recipe."""
     fulfillment = await active_order_fulfillment(session, order.id)
     units = packed_units(fulfillment)
     if not units or not await order_pack_complete(session, order):
@@ -176,36 +174,29 @@ async def write_off_order(
         )
     ]
     first_product_id, first_storage_location_id = next(iter(grouped))
-    session.add(
-        FbsShipmentReversalLedger(
-            tenant_id=tenant_id,
-            fbs_order_id=order.id,
-            product_id=first_product_id,
-            storage_location_id=first_storage_location_id,
-            quantity=sum(grouped.values()),
-            ozon_positions_json=positions_json,
-        )
+    ledger = FbsShipmentReversalLedger(
+        tenant_id=tenant_id,
+        fbs_order_id=order.id,
+        product_id=first_product_id,
+        storage_location_id=first_storage_location_id,
+        quantity=sum(grouped.values()),
+        ozon_positions_json=positions_json,
     )
+    session.add(ledger)
     await session.flush()
+    first_movement_id: uuid.UUID | None = None
     for (product_id, storage_location_id), quantity in grouped.items():
-        try:
-            await inv_svc.apply_fbs_supply_write_off(
-                session,
-                tenant_id=tenant_id,
-                product_id=product_id,
-                storage_location_id=storage_location_id,
-                quantity=quantity,
-                actor_user_id=actor_user_id,
-            )
-        except ValueError as exc:
-            if str(exc) != "insufficient stock":
-                raise
-            logger.warning(
-                "Ozon FBS write-off skipped, no stock: tenant=%s product=%s "
-                "location=%s order=%s quantity=%s",
-                tenant_id,
-                product_id,
-                storage_location_id,
-                order.id,
-                quantity,
-            )
+        movement = await inv_svc.apply_fbs_supply_write_off(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=storage_location_id,
+            quantity=quantity,
+            actor_user_id=actor_user_id,
+        )
+        await session.flush()
+        if first_movement_id is None:
+            first_movement_id = movement.id
+    ledger.shipment_movement_id = first_movement_id
+    await session.flush()
+    return ledger

@@ -328,6 +328,16 @@ async def _apply_status(session: AsyncSession, order: FbsOrder, raw_status: str 
     order.supplier_status = "new" if local == FBS_ORDER_STATUS_NEW else normalized
     order.status = local
     if local in {FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DONE}:
+        if local == FBS_ORDER_STATUS_CANCELLED:
+            from app.services.fbs_cancellation_service import (
+                reverse_fbs_shipment_if_needed,
+            )
+
+            await reverse_fbs_shipment_if_needed(
+                session,
+                order,
+                actor_user_id=None,
+            )
         await _release_reservation(session, order)
     return changed
 

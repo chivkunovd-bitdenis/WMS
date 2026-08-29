@@ -31,6 +31,7 @@ from app.models.fbs_order import (
     FbsOrderProduct,
     FbsOrderProductReservation,
 )
+from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_print_asset import PRINT_ASSET_STATUS_READY
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_PVZ,
@@ -41,6 +42,7 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.inventory_balance import InventoryBalance
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
@@ -709,6 +711,80 @@ async def test_ozon_repeat_sync_replaces_changed_quantity_and_rereserves(
     assert order.reserve_status == "reserved"
 
 
+async def _seed_physical_ozon_packaging(
+    session: AsyncSession,
+    order: FbsOrder,
+    supply: FbsSupply,
+    product_quantities: list[tuple[Product, int]],
+) -> None:
+    """Give provider-contract tests the physical packing state delivery requires."""
+    now = datetime.now(UTC)
+    task = PackagingTask(
+        tenant_id=order.tenant_id,
+        warehouse_id=supply.warehouse_id,
+        status="done",
+    )
+    session.add(task)
+    await session.flush()
+    supply.packaging_task_id = task.id
+    packed_units: list[dict[str, str]] = []
+    first_line: PackagingTaskLine | None = None
+    for index, (product, quantity) in enumerate(product_quantities):
+        location = StorageLocation(
+            tenant_id=order.tenant_id,
+            warehouse_id=supply.warehouse_id,
+            code=f"OZON-PACK-{uuid.uuid4().hex[:8]}",
+            barcode=f"OZON-PACK-BC-{uuid.uuid4().hex[:8]}",
+        )
+        session.add(location)
+        await session.flush()
+        line = PackagingTaskLine(
+            task_id=task.id,
+            product_id=product.id,
+            storage_location_id=location.id,
+            qty_total=quantity,
+            qty_packed_in_task=quantity,
+        )
+        session.add_all(
+            [
+                line,
+                InventoryBalance(
+                    tenant_id=order.tenant_id,
+                    product_id=product.id,
+                    storage_location_id=location.id,
+                    quantity=quantity,
+                    quantity_unpacked=0,
+                    quantity_packed=quantity,
+                ),
+            ]
+        )
+        await session.flush()
+        first_line = first_line or line
+        packed_units.extend(
+            {
+                "product_id": str(product.id),
+                "packaging_task_line_id": str(line.id),
+                "storage_location_id": str(location.id),
+                "idempotency_key": f"ozon-provider-pack-{index}-{unit}",
+                "packed_at": now.isoformat(),
+            }
+            for unit in range(quantity)
+        )
+    assert first_line is not None
+    session.add(
+        FbsPackagingFulfillment(
+            tenant_id=order.tenant_id,
+            fbs_order_id=order.id,
+            packaging_task_id=task.id,
+            packaging_task_line_id=first_line.id,
+            fulfilled_at=now,
+            pack_idempotency_key=f"ozon-provider-pack-{uuid.uuid4()}",
+            ozon_packed_units_json=packed_units,
+        )
+    )
+    await session.commit()
+
+
 @pytest.mark.asyncio
 async def test_ozon_ship_keeps_quantity_above_one(db_session: AsyncSession) -> None:
     """TC-S03-OZON-023: /ship receives quantity from the imported Ozon composition."""
@@ -727,6 +803,7 @@ async def test_ozon_ship_keeps_quantity_above_one(db_session: AsyncSession) -> N
         )
     )
     await db_session.commit()
+    await _seed_physical_ozon_packaging(db_session, order, supply, [(product, 2)])
     transport = FakeMarketplaceTransport(endpoint_responses=_ozon_handoff_responses())
 
     await shipment_svc.deliver_supply(
@@ -752,6 +829,14 @@ async def test_ozon_multi_position_ship_keeps_complete_posting_composition(
     """TC-S03-OZON-027: /ship receives every position rather than only the first one."""
     tenant, _, _, product, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
     assert supply is not None
+    second_product = Product(
+        tenant_id=tenant.id,
+        seller_id=order.seller_id,
+        name="Second product",
+        sku_code=f"ozon-second-{uuid.uuid4().hex[:8]}",
+    )
+    db_session.add(second_product)
+    await db_session.flush()
     db_session.add_all(
         [
             FbsOrderProduct(
@@ -766,7 +851,7 @@ async def test_ozon_multi_position_ship_keeps_complete_posting_composition(
             ),
             FbsOrderProduct(
                 order_id=order.id,
-                product_id=None,
+                product_id=second_product.id,
                 ozon_sku=3002,
                 offer_id="offer-2",
                 name="Second product",
@@ -777,6 +862,12 @@ async def test_ozon_multi_position_ship_keeps_complete_posting_composition(
         ]
     )
     await db_session.commit()
+    await _seed_physical_ozon_packaging(
+        db_session,
+        order,
+        supply,
+        [(product, 1), (second_product, 3)],
+    )
     transport = FakeMarketplaceTransport(endpoint_responses=_ozon_handoff_responses())
 
     await shipment_svc.deliver_supply(
@@ -823,6 +914,7 @@ async def test_ozon_handoff_sets_required_product_country_before_ship(
         )
     )
     await db_session.commit()
+    await _seed_physical_ozon_packaging(db_session, order, supply, [(product, 1)])
     responses = _ozon_handoff_responses()
     responses["/v2/posting/fbs/product/country/list"] = {
         "result": [{"name": "Россия", "country_iso_code": "RU"}]
