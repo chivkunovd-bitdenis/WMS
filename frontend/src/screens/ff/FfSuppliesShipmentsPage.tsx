@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import {
   ArrowForwardOutlined,
@@ -45,7 +45,7 @@ import { WbProductPickerDialog, type WbProductPickerCatalogRow } from '../../com
 import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { apiUrl } from '../../api'
 import { WmsDateField } from '../../components/WmsDateField'
-import { EmptyState, MarketplaceChip, PrimaryAction } from '../../ui-kit'
+import { MarketplaceChip } from '../../ui-kit'
 
 import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
@@ -56,6 +56,7 @@ import {
   type PackagingTask,
 } from './FfPackagingPage'
 import { FfMarketplaceUnloadBoxAddDialog } from './FfMarketplaceUnloadBoxAddDialog'
+import { FfMpUnloadPickPanel } from './FfMpUnloadPickPanel'
 import { BoxImportDialog } from '../../components/BoxImportDialog'
 import { BoxLabelPrintDialog } from '../../components/BoxLabelPrintDialog'
 import type { LabelSize } from '../../utils/labelSize'
@@ -294,7 +295,6 @@ export function FfSuppliesShipmentsPage({
   addressStorageEnabled = true,
 }: Props) {
   const [searchParams, setSearchParams] = useSearchParams()
-  const navigate = useNavigate()
   const isMpShipmentsPage = pageVariant === 'mp-shipments'
   const [kind, setKind] = useState<QuickFilterKind>(isMpShipmentsPage ? 'marketplace_unload' : 'all')
   const [sellerFilter, setSellerFilter] = useState<string>('all')
@@ -2734,21 +2734,14 @@ export function FfSuppliesShipmentsPage({
               ) : null}
               {mpUnloadTab === 'pick' && unloadDetail && token && authHeaders ? (
                 <Box data-testid="ff-mp-tab-pick-panel">
-                  {/* Подбор переехал на отдельный экран, принятый владельцем:
-                      оператор ходит по складу и снимает товар с мест, а окно
-                      документа для этого тесное. Старая встроенная панель
-                      осталась в FfMpUnloadPickPanel.tsx — если понадобится
-                      вернуть, достаточно восстановить импорт и этот блок. */}
-                  <EmptyState
-                    title="Подбор идёт на отдельном экране"
-                    hint="Там видно, где лежит каждый товар, и работает сканер мест."
+                  <FfMpUnloadPickPanel
+                    token={token}
+                    authHeaders={authHeaders}
+                    requestId={unloadDetail.id}
+                    disabled={modalBusy} addressStorageEnabled={addressStorageEnabled}
+                    onChanged={() => void loadDocDetail()}
+                    catalogById={catalogById}
                   />
-                  <PrimaryAction
-                    data-testid="ff-mp-open-unload-pick"
-                    onClick={() => navigate(`/app/ff/unload-pick/${unloadDetail.id}`)}
-                  >
-                    Открыть подбор
-                  </PrimaryAction>
                 </Box>
               ) : null}
               {mpUnloadTab === 'packaging' ? (
