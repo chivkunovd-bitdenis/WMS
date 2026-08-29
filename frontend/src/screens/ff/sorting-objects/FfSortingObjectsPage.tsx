@@ -150,7 +150,13 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
       const res = await fetch(apiUrl(`/warehouses/${warehouseId}/sorting-objects`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers(token) },
-        body: JSON.stringify({ kind }),
+        // Тара, созданная внутри документа приёмки, обязана нести ссылку на
+        // него (§A-03) — иначе документный фильтр её потом не находит: объект
+        // создаётся, но в приёмке, откуда его создали, не появляется.
+        body: JSON.stringify({
+          kind,
+          ...(embedded && inboundRequestId ? { inbound_request_id: inboundRequestId } : {}),
+        }),
       })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
       await load()
