@@ -89,10 +89,21 @@ function sourceLocationId(sourceKey: string | null): string | null {
   return sourceKey?.startsWith('cell:') ? sourceKey.slice(5) : null
 }
 
-type Props = { token: string }
+type Props = {
+  token: string
+  /**
+   * Документ, который подбираем.
+   *
+   * Экран живёт двумя способами: отдельным адресом со своим параметром пути и
+   * встроенным во вкладку «Подбор» документа отгрузки. Во втором случае номер
+   * приходит пропсом — адрес страницы при этом не меняется.
+   */
+  requestId?: string
+}
 
-export function FfUnloadPickPage({ token }: Props) {
-  const { requestId } = useParams<{ requestId: string }>()
+export function FfUnloadPickPage({ token, requestId: requestIdProp }: Props) {
+  const params = useParams<{ requestId: string }>()
+  const requestId = requestIdProp ?? params.requestId
   const navigate = useNavigate()
   const [detail, setDetail] = useState<ApiDetail | null>(null)
   const [pickOptions, setPickOptions] = useState<ApiPickProduct[]>([])

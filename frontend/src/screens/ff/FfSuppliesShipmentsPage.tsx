@@ -56,7 +56,7 @@ import {
   type PackagingTask,
 } from './FfPackagingPage'
 import { FfMarketplaceUnloadBoxAddDialog } from './FfMarketplaceUnloadBoxAddDialog'
-import { FfMpUnloadPickPanel } from './FfMpUnloadPickPanel'
+import { FfUnloadPickPage } from './unload-pick/FfUnloadPickPage'
 import { BoxImportDialog } from '../../components/BoxImportDialog'
 import { BoxLabelPrintDialog } from '../../components/BoxLabelPrintDialog'
 import type { LabelSize } from '../../utils/labelSize'
@@ -2734,14 +2734,11 @@ export function FfSuppliesShipmentsPage({
               ) : null}
               {mpUnloadTab === 'pick' && unloadDetail && token && authHeaders ? (
                 <Box data-testid="ff-mp-tab-pick-panel">
-                  <FfMpUnloadPickPanel
-                    token={token}
-                    authHeaders={authHeaders}
-                    requestId={unloadDetail.id}
-                    disabled={modalBusy} addressStorageEnabled={addressStorageEnabled}
-                    onChanged={() => void loadDocDetail()}
-                    catalogById={catalogById}
-                  />
+                  {/* Новый подбор с ячеек — согласованный экран варианта А —
+                      показывается прямо здесь, во вкладке документа. Отдельной
+                      страницей его открывать не надо: оператор работает внутри
+                      отгрузки. Старая панель осталась в FfMpUnloadPickPanel.tsx. */}
+                  <FfUnloadPickPage token={token} requestId={unloadDetail.id} />
                 </Box>
               ) : null}
               {mpUnloadTab === 'packaging' ? (
