@@ -451,6 +451,21 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
     [lookup, scanValue],
   )
 
+  /**
+   * Это поле — сканер, а не текстовый поиск (§Д-05): ввод и потеря фокуса
+   * раньше только меняли `scanValue`, ни один запрос не уходил, пока не
+   * нажат Enter. Уход фокуса с непустым значением обязан сработать так же,
+   * как Enter. Пока идёт предыдущий поиск, поле выключается само и теряет
+   * фокус (`disabled={scanLoading}`) — это не уход оператора, и второй запрос
+   * с тем же штрихкодом отсюда не шлём.
+   */
+  const handleScanBlur = useCallback(() => {
+    if (scanLoading) return
+    const barcode = scanValue.trim().toUpperCase()
+    if (!barcode) return
+    void lookup(barcode)
+  }, [lookup, scanLoading, scanValue])
+
   const handlePackageExpandedChange = useCallback((packageId: string, expanded: boolean) => {
     setOpenPackageId(expanded ? packageId : null)
   }, [])
@@ -473,6 +488,7 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
             setScanError(null)
           }}
           onKeyDown={handleScanKeyDown}
+          onBlur={handleScanBlur}
           placeholder="Сканируйте внутренний ШК"
           error={scanError !== null}
           disabled={scanLoading}
