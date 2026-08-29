@@ -66,9 +66,20 @@ export function ScannerField({
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (!busy) {
-      inputRef.current?.focus()
-    }
+    if (busy) return
+    // Сканер держит фокус, чтобы пик сразу попадал в поле. Но забирать фокус
+    // силой нельзя: оператор в этот момент может набирать количество в строке
+    // товара. Любой ответ сервера менял busy и notice, эффект срабатывал — и
+    // курсор выпрыгивал из поля количества обратно в сканер на первой же цифре.
+    const active = typeof document === 'undefined' ? null : document.activeElement
+    const typingElsewhere =
+      active instanceof HTMLElement &&
+      active !== inputRef.current &&
+      (active.tagName === 'INPUT' ||
+        active.tagName === 'TEXTAREA' ||
+        active.isContentEditable)
+    if (typingElsewhere) return
+    inputRef.current?.focus()
   }, [busy, notice, error])
 
   return (
