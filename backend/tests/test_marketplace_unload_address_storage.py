@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 
 import pytest
 from httpx import AsyncClient
@@ -16,6 +17,13 @@ from test_marketplace_unload_and_discrepancy_acts import (
     _post_inventory,
     _seller_wb_mp_warehouse,
 )
+
+from app.db.session import SessionLocal
+from app.models.inventory_balance import InventoryBalance
+from app.models.pallet import Pallet
+from app.models.product import Product
+from app.models.storage_location import StorageLocation
+from app.models.warehouse_box import WarehouseBox
 
 BASE = "/operations/marketplace-unload-requests"
 
@@ -171,6 +179,96 @@ async def test_collect_requires_location_when_address_storage_on(
     mid, box_id, pid, loc_id, wid = await _confirmed_unload_with_box(
         async_client, h, monkeypatch, address_storage_enabled=True
     )
+    async with SessionLocal() as session:
+        db_product = await session.get(Product, uuid.UUID(pid))
+        db_location = await session.get(StorageLocation, uuid.UUID(loc_id))
+        assert db_product is not None
+        assert db_location is not None
+        tenant_id = db_product.tenant_id
+        pallet = Pallet(
+            tenant_id=tenant_id,
+            warehouse_id=uuid.UUID(wid),
+            code=f"MP-PALLET-{pid[-8:]}",
+            barcode=f"MP-PALLET-BC-{pid[-8:]}",
+            storage_location_id=uuid.UUID(loc_id),
+        )
+        source_box = WarehouseBox(
+            tenant_id=tenant_id,
+            warehouse_id=uuid.UUID(wid),
+            internal_barcode=f"MP-BOX-{pid[-8:]}",
+            container_kind="box",
+        )
+        session.add_all([pallet, source_box])
+        await session.flush()
+        source_box.pallet_id = pallet.id
+        session.add(
+            InventoryBalance(
+                tenant_id=tenant_id,
+                storage_location_id=uuid.UUID(loc_id),
+                product_id=uuid.UUID(pid),
+                container_kind="box",
+                container_id=source_box.id,
+                quantity=4,
+                quantity_unpacked=4,
+                quantity_packed=0,
+            )
+        )
+        await session.commit()
+        location_code = db_location.code
+        pallet_id = pallet.id
+        source_box_id = source_box.id
+
+    # TC-NEW-PICK-CONTAINERS-001: the MP endpoint keeps legacy fields and
+    # serializes loose physical sources, including the operator sorting label.
+    options = await async_client.get(f"{BASE}/{mid}/pick-options", headers=h)
+    assert options.status_code == 200, options.text
+    product = next(row for row in options.json() if row["product_id"] == pid)
+    locations = {
+        location["storage_location_id"]: location
+        for location in product["locations"]
+    }
+    assert locations[loc_id] == {
+        "storage_location_id": loc_id,
+        "location_code": location_code,
+        "quantity": 14,
+        "reserved": 0,
+        "available": 14,
+        "picked": 0,
+        "sources": [
+            {
+                "quantity": 4,
+                "is_loose": False,
+                "source_label": f"Короб MP-BOX-{pid[-8:]}",
+                "container_path": [
+                    {
+                        "kind": "pallet",
+                        "id": str(pallet_id),
+                        "code": f"MP-PALLET-{pid[-8:]}",
+                        "label": f"Палета MP-PALLET-{pid[-8:]}",
+                    },
+                    {
+                        "kind": "box",
+                        "id": str(source_box_id),
+                        "code": f"MP-BOX-{pid[-8:]}",
+                        "label": f"Короб MP-BOX-{pid[-8:]}",
+                    },
+                ],
+            },
+            {
+                "quantity": 10,
+                "is_loose": True,
+                "source_label": "Россыпью",
+                "container_path": [],
+            },
+        ],
+    }
+    sorting = next(
+        location
+        for location in product["locations"]
+        if location["location_code"] == "Без ячеек"
+    )
+    assert sorting["quantity"] == 10
+    assert sorting["sources"][0]["source_label"] == "Россыпью"
 
     blocked = await async_client.post(
         f"{BASE}/{mid}/boxes/{box_id}/manual-line",
@@ -204,3 +302,22 @@ async def test_collect_requires_location_when_address_storage_on(
         json={"barcode": E2E_BARCODE, "storage_location_id": loc_id},
     )
     assert prod_scan.status_code == 200, prod_scan.text
+
+    async with SessionLocal() as session:
+        session.add(
+            InventoryBalance(
+                tenant_id=tenant_id,
+                storage_location_id=uuid.UUID(loc_id),
+                product_id=uuid.UUID(pid),
+                container_kind="box",
+                container_id=uuid.uuid4(),
+                quantity=1,
+                quantity_unpacked=1,
+                quantity_packed=0,
+            )
+        )
+        await session.commit()
+
+    invalid_options = await async_client.get(f"{BASE}/{mid}/pick-options", headers=h)
+    assert invalid_options.status_code == 409, invalid_options.text
+    assert invalid_options.json()["detail"] == "invalid_container_reference"

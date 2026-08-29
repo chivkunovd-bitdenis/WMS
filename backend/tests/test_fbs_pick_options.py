@@ -16,8 +16,11 @@ from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_DRAFT,
     FbsSupply,
 )
+from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_reservation import InventoryReservation
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
+from app.models.pallet import Pallet
+from app.models.warehouse_box import WarehouseBox
 from app.services import inventory_service
 from tests.inventory_actor_helpers import resolve_test_actor_user_id
 from tests.test_fbs_picking import (
@@ -117,6 +120,7 @@ async def _pick_options(
 
 
 # TC-NEW-FBS-PICK-OPTIONS-001
+# TC-NEW-PICK-CONTAINERS-001: FBS serializes the shared additive source contract.
 @pytest.mark.asyncio
 async def test_fbs_pick_options_returns_two_locations_with_inventory_numbers(
     async_client: AsyncClient,
@@ -161,6 +165,38 @@ async def test_fbs_pick_options_returns_two_locations_with_inventory_numbers(
         first_location_id,
         1,
     )
+    async with SessionLocal() as session:
+        pallet = Pallet(
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            code=f"PALLET-{suffix[-8:]}",
+            barcode=f"PALLET-BC-{suffix[-8:]}",
+            storage_location_id=first_location_id,
+        )
+        cargo_place = WarehouseBox(
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            internal_barcode=f"CARGO-{suffix[-8:]}",
+            container_kind="cargo_place",
+        )
+        session.add_all([pallet, cargo_place])
+        await session.flush()
+        cargo_place.pallet_id = pallet.id
+        session.add(
+            InventoryBalance(
+                tenant_id=tenant_id,
+                storage_location_id=first_location_id,
+                product_id=product_id,
+                container_kind="cargo_place",
+                container_id=cargo_place.id,
+                quantity=3,
+                quantity_unpacked=3,
+                quantity_packed=0,
+            )
+        )
+        await session.commit()
+        pallet_id = pallet.id
+        cargo_place_id = cargo_place.id
 
     response = await _pick_options(async_client, headers, supply_id)
 
@@ -188,10 +224,37 @@ async def test_fbs_pick_options_returns_two_locations_with_inventory_numbers(
     assert locations[first_location_id] == {
         "storage_location_id": str(first_location_id),
         "location_code": locations[first_location_id]["location_code"],
-        "quantity": 4,
+        "quantity": 7,
         "reserved": 1,
-        "available": 3,
+        "available": 6,
         "picked": 0,
+        "sources": [
+            {
+                "quantity": 3,
+                "is_loose": False,
+                "source_label": f"Грузоместо CARGO-{suffix[-8:]}",
+                "container_path": [
+                    {
+                        "kind": "pallet",
+                        "id": str(pallet_id),
+                        "code": f"PALLET-{suffix[-8:]}",
+                        "label": f"Палета PALLET-{suffix[-8:]}",
+                    },
+                    {
+                        "kind": "cargo_place",
+                        "id": str(cargo_place_id),
+                        "code": f"CARGO-{suffix[-8:]}",
+                        "label": f"Грузоместо CARGO-{suffix[-8:]}",
+                    },
+                ],
+            },
+            {
+                "quantity": 4,
+                "is_loose": True,
+                "source_label": "Россыпью",
+                "container_path": [],
+            }
+        ],
     }
     assert locations[second_location_id] == {
         "storage_location_id": str(second_location_id),
@@ -200,6 +263,14 @@ async def test_fbs_pick_options_returns_two_locations_with_inventory_numbers(
         "reserved": 0,
         "available": 2,
         "picked": 0,
+        "sources": [
+            {
+                "quantity": 2,
+                "is_loose": True,
+                "source_label": "Россыпью",
+                "container_path": [],
+            }
+        ],
     }
 
 
@@ -310,6 +381,7 @@ async def test_fbs_pick_options_keeps_zero_balance_picked_location(
     assert source["reserved"] == 0
     assert source["available"] == 0
     assert source["picked"] == 1
+    assert source["sources"] == []
 
 
 # TC-NEW-FBS-PICK-OPTIONS-004
@@ -349,6 +421,56 @@ async def test_fbs_pick_options_hides_foreign_tenant_supply(
 
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "supply_not_found"
+
+
+# TC-NEW-PICK-CONTAINERS-001
+@pytest.mark.asyncio
+async def test_fbs_pick_options_rejects_invalid_container_reference(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
+        async_client, headers, suffix
+    )
+    barcode = f"BAR-OPTIONS-BAD-CONTAINER-{suffix[-8:]}"
+    product_id = await _create_product(
+        async_client,
+        headers,
+        seller_id,
+        sku=f"SKU-OPTIONS-BAD-CONTAINER-{suffix}",
+        barcode=barcode,
+    )
+    supply_id, _order_ids, _location_code = await _seed_pick_supply(
+        async_client,
+        headers,
+        tenant_id,
+        seller_id,
+        warehouse_id,
+        location_id,
+        product_id,
+        stock_qty=1,
+        order_specs=[(1, timedelta(hours=24))],
+        barcode=barcode,
+    )
+    async with SessionLocal() as session:
+        session.add(
+            InventoryBalance(
+                tenant_id=tenant_id,
+                storage_location_id=location_id,
+                product_id=product_id,
+                container_kind="box",
+                container_id=uuid.uuid4(),
+                quantity=1,
+                quantity_unpacked=1,
+                quantity_packed=0,
+            )
+        )
+        await session.commit()
+
+    response = await _pick_options(async_client, headers, supply_id)
+
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["code"] == "invalid_container_reference"
 
 
 # TC-NEW-FBS-PICK-OPTIONS-005

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import UTC
 from typing import Any, Literal, cast
 
@@ -44,9 +45,101 @@ class WarehouseMapError(Exception):
         super().__init__(code)
 
 
+@dataclass(frozen=True)
+class WarehouseContainerPathItem:
+    kind: ContainerKind
+    id: uuid.UUID
+    code: str
+    label: str
+
+
 def _container_title(kind: str, code: str) -> str:
     title = {"pallet": "Палета", "box": "Короб", "cargo_place": "Грузоместо"}[kind]
     return f"{title} {code}"
+
+
+def _container_path_item(
+    kind: ContainerKind,
+    container_id: uuid.UUID,
+    code: str,
+) -> WarehouseContainerPathItem:
+    return WarehouseContainerPathItem(
+        kind=kind,
+        id=container_id,
+        code=code,
+        label=_container_title(kind, code),
+    )
+
+
+async def resolve_container_paths(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    container_refs: set[tuple[ContainerKind, uuid.UUID]],
+) -> dict[tuple[ContainerKind, uuid.UUID], tuple[WarehouseContainerPathItem, ...]]:
+    """Return map-compatible human container paths within one tenant warehouse."""
+    if not container_refs:
+        return {}
+    await _assert_warehouse(session, tenant_id, warehouse_id)
+    pallets = list(
+        (
+            await session.scalars(
+                select(Pallet).where(
+                    Pallet.tenant_id == tenant_id,
+                    Pallet.warehouse_id == warehouse_id,
+                    Pallet.disbanded_at.is_(None),
+                )
+            )
+        ).all()
+    )
+    warehouse_boxes, inbound_boxes, cargo_places = await _load_boxes(
+        session, tenant_id, warehouse_id
+    )
+    pallet_by_id = {pallet.id: pallet for pallet in pallets}
+    warehouse_box_by_key: dict[tuple[ContainerKind, uuid.UUID], WarehouseBox] = {
+        (box.container_kind, box.id): box for box in warehouse_boxes
+    }
+    inbound_box_by_id = {box.id: box for box in inbound_boxes}
+    cargo_place_by_id = {place.id: place for place in cargo_places}
+
+    paths: dict[
+        tuple[ContainerKind, uuid.UUID], tuple[WarehouseContainerPathItem, ...]
+    ] = {}
+    for ref in container_refs:
+        kind, container_id = ref
+        if kind == "pallet":
+            pallet = pallet_by_id.get(container_id)
+            if pallet is None:
+                raise WarehouseMapError("container_not_found")
+            paths[ref] = (_container_path_item("pallet", pallet.id, pallet.code),)
+            continue
+
+        code: str
+        parent_pallet_id: uuid.UUID | None
+        warehouse_box = warehouse_box_by_key.get(ref)
+        if warehouse_box is not None:
+            code = warehouse_box.internal_barcode
+            parent_pallet_id = warehouse_box.pallet_id
+        elif kind == "box" and container_id in inbound_box_by_id:
+            inbound_box = inbound_box_by_id[container_id]
+            code = f"КР-{inbound_box.box_number:06d}"
+            parent_pallet_id = inbound_box.pallet_id
+        elif kind == "cargo_place" and container_id in cargo_place_by_id:
+            cargo_place = cargo_place_by_id[container_id]
+            code = f"ГМ-{cargo_place.place_number:06d}"
+            parent_pallet_id = cargo_place.pallet_id
+        else:
+            raise WarehouseMapError("container_not_found")
+
+        path: list[WarehouseContainerPathItem] = []
+        if parent_pallet_id is not None:
+            parent = pallet_by_id.get(parent_pallet_id)
+            if parent is None:
+                raise WarehouseMapError("container_not_found")
+            path.append(_container_path_item("pallet", parent.id, parent.code))
+        path.append(_container_path_item(kind, container_id, code))
+        paths[ref] = tuple(path)
+    return paths
 
 
 def _card_data(card: SellerWildberriesImportedCard | None) -> tuple[str | None, str | None]:

@@ -34,6 +34,7 @@ from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.services import inventory_service
+from app.services import pick_option_location_service as pick_location_svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.fbs_cancelled_after_pack_service import (
     cancelled_operation_message,
@@ -41,6 +42,7 @@ from app.services.fbs_cancelled_after_pack_service import (
 )
 from app.services.fbs_workspace_service import FbsWorkspaceError, get_supply_workspace
 from app.services.operation_fact_service import record_fbs_pick
+from app.services.pick_option_location_service import PickOptionLocation
 from app.services.sorting_location_service import (
     get_or_create_sorting_location,
 )
@@ -56,16 +58,6 @@ class FbsPickingError(Exception):
 
     def __post_init__(self) -> None:
         super().__init__(self.code)
-
-
-@dataclass(frozen=True)
-class PickOptionLocation:
-    storage_location_id: uuid.UUID
-    location_code: str
-    quantity: int
-    reserved: int
-    available: int
-    picked: int
 
 
 @dataclass(frozen=True)
@@ -188,63 +180,20 @@ async def get_pick_options(
     for (product_id, _location_id), quantity in picked_by_location.items():
         picked_by_product[product_id] = picked_by_product.get(product_id, 0) + quantity
 
-    balance_rows = await inventory_service.list_location_balances_for_products_in_warehouse(
-        session,
-        tenant_id,
-        supply.warehouse_id,
-        product_ids,
-    )
-    locations_by_product: dict[uuid.UUID, list[PickOptionLocation]] = {
-        product_id: [] for product_id in product_ids
-    }
-    seen_pairs: set[tuple[uuid.UUID, uuid.UUID]] = set()
-    for product_id, location_id, code, on_hand, reserved in balance_rows:
-        seen_pairs.add((product_id, location_id))
-        locations_by_product[product_id].append(
-            PickOptionLocation(
-                storage_location_id=location_id,
-                location_code=code,
-                quantity=on_hand,
-                reserved=reserved,
-                available=max(0, on_hand - reserved),
-                picked=picked_by_location.get((product_id, location_id), 0),
-            )
+    try:
+        locations_by_product = await pick_location_svc.list_pick_option_locations(
+            session,
+            tenant_id,
+            supply.warehouse_id,
+            product_ids,
+            picked_by_location,
         )
-
-    # A completed pick moves the unit away from its source cell. The positive-balance
-    # query then omits that cell, but it must remain visible so the operator can undo
-    # the pick back to the original source.
-    for (product_id, location_id), quantity in picked_by_location.items():
-        if (product_id, location_id) in seen_pairs or product_id not in planned:
-            continue
-        location = await session.scalar(
-            select(StorageLocation).where(
-                StorageLocation.id == location_id,
-                StorageLocation.tenant_id == tenant_id,
-                StorageLocation.warehouse_id == supply.warehouse_id,
-            )
-        )
-        if location is None:
-            continue
-        available = await inventory_service.available_at_location(
-            session, tenant_id, product_id, location_id
-        )
-        reserved = await inventory_service.total_reserved_at_location(
-            session, tenant_id, product_id, location_id
-        )
-        locations_by_product[product_id].append(
-            PickOptionLocation(
-                storage_location_id=location_id,
-                location_code=location.code,
-                quantity=available + reserved,
-                reserved=reserved,
-                available=max(0, available),
-                picked=quantity,
-            )
-        )
-
-    for locations in locations_by_product.values():
-        locations.sort(key=lambda location: location.location_code)
+    except pick_location_svc.PickOptionLocationError as exc:
+        raise FbsPickingError(
+            exc.code,
+            "Неконсистентная ссылка на складскую тару.",
+            http_status=409,
+        ) from exc
 
     return [
         PickOptionProduct(

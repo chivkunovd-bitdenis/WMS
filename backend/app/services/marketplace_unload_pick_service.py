@@ -16,9 +16,10 @@ from app.models.marketplace_unload import (
     MarketplaceUnloadRequest,
 )
 from app.models.storage_location import StorageLocation
-from app.services import inventory_service
 from app.services import marketplace_unload_service as mu_svc
+from app.services import pick_option_location_service as pick_location_svc
 from app.services import tenant_settings_service as tenant_settings_svc
+from app.services.pick_option_location_service import PickOptionLocation
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
 PICK_EDITABLE_STATUSES = mu_svc.EXECUTION_STATUSES
@@ -35,16 +36,6 @@ class PickAllocationRow:
     product_id: uuid.UUID
     storage_location_id: uuid.UUID | None
     quantity: int
-
-
-@dataclass(frozen=True)
-class PickOptionLocation:
-    storage_location_id: uuid.UUID
-    location_code: str
-    quantity: int
-    reserved: int
-    available: int
-    picked: int
 
 
 @dataclass(frozen=True)
@@ -184,53 +175,16 @@ async def get_pick_options(
 
     picked = await _picked_qty_by_product(session, req.id)
     picked_by_loc = await _picked_qty_by_product_location(session, req.id)
-    bal_rows = await inventory_service.list_location_balances_for_products_in_warehouse(
-        session,
-        tenant_id,
-        req.warehouse_id,
-        product_ids,
-    )
-    loc_by_product: dict[uuid.UUID, list[PickOptionLocation]] = {pid: [] for pid in product_ids}
-    seen_pairs: set[tuple[uuid.UUID, uuid.UUID]] = set()
-    for pid, loc_id, code, on_hand, rsv in bal_rows:
-        seen_pairs.add((pid, loc_id))
-        loc_by_product.setdefault(pid, []).append(
-            PickOptionLocation(
-                storage_location_id=loc_id,
-                location_code=code,
-                quantity=on_hand,
-                reserved=rsv,
-                available=max(0, on_hand - rsv),
-                picked=picked_by_loc.get((pid, loc_id), 0),
-            )
+    try:
+        loc_by_product = await pick_location_svc.list_pick_option_locations(
+            session,
+            tenant_id,
+            req.warehouse_id,
+            product_ids,
+            picked_by_loc,
         )
-
-    # Ячейки, по которым уже есть подбор, но остаток в них стал нулевым, не попадают
-    # в bal_rows (там фильтр quantity > 0) — без них оператор не смог бы вернуть
-    # снятое обратно в ячейку (PICK-01).
-    for (pid, loc_id), qty in picked_by_loc.items():
-        if (pid, loc_id) in seen_pairs or pid not in loc_by_product:
-            continue
-        loc = await session.get(StorageLocation, loc_id)
-        if loc is None:
-            continue
-        available = await inventory_service.available_at_location(session, tenant_id, pid, loc_id)
-        reserved = await inventory_service.total_reserved_at_location(
-            session, tenant_id, pid, loc_id
-        )
-        loc_by_product[pid].append(
-            PickOptionLocation(
-                storage_location_id=loc_id,
-                location_code=loc.code,
-                quantity=available + reserved,
-                reserved=reserved,
-                available=max(0, available),
-                picked=qty,
-            )
-        )
-
-    for _pid, locs in loc_by_product.items():
-        locs.sort(key=lambda loc: loc.location_code)
+    except pick_location_svc.PickOptionLocationError as exc:
+        raise MarketplaceUnloadPickError(exc.code) from exc
 
     out: list[PickOptionProduct] = []
     for ln in req.lines:
