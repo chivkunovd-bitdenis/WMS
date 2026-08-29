@@ -27,7 +27,7 @@ import CloseOutlined from '@mui/icons-material/CloseOutlined'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import type { WbProductPickerCatalogRow } from '../../components/WbProductPickerDialog'
-import { storageLocationLabel, SORTING_LOCATION_CODE } from '../../utils/inboundQueues'
+import { storageLocationLabel } from '../../utils/inboundQueues'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 import {
@@ -126,12 +126,22 @@ function locationAddableQty(row: PickOptionProduct, locationId: string): number 
   return Math.min(planRemaining, loc.available)
 }
 
+// pick-options (marketplace-unload-requests/{id}/pick-options) отдаёт для
+// системной sorting-ячейки уже человеческую подпись «Без ячеек», а не сырой
+// код __SORTING__ — контракт изменён бэкендом в PICK-CONTAINERS-01 (общий
+// pick_option_location_service._operator_location_code). SORTING_LOCATION_CODE
+// из utils/inboundQueues тут больше не приходит, поэтому сравниваем с той же
+// подписью, что и бэковый UNASSIGNED_LABEL (sorting_location_service.py).
+const SORTING_ZONE_LOCATION_LABEL = 'Без ячеек'
+
 function hasStorageCellBalances(locations: PickOptionLocation[]): boolean {
-  return locations.some((l) => l.location_code !== SORTING_LOCATION_CODE)
+  return locations.some((l) => l.location_code !== SORTING_ZONE_LOCATION_LABEL)
 }
 
 function sortingZoneAvailable(locations: PickOptionLocation[]): number {
-  return locations.find((l) => l.location_code === SORTING_LOCATION_CODE)?.available ?? 0
+  return (
+    locations.find((l) => l.location_code === SORTING_ZONE_LOCATION_LABEL)?.available ?? 0
+  )
 }
 
 function productNeedsExplicitLocation(
