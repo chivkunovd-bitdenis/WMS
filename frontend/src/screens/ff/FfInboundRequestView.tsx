@@ -72,6 +72,7 @@ import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { inboundOperationTypeReceptionLabel } from '../../utils/inboundOperationType'
 import { FfInboundBoxAddDialog } from './FfInboundBoxAddDialog'
 import { FfInboundSortingPanel } from './FfInboundSortingPanel'
+import { FfSortingObjectsPage } from './sorting-objects/FfSortingObjectsPage'
 import { buildInboundScanProductMap, findInboundScanProductId } from './inboundScanLookup'
 import { BoxImportDialog } from '../../components/BoxImportDialog'
 import {
@@ -2306,6 +2307,18 @@ export function FfInboundRequestView({
                 <Alert severity="success" sx={{ mb: 2 }} data-testid="ff-sorting-posted-done">
                   {addressStorageEnabled ? 'Оприходовано — весь товар разложен по ячейкам хранения.' : 'Оприходовано — весь товар принят на склад.'}
                 </Alert>
+              ) : null}
+              {/* Раскладка по ячейкам — инструмент сортировки: разложить то, что
+                  только что приняли. Владелец: «экран сортировки должен быть
+                  внутри документа сортировки». Раньше здесь под каждым товаром
+                  выбирали ячейку по одной. */}
+              {addressStorageEnabled && token ? (
+                <Box sx={{ mb: 2 }} data-testid="ff-inbound-sorting-objects">
+                  <FfSortingObjectsPage
+                    token={token}
+                    warehouses={[{ id: detail.warehouse_id, name: 'Склад приёмки' }]}
+                  />
+                </Box>
               ) : null}
               {addressStorageEnabled ? <FfInboundSortingPanel
                 token={token}

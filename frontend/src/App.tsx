@@ -2966,8 +2966,6 @@ export default function App() {
               token && canReceptionOps ? (
                 <FfInboundQueuePage
                   addressStorageEnabled={me.address_storage_enabled !== false} workspace="sorting"
-                  token={token}
-                  warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}
                   rows={inboundSummaries}
                   onOpen={(id) => {
                     setSelectedOutboundId(null)

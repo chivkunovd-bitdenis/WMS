@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FfSortingObjectsPage } from './sorting-objects/FfSortingObjectsPage'
 import {
   Alert,
   Box,
@@ -62,9 +61,6 @@ type Props = {
   error?: string | null
   onRetry?: () => void | Promise<void>
   addressStorageEnabled?: boolean
-  /** Токен и склады нужны раскладке: она живёт внутри сортировки, а не отдельно. */
-  token?: string
-  warehouses?: Array<{ id: string; name: string }>
 }
 
 type SortKey = 'date' | 'number'
@@ -138,8 +134,6 @@ export function FfInboundQueuePage({
   error = null,
   onRetry,
   addressStorageEnabled = true,
-  token,
-  warehouses,
 }: Props) {
   const [sellerFilter, setSellerFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -546,11 +540,6 @@ export function FfInboundQueuePage({
           <Typography variant="body2" color="text.secondary">
             Зона «Сортировка» — служебный буфер принятого товара до раскладки; как обычную полку хранения её не выбирают.
           </Typography>
-          {/* Раскладка по ячейкам — это и есть сортировка: сюда попадает ровно
-              то, что пришло из приёмки. Отдельным разделом она не живёт. */}
-          {token && warehouses && warehouses.length > 0 ? (
-            <FfSortingObjectsPage token={token} warehouses={warehouses} />
-          ) : null}
         </Stack>
       ) : null}
     </Box>
