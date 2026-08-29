@@ -253,8 +253,20 @@ test('ff staff rights: four compact work blocks pass UI and direct-route gates',
   await expect(page.getByTestId('nav-catalog')).toBeVisible()
   await expect(page.getByTestId('nav-ff-storage')).toBeVisible()
   await expect(page.getByTestId('nav-catalog')).toContainText('Каталог и ячейки')
+  // Раздел «Ячейки» (/app/catalog) с коммита 8d611534/789204a8 требует
+  // isFulfillmentAdmin (см. App.tsx, path="catalog") — карта склада
+  // (/app/ff/warehouse-map) заняла его место как единственный маршрут,
+  // доступный сотруднику с правом cells без админки. Пункт «nav-catalog»
+  // ведёт туда же для всех ролей с этим правом; ярлык теста «/products»
+  // отстал от этой замены раздела.
   await page.getByTestId('nav-catalog').click()
-  await expect(page).toHaveURL(/\/app\/ff\/products/)
+  await expect(page).toHaveURL(/\/app\/ff\/warehouse-map/)
+  await expect(page.getByTestId('warehouse-map-screen')).toBeVisible()
+
+  // Ограничения по кнопкам каталога (создать селлера/импорт ТЗ и т.д.) —
+  // это про сам экран /app/ff/products для роли без прав администратора,
+  // а не про то, как на него попали, поэтому возвращаемся туда напрямую.
+  await page.goto('/app/ff/products')
   await expect(page.getByTestId('ff-products-list')).toBeVisible()
   await expect(page.getByTestId('nav-ff-reception')).toHaveCount(0)
   await expect(page.getByTestId('nav-ff-mp-shipments')).toHaveCount(0)
