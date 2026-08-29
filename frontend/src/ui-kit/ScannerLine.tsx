@@ -64,21 +64,20 @@ export function ScannerField({
   testId?: string
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
+  // Держал ли фокус сам сканер. Только по этому признаку поле имеет право
+  // забрать фокус обратно.
+  //
+  // Проверять `document.activeElement` в момент эффекта оказалось недостаточно.
+  // Оператор набирает количество в строке товара, экран сохраняет введённое,
+  // строка перерисовывается — и поле количества на мгновение теряет фокус.
+  // В этот зазор `activeElement` равен `body`, прошлая проверка считала, что
+  // никто не печатает, и курсор выпрыгивал в сканер. При медленном вводе зазора
+  // не возникало, при быстром и у настоящего сканера-клавиатуры — всегда.
+  const ownsFocusRef = useRef(true)
 
   useEffect(() => {
     if (busy) return
-    // Сканер держит фокус, чтобы пик сразу попадал в поле. Но забирать фокус
-    // силой нельзя: оператор в этот момент может набирать количество в строке
-    // товара. Любой ответ сервера менял busy и notice, эффект срабатывал — и
-    // курсор выпрыгивал из поля количества обратно в сканер на первой же цифре.
-    const active = typeof document === 'undefined' ? null : document.activeElement
-    const typingElsewhere =
-      active instanceof HTMLElement &&
-      active !== inputRef.current &&
-      (active.tagName === 'INPUT' ||
-        active.tagName === 'TEXTAREA' ||
-        active.isContentEditable)
-    if (typingElsewhere) return
+    if (!ownsFocusRef.current) return
     inputRef.current?.focus()
   }, [busy, notice, error])
 
@@ -92,6 +91,14 @@ export function ScannerField({
         value={value}
         disabled={busy}
         onChange={(event) => onChange(event.target.value)}
+        onFocus={() => {
+          ownsFocusRef.current = true
+        }}
+        onBlur={() => {
+          // Пока идёт запрос, поле выключено и теряет фокус само — это не уход
+          // оператора в другое поле, и право вернуть фокус сохраняем.
+          if (!busy) ownsFocusRef.current = false
+        }}
         onKeyDown={(event) => {
           if (event.key !== 'Enter') return
           // Значение берём из самого поля, а не из состояния React. «Клавиатурный»

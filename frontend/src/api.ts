@@ -1,5 +1,3 @@
-import { readApiErrorMessage } from './utils/readApiErrorMessage';
-
 const API_PREFIX = '/api';
 
 export type AuthStoragePortal = 'fulfillment' | 'seller';
@@ -70,18 +68,3 @@ export type ProductFbsStockLimitFromBalanceResult = {
   pool_reset_products_count: number;
 };
 
-export async function applyFbsStockLimitFromBalance(
-  token: string,
-  authHeaders: (t: string) => Record<string, string>,
-  productIds: string[],
-): Promise<ProductFbsStockLimitFromBalanceResult> {
-  const res = await fetch(apiUrl('/products/fbs-stock-limit/from-balance/bulk'), {
-    method: 'PATCH',
-    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ product_ids: productIds }),
-  });
-  if (!res.ok) {
-    throw new Error(await readApiErrorMessage(res));
-  }
-  return (await res.json()) as ProductFbsStockLimitFromBalanceResult;
-}

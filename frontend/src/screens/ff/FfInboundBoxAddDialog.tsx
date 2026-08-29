@@ -419,7 +419,7 @@ export function FfInboundBoxAddDialog({
     >
       <DialogTitle component="div" sx={{ pr: 6, flexShrink: 0 }} data-testid="ff-inbound-box-add-title">
         <Typography component="span" variant="h6" sx={{ display: 'block', fontWeight: 700 }}>
-          Наполнить короб
+          {containerKind === 'cargo_place' ? 'Наполнить грузоместо' : 'Наполнить короб'}
         </Typography>
         <Typography
           variant="body2"
