@@ -32,6 +32,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
+import { FfUnloadPickPage } from '../ff/unload-pick/FfUnloadPickPage'
 import CloseIcon from '@mui/icons-material/Close'
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined'
@@ -1682,6 +1683,14 @@ export function FfFbsSupplyWorkspace({
           {workspace && stage === 'picking' ? (
             <Stack spacing={2}>
               {!stageIsCurrent ? <Alert severity="success">Подбор завершён. Этот этап доступен только для просмотра.</Alert> : null}
+              {/* Тот же экран подбора, что в документе отгрузки: строка идёт от
+                  товара, видно где он лежит и сколько снять. Владелец требовал
+                  одинаковый инструмент в обоих подборах. */}
+              {supplyId ? (
+                <Box data-testid="fbs-pick-unified">
+                  <FfUnloadPickPage token={token} requestId={supplyId} source="fbs" />
+                </Box>
+              ) : null}
               {addressStorageEnabled ? <Paper variant="outlined" sx={{ p: 2 }}>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'flex-start' }, mb: 2 }}>
                   <Box>

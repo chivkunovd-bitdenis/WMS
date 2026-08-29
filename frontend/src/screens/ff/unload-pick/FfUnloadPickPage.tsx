@@ -16,7 +16,8 @@ import { pickKey, type PickedMap } from './pickRows'
 // оптимистичного изменения, перечитываем документ — иначе оператор продолжит
 // работу по цифрам, которых в системе на самом деле нет.
 
-const BASE = '/operations/marketplace-unload-requests'
+const UNLOAD_BASE = '/operations/marketplace-unload-requests'
+const FBS_BASE = '/operations/fbs-supplies'
 
 function headers(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}` }
@@ -99,9 +100,18 @@ type Props = {
    * приходит пропсом — адрес страницы при этом не меняется.
    */
   requestId?: string
+  /**
+   * Откуда подбираем: отгрузка на маркетплейс или поставка FBS.
+   *
+   * Экран один и тот же — владелец так и требовал. Обе стороны отдают места
+   * одной формой и принимают запись одними и теми же двумя ручками, поэтому
+   * различается только корень адреса.
+   */
+  source?: 'unload' | 'fbs'
 }
 
-export function FfUnloadPickPage({ token, requestId: requestIdProp }: Props) {
+export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Props) {
+  const BASE = source === 'fbs' ? FBS_BASE : UNLOAD_BASE
   const params = useParams<{ requestId: string }>()
   const requestId = requestIdProp ?? params.requestId
   const navigate = useNavigate()
