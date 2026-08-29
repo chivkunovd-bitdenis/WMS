@@ -60,7 +60,13 @@ test('S-16: server marketplace filter and warehouse-only Ozon binding feedback',
   await page.goto('/app/ff/products')
   await expect(page.getByTestId('ff-products-table')).toBeVisible()
   const filterResponse = page.waitForResponse((response) =>
-    response.url().includes('/api/products/ff-catalog?marketplace=ozon') && response.ok(),
+    // Каталог давно ходит в постраничную ручку ff-catalog-page: старый адрес
+    // ff-catalog экран не зовёт вовсе, и ожидание такого ответа висело до
+    // таймаута. Параметры в строке идут в другом порядке, поэтому проверяем
+    // адрес и отбор по отдельности.
+    response.url().includes('/api/products/ff-catalog-page') &&
+      response.url().includes('marketplace=ozon') &&
+      response.ok(),
   )
   await page.getByTestId('ff-catalog-marketplace-filter').click()
   await page.getByRole('option', { name: 'Ozon', exact: true }).click()
