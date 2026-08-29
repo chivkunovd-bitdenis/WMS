@@ -196,21 +196,8 @@ def upgrade() -> None:
         "inventory_balances",
         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
     )
-    op.create_check_constraint(
-        "ck_inventory_balance_quantity_nonnegative",
-        "inventory_balances",
-        "quantity >= 0",
-    )
-    op.create_check_constraint(
-        "ck_inventory_balance_quantity_unpacked_nonnegative",
-        "inventory_balances",
-        "quantity_unpacked >= 0",
-    )
-    op.create_check_constraint(
-        "ck_inventory_balance_quantity_packed_nonnegative",
-        "inventory_balances",
-        "quantity_packed >= 0",
-    )
+    # Эти проверки намеренно не создаём: минус в остатке — законный след
+    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
     op.create_index(
         "uq_inventory_balance_loc_product_container",
         "inventory_balances",
@@ -236,21 +223,6 @@ def downgrade() -> None:
     )
     op.drop_index(
         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
-    )
-    op.drop_constraint(
-        "ck_inventory_balance_quantity_packed_nonnegative",
-        "inventory_balances",
-        type_="check",
-    )
-    op.drop_constraint(
-        "ck_inventory_balance_quantity_unpacked_nonnegative",
-        "inventory_balances",
-        type_="check",
-    )
-    op.drop_constraint(
-        "ck_inventory_balance_quantity_nonnegative",
-        "inventory_balances",
-        type_="check",
     )
     op.drop_constraint(
         "ck_inventory_balance_container_kind",
