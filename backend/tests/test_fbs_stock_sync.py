@@ -32,15 +32,18 @@ from app.models.fbs_stock_sync_item import (
     FbsStockSyncItem,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.inventory_balance import InventoryBalance
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
+from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
 from app.services.fbs_stock_sync_service import (
     DEFAULT_RATE_INTERVAL_SECONDS,
     ERROR_DUPLICATE_CHRT,
     ERROR_READBACK_MISMATCH,
+    ERROR_STOCK_RULE_CALCULATION_FAILED,
     ERROR_SYNC_BUSY,
     ERROR_UNSAFE_STOCK_UNKNOWN,
     NoopStockSyncRateLimiter,
@@ -115,6 +118,8 @@ def _product(
     sku_suffix: str,
     fbs_stock_sync_enabled: bool = True,
     fbs_stock_limit: int | None = None,
+    fbs_percent: int | None = None,
+    fbs_same_everywhere: bool = True,
 ) -> Product:
     return Product(
         id=uuid.uuid4(),
@@ -125,24 +130,67 @@ def _product(
         wb_chrt_id=chrt_id,
         fbs_stock_sync_enabled=fbs_stock_sync_enabled,
         fbs_stock_limit=fbs_stock_limit,
+        fbs_percent=fbs_percent,
+        fbs_same_everywhere=fbs_same_everywhere,
     )
 
 
-async def _add_fbs_pool(
+async def _configure_rule_amount(
     session: AsyncSession,
     ctx: _SeedContext,
     product: Product,
-    quantity: int,
+    amount: int,
 ) -> None:
-    """Seed a manual pool allocation for ctx.binding — the new source of truth."""
-    session.add(
-        FbsBindingStockPool(
-            tenant_id=ctx.tenant.id,
-            binding_id=ctx.binding.id,
-            product_id=product.id,
-            quantity=quantity,
-        )
+    """Настроить правило 100% так, чтобы оно вычислило заданное количество."""
+    product.fbs_percent = 100
+    location = StorageLocation(
+        id=uuid.uuid4(),
+        tenant_id=ctx.tenant.id,
+        warehouse_id=ctx.warehouse.id,
+        code=f"CELL-{uuid.uuid4().hex[:8]}",
+        barcode=f"BC-{uuid.uuid4().hex[:10]}",
     )
+    session.add_all(
+        [
+            location,
+            InventoryBalance(
+                id=uuid.uuid4(),
+                tenant_id=ctx.tenant.id,
+                storage_location_id=location.id,
+                product_id=product.id,
+                quantity=amount,
+            ),
+        ]
+    )
+    await session.commit()
+
+
+async def _configure_bulk_rule_amount(
+    session: AsyncSession,
+    ctx: _SeedContext,
+    products: list[Product],
+    amount: int,
+) -> None:
+    """Настроить одинаковый рассчитанный остаток для пачечных sync-тестов."""
+    location = StorageLocation(
+        id=uuid.uuid4(),
+        tenant_id=ctx.tenant.id,
+        warehouse_id=ctx.warehouse.id,
+        code=f"CELL-{uuid.uuid4().hex[:8]}",
+        barcode=f"BC-{uuid.uuid4().hex[:10]}",
+    )
+    session.add(location)
+    for product in products:
+        product.fbs_percent = 100
+        session.add(
+            InventoryBalance(
+                id=uuid.uuid4(),
+                tenant_id=ctx.tenant.id,
+                storage_location_id=location.id,
+                product_id=product.id,
+                quantity=amount,
+            )
+        )
     await session.commit()
 
 
@@ -225,8 +273,19 @@ async def test_sync_skips_products_with_disabled_fbs_sync_flag(
         chrt_id=9101,
         sku_suffix="disabled",
         fbs_stock_sync_enabled=False,
+        fbs_percent=0,
     )
-    db_session.add(disabled)
+    db_session.add_all(
+        [
+            disabled,
+            FbsBindingStockPool(
+                tenant_id=ctx.tenant.id,
+                binding_id=ctx.binding.id,
+                product_id=disabled.id,
+                quantity=57,
+            ),
+        ]
+    )
     await db_session.commit()
 
     transport = _MockStocksTransport()
@@ -358,10 +417,9 @@ async def test_sync_does_not_zero_disabled_product_from_stale_confirmed_item(
     assert transport.put_calls == []
 
 
-# Manual-pool model: no fbs_binding_stock_pools row for this binding means the
-# admin hasn't allocated any of the pool here yet — nothing publishes, no error.
+# Старое число не заменяет отсутствующую настройку нового правила.
 @pytest.mark.asyncio
-async def test_sync_skips_enabled_product_without_pool_allocation(
+async def test_sync_skips_product_without_percent_despite_old_pool_number(
     db_session: AsyncSession,
 ) -> None:
     ctx = await _seed_binding(db_session)
@@ -371,7 +429,17 @@ async def test_sync_skips_enabled_product_without_pool_allocation(
         chrt_id=331,
         sku_suffix="no-fbs-pool",
     )
-    db_session.add(product)
+    db_session.add_all(
+        [
+            product,
+            FbsBindingStockPool(
+                tenant_id=ctx.tenant.id,
+                binding_id=ctx.binding.id,
+                product_id=product.id,
+                quantity=57,
+            ),
+        ]
+    )
     await db_session.commit()
 
     transport = _MockStocksTransport()
@@ -407,6 +475,134 @@ async def test_sync_skips_enabled_product_without_pool_allocation(
     assert ctx.binding.last_error_code is None
 
 
+@pytest.mark.asyncio
+async def test_sync_publishes_explicit_zero_percent_as_zero(
+    db_session: AsyncSession,
+) -> None:
+    ctx = await _seed_binding(db_session)
+    product = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=332,
+        sku_suffix="explicit-zero-percent",
+        fbs_percent=0,
+    )
+    db_session.add_all(
+        [
+            product,
+            FbsBindingStockPool(
+                tenant_id=ctx.tenant.id,
+                binding_id=ctx.binding.id,
+                product_id=product.id,
+                quantity=64,
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    transport = _MockStocksTransport()
+    transport.stored[332] = 64
+    async with _client(transport) as http_client:
+        result = await sync_binding_stocks(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            ctx.binding,
+            http_client,
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert result.products_targeted == 1
+    assert result.products_confirmed == 1
+    assert [[entry.amount for entry in batch] for batch in transport.put_calls] == [[0]]
+    assert transport.stored[332] == 0
+
+
+@pytest.mark.asyncio
+async def test_sync_skips_binding_not_served_by_us(db_session: AsyncSession) -> None:
+    ctx = await _seed_binding(db_session)
+    ctx.binding.served = False
+    product = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=334,
+        sku_suffix="not-served",
+        fbs_percent=100,
+    )
+    db_session.add(product)
+    await db_session.commit()
+
+    transport = _MockStocksTransport()
+    transport.stored[334] = 10
+    async with _client(transport) as http_client:
+        result = await sync_binding_stocks(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            ctx.binding,
+            http_client,
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert result.products_targeted == 0
+    assert transport.put_calls == []
+    assert transport.stored[334] == 10
+
+
+@pytest.mark.asyncio
+async def test_rule_failure_marks_binding_error_without_old_pool_fallback(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx = await _seed_binding(db_session)
+    product = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=335,
+        sku_suffix="rule-error",
+        fbs_percent=100,
+    )
+    db_session.add_all(
+        [
+            product,
+            FbsBindingStockPool(
+                tenant_id=ctx.tenant.id,
+                binding_id=ctx.binding.id,
+                product_id=product.id,
+                quantity=57,
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    async def fail_rule(*_args: object, **_kwargs: object) -> dict[uuid.UUID, int]:
+        raise RuntimeError("ошибка расчёта правила")
+
+    monkeypatch.setattr(
+        "app.services.fbs_stock_sync_service.publish_amounts_for_binding",
+        fail_rule,
+    )
+    transport = _MockStocksTransport()
+    transport.stored[335] = 57
+    async with _client(transport) as http_client:
+        result = await sync_binding_stocks(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            ctx.binding,
+            http_client,
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert result.errors == 1
+    assert result.error_code == ERROR_STOCK_RULE_CALCULATION_FAILED
+    assert transport.put_calls == []
+    assert transport.stored[335] == 57
+    await db_session.refresh(ctx.binding)
+    assert ctx.binding.last_sync_status == STOCK_SYNC_STATUS_ERROR
+    assert ctx.binding.last_error_code == ERROR_STOCK_RULE_CALCULATION_FAILED
+
+
 # TC-NEW-FBS-STOCK-009 — PUT + readback happy path
 @pytest.mark.asyncio
 async def test_sync_confirms_when_readback_matches(db_session: AsyncSession) -> None:
@@ -419,7 +615,7 @@ async def test_sync_confirms_when_readback_matches(db_session: AsyncSession) -> 
     )
     db_session.add(product)
     await db_session.commit()
-    await _add_fbs_pool(db_session, ctx, product, 7)
+    await _configure_rule_amount(db_session, ctx, product, 7)
 
     transport = _MockStocksTransport()
     async with _client(transport) as http_client:
@@ -447,10 +643,9 @@ async def test_sync_confirms_when_readback_matches(db_session: AsyncSession) -> 
     assert "wb-test-token-secret" not in str(result)
 
 
-# Manual-pool model: the number in fbs_binding_stock_pools publishes AS-IS — not
-# reduced by FBS order reservations, not derived from InventoryBalance/StockDirection.
+# Новое правило — единственный источник: 100% от свободных 200 штук дают 200.
 @pytest.mark.asyncio
-async def test_sync_publishes_exact_manual_pool_amount(
+async def test_sync_publishes_amount_calculated_by_rule(
     db_session: AsyncSession,
 ) -> None:
     ctx = await _seed_binding(db_session)
@@ -462,7 +657,7 @@ async def test_sync_publishes_exact_manual_pool_amount(
     )
     db_session.add(product)
     await db_session.commit()
-    await _add_fbs_pool(db_session, ctx, product, 200)
+    await _configure_rule_amount(db_session, ctx, product, 200)
 
     transport = _MockStocksTransport()
     async with _client(transport) as http_client:
@@ -492,46 +687,64 @@ async def test_sync_publishes_exact_manual_pool_amount(
     assert item.last_confirmed_amount == 200
 
 
-# Manual-pool model: two bindings for the same product each carry their own row in
-# fbs_binding_stock_pools — no shared computed number, so no ambiguity to block.
+# Разные доли по двум складам WB делят общий свободный остаток по правилу.
 @pytest.mark.asyncio
-async def test_sync_publishes_independent_pool_amounts_per_binding(
+async def test_sync_publishes_rule_amounts_per_binding(
     db_session: AsyncSession,
 ) -> None:
     ctx = await _seed_binding(db_session, wb_warehouse_id=501101)
-    second_warehouse = Warehouse(
-        id=uuid.uuid4(),
-        tenant_id=ctx.tenant.id,
-        name="Second FBS WH",
-        code=f"wh2-{uuid.uuid4().hex[:6]}",
-    )
     second_binding = FbsWarehouseBinding(
         id=uuid.uuid4(),
         tenant_id=ctx.tenant.id,
         seller_id=ctx.seller.id,
         wb_warehouse_id=501102,
-        wms_warehouse_id=second_warehouse.id,
+        wms_warehouse_id=ctx.warehouse.id,
         is_active=True,
         stock_sync_enabled=True,
+        served=True,
     )
     product = _product(
         tenant_id=ctx.tenant.id,
         seller_id=ctx.seller.id,
         chrt_id=1211,
-        sku_suffix="f10-independent-pool",
+        sku_suffix="f10-rule-split",
+        fbs_percent=0,
+        fbs_same_everywhere=False,
     )
-    db_session.add_all([second_warehouse, second_binding, product])
-    await db_session.commit()
-    # Manual split: 12 units to the first binding, 8 to the second — same product,
-    # two different WB warehouses, no shared computed number.
-    await _add_fbs_pool(db_session, ctx, product, 12)
-    db_session.add(
-        FbsBindingStockPool(
-            tenant_id=ctx.tenant.id,
-            binding_id=second_binding.id,
-            product_id=product.id,
-            quantity=8,
-        )
+    location = StorageLocation(
+        id=uuid.uuid4(),
+        tenant_id=ctx.tenant.id,
+        warehouse_id=ctx.warehouse.id,
+        code=f"CELL-{uuid.uuid4().hex[:8]}",
+        barcode=f"BC-{uuid.uuid4().hex[:10]}",
+    )
+    db_session.add_all(
+        [
+            second_binding,
+            product,
+            location,
+            InventoryBalance(
+                id=uuid.uuid4(),
+                tenant_id=ctx.tenant.id,
+                storage_location_id=location.id,
+                product_id=product.id,
+                quantity=20,
+            ),
+            FbsBindingStockPool(
+                tenant_id=ctx.tenant.id,
+                binding_id=ctx.binding.id,
+                product_id=product.id,
+                quantity=999,
+                percent=60,
+            ),
+            FbsBindingStockPool(
+                tenant_id=ctx.tenant.id,
+                binding_id=second_binding.id,
+                product_id=product.id,
+                quantity=888,
+                percent=40,
+            ),
+        ]
     )
     await db_session.commit()
 
@@ -688,7 +901,7 @@ async def test_sync_marks_error_on_readback_mismatch(db_session: AsyncSession) -
     )
     db_session.add(product)
     await db_session.commit()
-    await _add_fbs_pool(db_session, ctx, product, 5)
+    await _configure_rule_amount(db_session, ctx, product, 5)
 
     transport = _MockStocksTransport(readback_overrides={444: 6})
     async with _client(transport) as http_client:
@@ -760,18 +973,21 @@ async def test_sync_skips_missing_chrt_and_conflicts_duplicates(
         seller_id=ctx.seller.id,
         chrt_id=None,
         sku_suffix="no-chrt",
+        fbs_percent=100,
     )
     dup_a = _product(
         tenant_id=ctx.tenant.id,
         seller_id=ctx.seller.id,
         chrt_id=777,
         sku_suffix="dup-a",
+        fbs_percent=100,
     )
     dup_b = _product(
         tenant_id=ctx.tenant.id,
         seller_id=ctx.seller.id,
         chrt_id=777,
         sku_suffix="dup-b",
+        fbs_percent=100,
     )
     ok = _product(
         tenant_id=ctx.tenant.id,
@@ -781,7 +997,7 @@ async def test_sync_skips_missing_chrt_and_conflicts_duplicates(
     )
     db_session.add_all([missing, dup_a, dup_b, ok])
     await db_session.commit()
-    await _add_fbs_pool(db_session, ctx, ok, 8)
+    await _configure_rule_amount(db_session, ctx, ok, 8)
 
     transport = _MockStocksTransport()
     async with _client(transport) as http_client:
@@ -828,18 +1044,7 @@ async def test_sync_splits_1001_items_into_two_batches(db_session: AsyncSession)
     ]
     db_session.add_all(products)
     await db_session.commit()
-    db_session.add_all(
-        [
-            FbsBindingStockPool(
-                tenant_id=ctx.tenant.id,
-                binding_id=ctx.binding.id,
-                product_id=product.id,
-                quantity=1,
-            )
-            for product in products
-        ]
-    )
-    await db_session.commit()
+    await _configure_bulk_rule_amount(db_session, ctx, products, 1)
 
     transport = _MockStocksTransport()
     async with _client(transport) as http_client:
@@ -880,7 +1085,7 @@ async def test_sync_upstream_error_marks_batch_error(
     )
     db_session.add(product)
     await db_session.commit()
-    await _add_fbs_pool(db_session, ctx, product, 4)
+    await _configure_rule_amount(db_session, ctx, product, 4)
 
     transport = _MockStocksTransport(put_status_sequence=[status_code])
     async with _client(transport) as http_client:
@@ -922,7 +1127,7 @@ async def test_sync_429_after_retry_marks_binding_upstream_error(
     )
     db_session.add(product)
     await db_session.commit()
-    await _add_fbs_pool(db_session, ctx, product, 4)
+    await _configure_rule_amount(db_session, ctx, product, 4)
 
     transport = _MockStocksTransport(put_status_sequence=[429, 429])
     async with _client(transport) as http_client:
@@ -957,7 +1162,7 @@ async def test_sync_transport_error_marks_binding_not_readback_mismatch(
     )
     db_session.add(product)
     await db_session.commit()
-    await _add_fbs_pool(db_session, ctx, product, 4)
+    await _configure_rule_amount(db_session, ctx, product, 4)
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "PUT":
@@ -997,7 +1202,7 @@ async def test_sync_429_retries_once_then_succeeds(db_session: AsyncSession) -> 
     )
     db_session.add(product)
     await db_session.commit()
-    await _add_fbs_pool(db_session, ctx, product, 4)
+    await _configure_rule_amount(db_session, ctx, product, 4)
 
     transport = _MockStocksTransport(put_status_sequence=[429])
     limiter = RecordingRateLimiter()
@@ -1042,7 +1247,7 @@ async def test_default_rate_limiter_paces_wb_calls(
     )
     db_session.add(product)
     await db_session.commit()
-    await _add_fbs_pool(db_session, ctx, product, 4)
+    await _configure_rule_amount(db_session, ctx, product, 4)
 
     transport = _MockStocksTransport()
     async with _client(transport) as http_client:
@@ -1084,7 +1289,7 @@ async def test_sync_429_honors_retry_after_on_production_limiter(
     )
     db_session.add(product)
     await db_session.commit()
-    await _add_fbs_pool(db_session, ctx, product, 4)
+    await _configure_rule_amount(db_session, ctx, product, 4)
 
     transport = _MockStocksTransport(put_status_sequence=[429])
     async with _client(transport) as http_client:
@@ -1159,18 +1364,7 @@ async def test_partial_batch_failure_leaves_confirmed_batch(
     ]
     db_session.add_all(products)
     await db_session.commit()
-    db_session.add_all(
-        [
-            FbsBindingStockPool(
-                tenant_id=ctx.tenant.id,
-                binding_id=ctx.binding.id,
-                product_id=product.id,
-                quantity=1,
-            )
-            for product in products
-        ]
-    )
-    await db_session.commit()
+    await _configure_bulk_rule_amount(db_session, ctx, products, 1)
 
     call_count = 0
 

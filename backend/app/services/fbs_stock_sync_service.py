@@ -15,7 +15,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
-from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_stock_sync_item import (
     STOCK_SYNC_STATUS_CONFIRMED,
     STOCK_SYNC_STATUS_CONFLICT,
@@ -26,6 +25,7 @@ from app.models.fbs_stock_sync_item import (
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller import Seller
+from app.services.fbs_stock_rule_service import publish_amounts_for_binding
 from app.services.wildberries_client import (
     MARKETPLACE_STOCKS_PATH,
     MarketplaceStockAmount,
@@ -57,6 +57,7 @@ ERROR_BINDING_MISMATCH = "binding_mismatch"
 ERROR_SELLER_NOT_FOUND = "seller_not_found"
 ERROR_UNSAFE_STOCK_UNKNOWN = "unsafe_stock_unknown"
 ERROR_UNSAFE_ZERO_BLOCKED = "unsafe_zero_blocked"
+ERROR_STOCK_RULE_CALCULATION_FAILED = "stock_rule_calculation_failed"
 
 
 class StockSyncRateLimiter(Protocol):
@@ -184,6 +185,7 @@ async def _load_seller_products(
         Product.tenant_id == tenant_id,
         Product.seller_id == seller_id,
         Product.fbs_stock_sync_enabled.is_(True),
+        Product.fbs_percent.is_not(None),
     )
     res = await session.execute(stmt)
     return list(res.scalars().all())
@@ -198,60 +200,31 @@ async def _load_existing_sync_items(
     return {item.chrt_id: item for item in res.scalars().all()}
 
 
-async def _load_pool_quantities(
-    session: AsyncSession,
-    binding_id: uuid.UUID,
-) -> dict[uuid.UUID, int]:
-    """Ручное распределение пула FBS по этой привязке — источник истины, синк только читает."""
-    stmt = select(FbsBindingStockPool.product_id, FbsBindingStockPool.quantity).where(
-        FbsBindingStockPool.binding_id == binding_id
-    )
-    res = await session.execute(stmt)
-    return {row.product_id: row.quantity for row in res.all()}
-
-
 async def _resolve_publish_quantities(
     session: AsyncSession,
     binding: FbsWarehouseBinding,
     products: list[Product],
 ) -> dict[uuid.UUID, int]:
-    """Источник числа для публикации: доля свободного остатка, со страховкой.
+    """Вернуть количества, рассчитанные только по правилу доли свободного остатка.
 
-    Сам механизм отправки не переписан — он как был событийным, так и остался.
-    Поменялось только то, откуда берётся число: у товара с настроенной долей оно
-    считается от свободного остатка на этот момент, а не берётся из сохранённого
-    распределения.
-
-    Товары без доли продолжают публиковаться по-старому, поэтому выкатка не
-    требует, чтобы правило успели настроить всем сразу. И если новая ветка расчёта
-    упадёт, публикация не прекращается молча: WB иначе продолжил бы продавать по
-    последнему числу, которое у него осталось.
+    Старое абсолютное поле ``fbs_binding_stock_pools.quantity`` намеренно не
+    читается: отсутствие доли означает «не трогать товар», а не откат к старому
+    числу. Ошибка расчёта также должна подняться в вызывающий код, чтобы привязка
+    получила статус ошибки и публикация не состоялась.
     """
-    stored = await _load_pool_quantities(session, binding.id)
-    try:
-        from app.services.fbs_stock_rule_service import publish_amounts_for_binding
-
-        by_rule = await publish_amounts_for_binding(session, binding, products)
-    except Exception:
-        logger.exception(
-            "fbs stock rule failed for binding %s, falling back to stored pool quantities",
-            binding.id,
-        )
-        return stored
-    stored.update(by_rule)
-    return stored
+    return await publish_amounts_for_binding(session, binding, products)
 
 
 def _build_publish_plan(
     products: list[Product],
-    pool_quantities: dict[uuid.UUID, int],
+    publish_quantities: dict[uuid.UUID, int],
     existing_items: dict[int, FbsStockSyncItem],
     product_block_errors: dict[uuid.UUID, str] | None = None,
 ) -> tuple[list[_PublishTarget], list[_BlockedTarget], list[uuid.UUID], set[int]]:
     """Return safe publish targets, blocked targets, missing chrt ids, and conflicts.
 
-    Pool quantities are read from fbs_binding_stock_pools for this binding.
-    If a product is not in the pool, it is not blocked — simply skipped.
+    Quantities come from the percentage rule. If a product is absent from the
+    calculated mapping, publication is disabled or not configured, so it is skipped.
     """
     skipped_missing: list[uuid.UUID] = []
     block_errors = product_block_errors or {}
@@ -280,16 +253,14 @@ def _build_publish_plan(
                 )
             )
             continue
-        if product.id not in pool_quantities:
-            # Нет строки распределения в fbs_binding_stock_pools для этой привязки —
-            # это НЕ ошибка, просто админ ещё не выделил количество на этот склад.
-            # Товар просто не попадает в targets, никакого blocked_targets/error_code.
+        if product.id not in publish_quantities:
+            # Нет рассчитанного количества — публикация выключена либо доля не
+            # настроена. Товар не трогаем и ноль в WB не отправляем.
             continue
-        amount = int(pool_quantities[product.id])
+        amount = int(publish_quantities[product.id])
         amount = max(amount, 0)
-        # Строка в fbs_binding_stock_pools пишется только через
-        # fbs_warehouse_binding_service.set_binding_stock_pool_quantity — само её наличие
-        # доказывает осознанное действие администратора, включая amount == 0.
+        # В результирующий словарь попадают только товары с настроенной долей,
+        # поэтому amount == 0 здесь означает осознанную нулевую долю.
         targets_by_chrt[chrt_id] = _PublishTarget(
             chrt_id=chrt_id,
             amount=amount,
@@ -613,7 +584,7 @@ async def sync_binding_stocks(
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
         raise FbsStockSyncError(ERROR_SELLER_NOT_FOUND)
 
-    if not binding.is_active or not binding.stock_sync_enabled:
+    if not binding.is_active or not binding.stock_sync_enabled or not binding.served:
         return FbsStockSyncResult()
 
     if not await _try_acquire_lease(session, binding):
@@ -631,12 +602,25 @@ async def sync_binding_stocks(
             return FbsStockSyncResult(errors=1, error_code=exc.code)
 
         products = await _load_seller_products(session, tenant_id, seller_id)
-        pool_quantities = await _resolve_publish_quantities(session, binding, products)
+        try:
+            publish_quantities = await _resolve_publish_quantities(
+                session, binding, products
+            )
+        except Exception:
+            logger.exception("fbs stock rule calculation failed for binding %s", binding.id)
+            binding.last_sync_status = STOCK_SYNC_STATUS_ERROR
+            binding.last_sync_at = _utcnow()
+            binding.last_error_code = ERROR_STOCK_RULE_CALCULATION_FAILED
+            await session.commit()
+            return FbsStockSyncResult(
+                errors=1,
+                error_code=ERROR_STOCK_RULE_CALCULATION_FAILED,
+            )
         product_block_errors: dict[uuid.UUID, str] = {}
         existing_items = await _load_existing_sync_items(session, binding.id)
 
         targets, blocked_targets, skipped_missing, conflict_chrts = _build_publish_plan(
-            products, pool_quantities, existing_items, product_block_errors
+            products, publish_quantities, existing_items, product_block_errors
         )
 
         # Zero guard: protect against zero amount without is_explicit_zero flag

@@ -93,7 +93,8 @@ class Product(Base):
     fbs_stock_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Правило вместо снимка: доля свободного остатка, которую отдаём в FBS.
     # Само число считается на момент публикации, поэтому не устаревает от прихода
-    # новой партии. Старая `fbs_stock_limit` пока остаётся ради безопасного отката.
+    # новой партии. Старая `fbs_stock_limit` остаётся только как наследуемое поле и
+    # больше не используется публикацией как аварийный источник.
     fbs_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fbs_same_everywhere: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
