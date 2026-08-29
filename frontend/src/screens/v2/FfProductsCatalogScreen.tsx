@@ -38,7 +38,7 @@ import {
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined'
 import QrCode2OutlinedIcon from '@mui/icons-material/QrCode2Outlined'
 import TuneOutlined from '@mui/icons-material/TuneOutlined'
-import { apiUrl, applyFbsStockLimitFromBalance } from '../../api'
+import { apiUrl } from '../../api'
 import { FbsStockDialog } from '../ff/products-fbs/FbsStockDialog'
 import {
   toProduct as toFbsProduct,
@@ -191,27 +191,6 @@ function humanFfCatalogError(message: string): string {
   return normalized || 'Не удалось загрузить каталог.'
 }
 
-// Массовая простановка остатка FBS = фактический остаток на складе.
-function humanFbsBulkSkipReason(reason: string): string {
-  if (reason === 'not_found') return 'товар не найден или принадлежит другому продавцу'
-  return reason
-}
-
-function ruProductsWord(count: number): string {
-  const mod10 = count % 10
-  const mod100 = count % 100
-  if (mod100 >= 11 && mod100 <= 14) return 'товаров'
-  if (mod10 === 1) return 'товар'
-  if (mod10 >= 2 && mod10 <= 4) return 'товара'
-  return 'товаров'
-}
-
-type FbsBulkResultView = {
-  updatedCount: number
-  poolResetCount: number
-  skipped: Array<{ label: string; reason: string }>
-}
-
 export function FfProductsCatalogScreen({
   token,
   authHeaders,
@@ -258,9 +237,6 @@ export function FfProductsCatalogScreen({
     rule: FbsRuleModel
   } | null>(null)
   const [fbsDialogError, setFbsDialogError] = useState<string | null>(null)
-  const [fbsBulkConfirmOpen, setFbsBulkConfirmOpen] = useState(false)
-  const [fbsBulkBusy, setFbsBulkBusy] = useState(false)
-  const [fbsBulkResult, setFbsBulkResult] = useState<FbsBulkResultView | null>(null)
 
   // ── Фильтры над таблицей (CAT-12, часть 2) ──────────────────────────────
   const [filterSearch, setFilterSearch] = useState('')
@@ -644,46 +620,6 @@ export function FfProductsCatalogScreen({
     setSearchParams(next, { replace: true })
   }, [catalog, openFbsStockDialog, searchParams, setSearchParams])
 
-  const openFbsBulkConfirm = useCallback(() => {
-    if (selectedIds.size === 0) return
-    setFbsBulkResult(null)
-    setFbsBulkConfirmOpen(true)
-  }, [selectedIds])
-
-  const closeFbsBulkConfirm = useCallback(() => {
-    if (fbsBulkBusy) return
-    setFbsBulkConfirmOpen(false)
-  }, [fbsBulkBusy])
-
-  const confirmFbsBulkApply = useCallback(async () => {
-    const ids = Array.from(selectedIds)
-    if (ids.length === 0) return
-    const labelById = new Map(rows.map((r) => [r.id, `${r.sku_code} · ${r.name}`]))
-    setFbsBulkBusy(true)
-    setError(null)
-    try {
-      const result = await applyFbsStockLimitFromBalance(token, authHeaders, ids)
-      setFbsBulkResult({
-        updatedCount: result.updated_count,
-        poolResetCount: result.pool_reset_products_count,
-        skipped: result.skipped.map((s) => ({
-          label: labelById.get(s.product_id) ?? s.product_id,
-          reason: humanFbsBulkSkipReason(s.reason),
-        })),
-      })
-      setFbsBulkConfirmOpen(false)
-      setSelectedIds(new Set())
-      await load()
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : 'Не удалось проставить остаток FBS по выбранным товарам.',
-      )
-    } finally {
-      setFbsBulkBusy(false)
-    }
-  }, [authHeaders, load, rows, selectedIds, token])
 
   const markDirectionBusy = useCallback((productId: string, pending: boolean) => {
     setDirectionBusy((current) => {
@@ -1037,29 +973,6 @@ export function FfProductsCatalogScreen({
           </Stack>
         </Paper>
 
-        {fbsBulkResult ? (
-          <Alert
-            severity={fbsBulkResult.skipped.length > 0 ? 'warning' : 'success'}
-            sx={{ mb: 2 }}
-            onClose={() => setFbsBulkResult(null)}
-            data-testid="ff-catalog-fbs-bulk-result"
-          >
-            <Typography variant="body2">
-              Остаток FBS проставлен по факту склада у {fbsBulkResult.updatedCount}{' '}
-              {ruProductsWord(fbsBulkResult.updatedCount)}. Раскладка по складам сброшена у{' '}
-              {fbsBulkResult.poolResetCount} {ruProductsWord(fbsBulkResult.poolResetCount)}.
-            </Typography>
-            {fbsBulkResult.skipped.length > 0 ? (
-              <Box component="ul" sx={{ m: 0, mt: 1, pl: 2.5 }}>
-                {fbsBulkResult.skipped.map((s, i) => (
-                  <Typography component="li" variant="caption" key={`${s.label}-${i}`}>
-                    {s.label} — {s.reason}
-                  </Typography>
-                ))}
-              </Box>
-            ) : null}
-          </Alert>
-        ) : null}
 
         {selectedIds.size > 0 ? (
           <Paper
@@ -1084,13 +997,6 @@ export function FfProductsCatalogScreen({
                   data-testid="ff-catalog-fbs-set-stock"
                 >
                   Задать остаток · {selectedIds.size}
-                </Button>
-                <Button
-                  variant="outlined"
-                  onClick={openFbsBulkConfirm}
-                  data-testid="ff-catalog-fbs-bulk-apply"
-                >
-                  Весь остаток на FBS
                 </Button>
               </Stack>
             </Stack>
@@ -1508,45 +1414,6 @@ export function FfProductsCatalogScreen({
         ) : null}
 
 
-        <Dialog
-          open={fbsBulkConfirmOpen}
-          onClose={closeFbsBulkConfirm}
-          maxWidth="xs"
-          fullWidth
-          data-testid="ff-catalog-fbs-bulk-confirm-dialog"
-        >
-          <DialogTitle>Проставить остаток FBS по факту склада?</DialogTitle>
-          <DialogContent>
-            <Stack spacing={1.5} sx={{ pt: 1 }}>
-              <Typography variant="body2">
-                Выбрано товаров: {selectedIds.size}. Остаток FBS станет равен фактически доступному
-                остатку на складе — за вычетом броней под сборку, отгрузок и именованных резервов.
-              </Typography>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                Раскладка этих товаров по складам WB будет сброшена в ноль — её нужно будет сделать
-                заново.
-              </Typography>
-              <Typography variant="body2" color="error.main">
-                Остатки по этим товарам в кабинете WB тоже обнулятся, и продажи по ним остановятся до
-                новой раскладки. Не нажимайте на бегу — сначала проверьте список выбранных товаров.
-              </Typography>
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={closeFbsBulkConfirm} disabled={fbsBulkBusy}>
-              Отмена
-            </Button>
-            <Button
-              variant="contained"
-              color="warning"
-              disabled={fbsBulkBusy}
-              onClick={() => void confirmFbsBulkApply()}
-              data-testid="ff-catalog-fbs-bulk-confirm"
-            >
-              {fbsBulkBusy ? 'Проставляем…' : 'Проставить и сбросить раскладку'}
-            </Button>
-          </DialogActions>
-        </Dialog>
 
         <Dialog
           open={editProduct !== null}
