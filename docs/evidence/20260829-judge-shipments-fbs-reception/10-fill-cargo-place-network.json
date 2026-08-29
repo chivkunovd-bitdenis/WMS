@@ -1,0 +1,7 @@
+[
+  {
+    "url": "https://web-production-9e7c1.up.railway.app/api/operations/inbound-intake-requests/4031b4a8-b481-4d10-8c86-e75620868ef5/boxes/d09fc50a-698f-408e-9d37-a6dfc506eb32/scan",
+    "status": 404,
+    "body": "{\"detail\":\"box_not_found\"}"
+  }
+]

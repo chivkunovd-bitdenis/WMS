@@ -343,7 +343,11 @@ export function FfInboundBoxAddDialog({
     try {
       const productId = findInboundScanProductId(raw, scanProductByBarcode)
       const res = await fetch(
-        apiUrl(`/operations/inbound-intake-requests/${requestId}/boxes/${boxId}/scan`),
+        apiUrl(
+          `/operations/inbound-intake-requests/${requestId}/${
+            containerKind === 'cargo_place' ? 'cargo-places' : 'boxes'
+          }/${boxId}/scan`,
+        ),
         {
           method: 'POST',
           headers: authHeaders,

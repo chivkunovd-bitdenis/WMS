@@ -1,0 +1,11 @@
+{
+  "beforeType": {
+    "tag": "INPUT",
+    "aria": "Снять"
+  },
+  "afterType": {
+    "tag": "INPUT",
+    "aria": "Снять",
+    "placeholder": ""
+  }
+}

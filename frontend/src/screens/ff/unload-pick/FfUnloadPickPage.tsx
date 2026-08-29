@@ -50,7 +50,10 @@ type ApiDetail = {
   seller_id: string | null
   seller_name: string | null
   planned_shipment_date: string | null
-  lines: ApiLine[]
+  // У поставки ФБС состава в документе нет: там товары приходят вместе с
+  // местами подбора. Поэтому поле необязательное, а состав ниже собирается
+  // из того источника, который его реально отдаёт.
+  lines?: ApiLine[]
 }
 
 /** Ступень тары снаружи внутрь: палета, потом короб на ней. */
@@ -74,6 +77,8 @@ type ApiPickSource = {
   is_loose: boolean
   source_label: string
   container_path: ApiContainerStep[]
+  /** Сколько уже снято именно отсюда — считает сервер, экран не угадывает. */
+  picked?: number
 }
 
 type ApiPickLocation = {
@@ -191,23 +196,47 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
   const screenData = useMemo(() => {
     if (!detail) return null
 
-    // Состав строится только из lines документа. Даже если складской ответ
-    // содержит больше товаров, чужой состав тары на этом экране не появится.
-    const products: PickProduct[] = detail.lines.map((line) => {
-      const catalog = catalogById.get(line.product_id)
+    // Состав берём из того источника, который его отдаёт. У отгрузки это строки
+    // документа. У поставки ФБС строк в документе нет вовсе — там товары
+    // приезжают вместе с местами подбора, и обращение к `detail.lines` роняло
+    // экран целиком: «Cannot read properties of undefined (reading 'map')».
+    const composition: Array<{
+      id: string
+      productId: string
+      name: string
+      sku: string
+      plan: number
+    }> = detail.lines
+      ? detail.lines.map((line) => ({
+          id: line.id,
+          productId: line.product_id,
+          name: line.product_name,
+          sku: line.sku_code,
+          plan: line.quantity,
+        }))
+      : pickOptions.map((option) => ({
+          id: option.product_id,
+          productId: option.product_id,
+          name: option.product_name,
+          sku: option.sku_code,
+          plan: option.planned_qty,
+        }))
+
+    const products: PickProduct[] = composition.map((item) => {
+      const catalog = catalogById.get(item.productId)
       return {
-        id: line.product_id,
-        name: line.product_name,
-        sku: line.sku_code,
+        id: item.productId,
+        name: item.name,
+        sku: item.sku,
         barcode: catalog?.wb_primary_barcode ?? catalog?.wb_barcodes[0] ?? '',
         photo: catalog?.wb_primary_image_url ?? '',
         size: catalog?.wb_size ?? null,
       }
     })
-    const plan: PlanLine[] = detail.lines.map((line) => ({
-      id: line.id,
-      productId: line.product_id,
-      plan: line.quantity,
+    const plan: PlanLine[] = composition.map((item) => ({
+      id: item.id,
+      productId: item.productId,
+      plan: item.plan,
     }))
 
     const cellsById = new Map<string, Cell>()
@@ -234,13 +263,20 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
 
         // Остаток уже уменьшен предыдущими снятиями. Возвращаем picked к
         // доступному, чтобы поле могло показать и уменьшить сохранённый факт.
-        let pool = location.available + location.picked
-        let pickedLeft = location.picked
+        const pool = location.available + location.picked
 
         // Старый ответ сервера без тары — место остаётся одной строкой на ячейку.
         const sources: ApiPickSource[] = location.sources?.length
           ? location.sources
-          : [{ quantity: pool, is_loose: true, source_label: 'Россыпью', container_path: [] }]
+          : [
+              {
+                quantity: pool,
+                is_loose: true,
+                source_label: 'Россыпью',
+                container_path: [],
+                picked: location.picked,
+              },
+            ]
 
         for (const source of sources) {
           // Строим цепочку тары снаружи внутрь: палета стоит в ячейке, короб —
@@ -260,13 +296,11 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
             holder = objRef(step.id)
           }
 
-          // Сервер не режет доступное по таре, поэтому режем здесь по порядку:
-          // источник не может дать больше, чем осталось доступным на ячейке.
-          const capacity = Math.min(source.quantity, pool)
-          pool -= capacity
-          const takenHere = Math.min(pickedLeft, capacity)
-          pickedLeft -= takenHere
-          if (capacity <= 0 && takenHere <= 0) continue
+          // Снятое приходит по каждому источнику отдельно, а «сколько можно
+          // снять» — это то, что лежит здесь, плюс уже снятое отсюда же.
+          const takenHere = source.picked ?? 0
+          const capacity = source.quantity + takenHere
+          if (capacity <= 0) continue
 
           stock.push({
             id: `${product.product_id}-${holder}`,
