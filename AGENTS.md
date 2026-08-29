@@ -1,3 +1,43 @@
+# ⛔️⛔️⛔️ ГЛАВНОЕ ПРАВИЛО. НАРУШЕНИЕ = УВОЛЬНЕНИЕ ⛔️⛔️⛔️
+
+## Никаких гипотез. Ни одной. Никогда.
+
+Владелец — суровый технический директор, который спрашивает за функционал.
+Сотрудник, который вбросил догадку, не разобравшись, — вылетает. В серьёзных
+системах иначе нельзя: неверный ответ про склад стоит денег и товара.
+
+**Каждое утверждение в ответе должно опираться на то, что ты только что
+посмотрел.** Не на память, не на «скорее всего», не на «судя по коду должно
+быть», не на вчерашний отчёт и не на чужую сводку.
+
+- **Про код** — открой файл и прочитай. Про ветки — выполни `git`.
+  Про базу — сделай запрос.
+- **Про фронт и экраны — ОТКРОЙ БРАУЗЕР И ПОСМОТРИ.** Чтение кода экрана,
+  запросы к API и зелёные тесты **не считаются проверкой интерфейса**.
+  Нажми кнопку сам. Если не нажимал — так и скажи, не выдавай за проверенное.
+- **Не знаешь — скажи «не знаю, сейчас проверю»** и проверь. Это нормальный
+  ответ. Догадка вместо проверки — нет.
+- **Не уверен в цифре — не называй цифру.** Сначала посчитай.
+
+## Не экономить контекст на ответах
+
+Запрещено сокращать проверку, чтобы сэкономить контекст или время. Лучше
+потратить сто вызовов инструментов и ответить точно, чем ответить быстро и
+неверно. Экономия контекста ценой достоверности — то же самое увольнение.
+
+## Проверять себя на перегруз перед каждым ответом
+
+Перед ответом оцени своё состояние. Если контекст перегружен и есть риск начать
+нести чушь — **скажи об этом прямо и попроси пересоздать чат**. Признать
+«я поплыл, начнём новый чат» — правильное поведение. Продолжать отвечать
+наугад — недопустимое.
+
+Признаки, при которых надо остановиться и попросить новый чат: путаешься в том,
+что уже сделал; повторяешь одно и то же; отвечаешь по памяти вместо проверки;
+не помнишь, проверял ли экран руками.
+
+---
+
 # AGENTS
 
 ## ⛔️ ЕДИНСТВЕННЫЙ ПРАВИЛЬНЫЙ ПУТЬ ПРОЕКТА — ЧИТАТЬ ПЕРВЫМ
@@ -17,6 +57,53 @@
 
 ---
 
+## ⛔️ ОБЯЗАТЕЛЬНЫЙ PRODUCT GATE ДЛЯ ЛЮБОЙ ЗАДАЧИ WMS
+
+Любая задача WMS сначала проходит gate: поток требований, баг, UI-правка,
+backend-изменение, складской процесс, FBS/FBO/WB/MP, печать, приемка, отгрузка,
+упаковка, каталог, остатки, доступы, deploy/release-заявка или любое изменение
+видимого поведения. Исключение только одно: пользователь прямо пишет, что это
+срочный production hotfix и нужно чинить сейчас. Тогда агент фиксирует
+`EMERGENCY_BYPASS_USER_APPROVED`, делает минимальное исправление и после
+стабилизации всё равно возвращает задачу в этот gate; emergency bypass не
+является продуктовой приемкой.
+
+Главная цепочка:
+
+1. **BA Feature Cards** — изолированный BA Agent превращает задачу или поток
+   сознания в атомарные feature cards: что меняем, зачем, кто пользователь,
+   какой складской шаг, какой экран, какие данные нужны, что лишнее, какие
+   состояния успеха/ошибки/пустоты.
+2. **Product Before Dev** — отдельный изолированный Product Agent проверяет
+   каждую feature card до разработки. Подробная роль Product Agent описана в
+   [docs/WMS_PRODUCT_AGENT_RU.md](docs/WMS_PRODUCT_AGENT_RU.md). Без
+   `PRODUCT_APPROVED_FOR_DEV` разработка запрещена.
+3. **Atomic Dev** — отдельный изолированный Dev Agent реализует ровно одну
+   утвержденную карточку. Нельзя "заодно" брать соседние задачи.
+4. **Code Review** — отдельный изолированный reviewer проверяет код, границы,
+   тесты и регрессии. Code Review не принимает продукт.
+5. **Product Browser Review After Dev** — отдельный изолированный Product Agent
+   открывает реальную вкладку браузера с живым UI и руками проходит сценарий.
+   Playwright, API/curl, unit-тесты, методы, скриншоты, чтение кода, headless
+   browser или эмуляция не засчитываются как product browser review. Без
+   `PRODUCT_BROWSER_APPROVED` карточка не закрыта.
+
+Оркестратор только координирует, режет задачи, запускает изолированных агентов и
+сводит статусы. Он не имеет права подменять собой BA, Product, Dev, Code Review
+или Product Browser Review. Rework возвращает карточку в BA/Product и повторяет
+цикл заново; старый product verdict после изменений не действует.
+
+Нельзя писать "готово", "принято", "release-ready", "можно деплоить" или
+"задача закрыта", если по каждой карточке нет `BA_READY`,
+`PRODUCT_APPROVED_FOR_DEV`, `DEV_DONE`, `CODE_REVIEW_PASSED` и
+`PRODUCT_BROWSER_APPROVED`. Зеленые `pytest`, `npm run build`, Playwright, CI и
+code review обязательны как технический слой, но не заменяют product gate.
+
+Полный протокол, статусы, формат feature cards и отчетные метрики лежат в
+[docs/WMS_FEATURE_GATE_PROTOCOL_RU.md](docs/WMS_FEATURE_GATE_PROTOCOL_RU.md).
+
+---
+
 This repo is optimized for an “autopilot” development loop.
 
 ## Product decisions (source of truth)
@@ -25,60 +112,60 @@ Before picking an issue, read **[docs/MVP_DECISIONS_RU.md](docs/MVP_DECISIONS_RU
 
 Epic map for splitting work: **[docs/BACKLOG_EPICS_RU.md](docs/BACKLOG_EPICS_RU.md)**.
 
+## Обязательный gate-протокол для WMS-фичей
+
+Для любой WMS-фичи, рефакторинга складского процесса или UI/UX-изменения сначала
+прочитай **[docs/WMS_FEATURE_GATE_PROTOCOL_RU.md](docs/WMS_FEATURE_GATE_PROTOCOL_RU.md)**.
+
+Этот протокол строже общего autopilot loop: одна фича проходит изолированных
+агентов в порядке BA -> Product / UX -> Atomic Dev -> Code Review -> Browser
+Product QA. Разработка запрещена, пока product agent не дал явный OK именно по
+этой фиче. Нельзя смешивать несколько фичей в один dev-проход и нельзя
+объявлять фичу готовой без живого browser product QA.
+
 ## UI (портал FF)
 
 Новые и правимые экраны фулфилмента — **единый MUI-дизайн** (без legacy `Card`/`Input` из `frontend/src/ui` в основной области). Эталон: `FfProductsCatalogScreen.tsx`. Правила: **[docs/UI_DESIGN_SYSTEM_RU.md](docs/UI_DESIGN_SYSTEM_RU.md)**.
 
-## Как ведётся задача
+## Autopilot loop (one gated task at a time)
 
-Ролей, вердиктов и изолированных агентов-приёмщиков в этом репозитории нет.
-Одна голова ведёт задачу от постановки до сдачи и отвечает за результат целиком.
-
-1. Взять задачу: текст владельца или GitHub Issue с меткой `ready` (пропуская
-   `blocked`).
-2. Сформулировать, что считается сделанным, и понять, какие модули задеты.
-   Тем же шагом — таблица покрытия из раздела
-   **[Test coverage traceability](#test-coverage-traceability-mandatory-before-vertical-slice)**:
-   она нужна CI и служит проверяемым мини-спеком, а не формальностью.
-3. Реализовать **вертикальный срез** с соблюдением слоёв:
-   - роуты только в `backend/app/api` (интеграции: `wildberries_integration.py`
-     → `/integrations/wildberries/...`, в т.ч. `status`, `sellers/{id}/tokens`,
-     `sellers/{id}/imported-cards`, `sellers/{id}/imported-supplies`,
-     `sellers/{id}/link-product` для админа)
-   - бизнес-логика только в `backend/app/services`
-   - модели только в `backend/app/models`
-   - доступ к БД только через `backend/app/db`
-   - фоновые задачи только в `backend/app/tasks` (ставятся из API; брокер через
-     `CELERY_BROKER_URL`; без него используется FastAPI `BackgroundTasks`;
-     типы джоб: `movements_digest`, `wildberries_cards_sync`,
-     `wildberries_supplies_sync` + `seller_id` в теле)
-   - Playwright webServer для API: в `frontend/playwright.config.ts` заданы
-     `E2E_MOCK_WB_CARDS=1` и `E2E_MOCK_WB_SUPPLIES=1` — заглушки в
-     `fetch_cards_list` / `fetch_supplies_list`, без сети наружу.
-4. Написать тесты: бэк — pytest на логику и проверки; фронт — Playwright на
-   **видимый пользователю результат**, а не на код ответа 200. Каждый новый или
-   существенно изменённый сценарий ссылается на строку `TC-` в комментарии над
-   `test()` или в его названии, чтобы связь пережила рефакторинг.
-5. Прогнать ворота локально:
-   - бэк: `ruff check . && mypy . && pytest` (в `backend/`)
-   - фронт: `npm run build && npm run test:e2e` (в `frontend/`)
-6. Посмотреть результат **своими глазами в живом браузере**, если менялся экран.
-   Чтение кода, curl и зелёный Playwright этого не заменяют — они не показывают
-   разорванную строку, съехавшую колонку и направляющую в пустоту.
-7. Открыть PR по шаблону, дождаться зелёного CI, влить.
-
-**Про тесты по ходу работы.** Полный набор — это тысяча с лишним тестов и
-пятнадцать минут. Гонять его после каждой правки бессмысленно: по ходу запускать
-точечно затронутые файлы, полный прогон — один раз перед сдачей. Упало — чинить
-и перезапускать упавшее по имени, а не весь набор заново.
+1. Take the task text or the next GitHub Issue with label `ready` (skip
+   `blocked`). Do not classify it as "just a bug" or "just UI" to bypass the
+   gate.
+2. Run the required isolated BA Agent and produce BA feature cards described in
+   **[WMS Feature Gate Protocol](docs/WMS_FEATURE_GATE_PROTOCOL_RU.md)**.
+3. Run the isolated Product Agent before development. Development starts only
+   after `PRODUCT_APPROVED_FOR_DEV`.
+4. Re-state the acceptance criteria (Given/When/Then) and identify impacted modules. **Same step — test coverage traceability (mandatory):** produce the artifact described in **[Test coverage traceability](#test-coverage-traceability-mandatory-before-vertical-slice)** below (issue + copy into PR for CI). CI is mandatory, but it does not replace Product Before Dev or Product Browser Review After Dev.
+5. Implement **vertical slice**:
+   - API routes only in `backend/app/api` (в т.ч. интеграции: `wildberries_integration.py` → `/integrations/wildberries/...`, в т.ч. `status`, `sellers/{id}/tokens`, `sellers/{id}/imported-cards`, `sellers/{id}/imported-supplies`, `sellers/{id}/link-product` для админа)
+   - business logic only in `backend/app/services`
+   - data models only in `backend/app/models`
+   - DB access only via `backend/app/db`
+   - Celery tasks only in `backend/app/tasks` (enqueue from API; broker via `CELERY_BROKER_URL`; unset `CELERY_BROKER_URL` uses FastAPI `BackgroundTasks` for local/tests; типы джоб: `movements_digest`, `wildberries_cards_sync`, `wildberries_supplies_sync` + `seller_id` в теле)
+   - Playwright webServer для API: в `frontend/playwright.config.ts` задаётся `E2E_MOCK_WB_CARDS=1` и `E2E_MOCK_WB_SUPPLIES=1` — заглушки в `fetch_cards_list` / `fetch_supplies_list` (без сети наружу).
+6. Add tests:
+   - backend: pytest for core logic/validation
+   - frontend: Playwright e2e that verifies **user-visible outcome** (not just HTTP 200). Each new or materially changed scenario must **map to a row** in the issue’s `### Test coverage` block (existing `TC-Sxx-yyy` or `TC-NEW-*` from step 2); reference the TC id in a **comment** above the `test()` or in the test title so traceability survives refactors.
+7. Run gates locally:
+   - backend: `ruff check . && mypy . && pytest` (in `backend/`)
+   - frontend: `npm run build && npm run test:e2e` (in `frontend/`)
+8. Run isolated Code Review, then isolated Product Browser Review for the
+   implemented card. The product verdict must include URL, role, clicked
+   actions, visible states, browser evidence, and either
+   `PRODUCT_BROWSER_APPROVED`, `PRODUCT_REWORK_REQUIRED`, or
+   `PRODUCT_BROWSER_BLOCKED`.
+9. Open PR with the template and wait for CI green.
+10. Only after green CI and `PRODUCT_BROWSER_APPROVED`: mark the card done and move to the next `ready`.
 
 ## Test coverage traceability (mandatory before vertical slice)
 
 Canonical manual / future-automation catalog: **[docs/IMPLEMENTED_PRODUCT_SCENARIOS_TEST_CASES_EN.md](docs/IMPLEMENTED_PRODUCT_SCENARIOS_TEST_CASES_EN.md)** (IDs `TC-Sxx-yyy`). Scenario context: **[docs/IMPLEMENTED_PRODUCT_SCENARIOS_EN.md](docs/IMPLEMENTED_PRODUCT_SCENARIOS_EN.md)**. Conflicts with scope → **[docs/MVP_DECISIONS_RU.md](docs/MVP_DECISIONS_RU.md)**.
 
-**Кто заполняет:** автор работы **до** merge. Смысл не в галочке для CI, а в
-том, чтобы в PR лежал проверяемый мини-спек: что делает пользователь и что он
-должен увидеть.
+**Кто заполняет:** любой автор работы (человек или агент) **до** merge; важно,
+чтобы в PR был проверяемый блок. Это только слой тестовой трассировки: он не
+заменяет обязательный Product Before Dev и Product Browser Review After Dev из
+`docs/WMS_FEATURE_GATE_PROTOCOL_RU.md`.
 
 **Artifact — add to the GitHub Issue** (description or first comment), section heading exactly:
 
@@ -102,17 +189,22 @@ Canonical manual / future-automation catalog: **[docs/IMPLEMENTED_PRODUCT_SCENAR
 - Для каждой строки с **Applies = Y** в **Notes**: что делает пользователь, **что видно** при успехе, **негатив или ограничение** (если уместно), границы роли/статуса если важно. Стиль как в `IMPLEMENTED_PRODUCT_SCENARIOS_TEST_CASES_EN.md` (шаги + Expected + Negative).
 - Минимум **две** строки таблицы с `TC-...` и хотя бы одна **Y**.
 - В тексте секции должны встречаться **смысловые маркеры** (Given/When/Then или дано/когда/тогда, negative/негатив, restriction/огранич…, expected/ожидаемо) — **CI считает их количество** (`scripts/ci/check_pr_test_coverage.py`), чтобы отсечь однострочный формализм.
-- Метка `skip-test-coverage-check` снимает эту проверку. Ставить после явного
-  согласования с владельцем.
+- `skip-test-coverage-check` относится только к автоматической TC-таблице и не
+  отменяет Product gate. Использовать только после явного согласования.
 
-## CI enforcement (GitHub Actions)
+**Опционально для Cursor:** [`.cursor/skills/feature-test-coverage/SKILL.md`](.cursor/skills/feature-test-coverage/SKILL.md) — подсказка агенту, как оформить таблицу; **не часть пайплайна GitHub** и не замена product gate.
+
+## CI enforcement (GitHub Actions) — тестовый слой, не product acceptance
 
 На **pull_request**, если дифф затрагивает `frontend/src`, `frontend/tests-e2e`, `backend/app/api` или `backend/app/services`:
 
+- На каждом PR обязателен заполненный `## Product gate`; скрипт
+  `scripts/ci/check_pr_product_gate.py` не дает оставить пустой шаблон вместо
+  BA/Product/Code Review/Product Browser verdict.
 - **Обязателен** осмысленный блок `### Test coverage` в **описании PR** (не короткая заглушка): минимальная длина, ≥2 строки с `TC-`, строка с **Y**, несколько **маркеров Given/When/Then или негативов/ограничений** в секции — скрипт `scripts/ci/check_pr_test_coverage.py` (см. **Quality bar** выше). **Включите branch protection:** merge в `main` только при зелёном CI.
 - Если менялись только файлы в `frontend/tests-e2e/**`, каждый затронутый `*.spec.ts` должен содержать упоминание **`TC-Sxx-yyy`** или **`TC-NEW-*`** (скрипт `scripts/ci/check_e2e_tc_mentions.py`).
-- Метка **`skip-test-coverage-check`** снимает проверку таблицы — после явного
-  согласования с владельцем.
+- **Только для TC-таблицы:** label на PR **`skip-test-coverage-check`** — после
+  явного согласования. Product gate этот label не отключает.
 
 **Визуальная целостность shell:** см. Playwright `frontend/tests-e2e/admin-shell-layout.spec.ts` (навигация/единый `app-root`); при необходимости расширяйте аналогичными проверками ключевых `data-testid`. Скриншотные тесты (`toHaveScreenshot`) — опционально, если понадобится пиксельный контроль.
 
