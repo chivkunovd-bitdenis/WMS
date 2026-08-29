@@ -178,6 +178,7 @@ class FbsPickContainerPathItemOut(BaseModel):
 
 class FbsPickOptionSourceOut(BaseModel):
     quantity: int
+    picked: int
     is_loose: bool
     source_label: str
     container_path: list[FbsPickContainerPathItemOut]
@@ -216,6 +217,14 @@ class FbsPickScanBody(BaseModel):
     barcode: str = Field(min_length=1, max_length=128)
     product_id: uuid.UUID | None = None
     storage_location_id: uuid.UUID | None = None
+    container_kind: Literal["pallet", "box", "cargo_place"] | None = None
+    container_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _container_pair(self) -> FbsPickScanBody:
+        if (self.container_kind is None) != (self.container_id is None):
+            raise ValueError("container_kind and container_id must be set together")
+        return self
 
 
 class FbsPickScanOut(BaseModel):
@@ -227,6 +236,9 @@ class FbsPickScanOut(BaseModel):
     product_name: str | None = None
     picked_qty: int | None = None
     allocation_quantity: int | None = None
+    container_kind: Literal["pallet", "box", "cargo_place"] | None = None
+    container_id: str | None = None
+    container_code: str | None = None
 
 
 class FbsPickSetBody(BaseModel):
@@ -1197,6 +1209,7 @@ async def get_fbs_supply_pick_options(
                     sources=[
                         FbsPickOptionSourceOut(
                             quantity=source.quantity,
+                            picked=source.picked,
                             is_loose=source.is_loose,
                             source_label=source.source_label,
                             container_path=[
@@ -1240,6 +1253,8 @@ async def scan_fbs_supply_pick(
             storage_location_id=body.storage_location_id,
             idempotency_key=idempotency_key or str(uuid.uuid4()),
             actor=user,
+            container_kind=body.container_kind,
+            container_id=body.container_id,
         )
     except picking_svc.FbsPickingError as exc:
         _raise_from_picking(exc)
@@ -1257,6 +1272,11 @@ async def scan_fbs_supply_pick(
         product_name=result.product_name,
         picked_qty=result.picked_qty,
         allocation_quantity=result.allocation_quantity,
+        container_kind=result.container_kind,
+        container_id=(
+            str(result.container_id) if result.container_id is not None else None
+        ),
+        container_code=result.container_code,
     )
 
 

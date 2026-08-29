@@ -43,6 +43,12 @@ class WarehouseBox(Base):
         ForeignKey("warehouses.id", ondelete="CASCADE"),
         index=True,
     )
+    inbound_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("inbound_intake_requests.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     internal_barcode: Mapped[str] = mapped_column(String(64), nullable=False)
     container_kind: Mapped[Literal["box", "cargo_place"]] = mapped_column(
         String(32), nullable=False, default="box", server_default="box"

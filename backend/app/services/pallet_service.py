@@ -73,6 +73,7 @@ async def create_pallet(
     *,
     warehouse_id: uuid.UUID,
     storage_location_id: uuid.UUID | None = None,
+    inbound_request_id: uuid.UUID | None = None,
     free_text: str | None = None,
 ) -> Pallet:
     warehouse = await session.get(Warehouse, warehouse_id)
@@ -93,6 +94,7 @@ async def create_pallet(
         code=f"П-{number:06d}",
         barcode=f"PLT-{uuid.uuid4().hex[:12].upper()}",
         storage_location_id=storage_location_id,
+        inbound_request_id=inbound_request_id,
         free_text=free_text.strip() if free_text and free_text.strip() else None,
     )
     session.add(pallet)
@@ -433,8 +435,10 @@ async def disband_pallet(
     )
     for box in inbound_boxes:
         box.pallet_id = None
+        box.storage_location_id = None
     for place in cargo_places:
         place.pallet_id = None
+        place.storage_location_id = None
     for warehouse_box in warehouse_boxes:
         warehouse_box.pallet_id = None
         warehouse_box.storage_location_id = None

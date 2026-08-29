@@ -215,23 +215,10 @@ async def resolve_collect_storage_location(
         rows = await inventory_service.list_location_balances_for_products_in_warehouse(
             session, tenant_id, warehouse_id, [product_id]
         )
-        alloc_stmt = select(
-            MarketplaceUnloadPickAllocation.storage_location_id,
-            MarketplaceUnloadPickAllocation.quantity,
-        ).where(
-            MarketplaceUnloadPickAllocation.request_id == request_id,
-            MarketplaceUnloadPickAllocation.product_id == product_id,
-        )
-        alloc_res = await session.execute(alloc_stmt)
-        picked_by_loc = {
-            loc_id: int(qty) for loc_id, qty in alloc_res.all()
-        }
         candidates: list[tuple[uuid.UUID, int]] = []
         for _pid, loc_id, _code, on_hand, rsv in rows:
             avail = int(on_hand) - int(rsv)
-            current_pick = picked_by_loc.get(loc_id, 0)
-            new_pick = current_pick + increment_qty
-            if avail >= new_pick:
+            if avail >= increment_qty:
                 candidates.append((loc_id, avail))
         if not candidates:
             raise MarketplaceUnloadPickError("insufficient_available")
@@ -334,7 +321,7 @@ async def collect_into_box(
     available = await inventory_service.available_at_location(
         session, tenant_id, product_id, effective_location_id
     )
-    if available < new_pick:
+    if available < quantity:
         raise MarketplaceUnloadPickError("insufficient_available")
 
     try:
@@ -517,7 +504,7 @@ async def record_pick_allocation(
             container_kind,
             container_id,
         )
-    if available < new_pick:
+    if available < quantity:
         raise MarketplaceUnloadPickError("insufficient_available")
 
     try:

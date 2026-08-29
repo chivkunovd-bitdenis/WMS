@@ -21,6 +21,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from test_marketplace_unload_and_discrepancy_acts import (  # type: ignore[import-not-found]
+    E2E_BARCODE,
     _link_product_wb_barcode,
     _patch_mp_planned_date,
     _patch_packaging_instructions,
@@ -124,6 +125,7 @@ async def test_pick_set_takes_stock_from_the_named_container(
     )
     assert box.status_code == 201, box.text
     box_id = str(box.json()["id"])
+    box_barcode = str(box.json()["barcode"])
 
     place = await async_client.post(
         f"/warehouses/{wid}/map/move",
@@ -180,6 +182,32 @@ async def test_pick_set_takes_stock_from_the_named_container(
     assert box_source["quantity"] == 3
     assert box_source["container_path"][-1]["id"] == box_id
 
+    selected_box = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/pick/scan",
+        headers=h,
+        json={"barcode": box_barcode},
+    )
+    assert selected_box.status_code == 200, selected_box.text
+    assert selected_box.json()["kind"] == "container"
+    assert selected_box.json()["container_kind"] == "box"
+    assert selected_box.json()["container_id"] == box_id
+    assert selected_box.json()["storage_location_id"] == loc_id
+
+    scanned_product = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/pick/scan",
+        headers=h,
+        json={
+            "barcode": E2E_BARCODE,
+            "product_id": pid,
+            "storage_location_id": loc_id,
+            "container_kind": "box",
+            "container_id": box_id,
+        },
+    )
+    assert scanned_product.status_code == 200, scanned_product.text
+    assert scanned_product.json()["kind"] == "product"
+    assert scanned_product.json()["allocation_quantity"] == 1
+
     # Негатив: из короба нельзя снять больше, чем в нём лежит.
     too_much = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/pick/set",
@@ -227,6 +255,31 @@ async def test_pick_set_takes_stock_from_the_named_container(
     assert len(allocs) == 1
     assert str(allocs[0].container_id) == box_id
     assert allocs[0].container_kind == "box"
+
+    # Повторная загрузка должна вернуть прогресс именно по физическому источнику,
+    # иначе поле количества снова показывает ноль и следующий ввод даёт ложную
+    # ошибку превышения плана.
+    refreshed_options = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}/pick-options", headers=h
+    )
+    assert refreshed_options.status_code == 200, refreshed_options.text
+    refreshed_product = next(
+        row for row in refreshed_options.json() if row["product_id"] == pid
+    )
+    refreshed_location = next(
+        row
+        for row in refreshed_product["locations"]
+        if row["storage_location_id"] == loc_id
+    )
+    refreshed_box = next(
+        source for source in refreshed_location["sources"] if not source["is_loose"]
+    )
+    refreshed_loose = next(
+        source for source in refreshed_location["sources"] if source["is_loose"]
+    )
+    assert refreshed_location["picked"] == 3
+    assert refreshed_box["picked"] == 3
+    assert refreshed_loose["picked"] == 0
 
     # Возврат кладём обратно в тот же короб, а не россыпью.
     back = await async_client.post(

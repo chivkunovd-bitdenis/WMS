@@ -230,6 +230,7 @@ class MarketplaceUnloadPickContainerPathItemOut(BaseModel):
 
 class MarketplaceUnloadPickOptionSourceOut(BaseModel):
     quantity: int
+    picked: int
     is_loose: bool
     source_label: str
     container_path: list[MarketplaceUnloadPickContainerPathItemOut]
@@ -258,6 +259,14 @@ class MarketplaceUnloadPickScanBody(BaseModel):
     barcode: str = Field(min_length=1, max_length=128)
     product_id: uuid.UUID | None = None
     storage_location_id: uuid.UUID | None = None
+    container_kind: Literal["pallet", "box", "cargo_place"] | None = None
+    container_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _container_pair(self) -> MarketplaceUnloadPickScanBody:
+        if (self.container_kind is None) != (self.container_id is None):
+            raise ValueError("container_kind and container_id must be set together")
+        return self
 
 
 class MarketplaceUnloadPickScanOut(BaseModel):
@@ -269,6 +278,9 @@ class MarketplaceUnloadPickScanOut(BaseModel):
     product_name: str | None = None
     picked_qty: int | None = None
     allocation_quantity: int | None = None
+    container_kind: Literal["pallet", "box", "cargo_place"] | None = None
+    container_id: str | None = None
+    container_code: str | None = None
 
 
 class MarketplaceUnloadPickAddBody(BaseModel):
@@ -1238,6 +1250,7 @@ async def get_marketplace_unload_pick_options(
                     sources=[
                         MarketplaceUnloadPickOptionSourceOut(
                             quantity=source.quantity,
+                            picked=source.picked,
                             is_loose=source.is_loose,
                             source_label=source.source_label,
                             container_path=[
@@ -1284,6 +1297,8 @@ async def scan_marketplace_unload_pick(
             product_id_hint=body.product_id,
             storage_location_id=body.storage_location_id,
             actor_user_id=user.id,
+            container_kind=body.container_kind,
+            container_id=body.container_id,
         )
     except MarketplaceUnloadPickError as exc:
         raise _map_pick_err(exc) from None
@@ -1301,6 +1316,11 @@ async def scan_marketplace_unload_pick(
         product_name=result.product_name,
         picked_qty=result.picked_qty,
         allocation_quantity=result.allocation_quantity,
+        container_kind=result.container_kind,
+        container_id=(
+            str(result.container_id) if result.container_id is not None else None
+        ),
+        container_code=result.container_code,
     )
 
 

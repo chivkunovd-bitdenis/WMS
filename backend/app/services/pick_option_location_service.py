@@ -27,6 +27,7 @@ class PickOptionLocationError(Exception):
 @dataclass(frozen=True)
 class PickOptionSource:
     quantity: int
+    picked: int
     is_loose: bool
     source_label: str
     container_path: tuple[WarehouseContainerPathItem, ...]
@@ -53,6 +54,16 @@ async def list_pick_option_locations(
     warehouse_id: uuid.UUID,
     product_ids: list[uuid.UUID],
     picked_by_location: dict[tuple[uuid.UUID, uuid.UUID], int],
+    picked_by_source: dict[
+        tuple[
+            uuid.UUID,
+            uuid.UUID,
+            ContainerKind | None,
+            uuid.UUID | None,
+        ],
+        int,
+    ]
+    | None = None,
 ) -> dict[uuid.UUID, list[PickOptionLocation]]:
     """Keep legacy location totals and add distinct physical stock sources."""
     locations_by_product: dict[uuid.UUID, list[PickOptionLocation]] = {
@@ -60,6 +71,7 @@ async def list_pick_option_locations(
     }
     if not product_ids:
         return locations_by_product
+    source_progress = picked_by_source or {}
 
     legacy_rows = await inventory_service.list_location_balances_for_products_in_warehouse(
         session,
@@ -92,6 +104,12 @@ async def list_pick_option_locations(
         if raw_kind not in {"pallet", "box", "cargo_place"} or container_id is None:
             raise PickOptionLocationError("invalid_container_reference")
         container_refs.add((cast(ContainerKind, raw_kind), container_id))
+    for _product_id, _location_id, raw_kind, container_id in source_progress:
+        if raw_kind is None and container_id is None:
+            continue
+        if raw_kind is None or container_id is None:
+            raise PickOptionLocationError("invalid_container_reference")
+        container_refs.add((raw_kind, container_id))
 
     try:
         container_paths = await warehouse_map_service.resolve_container_paths(
@@ -106,10 +124,26 @@ async def list_pick_option_locations(
     sources_by_location: dict[
         tuple[uuid.UUID, uuid.UUID], list[PickOptionSource]
     ] = defaultdict(list)
+    seen_source_keys: set[
+        tuple[
+            uuid.UUID,
+            uuid.UUID,
+            ContainerKind | None,
+            uuid.UUID | None,
+        ]
+    ] = set()
     for product_id, location_id, quantity, raw_kind, container_id in source_rows:
+        source_key: tuple[
+            uuid.UUID,
+            uuid.UUID,
+            ContainerKind | None,
+            uuid.UUID | None,
+        ]
         if raw_kind is None and container_id is None:
+            source_key = (product_id, location_id, None, None)
             source = PickOptionSource(
                 quantity=int(quantity),
+                picked=source_progress.get(source_key, 0),
                 is_loose=True,
                 source_label="Россыпью",
                 container_path=(),
@@ -117,11 +151,43 @@ async def list_pick_option_locations(
         else:
             assert raw_kind is not None and container_id is not None
             ref = (cast(ContainerKind, raw_kind), container_id)
+            source_key = (product_id, location_id, *ref)
             path = container_paths.get(ref)
             if not path:
                 raise PickOptionLocationError("invalid_container_reference")
             source = PickOptionSource(
                 quantity=int(quantity),
+                picked=source_progress.get(source_key, 0),
+                is_loose=False,
+                source_label=path[-1].label,
+                container_path=path,
+            )
+        seen_source_keys.add(source_key)
+        sources_by_location[(product_id, location_id)].append(source)
+
+    for source_key, picked in source_progress.items():
+        if picked <= 0 or source_key in seen_source_keys:
+            continue
+        product_id, location_id, container_kind, container_id = source_key
+        if product_id not in locations_by_product:
+            continue
+        if container_kind is None and container_id is None:
+            source = PickOptionSource(
+                quantity=0,
+                picked=picked,
+                is_loose=True,
+                source_label="Россыпью",
+                container_path=(),
+            )
+        else:
+            if container_kind is None or container_id is None:
+                raise PickOptionLocationError("invalid_container_reference")
+            path = container_paths.get((container_kind, container_id))
+            if not path:
+                raise PickOptionLocationError("invalid_container_reference")
+            source = PickOptionSource(
+                quantity=0,
+                picked=picked,
                 is_loose=False,
                 source_label=path[-1].label,
                 container_path=path,
@@ -189,7 +255,7 @@ async def list_pick_option_locations(
                 reserved=reserved,
                 available=max(0, available),
                 picked=picked,
-                sources=(),
+                sources=tuple(sources_by_location.get((product_id, location_id), [])),
             )
         )
 

@@ -33,7 +33,7 @@ from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.models.user import User
-from app.services import inventory_service
+from app.services import inventory_service, warehouse_map_service
 from app.services import pick_option_location_service as pick_location_svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.fbs_cancelled_after_pack_service import (
@@ -41,7 +41,12 @@ from app.services.fbs_cancelled_after_pack_service import (
     order_belonged_to_supply,
 )
 from app.services.fbs_workspace_service import FbsWorkspaceError, get_supply_workspace
-from app.services.inventory_container_service import ContainerKind
+from app.services.inventory_container_service import (
+    ContainerKind,
+    InventoryContainerScanError,
+    resolve_container_scan,
+    validate_container,
+)
 from app.services.operation_fact_service import record_fbs_pick
 from app.services.pick_option_location_service import PickOptionLocation
 from app.services.sorting_location_service import (
@@ -83,7 +88,7 @@ class PickAllocationResult:
 
 @dataclass(frozen=True)
 class PickScanResult:
-    kind: Literal["location", "product"]
+    kind: Literal["location", "container", "product"]
     storage_location_id: uuid.UUID | None = None
     location_code: str | None = None
     product_id: uuid.UUID | None = None
@@ -91,6 +96,9 @@ class PickScanResult:
     product_name: str | None = None
     picked_qty: int | None = None
     allocation_quantity: int | None = None
+    container_kind: ContainerKind | None = None
+    container_id: uuid.UUID | None = None
+    container_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -161,6 +169,79 @@ async def _picked_qty_by_product_location(
     return picked
 
 
+async def _picked_qty_by_product_source(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+) -> dict[
+    tuple[
+        uuid.UUID,
+        uuid.UUID,
+        ContainerKind | None,
+        uuid.UUID | None,
+    ],
+    int,
+]:
+    picked: dict[
+        tuple[
+            uuid.UUID,
+            uuid.UUID,
+            ContainerKind | None,
+            uuid.UUID | None,
+        ],
+        int,
+    ] = {}
+    wb_rows = await session.execute(
+        select(
+            FbsOrderPick.product_id,
+            FbsOrderPick.source_storage_location_id,
+            FbsOrderPick.source_container_kind,
+            FbsOrderPick.source_container_id,
+            func.count(FbsOrderPick.id),
+        )
+        .where(
+            FbsOrderPick.tenant_id == tenant_id,
+            FbsOrderPick.fbs_supply_id == supply_id,
+            FbsOrderPick.undone_at.is_(None),
+        )
+        .group_by(
+            FbsOrderPick.product_id,
+            FbsOrderPick.source_storage_location_id,
+            FbsOrderPick.source_container_kind,
+            FbsOrderPick.source_container_id,
+        )
+    )
+    for product_id, location_id, kind, container_id, quantity in wb_rows.all():
+        key = (
+            product_id,
+            location_id,
+            cast(ContainerKind | None, kind),
+            container_id,
+        )
+        picked[key] = picked.get(key, 0) + int(quantity)
+
+    position_rows = await session.execute(
+        select(
+            FbsOrderProductPick.product_id,
+            FbsOrderProductPick.source_storage_location_id,
+            func.count(FbsOrderProductPick.id),
+        )
+        .where(
+            FbsOrderProductPick.tenant_id == tenant_id,
+            FbsOrderProductPick.fbs_supply_id == supply_id,
+            FbsOrderProductPick.undone_at.is_(None),
+        )
+        .group_by(
+            FbsOrderProductPick.product_id,
+            FbsOrderProductPick.source_storage_location_id,
+        )
+    )
+    for product_id, location_id, quantity in position_rows.all():
+        key = (product_id, location_id, None, None)
+        picked[key] = picked.get(key, 0) + int(quantity)
+    return picked
+
+
 async def get_pick_options(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -177,6 +258,9 @@ async def get_pick_options(
     picked_by_location = await _picked_qty_by_product_location(
         session, tenant_id, supply.id
     )
+    picked_by_source = await _picked_qty_by_product_source(
+        session, tenant_id, supply.id
+    )
     picked_by_product: dict[uuid.UUID, int] = {}
     for (product_id, _location_id), quantity in picked_by_location.items():
         picked_by_product[product_id] = picked_by_product.get(product_id, 0) + quantity
@@ -188,6 +272,7 @@ async def get_pick_options(
             supply.warehouse_id,
             product_ids,
             picked_by_location,
+            picked_by_source,
         )
     except pick_location_svc.PickOptionLocationError as exc:
         raise FbsPickingError(
@@ -496,6 +581,8 @@ async def pick_scan(
     storage_location_id: uuid.UUID | None,
     idempotency_key: str,
     actor: User,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> PickScanResult:
     raw = barcode.strip()
     if not raw:
@@ -518,6 +605,73 @@ async def pick_scan(
                 storage_location_id=location.id,
                 location_code=location.code,
             )
+
+    if container_kind is None and container_id is None:
+        try:
+            container = await resolve_container_scan(
+                session,
+                tenant_id,
+                supply.warehouse_id,
+                raw,
+            )
+        except InventoryContainerScanError as exc:
+            if exc.code != "container_scan_not_found":
+                raise FbsPickingError(
+                    "invalid_container_reference",
+                    "Штрихкод относится к нескольким складским тарам.",
+                ) from exc
+        else:
+            location_id = await warehouse_map_service.resolve_container_location(
+                session,
+                tenant_id,
+                supply.warehouse_id,
+                container.kind,
+                container.id,
+            )
+            location = await session.get(StorageLocation, location_id)
+            return PickScanResult(
+                kind="container",
+                storage_location_id=location_id,
+                location_code=location.code if location is not None else None,
+                container_kind=container.kind,
+                container_id=container.id,
+                container_code=container.code,
+            )
+    elif container_kind is None or container_id is None:
+        raise FbsPickingError(
+            "invalid_container_reference",
+            "Тип тары и её идентификатор должны передаваться вместе.",
+        )
+    else:
+        try:
+            await validate_container(
+                session,
+                tenant_id,
+                supply.warehouse_id,
+                container_kind,
+                container_id,
+            )
+        except ValueError as exc:
+            raise FbsPickingError(
+                "invalid_container_reference",
+                "Тара не найдена на складе поставки.",
+            ) from exc
+        container_location_id = await warehouse_map_service.resolve_container_location(
+            session,
+            tenant_id,
+            supply.warehouse_id,
+            container_kind,
+            container_id,
+        )
+        if (
+            storage_location_id is not None
+            and storage_location_id != container_location_id
+        ):
+            raise FbsPickingError(
+                "invalid_container_reference",
+                "Тара находится в другой ячейке.",
+            )
+        storage_location_id = container_location_id
 
     product = (
         await session.get(Product, product_id_hint)
@@ -565,6 +719,8 @@ async def pick_scan(
         product_id=product.id,
         idempotency_key=idempotency_key,
         actor=actor,
+        container_kind=container_kind,
+        container_id=container_id,
     )
     picked_by_location = await _picked_qty_by_product_location(
         session, tenant_id, supply_id

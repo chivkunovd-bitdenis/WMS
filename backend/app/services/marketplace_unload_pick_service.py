@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
-from sqlalchemy import case, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -19,7 +19,13 @@ from app.models.storage_location import StorageLocation
 from app.services import marketplace_unload_service as mu_svc
 from app.services import pick_option_location_service as pick_location_svc
 from app.services import tenant_settings_service as tenant_settings_svc
-from app.services.inventory_container_service import ContainerKind
+from app.services import warehouse_map_service
+from app.services.inventory_container_service import (
+    ContainerKind,
+    InventoryContainerScanError,
+    resolve_container_scan,
+    validate_container,
+)
 from app.services.pick_option_location_service import PickOptionLocation
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
@@ -51,7 +57,7 @@ class PickOptionProduct:
 
 @dataclass(frozen=True)
 class PickScanResult:
-    kind: Literal["location", "product"]
+    kind: Literal["location", "container", "product"]
     storage_location_id: uuid.UUID | None = None
     location_code: str | None = None
     product_id: uuid.UUID | None = None
@@ -59,6 +65,9 @@ class PickScanResult:
     product_name: str | None = None
     picked_qty: int | None = None
     allocation_quantity: int | None = None
+    container_kind: ContainerKind | None = None
+    container_id: uuid.UUID | None = None
+    container_code: str | None = None
 
 
 async def _picked_qty_by_product(
@@ -76,10 +85,51 @@ async def _picked_qty_by_product_location(
     stmt = select(
         MarketplaceUnloadPickAllocation.product_id,
         MarketplaceUnloadPickAllocation.storage_location_id,
-        MarketplaceUnloadPickAllocation.quantity,
-    ).where(MarketplaceUnloadPickAllocation.request_id == request_id)
+        func.sum(MarketplaceUnloadPickAllocation.quantity),
+    ).where(
+        MarketplaceUnloadPickAllocation.request_id == request_id
+    ).group_by(
+        MarketplaceUnloadPickAllocation.product_id,
+        MarketplaceUnloadPickAllocation.storage_location_id,
+    )
     res = await session.execute(stmt)
     return {(pid, loc_id): int(qty) for pid, loc_id, qty in res.all()}
+
+
+async def _picked_qty_by_product_source(
+    session: AsyncSession, request_id: uuid.UUID
+) -> dict[
+    tuple[
+        uuid.UUID,
+        uuid.UUID,
+        ContainerKind | None,
+        uuid.UUID | None,
+    ],
+    int,
+]:
+    stmt = (
+        select(
+            MarketplaceUnloadPickAllocation.product_id,
+            MarketplaceUnloadPickAllocation.storage_location_id,
+            MarketplaceUnloadPickAllocation.container_kind,
+            MarketplaceUnloadPickAllocation.container_id,
+            func.sum(MarketplaceUnloadPickAllocation.quantity),
+        )
+        .where(MarketplaceUnloadPickAllocation.request_id == request_id)
+        .group_by(
+            MarketplaceUnloadPickAllocation.product_id,
+            MarketplaceUnloadPickAllocation.storage_location_id,
+            MarketplaceUnloadPickAllocation.container_kind,
+            MarketplaceUnloadPickAllocation.container_id,
+        )
+    )
+    rows = await session.execute(stmt)
+    return {
+        (product_id, location_id, cast(ContainerKind | None, kind), container_id): int(
+            quantity
+        )
+        for product_id, location_id, kind, container_id, quantity in rows.all()
+    }
 
 
 async def _barcode_index_for_seller(
@@ -176,6 +226,7 @@ async def get_pick_options(
 
     picked = await _picked_qty_by_product(session, req.id)
     picked_by_loc = await _picked_qty_by_product_location(session, req.id)
+    picked_by_source = await _picked_qty_by_product_source(session, req.id)
     try:
         loc_by_product = await pick_location_svc.list_pick_option_locations(
             session,
@@ -183,6 +234,7 @@ async def get_pick_options(
             req.warehouse_id,
             product_ids,
             picked_by_loc,
+            picked_by_source,
         )
     except pick_location_svc.PickOptionLocationError as exc:
         raise MarketplaceUnloadPickError(exc.code) from exc
@@ -263,6 +315,8 @@ async def pick_scan(
     product_id_hint: uuid.UUID | None = None,
     storage_location_id: uuid.UUID | None,
     actor_user_id: uuid.UUID | None,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> PickScanResult:
     raw = barcode.strip()
     if not raw:
@@ -281,6 +335,61 @@ async def pick_scan(
                 storage_location_id=loc.id,
                 location_code=loc.code,
             )
+
+    if container_kind is None and container_id is None:
+        try:
+            container = await resolve_container_scan(
+                session,
+                tenant_id,
+                req.warehouse_id,
+                raw,
+            )
+        except InventoryContainerScanError as exc:
+            if exc.code != "container_scan_not_found":
+                raise MarketplaceUnloadPickError("invalid_container_reference") from exc
+        else:
+            location_id = await warehouse_map_service.resolve_container_location(
+                session,
+                tenant_id,
+                req.warehouse_id,
+                container.kind,
+                container.id,
+            )
+            location = await session.get(StorageLocation, location_id)
+            return PickScanResult(
+                kind="container",
+                storage_location_id=location_id,
+                location_code=location.code if location is not None else None,
+                container_kind=container.kind,
+                container_id=container.id,
+                container_code=container.code,
+            )
+    elif container_kind is None or container_id is None:
+        raise MarketplaceUnloadPickError("invalid_container_reference")
+    else:
+        try:
+            await validate_container(
+                session,
+                tenant_id,
+                req.warehouse_id,
+                container_kind,
+                container_id,
+            )
+        except ValueError as exc:
+            raise MarketplaceUnloadPickError("invalid_container_reference") from exc
+        container_location_id = await warehouse_map_service.resolve_container_location(
+            session,
+            tenant_id,
+            req.warehouse_id,
+            container_kind,
+            container_id,
+        )
+        if (
+            storage_location_id is not None
+            and storage_location_id != container_location_id
+        ):
+            raise MarketplaceUnloadPickError("invalid_container_reference")
+        storage_location_id = container_location_id
 
     if address_enabled and storage_location_id is None:
         raise MarketplaceUnloadPickError("location_required")
@@ -307,6 +416,8 @@ async def pick_scan(
         product_id=product_id,
         quantity=1,
         actor_user_id=actor_user_id,
+        container_kind=container_kind,
+        container_id=container_id,
     )
     p = result.product
     return PickScanResult(

@@ -30,6 +30,7 @@ async def create_warehouse_box(
     *,
     warehouse_id: uuid.UUID,
     storage_location_id: uuid.UUID | None = None,
+    inbound_request_id: uuid.UUID | None = None,
     container_kind: Literal["box", "cargo_place"] = "box",
 ) -> WarehouseBox:
     for _ in range(8):
@@ -39,6 +40,7 @@ async def create_warehouse_box(
             internal_barcode=_new_barcode(),
             container_kind=container_kind,
             storage_location_id=storage_location_id,
+            inbound_request_id=inbound_request_id,
         )
         session.add(box)
         try:

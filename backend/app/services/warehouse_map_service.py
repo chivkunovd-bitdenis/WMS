@@ -11,7 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inbound_intake import (
     InboundIntakeBox,
+    InboundIntakeBoxLine,
     InboundIntakeCargoPlace,
+    InboundIntakeCargoPlaceLine,
     InboundIntakeLine,
     InboundIntakeRequest,
 )
@@ -38,6 +40,16 @@ from app.services.wb_card_enrichment import first_photo_url_from_card, subject_n
 ObjectKind = Literal["product", "pallet", "box", "cargo_place"]
 DestinationKind = Literal["cell", "unassigned", "sorting", "pallet", "box", "cargo_place"]
 MOVEMENT_TYPE_WAREHOUSE_MAP = "warehouse_map_move"
+
+
+@dataclass(frozen=True)
+class PendingInboundContent:
+    kind: Literal["box", "cargo_place"]
+    container_id: uuid.UUID
+    line_id: uuid.UUID
+    product: Product
+    seller: Seller | None
+    quantity: int
 
 
 class WarehouseMapError(Exception):
@@ -210,6 +222,8 @@ async def _load_map_rows(
     list[WarehouseBox],
     list[InboundIntakeBox],
     list[InboundIntakeCargoPlace],
+    list[PendingInboundContent],
+    dict[uuid.UUID, str | None],
     dict[tuple[uuid.UUID, int], SellerWildberriesImportedCard],
 ]:
     rows = cast(
@@ -263,11 +277,112 @@ async def _load_map_rows(
     warehouse_boxes, inbound_boxes, cargo_places = await _load_boxes(
         session, tenant_id, warehouse_id
     )
+    pending_contents: list[PendingInboundContent] = []
+    box_line_rows = await session.execute(
+        select(InboundIntakeBoxLine, InboundIntakeBox, Product, Seller)
+        .join(InboundIntakeBox, InboundIntakeBox.id == InboundIntakeBoxLine.box_id)
+        .join(
+            InboundIntakeRequest,
+            InboundIntakeRequest.id == InboundIntakeBox.request_id,
+        )
+        .join(Product, Product.id == InboundIntakeBoxLine.product_id)
+        .outerjoin(Seller, Seller.id == Product.seller_id)
+        .where(
+            InboundIntakeBox.tenant_id == tenant_id,
+            InboundIntakeRequest.tenant_id == tenant_id,
+            InboundIntakeRequest.warehouse_id == warehouse_id,
+            InboundIntakeBoxLine.quantity > InboundIntakeBoxLine.posted_qty,
+        )
+    )
+    pending_contents.extend(
+        PendingInboundContent(
+            kind="box",
+            container_id=box.id,
+            line_id=line.id,
+            product=product,
+            seller=seller,
+            quantity=max(0, int(line.quantity) - int(line.posted_qty)),
+        )
+        for line, box, product, seller in box_line_rows.all()
+    )
+    cargo_line_rows = await session.execute(
+        select(
+            InboundIntakeCargoPlaceLine,
+            InboundIntakeCargoPlace,
+            Product,
+            Seller,
+        )
+        .join(
+            InboundIntakeCargoPlace,
+            InboundIntakeCargoPlace.id
+            == InboundIntakeCargoPlaceLine.cargo_place_id,
+        )
+        .join(
+            InboundIntakeRequest,
+            InboundIntakeRequest.id == InboundIntakeCargoPlace.request_id,
+        )
+        .join(Product, Product.id == InboundIntakeCargoPlaceLine.product_id)
+        .outerjoin(Seller, Seller.id == Product.seller_id)
+        .where(
+            InboundIntakeCargoPlace.tenant_id == tenant_id,
+            InboundIntakeRequest.tenant_id == tenant_id,
+            InboundIntakeRequest.warehouse_id == warehouse_id,
+            InboundIntakeCargoPlaceLine.quantity
+            > InboundIntakeCargoPlaceLine.posted_qty,
+        )
+    )
+    pending_contents.extend(
+        PendingInboundContent(
+            kind="cargo_place",
+            container_id=place.id,
+            line_id=line.id,
+            product=product,
+            seller=seller,
+            quantity=max(0, int(line.quantity) - int(line.posted_qty)),
+        )
+        for line, place, product, seller in cargo_line_rows.all()
+    )
+    request_ids = {
+        *(box.request_id for box in inbound_boxes),
+        *(place.request_id for place in cargo_places),
+        *(
+            pallet.inbound_request_id
+            for pallet in pallets
+            if pallet.inbound_request_id is not None
+        ),
+        *(
+            box.inbound_request_id
+            for box in warehouse_boxes
+            if box.inbound_request_id is not None
+        ),
+    }
+    request_numbers: dict[uuid.UUID, str | None] = {}
+    if request_ids:
+        request_rows = await session.execute(
+            select(
+                InboundIntakeRequest.id,
+                InboundIntakeRequest.display_number,
+                InboundIntakeRequest.document_number,
+            ).where(
+                InboundIntakeRequest.id.in_(request_ids),
+                InboundIntakeRequest.tenant_id == tenant_id,
+                InboundIntakeRequest.warehouse_id == warehouse_id,
+            )
+        )
+        request_numbers = {
+            request_id: display_number or document_number
+            for request_id, display_number, document_number in request_rows.all()
+        }
     pairs = {
         (product.seller_id, product.wb_nm_id)
         for _balance, _location, product, _seller in rows
         if product.seller_id is not None and product.wb_nm_id is not None
     }
+    pairs.update(
+        (row.product.seller_id, row.product.wb_nm_id)
+        for row in pending_contents
+        if row.product.seller_id is not None and row.product.wb_nm_id is not None
+    )
     cards: dict[tuple[uuid.UUID, int], SellerWildberriesImportedCard] = {}
     if pairs:
         seller_ids = {pair[0] for pair in pairs}
@@ -287,6 +402,8 @@ async def _load_map_rows(
         warehouse_boxes,
         inbound_boxes,
         cargo_places,
+        pending_contents,
+        request_numbers,
         cards,
     )
 
@@ -328,6 +445,8 @@ async def get_warehouse_map(
         warehouse_boxes,
         inbound_boxes,
         cargo_places,
+        pending_contents,
+        request_numbers,
         cards,
     ) = await _load_map_rows(session, tenant_id, warehouse_id)
 
@@ -339,6 +458,10 @@ async def get_warehouse_map(
 
     nodes: dict[tuple[str, uuid.UUID], dict[str, Any]] = {}
     holders: dict[tuple[str, uuid.UUID], tuple[str, uuid.UUID] | uuid.UUID | None] = {}
+
+    def source_document_number(request_id: uuid.UUID | None) -> str | None:
+        return request_numbers.get(request_id) if request_id is not None else None
+
     pallet_ids = {pallet.id for pallet in pallets}
     for pallet in pallets:
         key = ("pallet", pallet.id)
@@ -349,6 +472,9 @@ async def get_warehouse_map(
             "barcode": pallet.barcode,
             "seller_name": None,
             "qty": 0,
+            "source_document_number": source_document_number(
+                pallet.inbound_request_id
+            ),
             "children": [],
         }
         holders[key] = pallet.storage_location_id
@@ -361,6 +487,7 @@ async def get_warehouse_map(
             "barcode": box.internal_barcode,
             "seller_name": None,
             "qty": 0,
+            "source_document_number": source_document_number(box.inbound_request_id),
             "children": [],
         }
         holders[key] = (
@@ -377,12 +504,13 @@ async def get_warehouse_map(
             "barcode": inbound_box.internal_barcode,
             "seller_name": None,
             "qty": 0,
+            "source_document_number": request_numbers.get(inbound_box.request_id),
             "children": [],
         }
         holders[key] = (
             ("pallet", inbound_box.pallet_id)
             if inbound_box.pallet_id in pallet_ids
-            else balance_location.get(key)
+            else inbound_box.storage_location_id or balance_location.get(key)
         )
     for place in cargo_places:
         key = ("cargo_place", place.id)
@@ -393,12 +521,13 @@ async def get_warehouse_map(
             "barcode": place.internal_barcode,
             "seller_name": None,
             "qty": 0,
+            "source_document_number": request_numbers.get(place.request_id),
             "children": [],
         }
         holders[key] = (
             ("pallet", place.pallet_id)
             if place.pallet_id in pallet_ids
-            else balance_location.get(key)
+            else place.storage_location_id or balance_location.get(key)
         )
 
     loose_by_location: dict[uuid.UUID, list[dict[str, Any]]] = defaultdict(list)
@@ -437,6 +566,36 @@ async def get_warehouse_map(
             nodes[container_key]["children"].append(product_node)
         else:
             loose_by_location[location.id].append(product_node)
+
+    for pending in pending_contents:
+        container_key = (pending.kind, pending.container_id)
+        if container_key not in nodes:
+            continue
+        product = pending.product
+        card = (
+            cards.get((product.seller_id, product.wb_nm_id))
+            if (product.seller_id is not None and product.wb_nm_id is not None)
+            else None
+        )
+        category, photo_url = _card_data(card)
+        seller_name = pending.seller.name if pending.seller is not None else None
+        if seller_name:
+            sellers.add(seller_name)
+        if category:
+            categories.add(category)
+        nodes[container_key]["children"].append(
+            {
+                "kind": "product",
+                "id": str(pending.line_id),
+                "product_id": str(product.id),
+                "name": product.name,
+                "seller_name": seller_name,
+                "category": category,
+                "barcode": product.wb_barcode,
+                "photo_url": photo_url,
+                "qty": pending.quantity,
+            }
+        )
 
     root_by_location: dict[uuid.UUID, list[dict[str, Any]]] = defaultdict(list)
     unassigned: list[dict[str, Any]] = []
@@ -560,6 +719,14 @@ async def _container_location_id(
                     return pallet.storage_location_id
             if box.storage_location_id is not None:
                 return box.storage_location_id
+        inbound_box = await session.get(InboundIntakeBox, container_id)
+        if inbound_box is not None and inbound_box.tenant_id == tenant_id:
+            if inbound_box.pallet_id is not None:
+                pallet = await session.get(Pallet, inbound_box.pallet_id)
+                if pallet is not None and pallet.storage_location_id is not None:
+                    return pallet.storage_location_id
+            if inbound_box.storage_location_id is not None:
+                return inbound_box.storage_location_id
     if kind == "cargo_place":
         cargo_place = await session.get(WarehouseBox, container_id)
         if (
@@ -574,6 +741,14 @@ async def _container_location_id(
                     return pallet.storage_location_id
             if cargo_place.storage_location_id is not None:
                 return cargo_place.storage_location_id
+        inbound_cargo = await session.get(InboundIntakeCargoPlace, container_id)
+        if inbound_cargo is not None and inbound_cargo.tenant_id == tenant_id:
+            if inbound_cargo.pallet_id is not None:
+                pallet = await session.get(Pallet, inbound_cargo.pallet_id)
+                if pallet is not None and pallet.storage_location_id is not None:
+                    return pallet.storage_location_id
+            if inbound_cargo.storage_location_id is not None:
+                return inbound_cargo.storage_location_id
     balance_location = await session.scalar(
         select(InventoryBalance.storage_location_id)
         .where(
@@ -590,6 +765,23 @@ async def _container_location_id(
             return balance_location
     sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
     return sorting.id
+
+
+async def resolve_container_location(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    kind: ContainerKind,
+    container_id: uuid.UUID,
+) -> uuid.UUID:
+    """Return the persisted root location for a pick-source container."""
+    return await _container_location_id(
+        session,
+        tenant_id,
+        warehouse_id,
+        kind,
+        container_id,
+    )
 
 
 async def _destination(
@@ -826,6 +1018,9 @@ async def _place_container(
         if inbound is None:
             raise WarehouseMapError("object_not_found")
         inbound.pallet_id = pallet_id
+        inbound.storage_location_id = (
+            destination_location_id if to_kind == "cell" else None
+        )
         return
     warehouse_cargo_place = await session.get(WarehouseBox, container_id)
     if (
@@ -851,6 +1046,9 @@ async def _place_container(
     if cargo is None:
         raise WarehouseMapError("object_not_found")
     cargo.pallet_id = pallet_id
+    cargo.storage_location_id = (
+        destination_location_id if to_kind == "cell" else None
+    )
 
 
 async def move_object(
@@ -978,14 +1176,24 @@ async def create_sorting_object(
     warehouse_id: uuid.UUID,
     *,
     kind: Literal["pallet", "box", "cargo_place"],
+    inbound_request_id: uuid.UUID | None = None,
 ) -> dict[str, str | None]:
     await _assert_warehouse(session, tenant_id, warehouse_id)
+    if inbound_request_id is not None:
+        request = await session.get(InboundIntakeRequest, inbound_request_id)
+        if (
+            request is None
+            or request.tenant_id != tenant_id
+            or request.warehouse_id != warehouse_id
+        ):
+            raise WarehouseMapError("inbound_request_not_found")
     if kind == "pallet":
         try:
             pallet = await pallet_service.create_pallet(
                 session,
                 tenant_id,
                 warehouse_id=warehouse_id,
+                inbound_request_id=inbound_request_id,
             )
         except pallet_service.PalletServiceError as exc:
             raise WarehouseMapError(exc.code) from exc
@@ -1002,6 +1210,7 @@ async def create_sorting_object(
             session,
             tenant_id,
             warehouse_id=warehouse_id,
+            inbound_request_id=inbound_request_id,
             container_kind=kind,
         )
         await session.commit()
@@ -1155,6 +1364,36 @@ async def _filter_sorting_map_by_inbound_request(
             if pallet_id is not None
         ),
     }
+    generic_pallet_ids = list(
+        (
+            await session.scalars(
+                select(Pallet.id).where(
+                    Pallet.tenant_id == tenant_id,
+                    Pallet.warehouse_id == warehouse_id,
+                    Pallet.inbound_request_id == inbound_request_id,
+                    Pallet.disbanded_at.is_(None),
+                )
+            )
+        ).all()
+    )
+    generic_box_rows = list(
+        (
+            await session.execute(
+                select(WarehouseBox.id, WarehouseBox.container_kind).where(
+                    WarehouseBox.tenant_id == tenant_id,
+                    WarehouseBox.warehouse_id == warehouse_id,
+                    WarehouseBox.inbound_request_id == inbound_request_id,
+                )
+            )
+        ).all()
+    )
+    allowed_containers.update(
+        ("pallet", str(pallet_id)) for pallet_id in generic_pallet_ids
+    )
+    allowed_containers.update(
+        (container_kind, str(container_id))
+        for container_id, container_kind in generic_box_rows
+    )
 
     def filter_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
         filtered: list[dict[str, Any]] = []

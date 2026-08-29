@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from typing import Literal
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inbound_intake import (
@@ -17,6 +18,97 @@ from app.models.pallet import Pallet
 from app.models.warehouse_box import WarehouseBox
 
 ContainerKind = Literal["pallet", "box", "cargo_place"]
+
+
+@dataclass(frozen=True)
+class InventoryContainerScanMatch:
+    kind: ContainerKind
+    id: uuid.UUID
+    code: str
+
+
+class InventoryContainerScanError(Exception):
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
+
+
+async def resolve_container_scan(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    barcode: str,
+) -> InventoryContainerScanMatch:
+    raw = barcode.strip()
+    if not raw:
+        raise InventoryContainerScanError("container_scan_not_found")
+
+    matches: list[InventoryContainerScanMatch] = []
+    pallets = await session.scalars(
+        select(Pallet).where(
+            Pallet.tenant_id == tenant_id,
+            Pallet.warehouse_id == warehouse_id,
+            Pallet.disbanded_at.is_(None),
+            or_(Pallet.barcode == raw, Pallet.code == raw),
+        )
+    )
+    matches.extend(
+        InventoryContainerScanMatch("pallet", pallet.id, pallet.code)
+        for pallet in pallets.all()
+    )
+    warehouse_boxes = await session.scalars(
+        select(WarehouseBox).where(
+            WarehouseBox.tenant_id == tenant_id,
+            WarehouseBox.warehouse_id == warehouse_id,
+            WarehouseBox.internal_barcode == raw,
+        )
+    )
+    matches.extend(
+        InventoryContainerScanMatch(
+            box.container_kind,
+            box.id,
+            box.internal_barcode,
+        )
+        for box in warehouse_boxes.all()
+    )
+    inbound_boxes = await session.scalars(
+        select(InboundIntakeBox)
+        .join(InboundIntakeRequest)
+        .where(
+            InboundIntakeBox.tenant_id == tenant_id,
+            InboundIntakeRequest.tenant_id == tenant_id,
+            InboundIntakeRequest.warehouse_id == warehouse_id,
+            InboundIntakeBox.internal_barcode == raw,
+        )
+    )
+    matches.extend(
+        InventoryContainerScanMatch("box", box.id, f"КР-{box.box_number:06d}")
+        for box in inbound_boxes.all()
+    )
+    inbound_cargo = await session.scalars(
+        select(InboundIntakeCargoPlace)
+        .join(InboundIntakeRequest)
+        .where(
+            InboundIntakeCargoPlace.tenant_id == tenant_id,
+            InboundIntakeRequest.tenant_id == tenant_id,
+            InboundIntakeRequest.warehouse_id == warehouse_id,
+            InboundIntakeCargoPlace.internal_barcode == raw,
+        )
+    )
+    matches.extend(
+        InventoryContainerScanMatch(
+            "cargo_place",
+            place.id,
+            f"ГМ-{place.place_number:06d}",
+        )
+        for place in inbound_cargo.all()
+    )
+    unique = {(match.kind, match.id): match for match in matches}
+    if not unique:
+        raise InventoryContainerScanError("container_scan_not_found")
+    if len(unique) > 1:
+        raise InventoryContainerScanError("container_scan_ambiguous")
+    return next(iter(unique.values()))
 
 
 async def validate_container(

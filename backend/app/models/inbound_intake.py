@@ -160,6 +160,12 @@ class InboundIntakeCargoPlace(Base):
         nullable=True,
         index=True,
     )
+    storage_location_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("storage_locations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     label_printed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -258,6 +264,12 @@ class InboundIntakeBox(Base):
     pallet_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("pallets.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    storage_location_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("storage_locations.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )

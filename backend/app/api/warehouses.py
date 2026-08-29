@@ -124,6 +124,7 @@ class WarehouseMapContainerOut(BaseModel):
     barcode: str | None
     seller_name: str | None
     qty: int
+    source_document_number: str | None = None
     children: list[WarehouseMapProductOut | WarehouseMapContainerOut]
 
 
@@ -231,6 +232,7 @@ class SortingObjectsOut(BaseModel):
 
 class SortingObjectCreateIn(BaseModel):
     kind: Literal["pallet", "box", "cargo_place"]
+    inbound_request_id: uuid.UUID | None = None
 
 
 class SortingPlaceIn(BaseModel):
@@ -248,6 +250,7 @@ def _map_error(exc: WarehouseMapError) -> HTTPException:
         "destination_not_found",
         "cell_not_found",
         "pallet_not_found",
+        "inbound_request_not_found",
     }:
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
     if exc.code in {
@@ -363,6 +366,7 @@ async def create_sorting_object_route(
             user.tenant_id,
             warehouse_id,
             kind=body.kind,
+            inbound_request_id=body.inbound_request_id,
         )
     except WarehouseMapError as exc:
         await session.rollback()

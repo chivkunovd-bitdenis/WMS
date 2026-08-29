@@ -28,6 +28,9 @@ from app.db.session import SessionLocal
 from app.models.fbs_order import PICK_STATUS_PENDING, PICK_STATUS_PICKED, FbsOrder
 from app.models.fbs_order_pick import FbsOrderPick
 from app.models.inventory_balance import InventoryBalance
+from app.models.product import Product
+from app.models.storage_location import StorageLocation
+from app.models.warehouse_box import WarehouseBox
 from app.services.sorting_location_service import get_or_create_sorting_location
 from tests.test_fbs_picking import (
     _create_product,
@@ -196,6 +199,9 @@ async def test_fbs_pick_scan_location_then_product_is_idempotent(
         "product_name": None,
         "picked_qty": None,
         "allocation_quantity": None,
+        "container_kind": None,
+        "container_id": None,
+        "container_code": None,
     }
 
     options = await async_client.get(f"{BASE}/{supply_id}/pick-options", headers=headers)
@@ -230,6 +236,78 @@ async def test_fbs_pick_scan_location_then_product_is_idempotent(
     assert replay.json()["picked_qty"] == 1
     assert replay.json()["allocation_quantity"] == 1
     assert await _active_pick_count(supply_id) == 1
+
+
+@pytest.mark.asyncio
+async def test_fbs_pick_scan_selects_container_and_keeps_it_on_product_pick(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, product_id, location_id, _order_ids, _location_code = (
+        await _seed_two_order_supply(async_client)
+    )
+    async with SessionLocal() as session:
+        location = await session.get(StorageLocation, location_id)
+        product = await session.get(Product, product_id)
+        assert location is not None
+        assert product is not None
+        box = WarehouseBox(
+            tenant_id=location.tenant_id,
+            warehouse_id=location.warehouse_id,
+            internal_barcode=f"FBS-SOURCE-{uuid.uuid4().hex[:12]}",
+            container_kind="box",
+            storage_location_id=location.id,
+        )
+        session.add(box)
+        await session.flush()
+        balance = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.tenant_id == location.tenant_id,
+                InventoryBalance.storage_location_id == location.id,
+                InventoryBalance.product_id == product.id,
+            )
+        )
+        assert balance is not None
+        balance.container_kind = "box"
+        balance.container_id = box.id
+        await session.commit()
+        box_id = box.id
+        box_barcode = box.internal_barcode
+        product_barcode = product.wb_barcode
+        assert product_barcode is not None
+
+    selected = await async_client.post(
+        f"{BASE}/{supply_id}/pick/scan",
+        headers=headers,
+        json={"barcode": box_barcode},
+    )
+    assert selected.status_code == 200, selected.text
+    assert selected.json()["kind"] == "container"
+    assert selected.json()["container_kind"] == "box"
+    assert selected.json()["container_id"] == str(box_id)
+
+    picked = await async_client.post(
+        f"{BASE}/{supply_id}/pick/scan",
+        headers={**headers, "Idempotency-Key": "fbs-container-product"},
+        json={
+            "barcode": product_barcode,
+            "product_id": str(product_id),
+            "storage_location_id": str(location_id),
+            "container_kind": "box",
+            "container_id": str(box_id),
+        },
+    )
+    assert picked.status_code == 200, picked.text
+    assert picked.json()["kind"] == "product"
+    async with SessionLocal() as session:
+        stored_pick = await session.scalar(
+            select(FbsOrderPick).where(
+                FbsOrderPick.fbs_supply_id == supply_id,
+                FbsOrderPick.undone_at.is_(None),
+            )
+        )
+        assert stored_pick is not None
+        assert stored_pick.source_container_kind == "box"
+        assert stored_pick.source_container_id == box_id
 
 
 @pytest.mark.asyncio

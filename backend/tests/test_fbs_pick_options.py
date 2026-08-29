@@ -231,6 +231,7 @@ async def test_fbs_pick_options_returns_two_locations_with_inventory_numbers(
         "sources": [
             {
                 "quantity": 3,
+                "picked": 0,
                 "is_loose": False,
                 "source_label": f"Грузоместо CARGO-{suffix[-8:]}",
                 "container_path": [
@@ -250,6 +251,7 @@ async def test_fbs_pick_options_returns_two_locations_with_inventory_numbers(
             },
             {
                 "quantity": 4,
+                "picked": 0,
                 "is_loose": True,
                 "source_label": "Россыпью",
                 "container_path": [],
@@ -266,6 +268,7 @@ async def test_fbs_pick_options_returns_two_locations_with_inventory_numbers(
         "sources": [
             {
                 "quantity": 2,
+                "picked": 0,
                 "is_loose": True,
                 "source_label": "Россыпью",
                 "container_path": [],
@@ -381,7 +384,15 @@ async def test_fbs_pick_options_keeps_zero_balance_picked_location(
     assert source["reserved"] == 0
     assert source["available"] == 0
     assert source["picked"] == 1
-    assert source["sources"] == []
+    assert source["sources"] == [
+        {
+            "quantity": 0,
+            "picked": 1,
+            "is_loose": True,
+            "source_label": "Россыпью",
+            "container_path": [],
+        }
+    ]
 
 
 # TC-NEW-FBS-PICK-OPTIONS-004

@@ -237,6 +237,7 @@ async def test_collect_requires_location_when_address_storage_on(
         "sources": [
             {
                 "quantity": 4,
+                "picked": 0,
                 "is_loose": False,
                 "source_label": f"Короб MP-BOX-{pid[-8:]}",
                 "container_path": [
@@ -256,6 +257,7 @@ async def test_collect_requires_location_when_address_storage_on(
             },
             {
                 "quantity": 10,
+                "picked": 0,
                 "is_loose": True,
                 "source_label": "Россыпью",
                 "container_path": [],

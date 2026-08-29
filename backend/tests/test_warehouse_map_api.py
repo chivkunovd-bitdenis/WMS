@@ -10,6 +10,9 @@ from sqlalchemy import func, select
 from app.db.session import SessionLocal
 from app.models.inbound_intake import (
     InboundIntakeBox,
+    InboundIntakeBoxLine,
+    InboundIntakeCargoPlace,
+    InboundIntakeCargoPlaceLine,
     InboundIntakeRequest,
 )
 from app.models.inventory_balance import InventoryBalance
@@ -421,3 +424,182 @@ async def test_address_storage_disabled_hides_cells_and_rejects_place(
             ).all()
         )
     assert len(locations) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["box", "cargo_place"])
+async def test_empty_inbound_container_keeps_cell_after_map_reload(
+    async_client: AsyncClient,
+    kind: str,
+) -> None:
+    headers, _user, tenant = await _register(
+        async_client, f"empty-{kind.replace('_', '-')}"
+    )
+    async with SessionLocal() as session:
+        suffix = uuid.uuid4().hex[:10]
+        warehouse = Warehouse(
+            tenant_id=tenant.id,
+            name="Склад пустой тары",
+            code=f"empty-{suffix}",
+            barcode=f"WH-EMPTY-{suffix}",
+        )
+        session.add(warehouse)
+        await session.flush()
+        cell = StorageLocation(
+            tenant_id=tenant.id,
+            warehouse_id=warehouse.id,
+            code="Б-02-03",
+            barcode=f"CELL-EMPTY-{suffix}",
+        )
+        request = InboundIntakeRequest(
+            tenant_id=tenant.id,
+            warehouse_id=warehouse.id,
+            status="receiving",
+        )
+        session.add_all([cell, request])
+        await session.flush()
+        if kind == "box":
+            container = InboundIntakeBox(
+                tenant_id=tenant.id,
+                request_id=request.id,
+                box_number=1,
+                internal_barcode=f"BOX-EMPTY-{suffix}",
+            )
+        else:
+            container = InboundIntakeCargoPlace(
+                tenant_id=tenant.id,
+                request_id=request.id,
+                place_number=1,
+                internal_barcode=f"CARGO-EMPTY-{suffix}",
+            )
+        session.add(container)
+        await session.commit()
+        warehouse_id = warehouse.id
+        cell_id = cell.id
+        container_id = container.id
+
+    moved = await async_client.post(
+        f"/warehouses/{warehouse_id}/map/move",
+        headers=headers,
+        json={
+            "kind": kind,
+            "id": str(container_id),
+            "to_kind": "cell",
+            "to_id": str(cell_id),
+            "qty": 1,
+        },
+    )
+
+    assert moved.status_code == 200, moved.text
+    reloaded = await async_client.get(
+        f"/warehouses/{warehouse_id}/map",
+        headers=headers,
+    )
+    assert reloaded.status_code == 200, reloaded.text
+    target_cell = next(row for row in reloaded.json()["cells"] if row["id"] == str(cell_id))
+    assert str(container_id) in {row["id"] for row in target_cell["children"]}
+    assert str(container_id) not in {
+        row["id"] for row in reloaded.json()["unassigned"]
+    }
+
+    async with SessionLocal() as session:
+        model = InboundIntakeBox if kind == "box" else InboundIntakeCargoPlace
+        stored = await session.get(model, container_id)
+        assert stored is not None
+        assert stored.storage_location_id == cell_id
+
+
+@pytest.mark.asyncio
+async def test_map_shows_unposted_contents_of_unfinished_inbound_containers(
+    async_client: AsyncClient,
+) -> None:
+    headers, _user, tenant = await _register(async_client, "pending-contents")
+    async with SessionLocal() as session:
+        suffix = uuid.uuid4().hex[:10]
+        warehouse = Warehouse(
+            tenant_id=tenant.id,
+            name="Склад незавершённой приёмки",
+            code=f"pending-{suffix}",
+            barcode=f"WH-PENDING-{suffix}",
+        )
+        seller = Seller(tenant_id=tenant.id, name="Селлер незавершённой тары")
+        session.add_all([warehouse, seller])
+        await session.flush()
+        cell = StorageLocation(
+            tenant_id=tenant.id,
+            warehouse_id=warehouse.id,
+            code="В-03-04",
+            barcode=f"CELL-PENDING-{suffix}",
+        )
+        product = Product(
+            tenant_id=tenant.id,
+            seller_id=seller.id,
+            name="Товар ещё не разложен",
+            sku_code=f"PENDING-{suffix}",
+            wb_barcode=f"4900{suffix[:8]}",
+        )
+        request = InboundIntakeRequest(
+            tenant_id=tenant.id,
+            warehouse_id=warehouse.id,
+            seller_id=seller.id,
+            status="receiving",
+            document_number="ПРИЕМ-НЕЗАВЕРШЕННЫЙ-1",
+        )
+        session.add_all([cell, product, request])
+        await session.flush()
+        box = InboundIntakeBox(
+            tenant_id=tenant.id,
+            request_id=request.id,
+            box_number=1,
+            internal_barcode=f"BOX-PENDING-{suffix}",
+            storage_location_id=cell.id,
+        )
+        cargo = InboundIntakeCargoPlace(
+            tenant_id=tenant.id,
+            request_id=request.id,
+            place_number=1,
+            internal_barcode=f"CARGO-PENDING-{suffix}",
+            storage_location_id=cell.id,
+        )
+        session.add_all([box, cargo])
+        await session.flush()
+        session.add_all(
+            [
+                InboundIntakeBoxLine(
+                    box_id=box.id,
+                    product_id=product.id,
+                    quantity=8,
+                    posted_qty=3,
+                ),
+                InboundIntakeCargoPlaceLine(
+                    tenant_id=tenant.id,
+                    cargo_place_id=cargo.id,
+                    product_id=product.id,
+                    quantity=6,
+                    posted_qty=2,
+                ),
+            ]
+        )
+        await session.commit()
+        warehouse_id = warehouse.id
+        cell_id = cell.id
+        expected = {str(box.id): 5, str(cargo.id): 4}
+
+    response = await async_client.get(
+        f"/warehouses/{warehouse_id}/map",
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    target_cell = next(row for row in response.json()["cells"] if row["id"] == str(cell_id))
+    by_id = {row["id"]: row for row in target_cell["children"]}
+    for container_id, remaining_qty in expected.items():
+        assert by_id[container_id]["qty"] == remaining_qty
+        assert by_id[container_id]["source_document_number"] == (
+            "ПРИЕМ-НЕЗАВЕРШЕННЫЙ-1"
+        )
+        children = by_id[container_id]["children"]
+        assert len(children) == 1
+        assert children[0]["name"] == "Товар ещё не разложен"
+        assert children[0]["seller_name"] == "Селлер незавершённой тары"
+        assert children[0]["qty"] == remaining_qty

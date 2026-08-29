@@ -8,6 +8,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
+from app.models.inbound_intake import InboundIntakeRequest
 from app.models.pallet import Pallet
 from app.models.tenant import Tenant
 from app.models.user import User
@@ -171,3 +172,58 @@ async def test_sorting_object_creation_rejects_missing_warehouse(
 
     assert response.status_code == 404
     assert response.json()["detail"] == "warehouse_not_found"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["pallet", "box", "cargo_place"])
+async def test_created_sorting_object_can_be_bound_to_one_inbound_request(
+    async_client: AsyncClient,
+    kind: str,
+) -> None:
+    headers, tenant = await _register(async_client, f"document-{kind}")
+    warehouse = await _create_warehouse(tenant.id, kind)
+    async with SessionLocal() as session:
+        own_request = InboundIntakeRequest(
+            tenant_id=tenant.id,
+            warehouse_id=warehouse.id,
+            status="sorting",
+        )
+        other_request = InboundIntakeRequest(
+            tenant_id=tenant.id,
+            warehouse_id=warehouse.id,
+            status="sorting",
+        )
+        session.add_all([own_request, other_request])
+        await session.commit()
+        own_request_id = own_request.id
+        other_request_id = other_request.id
+
+    created = await async_client.post(
+        f"/warehouses/{warehouse.id}/sorting-objects",
+        headers=headers,
+        json={"kind": kind, "inbound_request_id": str(own_request_id)},
+    )
+
+    assert created.status_code == 201, created.text
+    object_id = created.json()["id"]
+    own_listing = await async_client.get(
+        f"/warehouses/{warehouse.id}/sorting-objects",
+        headers=headers,
+        params={"inbound_request_id": str(own_request_id)},
+    )
+    other_listing = await async_client.get(
+        f"/warehouses/{warehouse.id}/sorting-objects",
+        headers=headers,
+        params={"inbound_request_id": str(other_request_id)},
+    )
+
+    assert own_listing.status_code == 200, own_listing.text
+    assert object_id in {row["id"] for row in own_listing.json()["objects"]}
+    assert other_listing.status_code == 200, other_listing.text
+    assert object_id not in {row["id"] for row in other_listing.json()["objects"]}
+
+    async with SessionLocal() as session:
+        model = Pallet if kind == "pallet" else WarehouseBox
+        stored = await session.get(model, uuid.UUID(object_id))
+        assert stored is not None
+        assert stored.inbound_request_id == own_request_id

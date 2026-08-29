@@ -37,6 +37,12 @@ class Pallet(Base):
         ForeignKey("warehouses.id", ondelete="CASCADE"),
         index=True,
     )
+    inbound_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("inbound_intake_requests.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     code: Mapped[str] = mapped_column(String(32), nullable=False)
     barcode: Mapped[str] = mapped_column(String(64), nullable=False)
     free_text: Mapped[str | None] = mapped_column(Text, nullable=True)
