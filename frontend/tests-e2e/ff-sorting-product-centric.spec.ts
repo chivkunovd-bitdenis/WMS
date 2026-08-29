@@ -10,7 +10,16 @@ async function selectSortingLocation(page: Page, row: Locator, name: RegExp): Pr
 }
 
 // TC-NEW-SORT-01 — box contents stay under the box; only loose goods remain below.
-test('ff sorting: box product rows and loose goods are separate', async ({ page }) => {
+// ⚠️ ОТЛОЖЕН, НЕ УДАЛЁН. Сценарий проверяет экран раскладки на компоненте
+// FfInboundSortingPanel.tsx. Этот компонент (1481 строка) больше не
+// импортируется нигде в src — он вытеснен раскладкой объектами
+// (FfSortingObjectsPage / objects-tree) по прямому решению владельца.
+// Поведение, которое здесь описано (черновик с «Сохранить/Применить», диалог
+// о несохранённых правках, накопление сканов), у новой раскладки отсутствует
+// по замыслу: она сохраняет каждую постановку сразу на сервер.
+// Переписывать сценарий под новую раскладку — это писать другой тест, а не
+// чинить этот. Решение за владельцем: либо новый сценарий, либо снятие.
+test.fixme('ff sorting: box product rows and loose goods are separate', async ({ page }) => {
   const email = `e2e-sort-mix-${Date.now()}@example.com`;
   const sku = `SKU-SORT-MIX-${Date.now()}`;
   const whCode = `wh-sort-mix-${Date.now()}`;
@@ -194,7 +203,16 @@ test('ff sorting: box product rows and loose goods are separate', async ({ page 
 });
 
 // TC-REV-SORT-FE-02 — failed GET distribution-lines shows error and blocks apply.
-test('ff sorting: failed distribution-lines load shows error and blocks apply', async ({ page }) => {
+// ⚠️ ОТЛОЖЕН, НЕ УДАЛЁН. Сценарий проверяет экран раскладки на компоненте
+// FfInboundSortingPanel.tsx. Этот компонент (1481 строка) больше не
+// импортируется нигде в src — он вытеснен раскладкой объектами
+// (FfSortingObjectsPage / objects-tree) по прямому решению владельца.
+// Поведение, которое здесь описано (черновик с «Сохранить/Применить», диалог
+// о несохранённых правках, накопление сканов), у новой раскладки отсутствует
+// по замыслу: она сохраняет каждую постановку сразу на сервер.
+// Переписывать сценарий под новую раскладку — это писать другой тест, а не
+// чинить этот. Решение за владельцем: либо новый сценарий, либо снятие.
+test.fixme('ff sorting: failed distribution-lines load shows error and blocks apply', async ({ page }) => {
   const email = `e2e-sort-fail-${Date.now()}@example.com`;
   const sku = `SKU-SORT-FAIL-${Date.now()}`;
   const whCode = `wh-sort-fail-${Date.now()}`;
@@ -323,7 +341,16 @@ test('ff sorting: failed distribution-lines load shows error and blocks apply', 
 });
 
 // TC-NEW-SORT-03 — scanner-first cell -> product -> +1, apply locks the document and closes the sorting balance.
-test('ff sorting scanner-first: cell barcode then product scans apply distribution', async ({ page }) => {
+// ⚠️ ОТЛОЖЕН, НЕ УДАЛЁН. Сценарий проверяет экран раскладки на компоненте
+// FfInboundSortingPanel.tsx. Этот компонент (1481 строка) больше не
+// импортируется нигде в src — он вытеснен раскладкой объектами
+// (FfSortingObjectsPage / objects-tree) по прямому решению владельца.
+// Поведение, которое здесь описано (черновик с «Сохранить/Применить», диалог
+// о несохранённых правках, накопление сканов), у новой раскладки отсутствует
+// по замыслу: она сохраняет каждую постановку сразу на сервер.
+// Переписывать сценарий под новую раскладку — это писать другой тест, а не
+// чинить этот. Решение за владельцем: либо новый сценарий, либо снятие.
+test.fixme('ff sorting scanner-first: cell barcode then product scans apply distribution', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   const email = `e2e-sort-scan-${Date.now()}@example.com`;
   const sku = `SKU-SORT-SCAN-${Date.now()}`;
@@ -427,7 +454,16 @@ test('ff sorting scanner-first: cell barcode then product scans apply distributi
 });
 
 // TC-URG-SORT-BOX-01 — scan box -> cell places every SKU; second box is placed manually.
-test('ff sorting: whole boxes go to one cell by scan or one explicit row action', async ({ page }) => {
+// ⚠️ ОТЛОЖЕН, НЕ УДАЛЁН. Сценарий проверяет экран раскладки на компоненте
+// FfInboundSortingPanel.tsx. Этот компонент (1481 строка) больше не
+// импортируется нигде в src — он вытеснен раскладкой объектами
+// (FfSortingObjectsPage / objects-tree) по прямому решению владельца.
+// Поведение, которое здесь описано (черновик с «Сохранить/Применить», диалог
+// о несохранённых правках, накопление сканов), у новой раскладки отсутствует
+// по замыслу: она сохраняет каждую постановку сразу на сервер.
+// Переписывать сценарий под новую раскладку — это писать другой тест, а не
+// чинить этот. Решение за владельцем: либо новый сценарий, либо снятие.
+test.fixme('ff sorting: whole boxes go to one cell by scan or one explicit row action', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   const suffix = String(Date.now());
   const email = `e2e-whole-box-${suffix}@example.com`;
@@ -616,7 +652,16 @@ test('ff sorting: whole boxes go to one cell by scan or one explicit row action'
 });
 
 // TC-NEW-SORT-04 — sorting draft close/cross asks before losing unsaved manual corrections.
-test('ff sorting: unsaved manual correction asks before close', async ({ page }) => {
+// ⚠️ ОТЛОЖЕН, НЕ УДАЛЁН. Сценарий проверяет экран раскладки на компоненте
+// FfInboundSortingPanel.tsx. Этот компонент (1481 строка) больше не
+// импортируется нигде в src — он вытеснен раскладкой объектами
+// (FfSortingObjectsPage / objects-tree) по прямому решению владельца.
+// Поведение, которое здесь описано (черновик с «Сохранить/Применить», диалог
+// о несохранённых правках, накопление сканов), у новой раскладки отсутствует
+// по замыслу: она сохраняет каждую постановку сразу на сервер.
+// Переписывать сценарий под новую раскладку — это писать другой тест, а не
+// чинить этот. Решение за владельцем: либо новый сценарий, либо снятие.
+test.fixme('ff sorting: unsaved manual correction asks before close', async ({ page }) => {
   const email = `e2e-sort-dirty-${Date.now()}@example.com`;
   const sku = `SKU-SORT-DIRTY-${Date.now()}`;
   const whCode = `wh-sort-dirty-${Date.now()}`;
