@@ -1100,6 +1100,7 @@ export function FfProductsCatalogScreen({
                 <TableCell>Размер</TableCell>
                 <TableCell>Селлер</TableCell>
                 <TableCell align="right">Остаток</TableCell>
+                <TableCell align="right">В Wildberries</TableCell>
                 <TableCell>ТЗ</TableCell>
                 <TableCell>ЧЗ</TableCell>
                 <TableCell>Резервы</TableCell>
@@ -1231,6 +1232,29 @@ export function FfProductsCatalogScreen({
                           Свободный FBO {p.stock_free_fbo}
                         </Typography>
                       </Stack>
+                    </TableCell>
+                    {/* Сколько из свободного остатка уходит в Wildberries.
+                        Владелец просил видеть это прямо в каталоге, рядом с
+                        остатком, а не на отдельном экране. */}
+                    <TableCell align="right" sx={{ minWidth: 0 }}>
+                      {p.fbs_stock_sync_enabled ? (
+                        <Typography
+                          variant="body2"
+                          sx={{ fontWeight: 600 }}
+                          data-testid={`ff-catalog-fbs-published-${p.id}`}
+                        >
+                          {(p.fbs_published_amount ?? 0).toLocaleString('ru-RU')}
+                        </Typography>
+                      ) : (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          data-testid={`ff-catalog-fbs-published-${p.id}`}
+                          noWrap
+                        >
+                          не передаётся
+                        </Typography>
+                      )}
                     </TableCell>
                     <TableCell sx={{ minWidth: 0 }}>
                       <Button
