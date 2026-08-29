@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 class FbsBindingStockPool(Base):
-    """Manual distribution of FBS stock pool quantity across WB warehouses."""
+    """Доля FBS по складу WB и наследуемое абсолютное количество."""
 
     __tablename__ = "fbs_binding_stock_pools"
     __table_args__ = (
@@ -62,6 +62,8 @@ class FbsBindingStockPool(Base):
     quantity: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    # Наследуемое поле старого пула. Публикация его больше не читает: единственным
+    # источником количества служит рассчитанная доля ``percent``/``fbs_percent``.
     # Доля свободного остатка для этого склада WB, когда у товара доли разные.
     # NULL — «отдельная доля не задана», и это не то же самое, что ноль: ноль
     # означает осознанное «на этот склад не публикуем».

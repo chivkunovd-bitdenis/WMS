@@ -3,7 +3,7 @@
 TC-NEW-FBS-RULE-001: доля считается от свободного остатка на момент публикации.
 TC-NEW-FBS-RULE-002: сумма долей по складам не может превысить сто процентов.
 TC-NEW-FBS-RULE-003: массовое присвоение отказывает на товарах разных продавцов.
-TC-NEW-FBS-RULE-004: товар без доли продолжает публиковаться по старому числу.
+TC-NEW-FBS-RULE-004: товар без доли не публикуется, старое число игнорируется.
 """
 
 from __future__ import annotations
@@ -382,7 +382,7 @@ async def test_publish_takes_number_from_rule(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_product_without_rule_keeps_old_stored_number(
+async def test_product_without_rule_ignores_old_stored_number(
     db_session: AsyncSession,
 ) -> None:
     # Дано: товар, которому долю ещё не настроили, но старое распределение есть.
@@ -400,5 +400,5 @@ async def test_product_without_rule_keeps_old_stored_number(
     quantities = await _resolve_publish_quantities(
         db_session, seed.bindings[0], [seed.product]
     )
-    # Тогда он публикуется по-старому: выкатка не требует настроить всех сразу.
-    assert quantities == {seed.product.id: 17}
+    # Тогда товар не попадает в публикацию: старое абсолютное число больше не источник.
+    assert quantities == {}
