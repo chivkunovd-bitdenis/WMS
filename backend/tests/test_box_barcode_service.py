@@ -28,6 +28,7 @@ from app.services.box_barcode_service import (
 )
 from app.services.inbound_intake_box_service import _new_barcode as new_inbound_barcode
 from app.services.marketplace_unload_box_service import (
+    MarketplaceUnloadBoxError,
     attach_existing_box_by_barcode,
 )
 from app.services.warehouse_box_service import (
@@ -136,13 +137,19 @@ async def test_legacy_box_barcodes_attach_through_real_database_path(
             warehouse_id=warehouse.id,
             internal_barcode="WHB-ABCDEF123456",
         )
+        cargo_place = WarehouseBox(
+            tenant_id=tenant.id,
+            warehouse_id=warehouse.id,
+            internal_barcode="WHB-CARGO1234567",
+            container_kind="cargo_place",
+        )
         legacy_inbound_box = InboundIntakeBox(
             tenant_id=tenant.id,
             request_id=inbound_request.id,
             box_number=1,
             internal_barcode="INB-ABCDEF123456",
         )
-        session.add_all([legacy_warehouse_box, legacy_inbound_box])
+        session.add_all([legacy_warehouse_box, legacy_inbound_box, cargo_place])
         await session.flush()
 
         session.add_all(
@@ -193,6 +200,17 @@ async def test_legacy_box_barcodes_attach_through_real_database_path(
         assert len(attached_inb.lines) == 1
         assert attached_inb.lines[0].product_id == product.id
         assert attached_inb.lines[0].quantity == 1
+
+        # Негатив: грузоместо имеет собственный смысл в отгрузке и не может
+        # пройти старый сценарий «привязать готовый короб» только из-за общей таблицы.
+        with pytest.raises(MarketplaceUnloadBoxError, match="box_barcode_unknown"):
+            await attach_existing_box_by_barcode(
+                session,
+                tenant.id,
+                unload_request.id,
+                barcode=cargo_place.internal_barcode,
+                actor_user_id=None,
+            )
 
 
 @pytest.mark.parametrize(

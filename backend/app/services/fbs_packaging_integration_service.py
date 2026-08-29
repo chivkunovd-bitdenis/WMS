@@ -822,6 +822,7 @@ async def bind_packaging_box_to_trbx(
             WarehouseBox.id == packaging_box_id,
             WarehouseBox.tenant_id == tenant_id,
             WarehouseBox.warehouse_id == supply.warehouse_id,
+            WarehouseBox.container_kind == "box",
         )
         .with_for_update()
     )

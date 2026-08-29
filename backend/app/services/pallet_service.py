@@ -188,6 +188,7 @@ async def _load_warehouse_boxes(
             WarehouseBox.id.in_(ids),
             WarehouseBox.tenant_id == tenant_id,
             WarehouseBox.warehouse_id == warehouse_id,
+            WarehouseBox.container_kind == "box",
         )
         .with_for_update()
     )
