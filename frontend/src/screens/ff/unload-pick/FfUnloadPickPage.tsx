@@ -6,7 +6,16 @@ import { useMarketplaceProductCatalog } from '../../../hooks/useWbProductCatalog
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { EmptyState, ErrorNotice } from '../../../ui-kit'
 import { UnloadPickScreen, type UnloadPickScanResult } from './UnloadPickScreen'
-import { cellRef, type Cell, type GoodsLine, type PickProduct, type PlanLine } from './pickStub'
+import {
+  cellRef,
+  objRef,
+  type Cell,
+  type GoodsLine,
+  type ObjKind,
+  type PickProduct,
+  type PlanLine,
+  type WarehouseObject,
+} from './pickStub'
 import { pickKey, type PickedMap } from './pickRows'
 
 // Принятый экран подбора, подключённый к серверу.
@@ -44,6 +53,29 @@ type ApiDetail = {
   lines: ApiLine[]
 }
 
+/** Ступень тары снаружи внутрь: палета, потом короб на ней. */
+type ApiContainerStep = {
+  kind: ObjKind
+  id: string
+  code: string
+  label: string
+}
+
+/**
+ * Один физический источник внутри ячейки: короб, грузоместо, палета или россыпь.
+ *
+ * Сервер не делит по таре агрегаты `quantity`/`reserved`/`available`/`picked` —
+ * они остаются на всё место целиком. Поэтому долю каждого источника считаем
+ * здесь, а сохраняем по-прежнему сумму на ячейку: ручка `pick/set` принимает
+ * только `storage_location_id`.
+ */
+type ApiPickSource = {
+  quantity: number
+  is_loose: boolean
+  source_label: string
+  container_path: ApiContainerStep[]
+}
+
 type ApiPickLocation = {
   storage_location_id: string
   location_code: string
@@ -51,6 +83,7 @@ type ApiPickLocation = {
   reserved: number
   available: number
   picked: number
+  sources?: ApiPickSource[]
 }
 
 type ApiPickProduct = {
@@ -178,8 +211,14 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
     }))
 
     const cellsById = new Map<string, Cell>()
+    const objectsById = new Map<string, WarehouseObject>()
     const stock: GoodsLine[] = []
     const picked: PickedMap = {}
+    // Какая ячейка стоит за каждой строкой места и какие ещё строки делят с ней
+    // ту же ячейку: сохранять всё равно надо сумму по ячейке.
+    const placeLocation = new Map<string, string>()
+    const placesOfLocation = new Map<string, string[]>()
+
     for (const product of pickOptions) {
       for (const location of product.locations) {
         cellsById.set(location.storage_location_id, {
@@ -189,16 +228,55 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
           // ручного ввода, а настоящий штрихкод распознаёт scan-роут сервера.
           barcode: location.location_code,
         })
-        const holder = cellRef(location.storage_location_id)
-        stock.push({
-          id: `${product.product_id}-${location.storage_location_id}`,
-          productId: product.product_id,
-          // Остаток уже уменьшен предыдущими снятиями. Возвращаем picked к
-          // доступному, чтобы поле могло показать и уменьшить сохранённый факт.
-          qty: location.available + location.picked,
-          holder,
-        })
-        picked[pickKey(product.product_id, holder)] = location.picked
+        const cellHolder = cellRef(location.storage_location_id)
+        const group = `${product.product_id}|${location.storage_location_id}`
+
+        // Остаток уже уменьшен предыдущими снятиями. Возвращаем picked к
+        // доступному, чтобы поле могло показать и уменьшить сохранённый факт.
+        let pool = location.available + location.picked
+        let pickedLeft = location.picked
+
+        // Старый ответ сервера без тары — место остаётся одной строкой на ячейку.
+        const sources: ApiPickSource[] = location.sources?.length
+          ? location.sources
+          : [{ quantity: pool, is_loose: true, source_label: 'Россыпью', container_path: [] }]
+
+        for (const source of sources) {
+          // Строим цепочку тары снаружи внутрь: палета стоит в ячейке, короб —
+          // на палете. У россыпи цепочка пустая, и держателем остаётся ячейка.
+          let holder = cellHolder
+          for (const step of source.container_path) {
+            if (!objectsById.has(step.id)) {
+              objectsById.set(step.id, {
+                id: step.id,
+                kind: step.kind,
+                code: step.code,
+                // Отдельного ШК тары ручка не отдаёт; распознаёт его scan-роут.
+                barcode: step.code,
+                holder,
+              })
+            }
+            holder = objRef(step.id)
+          }
+
+          // Сервер не режет доступное по таре, поэтому режем здесь по порядку:
+          // источник не может дать больше, чем осталось доступным на ячейке.
+          const capacity = Math.min(source.quantity, pool)
+          pool -= capacity
+          const takenHere = Math.min(pickedLeft, capacity)
+          pickedLeft -= takenHere
+          if (capacity <= 0 && takenHere <= 0) continue
+
+          stock.push({
+            id: `${product.product_id}-${holder}`,
+            productId: product.product_id,
+            qty: capacity,
+            holder,
+          })
+          picked[pickKey(product.product_id, holder)] = takenHere
+          placeLocation.set(`${product.product_id}|${holder}`, location.storage_location_id)
+          placesOfLocation.set(group, [...(placesOfLocation.get(group) ?? []), holder])
+        }
       }
     }
 
@@ -210,8 +288,11 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
       products,
       plan,
       stock,
+      objects: [...objectsById.values()],
       cells: [...cellsById.values()],
       picked,
+      placeLocation,
+      placesOfLocation,
     }
   }, [catalogById, detail, pickOptions])
 
@@ -247,12 +328,26 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
   const setPicked = useCallback(
     async (payload: { productId: string; place: { key: string }; quantity: number }) => {
       if (!requestId) return
-      const locationId = sourceLocationId(payload.place.key)
+      const locationId =
+        screenData?.placeLocation.get(payload.place.key) ?? sourceLocationId(payload.place.key)
       if (!locationId) {
         setError('Сервер не вернул ячейку, из которой снимается товар')
         await load()
         return
       }
+      // Ручка принимает только ячейку, а строк на ячейке может быть несколько —
+      // короб, грузоместо, россыпь. Поэтому отправляем сумму по всей ячейке,
+      // подставив в неё новое число текущей строки.
+      const group = `${payload.productId}|${locationId}`
+      const siblings = screenData?.placesOfLocation.get(group) ?? [payload.place.key]
+      const locationQuantity = siblings.reduce(
+        (sum, key) =>
+          sum +
+          (key === payload.place.key
+            ? payload.quantity
+            : (screenData?.picked[pickKey(payload.productId, key)] ?? 0)),
+        0,
+      )
       setBusy(true)
       setError(null)
       try {
@@ -262,7 +357,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
           body: JSON.stringify({
             product_id: payload.productId,
             storage_location_id: locationId,
-            quantity: payload.quantity,
+            quantity: locationQuantity,
           }),
         })
         if (!res.ok) throw new Error(await readApiErrorMessage(res))
@@ -278,7 +373,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
         setBusy(false)
       }
     },
-    [load, requestId, token, updateOption],
+    [load, requestId, screenData, token, updateOption],
   )
 
   const scan = useCallback(
@@ -294,7 +389,9 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
           catalog?.wb_barcodes.some((one) => one === barcode)
         )
       })
-      let locationId = sourceLocationId(sourceKey)
+      let locationId =
+        (sourceKey ? screenData?.placeLocation.get(sourceKey) : null) ??
+        sourceLocationId(sourceKey)
       if (matchedProduct && !locationId) {
         const option = pickOptions.find((one) => one.product_id === matchedProduct.id)
         const candidates = option?.locations.filter((one) => one.available > 0) ?? []
@@ -358,7 +455,15 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
         setBusy(false)
       }
     },
-    [catalogById, pickOptions, requestId, screenData?.products, token, updateOption],
+    [
+      catalogById,
+      pickOptions,
+      requestId,
+      screenData?.placeLocation,
+      screenData?.products,
+      token,
+      updateOption,
+    ],
   )
 
   if (loading && !screenData) {
@@ -387,7 +492,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
         products={screenData.products}
         plan={screenData.plan}
         stock={screenData.stock}
-        objects={[]}
+        objects={screenData.objects}
         cells={screenData.cells}
         initialPicked={screenData.picked}
         busy={busy}
