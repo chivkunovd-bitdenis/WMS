@@ -16,7 +16,7 @@ function headers(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}` }
 }
 
-type ApiCatalogRow = {
+export type ApiCatalogRow = {
   id: string
   seller_id: string | null
   name: string
@@ -26,7 +26,7 @@ type ApiCatalogRow = {
   wb_subject_name?: string | null
 }
 
-type ApiRule = {
+export type ApiRule = {
   publish: boolean
   same_everywhere: boolean
   percent: number
@@ -52,9 +52,9 @@ type ApiSellerWarehouse = {
  * записью под служебным ключом, вместо того чтобы выдумывать распределение,
  * которого сервер не знает.
  */
-const TOTAL_KEY = '__total__'
+export const TOTAL_KEY = '__total__'
 
-function toProduct(row: ApiCatalogRow, rule: ApiRule | undefined, sellerId: string): Product {
+export function toProduct(row: ApiCatalogRow, rule: ApiRule | undefined, sellerId: string): Product {
   const onHand = rule?.on_hand ?? 0
   const reserved = rule?.reserved ?? 0
   return {
@@ -69,7 +69,7 @@ function toProduct(row: ApiCatalogRow, rule: ApiRule | undefined, sellerId: stri
   }
 }
 
-function toRule(productId: string, rule: ApiRule | undefined): FbsRule {
+export function toRule(productId: string, rule: ApiRule | undefined): FbsRule {
   return {
     productId,
     publish: rule?.publish ?? false,

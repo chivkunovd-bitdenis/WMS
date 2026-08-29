@@ -162,6 +162,14 @@ type Props = {
   requestId: string
   boxId: string
   boxLabel: string
+  /**
+   * Что наполняем: короб или грузоместо.
+   *
+   * Процесс у них одинаковый — владелец так и сказал: «в точности по такому же
+   * процессу, как и в короба». Отличается только адрес ручки, поэтому диалог
+   * один, а не скопированный второй раз.
+   */
+  containerKind?: 'box' | 'cargo_place'
   readOnly: boolean
   token: string
   requestLines: RequestLine[]
@@ -176,6 +184,7 @@ export function FfInboundBoxAddDialog({
   requestId,
   boxId,
   boxLabel,
+  containerKind,
   readOnly,
   token,
   requestLines,
@@ -265,7 +274,9 @@ export function FfInboundBoxAddDialog({
       try {
         const res = await fetch(
           apiUrl(
-            `/operations/inbound-intake-requests/${requestId}/boxes/${boxId}/lines/${productId}`,
+            `/operations/inbound-intake-requests/${requestId}/${
+              containerKind === 'cargo_place' ? 'cargo-places' : 'boxes'
+            }/${boxId}/lines/${productId}`,
           ),
           {
             method: 'PUT',

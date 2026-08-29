@@ -127,6 +127,8 @@ type InboundCargoPlace = {
   internal_barcode: string
   label_printed_at: string | null
   created_at: string
+  /** Товары внутри. Наполняется тем же процессом, что и короб. */
+  lines?: InboundBoxLine[]
 }
 
 type InboundLine = {
@@ -461,6 +463,7 @@ export function FfInboundRequestView({
   const [plannedDateDraft, setPlannedDateDraft] = useState<string>('')
   const [manualEditLineId, setManualEditLineId] = useState<string | null>(null)
   const [boxAddDialogBoxId, setBoxAddDialogBoxId] = useState<string | null>(null)
+  const [cargoAddDialogPlaceId, setCargoAddDialogPlaceId] = useState<string | null>(null)
   const [finishConfirmOpen, setFinishConfirmOpen] = useState(false)
   const [scanToastError, setScanToastError] = useState<string | null>(null)
   const [scanAddBarcode, setScanAddBarcode] = useState<string | null>(null)
@@ -1734,6 +1737,10 @@ export function FfInboundRequestView({
     }
   }
 
+  const openCargoAddDialog = (placeId: string) => {
+    setCargoAddDialogPlaceId(placeId)
+  }
+
   const openBoxAddDialog = (boxId: string) => {
     setBoxAddDialogBoxId(boxId)
   }
@@ -2915,6 +2922,15 @@ export function FfInboundRequestView({
                           ) : null}
                           <Button
                             size="small"
+                            variant="contained"
+                            disabled={busy || !receivingActive}
+                            onClick={() => openCargoAddDialog(place.id)}
+                            data-testid={`ff-inbound-cargo-place-fill-${place.id}`}
+                          >
+                            Наполнить
+                          </Button>
+                          <Button
+                            size="small"
                             variant="outlined"
                             disabled={busy}
                             onClick={() => requestPrintInboundCargoPlace(place)}
@@ -3416,6 +3432,31 @@ export function FfInboundRequestView({
           }}
         />
       ) : null}
+
+      {cargoAddDialogPlaceId && token
+        ? (() => {
+            const place = cargoPlaces.find((one) => one.id === cargoAddDialogPlaceId)
+            if (!place) return null
+            return (
+              <FfInboundBoxAddDialog
+                open
+                onClose={() => setCargoAddDialogPlaceId(null)}
+                requestId={requestId}
+                boxId={place.id}
+                boxLabel={`Грузоместо № ${place.place_number}`}
+                containerKind="cargo_place"
+                readOnly={!receivingActive}
+                token={token}
+                requestLines={detail?.lines ?? []}
+                boxLines={place.lines ?? []}
+                catalogById={catalogById}
+                onUpdated={async () => {
+                  await loadDetail()
+                }}
+              />
+            )
+          })()
+        : null}
 
       <Snackbar
         open={importSuccessMsg !== null}

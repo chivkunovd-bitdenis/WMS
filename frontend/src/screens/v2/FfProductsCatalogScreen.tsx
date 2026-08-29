@@ -39,6 +39,17 @@ import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined'
 import QrCode2OutlinedIcon from '@mui/icons-material/QrCode2Outlined'
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 import { apiUrl, applyFbsStockLimitFromBalance } from '../../api'
+import { FbsStockDialog } from '../ff/products-fbs/FbsStockDialog'
+import {
+  toProduct as toFbsProduct,
+  toRule as toFbsRule,
+  type ApiRule as FbsApiRule,
+} from '../ff/products-fbs/FfProductsFbsPage'
+import type {
+  FbsRule as FbsRuleModel,
+  Product as FbsProduct,
+  Seller as FbsSeller,
+} from '../ff/products-fbs/stub'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { ProductBarcodeCell } from '../../components/ProductBarcodeCell'
 import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintButton'
@@ -82,6 +93,8 @@ type FfCatalogRow = {
   fbs_stock_sync_enabled?: boolean
   fbs_stock_limit?: number | null
   fbs_published_amount?: number | null
+  fbs_percent?: number | null
+  fbs_same_everywhere?: boolean | null
   fbs_sync_status?: string | null
 }
 
@@ -239,6 +252,14 @@ export function FfProductsCatalogScreen({
 
   // ── Массовая простановка остатка FBS по фактическому остатку на складе ──
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  // Модалка «Задать остаток» — та же, что была на отдельном экране остатков FBS.
+  // Владелец просил, чтобы настройка жила в каталоге, а не отдельным разделом.
+  const [fbsDialog, setFbsDialog] = useState<{
+    products: FbsProduct[]
+    seller: FbsSeller
+    rule: FbsRuleModel
+  } | null>(null)
+  const [fbsDialogError, setFbsDialogError] = useState<string | null>(null)
   const [fbsBulkConfirmOpen, setFbsBulkConfirmOpen] = useState(false)
   const [fbsBulkBusy, setFbsBulkBusy] = useState(false)
   const [fbsBulkResult, setFbsBulkResult] = useState<FbsBulkResultView | null>(null)
@@ -597,6 +618,77 @@ export function FfProductsCatalogScreen({
       return next
     })
   }, [])
+
+  const openFbsStockDialog = useCallback(async () => {
+    setFbsDialogError(null)
+    const chosen = rows.filter((r) => selectedIds.has(r.id) && r.seller_id)
+    if (chosen.length === 0) {
+      setFbsDialogError('Выберите товары с продавцом: без него складов WB нет.')
+      return
+    }
+    const sellerId = chosen[0]!.seller_id as string
+    if (chosen.some((r) => r.seller_id !== sellerId)) {
+      setFbsDialogError('Выберите товары одного продавца: склады у каждого свои.')
+      return
+    }
+    try {
+      const [rulesRes, whRes] = await Promise.all([
+        fetch(apiUrl('/products/fbs-rule/bulk'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+          body: JSON.stringify({ product_ids: chosen.map((r) => r.id) }),
+        }),
+        fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/warehouses`), {
+          headers: { ...authHeaders(token) },
+        }),
+      ])
+      if (!rulesRes.ok) throw new Error(await readApiErrorMessage(rulesRes))
+      const rulesBody = (await rulesRes.json()) as {
+        items: Array<FbsApiRule & { product_id: string }>
+      }
+      const ruleById = new Map(rulesBody.items.map((one) => [one.product_id, one]))
+      const whRows = whRes.ok
+        ? ((await whRes.json()) as Array<{
+            wb_warehouse_id: number | string
+            name: string | null
+            wms_warehouse_id: string | null
+            served: boolean
+          }>)
+        : []
+      const seller: FbsSeller = {
+        id: sellerId,
+        name: chosen[0]!.seller_name ?? '—',
+        warehouses: whRows.map((one) => ({
+          id: String(one.wb_warehouse_id),
+          name: one.name ?? `Склад ${one.wb_warehouse_id}`,
+          boundTo: one.wms_warehouse_id,
+          fbsEnabled: one.served,
+        })),
+        wbWarehouses: whRows.map((one) => ({
+          id: String(one.wb_warehouse_id),
+          name: one.name ?? `Склад ${one.wb_warehouse_id}`,
+        })),
+      }
+      const products: FbsProduct[] = chosen.map((r) =>
+        toFbsProduct(
+          {
+            id: r.id,
+            seller_id: r.seller_id,
+            name: r.name,
+            sku_code: r.sku_code,
+            wb_size: r.wb_size,
+            wb_primary_barcode: r.wb_primary_barcode,
+          },
+          ruleById.get(r.id),
+          sellerId,
+        ),
+      )
+      const rule: FbsRuleModel = toFbsRule(chosen[0]!.id, ruleById.get(chosen[0]!.id))
+      setFbsDialog({ products, seller, rule })
+    } catch (e) {
+      setFbsDialogError(e instanceof Error ? e.message : 'Не удалось открыть настройку остатка')
+    }
+  }, [rows, selectedIds, token])
 
   const openFbsBulkConfirm = useCallback(() => {
     if (selectedIds.size === 0) return
@@ -1029,13 +1121,24 @@ export function FfProductsCatalogScreen({
               <Typography variant="subtitle2" data-testid="ff-catalog-selection-count">
                 Выбрано {selectedIds.size}
               </Typography>
-              <Button
-                variant="contained"
-                onClick={openFbsBulkConfirm}
-                data-testid="ff-catalog-fbs-bulk-apply"
-              >
-                Весь остаток на FBS
-              </Button>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                {/* Как на согласованном макете: кнопка открывает настройку доли
+                    остатка с ползунками, а не разом отдаёт весь остаток. */}
+                <Button
+                  variant="contained"
+                  onClick={() => void openFbsStockDialog()}
+                  data-testid="ff-catalog-fbs-set-stock"
+                >
+                  Задать остаток · {selectedIds.size}
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={openFbsBulkConfirm}
+                  data-testid="ff-catalog-fbs-bulk-apply"
+                >
+                  Весь остаток на FBS
+                </Button>
+              </Stack>
             </Stack>
           </Paper>
         ) : null}
@@ -1238,13 +1341,35 @@ export function FfProductsCatalogScreen({
                         остатком, а не на отдельном экране. */}
                     <TableCell align="right" sx={{ minWidth: 0 }}>
                       {p.fbs_stock_sync_enabled ? (
-                        <Typography
-                          variant="body2"
-                          sx={{ fontWeight: 600 }}
-                          data-testid={`ff-catalog-fbs-published-${p.id}`}
+                        <Stack
+                          direction="row"
+                          spacing={0.75}
+                          sx={{ alignItems: 'center', justifyContent: 'flex-end' }}
                         >
-                          {(p.fbs_published_amount ?? 0).toLocaleString('ru-RU')}
-                        </Typography>
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: 600 }}
+                            data-testid={`ff-catalog-fbs-published-${p.id}`}
+                          >
+                            {(p.fbs_published_amount ?? 0).toLocaleString('ru-RU')}
+                          </Typography>
+                          {/* Как на макете: рядом с числом видно правило — общий
+                              процент либо «по складам», если проценты разные.
+                              Пока сервер не отдаёт эти поля, чипа нет: рисовать
+                              «0%» значило бы показать неправду. */}
+                          {p.fbs_same_everywhere === false || p.fbs_percent != null ? (
+                            <Chip
+                              size="small"
+                              label={
+                                p.fbs_same_everywhere === false
+                                  ? 'по складам'
+                                  : `${p.fbs_percent ?? 0}%`
+                              }
+                              sx={{ height: 20 }}
+                              data-testid={`ff-catalog-fbs-rule-${p.id}`}
+                            />
+                          ) : null}
+                        </Stack>
                       ) : (
                         <Typography
                           variant="caption"
@@ -1851,6 +1976,52 @@ export function FfProductsCatalogScreen({
             </Button>
           </DialogActions>
         </Dialog>
+
+        {fbsDialogError ? (
+          <Alert severity="error" sx={{ mt: 2 }} data-testid="ff-catalog-fbs-dialog-error">
+            {fbsDialogError}
+          </Alert>
+        ) : null}
+
+        {fbsDialog ? (
+          <FbsStockDialog
+            open
+            products={fbsDialog.products}
+            seller={fbsDialog.seller}
+            rule={fbsDialog.rule}
+            onClose={() => setFbsDialog(null)}
+            onBind={() => undefined}
+            onSave={(rule) => {
+              const ids = fbsDialog.products.map((one) => one.id)
+              void (async () => {
+                try {
+                  const res = await fetch(apiUrl('/products/fbs-rule'), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+                    body: JSON.stringify({
+                      product_ids: ids,
+                      publish: rule.publish,
+                      same_everywhere: rule.sameEverywhere,
+                      percent: rule.percent,
+                      by_warehouse: rule.byWarehouse,
+                    }),
+                  })
+                  if (!res.ok) {
+                    setFbsDialogError(await readApiErrorMessage(res))
+                    return
+                  }
+                  setFbsDialog(null)
+                  setFbsDialogError(null)
+                  await load()
+                } catch (e) {
+                  setFbsDialogError(
+                    e instanceof Error ? e.message : 'Не удалось сохранить правило',
+                  )
+                }
+              })()
+            }}
+          />
+        ) : null}
       </Box>
     </FfProductMarkingPrintProvider>
   )
