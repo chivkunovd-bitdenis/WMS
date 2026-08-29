@@ -254,6 +254,7 @@ def _map_error(exc: WarehouseMapError) -> HTTPException:
         "invalid_container_destination",
         "insufficient_stock",
         "pallet_disbanded",
+        "pallet_identifier_conflict",
     }:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.code)

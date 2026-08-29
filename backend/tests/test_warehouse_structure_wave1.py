@@ -21,6 +21,7 @@ from app.models.inventory_movement import (
     MOVEMENT_TYPE_INBOUND_INTAKE,
     MOVEMENT_TYPE_OUTBOUND_SHIPMENT,
 )
+from app.models.pallet import Pallet
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
@@ -152,6 +153,77 @@ async def test_tenant_b_cannot_add_product_to_tenant_a_pallet_or_list_it(
             )
         await session.rollback()
         assert await pallet_service.list_pallets(session, tenant_b_id) == []
+
+
+@pytest.mark.asyncio
+async def test_parallel_pallet_creation_reserves_distinct_codes(
+    async_client: AsyncClient,
+) -> None:
+    # TC-NEW-PALLET-CONCURRENT-CODE-001
+    # Дано один склад. Когда две транзакции одновременно создают палеты, тогда
+    # обе операции успешны, коды различаются и обе строки остаются в базе.
+    del async_client
+    async with SessionLocal() as seed_session:
+        tenant, warehouse, _location, _product = await _seed_tenant(
+            seed_session, "parallel-pallet"
+        )
+        await seed_session.commit()
+        tenant_id = tenant.id
+        warehouse_id = warehouse.id
+
+    async def create_one() -> tuple[uuid.UUID, str]:
+        async with SessionLocal() as session:
+            pallet = await pallet_service.create_pallet(
+                session,
+                tenant_id,
+                warehouse_id=warehouse_id,
+            )
+            return pallet.id, pallet.code
+
+    created = await asyncio.gather(create_one(), create_one())
+
+    ids = {pallet_id for pallet_id, _code in created}
+    codes = {code for _pallet_id, code in created}
+    assert len(ids) == 2
+    assert len(codes) == 2
+    async with SessionLocal() as verify_session:
+        persisted = await pallet_service.list_pallets(
+            verify_session,
+            tenant_id,
+            warehouse_id=warehouse_id,
+        )
+    assert {pallet.id for pallet in persisted} == ids
+    assert {pallet.code for pallet in persisted} == codes
+
+
+@pytest.mark.asyncio
+async def test_pallet_counter_continues_after_existing_legacy_code(
+    async_client: AsyncClient,
+) -> None:
+    # TC-NEW-PALLET-CONCURRENT-CODE-002
+    # Ограничение: включение атомарного счётчика не переиспользует старые номера.
+    del async_client
+    async with SessionLocal() as session:
+        tenant, warehouse, _location, _product = await _seed_tenant(
+            session, "legacy-pallet"
+        )
+        session.add(
+            Pallet(
+                tenant_id=tenant.id,
+                warehouse_id=warehouse.id,
+                code="П-000005",
+                barcode=f"PLT-LEGACY-{uuid.uuid4().hex[:8]}",
+            )
+        )
+        await session.commit()
+
+        created = await pallet_service.create_pallet(
+            session,
+            tenant.id,
+            warehouse_id=warehouse.id,
+        )
+
+    assert created.code == "П-000006"
 
 
 @pytest.mark.asyncio

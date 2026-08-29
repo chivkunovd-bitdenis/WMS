@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from datetime import UTC, datetime
 
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inbound_intake import (
@@ -19,6 +20,7 @@ from app.models.pallet import Pallet
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
+from app.services.document_number_service import DOC_TYPE_PALLET, next_display_counter
 from app.services.sorting_location_service import get_or_create_sorting_location
 
 
@@ -51,12 +53,18 @@ async def _next_code_number(session: AsyncSession, tenant_id: uuid.UUID) -> int:
     last_code = await session.scalar(
         select(func.max(Pallet.code)).where(Pallet.tenant_id == tenant_id)
     )
-    if not last_code:
-        return 1
+    legacy_next = 1
     try:
-        return int(str(last_code).removeprefix("П-")) + 1
+        if last_code:
+            legacy_next = int(str(last_code).removeprefix("П-")) + 1
     except ValueError:
-        return 1
+        pass
+    return await next_display_counter(
+        session,
+        tenant_id,
+        DOC_TYPE_PALLET,
+        minimum_counter=legacy_next,
+    )
 
 
 async def create_pallet(
@@ -88,7 +96,11 @@ async def create_pallet(
         free_text=free_text.strip() if free_text and free_text.strip() else None,
     )
     session.add(pallet)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise PalletServiceError("pallet_identifier_conflict") from exc
     await session.refresh(pallet)
     return pallet
 

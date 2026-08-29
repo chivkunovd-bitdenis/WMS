@@ -38,6 +38,7 @@ from app.services.fbs_stock_rule_service import (
     validate_rule,
 )
 from app.services.fbs_stock_sync_service import _resolve_publish_quantities
+from app.services.stock_direction_service import create_stock_direction
 
 
 @pytest_asyncio.fixture
@@ -197,6 +198,90 @@ async def test_rule_view_shows_three_numbers(db_session: AsyncSession) -> None:
     assert view.free_stock == 420
     assert view.published_now == 210
     assert view.rule.percent == 50
+
+
+@pytest.mark.asyncio
+async def test_rule_view_counts_global_direction_reserve_once_across_warehouses(
+    db_session: AsyncSession,
+) -> None:
+    # TC-NEW-FBS-RULE-GLOBAL-RESERVE-001
+    # Дано два физических склада по 100 штук и один глобальный резерв направления
+    # 30. Когда экран суммирует склады, тогда резерв виден один раз: 30, а не 60.
+    seed = await _seed(db_session, on_hand=100)
+    second_warehouse = Warehouse(
+        id=uuid.uuid4(),
+        tenant_id=seed.tenant.id,
+        name="WH 2",
+        code=f"wh-{uuid.uuid4().hex[:6]}",
+    )
+    second_location = StorageLocation(
+        id=uuid.uuid4(),
+        tenant_id=seed.tenant.id,
+        warehouse_id=second_warehouse.id,
+        code=f"CELL-{uuid.uuid4().hex[:6]}",
+        barcode=f"BC-{uuid.uuid4().hex[:8]}",
+    )
+    db_session.add_all(
+        [
+            second_warehouse,
+            second_location,
+            InventoryBalance(
+                id=uuid.uuid4(),
+                tenant_id=seed.tenant.id,
+                storage_location_id=second_location.id,
+                product_id=seed.product.id,
+                quantity=100,
+            ),
+            FbsWarehouseBinding(
+                id=uuid.uuid4(),
+                tenant_id=seed.tenant.id,
+                seller_id=seed.seller.id,
+                wb_warehouse_id=501002,
+                wms_warehouse_id=second_warehouse.id,
+                is_active=True,
+                stock_sync_enabled=True,
+                served=True,
+            ),
+        ]
+    )
+    await db_session.commit()
+    await create_stock_direction(
+        db_session,
+        seed.tenant.id,
+        seed.product.id,
+        name="Глобальный резерв",
+        quantity=30,
+        is_fbs=False,
+    )
+
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+
+    assert view.on_hand == 200
+    assert view.reserved == 30
+    assert view.free_stock == 170
+
+
+@pytest.mark.asyncio
+async def test_rule_view_keeps_single_warehouse_direction_math(
+    db_session: AsyncSession,
+) -> None:
+    # TC-NEW-FBS-RULE-GLOBAL-RESERVE-002
+    # Ограничение: для одного склада прежняя правильная арифметика не меняется.
+    seed = await _seed(db_session, on_hand=100)
+    await create_stock_direction(
+        db_session,
+        seed.tenant.id,
+        seed.product.id,
+        name="Глобальный резерв",
+        quantity=30,
+        is_fbs=False,
+    )
+
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+
+    assert view.on_hand == 100
+    assert view.reserved == 30
+    assert view.free_stock == 70
 
 
 @pytest.mark.asyncio

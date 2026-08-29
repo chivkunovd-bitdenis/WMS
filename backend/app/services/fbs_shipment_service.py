@@ -49,6 +49,12 @@ from app.services import fbs_marking_service as marking_svc
 from app.services import fbs_packing_box_service as packing_box_svc
 from app.services import fbs_shipment_pvz_service as pvz_svc
 from app.services import inventory_service as inventory_svc
+from app.services.fbs_ozon_packaging_service import (
+    OzonPackagingError,
+)
+from app.services.fbs_ozon_packaging_service import (
+    write_off_order as write_off_ozon_order,
+)
 from app.services.fbs_print_asset_service import upsert_supply_qr_asset_from_bytes
 from app.services.fbs_print_asset_storage import FbsPrintAssetStorageError
 from app.services.fbs_supply_reconcile_service import (
@@ -842,11 +848,12 @@ async def _write_off_delivered_orders_once(
     orders: list[FbsOrder],
     actor_user_id: uuid.UUID | None,
 ) -> None:
-    """Create exactly one physical write-off per confirmed FBS order."""
+    """Create exactly one physical write-off recipe per confirmed FBS order."""
     active_orders = [
         order
         for order in orders
-        if order.status != FBS_ORDER_STATUS_CANCELLED and order.product_id is not None
+        if order.status != FBS_ORDER_STATUS_CANCELLED
+        and (order.product_id is not None or order.marketplace == "ozon")
     ]
     order_ids = [order.id for order in active_orders]
     existing_ledgers = {
@@ -871,7 +878,20 @@ async def _write_off_delivered_orders_once(
 
     for order in active_orders:
         ledger = existing_ledgers.get(order.id)
+        if ledger is None and order.marketplace == "ozon" and order.product_positions:
+            try:
+                ledger = await write_off_ozon_order(
+                    session,
+                    tenant_id=supply.tenant_id,
+                    order=order,
+                    actor_user_id=actor_user_id,
+                )
+            except OzonPackagingError as exc:
+                raise FbsShipmentError(str(exc), http_status=409) from exc
+            existing_ledgers[order.id] = ledger
         if ledger is None:
+            if order.product_id is None:
+                raise FbsShipmentError("fbs_shipment_product_missing", http_status=409)
             shipment_location = locations.get(order.id)
             if shipment_location is not None:
                 fulfilled_product_id, storage_location_id = shipment_location
