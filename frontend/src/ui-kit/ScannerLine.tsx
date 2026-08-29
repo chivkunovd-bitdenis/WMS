@@ -94,10 +94,20 @@ export function ScannerField({
         onFocus={() => {
           ownsFocusRef.current = true
         }}
-        onBlur={() => {
+        onBlur={(event) => {
           // Пока идёт запрос, поле выключено и теряет фокус само — это не уход
           // оператора в другое поле, и право вернуть фокус сохраняем.
-          if (!busy) ownsFocusRef.current = false
+          if (busy) return
+          ownsFocusRef.current = false
+          // Уход фокуса с непустым значением — тот же сигнал, что и Enter
+          // (§Ж-02): штрихкод, набранный или вставленный и оставленный в поле,
+          // должен обработаться, а не молча остаться нетронутым. Значение
+          // читаем из самого DOM-узла по той же причине, что и в onKeyDown —
+          // не гонимся за React-состоянием, которое к этому моменту могло не
+          // успеть перерисоваться.
+          const code = event.target.value.trim()
+          if (!code) return
+          onScan(code)
         }}
         onKeyDown={(event) => {
           if (event.key !== 'Enter') return
