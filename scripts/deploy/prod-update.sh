@@ -73,15 +73,15 @@ echo "==> start application services"
 echo "==> status"
 "${COMPOSE[@]}" ps
 
-echo "==> WB products re-sync (all sellers; legacy SKUs → OLD/…)"
-if [[ -x scripts/deploy/sync-all-wb-products.sh ]]; then
-  if ! ./scripts/deploy/sync-all-wb-products.sh; then
-    sync_rc=$?
-    echo "WARN: WB products sync failed (exit ${sync_rc}; 137 often OOM) — deploy continues."
-    echo "      Re-run later: ./scripts/deploy/sync-all-wb-products.sh"
-  fi
-else
-  echo "skip: scripts/deploy/sync-all-wb-products.sh not found"
-fi
+# Переимпорт карточек WB из выкатки убран 29.08.2026.
+#
+# Он появился 14.06.2026 вместе с разовой перестройкой каталога (один товар на
+# размер, старые артикулы в OLD/…) и с тех пор гонялся после КАЖДОЙ выкатки:
+# массовая перезапись 12490 боевых товаров по 34 продавцам без подтверждения.
+# Задачу свою он выполнил тогда же, карточки и так подтягивает фоновая
+# синхронизация, а падения по нехватке памяти (код 137) стали привычными.
+#
+# Нужен разово — запускать руками и под наблюдением:
+#   ./scripts/deploy/sync-all-wb-products.sh
 
 echo "Done. Check https://${WMS_PUBLIC_DOMAIN:-your-domain}"
