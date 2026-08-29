@@ -54,9 +54,11 @@ test('admin shell: single app root, nav, dashboard and main sections visible', a
   await expect(page).toHaveURL(/\/app\/ff\/sellers$/);
   await expect(page.getByTestId('sellers-panel')).toBeVisible();
 
+  // Раздел «Ячейки» открывает новый экран склада: он заменил прежний плоский
+  // список ячеек. Дерево, перетаскивание и создание складов и ячеек — там же.
   await page.getByTestId('nav-catalog').click();
-  await expect(page).toHaveURL(/\/app\/catalog$/);
-  await expect(page.getByTestId('catalog-section')).toBeVisible();
+  await expect(page).toHaveURL(/\/app\/ff\/warehouse-map$/);
+  await expect(page.getByTestId('warehouse-map-screen')).toBeVisible();
 
   await page.getByTestId('nav-ff-settings').click();
   await expect(page.getByTestId('cal-03-fbs-cutoff-section')).toBeVisible();

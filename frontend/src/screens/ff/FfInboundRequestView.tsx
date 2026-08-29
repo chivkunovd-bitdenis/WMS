@@ -2306,6 +2306,7 @@ export function FfInboundRequestView({
                   <FfSortingObjectsPage
                     token={token}
                     warehouses={[{ id: detail.warehouse_id, name: 'Склад приёмки' }]}
+                    embedded
                   />
                 </Box>
               ) : null}

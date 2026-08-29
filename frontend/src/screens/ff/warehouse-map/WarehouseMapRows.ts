@@ -24,6 +24,14 @@ export type MapRow = {
   category: string | null
   barcode: string | null
   qty: number
+  /**
+   * Идентификатор товара у строки товара.
+   *
+   * У строки товара `id` — это ключ остатка «товар на месте», а не сам товар.
+   * Пересчёт по объекту ждёт именно товар, и без этого поля он отвечал
+   * «объект уже переместили или удалили».
+   */
+  productId?: string | null
   photoUrl: string | null
   expandable: boolean
   expanded: boolean
@@ -167,6 +175,7 @@ function pushNode(
   context.rows.push({
     key,
     id: node.id,
+    productId: node.kind === 'product' ? node.product_id : null,
     kind: node.kind,
     depth,
     title: nodeTitle(node),

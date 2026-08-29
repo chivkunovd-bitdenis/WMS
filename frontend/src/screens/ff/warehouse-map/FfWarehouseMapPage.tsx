@@ -311,7 +311,10 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
       title: targetTitle(row.kind, row.title),
     }
     try {
-      const created = await createObjectCount(token, { type, id: row.id })
+      // У строки товара собственный id — это ключ остатка «товар на месте».
+      // Сервер ждёт сам товар, иначе отвечает «объект уже переместили».
+      const objectId = row.kind === 'product' ? (row.productId ?? row.id) : row.id
+      const created = await createObjectCount(token, { type, id: objectId })
       setCountTarget(target)
       setCount(created)
     } catch (err) {

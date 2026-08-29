@@ -29,9 +29,14 @@ type ApiSorting = {
 type Props = {
   token: string
   warehouses: Array<{ id: string; name: string }>
+  /**
+   * Внутри документа сортировки склад уже известен, а заголовок документа стоит
+   * выше — переключатель складов и собственная шапка здесь только мешают.
+   */
+  embedded?: boolean
 }
 
-export function FfSortingObjectsPage({ token, warehouses }: Props) {
+export function FfSortingObjectsPage({ token, warehouses, embedded }: Props) {
   const navigate = useNavigate()
   // Склад выбирается руками, как на карте: раскладка идёт на конкретном складе,
   // и молча показывать первый попавшийся значит врать оператору.
@@ -163,7 +168,11 @@ export function FfSortingObjectsPage({ token, warehouses }: Props) {
   return (
     <Box>
       {error ? <ErrorNotice testId="sorting-objects-error">{error}</ErrorNotice> : null}
-      <Stack direction="row" spacing={0.5} sx={{ mb: 2, flexWrap: 'wrap' }}>
+      <Stack
+        direction="row"
+        spacing={0.5}
+        sx={{ mb: 2, flexWrap: 'wrap', display: embedded ? 'none' : 'flex' }}
+      >
         <ToggleButtonGroup
           exclusive
           size="small"
@@ -196,7 +205,11 @@ export function FfSortingObjectsPage({ token, warehouses }: Props) {
           products={data.products}
           initialCells={data.cells}
           onPlace={(payload) => void place(payload)}
-          purpose={`Склад ${warehouseName}. Собираем объект и ставим готовый объект на полку.`}
+          purpose={
+            embedded
+              ? 'Собираем объект и ставим готовый объект на полку.'
+              : `Склад ${warehouseName}. Собираем объект и ставим готовый объект на полку.`
+          }
           warehouseName={warehouseName}
           onCreateCell={(code) => void createCell(code)}
           onPrint={(title, barcode, size) => printLabel(title, barcode, size)}

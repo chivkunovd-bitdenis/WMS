@@ -244,6 +244,14 @@ export function AuthedAppLayout({
                 <ListItemText primary="Хранение" />
               </ListItemButton>
             ) : null}
+            {/* Инвентаризация — документ, и его надо где-то заводить и искать.
+                Пересчёт по одной строке склада запускается значком на карте, а
+                список документов и создание по фильтрам живут здесь. */}
+            {canStorage ? (
+              <ListItemButton component={NavLink} to={`${base}/stocktaking`} data-testid="nav-ff-stocktaking" data-task-id="NAV-01">
+                <ListItemText primary="Инвентаризация" />
+              </ListItemButton>
+            ) : null}
             {isAdmin ? (
               <ListItemButton component={NavLink} to={`${base}/sellers`} data-testid="nav-sellers" data-task-id="NAV-01">
                 <ListItemText primary="Селлеры" />
