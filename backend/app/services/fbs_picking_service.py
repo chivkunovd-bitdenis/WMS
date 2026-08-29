@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,6 +34,7 @@ from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.services import inventory_service
+from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.fbs_cancelled_after_pack_service import (
     cancelled_operation_message,
     order_belonged_to_supply,
@@ -75,6 +76,34 @@ class PickOptionProduct:
     planned_qty: int
     picked_qty: int
     locations: list[PickOptionLocation]
+
+
+@dataclass(frozen=True)
+class PickAllocationResult:
+    id: uuid.UUID
+    product: Product
+    storage_location_id: uuid.UUID
+    location_code: str
+    quantity: int
+    picked_qty: int
+
+
+@dataclass(frozen=True)
+class PickScanResult:
+    kind: Literal["location", "product"]
+    storage_location_id: uuid.UUID | None = None
+    location_code: str | None = None
+    product_id: uuid.UUID | None = None
+    sku_code: str | None = None
+    product_name: str | None = None
+    picked_qty: int | None = None
+    allocation_quantity: int | None = None
+
+
+@dataclass(frozen=True)
+class _ActiveAssignment:
+    order_id: uuid.UUID
+    picked_at: datetime
 
 
 def _planned_qty_by_product(supply: FbsSupply) -> dict[uuid.UUID, int]:
@@ -230,6 +259,378 @@ async def get_pick_options(
             products.items(), key=lambda item: (item[1].sku_code, str(item[0]))
         )
     ]
+
+
+def _allocation_id(
+    supply_id: uuid.UUID,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+) -> uuid.UUID:
+    """Stable adapter id for the shipment-compatible allocation response."""
+    return uuid.uuid5(
+        uuid.NAMESPACE_URL,
+        f"wms:fbs-pick:{supply_id}:{product_id}:{storage_location_id}",
+    )
+
+
+def _derived_idempotency_key(
+    operation_key: str,
+    *,
+    action: str,
+    order_id: uuid.UUID,
+    ordinal: int,
+) -> str:
+    return str(
+        uuid.uuid5(
+            uuid.NAMESPACE_URL,
+            f"wms:fbs-pick:{operation_key}:{action}:{order_id}:{ordinal}",
+        )
+    )
+
+
+async def _active_assignments_for_product_location(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+) -> list[_ActiveAssignment]:
+    assignments: list[_ActiveAssignment] = []
+    wb_rows = await session.execute(
+        select(FbsOrderPick.fbs_order_id, FbsOrderPick.picked_at).where(
+            FbsOrderPick.tenant_id == tenant_id,
+            FbsOrderPick.fbs_supply_id == supply_id,
+            FbsOrderPick.product_id == product_id,
+            FbsOrderPick.source_storage_location_id == storage_location_id,
+            FbsOrderPick.undone_at.is_(None),
+        )
+    )
+    assignments.extend(
+        _ActiveAssignment(order_id=order_id, picked_at=picked_at)
+        for order_id, picked_at in wb_rows.all()
+    )
+
+    position_rows = await session.execute(
+        select(FbsOrderProduct.order_id, FbsOrderProductPick.picked_at)
+        .join(
+            FbsOrderProduct,
+            FbsOrderProduct.id == FbsOrderProductPick.order_product_id,
+        )
+        .where(
+            FbsOrderProductPick.tenant_id == tenant_id,
+            FbsOrderProductPick.fbs_supply_id == supply_id,
+            FbsOrderProductPick.product_id == product_id,
+            FbsOrderProductPick.source_storage_location_id == storage_location_id,
+            FbsOrderProductPick.undone_at.is_(None),
+        )
+    )
+    assignments.extend(
+        _ActiveAssignment(order_id=order_id, picked_at=picked_at)
+        for order_id, picked_at in position_rows.all()
+    )
+    assignments.sort(key=lambda assignment: assignment.picked_at, reverse=True)
+    return assignments
+
+
+def _pending_order_ids_for_product(
+    supply: FbsSupply,
+    product_id: uuid.UUID,
+) -> list[uuid.UUID]:
+    if supply.marketplace != "ozon":
+        return [
+            order.id
+            for order in sorted(
+                _eligible_orders_for_product(supply.orders, product_id),
+                key=lambda order: order.deadline_at,
+            )
+        ]
+
+    pending: list[tuple[datetime, uuid.UUID]] = []
+    for order, position in _eligible_positions_for_product(supply.orders, product_id):
+        remaining = max(0, int(position.quantity) - int(position.picked_quantity))
+        pending.extend((order.deadline_at, order.id) for _ in range(remaining))
+    pending.sort(key=lambda row: row[0])
+    return [order_id for _deadline, order_id in pending]
+
+
+async def set_pick_quantity(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+    quantity: int,
+    idempotency_key: str,
+    actor: User,
+) -> PickAllocationResult:
+    """Set the final picked quantity using the existing per-order pick/undo path."""
+    if quantity < 0:
+        raise FbsPickingError(
+            "invalid_qty",
+            "Количество подбора не может быть отрицательным.",
+            http_status=422,
+        )
+
+    locked_supply_id = await session.scalar(
+        select(FbsSupply.id)
+        .where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)
+        .with_for_update()
+    )
+    if locked_supply_id is None:
+        raise FbsPickingError(
+            "supply_not_found",
+            "Поставка не найдена.",
+            http_status=404,
+        )
+    supply = await _load_supply(session, tenant_id, supply_id)
+
+    product = await session.get(Product, product_id)
+    if product is None or product.tenant_id != tenant_id:
+        raise FbsPickingError(
+            "wrong_product",
+            "Товар не найден в этой поставке.",
+            http_status=404,
+        )
+    if product.seller_id != supply.seller_id:
+        raise FbsPickingError(
+            "seller_stock_mismatch",
+            "Товар принадлежит другому селлеру.",
+            context={"product_id": str(product_id)},
+        )
+
+    location = await session.get(StorageLocation, storage_location_id)
+    if (
+        location is None
+        or location.tenant_id != tenant_id
+        or location.warehouse_id != supply.warehouse_id
+    ):
+        raise FbsPickingError(
+            "wrong_location",
+            "Ячейка не принадлежит складу поставки.",
+            http_status=404,
+        )
+
+    active = await _active_assignments_for_product_location(
+        session,
+        tenant_id,
+        supply_id,
+        product_id,
+        storage_location_id,
+    )
+    pending_order_ids = _pending_order_ids_for_product(supply, product_id)
+    max_quantity = len(active) + len(pending_order_ids)
+    if quantity > max_quantity:
+        raise FbsPickingError(
+            "pick_quantity_exceeds_demand",
+            "Количество больше, чем ждут неподобранные заказы поставки.",
+            context={
+                "product_id": str(product_id),
+                "requested": quantity,
+                "maximum": max_quantity,
+            },
+        )
+
+    current_quantity = len(active)
+    if quantity > current_quantity:
+        for ordinal, order_id in enumerate(
+            pending_order_ids[: quantity - current_quantity],
+            start=1,
+        ):
+            await manual_pick_product(
+                session,
+                tenant_id,
+                supply_id,
+                location_id=storage_location_id,
+                product_id=product_id,
+                order_id=order_id,
+                idempotency_key=_derived_idempotency_key(
+                    idempotency_key,
+                    action="pick",
+                    order_id=order_id,
+                    ordinal=ordinal,
+                ),
+                actor=actor,
+            )
+    elif quantity < current_quantity:
+        for ordinal, assignment in enumerate(
+            active[: current_quantity - quantity],
+            start=1,
+        ):
+            await undo_pick(
+                session,
+                tenant_id,
+                supply_id,
+                assignment.order_id,
+                idempotency_key=_derived_idempotency_key(
+                    idempotency_key,
+                    action="undo",
+                    order_id=assignment.order_id,
+                    ordinal=ordinal,
+                ),
+                actor=actor,
+            )
+
+    picked_by_location = await _picked_qty_by_product_location(
+        session, tenant_id, supply_id
+    )
+    picked_by_product = sum(
+        picked
+        for (picked_product_id, _location_id), picked in picked_by_location.items()
+        if picked_product_id == product_id
+    )
+    return PickAllocationResult(
+        id=_allocation_id(supply_id, product_id, storage_location_id),
+        product=product,
+        storage_location_id=storage_location_id,
+        location_code=location.code,
+        quantity=picked_by_location.get((product_id, storage_location_id), 0),
+        picked_qty=picked_by_product,
+    )
+
+
+async def _implicit_pick_location(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    product_id: uuid.UUID,
+    *,
+    address_storage_enabled: bool,
+) -> StorageLocation:
+    if address_storage_enabled:
+        cell_rows = await inventory_service.list_locations_for_product_in_warehouse(
+            session,
+            tenant_id,
+            supply.warehouse_id,
+            product_id,
+        )
+        if cell_rows:
+            raise FbsPickingError(
+                "location_required",
+                "Сначала отсканируйте место, из которого снимаете товар.",
+            )
+        return await get_or_create_sorting_location(
+            session, tenant_id, supply.warehouse_id
+        )
+
+    rows = await inventory_service.list_location_balances_for_products_in_warehouse(
+        session,
+        tenant_id,
+        supply.warehouse_id,
+        [product_id],
+    )
+    candidates = [
+        (on_hand - reserved, location_id)
+        for row_product_id, location_id, _code, on_hand, reserved in rows
+        if row_product_id == product_id and on_hand - reserved > 0
+    ]
+    if candidates:
+        _available, location_id = max(candidates, key=lambda row: row[0])
+        location = await session.get(StorageLocation, location_id)
+        assert location is not None
+        return location
+    return await get_or_create_sorting_location(session, tenant_id, supply.warehouse_id)
+
+
+async def pick_scan(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    barcode: str,
+    product_id_hint: uuid.UUID | None,
+    storage_location_id: uuid.UUID | None,
+    idempotency_key: str,
+    actor: User,
+) -> PickScanResult:
+    raw = barcode.strip()
+    if not raw:
+        raise FbsPickingError("barcode_empty", "Штрихкод не может быть пустым.", http_status=422)
+
+    supply = await _load_supply(session, tenant_id, supply_id)
+    address_storage_enabled = await tenant_settings_svc.is_address_storage_enabled(
+        session, tenant_id
+    )
+    if address_storage_enabled:
+        location = await _resolve_storage_location(
+            session,
+            tenant_id,
+            warehouse_id=supply.warehouse_id,
+            location_barcode=raw,
+        )
+        if location is not None:
+            return PickScanResult(
+                kind="location",
+                storage_location_id=location.id,
+                location_code=location.code,
+            )
+
+    product = (
+        await session.get(Product, product_id_hint)
+        if product_id_hint is not None
+        else await _resolve_product_for_supply(
+            session,
+            tenant_id,
+            supply,
+            product_barcode=raw,
+        )
+    )
+    if product is None or product.tenant_id != tenant_id:
+        raise FbsPickingError(
+            "wrong_product",
+            "Товар не найден по штрихкоду в этой поставке.",
+        )
+
+    if storage_location_id is not None:
+        location = await session.get(StorageLocation, storage_location_id)
+        if (
+            location is None
+            or location.tenant_id != tenant_id
+            or location.warehouse_id != supply.warehouse_id
+        ):
+            raise FbsPickingError(
+                "wrong_location",
+                "Ячейка не принадлежит складу поставки.",
+                http_status=404,
+            )
+    else:
+        location = await _implicit_pick_location(
+            session,
+            tenant_id,
+            supply,
+            product.id,
+            address_storage_enabled=address_storage_enabled,
+        )
+
+    await scan_pick_product(
+        session,
+        tenant_id,
+        supply_id,
+        location_id=location.id,
+        product_barcode=raw,
+        product_id=product.id,
+        idempotency_key=idempotency_key,
+        actor=actor,
+    )
+    picked_by_location = await _picked_qty_by_product_location(
+        session, tenant_id, supply_id
+    )
+    picked_by_product = sum(
+        picked
+        for (picked_product_id, _location_id), picked in picked_by_location.items()
+        if picked_product_id == product.id
+    )
+    reveal_location = address_storage_enabled and storage_location_id is not None
+    return PickScanResult(
+        kind="product",
+        storage_location_id=location.id if reveal_location else None,
+        location_code=location.code if reveal_location else None,
+        product_id=product.id,
+        sku_code=product.sku_code,
+        product_name=product.name,
+        picked_qty=picked_by_product,
+        allocation_quantity=picked_by_location.get((product.id, location.id), 0),
+    )
 
 
 async def scan_pick_location(
@@ -1106,8 +1507,10 @@ __all__ = [
     "FbsWorkspaceError",
     "get_pick_options",
     "manual_pick_product",
+    "pick_scan",
     "scan_pick_location",
     "scan_pick_product",
     "select_pick_location",
+    "set_pick_quantity",
     "undo_pick",
 ]
