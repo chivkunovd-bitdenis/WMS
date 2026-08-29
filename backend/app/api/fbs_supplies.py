@@ -168,6 +168,24 @@ class FbsPickingListOut(BaseModel):
     items: list[FbsPickingListItemOut]
 
 
+class FbsPickOptionLocationOut(BaseModel):
+    storage_location_id: str
+    location_code: str
+    quantity: int
+    reserved: int
+    available: int
+    picked: int
+
+
+class FbsPickOptionProductOut(BaseModel):
+    product_id: str
+    sku_code: str
+    product_name: str
+    planned_qty: int
+    picked_qty: int
+    locations: list[FbsPickOptionLocationOut]
+
+
 class FbsStickerMetaOut(BaseModel):
     order_id: str
     wb_order_id: int
@@ -1087,6 +1105,41 @@ async def get_fbs_supplies_worklist(
     except supply_svc.FbsSupplyError as exc:
         _raise_from_service(exc)
     return FbsSupplyWorklistOut.model_validate(payload)
+
+
+@router.get("/{supply_id}/pick-options", response_model=list[FbsPickOptionProductOut])
+async def get_fbs_supply_pick_options(
+    supply_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[FbsPickOptionProductOut]:
+    try:
+        options = await picking_svc.get_pick_options(
+            session, user.tenant_id, supply_id
+        )
+    except picking_svc.FbsPickingError as exc:
+        _raise_from_picking(exc)
+    return [
+        FbsPickOptionProductOut(
+            product_id=str(option.product_id),
+            sku_code=option.sku_code,
+            product_name=option.product_name,
+            planned_qty=option.planned_qty,
+            picked_qty=option.picked_qty,
+            locations=[
+                FbsPickOptionLocationOut(
+                    storage_location_id=str(location.storage_location_id),
+                    location_code=location.location_code,
+                    quantity=location.quantity,
+                    reserved=location.reserved,
+                    available=location.available,
+                    picked=location.picked,
+                )
+                for location in option.locations
+            ],
+        )
+        for option in options
+    ]
 
 
 @router.post("/{supply_id}/orders/batch", response_model=FbsWorkspaceOut)
