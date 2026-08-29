@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -55,6 +55,181 @@ class FbsPickingError(Exception):
 
     def __post_init__(self) -> None:
         super().__init__(self.code)
+
+
+@dataclass(frozen=True)
+class PickOptionLocation:
+    storage_location_id: uuid.UUID
+    location_code: str
+    quantity: int
+    reserved: int
+    available: int
+    picked: int
+
+
+@dataclass(frozen=True)
+class PickOptionProduct:
+    product_id: uuid.UUID
+    sku_code: str
+    product_name: str
+    planned_qty: int
+    picked_qty: int
+    locations: list[PickOptionLocation]
+
+
+def _planned_qty_by_product(supply: FbsSupply) -> dict[uuid.UUID, int]:
+    planned: dict[uuid.UUID, int] = {}
+    for order in supply.orders:
+        if order.product_positions:
+            for position in order.product_positions:
+                if position.product_id is not None:
+                    planned[position.product_id] = (
+                        planned.get(position.product_id, 0) + int(position.quantity)
+                    )
+            continue
+        if order.product_id is not None:
+            planned[order.product_id] = planned.get(order.product_id, 0) + 1
+    return planned
+
+
+async def _picked_qty_by_product_location(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+) -> dict[tuple[uuid.UUID, uuid.UUID], int]:
+    picked: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
+    wb_rows = await session.execute(
+        select(
+            FbsOrderPick.product_id,
+            FbsOrderPick.source_storage_location_id,
+            func.count(FbsOrderPick.id),
+        )
+        .where(
+            FbsOrderPick.tenant_id == tenant_id,
+            FbsOrderPick.fbs_supply_id == supply_id,
+            FbsOrderPick.undone_at.is_(None),
+        )
+        .group_by(
+            FbsOrderPick.product_id,
+            FbsOrderPick.source_storage_location_id,
+        )
+    )
+    for product_id, location_id, quantity in wb_rows.all():
+        picked[(product_id, location_id)] = int(quantity)
+
+    position_rows = await session.execute(
+        select(
+            FbsOrderProductPick.product_id,
+            FbsOrderProductPick.source_storage_location_id,
+            func.count(FbsOrderProductPick.id),
+        )
+        .where(
+            FbsOrderProductPick.tenant_id == tenant_id,
+            FbsOrderProductPick.fbs_supply_id == supply_id,
+            FbsOrderProductPick.undone_at.is_(None),
+        )
+        .group_by(
+            FbsOrderProductPick.product_id,
+            FbsOrderProductPick.source_storage_location_id,
+        )
+    )
+    for product_id, location_id, quantity in position_rows.all():
+        key = (product_id, location_id)
+        picked[key] = picked.get(key, 0) + int(quantity)
+    return picked
+
+
+async def get_pick_options(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+) -> list[PickOptionProduct]:
+    """Return product-first FBS picking options with source-cell progress."""
+    supply = await _load_supply(session, tenant_id, supply_id)
+    planned = _planned_qty_by_product(supply)
+    if not planned:
+        return []
+
+    product_ids = list(planned)
+    products = await _load_products(session, tenant_id, product_ids)
+    picked_by_location = await _picked_qty_by_product_location(
+        session, tenant_id, supply.id
+    )
+    picked_by_product: dict[uuid.UUID, int] = {}
+    for (product_id, _location_id), quantity in picked_by_location.items():
+        picked_by_product[product_id] = picked_by_product.get(product_id, 0) + quantity
+
+    balance_rows = await inventory_service.list_location_balances_for_products_in_warehouse(
+        session,
+        tenant_id,
+        supply.warehouse_id,
+        product_ids,
+    )
+    locations_by_product: dict[uuid.UUID, list[PickOptionLocation]] = {
+        product_id: [] for product_id in product_ids
+    }
+    seen_pairs: set[tuple[uuid.UUID, uuid.UUID]] = set()
+    for product_id, location_id, code, on_hand, reserved in balance_rows:
+        seen_pairs.add((product_id, location_id))
+        locations_by_product[product_id].append(
+            PickOptionLocation(
+                storage_location_id=location_id,
+                location_code=code,
+                quantity=on_hand,
+                reserved=reserved,
+                available=max(0, on_hand - reserved),
+                picked=picked_by_location.get((product_id, location_id), 0),
+            )
+        )
+
+    # A completed pick moves the unit away from its source cell. The positive-balance
+    # query then omits that cell, but it must remain visible so the operator can undo
+    # the pick back to the original source.
+    for (product_id, location_id), quantity in picked_by_location.items():
+        if (product_id, location_id) in seen_pairs or product_id not in planned:
+            continue
+        location = await session.scalar(
+            select(StorageLocation).where(
+                StorageLocation.id == location_id,
+                StorageLocation.tenant_id == tenant_id,
+                StorageLocation.warehouse_id == supply.warehouse_id,
+            )
+        )
+        if location is None:
+            continue
+        available = await inventory_service.available_at_location(
+            session, tenant_id, product_id, location_id
+        )
+        reserved = await inventory_service.total_reserved_at_location(
+            session, tenant_id, product_id, location_id
+        )
+        locations_by_product[product_id].append(
+            PickOptionLocation(
+                storage_location_id=location_id,
+                location_code=location.code,
+                quantity=available + reserved,
+                reserved=reserved,
+                available=max(0, available),
+                picked=quantity,
+            )
+        )
+
+    for locations in locations_by_product.values():
+        locations.sort(key=lambda location: location.location_code)
+
+    return [
+        PickOptionProduct(
+            product_id=product_id,
+            sku_code=product.sku_code,
+            product_name=product.name,
+            planned_qty=planned[product_id],
+            picked_qty=picked_by_product.get(product_id, 0),
+            locations=locations_by_product[product_id],
+        )
+        for product_id, product in sorted(
+            products.items(), key=lambda item: (item[1].sku_code, str(item[0]))
+        )
+    ]
 
 
 async def scan_pick_location(
@@ -929,6 +1104,7 @@ async def _load_active_pick_for_order(
 __all__ = [
     "FbsPickingError",
     "FbsWorkspaceError",
+    "get_pick_options",
     "manual_pick_product",
     "scan_pick_location",
     "scan_pick_product",
