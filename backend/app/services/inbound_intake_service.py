@@ -16,6 +16,7 @@ from app.models.inbound_intake import (
     InboundIntakeBox,
     InboundIntakeBoxLine,
     InboundIntakeCargoPlace,
+    InboundIntakeCargoPlaceLine,
     InboundIntakeDistributionLine,
     InboundIntakeLine,
     InboundIntakeRequest,
@@ -290,7 +291,9 @@ async def get_request(
             selectinload(InboundIntakeRequest.boxes).options(
                 selectinload(InboundIntakeBox.lines).selectinload(InboundIntakeBoxLine.product),
             ),
-            selectinload(InboundIntakeRequest.cargo_places),
+            selectinload(InboundIntakeRequest.cargo_places)
+            .selectinload(InboundIntakeCargoPlace.lines)
+            .selectinload(InboundIntakeCargoPlaceLine.product),
         )
     )
     res = await session.execute(stmt)

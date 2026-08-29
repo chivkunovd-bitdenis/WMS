@@ -41,6 +41,7 @@ from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.services import box_import_service as box_import_svc
+from app.services import inbound_cargo_place_service as inbound_cargo_place_svc
 from app.services import inbound_intake_box_service as inbound_box_svc
 from app.services import inbound_intake_service as svc
 from app.services import inventory_service as inv_svc
@@ -168,6 +169,8 @@ class InboundCargoPlaceOut(BaseModel):
     internal_barcode: str
     label_printed_at: str | None = None
     created_at: str
+    remaining_qty: int = 0
+    lines: list[InboundIntakeBoxLineOut] = Field(default_factory=list)
 
 
 class InboundBoxBarcodeBody(BaseModel):
@@ -331,6 +334,20 @@ def _box_out(b: InboundIntakeBox) -> InboundIntakeBoxOut:
 
 
 def _cargo_place_out(place: InboundIntakeCargoPlace) -> InboundCargoPlaceOut:
+    lines_out: list[InboundIntakeBoxLineOut] = []
+    if "lines" not in sa_inspect(place).unloaded:
+        lines_out = [
+            InboundIntakeBoxLineOut(
+                id=str(line.id),
+                product_id=str(line.product_id),
+                sku_code=line.product.sku_code if line.product is not None else "",
+                product_name=line.product.name if line.product is not None else "",
+                quantity=int(line.quantity),
+                posted_qty=int(line.posted_qty),
+                remaining_qty=max(0, int(line.quantity) - int(line.posted_qty)),
+            )
+            for line in place.lines
+        ]
     return InboundCargoPlaceOut(
         id=str(place.id),
         place_number=int(place.place_number),
@@ -339,6 +356,8 @@ def _cargo_place_out(place: InboundIntakeCargoPlace) -> InboundCargoPlaceOut:
         if place.label_printed_at
         else None,
         created_at=place.created_at.isoformat(),
+        remaining_qty=sum(line.remaining_qty for line in lines_out),
+        lines=lines_out,
     )
 
 
@@ -407,6 +426,7 @@ def _map_inbound_svc_err(exc: InboundIntakeError) -> HTTPException:
         "storage_not_assigned",
         "lines_missing_storage",
         "product_not_on_request",
+        "actual_below_posted",
         "product_not_in_seller_catalog",
         "product_seller_mismatch",
         "mixed_seller_lines",
@@ -434,6 +454,7 @@ def _map_inbound_svc_err(exc: InboundIntakeError) -> HTTPException:
         "product_not_found",
         "location_not_found",
         "box_not_found",
+        "barcode_unknown",
     ):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=code)
     return HTTPException(
@@ -951,6 +972,57 @@ async def mark_inbound_cargo_place_label_printed(
             user.tenant_id,
             request_id,
             place_id,
+        )
+    except InboundIntakeError as exc:
+        raise _map_inbound_svc_err(exc) from None
+    return _cargo_place_out(place)
+
+
+@router.post(
+    "/{request_id}/cargo-places/{place_id}/scan",
+    response_model=InboundCargoPlaceOut,
+)
+async def scan_product_into_inbound_cargo_place(
+    request_id: uuid.UUID,
+    place_id: uuid.UUID,
+    body: InboundBoxScanBody,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundCargoPlaceOut:
+    try:
+        place = await inbound_cargo_place_svc.scan_product(
+            session,
+            user.tenant_id,
+            request_id,
+            place_id,
+            barcode=body.barcode,
+            product_id_hint=body.product_id,
+        )
+    except InboundIntakeError as exc:
+        raise _map_inbound_svc_err(exc) from None
+    return _cargo_place_out(place)
+
+
+@router.put(
+    "/{request_id}/cargo-places/{place_id}/lines/{product_id}",
+    response_model=InboundCargoPlaceOut,
+)
+async def set_inbound_cargo_place_line_quantity(
+    request_id: uuid.UUID,
+    place_id: uuid.UUID,
+    product_id: uuid.UUID,
+    body: InboundBoxLineQuantityBody,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundCargoPlaceOut:
+    try:
+        place = await inbound_cargo_place_svc.set_line_quantity(
+            session,
+            user.tenant_id,
+            request_id,
+            place_id,
+            product_id,
+            quantity=body.quantity,
         )
     except InboundIntakeError as exc:
         raise _map_inbound_svc_err(exc) from None
