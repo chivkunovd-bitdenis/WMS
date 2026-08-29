@@ -3,6 +3,8 @@ import { expect, test } from '@playwright/test'
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
 
+// TC-NEW-212 — на карточке отгрузки имя склада маркетплейса стоит рядом с чипом площадки,
+// а не вместо него: оператор должен видеть, куда именно едет поставка.
 test('S-12 keeps warehouse name beside the marketplace chip', async ({ page }) => {
   const suffix = String(Date.now())
   const warehouseName = `Склад Ozon ${suffix}`

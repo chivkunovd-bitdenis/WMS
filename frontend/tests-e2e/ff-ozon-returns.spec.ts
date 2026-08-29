@@ -13,6 +13,8 @@ const evidenceDir = path.resolve(
 
 test.use({ viewport: { width: 1600, height: 1000 } })
 
+// TC-NEW-213 — возврат Ozon идёт по тому же живому потоку приёмки, что и WB, и добавляет
+// к нему выбор товара, отметку брака и печать. Негатив: без выбранного товара действия недоступны.
 test('Ozon return keeps the live reception flow and adds picker, defect and print actions', async ({
   page,
 }) => {

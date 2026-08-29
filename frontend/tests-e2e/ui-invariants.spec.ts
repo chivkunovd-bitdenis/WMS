@@ -20,6 +20,8 @@ function rules(result: { violations: Violation[] }) {
   return result.violations.map((violation) => violation.rule)
 }
 
+// TC-NEW-214 — горизонтальная прокрутка таблицы допускается только внутри её карточки
+// и только когда до неё реально можно дотянуться. Ограничение R-08 канона интерфейса.
 test('ui invariants permit only a reachable DataTable horizontal scroll inside its card', async ({ page }) => {
   await page.setViewportSize({ width: 400, height: 300 })
   const result = await invariants(page, `
@@ -32,6 +34,7 @@ test('ui invariants permit only a reachable DataTable horizontal scroll inside i
   expect(rules(result)).not.toContain('R-08')
 })
 
+// TC-NEW-215 — скрытое или невыходящее за край содержимое таблицы не считается нарушением R-08.
 test('ui invariants keep R-08 for hidden or non-overflowing DataTable content', async ({ page }) => {
   await page.setViewportSize({ width: 400, height: 300 })
   const hidden = await invariants(page, `
@@ -49,6 +52,7 @@ test('ui invariants keep R-08 for hidden or non-overflowing DataTable content', 
   expect(rules(noOverflow)).toContain('R-08')
 })
 
+// TC-NEW-216 — прокрутка за пределами карточки нарушением R-08 не считается.
 test('ui invariants keep R-08 when the scrollport is outside the current card', async ({ page }) => {
   await page.setViewportSize({ width: 400, height: 300 })
   const result = await invariants(page, `
@@ -62,6 +66,7 @@ test('ui invariants keep R-08 when the scrollport is outside the current card', 
   expect(rules(result)).toContain('R-08')
 })
 
+// TC-NEW-217 — край таблицы, видимый через широкий промежуточный обрез, остаётся допустимым.
 test('ui invariants permit a DataTable endpoint still visible through a wide intermediate clip', async ({ page }) => {
   await page.setViewportSize({ width: 400, height: 300 })
   const result = await invariants(page, `
