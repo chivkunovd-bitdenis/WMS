@@ -584,20 +584,28 @@ async def fix_storage_statement(
     if statement.period_start >= current_month:
         raise StorageStatementError("period_not_closed")
 
-    measurements = list(
+    peer_measurements = list(
         (
             await session.scalars(
                 select(StorageMeasurement)
                 .where(StorageMeasurement.tenant_id == tenant_id)
                 .where(StorageMeasurement.seller_id == statement.seller_id)
-                .where(StorageMeasurement.warehouse_id == statement.warehouse_id)
                 .where(StorageMeasurement.period_start == statement.period_start)
                 .where(StorageMeasurement.period_end == statement.period_end)
-                .order_by(StorageMeasurement.id)
+                .order_by(StorageMeasurement.warehouse_id, StorageMeasurement.id)
             )
         ).all()
     )
-    if any(row.status != "calculated" for row in measurements):
+    measurements = [
+        row
+        for row in peer_measurements
+        if row.warehouse_id == statement.warehouse_id
+    ]
+    # Копейки округляются на уровне продавца и дня, а потом распределяются между
+    # всеми его складами. Поэтому фиксировать один склад можно только после того,
+    # как рассчитаны габариты на остальных складах того же периода: иначе позднее
+    # исправление соседа перераспределит копейку, уже опубликованную проводкой.
+    if any(row.status != "calculated" for row in peer_measurements):
         raise StorageStatementError("missing_dimensions")
 
     # Load every shared tariff intersecting the month.  Pricing below applies
@@ -641,19 +649,6 @@ async def fix_storage_statement(
                     StorageStatement.seller_id == statement.seller_id,
                     StorageStatement.period_start == statement.period_start,
                     StorageStatement.period_end == statement.period_end,
-                )
-            )
-        ).all()
-    )
-    peer_measurements = list(
-        (
-            await session.scalars(
-                select(StorageMeasurement).where(
-                    StorageMeasurement.tenant_id == tenant_id,
-                    StorageMeasurement.seller_id == statement.seller_id,
-                    StorageMeasurement.period_start == statement.period_start,
-                    StorageMeasurement.period_end == statement.period_end,
-                    StorageMeasurement.status == "calculated",
                 )
             )
         ).all()

@@ -15,7 +15,11 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
-from app.models.billing import BillingTariffVersion, BillingTariffVersionV2
+from app.models.billing import (
+    BillingLedgerEntry,
+    BillingTariffVersion,
+    BillingTariffVersionV2,
+)
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
@@ -769,6 +773,48 @@ async def test_fractional_warehouse_statements_sum_to_seller_report_and_invoice(
     assert report["amount_kopecks"] == invoice.json()["total_amount_kopecks"]
     assert allocated_kopecks == statement_kopecks
     assert statement_kopecks == report["amount_kopecks"] == invoice.json()["total_amount_kopecks"]
+
+
+@pytest.mark.asyncio
+async def test_fix_waits_for_dimensions_in_the_whole_seller_rounding_scope(
+    async_client: AsyncClient,
+) -> None:
+    """P2: проводку нельзя фиксировать до расчёта всех складов продавца."""
+    headers, _seller_id, _warehouse_ids, statement_ids = (
+        await _create_cross_warehouse_fractional_storage_case(async_client)
+    )
+    async with SessionLocal() as session:
+        second_statement = await session.get(StorageStatement, statement_ids[1])
+        assert second_statement is not None
+        second_measurement = await session.scalar(
+            select(StorageMeasurement).where(
+                StorageMeasurement.seller_id == second_statement.seller_id,
+                StorageMeasurement.warehouse_id == second_statement.warehouse_id,
+                StorageMeasurement.period_start == second_statement.period_start,
+                StorageMeasurement.period_end == second_statement.period_end,
+            )
+        )
+        assert second_measurement is not None
+        second_measurement.status = "missing_dimensions"
+        await session.commit()
+
+    blocked = await async_client.post(
+        f"/operations/storage/statements/{statement_ids[0]}/fix",
+        headers=headers,
+    )
+
+    assert blocked.status_code == 409, blocked.text
+    assert blocked.json()["detail"] == "missing_dimensions"
+    async with SessionLocal() as session:
+        first_statement = await session.get(StorageStatement, statement_ids[0])
+        assert first_statement is not None
+        assert first_statement.status == "draft"
+        ledger_count = await session.scalar(
+            select(func.count(BillingLedgerEntry.id)).where(
+                BillingLedgerEntry.source_type == "storage_measurement",
+            )
+        )
+        assert ledger_count == 0
 
 
 @pytest.mark.asyncio
