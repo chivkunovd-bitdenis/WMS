@@ -320,17 +320,14 @@ export function SortingObjectsScreen({
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ alignItems: 'flex-start' }}>
         <Box sx={{
-            flexShrink: 0,
+            // Таблица занимает всю оставшуюся ширину, а не «по содержимому».
+            // По содержимому она схлопывалась на коротких кодах коробов, и
+            // полэкрана уходило в пустоту — а в согласованном макете таблица
+            // занимает основную часть строки, справа узкая колонка ячеек.
+            flexGrow: 1,
+            flexShrink: 1,
             minWidth: 0,
-            // Ширина по содержимому, но не больше доли строки: числом её задавать
-            // нельзя — при другой ширине окна число всегда неверное. Доля же
-            // работает и на ноутбуке, и на большом мониторе.
-            // Ширина ровно по содержимому таблицы: она не тянется на пустоту и не
-            // жмёт названия. Число здесь задавать нельзя — при другой ширине окна
-            // оно всегда неверное.
-            width: { lg: 'max-content' },
-            // Предел только чтобы правая панель не схлопнулась совсем.
-            maxWidth: { xs: '100%', lg: 'calc(100% - 320px)' },
+            width: { xs: '100%', lg: 'auto' },
           }}>
           <Stack spacing={1} sx={{ mb: 1.5 }}>
             <Stack direction="row" spacing={2} sx={{ alignItems: 'baseline' }}>
@@ -398,7 +395,16 @@ export function SortingObjectsScreen({
           />
         </Box>
 
-        <Stack spacing={2} sx={{ flexGrow: 1, minWidth: 0, width: '100%' }}>
+        <Stack
+          spacing={2}
+          sx={{
+            // Колонка ячеек — узкая приставка справа, а не половина экрана.
+            flexGrow: 0,
+            flexShrink: 0,
+            minWidth: 0,
+            width: { xs: '100%', lg: 320 },
+          }}
+        >
           <Paper variant="outlined" sx={{ p: 2 }} data-testid="objects-cells">
             <Typography variant="subtitle1" sx={{ mb: 1.5 }}>
               Ячейки склада
