@@ -2307,6 +2307,9 @@ export function FfInboundRequestView({
                     token={token}
                     warehouses={[{ id: detail.warehouse_id, name: 'Склад приёмки' }]}
                     embedded
+                    // Раскладка внутри документа показывает тару и товар ЭТОЙ приёмки,
+                    // а не всего склада: без идентификатора она тянула весь склад.
+                    inboundRequestId={requestId}
                   />
                 </Box>
               ) : null}
