@@ -96,7 +96,10 @@ function haystack(node: MapNode): string[] {
     ? [node.name, node.seller_name, node.category, node.barcode]
         .filter(Boolean)
         .map((value) => (value as string).toLowerCase())
-    : [node.code, node.seller_name, node.barcode]
+    : // Номер приёмки ищем тем же полем, что и код тары (§Б-04): короб из
+      // незавершённой приёмки находится по номеру документа, из которого он
+      // ещё не выехал в постоянное место.
+      [node.code, node.seller_name, node.barcode, node.source_document_number]
         .filter(Boolean)
         .map((value) => (value as string).toLowerCase())
 }
