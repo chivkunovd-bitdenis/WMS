@@ -39,6 +39,13 @@ type Props = {
   onRangeChange: (range: MoscowDateRangeValue) => void
   /** Пока считаем — не показываем прошлые числа как свежие. */
   loading?: boolean
+  /**
+   * Сводка не посчиталась.
+   *
+   * Показывать в этом случае «0,0 часа» нельзя: ноль часов — это отличный
+   * результат, и по нему принимают решения. Честнее сказать, что цифры нет.
+   */
+  failed?: boolean
 }
 
 export function FbsMetricPanel({
@@ -54,8 +61,10 @@ export function FbsMetricPanel({
   range,
   onRangeChange,
   loading,
+  failed,
 }: Props) {
   const seller = sellers.find((one) => one.id === sellerId) ?? null
+  const noValue = failed && !loading
   return (
     <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="fbs-metric">
       <Stack
@@ -66,14 +75,16 @@ export function FbsMetricPanel({
         <Stack spacing={0.25}>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline' }}>
             <Typography variant="h3" sx={{ fontWeight: 800 }} data-testid="fbs-metric-value">
-              {loading ? '…' : hours.toLocaleString('ru-RU', { minimumFractionDigits: 1 })}
+              {loading ? '…' : noValue ? '—' : hours.toLocaleString('ru-RU', { minimumFractionDigits: 1 })}
             </Typography>
             <Typography variant="h6" color="text.secondary">
               часа
             </Typography>
           </Stack>
           <Typography variant="body2" color="text.secondary">
-            среднее время сборки: от поступления заказа до нажатия «Отгрузить»
+            {noValue
+              ? 'не удалось посчитать: данные недоступны, обновите страницу'
+              : 'среднее время сборки: от поступления заказа до нажатия «Отгрузить»'}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {seller ? seller.name : 'все продавцы'}
@@ -82,7 +93,7 @@ export function FbsMetricPanel({
           <Stack direction="row" spacing={4} sx={{ pt: 1.5, flexWrap: 'wrap' }}>
             <Stack spacing={0.25}>
               <Typography variant="h5" sx={{ fontWeight: 700 }} data-testid="fbs-metric-orders">
-                {loading ? '…' : orders.toLocaleString('ru-RU')}
+                {loading ? '…' : noValue ? '—' : orders.toLocaleString('ru-RU')}
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 отгружено заказов

@@ -1,3 +1,5 @@
+// TC-NEW-CAT-01 — каталог: фильтр по маркетплейсу и поиск по артикулу Ozon.
+// TC-NEW-CAT-02 — селлер видит чип Ozon и не получает средств привязки.
 import { expect, test } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'

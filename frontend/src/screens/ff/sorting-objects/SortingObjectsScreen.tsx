@@ -208,10 +208,11 @@ export function SortingObjectsScreen({
       moveGoods(row.line, row.line.qty, null)
       return
     }
-    setObjects((current) =>
-      current.map((one) => (one.id === row.object.id ? { ...one, holder: null } : one)),
-    )
-    onNote(`${KIND_TITLE[row.object.kind]} ${row.object.code} снят с ячейки`)
+    // Снятие — это то же перемещение, только цель пустая: сервер понимает
+    // пустую цель как «Без ячеек». Раньше здесь менялось только состояние
+    // вкладки: экран говорил «снят», а после обновления страницы тара
+    // возвращалась в старую ячейку, потому что на сервер ничего не уходило.
+    moveObject(row.object, null, 'россыпь')
   }
 
   /** Вынуть наружу: то же окно, но место уже выбрано — россыпь. */
@@ -481,7 +482,10 @@ export function SortingObjectsScreen({
             <PrintAction
               what="ШК ячейки"
               placement="row"
-              onClick={() => setPrinting(`ячейка ${activeCell.code}`)}
+              // В состояние кладём сам код ячейки, а не подпись: печать ищет
+              // объект по коду, и строка «ячейка А 1.1» не совпадала ни с чем —
+              // печать молча ничего не делала.
+              onClick={() => setPrinting(activeCell.code)}
               testId="objects-print-cell"
             />
           </Stack>

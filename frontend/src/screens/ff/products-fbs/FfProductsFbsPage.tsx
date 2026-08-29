@@ -113,11 +113,17 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
       // был запрос на каждый товар — на боевых данных это двести обращений на
       // одно открытие экрана, и таблица заметно висела.
       const loadedRules = new Map<string, ApiRule>()
-      if (page.items.length > 0) {
+      // Товары без продавца в пачку не кладём. Сервер отвергает такую пачку
+      // целиком: у товара без продавца нет складов WB, а значит и правила. Один
+      // заведённый руками товар без селлера иначе превращает весь экран в ошибку
+      // загрузки — экран показывает только товары с продавцом, и спрашивать
+      // правила надо ровно про них.
+      const ruleTargets = page.items.filter((row) => row.seller_id !== null)
+      if (ruleTargets.length > 0) {
         const bulk = await fetch(apiUrl('/products/fbs-rule/bulk'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...headers(token) },
-          body: JSON.stringify({ product_ids: page.items.map((row) => row.id) }),
+          body: JSON.stringify({ product_ids: ruleTargets.map((row) => row.id) }),
         })
         if (!bulk.ok) throw new Error(await readApiErrorMessage(bulk))
         const answer = (await bulk.json()) as { items: Array<ApiRule & { product_id: string }> }

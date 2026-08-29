@@ -143,6 +143,10 @@ export function AuthedAppLayout({
   const canMpShipments = isAdmin || can('mp_shipments')
   const canPackaging = isAdmin || can('packaging')
   const canCatalogCells = isAdmin || can('cells') || can('inventory')
+  // Сервер пускает к ячейкам строго по праву «cells». Показывать карту и
+  // раскладку сотруднику с одним лишь правом инвентаризации — значит выдать ему
+  // экран, где каждое действие вернёт отказ доступа.
+  const canCellsScreens = isAdmin || can('cells')
   const canStorage = isAdmin || can('inventory')
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }} data-testid="app-frame">
@@ -246,7 +250,7 @@ export function AuthedAppLayout({
             ) : null}
             {/* Новые экраны. Без ссылок сюда до них нельзя было добраться иначе
                 как набрав адрес руками — то есть для оператора их не было. */}
-            {canCatalogCells && addressStorageEnabled ? (
+            {canCellsScreens && addressStorageEnabled ? (
               <ListItemButton
                 component={NavLink}
                 to={`${base}/warehouse-map`}
@@ -256,7 +260,7 @@ export function AuthedAppLayout({
                 <ListItemText primary="Карта склада" />
               </ListItemButton>
             ) : null}
-            {canCatalogCells && addressStorageEnabled ? (
+            {canCellsScreens && addressStorageEnabled ? (
               <ListItemButton
                 component={NavLink}
                 to={`${base}/sorting-objects`}

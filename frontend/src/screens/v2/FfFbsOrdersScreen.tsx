@@ -531,6 +531,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     in24: number | null
   }>({ hours: 0, orders: 0, in12: null, in24: null })
   const [metricLoading, setMetricLoading] = useState(false)
+  // Сводка не смогла посчитаться — это не «ноль часов». Ноль читается как
+  // отличный результат, и руководитель принимает решение по несуществующей
+  // цифре. Держим отказ отдельно и показываем его вместо чисел.
+  const [metricError, setMetricError] = useState(false)
 
   const location = useLocation()
   const navigate = useNavigate()
@@ -697,11 +701,15 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     else if (metricPreset === 'month') from.setMonth(from.getMonth() - 1)
     const useCustom =
       metricPreset === 'custom' && metricRange.start !== '' && metricRange.end !== ''
-    const fromIso = useCustom ? `${metricRange.start}T00:00:00Z` : from.toISOString()
-    const toIso = useCustom ? `${metricRange.end}T23:59:59Z` : to.toISOString()
+    // Оператор выбирает московские даты, а не UTC. Написать к ним «Z» значит
+    // сдвинуть период на три часа: начало съедало первые три часа первого дня,
+    // а конец прихватывал три часа следующего. Указываем московскую зону явно.
+    const fromIso = useCustom ? `${metricRange.start}T00:00:00+03:00` : from.toISOString()
+    const toIso = useCustom ? `${metricRange.end}T23:59:59+03:00` : to.toISOString()
 
     void (async () => {
       setMetricLoading(true)
+      setMetricError(false)
       try {
         const query = new URLSearchParams({ from: fromIso, to: toIso })
         if (metricSellerId) query.set('seller_id', metricSellerId)
@@ -725,7 +733,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           in24: body.within_24_hours_percent ?? null,
         })
       } catch {
-        if (!cancelled) setMetric({ hours: 0, orders: 0, in12: null, in24: null })
+        if (!cancelled) {
+          setMetric({ hours: 0, orders: 0, in12: null, in24: null })
+          setMetricError(true)
+        }
       } finally {
         if (!cancelled) setMetricLoading(false)
       }
@@ -1142,6 +1153,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         range={metricRange}
         onRangeChange={setMetricRange}
         loading={metricLoading}
+        failed={metricError}
       />
 
       <Paper variant="outlined" sx={{ overflow: 'hidden', mt: 2 }}>
