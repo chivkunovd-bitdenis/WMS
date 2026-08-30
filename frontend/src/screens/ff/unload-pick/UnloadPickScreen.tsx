@@ -305,9 +305,17 @@ export function UnloadPickScreen({
       // Сужение по свойству не доживает до колбэка: держим ячейку отдельной
       // переменной, иначе TypeScript видит внутри find снова «строка или пусто».
       const scannedLocationId = result.storageLocationId
-      const place = scannedLocationId
-        ? row.places.find((one) => one.key === cellRef(scannedLocationId))
-        : row.places[0]
+      // Если оператор выбрал место сканом — берём именно его. Сервер отвечает
+      // адресом ячейки, в которой стоит тара, и поиск по ячейке находил бы
+      // строку ячейки: снятие приписывалось бы россыпи, хотя на сервере оно
+      // записано на короб. Отсюда и подпись «снято — СТЕЛЛАЖ 1.1» вместо
+      // короба, и прирост не на той строке.
+      const selectedPlace = source ? row.places.find((one) => one.key === source) : undefined
+      const place =
+        selectedPlace ??
+        (scannedLocationId
+          ? row.places.find((one) => one.key === cellRef(scannedLocationId))
+          : row.places[0])
       if (!place) {
         setScanNotice(null)
         setScanError(`${result.sku} — сервер не вернул место снятия`)
