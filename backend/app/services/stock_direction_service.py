@@ -141,7 +141,16 @@ async def list_stock_directions(
             StockDirection.tenant_id == tenant_id,
             StockDirection.product_id == product_id,
         )
-        .order_by(StockDirection.is_fbs.desc(), StockDirection.created_at.asc())
+        # created_at приходит из CURRENT_TIMESTAMP: в PostgreSQL это микросекунды,
+        # а в SQLite — целые секунды, и два направления, заведённые подряд,
+        # получают одно значение. Без третьего ключа порядок между ними не
+        # определён, и список прыгает при каждом открытии. Разрешаем по имени:
+        # id здесь случайный UUID и в качестве ключа бессмыслен.
+        .order_by(
+            StockDirection.is_fbs.desc(),
+            StockDirection.created_at.asc(),
+            StockDirection.name.asc(),
+        )
     )
     return list((await session.execute(stmt)).scalars().all())
 

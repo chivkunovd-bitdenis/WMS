@@ -206,7 +206,16 @@ async def test_seller_stock_directions_summary_and_scope(
         headers=seller_headers,
     )
     assert listed.status_code == 200, listed.text
-    assert [row["quantity"] for row in listed.json()] == [3, 2]
+    # Признак ФБС у направлений остатка отменён 18.08.2026 (коммит 36df9ce8,
+    # «галка FBS убрана»): доля на ФБС задаётся у товара, а не направлением.
+    # Поэтому оба направления обычные, и список идёт по времени создания.
+    # Проверяем именно это правило, а не совпадение чисел: раньше тест ловил
+    # порядок вставки и падал через раз.
+    rows = listed.json()
+    assert [row["is_fbs"] for row in rows] == [False, False], rows
+    # Оба заведены в одну секунду, поэтому решает имя: «FBS WB» < «Reserve».
+    assert [row["name"] for row in rows] == ["FBS WB", "Reserve September"], rows
+    assert [row["quantity"] for row in rows] == [3, 2], rows
 
     summary = await async_client.get(
         "/operations/inventory-balances/summary",
