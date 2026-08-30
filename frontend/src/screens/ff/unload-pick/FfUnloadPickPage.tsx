@@ -149,9 +149,13 @@ type Props = {
    * различается только корень адреса.
    */
   source?: 'unload' | 'fbs'
+  /** Экран встроен в окно документа: там завершение подбора не уводит
+   * со страницы, а переключает на упаковку. Без этого встроенный экран
+   * уходил на список отгрузок и окно оставалось пустым. */
+  onFinished?: () => void
 }
 
-export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Props) {
+export function FfUnloadPickPage({ token, requestId: requestIdProp, source, onFinished }: Props) {
   const BASE = source === 'fbs' ? FBS_BASE : UNLOAD_BASE
   const params = useParams<{ requestId: string }>()
   const requestId = requestIdProp ?? params.requestId
@@ -569,9 +573,13 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source }: Pr
         onSetPicked={setPicked}
         onScan={scan}
         onPause={() => navigate('/app/ff/mp-shipments')}
-        onComplete={() =>
+        onComplete={() => {
+          if (onFinished) {
+            onFinished()
+            return
+          }
           navigate(`/app/ff/mp-shipments?open_mp=${encodeURIComponent(requestId ?? '')}`)
-        }
+        }}
       />
     </Box>
   )

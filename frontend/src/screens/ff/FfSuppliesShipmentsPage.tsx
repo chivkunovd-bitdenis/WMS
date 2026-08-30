@@ -2752,7 +2752,13 @@ export function FfSuppliesShipmentsPage({
                       показывается прямо здесь, во вкладке документа. Отдельной
                       страницей его открывать не надо: оператор работает внутри
                       отгрузки. Старая панель осталась в FfMpUnloadPickPanel.tsx. */}
-                  <FfUnloadPickPage token={token} requestId={unloadDetail.id} />
+                  <FfUnloadPickPage
+                    token={token}
+                    requestId={unloadDetail.id}
+                    // Подбор идёт внутри окна документа, поэтому его завершение
+                    // переводит на упаковку, а не уводит на список отгрузок.
+                    onFinished={() => setMpUnloadTab('packaging')}
+                  />
                 </Box>
               ) : null}
               {mpUnloadTab === 'packaging' ? (
