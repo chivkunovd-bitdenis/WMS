@@ -313,10 +313,15 @@ export function FfMarketplaceUnloadBoxAddDialog({
       return
     }
     const row = pickOptions.find((p) => p.product_id === productId)
+    // Ячейка нужна только чтобы снять товар со склада. Уже подобранное лежит на
+    // упаковке и просто перекладывается в короб — ячейки для него не существует,
+    // и требовать её значит запереть упаковку намертво.
+    const readyToBox = row ? Math.max(0, row.picked_qty - (row.boxed_qty ?? 0)) : 0
     if (
       row &&
       productNeedsExplicitLocation(row, addressStorageEnabled) &&
-      !activeLocationId
+      !activeLocationId &&
+      quantity > readyToBox
     ) {
       setError('Выберите ячейку или отсканируйте её штрихкод.')
       return
