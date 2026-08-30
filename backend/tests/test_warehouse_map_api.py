@@ -618,3 +618,44 @@ async def test_map_shows_unposted_contents_of_unfinished_inbound_containers(
     )
     assert blocked_cargo.status_code == 409, blocked_cargo.text
     assert blocked_cargo.json()["detail"] == "container_stock_missing"
+
+
+async def test_empty_container_can_be_taken_off_a_cell(
+    async_client: AsyncClient,
+) -> None:
+    """Пустой короб снимается с ячейки: у тары количество не спрашивают.
+
+    Контракт карты склада, 3.1: «qty: null — переехало целиком; так всегда для
+    контейнеров». Раньше поле было обязательным и строго больше нуля, поэтому
+    снятие пустого короба падало с текстом «qty: Input should be greater than 0»,
+    и кладовщик не мог убрать короб с ячейки.
+    """
+    headers, _user, tenant = await _register(async_client, "empty-box-off")
+    warehouse, cell, *_rest = await _seed_map(tenant.id)
+
+    created = await async_client.post(
+        f"/warehouses/{warehouse.id}/sorting-objects",
+        headers=headers,
+        json={"kind": "box"},
+    )
+    assert created.status_code in (200, 201), created.text
+    box_id = created.json()["id"]
+
+    placed = await async_client.post(
+        f"/warehouses/{warehouse.id}/sorting-objects/place",
+        headers=headers,
+        json={"kind": "box", "id": box_id, "cell_id": str(cell.id)},
+    )
+    assert placed.status_code == 200, placed.text
+
+    # Снятие БЕЗ количества — так и должно быть для тары.
+    moved = await async_client.post(
+        f"/warehouses/{warehouse.id}/map/move",
+        headers=headers,
+        json={"kind": "box", "id": box_id, "to_kind": "unassigned", "to_id": None},
+    )
+    assert moved.status_code == 200, moved.text
+
+    fresh = await async_client.get(f"/warehouses/{warehouse.id}/map", headers=headers)
+    assert fresh.status_code == 200, fresh.text
+    assert box_id in {n["id"] for n in fresh.json()["unassigned"]}, fresh.text

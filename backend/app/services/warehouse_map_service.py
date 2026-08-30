@@ -1066,10 +1066,12 @@ async def move_object(
     object_id: uuid.UUID,
     to_kind: DestinationKind,
     to_id: uuid.UUID | None,
-    quantity: int,
+    quantity: int | None,
 ) -> dict[str, Any]:
     await _assert_warehouse(session, tenant_id, warehouse_id)
-    if quantity <= 0:
+    # Количество имеет смысл только для товара: тара всегда переезжает целиком
+    # вместе с содержимым (контракт карты склада, раздел 3.1).
+    if kind == "product" and (quantity is None or quantity <= 0):
         raise WarehouseMapError("quantity_must_be_positive")
     if kind == "pallet" and to_kind == "pallet" and object_id == to_id:
         raise WarehouseMapError("container_cycle")
@@ -1092,6 +1094,8 @@ async def move_object(
         )
         if balance is None:
             raise WarehouseMapError("object_not_found")
+        # Проверка выше уже гарантировала число для товара; сообщаем это типам.
+        assert quantity is not None
         if quantity > balance.quantity:
             raise WarehouseMapError("insufficient_stock")
         product = await session.get(Product, balance.product_id)

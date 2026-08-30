@@ -180,7 +180,12 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
                   id: intent.row.id,
                   to_kind: intent.toKind,
                   to_id: intent.toId,
-                  qty,
+                  // Количество имеет смысл только у товара. Тара переезжает
+                  // целиком вместе с содержимым — контракт карты склада, 3.1:
+                  // «qty: null — переехало целиком; так всегда для контейнеров».
+                  // Раньше отправляли qty строки, и снятие пустого короба
+                  // падало с «Input should be greater than 0».
+                  qty: intent.row.kind === 'product' ? qty : null,
                 },
           ),
         },

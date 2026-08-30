@@ -165,7 +165,11 @@ class WarehouseMapMoveIn(BaseModel):
     id: uuid.UUID
     to_kind: Literal["cell", "unassigned", "sorting", "pallet", "box", "cargo_place"]
     to_id: uuid.UUID | None = None
-    qty: int = Field(gt=0)
+    # Контракт карты склада, раздел 3.1: «qty: null — переехало целиком; так
+    # всегда для контейнеров». Количество имеет смысл только у товара, тара
+    # всегда едет вся. Раньше поле было обязательным, и снятие пустого короба
+    # с ячейки падало на валидации «Input should be greater than 0».
+    qty: int | None = Field(default=None, gt=0)
 
 
 class WarehouseMapMoveOut(BaseModel):
@@ -240,7 +244,8 @@ class SortingPlaceIn(BaseModel):
     id: uuid.UUID
     cell_id: uuid.UUID | None = None
     to_id: uuid.UUID | None = None
-    qty: int = Field(gt=0)
+    # Как и у переноса: количество имеет смысл только у товара, тара едет вся.
+    qty: int | None = Field(default=None, gt=0)
 
 
 def _map_error(exc: WarehouseMapError) -> HTTPException:
