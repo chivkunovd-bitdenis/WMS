@@ -65,4 +65,27 @@ tasks/_current/
 
 # Вывод генераторов печати и черновики агентов — не код
 output/
+
+# Ресурсы самого приложения остаются в репозитории — они часть продукта.
+!frontend/public/*.png
+!frontend/src/assets/*.png
 scratchpad/
+
+# Тяжёлые артефакты проверок в репозитории не хранятся: они раздували каждую
+# рабочую копию на 170 МБ и попадали в историю навсегда. Вынесены 30.08.2026
+# в .archive/media-20260830 (вне гита), указатель — docs/MEDIA-ARCHIVE.md.
+docs/**/*.png
+docs/**/*.jpg
+docs/**/*.jpeg
+docs/**/*.gif
+docs/**/*.pdf
+docs/**/*.zip
+docs/**/*.sqlite
+docs/**/*.db
+docs/**/*.mp4
+docs/**/*.webm
+tasks/**/*.png
+tasks/**/*.jpg
+tasks/**/*.pdf
+tasks/**/*.zip
+output/

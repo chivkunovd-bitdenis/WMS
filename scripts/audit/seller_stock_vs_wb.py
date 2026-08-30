@@ -50,6 +50,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 # WB принимает ограниченную пачку артикулов за один запрос.
 CHRT_BATCH = 1000
+# Пауза между пачками, чтобы WB не отбивал по лимиту частоты.
+PAUSE_BETWEEN_BATCHES = 1.5
 
 
 async def _find_sellers(session: AsyncSession, needle: str) -> list[Seller]:
@@ -146,19 +148,30 @@ async def main(needle: str) -> int:
                 failed = False
                 for start in range(0, len(chrt_ids), CHRT_BATCH):
                     batch = chrt_ids[start : start + CHRT_BATCH]
-                    try:
-                        rows = await fetch_marketplace_stocks(
-                            http_client,
-                            api_token=token,
-                            warehouse_id=int(binding.wb_warehouse_id),
-                            chrt_ids=batch,
-                        )
-                    except WildberriesClientError as exc:
-                        print(f"    WB не ответил по этому складу: {exc}")
-                        failed = True
+                    rows = None
+                    # WB режет частые запросы. Ждём между пачками и повторяем с
+                    # нарастающей паузой: иначе половина складов молча выпадает
+                    # из сверки, и «расхождений нет» означало бы «мы не спросили».
+                    for attempt in range(5):
+                        try:
+                            rows = await fetch_marketplace_stocks(
+                                http_client,
+                                api_token=token,
+                                warehouse_id=int(binding.wb_warehouse_id),
+                                chrt_ids=batch,
+                            )
+                            break
+                        except WildberriesClientError as exc:
+                            if attempt == 4:
+                                print(f"    WB не ответил по этому складу: {exc}")
+                                failed = True
+                                break
+                            await asyncio.sleep(2 * (attempt + 1))
+                    if rows is None:
                         break
                     for row in rows:
                         amounts[int(row.chrt_id)] = int(row.amount)
+                    await asyncio.sleep(PAUSE_BETWEEN_BATCHES)
                 if failed:
                     continue
 
