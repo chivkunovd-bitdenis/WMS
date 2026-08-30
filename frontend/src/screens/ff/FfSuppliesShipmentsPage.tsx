@@ -394,13 +394,17 @@ export function FfSuppliesShipmentsPage({
   }, [token, authHeaders])
 
   const loadDocDetail = useCallback(async () => {
-    const docDetailRequestId = docDetailRequests.current.next()
     if (!token || !authHeaders || !docModal || !docModalId) {
       setUnloadDetail(null)
       setDivergeDetail(null)
       setWarehouseAvailableProductPicklist([])
       return
     }
+    // Номер берём ПОСЛЕ проверки. Раньше его брал и холостой вызов, который тут
+    // же выходил, — и этим обесценивал уже летящий настоящий запрос: ответ
+    // приходил с кодом 200, но отбрасывался как устаревший, и окно документа
+    // оставалось пустым навсегда. Так ломалось «Завершить подбор».
+    const docDetailRequestId = docDetailRequests.current.next()
     setModalBusy(true)
     setModalError(null)
     try {
