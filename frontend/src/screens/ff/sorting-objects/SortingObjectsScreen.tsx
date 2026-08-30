@@ -127,7 +127,9 @@ export function SortingObjectsScreen({
   const [askTarget, setAskTarget] = useState('')
   const [askQty, setAskQty] = useState<number | null>(null)
   const [created, setCreated] = useState(0)
-  const [printing, setPrinting] = useState<string | null>(null)
+  // Держим не только подпись, но и штрихкод самой строки: у товара его негде
+  // взять поиском по таре и ячейкам, а печать ШК товара из сортировки нужна.
+  const [printing, setPrinting] = useState<{ title: string; barcode: string } | null>(null)
   const [cellDialogOpen, setCellDialogOpen] = useState(false)
   const [extraCells, setExtraCells] = useState<typeof CELLS>([])
 
@@ -390,7 +392,13 @@ export function SortingObjectsScreen({
             onDropOn={drop}
             onTakeOut={takeOut}
             onMinus={takeOffCell}
-            onPrint={(row) => setPrinting(row.kind === 'object' ? objectTitle(row.object) : row.name)}
+            onPrint={(row) =>
+              setPrinting(
+                row.kind === 'object'
+                  ? { title: objectTitle(row.object), barcode: row.object.barcode }
+                  : { title: row.name, barcode: row.barcode },
+              )
+            }
             onPickCell={setActiveCellId}
           />
         </Box>
@@ -491,7 +499,7 @@ export function SortingObjectsScreen({
               // В состояние кладём сам код ячейки, а не подпись: печать ищет
               // объект по коду, и строка «ячейка А 1.1» не совпадала ни с чем —
               // печать молча ничего не делала.
-              onClick={() => setPrinting(activeCell.code)}
+              onClick={() => setPrinting({ title: activeCell.code, barcode: activeCell.barcode })}
               testId="objects-print-cell"
             />
           </Stack>
@@ -521,7 +529,13 @@ export function SortingObjectsScreen({
             onDropOn={drop}
             onTakeOut={takeOut}
             onMinus={takeOffCell}
-            onPrint={(row) => setPrinting(row.kind === 'object' ? objectTitle(row.object) : row.name)}
+            onPrint={(row) =>
+              setPrinting(
+                row.kind === 'object'
+                  ? { title: objectTitle(row.object), barcode: row.object.barcode }
+                  : { title: row.name, barcode: row.barcode },
+              )
+            }
             onPickCell={setActiveCellId}
           />
             </Paper>
@@ -570,7 +584,7 @@ export function SortingObjectsScreen({
 
       <BoxLabelPrintDialog
         open={printing !== null}
-        title={printing ? `Печать стикера: ${printing}` : ''}
+        title={printing ? `Печать стикера: ${printing.title}` : ''}
         description="Выберите размер этикетки. Напечатанное не отменить."
         scope="label"
         onClose={() => setPrinting(null)}
@@ -579,19 +593,17 @@ export function SortingObjectsScreen({
           setPrinting(null)
           if (!target) return
           if (onPrint) {
-            // Штрихкод ищем среди того, что экран уже показывает: печатаем ровно
-            // то, что стоит в строке, а не собранный на клиенте код.
-            const object = objects.find((one) => objectTitle(one) === target)
-            const cell = cells.find((one) => one.code === target)
-            const barcode = object?.barcode ?? cell?.barcode ?? ''
-            if (!barcode) {
-              onNote(`У «${target}» нет штрихкода — печатать нечего.`)
+            // Штрихкод приходит из самой строки: печатаем ровно то, что в ней
+            // стоит. Раньше его искали среди тары и ячеек, поэтому у товара он
+            // не находился и печать ШК товара из сортировки была недоступна.
+            if (!target.barcode) {
+              onNote(`У «${target.title}» нет штрихкода — печатать нечего.`)
               return
             }
-            onPrint(target, barcode, size)
+            onPrint(target.title, target.barcode, size)
             return
           }
-          onNote(`Заглушка: ${target}, этикетка ${size.label} — принтера в превью нет`)
+          onNote(`Заглушка: ${target.title}, этикетка ${size.label} — принтера в превью нет`)
         }}
         testId="objects-print-dialog"
       />

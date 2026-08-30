@@ -287,7 +287,9 @@ export function ObjectsTree({
               : row.object.kind === 'box'
                 ? ('ШК короба' as const)
                 : ('ШК грузоместа' as const)
-            : null
+            : // Печать ШК товара из сортировки: раньше жила на прежнем экране
+              // раскладки, а при переходе на раскладку объектами потерялась.
+              ('ШК товара' as const)
         return (
           <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'flex-end' }}>
             {printable ? (
