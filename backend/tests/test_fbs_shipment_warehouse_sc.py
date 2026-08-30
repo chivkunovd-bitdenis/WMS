@@ -20,6 +20,7 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_NEW,
     FBS_ORDER_STATUS_PACKED,
     META_STATUS_ACCEPTED,
+    STICKER_STATUS_READY,
     FbsOrder,
     FbsOrderMarking,
     FbsOrderReservation,
@@ -169,6 +170,7 @@ async def _prepare_supply_with_orders(
     products: list[Product | None] | None = None,
     supply_name: str,
     delivery_type: str = "warehouse_sc",
+    sticker_ready: bool = True,
 ) -> tuple[dict[str, Any], list[uuid.UUID]]:
     seller_uuid = uuid.UUID(seller_id)
     warehouse_uuid = uuid.UUID(warehouse_id)
@@ -209,6 +211,9 @@ async def _prepare_supply_with_orders(
             order = await session.get(FbsOrder, local_order_id)
             assert order is not None
             order.status = order_status
+            if sticker_ready:
+                order.sticker_status = STICKER_STATUS_READY
+                order.sticker_file = f"fbs/orders/{order.id}.png"
             if order_status == FBS_ORDER_STATUS_PACKED:
                 order.pack_status = "packed"
         await session.commit()
