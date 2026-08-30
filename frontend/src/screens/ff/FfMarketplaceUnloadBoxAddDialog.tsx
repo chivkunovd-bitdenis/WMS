@@ -57,6 +57,8 @@ type PickOptionProduct = {
   product_name: string
   planned_qty: number
   picked_qty: number
+  /** Сколько уже разложено по коробам. Упаковка считает остаток по нему. */
+  boxed_qty?: number
   locations: PickOptionLocation[]
 }
 
@@ -104,14 +106,20 @@ function addableQty(
   activeLocationId: string | null,
   warehouseStockByProductId: Map<string, number>,
 ): number {
-  const planRemaining = Math.max(0, row.planned_qty - row.picked_qty)
+  // Считаем остаток к раскладке по коробам, а не по подобранному. Раньше здесь
+  // стояло «план − подобрано»: после полного подбора выходил ноль, кнопка
+  // «Добавить» гасла навсегда, и отгрузку нельзя было завершить в принципе.
+  // Подобранное уже снято со склада — его достаточно переложить в короб.
+  const boxed = row.boxed_qty ?? 0
+  const leftToBox = Math.max(0, row.planned_qty - boxed)
+  const alreadyPicked = Math.max(0, row.picked_qty - boxed)
   const physical = physicalAvailable(
     row,
     addressStorageEnabled,
     activeLocationId,
     warehouseStockByProductId,
   )
-  return Math.min(planRemaining, physical)
+  return Math.min(leftToBox, alreadyPicked + physical)
 }
 
 function locationAddableQty(row: PickOptionProduct, locationId: string): number {
@@ -679,9 +687,15 @@ export function FfMarketplaceUnloadBoxAddDialog({
                         const qtyStr = manualQtyByProduct[row.product_id] ?? '1'
                         const qtyNum = Number(qtyStr)
                         const qtyValid = Number.isInteger(qtyNum) && qtyNum >= 1
+                        // Ячейка нужна только чтобы снять товар со склада. То, что уже
+                        // подобрано, лежит на упаковке и просто перекладывается в короб —
+                        // требовать для него ячейку бессмысленно, а на упаковке ячеек
+                        // с этим товаром уже и не остаётся.
+                        const readyToBox = Math.max(0, row.picked_qty - (row.boxed_qty ?? 0))
                         const needsLocation =
                           productNeedsExplicitLocation(row, addressStorageEnabled) &&
-                          !activeLocationId
+                          !activeLocationId &&
+                          qtyNum > readyToBox
                         return (
                           <TableRow
                             key={row.product_id}
@@ -708,7 +722,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
                               {row.product_name}
                             </TableCell>
                             <TableCell align="right">{row.planned_qty}</TableCell>
-                            <TableCell align="right">{row.picked_qty}</TableCell>
+                            <TableCell align="right">{row.boxed_qty ?? 0}</TableCell>
                             <TableCell align="right" data-testid={`ff-mp-box-add-available-${row.product_id}`}>
                               {available}
                             </TableCell>

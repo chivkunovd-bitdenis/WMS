@@ -367,6 +367,68 @@ async def scan_barcode_into_box(
     )
 
 
+async def boxed_qty_for_product(
+    session: AsyncSession, request_id: uuid.UUID, product_id: uuid.UUID
+) -> int:
+    """Сколько единиц товара уже разложено по коробам этой отгрузки."""
+    stmt = (
+        select(func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity), 0))
+        .join(MarketplaceUnloadBox, MarketplaceUnloadBox.id == MarketplaceUnloadBoxLine.box_id)
+        .where(
+            MarketplaceUnloadBox.request_id == request_id,
+            MarketplaceUnloadBoxLine.product_id == product_id,
+        )
+    )
+    return int((await session.execute(stmt)).scalar_one() or 0)
+
+
+async def _place_picked_into_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    box: MarketplaceUnloadBox,
+    *,
+    product_id: uuid.UUID,
+    quantity: int,
+) -> MarketplaceUnloadBoxLine:
+    """Переложить уже подобранный товар в короб.
+
+    Подбор его со склада уже списал и создал аллокацию, поэтому второй раз
+    трогать остатки нельзя — иначе одна и та же единица спишется дважды.
+    Здесь только строка короба и пересчёт прогресса упаковки.
+    """
+    stmt = select(MarketplaceUnloadBoxLine).where(
+        MarketplaceUnloadBoxLine.box_id == box.id,
+        MarketplaceUnloadBoxLine.product_id == product_id,
+    )
+    line = (await session.execute(stmt)).scalar_one_or_none()
+    if line is None:
+        line = MarketplaceUnloadBoxLine(
+            box_id=box.id, product_id=product_id, quantity=quantity
+        )
+        session.add(line)
+    else:
+        line.quantity = int(line.quantity) + quantity
+
+    from app.services import packaging_task_service as pkg_svc
+
+    task = await pkg_svc.get_task_for_unload(session, tenant_id, box.request_id)
+    await session.flush()
+    if task is not None:
+        await pkg_svc.sync_mp_task_packed_from_boxes(session, tenant_id, task)
+    line_id = line.id
+    await session.commit()
+    # После commit объект просрочен, а товар в нём подтягивается лениво — читать
+    # его в сериализаторе уже нельзя. Забираем строку заново вместе с товаром.
+    loaded = (
+        await session.execute(
+            select(MarketplaceUnloadBoxLine)
+            .where(MarketplaceUnloadBoxLine.id == line_id)
+            .options(selectinload(MarketplaceUnloadBoxLine.product))
+        )
+    ).scalar_one()
+    return loaded
+
+
 async def add_manual_qty_to_box(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -388,20 +450,39 @@ async def add_manual_qty_to_box(
     if not await _product_in_shipment(session, req.id, product_id):
         raise MarketplaceUnloadBoxError("product_not_in_shipment")
 
-    try:
-        result = await collect_svc.collect_into_box(
-            session,
-            tenant_id,
-            box.request_id,
-            box_id=box_id,
-            storage_location_id=storage_location_id,
-            product_id=product_id,
-            quantity=quantity,
-            actor_user_id=actor_user_id,
+    # Упаковка идёт после подбора, и товар к этому моменту уже снят со склада.
+    # Раньше любое наполнение короба шло через подбор, а тот отказывал с
+    # plan_limit_exceeded, потому что план уже выбран: отгрузка, подобранная
+    # россыпью, становилась незавершаемой навсегда. Поэтому сначала кладём в
+    # короб то, что уже подобрано и ещё не разложено, и только недостающее
+    # добираем со склада обычным подбором.
+    picked = await collect_svc.picked_qty_for_product(session, box.request_id, product_id)
+    boxed = await boxed_qty_for_product(session, box.request_id, product_id)
+    from_picked = max(0, min(quantity, picked - boxed))
+    to_collect = quantity - from_picked
+
+    line: MarketplaceUnloadBoxLine | None = None
+    if from_picked > 0:
+        line = await _place_picked_into_box(
+            session, tenant_id, box, product_id=product_id, quantity=from_picked
         )
-    except MarketplaceUnloadPickError as exc:
-        raise _map_collect_err(exc) from None
-    return result.box_line
+    if to_collect > 0:
+        try:
+            result = await collect_svc.collect_into_box(
+                session,
+                tenant_id,
+                box.request_id,
+                box_id=box_id,
+                storage_location_id=storage_location_id,
+                product_id=product_id,
+                quantity=to_collect,
+                actor_user_id=actor_user_id,
+            )
+        except MarketplaceUnloadPickError as exc:
+            raise _map_collect_err(exc) from None
+        line = result.box_line
+    assert line is not None
+    return line
 
 
 async def attach_existing_box_by_barcode(

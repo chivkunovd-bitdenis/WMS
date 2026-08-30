@@ -52,6 +52,9 @@ class PickOptionProduct:
     product_name: str
     planned_qty: int
     picked_qty: int
+    #: Сколько единиц уже разложено по коробам. Экран упаковки считает по нему
+    #: остаток к раскладке: подобранное можно класть в короб, не подбирая заново.
+    boxed_qty: int
     locations: list[PickOptionLocation]
 
 
@@ -76,6 +79,24 @@ async def _picked_qty_by_product(
     from app.services import marketplace_unload_collect_service as collect_svc
 
     return await collect_svc.picked_qty_by_product(session, request_id)
+
+
+async def _boxed_qty_by_product(
+    session: AsyncSession, request_id: uuid.UUID
+) -> dict[uuid.UUID, int]:
+    """Сколько единиц каждого товара уже лежит в коробах этой отгрузки."""
+    from app.models.marketplace_unload import MarketplaceUnloadBox, MarketplaceUnloadBoxLine
+
+    stmt = (
+        select(
+            MarketplaceUnloadBoxLine.product_id,
+            func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity), 0),
+        )
+        .join(MarketplaceUnloadBox, MarketplaceUnloadBox.id == MarketplaceUnloadBoxLine.box_id)
+        .where(MarketplaceUnloadBox.request_id == request_id)
+        .group_by(MarketplaceUnloadBoxLine.product_id)
+    )
+    return {row[0]: int(row[1] or 0) for row in (await session.execute(stmt)).all()}
 
 
 async def _picked_qty_by_product_location(
@@ -225,6 +246,7 @@ async def get_pick_options(
         return []
 
     picked = await _picked_qty_by_product(session, req.id)
+    boxed = await _boxed_qty_by_product(session, req.id)
     picked_by_loc = await _picked_qty_by_product_location(session, req.id)
     picked_by_source = await _picked_qty_by_product_source(session, req.id)
     try:
@@ -249,6 +271,7 @@ async def get_pick_options(
                 product_name=p.name,
                 planned_qty=int(ln.quantity),
                 picked_qty=picked.get(ln.product_id, 0),
+                boxed_qty=boxed.get(ln.product_id, 0),
                 locations=loc_by_product.get(ln.product_id, []),
             )
         )

@@ -687,9 +687,8 @@ export function FfSuppliesShipmentsPage({
     setModalError(null)
     setDocModal('marketplace_unload')
     setDocModalId(openMp)
-    const next = new URLSearchParams(searchParams)
-    next.delete('open_mp')
-    setSearchParams(next, { replace: true })
+    // Параметр НЕ стираем: пока окно открыто, документ живёт в адресе, и
+    // обновление страницы возвращает оператора в тот же документ, а не в журнал.
   }, [docModal, docModalId, isMpShipmentsPage, searchParams, setSearchParams])
 
   useEffect(() => {
@@ -734,6 +733,13 @@ export function FfSuppliesShipmentsPage({
 
   const closeDocModal = () => {
     docDetailRequests.current.invalidate()
+    // Документ закрыт — убираем его из адреса, иначе он откроется снова при
+    // следующем заходе по той же ссылке.
+    if (searchParams.get('open_mp')) {
+      const cleaned = new URLSearchParams(searchParams)
+      cleaned.delete('open_mp')
+      setSearchParams(cleaned, { replace: true })
+    }
     setDocModal(null)
     setDocModalId(null)
     setUnloadDetail(null)

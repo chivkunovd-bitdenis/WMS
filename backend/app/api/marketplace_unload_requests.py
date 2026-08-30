@@ -252,6 +252,7 @@ class MarketplaceUnloadPickOptionProductOut(BaseModel):
     product_name: str
     planned_qty: int
     picked_qty: int
+    boxed_qty: int = 0
     locations: list[MarketplaceUnloadPickOptionLocationOut]
 
 
@@ -1239,6 +1240,7 @@ async def get_marketplace_unload_pick_options(
             product_name=o.product_name,
             planned_qty=o.planned_qty,
             picked_qty=o.picked_qty,
+            boxed_qty=o.boxed_qty,
             locations=[
                 MarketplaceUnloadPickOptionLocationOut(
                     storage_location_id=str(loc.storage_location_id),

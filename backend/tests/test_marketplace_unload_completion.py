@@ -439,3 +439,73 @@ async def test_scan_barcode_into_box_service_wrapper_parity(
         req = await get_request(session, tenant_id, mid)
         assert req is not None
         assert req.status == "collecting"
+
+
+@pytest.mark.asyncio
+async def test_loose_pick_still_allows_filling_a_box(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TC-NEW-220: подбор россыпью не должен запирать упаковку.
+
+    Дано: отгрузка на 4 штуки, оператор подобрал весь план на вкладке
+    «Подбор», не создавая коробов. Когда он переходит на упаковку и
+    наполняет короб — тогда товар кладётся в короб, а прогресс упаковки
+    доходит до плана.
+
+    Негатив/ограничение: сверх плана положить по-прежнему нельзя, а
+    остатки на складе повторно не списываются — подбор их уже снял.
+    """
+    h, mid, loc_id = await _confirmed_unload_with_stock(
+        async_client, monkeypatch, plan_qty=4
+    )
+    opts = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}/pick-options", headers=h
+    )
+    assert opts.status_code == 200, opts.text
+    pid = opts.json()[0]["product_id"]
+
+    # Подбор россыпью: коробов нет, план выбран полностью.
+    add = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/pick/add",
+        headers=h,
+        json={"product_id": pid, "storage_location_id": loc_id, "quantity": 4},
+    )
+    assert add.status_code == 200, add.text
+
+    after_pick = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}/pick-options", headers=h
+    )
+    row = after_pick.json()[0]
+    assert row["picked_qty"] == 4
+    assert row["boxed_qty"] == 0
+
+    box = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes",
+        headers=h,
+        json={"box_preset": "60_40_40"},
+    )
+    assert box.status_code == 201, box.text
+    box_id = box.json()["id"]
+
+    # Раньше здесь был отказ plan_limit_exceeded и отгрузку нельзя было закрыть.
+    fill = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/manual-line",
+        headers=h,
+        json={"product_id": pid, "quantity": 4},
+    )
+    assert fill.status_code == 200, fill.text
+    assert fill.json()["quantity"] == 4
+
+    after_box = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}/pick-options", headers=h
+    )
+    row2 = after_box.json()[0]
+    assert row2["boxed_qty"] == 4
+    assert row2["picked_qty"] == 4, "повторного подбора со склада быть не должно"
+
+    over = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/manual-line",
+        headers=h,
+        json={"product_id": pid, "quantity": 1},
+    )
+    assert over.status_code >= 400, "сверх плана класть нельзя"

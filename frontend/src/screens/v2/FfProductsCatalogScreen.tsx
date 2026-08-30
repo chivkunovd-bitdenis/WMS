@@ -541,7 +541,15 @@ export function FfProductsCatalogScreen({
     }
     const sellerId = chosen[0]!.seller_id as string
     if (chosen.some((r) => r.seller_id !== sellerId)) {
-      setFbsDialogError('Выберите товары одного продавца: склады у каждого свои.')
+      // Называем селлеров поимённо: иначе оператор, выделивший «всё», не понимает,
+      // что именно ему разъединять в списке на сотни строк.
+      const names = Array.from(
+        new Set(chosen.map((r) => r.seller_name ?? 'без продавца')),
+      ).sort()
+      setFbsDialogError(
+        `Выбраны товары разных продавцов (${names.join(', ')}), а склады Wildberries ` +
+          'у каждого свои. Оставьте в выделении одного продавца.',
+      )
       return
     }
     try {
@@ -1000,6 +1008,18 @@ export function FfProductsCatalogScreen({
                 </Button>
               </Stack>
             </Stack>
+            {/* Отказ показываем здесь, у самой кнопки. Раньше он рисовался в самом
+                низу страницы, под таблицей на сотни строк: оператор нажимал кнопку,
+                ничего не происходило, и она выглядела сломанной. */}
+            {fbsDialogError ? (
+              <Alert
+                severity="error"
+                sx={{ mt: 2 }}
+                data-testid="ff-catalog-fbs-dialog-error"
+              >
+                {fbsDialogError}
+              </Alert>
+            ) : null}
           </Paper>
         ) : null}
 
@@ -1731,12 +1751,6 @@ export function FfProductsCatalogScreen({
             </Button>
           </DialogActions>
         </Dialog>
-
-        {fbsDialogError ? (
-          <Alert severity="error" sx={{ mt: 2 }} data-testid="ff-catalog-fbs-dialog-error">
-            {fbsDialogError}
-          </Alert>
-        ) : null}
 
         {fbsDialog ? (
           <FbsStockDialog
