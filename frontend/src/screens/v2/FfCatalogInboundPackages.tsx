@@ -360,6 +360,9 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
   const [scanLoading, setScanLoading] = useState(false)
   const [scanAnnouncement, setScanAnnouncement] = useState('')
   const requestSequence = useRef(0)
+  // Последний штрихкод, по которому уже ходили на сервер. Уход фокуса после
+  // удачного Enter не должен слать тот же запрос второй раз.
+  const lastLookedUpBarcode = useRef<string | null>(null)
   const scanInputRef = useRef<HTMLInputElement>(null)
 
   const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products])
@@ -398,6 +401,7 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
     async (barcode: string): Promise<void> => {
       const sequence = requestSequence.current + 1
       requestSequence.current = sequence
+      lastLookedUpBarcode.current = barcode
       setScanError(null)
       setScanAnnouncement('')
       setScanLoading(true)
@@ -463,6 +467,9 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
     if (scanLoading) return
     const barcode = scanValue.trim().toUpperCase()
     if (!barcode) return
+    // По этому штрихкоду уже ходили — значит оператор нажал Enter, а теперь
+    // просто уводит фокус. Второй такой же запрос не нужен ни серверу, ни ему.
+    if (lastLookedUpBarcode.current === barcode) return
     void lookup(barcode)
   }, [lookup, scanLoading, scanValue])
 
