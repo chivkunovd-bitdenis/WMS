@@ -1622,7 +1622,7 @@ async def place_sorting_object(
     object_id: uuid.UUID,
     cell_id: uuid.UUID | None,
     to_id: uuid.UUID | None,
-    quantity: int,
+    quantity: int | None,
 ) -> dict[str, Any]:
     if cell_id is not None and to_id is not None:
         raise WarehouseMapError("destination_conflict")
