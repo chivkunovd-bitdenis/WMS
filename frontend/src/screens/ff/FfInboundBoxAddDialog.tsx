@@ -358,7 +358,23 @@ export function FfInboundBoxAddDialog({
         setError(scanErrorMessageRu(await readApiErrorMessage(res)))
         return
       }
-      const scannedLine = (await res.json()) as InboundBoxLine
+      // Две ручки на одно действие отвечают по-разному: скан в короб отдаёт
+      // строку товара, скан в грузоместо — весь объект со списком строк.
+      // Читаем оба вида, иначе у грузоместа идентификатор товара оказывается
+      // пустым и колонка «В коробе» остаётся пустой при принятом скане.
+      const payload = (await res.json()) as
+        | InboundBoxLine
+        | { lines?: InboundBoxLine[] }
+      const scannedLine =
+        'product_id' in payload && payload.product_id
+          ? (payload as InboundBoxLine)
+          : ((payload as { lines?: InboundBoxLine[] }).lines ?? []).find(
+              (line) => line.product_id === productId,
+            )
+      if (!scannedLine) {
+        setError('Сервер принял скан, но не вернул строку товара.')
+        return
+      }
       setLocalBoxLines((current) => {
         const exists = current.some((line) => line.product_id === scannedLine.product_id)
         return exists
@@ -455,16 +471,23 @@ export function FfInboundBoxAddDialog({
                 label="Штрихкод товара"
                 value={scanBarcode}
                 onChange={(e) => setScanBarcode(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    void enqueueScanIntoBox()
-                  }
-                }}
                 disabled={busy}
                 fullWidth
                 autoFocus
-                slotProps={{ htmlInput: { 'data-testid': 'ff-inbound-box-add-scan-input' } }}
+                slotProps={{
+                  // onKeyDown вешаем на само поле ввода: MUI пробрасывает внутрь
+                  // только onChange, onBlur и onFocus, а остальное садится на
+                  // внешнюю обёртку — и Enter в сканере не срабатывал.
+                  htmlInput: {
+                    'data-testid': 'ff-inbound-box-add-scan-input',
+                    onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        void enqueueScanIntoBox()
+                      }
+                    },
+                  },
+                }}
               />
               <Button
                 variant="contained"
