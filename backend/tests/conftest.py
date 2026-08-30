@@ -27,7 +27,6 @@ from app.models import Base
 from app.services.fbs_stock_publish_service import drain_background_stock_publish_tasks
 from app.services.fbs_stock_sync_service import drain_zero_publish_background_tasks
 
-
 _SCHEMA_READY = False
 
 
