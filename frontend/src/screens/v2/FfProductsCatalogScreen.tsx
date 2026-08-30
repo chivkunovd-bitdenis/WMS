@@ -271,6 +271,10 @@ export function FfProductsCatalogScreen({
   // при смене страницы или фильтра он теряет смысл и снимается.
   useEffect(() => {
     setSelectedIds(new Set())
+    // Отказ относится к прежнему выделению. Если его не гасить, он остаётся на
+    // экране и врёт: фильтр уже сузили до одного продавца, а сообщение всё ещё
+    // перечисляет пятерых.
+    setFbsDialogError(null)
   }, [page, rowsPerPage, debouncedSearch, filterCategory, filterMarketplace, filterSellerId])
 
   const load = useCallback(async () => {
@@ -510,6 +514,7 @@ export function FfProductsCatalogScreen({
 
   const toggleSelectAllVisible = useCallback(
     (checked: boolean) => {
+      setFbsDialogError(null)
       setSelectedIds((current) => {
         const next = new Set(current)
         for (const row of filteredRows) {
@@ -523,6 +528,7 @@ export function FfProductsCatalogScreen({
   )
 
   const toggleRowSelected = useCallback((id: string, checked: boolean) => {
+    setFbsDialogError(null)
     setSelectedIds((current) => {
       const next = new Set(current)
       if (checked) next.add(id)
