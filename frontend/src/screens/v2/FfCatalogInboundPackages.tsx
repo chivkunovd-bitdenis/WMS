@@ -494,14 +494,20 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
             setScanValue(event.target.value)
             setScanError(null)
           }}
-          onKeyDown={handleScanKeyDown}
           onBlur={handleScanBlur}
           placeholder="Сканируйте внутренний ШК"
           error={scanError !== null}
           disabled={scanLoading}
           helperText={scanLoading ? 'Ищем короб…' : 'После скана нужный короб раскроется и подсветится.'}
           slotProps={{
-            htmlInput: { 'data-testid': 'ff-catalog-inbound-packages-scan' },
+            // onKeyDown вешаем прямо на поле ввода, а не на TextField: MUI
+            // пробрасывает внутрь только onChange, onBlur и onFocus, остальное
+            // садится на корневую обёртку. Из-за этого Enter в сканере не
+            // срабатывал, хотя уход фокуса работал — проверено на стенде.
+            htmlInput: {
+              'data-testid': 'ff-catalog-inbound-packages-scan',
+              onKeyDown: handleScanKeyDown,
+            },
           }}
         />
         <Box
