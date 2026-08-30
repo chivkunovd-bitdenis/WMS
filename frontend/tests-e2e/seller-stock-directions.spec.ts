@@ -151,7 +151,8 @@ test('ff manages stock directions and the product FBS limit from the catalog', a
   const adminEmail = `e2e-stock-dir-${suffix}@example.com`
   const password = 'password123'
   const sku = `SKU-DIR-${suffix}`
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi =
+    process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
 
   await page.goto('/')
   await openFulfillmentRegistration(page)

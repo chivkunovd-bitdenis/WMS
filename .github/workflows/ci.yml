@@ -85,6 +85,16 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    # Прогон браузерных сценариев — единственное, что осталось долгим: сама
+    # установка занимает меньше минуты, а сценарии шли 25 минут в один поток.
+    # Внутри одного прогона потоки поднимать нельзя: все сценарии ходят в один
+    # сервер и один файл базы, и параллельные потоки блокируют базу. Поэтому
+    # делим не потоки, а прогоны: каждая доля идёт на своей машине со своим
+    # сервером и своей базой.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     defaults:
       run:
         working-directory: frontend
@@ -114,4 +124,5 @@ jobs:
       - name: Run e2e
         env:
           CI: "1"
-        run: npx playwright test
+          E2E_DB_FILE: e2e-shard-${{ matrix.shard }}.db
+        run: npx playwright test --shard=${{ matrix.shard }}/4
