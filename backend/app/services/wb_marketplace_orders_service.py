@@ -1018,7 +1018,7 @@ async def _write_off_sold_order(session: AsyncSession, order: FbsOrder) -> None:
         return
 
     try:
-        await inv_svc.apply_fbs_supply_write_off(
+        movement = await inv_svc.apply_fbs_supply_write_off(
             session,
             tenant_id=order.tenant_id,
             product_id=order.product_id,
@@ -1042,10 +1042,12 @@ async def _write_off_sold_order(session: AsyncSession, order: FbsOrder) -> None:
         )
         return
 
-    # Запись в журнал — тот же, которым живёт списание при упаковке. У модели
-    # нет колонки на id движения списания (только reversal_movement_id — она
-    # заполняется позже, при фактическом сторнировании), поэтому здесь хранить
-    # больше нечего: сам факт записи в журнале и есть подтверждение списания.
+    # Запись в журнал — тот же, которым живёт списание при упаковке. Ссылку на
+    # движение сохранять ОБЯЗАТЕЛЬНО. Прежде здесь стоял комментарий, что колонки
+    # для неё нет, и id движения выбрасывался, — колонка есть всегда была. Из-за
+    # этого запись выглядела как «списания не было»: сверочный скрипт
+    # reconcile_fbs_unlinked_shipments ищет ровно такие строки (shipment_movement_id
+    # IS NULL) и списывает по ним товар повторно.
     session.add(
         FbsShipmentReversalLedger(
             tenant_id=order.tenant_id,
@@ -1053,6 +1055,7 @@ async def _write_off_sold_order(session: AsyncSession, order: FbsOrder) -> None:
             product_id=order.product_id,
             storage_location_id=location_id,
             quantity=1,
+            shipment_movement_id=movement.id,
         )
     )
     await session.flush()

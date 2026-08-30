@@ -296,6 +296,21 @@ async def test_write_off_sold_order_that_skipped_packaging_happens_once(
         )
         assert len(ledgers) == 1, "повторный обход не должен создавать вторую запись"
 
+        # Ограничение (негатив): запись без ссылки на движение читается сверочным
+        # скриптом reconcile_fbs_unlinked_shipments как «списания не было», и он
+        # списывает товар второй раз. Ссылка обязана быть проставлена сразу.
+        write_off_movement_id = await session.scalar(
+            select(InventoryMovement.id).where(
+                InventoryMovement.tenant_id == tenant_id,
+                InventoryMovement.product_id == product_id,
+                InventoryMovement.movement_type == MOVEMENT_TYPE_FBS_SHIPMENT,
+            )
+        )
+        assert ledgers[0].shipment_movement_id is not None, (
+            "без ссылки на движение сверочный скрипт спишет товар повторно"
+        )
+        assert ledgers[0].shipment_movement_id == write_off_movement_id
+
         write_off_count = await session.scalar(
             select(func.count(InventoryMovement.id)).where(
                 InventoryMovement.tenant_id == tenant_id,
