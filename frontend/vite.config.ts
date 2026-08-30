@@ -80,6 +80,7 @@ export default defineConfig({
         unloadPick2: 'unload-pick-2.html',
         inventory: 'inventory.html',
         fbsSpeed: 'fbs-speed.html',
+        raschety: 'raschety.html',
       },
     },
   },
