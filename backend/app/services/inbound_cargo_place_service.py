@@ -60,7 +60,7 @@ async def set_line_quantity(
     request = await intake_svc.get_request(session, tenant_id, request_id)
     if request is None:
         raise InboundIntakeError("request_not_found")
-    if request.status in intake_svc.DONE_STATUSES:
+    if request.status in intake_svc.SORTING_STATUSES | intake_svc.DONE_STATUSES:
         raise InboundIntakeError("not_editable")
     place = await _load_cargo_place(session, tenant_id, request_id, place_id)
     if not any(line.product_id == product_id for line in request.lines):

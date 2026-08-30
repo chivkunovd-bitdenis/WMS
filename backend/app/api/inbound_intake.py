@@ -1536,8 +1536,8 @@ async def patch_inbound_line_actual(
         current_line,
         request_status=current_request.status,
     )
-    box_qty = current_accepted - int(current_line.actual_qty or 0)
-    if body.actual_qty + box_qty < int(current_line.defective_qty or 0):
+    container_qty = current_accepted - int(current_line.actual_qty or 0)
+    if body.actual_qty + container_qty < int(current_line.defective_qty or 0):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="defective_qty_exceeds_accepted",

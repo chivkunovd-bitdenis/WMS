@@ -169,6 +169,145 @@ async def test_cargo_place_quantity_scan_update_and_remove_one_line(
 
 
 @pytest.mark.asyncio
+async def test_cargo_place_scan_increases_accepted_qty_and_posts_stock(
+    async_client: AsyncClient,
+) -> None:
+    """TC-NEW-CARGO-005: cargo-place intake is visible and enters accepted stock."""
+    headers = await _register_admin(async_client, "accepted")
+    request_id, place_id, product_id, sku_code, _seller_id = (
+        await _create_receiving_with_cargo_place(async_client, headers, "accepted")
+    )
+
+    started = await async_client.post(
+        f"{BASE}/{request_id}/begin-receiving",
+        headers=headers,
+    )
+    assert started.status_code == 200, started.text
+    assert started.json()["status"] == "receiving"
+
+    scanned = await async_client.post(
+        f"{BASE}/{request_id}/cargo-places/{place_id}/scan",
+        headers=headers,
+        json={"barcode": sku_code},
+    )
+    assert scanned.status_code == 200, scanned.text
+    assert scanned.json()["lines"][0]["product_id"] == product_id
+    assert scanned.json()["lines"][0]["quantity"] == 1
+
+    request = await async_client.get(f"{BASE}/{request_id}", headers=headers)
+    assert request.status_code == 200, request.text
+    body = request.json()
+    assert body["lines"][0]["effective_actual_qty"] == 1
+    request_place = next(place for place in body["cargo_places"] if place["id"] == place_id)
+    assert request_place["lines"][0]["product_id"] == product_id
+    assert request_place["lines"][0]["quantity"] == 1
+
+    completed = await async_client.post(
+        f"{BASE}/{request_id}/complete-receiving",
+        headers=headers,
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == "sorting"
+    assert completed.json()["lines"][0]["actual_qty"] == 1
+
+    late_scan = await async_client.post(
+        f"{BASE}/{request_id}/cargo-places/{place_id}/scan",
+        headers=headers,
+        json={"barcode": sku_code},
+    )
+    assert late_scan.status_code == 409, late_scan.text
+    assert late_scan.json()["detail"] == "not_editable"
+    late_update = await async_client.put(
+        f"{BASE}/{request_id}/cargo-places/{place_id}/lines/{product_id}",
+        headers=headers,
+        json={"quantity": 2},
+    )
+    assert late_update.status_code == 409, late_update.text
+    assert late_update.json()["detail"] == "not_editable"
+
+    unchanged = await async_client.get(f"{BASE}/{request_id}", headers=headers)
+    assert unchanged.status_code == 200, unchanged.text
+    assert unchanged.json()["lines"][0]["actual_qty"] == 1
+    unchanged_place = next(
+        place for place in unchanged.json()["cargo_places"] if place["id"] == place_id
+    )
+    assert unchanged_place["lines"][0]["quantity"] == 1
+
+    balances = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=headers,
+    )
+    assert balances.status_code == 200, balances.text
+    product_balance = next(
+        row for row in balances.json() if row["product_id"] == product_id
+    )
+    assert product_balance["quantity_in_sorting"] == 1
+
+
+@pytest.mark.asyncio
+async def test_box_and_cargo_place_are_counted_once_across_reopen(
+    async_client: AsyncClient,
+) -> None:
+    """TC-NEW-CARGO-006: box + cargo place stay additive without reopen duplication."""
+    headers = await _register_admin(async_client, "mixed")
+    request_id, place_id, product_id, sku_code, _seller_id = (
+        await _create_receiving_with_cargo_place(async_client, headers, "mixed")
+    )
+    base = f"{BASE}/{request_id}"
+
+    started = await async_client.post(f"{base}/begin-receiving", headers=headers)
+    assert started.status_code == 200, started.text
+
+    box = await async_client.post(f"{base}/boxes", headers=headers)
+    assert box.status_code == 201, box.text
+    for _ in range(2):
+        box_scan = await async_client.post(
+            f"{base}/boxes/{box.json()['id']}/scan",
+            headers=headers,
+            json={"barcode": sku_code},
+        )
+        assert box_scan.status_code == 200, box_scan.text
+    for _ in range(3):
+        cargo_scan = await async_client.post(
+            f"{base}/cargo-places/{place_id}/scan",
+            headers=headers,
+            json={"barcode": sku_code},
+        )
+        assert cargo_scan.status_code == 200, cargo_scan.text
+
+    receiving = await async_client.get(base, headers=headers)
+    assert receiving.status_code == 200, receiving.text
+    assert receiving.json()["lines"][0]["effective_actual_qty"] == 5
+
+    completed = await async_client.post(f"{base}/complete-receiving", headers=headers)
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["lines"][0]["actual_qty"] == 5
+
+    reopened = await async_client.post(f"{base}/reopen-receiving", headers=headers)
+    assert reopened.status_code == 200, reopened.text
+    receiving_again = await async_client.get(base, headers=headers)
+    assert receiving_again.status_code == 200, receiving_again.text
+    assert receiving_again.json()["lines"][0]["effective_actual_qty"] == 5
+
+    completed_again = await async_client.post(
+        f"{base}/complete-receiving",
+        headers=headers,
+    )
+    assert completed_again.status_code == 200, completed_again.text
+    assert completed_again.json()["lines"][0]["actual_qty"] == 5
+
+    balances = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=headers,
+    )
+    assert balances.status_code == 200, balances.text
+    product_balance = next(
+        row for row in balances.json() if row["product_id"] == product_id
+    )
+    assert product_balance["quantity_in_sorting"] == 5
+
+
+@pytest.mark.asyncio
 async def test_cargo_place_rejects_product_not_on_request(
     async_client: AsyncClient,
 ) -> None:

@@ -44,6 +44,7 @@ from app.services.document_number_service import (
     assign_display_number_if_missing,
     assign_document_number_if_missing,
 )
+from app.services.inbound_intake_quantity_service import container_total_for_product
 from app.services.operation_fact_service import record_inbound_completion
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
@@ -88,23 +89,6 @@ def _loose_qty(line: InboundIntakeLine) -> int:
     return line.actual_qty if line.actual_qty is not None else 0
 
 
-async def _box_total_for_product(
-    session: AsyncSession,
-    request_id: uuid.UUID,
-    product_id: uuid.UUID,
-) -> int:
-    stmt = (
-        select(sa.func.coalesce(sa.func.sum(InboundIntakeBoxLine.quantity), 0))
-        .join(InboundIntakeBox, InboundIntakeBoxLine.box_id == InboundIntakeBox.id)
-        .where(
-            InboundIntakeBox.request_id == request_id,
-            InboundIntakeBoxLine.product_id == product_id,
-        )
-    )
-    res = await session.execute(stmt)
-    return int(res.scalar_one())
-
-
 async def effective_actual_qty(
     session: AsyncSession,
     request_id: uuid.UUID,
@@ -112,7 +96,7 @@ async def effective_actual_qty(
     *,
     request_status: str | None = None,
 ) -> int:
-    """Accepted fact: loose+box while receiving; after sorting actual_qty is total."""
+    """Accepted fact: loose + all containers while receiving; later actual_qty is total."""
     raw = _loose_qty(line)
     status = request_status
     if status is None:
@@ -121,8 +105,8 @@ async def effective_actual_qty(
         status = res.scalar_one_or_none()
     if status in SORTING_STATUSES | DONE_STATUSES:
         return raw
-    box_total = await _box_total_for_product(session, request_id, line.product_id)
-    return raw + box_total
+    container_total = await container_total_for_product(session, request_id, line.product_id)
+    return raw + container_total
 
 
 def _accepted_qty_for_line(line: InboundIntakeLine) -> int:
@@ -180,7 +164,7 @@ async def sync_request_actuals_from_boxes(
     session: AsyncSession,
     req: InboundIntakeRequest,
 ) -> None:
-    """Validate posted qty against loose + boxes; does not overwrite loose intake."""
+    """Validate posted qty against loose + containers; does not overwrite loose intake."""
     for ln in req.lines:
         total = await effective_actual_qty(session, req.id, ln, request_status=req.status)
         if ln.posted_qty > total:
@@ -917,8 +901,8 @@ async def add_or_increment_received_product(
         session.add(line)
     else:
         new_loose = _loose_qty(line) + actual_qty
-        box_total = await _box_total_for_product(session, request_id, line.product_id)
-        if line.posted_qty > new_loose + box_total:
+        container_total = await container_total_for_product(session, request_id, line.product_id)
+        if line.posted_qty > new_loose + container_total:
             raise InboundIntakeError("actual_below_posted")
         line.actual_qty = new_loose
     await session.commit()
@@ -968,8 +952,8 @@ async def scan_barcode_to_loose_intake(
         if line is None:
             raise InboundIntakeError("product_not_on_request")
         new_loose = _loose_qty(line) + 1
-        box_total = await _box_total_for_product(session, request_id, line.product_id)
-        if line.posted_qty > new_loose + box_total:
+        container_total = await container_total_for_product(session, request_id, line.product_id)
+        if line.posted_qty > new_loose + container_total:
             raise InboundIntakeError("actual_below_posted")
         line.actual_qty = new_loose
         await session.commit()
@@ -1021,8 +1005,8 @@ async def set_line_actual_qty(
         req.primary_accepted_at = datetime.now(UTC)
     elif req.status not in RECEIVING_STATUSES:
         raise InboundIntakeError("not_verifying")
-    box_total = await _box_total_for_product(session, request_id, line.product_id)
-    if line.posted_qty > actual_qty + box_total:
+    container_total = await container_total_for_product(session, request_id, line.product_id)
+    if line.posted_qty > actual_qty + container_total:
         raise InboundIntakeError("actual_below_posted")
     line.actual_qty = actual_qty
     await session.commit()
@@ -2022,9 +2006,9 @@ async def reopen_receiving(
     req.verified_at = None
     req.status = STATUS_RECEIVING
     for line in req.lines:
-        box_total = await _box_total_for_product(session, request_id, line.product_id)
+        container_total = await container_total_for_product(session, request_id, line.product_id)
         accepted = _accepted_qty_for_line(line)
-        line.actual_qty = max(0, accepted - box_total)
+        line.actual_qty = max(0, accepted - container_total)
 
     await session.commit()
     reloaded = await get_request(session, tenant_id, request_id)
