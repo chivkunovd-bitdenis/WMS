@@ -148,15 +148,13 @@ function MissingText({ children }: { children: string }) {
 }
 
 // BL-4 (16.08, FBS-02): блокер "склад WB не привязан" — не просто упрёк, а понятная
-// подсказка с действием. Привязка делается на соседней вкладке «Остатки WB» того же
-// раздела FBS, поэтому клик по подписи ведёт туда через тот же react-router, которым
-// пользуется FfFbsSectionNav.
+// подсказка с действием. Настройка остатка и сопоставление складов живут в каталоге.
 function BlockerLine({
   blocker,
-  onGoToStockSync,
+  onGoToCatalog,
 }: {
   blocker: { code: string; message: string }
-  onGoToStockSync: () => void
+  onGoToCatalog: () => void
 }) {
   if (blocker.code === 'warehouse_unmapped') {
     return (
@@ -168,12 +166,12 @@ function BlockerLine({
         sx={{ fontWeight: 650, fontSize: '0.75rem', textAlign: 'left' }}
         onClick={(event) => {
           event.stopPropagation()
-          onGoToStockSync()
+          onGoToCatalog()
         }}
         data-testid="fbs-warehouse-unmapped-link"
         data-task-id="FBS-02"
       >
-        Склад WB не привязан — привязать на «Остатках WB»
+        Склад WB не привязан — настроить в каталоге
       </Link>
     )
   }
@@ -243,7 +241,7 @@ type NewOrderRowProps = {
   registerRow: (id: string, node: HTMLTableRowElement | null) => void
   onToggle: (order: FbsWorklistOrder) => void
   onOpenWorkspace: (supplyId: string) => void
-  onGoToStockSync: () => void
+  onGoToCatalog: (productId: string | null) => void
 }
 
 // Клик по одной галке меняет selected только у одной строки. React.memo не даёт
@@ -256,7 +254,7 @@ const NewOrderRow = memo(function NewOrderRow({
   registerRow,
   onToggle,
   onOpenWorkspace,
-  onGoToStockSync,
+  onGoToCatalog,
 }: NewOrderRowProps) {
   const blocked = order.selection_blockers.length > 0
   return (
@@ -322,7 +320,7 @@ const NewOrderRow = memo(function NewOrderRow({
                   <BlockerLine
                     key={blocker.code}
                     blocker={blocker}
-                    onGoToStockSync={onGoToStockSync}
+                    onGoToCatalog={() => onGoToCatalog(order.product.id)}
                   />
                 ))}
               </Stack>
@@ -546,7 +544,13 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const registerRow = useCallback((id: string, node: HTMLTableRowElement | null) => {
     rowRefs.current[id] = node
   }, [])
-  const goToStockSync = useCallback(() => navigate('/app/ff/fbs/stock-sync'), [navigate])
+  const goToCatalog = useCallback((productId: string | null) => {
+    navigate(
+      productId
+        ? `/app/ff/products?fbs_limit=${encodeURIComponent(productId)}`
+        : '/app/ff/products',
+    )
+  }, [navigate])
   const openedSupplyFromQuery = useRef<string | null>(null)
   const loadingRef = useRef(false)
   // Плавающая панель выбора (fbs-selection-bar) прибита к низу вьюпорта и накрывает
@@ -1106,7 +1110,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         </Stack>
       </Stack>
 
-      <FfFbsSectionNav showStockSync={isAdmin} />
+      <FfFbsSectionNav />
 
       {/* Среднее время сборки крупной цифрой над таблицей — согласованный блок.
           До сих пор он жил только в макете: экран его не показывал. */}
@@ -1461,7 +1465,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                     registerRow={registerRow}
                     onToggle={toggle}
                     onOpenWorkspace={openWorkspace}
-                    onGoToStockSync={goToStockSync}
+                    onGoToCatalog={goToCatalog}
                   />
                 )
               }
@@ -1698,7 +1702,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                             <BlockerLine
                               key={blocker.code}
                               blocker={blocker}
-                              onGoToStockSync={() => navigate('/app/ff/fbs/stock-sync')}
+                              onGoToCatalog={() => goToCatalog(order.product.id)}
                             />
                           ))}
                         </Stack>

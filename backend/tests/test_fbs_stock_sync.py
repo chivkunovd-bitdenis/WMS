@@ -263,7 +263,7 @@ def _client(transport: _MockStocksTransport) -> httpx.AsyncClient:
 
 
 @pytest.mark.asyncio
-async def test_sync_skips_products_with_disabled_fbs_sync_flag(
+async def test_sync_publishes_configured_disabled_product_as_explicit_zero(
     db_session: AsyncSession,
 ) -> None:
     ctx = await _seed_binding(db_session)
@@ -273,7 +273,7 @@ async def test_sync_skips_products_with_disabled_fbs_sync_flag(
         chrt_id=9101,
         sku_suffix="disabled",
         fbs_stock_sync_enabled=False,
-        fbs_percent=0,
+        fbs_percent=50,
     )
     db_session.add_all(
         [
@@ -299,9 +299,9 @@ async def test_sync_skips_products_with_disabled_fbs_sync_flag(
             marketplace_api_base="https://wb-mock.test",
         )
 
-    assert result.products_targeted == 0
-    assert result.products_zeroed == 0
-    assert transport.put_calls == []
+    assert result.products_targeted == 1
+    assert result.products_confirmed == 1
+    assert [[entry.amount for entry in batch] for batch in transport.put_calls] == [[0]]
 
 
 def test_build_publish_plan_reads_amounts_directly_from_pool() -> None:

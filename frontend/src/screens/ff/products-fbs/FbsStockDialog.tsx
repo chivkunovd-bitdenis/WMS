@@ -189,7 +189,7 @@ function FbsStockDialogBody({
         )}
 
         <Stack spacing={2}>
-          {(single ? [] : served).map((warehouse) => (
+          {seller.warehouses.map((warehouse) => (
             <Stack key={warehouse.id} spacing={1}>
               <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                 <Typography variant="subtitle2">{warehouse.name}</Typography>
@@ -197,13 +197,13 @@ function FbsStockDialogBody({
                   <StatusChip
                     label="склад не сопоставлен"
                     tone="warn"
-                    hint="Пока склад не сопоставлен со складом продавца в кабинете WB, остаток по нему не уйдёт"
+                    hint="Пока WB-направление не сопоставлено с физическим складом WMS, остаток по нему не уйдёт"
                   />
                 ) : null}
                 <Box sx={{ flexGrow: 1 }} />
                 <Box sx={{ minWidth: 240 }}>
                   <SelectInput
-                    label="Склад продавца в Wildberries"
+                    label="Склад WMS"
                     value={warehouse.boundTo ?? ''}
                     onChange={(value) => onBind(warehouse.id, value)}
                     options={seller.wbWarehouses.map((one) => ({ value: one.id, label: one.name }))}
@@ -212,23 +212,25 @@ function FbsStockDialogBody({
                   />
                 </Box>
               </Stack>
-              <PercentSlider
-                label="Доля на этот склад"
-                value={
-                  draft.sameEverywhere ? draft.percent : (draft.byWarehouse[warehouse.id] ?? 0)
-                }
-                onChange={(percent) =>
-                  setDraft((one) => ({
-                    ...one,
-                    byWarehouse: { ...one.byWarehouse, [warehouse.id]: percent },
-                  }))
-                }
-                base={base}
-                max={(draft.byWarehouse[warehouse.id] ?? 0) + freePercent}
-                disabled={draft.sameEverywhere}
-                disabledReason="Включено «одинаково по всем складам»"
-                testId={`fbs-stock-percent-${warehouse.id}`}
-              />
+              {warehouse.fbsEnabled && !single ? (
+                <PercentSlider
+                  label="Доля на этот склад"
+                  value={
+                    draft.sameEverywhere ? draft.percent : (draft.byWarehouse[warehouse.id] ?? 0)
+                  }
+                  onChange={(percent) =>
+                    setDraft((one) => ({
+                      ...one,
+                      byWarehouse: { ...one.byWarehouse, [warehouse.id]: percent },
+                    }))
+                  }
+                  base={base}
+                  max={(draft.byWarehouse[warehouse.id] ?? 0) + freePercent}
+                  disabled={draft.sameEverywhere}
+                  disabledReason="Включено «одинаково по всем складам»"
+                  testId={`fbs-stock-percent-${warehouse.id}`}
+                />
+              ) : null}
             </Stack>
           ))}
         </Stack>
@@ -246,20 +248,10 @@ function FbsStockDialogBody({
           </Typography>
         </Stack>
 
-        {single && served[0] ? (
-          <Typography variant="body2" color="text.secondary">
-            Склад {served[0].name}
-            {served[0].boundTo
-              ? ` — сопоставлен со складом продавца в Wildberries.`
-              : ` пока не сопоставлен со складом продавца, остаток по нему не уйдёт.`}{' '}
-            Список складов настраивается в карточке продавца.
-          </Typography>
-        ) : null}
-
         {unbound.length > 0 && draft.publish ? (
           <Typography variant="body2" color="text.secondary">
             По складам {unbound.map((one) => one.name).join(', ')} остаток не уйдёт, пока они не
-            сопоставлены со складами продавца.
+            сопоставлены с физическими складами WMS.
           </Typography>
         ) : null}
       </Stack>

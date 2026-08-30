@@ -66,6 +66,11 @@ import { FfCatalogInboundPackages } from './FfCatalogInboundPackages'
 import { MarketplaceChip } from '../../ui-kit'
 
 type SellerRow = { id: string; name: string }
+type WarehouseRow = { id: string; name: string; code: string; is_operational: boolean }
+
+function isTechnicalFbsWarehouse(warehouse: WarehouseRow): boolean {
+  return warehouse.code.startsWith('fbs-wb-') || warehouse.name.startsWith('FBS WB ')
+}
 
 type FfCatalogRow = {
   id: string
@@ -164,6 +169,7 @@ type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
   sellers: SellerRow[]
+  warehouses: WarehouseRow[]
   canManageCatalog?: boolean; addressStorageEnabled?: boolean
 }
 
@@ -195,6 +201,7 @@ export function FfProductsCatalogScreen({
   token,
   authHeaders,
   sellers,
+  warehouses,
   canManageCatalog = false, addressStorageEnabled = true,
 }: Props) {
   const navigate = useNavigate()
@@ -591,10 +598,12 @@ export function FfProductsCatalogScreen({
           boundTo: one.wms_warehouse_id,
           fbsEnabled: one.served,
         })),
-        wbWarehouses: whRows.map((one) => ({
-          id: String(one.wb_warehouse_id),
-          name: one.name ?? `Склад ${one.wb_warehouse_id}`,
-        })),
+        // Имя поля осталось от старого макета, но Select справа выбирает именно
+        // наш физический WMS-склад для WB-направления. Технические fbs-wb-* и
+        // выключенные склады сюда не попадают.
+        wbWarehouses: warehouses
+          .filter((one) => one.is_operational && !isTechnicalFbsWarehouse(one))
+          .map((one) => ({ id: one.id, name: one.name })),
       }
       const products: FbsProduct[] = chosen.map((r) =>
         toFbsProduct(
@@ -615,7 +624,51 @@ export function FfProductsCatalogScreen({
     } catch (e) {
       setFbsDialogError(e instanceof Error ? e.message : 'Не удалось открыть настройку остатка')
     }
-  }, [rows, selectedIds, token])
+  }, [authHeaders, rows, selectedIds, token, warehouses])
+
+  const bindFbsWarehouse = useCallback(async (wbWarehouseId: string, wmsWarehouseId: string) => {
+    if (!fbsDialog) return
+    // Пустое значение не превращаем в served=false: иначе обслуживаемое
+    // WB-направление исчезнет из dialog и вернуть его отсюда будет невозможно.
+    if (!wmsWarehouseId) return
+    setFbsDialogError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/fbs-sellers/${fbsDialog.seller.id}/warehouses/${wbWarehouseId}`),
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+          // Контрол показывается только для уже обслуживаемых WB-направлений.
+          // Выбор физического склада не включает скрытые served=false склады.
+          body: JSON.stringify({
+            served: true,
+            wms_warehouse_id: wmsWarehouseId,
+          }),
+        },
+      )
+      if (!res.ok) throw new Error(await readApiErrorMessage(res))
+      setFbsDialog((current) => {
+        if (!current) return current
+        return {
+          ...current,
+          seller: {
+            ...current.seller,
+            warehouses: current.seller.warehouses.map((one) =>
+              one.id === wbWarehouseId
+                ? {
+                    ...one,
+                    boundTo: wmsWarehouseId,
+                    fbsEnabled: true,
+                  }
+                : one,
+            ),
+          },
+        }
+      })
+    } catch (e) {
+      setFbsDialogError(e instanceof Error ? e.message : 'Не удалось сопоставить склад')
+    }
+  }, [authHeaders, fbsDialog, token])
 
   // Ссылка ?fbs_limit=<id> ведёт сюда из раскладки остатка по складам WB.
   // Старая модалка абсолютного лимита убрана, ссылка открывает ту же модалку
@@ -1764,8 +1817,14 @@ export function FfProductsCatalogScreen({
             products={fbsDialog.products}
             seller={fbsDialog.seller}
             rule={fbsDialog.rule}
-            onClose={() => setFbsDialog(null)}
-            onBind={() => undefined}
+            saveError={fbsDialogError}
+            onClose={() => {
+              setFbsDialog(null)
+              setFbsDialogError(null)
+            }}
+            onBind={(wbWarehouseId, wmsWarehouseId) => {
+              void bindFbsWarehouse(wbWarehouseId, wmsWarehouseId)
+            }}
             onSave={(rule) => {
               const ids = fbsDialog.products.map((one) => one.id)
               void (async () => {

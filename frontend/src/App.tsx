@@ -52,7 +52,6 @@ import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff
 import { FfInboundQueuePage } from './screens/ff/FfInboundQueuePage'
 import { FfProductsCatalogScreen } from './screens/v2/FfProductsCatalogScreen'
 import { FfFbsOrdersScreen } from './screens/v2/FfFbsOrdersScreen'
-import { FfFbsStockSyncScreen } from './screens/v2/FfFbsStockSyncScreen'
 import { FfSettingsScreen } from './screens/ff/FfSettingsScreen'
 import { FfBillingScreen } from './screens/ff/FfBillingScreen'
 import {
@@ -2988,6 +2987,7 @@ export default function App() {
                   token={token}
                   authHeaders={authHeaders}
                   sellers={sellers}
+                  warehouses={warehouses}
                   canManageCatalog={isFulfillmentAdmin} addressStorageEnabled={me.address_storage_enabled !== false}
                 />
               ) : (
@@ -3016,7 +3016,7 @@ export default function App() {
             path="ff/fbs/stock-sync"
             element={
               token && isFulfillmentAdmin ? (
-                <FfFbsStockSyncScreen token={token} authHeaders={authHeaders} sellers={sellers} />
+                <Navigate to="/app/ff/products" replace />
               ) : (
                 ffAccessDenied
               )

@@ -681,7 +681,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
         Склады маркетплейсов селлера, сопоставление с физическими складами WMS и публикация остатков.
       </Typography>
 
-      <FfFbsSectionNav showStockSync />
+      <FfFbsSectionNav />
 
       {error ? (
         <Alert

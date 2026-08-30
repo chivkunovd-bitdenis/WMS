@@ -1,25 +1,18 @@
 import { Tab, Tabs } from '@mui/material'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
-/** Поднавигация модуля FBS: заказы и остатки WB. */
-export function FfFbsSectionNav({ showStockSync = false }: { showStockSync?: boolean }) {
-  const loc = useLocation()
+/** Поднавигация модуля FBS. Настройка остатков теперь живёт в каталоге. */
+export function FfFbsSectionNav() {
   const nav = useNavigate()
-  const value = loc.pathname.includes('/stock-sync') ? 'stock-sync' : 'orders'
 
   return (
     <Tabs
-      value={value}
-      onChange={(_, v) => {
-        nav(v === 'orders' ? '/app/ff/fbs' : '/app/ff/fbs/stock-sync')
-      }}
+      value="orders"
+      onChange={() => nav('/app/ff/fbs')}
       sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
       data-testid="fbs-section-nav"
     >
       <Tab value="orders" label="Заказы" data-testid="fbs-nav-orders" />
-      {showStockSync ? (
-        <Tab value="stock-sync" label="Остатки WB" data-testid="fbs-nav-stock-sync" />
-      ) : null}
     </Tabs>
   )
 }

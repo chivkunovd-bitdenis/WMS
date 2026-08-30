@@ -23,6 +23,7 @@ from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.services import stock_direction_service
 from app.services.fbs_stock_availability_service import fbs_stock_breakdown_by_product
+from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
 
 # Доли задаются ползунком с шагом в десять процентов: промежуточные значения
 # оператору не нужны, а круглые числа он читает не считая.
@@ -424,6 +425,12 @@ async def set_rule_for_products(
         )
     validate_rule(rule, served_warehouse_count=len(served))
 
+    # The catalogue rule is the product-level source of truth, but ``served`` is
+    # still the ownership boundary. Only bindings already active and served by
+    # this fulfilment may be enabled for publication.
+    for binding in served:
+        binding.stock_sync_enabled = True
+
     binding_by_wb = {int(binding.wb_warehouse_id): binding for binding in bindings}
     for product in products:
         product.fbs_stock_sync_enabled = rule.publish
@@ -448,6 +455,7 @@ async def set_rule_for_products(
                 continue
             pool.percent = percent
             pool.updated_by = updated_by
+    schedule_seller_stock_publish(session, tenant_id, seller_id)
     await session.commit()
 
 
@@ -503,13 +511,14 @@ async def publish_amounts_for_binding(
     """Сколько штук отправить в WB по этой привязке: product_id -> количество.
 
     Это тот самый «источник числа», который заменил сохранённый абсолютный лимит.
-    Товар без включённой публикации в ответ не попадает вовсе — так публикация его
-    просто не трогает, вместо того чтобы отправить ноль.
+    Товар без правила в ответ не попадает вовсе. Если правило настроено, но
+    публикация выключена, в ответе остаётся осознанный ноль: WB не должен хранить
+    последнее положительное значение после выключения товара.
     """
     publishable = [
         product
         for product in products
-        if product.fbs_stock_sync_enabled and product.fbs_percent is not None
+        if product.fbs_percent is not None
     ]
     if not publishable or not binding.served:
         return {}

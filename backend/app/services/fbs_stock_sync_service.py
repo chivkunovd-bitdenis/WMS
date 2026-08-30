@@ -184,7 +184,6 @@ async def _load_seller_products(
     stmt = select(Product).where(
         Product.tenant_id == tenant_id,
         Product.seller_id == seller_id,
-        Product.fbs_stock_sync_enabled.is_(True),
         Product.fbs_percent.is_not(None),
     )
     res = await session.execute(stmt)
@@ -224,7 +223,8 @@ def _build_publish_plan(
     """Return safe publish targets, blocked targets, missing chrt ids, and conflicts.
 
     Quantities come from the percentage rule. If a product is absent from the
-    calculated mapping, publication is disabled or not configured, so it is skipped.
+    calculated mapping, its rule is not configured, so it is skipped. A configured
+    disabled rule remains in the mapping as an explicit zero.
     """
     skipped_missing: list[uuid.UUID] = []
     block_errors = product_block_errors or {}

@@ -61,6 +61,14 @@ class _Seed:
     product: Product
 
 
+@pytest.fixture(autouse=True)
+def _do_not_dispatch_background_publish(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.services.fbs_stock_rule_service.schedule_seller_stock_publish",
+        lambda *_args: None,
+    )
+
+
 async def _seed(
     session: AsyncSession,
     *,
@@ -379,6 +387,40 @@ async def test_publish_takes_number_from_rule(db_session: AsyncSession) -> None:
     )
     # Ожидаемо: публикация берёт 126, а не сохранённое когда-то число.
     assert amounts == {seed.product.id: 126}
+
+
+@pytest.mark.asyncio
+async def test_rule_save_enables_active_served_bindings_and_schedules_publish(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed = await _seed(db_session, wb_warehouse_ids=(501001, 501002))
+    for binding in seed.bindings:
+        binding.stock_sync_enabled = False
+    await db_session.commit()
+
+    scheduled: list[tuple[uuid.UUID, uuid.UUID]] = []
+    monkeypatch.setattr(
+        "app.services.fbs_stock_rule_service.schedule_seller_stock_publish",
+        lambda _session, tenant_id, seller_id: scheduled.append((tenant_id, seller_id)),
+    )
+
+    await set_rule_for_products(
+        db_session,
+        seed.tenant.id,
+        [seed.product.id],
+        FbsRule(publish=False, same_everywhere=True, percent=50, by_warehouse={}),
+    )
+
+    await db_session.refresh(seed.product)
+    assert seed.product.fbs_stock_sync_enabled is False
+    assert seed.product.fbs_percent == 50
+    for binding in seed.bindings:
+        await db_session.refresh(binding)
+        assert binding.is_active is True
+        assert binding.served is True
+        assert binding.stock_sync_enabled is True
+    assert scheduled == [(seed.tenant.id, seed.seller.id)]
 
 
 @pytest.mark.asyncio

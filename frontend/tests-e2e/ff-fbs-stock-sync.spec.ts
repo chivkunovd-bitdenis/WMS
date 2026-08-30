@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { waitForGetOk, waitForPostOk, waitForPutOk } from './api-waits'
+import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
 
 async function registerFf(page: import('@playwright/test').Page, tag: string) {
@@ -19,12 +19,13 @@ async function registerFf(page: import('@playwright/test').Page, tag: string) {
   await expect(page.getByTestId('dashboard')).toBeVisible()
 }
 
-// TC-NEW-FBS-STOCK-UI-001 — привязка реального WB-склада из строки к WMS-складу.
-// Given: оператор ФФ, селлер с WB-токеном и физический WMS-склад;
-// When: открывает склады селлера, выбирает WMS-склад в строке WB-склада и включает публикацию;
-// Then: ручного ввода WB ID нет, связь видна в строке, sync/status работают по выбранному складу.
-test('fbs seller warehouses: row binding, manual sync, status panel', async ({ page }) => {
-  await registerFf(page, 'ui')
+// TC-NEW-FBS-STOCK-UI-001 — настройка FBS-остатка остаётся в каталоге.
+// Given: FF-admin, два реальных WMS-склада и обслуживаемые/необслуживаемые WB-направления;
+// When: открывает старый URL и меняет сопоставление в существующем dialog каталога;
+// Then: URL редиректит в каталог, PUT получает WB id + выбранный WMS id;
+// negative: старая вкладка отсутствует, served=false направление не участвует в долях само.
+test('old FBS stock route redirects to catalog and catalog warehouse binding works', async ({ page }) => {
+  await registerFf(page, 'catalog-bind')
 
   const token = (await page.evaluate(() => localStorage.getItem('wms_token_ff'))) ?? ''
   const h = { Authorization: `Bearer ${token}` }
@@ -41,78 +42,97 @@ test('fbs seller warehouses: row binding, manual sync, status panel', async ({ p
   )
   expect(tokenPatch.ok()).toBeTruthy()
 
-  const whCode = `wh-stock-${Date.now()}`
-  const wh = (await (
+  const warehouseA = (await (
     await page.request.post('/api/warehouses', {
       headers: h,
-      data: { name: 'Склад FBS', code: whCode },
+      data: { name: 'Склад FBS A', code: `wh-stock-a-${Date.now()}` },
+    })
+  ).json()) as { id: string; name: string }
+  const warehouseB = (await (
+    await page.request.post('/api/warehouses', {
+      headers: h,
+      data: { name: 'Склад FBS B', code: `wh-stock-b-${Date.now()}` },
     })
   ).json()) as { id: string; name: string }
 
+  const product = (await (
+    await page.request.post('/api/products', {
+      headers: h,
+      data: {
+        name: 'Товар FBS-сопоставления',
+        sku_code: `SKU-FBS-BIND-${Date.now()}`,
+        length_mm: 10,
+        width_mm: 10,
+        height_mm: 10,
+        seller_id: seller.id,
+      },
+    })
+  ).json()) as { id: string }
+
+  const configure = await page.request.put(
+    `/api/fbs-sellers/${seller.id}/warehouses/501001`,
+    {
+      headers: h,
+      data: { served: true, wms_warehouse_id: warehouseA.id },
+    },
+  )
+  expect(configure.ok()).toBeTruthy()
+
+  // Необслуживаемое направление должно быть доступно только для явного
+  // сопоставления: до выбора WMS-склада оно не участвует в долях остатка.
+  await page.route(
+    `**/api/operations/fbs-sellers/${seller.id}/warehouses`,
+    async (route) => {
+      const response = await route.fetch()
+      const rows = (await response.json()) as Array<Record<string, unknown>>
+      await route.fulfill({
+        response,
+        json: [
+          ...rows,
+          {
+            id: 501003,
+            wb_warehouse_id: 501003,
+            name: 'E2E Unserved WB',
+            served: false,
+            wms_warehouse_id: null,
+          },
+        ],
+      })
+    },
+  )
+
+  // App перечитывает созданные склады и селлера после перезагрузки.
+  await page.reload()
   await page.goto('/app/ff/fbs/stock-sync')
-  await expect(page.getByTestId('fbs-stock-sync-screen')).toBeVisible()
-  await expect(page.getByTestId('fbs-nav-stock-sync')).toBeVisible()
+  await expect(page).toHaveURL(/\/app\/ff\/products$/)
+  await expect(page.getByTestId('ff-products-list')).toBeVisible()
+  await expect(page.getByTestId('fbs-stock-sync-screen')).toHaveCount(0)
+  await expect(page.getByTestId('fbs-nav-stock-sync')).toHaveCount(0)
 
-  await page.getByTestId('fbs-stock-seller-filter').click()
-  await page.getByRole('option', { name: 'Селлер Stock' }).click()
+  await page.getByTestId(`ff-catalog-fbs-row-${product.id}`).click()
+  await expect(page.getByTestId('fbs-stock-dialog')).toBeVisible()
+  await expect(page.getByTestId('fbs-stock-bind-501003')).toBeVisible()
+  await expect(page.getByTestId('fbs-stock-percent-501003')).toHaveCount(0)
 
-  const row = page.getByTestId('fbs-stock-binding-row').first()
-  await expect(row).toContainText('E2E Seller Warehouse')
-  await expect(row).toContainText('Moscow')
-  await expect(row).toContainText('WB ID 501001')
-  await expect(page.getByTestId('fbs-stock-add-binding')).toHaveCount(0)
-
-  await row.getByTestId('fbs-stock-row-wms-select').click()
-  await Promise.all([
-    waitForPutOk(page, '/warehouse-bindings/501001'),
-    waitForGetOk(page, '/warehouse-bindings'),
-    page.getByRole('option', { name: new RegExp(wh.name) }).click(),
+  const bindingSelect = page.getByTestId('fbs-stock-bind-501003')
+  await expect(bindingSelect.locator('option')).toHaveText([
+    'не сопоставлен',
+    warehouseA.name,
+    warehouseB.name,
   ])
 
-  await expect(row).toContainText('публикация выключена')
-  await Promise.all([
-    waitForPutOk(page, '/warehouse-bindings/501001'),
-    waitForGetOk(page, '/warehouse-bindings'),
-    row.getByTestId('fbs-stock-sync-toggle').click(),
-  ])
-  await expect(row).toContainText('публикация включена')
-
-  await Promise.all([
-    page.waitForResponse(
-      (r) =>
-        r.request().method() === 'POST' &&
-        r.url().includes('/stocks/sync') &&
-        r.status() >= 200 &&
-        r.status() < 300,
+  const [bindingRequest] = await Promise.all([
+    page.waitForRequest(
+      (request) =>
+        request.method() === 'PUT' &&
+        request.url().includes(`/api/fbs-sellers/${seller.id}/warehouses/501003`),
     ),
-    page.getByTestId('fbs-stock-sync-all').click(),
+    bindingSelect.selectOption(warehouseB.id),
   ])
-  await expect(page.getByTestId('fbs-stock-sync-feedback')).toBeVisible()
-
-  await row.getByTestId('fbs-stock-row-menu-btn').click()
-  await Promise.all([
-    waitForGetOk(page, '/stocks/sync-status'),
-    page.getByTestId('fbs-stock-status-btn').click(),
-  ])
-  await expect(page.getByTestId('fbs-stock-status-panel')).toBeVisible()
-
-  // Disable binding — real DELETE
-  await page.getByRole('button', { name: 'Закрыть' }).click()
-  await row.getByTestId('fbs-stock-row-menu-btn').click()
-  await page.getByTestId('fbs-stock-disable-binding').click()
-  await Promise.all([
-    page.waitForResponse(
-      (r) =>
-        r.request().method() === 'DELETE' &&
-        r.url().includes('/warehouse-bindings/501001') &&
-        r.status() === 200,
-    ),
-    waitForGetOk(page, '/warehouse-bindings'),
-    page.getByRole('dialog', { name: 'Отключить сопоставление складов?' }).getByRole('button', { name: 'Отключить' }).click(),
-  ])
-  await expect(row).toContainText('склад не сопоставлен')
-
-  // Seller id used for binding API path
-  expect(seller.id).toBeTruthy()
-  expect(wh.id).toBeTruthy()
+  expect(bindingRequest.postDataJSON()).toEqual({
+    served: true,
+    wms_warehouse_id: warehouseB.id,
+  })
+  await expect(bindingSelect).toHaveValue(warehouseB.id)
+  await expect(page.getByTestId('fbs-stock-percent-501003')).toBeVisible()
 })
