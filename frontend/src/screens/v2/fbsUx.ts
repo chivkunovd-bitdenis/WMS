@@ -21,6 +21,21 @@ export function fbsBoxOperationsDisabled(marketplace: FbsMarketplace): boolean {
   return marketplace === 'ozon'
 }
 
+export function fbsOrdersSyncErrorMessage(cause: unknown): string {
+  if (cause instanceof Error && cause.message === 'missing_marketplace_token') {
+    return 'У селлера не подключён ключ Wildberries. Добавьте ключ WB в карточке селлера.'
+  }
+  if (
+    cause
+    && typeof cause === 'object'
+    && 'code' in cause
+    && cause.code === 'missing_marketplace_token'
+  ) {
+    return 'У селлера не подключён ключ Wildberries. Добавьте ключ WB в карточке селлера.'
+  }
+  return cause instanceof Error ? cause.message : 'ошибка синхронизации'
+}
+
 export function orderStatusForChip(order: {
   marketplace: FbsMarketplace
   status: string

@@ -128,6 +128,8 @@ function formatDt(value: string | null): string {
 function stockErrorText(code: string | null): string | null {
   if (!code) return null
   const labels: Record<string, string> = {
+    missing_marketplace_token:
+      'У селлера не подключён ключ Wildberries. Добавьте ключ WB в карточке селлера.',
     wb_unavailable: 'Wildberries временно недоступен',
     wb_auth_failed: 'Проверьте токен Wildberries',
     readback_mismatch: 'Wildberries принял не все остатки',

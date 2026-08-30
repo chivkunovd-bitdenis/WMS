@@ -24,15 +24,24 @@ from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
+from app.models.fbs_wb_operation import (
+    WB_OPERATION_STATE_CONFIRMED,
+    WB_OPERATION_STATE_FAILED,
+    WB_OPERATION_STATE_PENDING_CONFIRMATION,
+    FbsWbOperation,
+)
+from app.services import fbs_shipment_pvz_service as pvz_svc
 from app.services.fbs_packing_box_service import (
     FbsPackingBoxError,
     set_boxes_without_distribution,
 )
+from app.services.fbs_supply_reconcile_service import OPERATION_KIND_CARGO_PLACES_CREATE
 from app.services.fbs_workspace_service import (
     WorkspaceProgress,
     _compute_stage,
     _compute_workspace_blockers,
 )
+from app.services.wildberries_errors import WildberriesClientError
 from tests.test_fbs_picking import (
     _create_product,
     _create_seller_and_warehouse,
@@ -210,6 +219,151 @@ async def test_box_creation_key_is_idempotent_and_rejects_different_count(
     assert conflict.json()["detail"]["code"] == "idempotency_key_reused"
     assert mode_conflict.status_code == 409, mode_conflict.text
     assert mode_conflict.json()["detail"]["code"] == "idempotency_key_reused"
+
+
+@pytest.mark.asyncio
+async def test_box_creation_wb_409_cleans_local_boxes_and_same_key_can_retry(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, supply_id, _ = await _packed_supply(async_client)
+    original_create = pvz_svc.create_marketplace_supply_trbx
+    attempts = 0
+
+    async def reject_once_then_create(*args: object, **kwargs: object) -> list[str]:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise WildberriesClientError("upstream_error", status_code=409)
+        return await original_create(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(pvz_svc, "create_marketplace_supply_trbx", reject_once_then_create)
+    url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    body = {"count": 1, "idempotency_key": "retry-after-wb-409"}
+
+    rejected = await async_client.post(url, headers=headers, json=body)
+    assert rejected.status_code == 409, rejected.text
+    assert rejected.json()["detail"] == {
+        "code": "box_create_rejected_by_wb",
+        "message": (
+            "Wildberries отклонил создание коробов. Обновите поставку и повторите; "
+            "если ошибка сохранится, проверьте состояние поставки в кабинете WB."
+        ),
+        "context": {},
+        "retryable": True,
+    }
+    async with SessionLocal() as session:
+        assert await session.scalar(
+            select(func.count(FbsPackingBox.id)).where(FbsPackingBox.supply_id == supply_id)
+        ) == 0
+        failed_operations = list(
+            (
+                await session.scalars(
+                    select(FbsWbOperation).where(
+                        FbsWbOperation.local_entity_id == supply_id,
+                        FbsWbOperation.operation_kind == OPERATION_KIND_CARGO_PLACES_CREATE,
+                    )
+                )
+            ).all()
+        )
+        assert [(item.state, item.error_code) for item in failed_operations] == [
+            (WB_OPERATION_STATE_FAILED, "wb_upstream_error_409")
+        ]
+
+    retried = await async_client.post(url, headers=headers, json=body)
+    assert retried.status_code == 201, retried.text
+    assert len(retried.json()["boxes"]) == 1
+    assert retried.json()["boxes"][0]["wb_trbx_id"] is not None
+    async with SessionLocal() as session:
+        operations = list(
+            (
+                await session.scalars(
+                    select(FbsWbOperation).where(
+                        FbsWbOperation.local_entity_id == supply_id,
+                        FbsWbOperation.operation_kind == OPERATION_KIND_CARGO_PLACES_CREATE,
+                    )
+                )
+            ).all()
+        )
+        assert {item.state for item in operations} == {
+            WB_OPERATION_STATE_FAILED,
+            WB_OPERATION_STATE_CONFIRMED,
+        }
+    assert attempts == 2
+
+
+@pytest.mark.asyncio
+async def test_box_retry_after_409_reconciles_timeout_with_same_operator_key(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, supply_id, _ = await _packed_supply(async_client)
+    remote_ids: list[str] = []
+    attempts = 0
+
+    async def reject_then_create_and_lose_response(
+        *args: object, **kwargs: object
+    ) -> list[str]:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise WildberriesClientError("upstream_error", status_code=409)
+        if attempts == 2:
+            remote_ids.append("WB-MP-RETRY-TIMEOUT")
+            raise WildberriesClientError("transport_error")
+        raise AssertionError("same operator key issued a blind third WB create")
+
+    async def list_remote_ids(*args: object, **kwargs: object) -> list[str]:
+        return list(remote_ids)
+
+    monkeypatch.setattr(
+        pvz_svc,
+        "create_marketplace_supply_trbx",
+        reject_then_create_and_lose_response,
+    )
+    monkeypatch.setattr(pvz_svc, "fetch_marketplace_supply_trbx_list", list_remote_ids)
+    url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    body = {"count": 1, "idempotency_key": "retry-409-then-timeout"}
+
+    rejected = await async_client.post(url, headers=headers, json=body)
+    assert rejected.status_code == 409, rejected.text
+    timed_out = await async_client.post(url, headers=headers, json=body)
+    assert timed_out.status_code == 504, timed_out.text
+    assert timed_out.json()["detail"]["code"] == "wb_timeout"
+    async with SessionLocal() as session:
+        states = list(
+            (
+                await session.scalars(
+                    select(FbsWbOperation.state).where(
+                        FbsWbOperation.local_entity_id == supply_id,
+                        FbsWbOperation.operation_kind == OPERATION_KIND_CARGO_PLACES_CREATE,
+                    )
+                )
+            ).all()
+        )
+        assert set(states) == {
+            WB_OPERATION_STATE_FAILED,
+            WB_OPERATION_STATE_PENDING_CONFIRMATION,
+        }
+
+    reconciled = await async_client.post(url, headers=headers, json=body)
+    assert reconciled.status_code == 201, reconciled.text
+    assert reconciled.json()["boxes"][0]["wb_trbx_id"] == "WB-MP-RETRY-TIMEOUT"
+    assert attempts == 2
+    async with SessionLocal() as session:
+        states = list(
+            (
+                await session.scalars(
+                    select(FbsWbOperation.state).where(
+                        FbsWbOperation.local_entity_id == supply_id,
+                        FbsWbOperation.operation_kind == OPERATION_KIND_CARGO_PLACES_CREATE,
+                    )
+                )
+            ).all()
+        )
+        assert set(states) == {WB_OPERATION_STATE_FAILED, WB_OPERATION_STATE_CONFIRMED}
 
 
 @pytest.mark.asyncio
@@ -903,6 +1057,48 @@ def test_workspace_handoff_requires_boxes_and_every_packed_order_assignment() ->
         ("physical_boxes_required", "handoff_prep"),
         ("packed_order_unassigned", "handoff_prep"),
     }
+
+
+def test_workspace_opens_boxes_while_order_sticker_is_not_ready() -> None:
+    order_id = uuid.uuid4()
+    supply = SimpleNamespace(
+        status=FBS_SUPPLY_STATUS_PACKED,
+        delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+        trbxes=[],
+    )
+    order = SimpleNamespace(
+        id=order_id,
+        wb_order_id=773,
+        pick_status="picked",
+        metadata_delivery_allowed=True,
+        required_meta_json=[],
+    )
+    progress = WorkspaceProgress(
+        picked=1,
+        packed=1,
+        metadata_ready=1,
+        stickers_ready=0,
+        total=1,
+    )
+
+    stage = _compute_stage(
+        supply,
+        [order],
+        progress,
+        has_physical_boxes=False,
+        unassigned_packed_order_ids={order_id},
+    )
+    blockers = _compute_workspace_blockers(
+        supply,
+        [order],
+        stage,
+        progress,
+        has_physical_boxes=False,
+        unassigned_packed_order_ids={order_id},
+    )
+
+    assert stage == "handoff_prep"
+    assert any(item["code"] == "stickers_not_ready" for item in blockers)
 
 
 def test_workspace_without_distribution_skips_assignment_gate() -> None:

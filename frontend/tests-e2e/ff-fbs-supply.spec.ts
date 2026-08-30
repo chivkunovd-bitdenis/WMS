@@ -212,6 +212,40 @@ test('fbs workspace: preflight and deliver', async ({ page }) => {
   expect(deliverBody?.idempotency_key).toEqual(expect.any(String))
 })
 
+// TC-S17-019 negative — every failed preflight reason is visible and delivery stays blocked.
+test('fbs workspace: failed preflight disables delivery and shows every reason', async ({ page }) => {
+  await registerFf(page, 'deliver-blocked')
+  const suppliedOrder = order('1', {
+    status: 'packed',
+    supply_id: 'sup-1',
+    pick: { status: 'picked', location_code: 'A-01', picked_at: new Date().toISOString() },
+    pack: { status: 'packed', packed_at: new Date().toISOString() },
+  })
+  await mockWorklist(page, [suppliedOrder])
+  await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) =>
+    json(route, workspace({ stage: 'delivery', status: 'packed', orders: [suppliedOrder] })),
+  )
+  await page.route('**/operations/fbs-supplies/sup-1/delivery-preflight', (route) =>
+    json(route, {
+      can_deliver: false,
+      version: 'blocked-v1',
+      checked_at: new Date().toISOString(),
+      checks: [
+        { code: 'order_sticker_not_ready', message: 'Стикер заказа WB не готов.', ok: false, order_id: '1' },
+        { code: 'packed_order_unassigned', message: 'Заказ не назначен в короб.', ok: false, order_id: '1' },
+      ],
+    }),
+  )
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByTestId('fbs-order-1').click()
+  await page.getByTestId('fbs-deliver-open').click()
+  const dialog = page.getByRole('dialog', { name: 'Передать поставку в WB?' })
+  await expect(dialog.getByTestId('fbs-delivery-marking-status')).toContainText('Стикер заказа WB не готов.')
+  await expect(dialog.getByTestId('fbs-delivery-marking-status')).toContainText('Заказ не назначен в короб.')
+  await expect(dialog.getByRole('button', { name: 'Передать в WB' })).toBeDisabled()
+})
+
 // TC-S17-006 — compatible selection creates one atomic supply and opens its workspace.
 test('fbs orders: create supply from selected orders', async ({ page }) => {
   await registerFf(page, 'create')

@@ -396,8 +396,9 @@ def _compute_stage(
         return "packing"
     if progress.metadata_ready < progress.total:
         return "packing"
-    if progress.stickers_ready < progress.total:
-        return "order_stickers"
+    # Короба можно готовить параллельно с повторным получением стикеров WB.
+    # Отсутствующий стикер не должен возвращать оператора назад в упаковку и
+    # запирать вкладку коробов; финальная передача проверяет стикеры отдельно.
     if (not has_physical_boxes and not without_distribution) or (
         unassigned_packed_order_ids and not without_distribution
     ):
@@ -407,6 +408,8 @@ def _compute_stage(
         and not supply.trbxes
         and not without_distribution
     ):
+        return "handoff_prep"
+    if progress.stickers_ready < progress.total:
         return "handoff_prep"
     if supply.status == FBS_SUPPLY_STATUS_PACKED:
         return "delivery"
@@ -508,12 +511,15 @@ def _compute_workspace_blockers(
                     "retryable": True,
                 }
             )
-    if progress.total and progress.stickers_ready < progress.total and stage == "delivery":
+    if progress.total and progress.stickers_ready < progress.total and stage in {
+        "handoff_prep",
+        "delivery",
+    }:
         blockers.append(
             {
-                "stage": "order_stickers",
+                "stage": "handoff_prep",
                 "code": "stickers_not_ready",
-                "message": "Не все стикеры заказов готовы.",
+                "message": "Не все стикеры заказов готовы. Получите их повторно перед передачей.",
                 "order_id": None,
                 "retryable": True,
             }

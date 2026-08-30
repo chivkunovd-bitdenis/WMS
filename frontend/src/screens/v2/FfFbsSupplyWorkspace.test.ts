@@ -3,6 +3,7 @@ import {
   buildFbsPickingListPrintHtml,
   buildFbsSyncTargets,
   fbsBoxOperationsDisabled,
+  fbsOrdersSyncErrorMessage,
   mixedMarketplaceSelectionMessage,
   normalizeMetadataKind,
 } from './fbsUx'
@@ -15,6 +16,12 @@ describe('Ozon FBS UI boundaries', () => {
       { sellerId: 'seller-b', marketplace: 'wb' },
       { sellerId: 'seller-b', marketplace: 'ozon' },
     ])
+  })
+
+  it('shows missing WB token as an operator action instead of a raw code', () => {
+    expect(fbsOrdersSyncErrorMessage(new Error('missing_marketplace_token'))).toBe(
+      'У селлера не подключён ключ Wildberries. Добавьте ключ WB в карточке селлера.',
+    )
   })
 
   it('blocks creating and adding a mixed WB/Ozon selection', () => {

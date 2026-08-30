@@ -24,12 +24,14 @@ from app.services.fbs_shipment_service import (
 
 def _mock_supply(
     *,
+    marketplace: str = "wb",
     delivery_type: str = FBS_DELIVERY_TYPE_WAREHOUSE_SC,
     trbxes: list | None = None,
     honest_sign_skipped_at: datetime | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=uuid.uuid4(),
+        marketplace=marketplace,
         status=FBS_SUPPLY_STATUS_PACKED,
         delivery_type=delivery_type,
         trbxes=trbxes or [],
@@ -46,6 +48,8 @@ def _mock_order(status: str, *, order_id: uuid.UUID | None = None) -> SimpleName
         wb_status="new",
         metadata_delivery_allowed=True,
         required_meta_json=[],
+        sticker_status="ready",
+        sticker_file="fbs/orders/sticker.png",
         product=None,
         markings=[],
     )
@@ -81,6 +85,34 @@ def test_deliver_ok_when_packed() -> None:
     )
     _validate_checks_pass(checks)
     assert all(check.ok for check in checks if check.code in {"supply_packed", "order_packed"})
+
+
+def test_deliver_blocked_until_real_order_sticker_is_ready() -> None:
+    order = _mock_order(FBS_ORDER_STATUS_PACKED)
+    order.sticker_status = "error"
+    order.sticker_file = None
+    checks = _build_delivery_checks(_mock_supply(), [order], cargo_qr_ready=True)
+
+    failed = [check for check in checks if check.code == "order_sticker_not_ready"]
+    assert len(failed) == 1
+    assert failed[0].ok is False
+    with pytest.raises(FbsShipmentError, match="order_sticker_not_ready"):
+        _validate_checks_pass(checks)
+
+
+def test_non_wb_delivery_does_not_require_wb_order_sticker() -> None:
+    order = _mock_order(FBS_ORDER_STATUS_PACKED)
+    order.sticker_status = "not_requested"
+    order.sticker_file = None
+    checks = _build_delivery_checks(
+        _mock_supply(marketplace="ozon"),
+        [order],
+        cargo_qr_ready=True,
+        boxes_required=False,
+    )
+
+    assert all(check.code != "order_sticker_not_ready" for check in checks)
+    _validate_checks_pass(checks)
 
 
 def test_cancelled_order_check_not_ok() -> None:

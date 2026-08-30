@@ -51,6 +51,7 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "insufficient_packaging_stock": "Недостаточно остатка товара в ячейке упаковки.",
     "pick_undo_not_allowed": "Отмена подбора после упаковки запрещена.",
     "order_not_picked": "Заказ ещё не подобран.",
+    "marking_not_done": "Не хватает напечатанных КМ по заданию на упаковку.",
     "trbx_not_found": "Грузоместо не найдено.",
     "wrong_delivery_type": "Неверный тип доставки для этой операции.",
     "invalid_status_transition": "Недопустимый переход статуса.",
@@ -85,7 +86,12 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "invalid_barcode_path": "Некорректный путь QR поставки.",
     "cargo_places_required": "Нужны грузоместа (ПВЗ).",
     "cargo_place_qr_not_ready": "QR грузомест не готов.",
+    "order_sticker_not_ready": "Стикер заказа WB не готов.",
     "physical_boxes_required": "Для передачи нужны физические короба.",
+    "box_create_rejected_by_wb": (
+        "Wildberries отклонил создание коробов. Обновите поставку и повторите; "
+        "если ошибка сохранится, проверьте состояние поставки в кабинете WB."
+    ),
     "packed_order_unassigned": "Упакованный заказ не назначен в короб.",
     "order_cancelled": "Заказ отменён на Wildberries.",
     "supply_bad_status": "Неверный статус поставки.",

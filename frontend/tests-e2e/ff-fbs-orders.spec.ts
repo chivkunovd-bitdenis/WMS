@@ -94,6 +94,7 @@ function workspace(items: FbsWorklistFixture[]) {
       barcode_asset: null,
     },
     stage: 'picking',
+    picking_auto_passed_reason: 'Техническая синяя подсказка не должна дублировать этап подбора.',
     progress: {
       picked: 0,
       packed: 0,
@@ -159,6 +160,13 @@ test('fbs orders: list, tabs and empty state', async ({ page }) => {
 
   await page.getByTestId('nav-ff-fbs').click()
   await expect(page.getByTestId('fbs-orders-screen')).toBeVisible()
+  await expect(page.getByTestId('fbs-worklist-table').getByRole('columnheader')).toHaveText([
+    '',
+    'Товар',
+    'Селлер',
+    'Маршрут сдачи',
+    'Отгрузить до',
+  ])
   await expect(page.getByTestId('fbs-order-1')).toBeVisible()
   await expect(page.getByTestId('fbs-order-2')).toBeVisible()
 
@@ -172,6 +180,14 @@ test('fbs orders: list, tabs and empty state', async ({ page }) => {
   await expect(page.getByTestId('fbs-18-supply-sup-4')).toBeVisible()
 
   await page.getByRole('tab', { name: 'Отменённые' }).click()
+  await expect(page.getByTestId('fbs-worklist-table').getByRole('columnheader')).toHaveText([
+    '',
+    'Товар',
+    'Селлер',
+    'Маршрут сдачи',
+    'Отгрузить до',
+    'Статус',
+  ])
   await expect(page.getByTestId('fbs-order-5')).toBeVisible()
 })
 
@@ -284,6 +300,51 @@ test('fbs orders: active supplies table explains external WB supply without loca
       body: JSON.stringify(workspace([localOrder])),
     })
   })
+  await page.route('**/operations/fbs-supplies/sup-1/pick-options', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([{
+        product_id: 'p-1',
+        sku_code: 'SKU-1',
+        product_name: 'Товар 1',
+        planned_qty: 2,
+        picked_qty: 1,
+        locations: [{
+          storage_location_id: 'loc-1',
+          location_code: 'A-01',
+          quantity: 1,
+          reserved: 0,
+          available: 1,
+          picked: 1,
+          sources: [{
+            quantity: 1,
+            picked: 1,
+            is_loose: true,
+            source_label: 'Россыпью',
+            container_path: [],
+          }],
+        }],
+      }]),
+    })
+  })
+  await page.route('**/operations/fbs-supplies/sup-1', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'sup-1',
+        seller_id: 's-1',
+        name: 'Тестовая поставка',
+        wb_supply_id: 'WB-GI-MOCK-1',
+        status: 'assembling',
+        planned_shipment_date: null,
+      }),
+    })
+  })
+  await page.route('**/products/linked-wb-catalog**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+  })
 
   await page.getByTestId('nav-ff-fbs').click()
   await page.getByRole('tab', { name: 'В работе' }).click()
@@ -299,6 +360,17 @@ test('fbs orders: active supplies table explains external WB supply without loca
   await page.getByTestId('fbs-18-supply-sup-1').click()
   await expect(page.getByTestId('fbs-workspace')).toBeVisible()
   expect(workspaceRequests).toBe(1)
+  // TC-NEW-FBS-PICK-CLEANUP — встроенный FBS-подбор оставляет один общий инструмент,
+  // без дублирующего заголовка, синей подсказки и двух старых блоков.
+  await expect(page.getByTestId('fbs-pick-unified')).toBeVisible()
+  await expect(page.getByTestId('pick-table')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Подбор на отгрузку' })).toHaveCount(0)
+  await expect(page.getByText('Техническая синяя подсказка не должна дублировать этап подбора.')).toHaveCount(0)
+  await expect(page.getByText('Сканирование подбора')).toHaveCount(0)
+  await expect(page.getByText('Подбор из ячеек')).toHaveCount(0)
+  // Снятие пришло с сервера, а не из истории этой вкладки: мёртвую отмену не показываем.
+  await expect(page.getByTestId('pick-undo-p-1')).toHaveCount(0)
+  await expect(page.getByTestId('fbs-pick-list-print')).toBeVisible()
 })
 
 // FBS-QR-REPRINT — supply and existing WB cargo-place QR are printable from the worklist.

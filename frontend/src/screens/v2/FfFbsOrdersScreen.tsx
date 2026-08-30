@@ -38,9 +38,8 @@ import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined'
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined'
-import { FbsStatusChip } from '../../components/fbs/FbsChips'
+import { DeadlinePill, FbsStatusChip } from '../../components/fbs/FbsChips'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
-import { MarketplaceChip } from '../../ui-kit'
 import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
@@ -52,6 +51,7 @@ import type { MoscowDateRangeValue } from '../../ui-kit'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import {
   buildFbsSyncTargets,
+  fbsOrdersSyncErrorMessage,
   mixedMarketplaceSelectionMessage,
   orderStatusForChip,
   ordersWord,
@@ -302,6 +302,20 @@ const NewOrderRow = memo(function NewOrderRow({
                 {order.product.id ? order.product.name : 'Товар не сопоставлен'}
               </Typography>
             </Tooltip>
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
+              {orderNumberLabel(order)} · ШК: {order.product.barcode ?? '—'}
+            </Typography>
+            {order.product.sku ? (
+              <Tooltip title={order.product.sku}>
+                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
+                  SKU {order.product.sku}
+                </Typography>
+              </Tooltip>
+            ) : order.product.seller_article ? (
+              <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
+                Артикул: {order.product.seller_article}
+              </Typography>
+            ) : null}
             {blocked ? (
               <Stack sx={{ mt: 0.75 }} spacing={0.25}>
                 {order.selection_blockers.map((blocker) => (
@@ -317,52 +331,20 @@ const NewOrderRow = memo(function NewOrderRow({
         </Stack>
       </TableCell>
       <TableCell>
-        <Typography variant="body2" sx={{ fontWeight: 700 }}>
-          {orderNumberLabel(order)}
-        </Typography>
-        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
-          ШК: {order.product.barcode ?? '—'}
-        </Typography>
-        {order.product.sku ? (
-          <Tooltip title={order.product.sku}>
-            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
-              SKU {order.product.sku}
-            </Typography>
-          </Tooltip>
-        ) : order.product.seller_article ? (
-          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
-            Артикул: {order.product.seller_article}
-          </Typography>
-        ) : null}
-      </TableCell>
-      <TableCell>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, minHeight: 45 }}>
-          <Tooltip title={order.seller.name ?? '—'}>
-            <Typography variant="body2" noWrap sx={{ minWidth: 0, maxWidth: 100 }}>{order.seller.name ?? '—'}</Typography>
-          </Tooltip>
-          <MarketplaceChip marketplace={order.marketplace} />
-        </Box>
-        {order.buyer_type === 'legal' ? (
-          <Typography variant="caption" color="text.secondary">
-            Юридическое лицо
-          </Typography>
-        ) : null}
-      </TableCell>
-      <TableCell>
-        <Tooltip title={order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`}>
-          <Typography variant="body2" noWrap sx={{ fontWeight: 650, maxWidth: 145 }}>
-            {order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`}
-          </Typography>
+        <Tooltip title={order.seller.name ?? '—'}>
+          <Typography variant="body2" noWrap sx={{ maxWidth: 125 }}>{order.seller.name ?? '—'}</Typography>
         </Tooltip>
-        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 145 }}>
-          WMS: {order.wms_warehouse.name}
-        </Typography>
       </TableCell>
       <TableCell>
-        <Typography variant="body2">{formatDateTime(order.created_at_wb)}</Typography>
-        <Typography variant="caption" color="text.secondary">
-          В сборке: {elapsedSince(order.created_at_wb, serverNow)}
-        </Typography>
+        <Chip size="small" variant="outlined" label={order.can_pvz ? 'ПВЗ' : 'Склад / СЦ'} />
+        {order.buyer_type === 'legal' ? <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>Юридическое лицо</Typography> : null}
+      </TableCell>
+      <TableCell>
+        <DeadlinePill
+          deadlineAt={order.deadline_at}
+          serverNow={serverNow}
+          cancelled={order.status === 'cancelled'}
+        />
       </TableCell>
     </TableRow>
   )
@@ -449,18 +431,6 @@ function supplyStatusColor(status: string): 'default' | 'primary' | 'success' | 
   if (status === 'in_delivery') return 'primary'
   if (status === 'draft' || status === 'assembling' || status === 'packed') return 'warning'
   return 'default'
-}
-
-function elapsedSince(value: string, serverNow: string | null): string {
-  const start = new Date(value).getTime()
-  const end = serverNow ? new Date(serverNow).getTime() : Date.now()
-  const minutes = Math.max(0, Math.floor((end - start) / 60000))
-  const days = Math.floor(minutes / 1440)
-  const hours = Math.floor((minutes % 1440) / 60)
-  const mins = minutes % 60
-  if (days > 0) return `${days} д ${hours} ч`
-  if (hours > 0) return `${hours} ч ${mins} мин`
-  return `${mins} мин`
 }
 
 // Задача 9 пула (HANDOFF-POLISH.md): отметка свежести данных — сколько прошло с последней
@@ -782,7 +752,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         skippedMismatchOrders += outcome.supplyLinkSkippedWarehouseMismatchOrders
         skippedSupplyIds.push(...outcome.supplyLinkSkippedUnmappedWarehouseSupplyIds)
       } catch (cause) {
-        failures.push(`${sellerName} · ${targetProvider}: ${cause instanceof Error ? cause.message : 'ошибка синхронизации'}`)
+        failures.push(`${sellerName} · ${targetProvider}: ${fbsOrdersSyncErrorMessage(cause)}`)
         continue
       }
       try {
@@ -1462,18 +1432,17 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               </TableCell>
               {statusGroup === 'new' ? (
                 <>
-                  <TableCell sx={{ minWidth: 210 }}>Товар</TableCell>
-                  <TableCell sx={{ minWidth: 210 }}>Заказ и сканирование</TableCell>
+                  <TableCell sx={{ minWidth: 270 }}>Товар</TableCell>
                   <TableCell sx={{ minWidth: 135 }}>Селлер</TableCell>
-                  <TableCell sx={{ minWidth: 180 }}>Склад селлера / WB</TableCell>
-                  <TableCell sx={{ minWidth: 140 }}>Создан WB / в сборке</TableCell>
+                  <TableCell sx={{ minWidth: 125 }}>Маршрут сдачи</TableCell>
+                  <TableCell sx={{ minWidth: 105 }}>Отгрузить до</TableCell>
                 </>
               ) : (
                 <>
                   <TableCell sx={{ minWidth: 270 }}>Товар</TableCell>
                   <TableCell sx={{ minWidth: 125 }}>Селлер</TableCell>
-                  <TableCell sx={{ minWidth: 150 }}>Склад селлера / WB</TableCell>
-                  <TableCell sx={{ minWidth: 150 }}>Создан WB / в сборке</TableCell>
+                  <TableCell sx={{ minWidth: 125 }}>Маршрут сдачи</TableCell>
+                  <TableCell sx={{ minWidth: 105 }}>Отгрузить до</TableCell>
                   <TableCell sx={{ minWidth: 130 }}>Статус</TableCell>
                 </>
               )}
@@ -1552,18 +1521,15 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                         <Typography variant="body2">{order.seller.name ?? '—'}</Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 650 }}>
-                          {order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          WMS: {order.wms_warehouse.name}
-                        </Typography>
+                        <Chip size="small" variant="outlined" label={order.can_pvz ? 'ПВЗ' : 'Склад / СЦ'} />
+                        {order.buyer_type === 'legal' ? <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>Юридическое лицо</Typography> : null}
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2">{formatDateTime(order.created_at_wb)}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          В сборке: {elapsedSince(order.created_at_wb, serverNow)}
-                        </Typography>
+                        <DeadlinePill
+                          deadlineAt={order.deadline_at}
+                          serverNow={serverNow}
+                          cancelled={order.status === 'cancelled'}
+                        />
                       </TableCell>
                       <TableCell>
                         {/* GLOBAL-02: одно главное состояние на строку. На «Просрочены»
@@ -1611,7 +1577,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
             })}
             {!busy && orders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6}>
+                <TableCell colSpan={statusGroup === 'new' ? 5 : 6}>
                   <Box sx={{ py: 8, textAlign: 'center' }}>
                     <Inventory2OutlinedIcon sx={{ fontSize: 42, color: 'text.disabled' }} />
                     <Typography variant="subtitle1" sx={{ mt: 1 }}>

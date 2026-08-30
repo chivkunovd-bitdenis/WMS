@@ -364,12 +364,14 @@ async def get_supply_for_packaging_task(
     packaging_task_id: uuid.UUID,
     *,
     with_orders: bool = False,
+    for_update: bool = False,
 ) -> FbsSupply | None:
     return await _load_supply_by_packaging_task(
         session,
         tenant_id,
         packaging_task_id,
         with_orders=with_orders,
+        for_update=for_update,
     )
 
 
@@ -421,6 +423,18 @@ async def _eligible_orders_for_product(
             )
         ).scalars()
     )
+    picked_ids: set[uuid.UUID] = set()
+    if require_pick:
+        picked_ids = set(
+            (
+                await session.execute(
+                    select(FbsOrderPick.fbs_order_id).where(
+                        FbsOrderPick.fbs_order_id.in_(supply_order_ids),
+                        FbsOrderPick.undone_at.is_(None),
+                    )
+                )
+            ).scalars()
+        )
     eligible: list[FbsOrder] = []
     for order in supply.orders:
         if order.status == FBS_ORDER_STATUS_CANCELLED:
@@ -432,7 +446,7 @@ async def _eligible_orders_for_product(
         if require_pick:
             if order.pick_status != PICK_STATUS_PICKED:
                 continue
-            if not await _order_has_active_pick(session, order.id):
+            if order.id not in picked_ids:
                 continue
         eligible.append(order)
     eligible.sort(
@@ -514,6 +528,7 @@ async def record_fbs_pack_progress(
     order_id: uuid.UUID | None = None,
     acting_user_id: uuid.UUID | None = None,
     idempotency_key: str | None = None,
+    fail_on_insufficient_stock: bool = False,
 ) -> FbsPackProgressResult:
     """Link each packed unit to one picked FBS order and convert sorting stock."""
     if qty < 1:
@@ -605,6 +620,14 @@ async def record_fbs_pack_progress(
             )
         except ValueError as exc:
             if str(exc) == "insufficient_stock":
+                if fail_on_insufficient_stock:
+                    insufficient_msg = await _insufficient_stock_message(
+                        session, tenant_id, line
+                    )
+                    raise FbsPackagingIntegrationError(
+                        "insufficient_packaging_stock",
+                        message=insufficient_msg,
+                    ) from exc
                 success, alt_location_code = await _try_deduct_from_alternative_sorting_location(
                     session,
                     tenant_id,
@@ -717,7 +740,7 @@ async def try_promote_fbs_supply_if_ready(
     if not await _all_active_orders_fulfilled(session, supply):
         return supply
 
-    if _supply_requires_marking(supply):
+    if supply.honest_sign_skipped_at is None and _supply_requires_marking(supply):
         return supply
 
     supply.status = FBS_SUPPLY_STATUS_PACKED

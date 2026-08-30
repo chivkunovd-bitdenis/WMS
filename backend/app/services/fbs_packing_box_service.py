@@ -22,6 +22,7 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.fbs_trbx import FbsTrbx
+from app.models.fbs_wb_operation import WB_OPERATION_STATE_FAILED
 from app.models.warehouse_box import WarehouseBox
 from app.services import fbs_shipment_pvz_service as pvz_svc
 from app.services.fbs_supply_reconcile_service import get_cargo_operation_by_idempotency
@@ -114,6 +115,12 @@ async def create_boxes(
         supply.seller_id,
         stored_key,
     )
+    wb_operation_key = await _cargo_operation_key_for_retry(
+        session, supply.seller_id, stored_key
+    )
+    created_box_ids: list[uuid.UUID] = []
+    created_warehouse_box_ids: list[uuid.UUID] = []
+    enabled_without_distribution_now = False
     if boxes:
         if len(boxes) != count or any(
             box.created_without_distribution != without_distribution for box in boxes
@@ -131,6 +138,7 @@ async def create_boxes(
         if without_distribution and assigned_count:
             raise FbsPackingBoxError("boxes_already_distributed")
         if without_distribution and supply.boxes_without_distribution_at is None:
+            enabled_without_distribution_now = True
             supply.boxes_without_distribution_at = datetime.now(UTC)
             supply.boxes_without_distribution_by_user_id = actor_user_id
         max_number = await session.scalar(
@@ -157,21 +165,72 @@ async def create_boxes(
             session.add(box)
             boxes.append(box)
         await session.flush()
+        created_box_ids = [box.id for box in boxes]
+        created_warehouse_box_ids = [box.warehouse_box_id for box in boxes]
 
     # A cargo place is registered with WB for every box, regardless of
     # delivery_type (see module docstring).
     if http_client is None:
         raise FbsPackingBoxError("pvz_http_client_required")
-    await _link_or_create_cargo_places(
-        session,
-        tenant_id,
-        supply,
-        boxes,
-        idempotency_key,
-        http_client,
-        actor_user_id=actor_user_id,
-    )
+    try:
+        await _link_or_create_cargo_places(
+            session,
+            tenant_id,
+            supply,
+            boxes,
+            wb_operation_key,
+            http_client,
+            actor_user_id=actor_user_id,
+        )
+    except FbsPackingBoxError as exc:
+        if exc.code == "box_create_rejected_by_wb" and created_box_ids:
+            # The WB operation service commits definitive failures so its audit row
+            # survives the HTTP rollback. That commit also makes the just-created
+            # local boxes visible; remove only this attempt in a compensating
+            # transaction, leaving the failed WB journal entry intact.
+            await session.execute(
+                delete(FbsPackingBox)
+                .where(FbsPackingBox.id.in_(created_box_ids))
+                .execution_options(synchronize_session=False)
+            )
+            await session.execute(
+                delete(WarehouseBox)
+                .where(WarehouseBox.id.in_(created_warehouse_box_ids))
+                .execution_options(synchronize_session=False)
+            )
+            if enabled_without_distribution_now:
+                compensated_supply = await _get_supply(
+                    session, tenant_id, supply_id, for_update=True
+                )
+                compensated_supply.boxes_without_distribution_at = None
+                compensated_supply.boxes_without_distribution_by_user_id = None
+            await session.commit()
+        raise
     return await _load_boxes(session, tenant_id, supply_id)
+
+
+async def _cargo_operation_key_for_retry(
+    session: AsyncSession,
+    seller_id: uuid.UUID,
+    operator_key: str,
+) -> str:
+    """Continue an uncertain retry and advance only past definitive WB 409s."""
+    candidate = operator_key
+    seen: set[str] = set()
+    while candidate not in seen:
+        seen.add(candidate)
+        operation = await get_cargo_operation_by_idempotency(session, seller_id, candidate)
+        if operation is None:
+            return candidate
+        if not (
+            operation.state == WB_OPERATION_STATE_FAILED
+            and operation.error_code in {"wb_upstream_error_409", "wb_business_error_409"}
+        ):
+            # Pending/pending-confirmation must keep its exact key so the cargo
+            # service reconciles instead of issuing a blind duplicate WB create.
+            return candidate
+        candidate = f"box-retry:{operation.id}"
+    raise FbsPackingBoxError("idempotency_key_reused")
 
 
 async def set_boxes_without_distribution(
@@ -434,6 +493,8 @@ async def _link_or_create_cargo_places(
         )
     except pvz_svc.FbsShipmentPvzError as exc:
         await _link_existing_trbxes(session, supply.id, boxes)
+        if exc.code in {"wb_upstream_error_409", "wb_business_error_409"}:
+            raise FbsPackingBoxError("box_create_rejected_by_wb") from exc
         raise FbsPackingBoxError(exc.code) from exc
     await _link_existing_trbxes(session, supply.id, boxes)
     if any(box.trbx_id is None for box in boxes):

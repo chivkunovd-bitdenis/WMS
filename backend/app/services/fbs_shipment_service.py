@@ -25,6 +25,9 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_PACKED,
     MARKING_KIND_SGTIN,
+    STICKER_STATUS_APPLIED,
+    STICKER_STATUS_PRINT_OPENED,
+    STICKER_STATUS_READY,
     FbsOrder,
     current_order_marking,
 )
@@ -104,6 +107,9 @@ from app.services.wildberries_errors import (
 from app.services.wildberries_fbs_client import split_marketplace_order_id_batches
 
 _DELIVER_READY_ORDER_STATUSES = frozenset({FBS_ORDER_STATUS_PACKED})
+_DELIVER_READY_STICKER_STATUSES = frozenset(
+    {STICKER_STATUS_READY, STICKER_STATUS_PRINT_OPENED, STICKER_STATUS_APPLIED}
+)
 _PACKAGING_PENDING_ORDER_STATUSES = frozenset(
     {FBS_ORDER_STATUS_IN_SUPPLY, FBS_ORDER_STATUS_ASSEMBLING}
 )
@@ -408,14 +414,15 @@ def _compute_preflight_version(
         *(str(order_id) for order_id in sorted(unassigned_packed_order_ids)),
     ]
     for order in sorted(orders, key=lambda item: item.id):
-        parts.extend(
-            [
-                str(order.id),
-                order.status,
-                order.wb_status or "",
-                str(order.metadata_delivery_allowed),
-            ]
-        )
+        order_parts = [
+            str(order.id),
+            order.status,
+            order.wb_status or "",
+            str(order.metadata_delivery_allowed),
+        ]
+        if supply.marketplace == "wb":
+            order_parts.extend([order.sticker_status, order.sticker_file or ""])
+        parts.extend(order_parts)
     raw = "|".join(parts).encode()
     return hashlib.sha256(raw).hexdigest()
 
@@ -507,6 +514,29 @@ def _build_delivery_checks(
                     order_id=order.id,
                 )
             )
+
+        if supply.marketplace == "wb":
+            if (
+                order.sticker_status not in _DELIVER_READY_STICKER_STATUSES
+                or not order.sticker_file
+            ):
+                checks.append(
+                    DeliveryCheck(
+                        code="order_sticker_not_ready",
+                        message="Стикер заказа WB не готов. Получите его повторно перед передачей.",
+                        ok=False,
+                        order_id=order.id,
+                    )
+                )
+            else:
+                checks.append(
+                    DeliveryCheck(
+                        code="order_sticker_ready",
+                        message="Стикер заказа WB готов.",
+                        ok=True,
+                        order_id=order.id,
+                    )
+                )
 
         product = order.product
         if (

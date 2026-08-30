@@ -798,8 +798,13 @@ def _raise_from_packing_box_service(exc: packing_box_svc.FbsPackingBoxError) -> 
         "box_not_empty",
         "order_already_in_box",
         "boxes_already_distributed",
+        "box_create_rejected_by_wb",
     }:
-        raise_fbs_http(status.HTTP_409_CONFLICT, exc.code)
+        raise_fbs_http(
+            status.HTTP_409_CONFLICT,
+            exc.code,
+            retryable=exc.code == "box_create_rejected_by_wb",
+        )
     if exc.code in {
         "order_not_packed",
         "order_not_in_supply",
@@ -852,6 +857,7 @@ def _raise_from_shipment_service(exc: shipment_svc.FbsShipmentError) -> None:
         "invalid_barcode_path",
         "cargo_places_required",
         "cargo_place_qr_not_ready",
+        "order_sticker_not_ready",
         "physical_boxes_required",
         "packed_order_unassigned",
         "missing_idempotency_key",

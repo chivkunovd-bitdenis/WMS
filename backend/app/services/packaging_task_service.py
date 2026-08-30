@@ -74,6 +74,7 @@ PackagingTaskError = Literal[
     "undo_not_available",
     "undo_not_supported",
     "invalid_status_filter",
+    "insufficient_packaging_stock",
 ]
 
 REVERSIBLE_PACK_EVENTS = (PACKAGING_EVENT_SCAN_PACK, PACKAGING_EVENT_MANUAL_PACK)
@@ -1191,6 +1192,23 @@ async def _assert_marking_done_for_task(
             raise
 
 
+async def _assert_marking_ready_for_full_completion(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    task: PackagingTask,
+) -> None:
+    """Validate markings against the final task quantity before FBS mutation."""
+    from app.services import marking_code_service as mc_svc
+
+    for line in task.lines:
+        product = await mc_svc.get_product(session, tenant_id, line.product_id)
+        if product is None or not product.requires_honest_sign:
+            continue
+        marked = int(line.qty_marking_printed) + int(line.qty_marking_external or 0)
+        if marked < int(line.qty_total):
+            raise PackagingTaskServiceError("marking_not_done")
+
+
 async def complete_task(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1255,6 +1273,147 @@ async def complete_task(
     loaded = await get_task(session, tenant_id, task_id)
     assert loaded is not None
     return loaded
+
+
+async def pack_all_and_complete_fbs_task(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    task_id: uuid.UUID,
+    *,
+    acting_user_id: uuid.UUID | None,
+) -> PackProgressResult:
+    """Atomically finish an FBS packaging task from the server-side fresh state.
+
+    The old UI sent one request per line and a final completion request.  A failure
+    in the middle left the supply partly changed.  This path keeps all per-unit
+    fulfillment, stock conversion, task events and supply promotion in one DB
+    transaction. It preserves the existing employee earnings calculation once
+    and does not introduce any seller billing.
+    """
+    from app.models.fbs_order import FbsOrder
+    from app.services.fbs_packaging_integration_service import (
+        FbsPackagingIntegrationError,
+        get_supply_for_packaging_task,
+        record_fbs_pack_progress,
+        sync_fbs_supply_on_packaging_done,
+    )
+
+    try:
+        # Lock ordering is intentional: supply -> task -> its lines -> orders.
+        # It prevents a second completion request from seeing a half-built result.
+        supply = await get_supply_for_packaging_task(
+            session,
+            tenant_id,
+            task_id,
+            with_orders=True,
+            for_update=True,
+        )
+        if supply is None:
+            raise PackagingTaskServiceError("supply_not_found")
+
+        await session.execute(
+            select(PackagingTask.id)
+            .where(PackagingTask.id == task_id, PackagingTask.tenant_id == tenant_id)
+            .with_for_update()
+        )
+        await session.execute(
+            select(PackagingTaskLine.id)
+            .where(PackagingTaskLine.task_id == task_id)
+            .with_for_update()
+        )
+        await session.execute(
+            select(FbsOrder.id)
+            .where(FbsOrder.tenant_id == tenant_id, FbsOrder.supply_id == supply.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
+        task = await get_task(session, tenant_id, task_id)
+        if task is None:
+            raise PackagingTaskServiceError("not_found")
+        if task.status == STATUS_DONE:
+            return PackProgressResult(task=task)
+        if task.status == STATUS_CANCELLED:
+            raise PackagingTaskServiceError("bad_status")
+        if not task.lines:
+            raise PackagingTaskServiceError("no_lines")
+
+        # Check Honest Sign against the finished quantity before the first stock
+        # or fulfillment mutation (the normal assertion only checks current done).
+        if supply.honest_sign_skipped_at is None:
+            await _assert_marking_ready_for_full_completion(session, tenant_id, task)
+
+        warnings: list[str] = []
+        for line in task.lines:
+            remaining = qty_need_pack(line) - int(line.qty_packed_in_task)
+            if remaining <= 0:
+                continue
+            try:
+                packed = await record_fbs_pack_progress(
+                    session,
+                    tenant_id,
+                    task,
+                    line,
+                    remaining,
+                    acting_user_id=acting_user_id,
+                    idempotency_key=f"pack-all:{task.id}:{line.id}",
+                    fail_on_insufficient_stock=True,
+                )
+            except FbsPackagingIntegrationError as exc:
+                raise PackagingTaskServiceError(exc.code, message=exc.message) from exc
+            packed_delta = len(packed.units)
+            if packed_delta:
+                await _add_task_event(
+                    session,
+                    task,
+                    action=PACKAGING_EVENT_MANUAL_PACK,
+                    quantity=packed_delta,
+                    line=line,
+                    acting_user_id=acting_user_id,
+                )
+            for warning in packed.warnings:
+                if warning not in warnings:
+                    warnings.append(warning)
+
+        if not is_task_complete(task):
+            raise PackagingTaskServiceError("packaging_incomplete")
+
+        task.status = STATUS_DONE
+        task.updated_at = datetime.now(UTC)
+        await _add_task_event(
+            session,
+            task,
+            action=PACKAGING_EVENT_COMPLETE,
+            quantity=sum(qty_done(line) for line in task.lines),
+            acting_user_id=acting_user_id,
+        )
+        if acting_user_id is not None:
+            # This is the pre-existing employee earnings calculation.  It is
+            # deliberately retained once; no seller billing is introduced here.
+            await billing_svc.finalize_task_billing(
+                session,
+                task,
+                completed_by_user_id=acting_user_id,
+            )
+        else:
+            task.completed_at = datetime.now(UTC)
+            task.completed_by_user_id = None
+        await sync_fbs_supply_on_packaging_done(
+            session,
+            tenant_id,
+            task.id,
+            actor_user_id=acting_user_id,
+        )
+        await session.commit()
+        loaded = await get_task(session, tenant_id, task_id)
+        assert loaded is not None
+        return PackProgressResult(task=loaded, warnings=warnings)
+    except PackagingTaskServiceError:
+        await session.rollback()
+        raise
+    except Exception:
+        await session.rollback()
+        raise
 
 
 async def assert_unload_packaging_done(

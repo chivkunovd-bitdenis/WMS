@@ -43,9 +43,11 @@ type ApiLine = {
 
 type ApiDetail = {
   id: string
+  name?: string | null
+  wb_supply_id?: string | null
   document_number: string | null
   display_number: string | null
-  warehouse_name: string
+  warehouse_name?: string | null
   status: string
   seller_id: string | null
   seller_name: string | null
@@ -149,13 +151,17 @@ type Props = {
    * различается только корень адреса.
    */
   source?: 'unload' | 'fbs'
+  /** Скрывает только дублирующий заголовок внутри карточки документа. */
+  hideHeader?: boolean
   /** Экран встроен в окно документа: там завершение подбора не уводит
    * со страницы, а переключает на упаковку. Без этого встроенный экран
    * уходил на список отгрузок и окно оставалось пустым. */
   onFinished?: () => void
+  /** Действие «Отложить» во встроенном документе не должно уводить в чужой список. */
+  onPaused?: () => void
 }
 
-export function FfUnloadPickPage({ token, requestId: requestIdProp, source, onFinished }: Props) {
+export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hideHeader = false, onFinished, onPaused }: Props) {
   const BASE = source === 'fbs' ? FBS_BASE : UNLOAD_BASE
   const params = useParams<{ requestId: string }>()
   const requestId = requestIdProp ?? params.requestId
@@ -335,10 +341,11 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, onFi
       }
     }
 
-    const number = detail.display_number ?? detail.document_number ?? detail.id
+    const number = detail.display_number ?? detail.document_number ?? detail.name ?? detail.wb_supply_id ?? detail.id
     const date = formatDate(detail.planned_shipment_date)
+    const warehouse = detail.warehouse_name ? ` · ${detail.warehouse_name}` : ''
     return {
-      document: `Отгрузка ${number}${date ? ` от ${date}` : ''} · ${detail.warehouse_name}`,
+      document: `${source === 'fbs' ? 'Поставка' : 'Отгрузка'} ${number}${date ? ` от ${date}` : ''}${warehouse}`,
       seller: detail.seller_name ?? '—',
       products,
       plan,
@@ -348,7 +355,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, onFi
       picked,
       placeSource,
     }
-  }, [catalogById, detail, pickOptions])
+  }, [catalogById, detail, pickOptions, source])
 
   const updateOption = useCallback(
     (productId: string, locationId: string, quantity: number) => {
@@ -561,6 +568,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, onFi
       <UnloadPickScreen
         key={`${requestId}-${version}`}
         onNote={() => undefined}
+        hideHeader={hideHeader}
         document={screenData.document}
         seller={screenData.seller}
         products={screenData.products}
@@ -572,7 +580,13 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, onFi
         busy={busy}
         onSetPicked={setPicked}
         onScan={scan}
-        onPause={() => navigate('/app/ff/mp-shipments')}
+        onPause={() => {
+          if (onPaused) {
+            onPaused()
+            return
+          }
+          navigate('/app/ff/mp-shipments')
+        }}
         onComplete={() => {
           if (onFinished) {
             onFinished()

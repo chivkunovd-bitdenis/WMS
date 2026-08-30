@@ -91,6 +91,8 @@ export type UnloadPickScanResult =
 
 type UnloadPickScreenProps = {
   onNote: (note: string) => void
+  /** Во встроенной вкладке документ уже подписан внешней карточкой. */
+  hideHeader?: boolean
   document?: string
   seller?: string
   products?: PickProduct[]
@@ -121,6 +123,7 @@ function placesCountLabel(count: number): string {
 
 export function UnloadPickScreen({
   onNote,
+  hideHeader = false,
   document: documentProp,
   seller: sellerProp,
   products: productsProp,
@@ -489,7 +492,7 @@ export function UnloadPickScreen({
       header: '',
       align: 'right',
       render: (row) =>
-        row.picked > 0 ? (
+        row.picked > 0 && history.some((operation) => operation.productId === row.product.id) ? (
           <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
             <IconAction
               title={`Отменить последнее снятие: ${row.product.sku}`}
@@ -505,10 +508,12 @@ export function UnloadPickScreen({
 
   return (
     <Box data-testid="unload-pick-screen">
-      <ScreenHeader
-        title="Подбор на отгрузку"
-        purpose={`${document}. Продавец ${seller}. Снимаем товар с ячеек, палет, коробов и грузомест.`}
-      />
+      {!hideHeader ? (
+        <ScreenHeader
+          title="Подбор на отгрузку"
+          purpose={`${document}. Продавец ${seller}. Снимаем товар с ячеек, палет, коробов и грузомест.`}
+        />
+      ) : null}
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Stack spacing={1.5}>

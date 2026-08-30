@@ -633,3 +633,32 @@ async def complete_packaging_task(
     except pkg_svc.PackagingTaskServiceError as exc:
         raise _http_from_pkg_error(exc) from exc
     return await _task_out(session, user.tenant_id, task)
+
+
+@router.post("/{task_id}/pack-all-and-complete", response_model=PackProgressOut)
+async def pack_all_and_complete_fbs_task(
+    task_id: uuid.UUID,
+    user: Annotated[User, Depends(require_packaging_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> PackProgressOut:
+    try:
+        result = await pkg_svc.pack_all_and_complete_fbs_task(
+            session,
+            user.tenant_id,
+            task_id,
+            acting_user_id=user.id,
+        )
+    except pkg_svc.PackagingTaskServiceError as exc:
+        # Keep the status-code mapping used by packaging endpoints, while the
+        # new FBS operation returns the existing operator-facing message shape.
+        mapped = _http_from_pkg_error(exc)
+        from app.api.fbs_errors import fbs_error_envelope
+
+        raise HTTPException(
+            status_code=mapped.status_code,
+            detail=fbs_error_envelope(exc.code, message=exc.message),
+        ) from exc
+    return PackProgressOut(
+        packaging_task=await _task_out(session, user.tenant_id, result.task),
+        warnings=result.warnings if result.warnings else None,
+    )

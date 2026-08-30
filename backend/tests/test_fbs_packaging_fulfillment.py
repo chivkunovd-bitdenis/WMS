@@ -28,12 +28,15 @@ from app.models.fbs_order_pick import FbsOrderPick
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+    FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_DRAFT,
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryMovement
+from app.models.packaging_task import PackagingTask, PackagingTaskEvent, PackagingTaskLine
+from app.models.product import Product
 from app.services import inventory_service
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
@@ -122,6 +125,7 @@ async def _create_product(
     seller_id: uuid.UUID,
     *,
     sku: str,
+    requires_honest_sign: bool = False,
 ) -> uuid.UUID:
     product = await async_client.post(
         "/products",
@@ -131,6 +135,7 @@ async def _create_product(
             "sku_code": sku,
             "seller_id": str(seller_id),
             "wb_barcode": f"BAR-{sku}",
+            "requires_honest_sign": requires_honest_sign,
         },
     )
     assert product.status_code in (200, 201), product.text
@@ -390,6 +395,535 @@ async def test_fbs_pack_rejected_without_pick(
     )
     assert blocked.status_code == 409
     assert blocked.json()["detail"] == "order_not_picked"
+
+    atomic_blocked = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/pack-all-and-complete",
+        headers=headers,
+    )
+    assert atomic_blocked.status_code == 409, atomic_blocked.text
+    assert atomic_blocked.json()["detail"]["code"] == "order_not_picked"
+    async with SessionLocal() as session:
+        task_after = await session.get(PackagingTask, uuid.UUID(task_id))
+        assert task_after is not None
+        assert task_after.status == "draft"
+        assert await session.scalar(
+            select(func.count(FbsPackagingFulfillment.id)).where(
+                FbsPackagingFulfillment.packaging_task_id == uuid.UUID(task_id)
+            )
+        ) == 0
+
+
+# TC-NEW-FBS-EMERG-001 — marking is checked before the transaction changes
+# stock, unit fulfillments, line counters, events, task or supply status.
+@pytest.mark.asyncio
+async def test_fbs_pack_all_marking_failure_rolls_back_everything(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, _source_location_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    product_id = await _create_product(
+        async_client,
+        headers,
+        seller_id,
+        sku=f"marking-{suffix}",
+        requires_honest_sign=True,
+    )
+    async with SessionLocal() as session:
+        product = await session.get(Product, product_id)
+        assert product is not None
+        product.requires_honest_sign = True
+        await session.commit()
+    supply_resp = await async_client.post(
+        "/operations/fbs-supplies",
+        headers=headers,
+        json={
+            "seller_id": str(seller_id),
+            "warehouse_id": str(warehouse_id),
+            "name": "Marking rollback supply",
+            "delivery_type": "warehouse_sc",
+        },
+    )
+    assert supply_resp.status_code == 201, supply_resp.text
+    supply_id = uuid.UUID(supply_resp.json()["id"])
+
+    async with SessionLocal() as session:
+        await seed_fbs_warehouse_binding(
+            session, tenant_id=tenant_id, seller_id=seller_id, wms_warehouse_id=warehouse_id
+        )
+        order, _ = await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            seller_id,
+            _wb_order_row(order_id=930012, article=f"MARK-{suffix}"),
+        )
+        order.product_id = product_id
+        order.supply_id = supply_id
+        order.status = FBS_ORDER_STATUS_IN_SUPPLY
+        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=sorting.id,
+            quantity_delta=1,
+            movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
+        )
+        await session.commit()
+
+    assembling = await async_client.put(
+        f"/operations/fbs-supplies/{supply_id}/status",
+        headers=headers,
+        json={"status": "assembling"},
+    )
+    assert assembling.status_code == 200, assembling.text
+    task_id = uuid.UUID(assembling.json()["packaging_task_id"])
+
+    blocked = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/pack-all-and-complete",
+        headers=headers,
+    )
+    assert blocked.status_code == 422, blocked.text
+    assert blocked.json()["detail"]["code"] == "marking_not_done"
+
+    async with SessionLocal() as session:
+        task = await session.get(PackagingTask, task_id)
+        assert task is not None
+        assert task.status == "draft"
+        assert task.completed_at is None
+        line = await session.scalar(
+            select(PackagingTaskLine).where(PackagingTaskLine.task_id == task_id)
+        )
+        assert line is not None
+        assert line.qty_packed_in_task == 0
+        event_count = await session.scalar(
+            select(func.count(PackagingTaskEvent.id)).where(PackagingTaskEvent.task_id == task_id)
+        )
+        assert event_count == 0
+        fulfillment_count = await session.scalar(
+            select(func.count(FbsPackagingFulfillment.id)).where(
+                FbsPackagingFulfillment.packaging_task_id == task_id
+            )
+        )
+        assert fulfillment_count == 0
+        balance = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+            )
+        )
+        assert balance is not None
+        assert (
+            int(balance.quantity),
+            int(balance.quantity_unpacked),
+            int(balance.quantity_packed),
+        ) == (
+            1,
+            1,
+            0,
+        )
+
+
+# TC-NEW-FBS-EMERG-003 — the existing «Сдать без Честного знака»
+# decision applies to the atomic completion path and supply promotion.
+@pytest.mark.asyncio
+async def test_fbs_pack_all_honest_sign_skip_completes_and_promotes_supply(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, source_location_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    product_id = await _create_product(
+        async_client,
+        headers,
+        seller_id,
+        sku=f"marking-skip-{suffix}",
+        requires_honest_sign=True,
+    )
+    created = await async_client.post(
+        "/operations/fbs-supplies",
+        headers=headers,
+        json={
+            "seller_id": str(seller_id),
+            "warehouse_id": str(warehouse_id),
+            "name": "Honest sign skipped supply",
+            "delivery_type": "warehouse_sc",
+        },
+    )
+    assert created.status_code == 201, created.text
+    supply_id = uuid.UUID(created.json()["id"])
+
+    async with SessionLocal() as session:
+        await seed_fbs_warehouse_binding(
+            session, tenant_id=tenant_id, seller_id=seller_id, wms_warehouse_id=warehouse_id
+        )
+        order, _ = await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            seller_id,
+            _wb_order_row(order_id=930015, article=f"MARK-SKIP-{suffix}"),
+        )
+        order.product_id = product_id
+        order.supply_id = supply_id
+        order.status = FBS_ORDER_STATUS_IN_SUPPLY
+        order.required_meta_json = ["sgtin"]
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=source_location_id,
+            quantity_delta=1,
+            movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
+        )
+        await session.commit()
+        order_id = order.id
+
+    assembling = await async_client.put(
+        f"/operations/fbs-supplies/{supply_id}/status",
+        headers=headers,
+        json={"status": "assembling"},
+    )
+    assert assembling.status_code == 200, assembling.text
+    task_id = uuid.UUID(assembling.json()["packaging_task_id"])
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        await _seed_pick_for_order(
+            session,
+            tenant_id=tenant_id,
+            supply_id=supply_id,
+            warehouse_id=warehouse_id,
+            order=order,
+            source_location_id=source_location_id,
+            scan_key=f"marking-skip-pick-{order_id}",
+        )
+        await session.commit()
+
+    skipped = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/honest-sign-skip",
+        headers=headers,
+    )
+    assert skipped.status_code == 200, skipped.text
+    completed = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/pack-all-and-complete",
+        headers=headers,
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["packaging_task"]["status"] == "done"
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        assert supply.honest_sign_skipped_at is not None
+        assert supply.status == FBS_SUPPLY_STATUS_PACKED
+
+
+# TC-NEW-FBS-EMERG-004 — atomic pack-all is fail-closed at its own warehouse
+# and must not consume a same-tenant balance from another warehouse.
+@pytest.mark.asyncio
+async def test_fbs_pack_all_insufficient_stock_rolls_back_everything(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, source_location_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    alternative_warehouse = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": "Alternative WH", "code": f"alt-{suffix[-8:]}"},
+    )
+    assert alternative_warehouse.status_code in (200, 201), alternative_warehouse.text
+    alternative_warehouse_id = uuid.UUID(alternative_warehouse.json()["id"])
+    product_id = await _create_product(async_client, headers, seller_id, sku=f"no-stock-{suffix}")
+    created = await async_client.post(
+        "/operations/fbs-supplies",
+        headers=headers,
+        json={
+            "seller_id": str(seller_id),
+            "warehouse_id": str(warehouse_id),
+            "name": "Strict stock rollback supply",
+            "delivery_type": "warehouse_sc",
+        },
+    )
+    assert created.status_code == 201, created.text
+    supply_id = uuid.UUID(created.json()["id"])
+    async with SessionLocal() as session:
+        await seed_fbs_warehouse_binding(
+            session, tenant_id=tenant_id, seller_id=seller_id, wms_warehouse_id=warehouse_id
+        )
+        order, _ = await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            seller_id,
+            _wb_order_row(order_id=930016, article=f"NO-STOCK-{suffix}"),
+        )
+        order.product_id = product_id
+        order.supply_id = supply_id
+        order.status = FBS_ORDER_STATUS_IN_SUPPLY
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=source_location_id,
+            quantity_delta=1,
+            movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
+        )
+        await session.commit()
+        order_id = order.id
+
+    assembling = await async_client.put(
+        f"/operations/fbs-supplies/{supply_id}/status",
+        headers=headers,
+        json={"status": "assembling"},
+    )
+    assert assembling.status_code == 200, assembling.text
+    task_id = uuid.UUID(assembling.json()["packaging_task_id"])
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        await _seed_pick_for_order(
+            session,
+            tenant_id=tenant_id,
+            supply_id=supply_id,
+            warehouse_id=warehouse_id,
+            order=order,
+            source_location_id=source_location_id,
+            scan_key=f"no-stock-pick-{order_id}",
+        )
+        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+        balance = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+                InventoryBalance.storage_location_id == sorting.id,
+            )
+        )
+        assert balance is not None
+        balance.quantity = 0
+        balance.quantity_unpacked = 0
+        balance.quantity_packed = 0
+        alternative_sorting = await get_or_create_sorting_location(
+            session, tenant_id, alternative_warehouse_id
+        )
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=alternative_sorting.id,
+            quantity_delta=1,
+            movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
+        )
+        await session.commit()
+
+    blocked = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/pack-all-and-complete",
+        headers=headers,
+    )
+    assert blocked.status_code == 409, blocked.text
+    detail = blocked.json()["detail"]
+    assert detail["code"] == "insufficient_packaging_stock"
+    assert "Недостаточно" in detail["message"]
+    assert "нужна как минимум 1" in detail["message"]
+
+    async with SessionLocal() as session:
+        task = await session.get(PackagingTask, task_id)
+        assert task is not None
+        assert task.status == "draft"
+        line = await session.scalar(
+            select(PackagingTaskLine).where(PackagingTaskLine.task_id == task_id)
+        )
+        assert line is not None
+        assert line.qty_packed_in_task == 0
+        assert await session.scalar(
+            select(func.count(PackagingTaskEvent.id)).where(PackagingTaskEvent.task_id == task_id)
+        ) == 0
+        assert await session.scalar(
+            select(func.count(FbsPackagingFulfillment.id)).where(
+                FbsPackagingFulfillment.packaging_task_id == task_id
+            )
+        ) == 0
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        assert supply.status == FBS_SUPPLY_STATUS_ASSEMBLING
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.pack_status == PACK_STATUS_PENDING
+        alternative_sorting = await get_or_create_sorting_location(
+            session, tenant_id, alternative_warehouse_id
+        )
+        alternative_balance = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+                InventoryBalance.storage_location_id == alternative_sorting.id,
+            )
+        )
+        assert alternative_balance is not None
+        assert (
+            int(alternative_balance.quantity),
+            int(alternative_balance.quantity_unpacked),
+            int(alternative_balance.quantity_packed),
+        ) == (1, 1, 0)
+
+
+# TC-NEW-FBS-EMERG-002 — one server operation creates the remaining fulfillment,
+# completes the task, preserves the physical balance and is safe to repeat.
+@pytest.mark.asyncio
+async def test_fbs_pack_all_completes_atomically_and_is_idempotent(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, source_location_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    product_id = await _create_product(async_client, headers, seller_id, sku=f"atomic-{suffix}")
+    created = await async_client.post(
+        "/operations/fbs-supplies",
+        headers=headers,
+        json={
+            "seller_id": str(seller_id),
+            "warehouse_id": str(warehouse_id),
+            "name": "Atomic packaging supply",
+            "delivery_type": "warehouse_sc",
+        },
+    )
+    assert created.status_code == 201, created.text
+    supply_id = uuid.UUID(created.json()["id"])
+    async with SessionLocal() as session:
+        await seed_fbs_warehouse_binding(
+            session, tenant_id=tenant_id, seller_id=seller_id, wms_warehouse_id=warehouse_id
+        )
+        order, _ = await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            seller_id,
+            _wb_order_row(order_id=930013, article=f"ATOMIC-{suffix}"),
+        )
+        order.product_id = product_id
+        order.supply_id = supply_id
+        order.status = FBS_ORDER_STATUS_IN_SUPPLY
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=source_location_id,
+            quantity_delta=2,
+            movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
+        )
+        second_order, _ = await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            seller_id,
+            _wb_order_row(order_id=930014, article=f"ATOMIC-SECOND-{suffix}"),
+        )
+        second_order.product_id = product_id
+        second_order.supply_id = supply_id
+        second_order.status = FBS_ORDER_STATUS_IN_SUPPLY
+        await session.commit()
+        order_ids = [order.id, second_order.id]
+
+    assembling = await async_client.put(
+        f"/operations/fbs-supplies/{supply_id}/status",
+        headers=headers,
+        json={"status": "assembling"},
+    )
+    assert assembling.status_code == 200, assembling.text
+    task_id = uuid.UUID(assembling.json()["packaging_task_id"])
+    async with SessionLocal() as session:
+        for order_id in order_ids:
+            order = await session.get(FbsOrder, order_id)
+            assert order is not None
+            await _seed_pick_for_order(
+                session,
+                tenant_id=tenant_id,
+                supply_id=supply_id,
+                warehouse_id=warehouse_id,
+                order=order,
+                source_location_id=source_location_id,
+                scan_key=f"atomic-pick-{order_id}",
+            )
+        await session.commit()
+
+    task_before = await async_client.get(
+        f"/operations/packaging-tasks/{task_id}", headers=headers
+    )
+    assert task_before.status_code == 200, task_before.text
+    line_id = task_before.json()["lines"][0]["id"]
+    prepacked = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/lines/{line_id}/pack",
+        headers=headers,
+        json={"quantity": 1, "idempotency_key": "atomic-partial"},
+    )
+    assert prepacked.status_code == 200, prepacked.text
+
+    completed = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/pack-all-and-complete",
+        headers=headers,
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["packaging_task"]["status"] == "done"
+    repeated = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/pack-all-and-complete",
+        headers=headers,
+    )
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json()["packaging_task"]["status"] == "done"
+
+    async with SessionLocal() as session:
+        fulfillments = await session.scalar(
+            select(func.count(FbsPackagingFulfillment.id)).where(
+                FbsPackagingFulfillment.packaging_task_id == task_id,
+                FbsPackagingFulfillment.undone_at.is_(None),
+            )
+        )
+        assert fulfillments == 2
+        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+        balance = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+                InventoryBalance.storage_location_id == sorting.id,
+            )
+        )
+        assert balance is not None
+        assert (
+            int(balance.quantity),
+            int(balance.quantity_unpacked),
+            int(balance.quantity_packed),
+        ) == (
+            2,
+            0,
+            2,
+        )
+        physical_total = await session.scalar(
+            select(func.coalesce(func.sum(InventoryBalance.quantity), 0)).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+            )
+        )
+        assert int(physical_total) == 2
+        task = await session.get(PackagingTask, task_id)
+        assert task is not None
+        assert task.completed_by_user_id is not None
+        assert task.billing_units_packed == 2
+        complete_event_count = await session.scalar(
+            select(func.count(PackagingTaskEvent.id)).where(
+                PackagingTaskEvent.task_id == task_id,
+                PackagingTaskEvent.action == "complete",
+            )
+        )
+        assert complete_event_count == 1
 
 
 # TC-11 — two same-SKU orders fulfilled individually; third pack rejected

@@ -232,27 +232,30 @@ test("TC-NEW-FBS-KIZ-013: operator binds and cancels external KIZ in the WB emul
   await createSupply(page, "kiz");
 
   await page.getByRole("button", { name: "Начать работу с поставкой" }).click();
-  await page.getByLabel("Штрихкод ячейки").fill(seed.location_code);
-  await page.getByRole("button", { name: "Подтвердить ячейку" }).click();
-  await expect(
-    page.getByText(new RegExp(`Ячейка ${seed.location_code} подтверждена`)),
-  ).toBeVisible();
-  for (const [index, order] of orders.entries()) {
-    await page.getByLabel("Штрихкод товара").fill(order.barcode);
+  const pickScanner = page.getByTestId("pick-scan");
+  await pickScanner.fill(seed.location_code);
+  await pickScanner.press("Enter");
+  await expect(page.getByText(new RegExp(`Ячейка ${seed.location_code}`)).first()).toBeVisible();
+  for (const order of orders) {
+    await pickScanner.fill(order.barcode);
     const [pickResponse] = await Promise.all([
       page.waitForResponse(
         (item) =>
-          item.url().includes("/pick/scan-product") && item.status() === 200,
+          item.url().includes("/pick/scan") && item.status() === 200,
       ),
-      page.getByRole("button", { name: "Подобрать товар" }).click(),
+      pickScanner.press("Enter"),
     ]);
-    const pickedWorkspace = (await pickResponse.json()) as {
-      progress: { picked: number; total: number };
+    const picked = (await pickResponse.json()) as {
+      kind: string;
+      picked_qty: number;
+      allocation_quantity: number;
     };
-    expect(pickedWorkspace.progress).toEqual(
-      expect.objectContaining({ picked: index + 1, total: orders.length }),
-    );
+    expect(picked.kind).toBe("product");
+    expect(picked.picked_qty).toBeGreaterThan(0);
+    expect(picked.allocation_quantity).toBeGreaterThan(0);
   }
+  await expect(page.getByTestId("pick-left-qty")).toHaveText("0");
+  await page.getByRole("button", { name: "Завершить подбор" }).click();
 
   await page.getByRole("tab", { name: "Упаковка и маркировка" }).click();
   await expect(page.getByText(/Напечатано 0 из 2/)).toBeVisible();
@@ -340,27 +343,35 @@ test("TC-NEW-FBS-KIZ-013: operator binds and cancels external KIZ in the WB emul
 async function pickAndPack(page: Page, route: RouteName, testInfo: TestInfo) {
   const orders = seed.orders[route];
   await page.getByRole("button", { name: "Начать работу с поставкой" }).click();
-  await page.getByLabel("Штрихкод ячейки").fill(seed.location_code);
-  await page.getByRole("button", { name: "Подтвердить ячейку" }).click();
-  await expect(
-    page.getByText(new RegExp(`Ячейка ${seed.location_code} подтверждена`)),
-  ).toBeVisible();
-  for (const [index, order] of orders.entries()) {
-    await page.getByLabel("Штрихкод товара").fill(order.barcode);
+  // TC-NEW-FBS-PICK-CLEANUP — один общий сканер ведёт FBS от места до товара;
+  // старые отдельные поля и ручной блок больше не участвуют в операции.
+  const pickScanner = page.getByTestId("pick-scan");
+  await expect(page.getByRole("heading", { name: "Подбор на отгрузку" })).toHaveCount(0);
+  await expect(page.getByText("Сканирование подбора")).toHaveCount(0);
+  await expect(page.getByText("Подбор из ячеек")).toHaveCount(0);
+  await pickScanner.fill(seed.location_code);
+  await pickScanner.press("Enter");
+  await expect(page.getByText(new RegExp(`Ячейка ${seed.location_code}`)).first()).toBeVisible();
+  for (const order of orders) {
+    await pickScanner.fill(order.barcode);
     const [pickResponse] = await Promise.all([
       page.waitForResponse(
         (item) =>
-          item.url().includes("/pick/scan-product") && item.status() === 200,
+          item.url().includes("/pick/scan") && item.status() === 200,
       ),
-      page.getByRole("button", { name: "Подобрать товар" }).click(),
+      pickScanner.press("Enter"),
     ]);
-    const pickedWorkspace = (await pickResponse.json()) as {
-      progress: { picked: number; total: number };
+    const picked = (await pickResponse.json()) as {
+      kind: string;
+      picked_qty: number;
+      allocation_quantity: number;
     };
-    expect(pickedWorkspace.progress).toEqual(
-      expect.objectContaining({ picked: index + 1, total: orders.length }),
-    );
+    expect(picked.kind).toBe("product");
+    expect(picked.picked_qty).toBeGreaterThan(0);
+    expect(picked.allocation_quantity).toBeGreaterThan(0);
   }
+  await expect(page.getByTestId("pick-left-qty")).toHaveText("0");
+  await page.getByRole("button", { name: "Завершить подбор" }).click();
   await shot(page, testInfo, `${route}-02-picked`);
 
   await page.getByRole("tab", { name: "Упаковка и маркировка" }).click();
@@ -378,19 +389,33 @@ async function pickAndPack(page: Page, route: RouteName, testInfo: TestInfo) {
     page.waitForRequest(
       (item) =>
         item.url().includes("/operations/packaging-tasks/") &&
-        item.url().endsWith("/complete"),
+        item.url().endsWith("/pack-all-and-complete"),
     ),
     page.waitForResponse(
       (item) =>
         item.url().includes("/operations/packaging-tasks/") &&
-        item.url().endsWith("/complete") &&
+        item.url().endsWith("/pack-all-and-complete") &&
         item.status() === 200,
     ),
     page.getByRole("button", { name: "Всё упаковано" }).click(),
   ]);
-  expect(completeRequest.postDataJSON()).toEqual({ acknowledge_all_packed: false });
-  const completedTask = (await completeResponse.json()) as { status: string };
-  expect(completedTask.status).toBe("done");
+  expect(completeRequest.method()).toBe("POST");
+  expect(completeRequest.postData()).toBeNull();
+  const completedTask = (await completeResponse.json()) as {
+    packaging_task: { status: string };
+  };
+  expect(completedTask.packaging_task.status).toBe("done");
+  const legacyPackCalls = await page.evaluate(() =>
+    performance
+      .getEntriesByType("resource")
+      .map((entry) => entry.name)
+      .filter(
+        (url) =>
+          /\/operations\/packaging-tasks\/[^/]+\/lines\/[^/]+\/pack(?:\?|$)/.test(url) ||
+          /\/operations\/packaging-tasks\/[^/]+\/complete(?:\?|$)/.test(url),
+      ),
+  );
+  expect(legacyPackCalls).toEqual([]);
   await expect(page.getByText("Упаковка завершена.")).toBeVisible();
 
   // Две разные кнопки, их легко перепутать:

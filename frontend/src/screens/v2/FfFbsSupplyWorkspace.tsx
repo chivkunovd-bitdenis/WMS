@@ -50,7 +50,6 @@ import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { buildFbsPickingListPrintHtml, fbsBoxOperationsDisabled, ordersWord } from './fbsUx'
 import {
   confirmFbsPrintApplied,
-  confirmFbsManualPick,
   addFbsOrdersToSupply,
   assignFbsPackingBoxOrders,
   clearFbsPackingBox,
@@ -70,9 +69,6 @@ import {
   removeFbsPackingBoxOrder,
   retryFbsPackingBoxQr,
   retryFbsSupplyQr,
-  scanFbsPickLocation,
-  scanFbsPickProduct,
-  selectFbsManualPickLocation,
   skipFbsSupplyHonestSign,
   startFbsSupplyWork,
   undoFbsPick,
@@ -80,7 +76,6 @@ import {
   validateFbsKiz,
   type FbsKizLookup,
   type FbsOrderPrintTapeRequest,
-  type FbsPickLocation,
   type FbsPrintAsset,
   type FbsPrintBatch,
   type FbsDeliveryPreflight,
@@ -281,13 +276,9 @@ export function FfFbsSupplyWorkspace({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [locationBarcode, setLocationBarcode] = useState('')
-  const [productBarcode, setProductBarcode] = useState('')
-  const [pickLocation, setPickLocation] = useState<FbsPickLocation | null>(null)
   const [printBatch, setPrintBatch] = useState<FbsPrintBatch | null>(null)
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
   const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
-  const [manualPickLocationRows, setManualPickLocationRows] = useState<Record<string, string[]>>({})
   const [boxCount, setBoxCount] = useState('1')
   const [boxesWithoutDistribution, setBoxesWithoutDistribution] = useState(false)
   const [boxAssignTarget, setBoxAssignTarget] = useState<string | null>(null)
@@ -361,8 +352,6 @@ export function FfFbsSupplyWorkspace({
     setStage(initialWorkspace ? visualStage(initialWorkspace.stage) : 'composition')
     setDeliveryKey(persistentOperationKey(supplyId, 'delivery'))
     setPrintBatch(null)
-    setPickLocation(null)
-    setManualPickLocationRows({})
     setBoxCount('1')
     setBoxesWithoutDistribution(false)
     setBoxAssignTarget(null)
@@ -500,40 +489,6 @@ export function FfFbsSupplyWorkspace({
     if (next) setPlannedShipmentDateDraft(next.supply.planned_shipment_date ?? '')
   }
 
-  const scanLocation = async () => {
-    if (!workspace || !locationBarcode.trim()) return
-    setBusy(true)
-    setError(null)
-    try {
-      const result = await scanFbsPickLocation(
-        token,
-        authHeaders,
-        workspace.supply.id,
-        locationBarcode.trim(),
-      )
-      setPickLocation(result)
-      setProductBarcode('')
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Ячейка не подтверждена.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const scanProduct = async () => {
-    if (!workspace || !pickLocation || !productBarcode.trim()) return
-    const key = createFbsIdempotencyKey()
-    const next = await run(
-      () =>
-        scanFbsPickProduct(token, authHeaders, workspace.supply.id, {
-          location_id: pickLocation.id,
-          product_barcode: productBarcode.trim(),
-          idempotency_key: key,
-        }),
-      'Товар подобран. Прогресс синхронизирован для всех операторов.',
-    )
-    if (next) setProductBarcode('')
-  }
 
   // KIZ-01: сканер стреляет в активное поле; пока запрос идёт, поле disabled и фокус
   // теряется — без возврата фокуса следующий скан уходит в никуда. Тот же приём,
@@ -629,32 +584,6 @@ export function FfFbsSupplyWorkspace({
     },
     [kizScanBusy, kizScanValue, kizScanActive, scanKizCode, scanKizSticker],
   )
-
-  const pickFromCell = async (locationId: string, productId: string, orderIds: string[]) => {
-    if (!workspace || orderIds.length === 0) return
-    setBusy(true)
-    setError(null)
-    setNotice(null)
-    try {
-      await selectFbsManualPickLocation(token, authHeaders, workspace.supply.id, locationId)
-      let next = workspace
-      for (const orderId of orderIds) {
-        next = await confirmFbsManualPick(token, authHeaders, workspace.supply.id, {
-          location_id: locationId,
-          product_id: productId,
-          order_id: orderId,
-          idempotency_key: createFbsIdempotencyKey(),
-        })
-      }
-      setWorkspace(next)
-      setStage(visualStage(next.stage))
-      setNotice(`Снято из ячейки: ${orderIds.length} шт.`)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось подтвердить подбор из ячейки.')
-    } finally {
-      setBusy(false)
-    }
-  }
 
   const requestPrintBatch = async (orderIds?: string[], retryMissing = false) => {
     if (!workspace) return
@@ -1036,45 +965,22 @@ export function FfFbsSupplyWorkspace({
     setError(null)
     setNotice(null)
     try {
-      let current = packagingTask
-      // Упаковка больше не падает из-за остатка в ячейке, но сервер может сказать, что
-      // списал из другой ячейки или не списал вовсе. Молчать об этом нельзя — собираем
-      // все предупреждения и показываем одним сообщением в конце.
-      const stockWarnings: string[] = []
-      for (const line of current.lines) {
-        const remaining = line.qty_need_pack - line.qty_packed_in_task
-        if (remaining <= 0) continue
-        const response = await fetch(apiUrl(`/operations/packaging-tasks/${current.id}/lines/${line.id}/pack`), {
-          method: 'POST',
-          headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-          body: JSON.stringify({ quantity: remaining }),
-        })
-        if (!response.ok) {
-          setError(await readApiErrorMessage(response))
-          return
-        }
-        const packed = (await response.json()) as {
-          packaging_task: PackagingTask
-          warnings?: string[] | null
-        }
-        for (const warning of packed.warnings ?? []) {
-          if (!stockWarnings.includes(warning)) stockWarnings.push(warning)
-        }
-        current = packed.packaging_task
-      }
-      const done = await fetch(apiUrl(`/operations/packaging-tasks/${current.id}/complete`), {
+      const done = await fetch(apiUrl(`/operations/packaging-tasks/${packagingTask.id}/pack-all-and-complete`), {
         method: 'POST',
-        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ acknowledge_all_packed: false }),
+        headers: authHeaders(token),
       })
       if (!done.ok) {
         setError(await readApiErrorMessage(done))
         return
       }
-      setPackagingTask((await done.json()) as PackagingTask)
+      const packed = (await done.json()) as {
+        packaging_task: PackagingTask
+        warnings?: string[] | null
+      }
+      setPackagingTask(packed.packaging_task)
       setNotice(
-        stockWarnings.length > 0
-          ? `Упаковка завершена. ${stockWarnings.join(' ')}`
+        (packed.warnings?.length ?? 0) > 0
+          ? `Упаковка завершена. ${packed.warnings?.join(' ')}`
           : 'Упаковка завершена.',
       )
       await load()
@@ -1161,73 +1067,6 @@ export function FfFbsSupplyWorkspace({
     }
     return [...grouped.values()]
   }, [fullTapeOrders, workspace])
-  const manualPickRows = useMemo(() => {
-    if (!workspace) return []
-    const byProduct = new Map<string, typeof workspace.orders>()
-    for (const order of workspace.orders) {
-      if (!order.product.id || order.pick.status === 'picked' || order.pack.status === 'packed') continue
-      const current = byProduct.get(order.product.id) ?? []
-      current.push(order)
-      byProduct.set(order.product.id, current)
-    }
-    return [...byProduct.entries()].flatMap(([productId, orders]) => {
-      const locations = new Map<string, { id: string; code: string; available: number }>()
-      for (const order of orders) for (const location of order.inventory.locations) {
-        if (location.available_unpacked <= 0) continue
-        const current = locations.get(location.id)
-        if (!current || location.available_unpacked > current.available) {
-          locations.set(location.id, { id: location.id, code: location.code, available: location.available_unpacked })
-        }
-      }
-      const sortedLocations = [...locations.values()].sort((a, b) => a.code.localeCompare(b.code))
-      if (sortedLocations.length === 0) return []
-      const autoLocationIds: string[] = []
-      let remainingOrders = orders.length
-      for (const location of sortedLocations) {
-        if (remainingOrders <= 0) break
-        autoLocationIds.push(location.id)
-        remainingOrders -= Math.min(location.available, remainingOrders)
-      }
-      const validLocationIds = new Set(sortedLocations.map((location) => location.id))
-      const configuredLocationIds = manualPickLocationRows[productId]
-      const manualDistribution = Boolean(configuredLocationIds)
-      const selectedLocationIds = (configuredLocationIds ?? autoLocationIds).filter((locationId, index, list) =>
-        validLocationIds.has(locationId) && list.indexOf(locationId) === index,
-      )
-      if (selectedLocationIds.length === 0) selectedLocationIds.push(sortedLocations[0].id)
-      let orderIndex = 0
-      return selectedLocationIds.flatMap((locationId, rowIndex) => {
-        const location = sortedLocations.find((item) => item.id === locationId) ?? sortedLocations[0]
-        const remainingForRows = orders.length - orderIndex
-        if (remainingForRows <= 0) return []
-        const laterRows = selectedLocationIds.length - rowIndex - 1
-        const maxForThisRow = manualDistribution
-          ? Math.max(1, remainingForRows - laterRows)
-          : remainingForRows
-        const count = Math.min(location.available, maxForThisRow)
-        if (count <= 0) return []
-        const orderIds = orders.slice(orderIndex, orderIndex + count).map((order) => order.id)
-        orderIndex += count
-        const selectedByOtherRows = new Set(selectedLocationIds.filter((_, index) => index !== rowIndex))
-        const locationOptions = sortedLocations.filter((item) => item.id === location.id || !selectedByOtherRows.has(item.id))
-        const nextLocation = sortedLocations.find((item) => !selectedLocationIds.includes(item.id))
-        const canAddLocationRow =
-          rowIndex === selectedLocationIds.length - 1 &&
-          selectedLocationIds.length < Math.min(orders.length, sortedLocations.length)
-        return [{
-          productId,
-          rowIndex,
-          selectedLocationIds,
-          location,
-          locationOptions,
-          nextLocationId: canAddLocationRow ? nextLocation?.id ?? null : null,
-          orderIds,
-          product: orders[0].product,
-          identifiers: [orders[0].product.seller_article, orders[0].product.barcode].filter(Boolean).join(' · '),
-        }]
-      })
-    })
-  }, [manualPickLocationRows, workspace])
   const printPickingList = () => {
     if (!workspace) return
     const printWindow = window.open('', '_blank')
@@ -1299,6 +1138,14 @@ export function FfFbsSupplyWorkspace({
   const deliveryConfirmed = deliverySubmitted
     || workspace?.stage === 'tracking'
     || ['in_delivery', 'done'].includes(workspace?.supply.status ?? '')
+  const failedDeliveryChecks = deliveryPreflight?.checks.filter((check) => !check.ok) ?? []
+  const deliveryPreflightMessage = deliveryPreflightLoading
+    ? `Проверяем готовность поставки в ${providerName}…`
+    : deliveryPreflightError
+      ?? (failedDeliveryChecks.length > 0
+        ? failedDeliveryChecks.map((check) => check.message).join('\n')
+        : deliveryPreflight?.checks.find((check) => check.code === 'marking_allowed')?.message
+          ?? (deliveryPreflight ? 'Все проверки пройдены. Поставку можно передать.' : ''))
   const packagingEditable = !deliveryConfirmed
   const assignedBoxOrderIds = new Set(workspace?.boxes.flatMap((box) => box.assigned_order_ids) ?? [])
   const availableForBox = (workspace?.orders ?? []).filter(
@@ -1599,11 +1446,6 @@ export function FfFbsSupplyWorkspace({
         <Box sx={{ p: { xs: 1.5, md: 2.5 }, minHeight: '100%' }}>
           {error ? <Alert severity="error" sx={{ mb: 2 }} action={retryAction ? <Button color="inherit" size="small" onClick={retryAction}>Повторить</Button> : undefined}>{error}</Alert> : null}
           {notice ? <Alert severity="success" sx={{ mb: 2 }}>{notice}</Alert> : null}
-          {workspace?.picking_auto_passed_reason ? (
-            <Alert severity="info" sx={{ mb: 2 }} data-testid="fbs-20-picking-auto-passed">
-              {workspace.picking_auto_passed_reason}
-            </Alert>
-          ) : null}
           {stageIsCurrent && stageBlockers.length ? (
             <Alert severity="warning" sx={{ mb: 2 }}>
               <Typography variant="subtitle2">Что нужно исправить</Typography>
@@ -1683,108 +1525,27 @@ export function FfFbsSupplyWorkspace({
           {workspace && stage === 'picking' ? (
             <Stack spacing={2}>
               {!stageIsCurrent ? <Alert severity="success">Подбор завершён. Этот этап доступен только для просмотра.</Alert> : null}
+              {allPicked && stageIsCurrent ? <Alert severity="success">Все товары подобраны. Перейдите к упаковке.</Alert> : null}
+              <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+                <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={printPickingList} data-testid="fbs-pick-list-print">
+                  Печать листа подбора
+                </Button>
+              </Stack>
               {/* Тот же экран подбора, что в документе отгрузки: строка идёт от
                   товара, видно где он лежит и сколько снять. Владелец требовал
                   одинаковый инструмент в обоих подборах. */}
               {supplyId ? (
                 <Box data-testid="fbs-pick-unified">
-                  <FfUnloadPickPage token={token} requestId={supplyId} source="fbs" />
+                  <FfUnloadPickPage
+                    token={token}
+                    requestId={supplyId}
+                    source="fbs"
+                    hideHeader
+                    onPaused={onClose}
+                    onFinished={() => { void load() }}
+                  />
                 </Box>
               ) : null}
-              {addressStorageEnabled ? <Paper variant="outlined" sx={{ p: 2 }}>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'flex-start' }, mb: 2 }}>
-                  <Box>
-                    <Typography variant="h6">Сканирование подбора</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Сначала подтвердите ячейку, затем сканируйте товары. Прогресс хранится на сервере.
-                    </Typography>
-                  </Box>
-                  <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={printPickingList} data-testid="fbs-pick-list-print">
-                    Печать листа подбора
-                  </Button>
-                </Stack>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-                  <TextField label="Штрихкод ячейки" value={locationBarcode} onChange={(e) => setLocationBarcode(e.target.value)} disabled={!stageIsCurrent || allPicked} onKeyDown={(e) => { if (e.key === 'Enter') void scanLocation() }} />
-                  <Button variant="outlined" onClick={() => void scanLocation()} disabled={!stageIsCurrent || allPicked}>Подтвердить ячейку</Button>
-                  <TextField label="Штрихкод товара" value={productBarcode} onChange={(e) => setProductBarcode(e.target.value)} disabled={!stageIsCurrent || !pickLocation || allPicked} onKeyDown={(e) => { if (e.key === 'Enter') void scanProduct() }} sx={{ flex: 1 }} />
-                  <Button variant="contained" onClick={() => void scanProduct()} disabled={!stageIsCurrent || !pickLocation || !productBarcode.trim() || allPicked}>Подобрать товар</Button>
-                </Stack>
-                {pickLocation ? <Alert severity="success" sx={{ mt: 2 }}>Ячейка {pickLocation.code} подтверждена · {pickLocation.warehouse_name}</Alert> : null}
-                {allPicked ? <Alert severity="success" sx={{ mt: 2 }}>Все товары подобраны. Перейдите к упаковке.</Alert> : null}
-              </Paper> : <Alert severity={allPicked ? 'success' : 'info'} data-testid="fbs-picking-without-cells">{allPicked ? 'Все товары подобраны. Перейдите к упаковке.' : 'Адресное хранение выключено: подбор выполняется по товару без выбора места.'}</Alert>}
-              {addressStorageEnabled ? <Paper variant="outlined" sx={{ p: 2 }} data-testid="fbs-manual-picking">
-                <Typography variant="h6">Подбор из ячеек</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>Сканер остаётся доступен выше. Здесь можно снять требуемое количество из конкретной ячейки вручную.</Typography>
-                {manualPickRows.length === 0 ? <Alert severity="info">Нет товаров, ожидающих ручного подбора из ячеек.</Alert> : (
-                  <Stack spacing={1}>
-                    {manualPickRows.map((row) => (
-                      <Stack
-                        key={`${row.productId}-${row.rowIndex}-${row.location.id}`}
-                        direction={{ xs: 'column', md: 'row' }}
-                        spacing={1.5}
-                        sx={{ alignItems: { md: 'center' }, p: 1.25, bgcolor: 'action.hover', borderRadius: 1.5 }}
-                      >
-                        <ProductPhotoThumb src={row.product.image_url} alt={row.product.name} size={44} />
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 700 }}>{row.product.name}</Typography>
-                          {row.identifiers ? <Typography variant="caption" color="text.secondary">{row.identifiers}</Typography> : null}
-                        </Box>
-                        <Stack direction="row" spacing={0.75} sx={{ width: { xs: '100%', md: 232 } }}>
-                          <TextField
-                            select
-                            size="small"
-                            label="Ячейка"
-                            value={row.location.id}
-                            disabled={!stageIsCurrent || busy}
-                            onChange={(event) => {
-                              const locationId = String(event.target.value)
-                              setManualPickLocationRows((current) => {
-                                const currentRows = current[row.productId] ?? row.selectedLocationIds
-                                const nextRows = [...currentRows]
-                                nextRows[row.rowIndex] = locationId
-                                return { ...current, [row.productId]: nextRows }
-                              })
-                            }}
-                            sx={{ flex: 1 }}
-                          >
-                            {row.locationOptions.map((location) => (
-                              <MenuItem key={location.id} value={location.id}>{location.code}</MenuItem>
-                            ))}
-                          </TextField>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            disabled={!stageIsCurrent || busy || !row.nextLocationId}
-                            aria-label="Добавить ячейку"
-                            onClick={() => {
-                              if (!row.nextLocationId) return
-                              setManualPickLocationRows((current) => {
-                                const currentRows = current[row.productId] ?? row.selectedLocationIds
-                                return { ...current, [row.productId]: [...currentRows, row.nextLocationId!] }
-                              })
-                            }}
-                            sx={{ minWidth: 38, px: 0 }}
-                          >
-                            +
-                          </Button>
-                        </Stack>
-                        <Box sx={{ minWidth: { md: 150 } }}>
-                          <Typography variant="body2">К снятию: {row.orderIds.length} шт.</Typography>
-                          <Typography variant="caption" color="text.secondary">Доступно: {row.location.available} шт.</Typography>
-                        </Box>
-                        <Button
-                          variant="contained"
-                          size="small"
-                          disabled={!stageIsCurrent || busy}
-                          onClick={() => void pickFromCell(row.location.id, row.productId, row.orderIds)}
-                        >
-                          Снять {row.orderIds.length} шт.
-                        </Button>
-                      </Stack>
-                    ))}
-                  </Stack>
-                )}
-              </Paper> : null}
               {nextStageControl('picking')}
             </Stack>
           ) : null}
@@ -2469,23 +2230,18 @@ export function FfFbsSupplyWorkspace({
           </Typography>
           <Typography
             variant="body2"
-            color={deliveryPreflightError || deliveryPreflight?.checks.some((check) => check.code === 'marking_not_allowed') ? 'error.main' : 'text.secondary'}
-            sx={{ mt: 1.5 }}
+            color={deliveryPreflightError || failedDeliveryChecks.length > 0 ? 'error.main' : 'text.secondary'}
+            sx={{ mt: 1.5, whiteSpace: 'pre-line' }}
             data-testid="fbs-delivery-marking-status"
           >
-            {deliveryPreflightLoading
-              ? `Проверяем маркировку в ${providerName}…`
-              : deliveryPreflightError
-                ?? deliveryPreflight?.checks.find((check) => check.code === 'marking_not_allowed')?.message
-                ?? deliveryPreflight?.checks.find((check) => check.code === 'marking_allowed')?.message
-                ?? (deliveryPreflight ? `${providerName}: маркировка не требуется.` : '')}
+            {deliveryPreflightMessage}
           </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeliverConfirmOpen(false)}>Не передавать</Button>
           <Button
             variant="contained"
-            disabled={deliveryPreflightLoading || !deliveryPreflight}
+            disabled={deliveryPreflightLoading || !deliveryPreflight?.can_deliver}
             onClick={() => {
               setDeliverConfirmOpen(false)
               void deliver()
