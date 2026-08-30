@@ -668,6 +668,16 @@ export function FfSuppliesShipmentsPage({
     if (!openMp || !isMpShipmentsPage) {
       return
     }
+    // Тот же документ уже открыт: так бывает после «Завершить подбор» —
+    // экран подбора просит список открыть документ, из которого сам и запущен.
+    // Обнулять данные тут нельзя: идентификатор не меняется, перезагрузка не
+    // запустится, и окно останется пустым. Только убираем параметр из адреса.
+    if (docModalId === openMp && docModal === 'marketplace_unload') {
+      const cleaned = new URLSearchParams(searchParams)
+      cleaned.delete('open_mp')
+      setSearchParams(cleaned, { replace: true })
+      return
+    }
     setUnloadDetail(null)
     setDivergeDetail(null)
     setModalError(null)
@@ -676,7 +686,7 @@ export function FfSuppliesShipmentsPage({
     const next = new URLSearchParams(searchParams)
     next.delete('open_mp')
     setSearchParams(next, { replace: true })
-  }, [isMpShipmentsPage, searchParams, setSearchParams])
+  }, [docModal, docModalId, isMpShipmentsPage, searchParams, setSearchParams])
 
   useEffect(() => {
     if (docModal !== 'marketplace_unload' || docModalId == null) {
