@@ -338,6 +338,64 @@ test('inbound receiving v2 — multiple boxes stay independent', async ({ page }
   await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('В сортировке');
 });
 
+// TC-NEW-IN-07 — грузоместо наполняется теми же двумя действиями, что и короб.
+// Given: открытая приёмка, товар заявки и созданное грузоместо;
+// When: оператор задаёт количество вручную, затем сканирует ещё одну штуку;
+// Then: обе ручки меняют одно грузоместо, а состав виден в его карточке после закрытия dialog.
+test('inbound receiving v2 — cargo place manual quantity and scan stay visible', async ({ page }) => {
+  const seed = await seedFfSellerInbound(page, `rcv-cargo-fill-${Date.now()}`);
+  await apiCreateSubmittedInbound(page.request, seed, {
+    plannedBoxes: 1,
+    expectedQty: 4,
+  });
+
+  await loginFfAdmin(page, seed.adminEmail, seed.password);
+  await page.getByTestId('nav-ff-reception').click();
+  await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
+  await startFfReceivingFromSubmitted(page);
+  await expandInboundPackages(page);
+
+  await page.getByTestId('ff-inbound-create-cargo-places').click();
+  await expect(page.getByTestId('ff-inbound-cargo-places-dialog')).toBeVisible();
+  await Promise.all([
+    waitForPostOk(page, INBOUND_API, (url) => url.endsWith('/cargo-places')),
+    page.getByTestId('ff-inbound-cargo-places-create').click(),
+  ]);
+  const cargoPlace = page.getByTestId('ff-inbound-cargo-place-row').first();
+  await expect(cargoPlace).toBeVisible();
+  await cargoPlace.getByRole('button', { name: 'Наполнить' }).click();
+  await expect(page.getByTestId('ff-inbound-box-add-title')).toContainText('Наполнить грузоместо');
+
+  const quantity = page.getByTestId('ff-inbound-box-add-manual-qty').first();
+  await quantity.fill('2');
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'PUT' &&
+        response.url().includes('/cargo-places/') &&
+        response.url().includes(`/lines/${seed.productId}`) &&
+        response.status() === 200,
+    ),
+    quantity.press('Enter'),
+  ]);
+  await expect(quantity).toHaveValue('2');
+
+  await page.getByTestId('ff-inbound-box-add-scan-input').fill(seed.sku);
+  await Promise.all([
+    waitForPostOk(
+      page,
+      INBOUND_API,
+      (url) => url.includes('/cargo-places/') && url.endsWith('/scan'),
+    ),
+    page.getByTestId('ff-inbound-box-add-scan-submit').click(),
+  ]);
+  await expect(quantity).toHaveValue('3');
+  await page.getByTestId('ff-inbound-box-add-dismiss').click();
+  await expect(page.getByTestId('ff-inbound-box-add-dialog')).toHaveCount(0);
+  await expect(cargoPlace).toContainText(seed.sku);
+  await expect(cargoPlace).toContainText('3');
+});
+
 // TC-NEW-IN-03 — чужой штрихкод в общую приёмку → тост-ошибка.
 test('inbound receiving v2 — foreign barcode shows toast error', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `rcv-foreign-${Date.now()}`);

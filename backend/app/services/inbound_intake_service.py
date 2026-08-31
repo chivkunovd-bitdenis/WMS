@@ -274,6 +274,7 @@ async def get_request(
             ),
             selectinload(InboundIntakeRequest.boxes).options(
                 selectinload(InboundIntakeBox.lines).selectinload(InboundIntakeBoxLine.product),
+                selectinload(InboundIntakeBox.pallet),
             ),
             selectinload(InboundIntakeRequest.cargo_places)
             .selectinload(InboundIntakeCargoPlace.lines)

@@ -160,6 +160,8 @@ class InboundIntakeBoxOut(BaseModel):
     intake_closed_at: str | None = None
     is_open: bool = False
     remaining_qty: int = 0
+    pallet_id: str | None = None
+    pallet_code: str | None = None
     lines: list[InboundIntakeBoxLineOut] = Field(default_factory=list)
 
 
@@ -329,6 +331,12 @@ def _box_out(b: InboundIntakeBox) -> InboundIntakeBoxOut:
         intake_closed_at=b.intake_closed_at.isoformat() if b.intake_closed_at else None,
         is_open=is_open,
         remaining_qty=svc.box_remaining_qty(b),
+        pallet_id=str(b.pallet_id) if b.pallet_id is not None else None,
+        pallet_code=(
+            b.pallet.code
+            if b.pallet_id is not None and "pallet" not in sa_inspect(b).unloaded
+            else None
+        ),
         lines=lines_out,
     )
 

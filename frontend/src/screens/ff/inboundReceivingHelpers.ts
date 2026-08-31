@@ -10,6 +10,10 @@ export type InboundBoxRef = {
   lines: InboundBoxLineRef[]
 }
 
+export type InboundCargoPlaceRef = {
+  lines?: InboundBoxLineRef[]
+}
+
 export type InboundLineRef = {
   sku_code?: string
   product_name?: string
@@ -105,6 +109,28 @@ export function boxTotalForProduct(boxes: InboundBoxRef[], productId: string): n
   return sum
 }
 
+export function cargoPlaceTotalForProduct(
+  cargoPlaces: InboundCargoPlaceRef[],
+  productId: string,
+): number {
+  let sum = 0
+  for (const place of cargoPlaces) {
+    const line = place.lines?.find((candidate) => candidate.product_id === productId)
+    if (line) {
+      sum += line.quantity
+    }
+  }
+  return sum
+}
+
+export function containerTotalForProduct(
+  boxes: InboundBoxRef[],
+  cargoPlaces: InboundCargoPlaceRef[],
+  productId: string,
+): number {
+  return boxTotalForProduct(boxes, productId) + cargoPlaceTotalForProduct(cargoPlaces, productId)
+}
+
 /** Mirrors backend effective_actual_qty: API field during receiving, else loose + boxes. */
 export function effectiveActualQty(
   line: InboundLineRef,
@@ -126,12 +152,16 @@ export function looseQtyFromDisplayedTotal(
   displayedTotal: number,
   line: InboundLineRef,
   boxes: InboundBoxRef[],
-): number {
-  const boxTotal = boxTotalForProduct(boxes, line.product_id)
-  if (boxTotal <= 0) {
+  cargoPlaces: InboundCargoPlaceRef[] = [],
+): number | null {
+  const containerTotal = containerTotalForProduct(boxes, cargoPlaces, line.product_id)
+  if (containerTotal <= 0) {
     return displayedTotal
   }
-  return Math.max(0, displayedTotal - boxTotal)
+  if (displayedTotal < containerTotal) {
+    return null
+  }
+  return displayedTotal - containerTotal
 }
 
 export function scanErrorMessageRu(code: string): string {

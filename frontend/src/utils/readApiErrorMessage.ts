@@ -73,6 +73,17 @@ const API_DETAIL_MESSAGES_RU: Record<string, string> = {
   box_already_attached: 'Этот короб уже привязан к другой отгрузке.',
   warehouse_mismatch: 'Короб создан на другом складе.',
   box_not_empty: 'Сначала уберите товар из короба.',
+  pallet_not_found: 'Палета не найдена. Обновите документ и повторите.',
+  pallet_disbanded: 'Палета расформирована — соберите новую.',
+  containers_required: 'Отметьте хотя бы один короб.',
+  cargo_place_not_found: 'Грузоместо не найдено на этом складе. Обновите документ.',
+  container_wrong_warehouse:
+    'Короб лежит на другом складе — на эту палету его не поставить.',
+  warehouse_not_found: 'Склад приёмки не найден.',
+  inbound_request_not_found: 'Документ приёмки не найден.',
+  inbound_request_required: 'Не указан документ приёмки.',
+  inbound_request_not_receiving: 'Палету можно собрать только во время приёмки.',
+  pallet_identifier_conflict: 'Не удалось выдать номер палеты, повторите.',
 }
 
 export async function readApiErrorMessage(res: Response): Promise<string> {

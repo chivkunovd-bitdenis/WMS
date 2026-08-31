@@ -12,13 +12,15 @@ from app.api.deps import (
     require_catalog_cells_read_access,
     require_cells_access,
     require_fulfillment_admin,
+    require_reception_access,
 )
 from app.db.session import get_db
+from app.models.pallet import Pallet
 from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.models.warehouse import Warehouse
+from app.services import pallet_service, warehouse_map_service
 from app.services import tenant_settings_service as tenant_settings_svc
-from app.services import warehouse_map_service
 from app.services.catalog_service import (
     CatalogError,
     create_location,
@@ -187,6 +189,36 @@ class WarehouseMapDisbandOut(BaseModel):
     disbanded: bool
 
 
+class PalletCombineIn(BaseModel):
+    pallet_id: uuid.UUID | None = None
+    inbound_request_id: uuid.UUID | None = None
+    inbound_box_ids: list[uuid.UUID] = Field(default_factory=list)
+    cargo_place_ids: list[uuid.UUID] = Field(default_factory=list)
+    warehouse_box_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
+class PalletOut(BaseModel):
+    id: str
+    code: str
+    barcode: str
+    storage_location_id: str | None = None
+    storage_location_code: str | None = None
+
+
+def _pallet_out(pallet: Pallet) -> PalletOut:
+    return PalletOut(
+        id=str(pallet.id),
+        code=pallet.code,
+        barcode=pallet.barcode,
+        storage_location_id=(
+            str(pallet.storage_location_id) if pallet.storage_location_id is not None else None
+        ),
+        storage_location_code=(
+            pallet.storage_location.code if pallet.storage_location is not None else None
+        ),
+    )
+
+
 class SortingObjectOut(BaseModel):
     id: str
     kind: Literal["pallet", "box", "cargo_place"]
@@ -273,6 +305,25 @@ def _map_error(exc: WarehouseMapError) -> HTTPException:
     return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.code)
 
 
+def _map_pallet_error(exc: pallet_service.PalletServiceError) -> HTTPException:
+    if exc.code in {
+        "pallet_not_found",
+        "box_not_found",
+        "cargo_place_not_found",
+        "warehouse_not_found",
+        "inbound_request_not_found",
+    }:
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
+    if exc.code in {
+        "pallet_disbanded",
+        "pallet_identifier_conflict",
+        "container_wrong_warehouse",
+        "inbound_request_not_receiving",
+    }:
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
+    return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.code)
+
+
 @router.get("/{warehouse_id}/map", response_model=WarehouseMapOut)
 async def get_warehouse_map_route(
     warehouse_id: uuid.UUID,
@@ -336,6 +387,75 @@ async def disband_warehouse_map_pallet_route(
         await session.rollback()
         raise _map_error(exc) from None
     return WarehouseMapDisbandOut.model_validate(result)
+
+
+@router.get("/{warehouse_id}/pallets", response_model=list[PalletOut])
+async def list_warehouse_pallets_route(
+    warehouse_id: uuid.UUID,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    inbound_request_id: Annotated[uuid.UUID | None, Query()] = None,
+) -> list[PalletOut]:
+    pallets = await pallet_service.list_pallets(
+        session,
+        user.tenant_id,
+        warehouse_id=warehouse_id,
+        inbound_request_id=inbound_request_id,
+    )
+    return [_pallet_out(pallet) for pallet in pallets]
+
+
+@router.post("/{warehouse_id}/pallets/combine", response_model=PalletOut)
+async def combine_warehouse_pallet_route(
+    warehouse_id: uuid.UUID,
+    body: PalletCombineIn,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> PalletOut:
+    try:
+        if body.inbound_request_id is None:
+            raise pallet_service.PalletServiceError("inbound_request_required")
+        await pallet_service.assert_receiving_inbound_request(
+            session,
+            user.tenant_id,
+            warehouse_id,
+            body.inbound_request_id,
+        )
+        if body.pallet_id is None:
+            pallet = await pallet_service.create_pallet(
+                session,
+                user.tenant_id,
+                warehouse_id=warehouse_id,
+                inbound_request_id=body.inbound_request_id,
+                commit=False,
+            )
+        else:
+            pallet = await pallet_service.get_pallet(
+                session,
+                user.tenant_id,
+                body.pallet_id,
+                warehouse_id=warehouse_id,
+                inbound_request_id=body.inbound_request_id,
+            )
+        await pallet_service.combine_into_pallet(
+            session,
+            user.tenant_id,
+            pallet.id,
+            inbound_box_ids=body.inbound_box_ids,
+            cargo_place_ids=body.cargo_place_ids,
+            warehouse_box_ids=body.warehouse_box_ids,
+            inbound_request_id=body.inbound_request_id,
+        )
+        loaded = await pallet_service.get_pallet(
+            session,
+            user.tenant_id,
+            pallet.id,
+            warehouse_id=warehouse_id,
+        )
+        return _pallet_out(loaded)
+    except pallet_service.PalletServiceError as exc:
+        await session.rollback()
+        raise _map_pallet_error(exc) from None
 
 
 @router.get("/{warehouse_id}/sorting-objects", response_model=SortingObjectsOut)
