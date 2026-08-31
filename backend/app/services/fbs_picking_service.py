@@ -7,7 +7,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -26,7 +27,12 @@ from app.models.fbs_order_pick import (
     FbsOrderPick,
     FbsOrderPickEvent,
 )
-from app.models.fbs_supply import FbsSupply
+from app.models.fbs_supply import (
+    FBS_SUPPLY_STATUS_DONE,
+    FBS_SUPPLY_STATUS_IN_DELIVERY,
+    FbsSupply,
+)
+from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
@@ -363,6 +369,71 @@ async def _active_assignments_for_product_location(
     )
     assignments.sort(key=lambda assignment: assignment.picked_at, reverse=True)
     return assignments
+
+
+async def _active_pick_count_for_sorting_source(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+    container_kind: ContainerKind | None,
+    container_id: uuid.UUID | None,
+) -> int:
+    if container_kind is None and container_id is None:
+        # A pick from another location physically transfers the unit into
+        # sorting without a container. A direct loose pick from sorting uses
+        # the same physical pool.
+        wb_container_scope = or_(
+            FbsOrderPick.source_storage_location_id != storage_location_id,
+            and_(
+                FbsOrderPick.source_storage_location_id == storage_location_id,
+                FbsOrderPick.source_container_kind.is_(None),
+                FbsOrderPick.source_container_id.is_(None),
+            ),
+        )
+    else:
+        wb_container_scope = and_(
+            FbsOrderPick.source_storage_location_id == storage_location_id,
+            FbsOrderPick.source_container_kind == container_kind,
+            FbsOrderPick.source_container_id == container_id,
+        )
+    wb_count = await session.scalar(
+        select(func.count(FbsOrderPick.id))
+        .join(FbsSupply, FbsSupply.id == FbsOrderPick.fbs_supply_id)
+        .where(
+            FbsOrderPick.tenant_id == tenant_id,
+            FbsOrderPick.product_id == product_id,
+            FbsOrderPick.sorting_storage_location_id == storage_location_id,
+            FbsOrderPick.undone_at.is_(None),
+            FbsSupply.status.notin_(
+                (FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE)
+            ),
+            wb_container_scope,
+        )
+    )
+    # Ozon position picks currently retain the source location but not the
+    # container reference. Counting all of them at this sorting location is
+    # conservative: it may ask the operator to choose another source, but it
+    # can never assign one physical unit twice.
+    ozon_count = await session.scalar(
+        select(func.count(FbsOrderProductPick.id))
+        .join(FbsSupply, FbsSupply.id == FbsOrderProductPick.fbs_supply_id)
+        .where(
+            FbsOrderProductPick.tenant_id == tenant_id,
+            FbsOrderProductPick.product_id == product_id,
+            FbsOrderProductPick.sorting_storage_location_id == storage_location_id,
+            FbsOrderProductPick.undone_at.is_(None),
+            FbsSupply.status.notin_(
+                (FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE)
+            ),
+            (
+                FbsOrderProductPick.source_storage_location_id == storage_location_id
+                if container_id is not None
+                else True
+            ),
+        )
+    )
+    return int(wb_count or 0) + int(ozon_count or 0)
 
 
 def _pending_order_ids_for_product(
@@ -998,7 +1069,37 @@ async def scan_pick_product(
             context={"order_id": str(target_order.id)},
         )
 
-    if container_id is None:
+    sorting_location = await get_or_create_sorting_location(session, tenant_id, supply.warehouse_id)
+    if location.id == sorting_location.id:
+        # No physical transfer happens when the source is already sorting, so
+        # lock the exact balance row and subtract active pick assignments. This
+        # makes the last unit safe under concurrent scan/manual requests.
+        balance_stmt = select(InventoryBalance.id).where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id == product.id,
+            InventoryBalance.storage_location_id == location.id,
+            InventoryBalance.container_kind == container_kind,
+            InventoryBalance.container_id == container_id,
+        )
+        await session.scalar(balance_stmt.with_for_update())
+        source_on_hand = await inventory_service.physical_on_hand_in_container(
+            session,
+            tenant_id,
+            product.id,
+            location.id,
+            container_kind,
+            container_id,
+        )
+        assigned = await _active_pick_count_for_sorting_source(
+            session,
+            tenant_id,
+            product.id,
+            location.id,
+            container_kind,
+            container_id,
+        )
+        available = source_on_hand - assigned
+    elif container_id is None:
         available = await inventory_service.available_quantity_at_location(
             session,
             tenant_id,
@@ -1015,7 +1116,6 @@ async def scan_pick_product(
             container_kind,
             container_id,
         )
-    sorting_location = await get_or_create_sorting_location(session, tenant_id, supply.warehouse_id)
     movement_id: uuid.UUID | None = None
     if available >= 1 and location.id != sorting_location.id:
         try:
@@ -1118,8 +1218,19 @@ async def scan_pick_product(
         inventory_movement_id=movement_id,
         scan_idempotency_key=idempotency_key,
     )
-    session.add(pick)
-    await session.flush()
+    try:
+        async with session.begin_nested():
+            session.add(pick)
+            await session.flush()
+    except IntegrityError as exc:
+        # A concurrent request may have selected the same pending order before
+        # the balance-row lock became visible (notably on SQLite, which ignores
+        # FOR UPDATE). Keep this a normal business conflict, never a 500.
+        raise FbsPickingError(
+            "order_already_picked",
+            "Заказ уже подобран другим запросом.",
+            context={"order_id": str(target_order.id)},
+        ) from exc
     event = FbsOrderPickEvent(
         pick_id=pick.id,
         event_type=PICK_EVENT_PICKED,

@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
@@ -411,6 +411,146 @@ async def test_fbs_pick_zero_stock_does_not_create_synthetic_pick(
         )
     assert int(sorting_quantity or 0) == 0
     assert active_pick is None
+
+
+# TC-NEW-FBS-PICK-STOCK-002 — one unit already in sorting can be assigned to
+# only one order, even when two requests race.
+@pytest.mark.asyncio
+async def test_fbs_pick_sorting_last_unit_is_atomic(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
+        async_client, headers, suffix
+    )
+    barcode = f"BAR-SORT-{suffix[-8:]}"
+    product_id = await _create_product(
+        async_client, headers, seller_id, sku=f"SKU-S-{suffix}", barcode=barcode
+    )
+    supply_id, _order_ids, _location_code = await _seed_pick_supply(
+        async_client,
+        headers,
+        tenant_id,
+        seller_id,
+        warehouse_id,
+        location_id,
+        product_id,
+        stock_qty=0,
+        order_specs=[(1, timedelta(hours=24)), (2, timedelta(hours=48))],
+        barcode=barcode,
+    )
+    async with SessionLocal() as session:
+        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=sorting.id,
+            quantity_delta=1,
+            movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
+        )
+        await session.commit()
+        sorting_id = sorting.id
+
+    async def _attempt(key: str) -> int:
+        response = await _scan_product(
+            async_client,
+            headers,
+            supply_id,
+            location_id=sorting_id,
+            barcode=barcode,
+            idempotency_key=key,
+        )
+        return response.status_code
+
+    code_a, code_b = await asyncio.gather(
+        _attempt(str(uuid.uuid4())),
+        _attempt(str(uuid.uuid4())),
+    )
+    assert sorted([code_a, code_b]) == [200, 409]
+    workspace = await _workspace(async_client, headers, supply_id)
+    assert workspace.json()["progress"]["picked"] == 1
+    async with SessionLocal() as session:
+        active_picks = await session.scalar(
+            select(func.count(FbsOrderPick.id)).where(
+                FbsOrderPick.fbs_supply_id == supply_id,
+                FbsOrderPick.undone_at.is_(None),
+            )
+        )
+        sorting_quantity = await session.scalar(
+            select(InventoryBalance.quantity).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+                InventoryBalance.storage_location_id == sorting_id,
+                InventoryBalance.container_id.is_(None),
+            )
+        )
+    assert int(active_picks or 0) == 1
+    assert int(sorting_quantity or 0) == 1
+
+
+# TC-NEW-FBS-PICK-STOCK-003 — a unit transferred into sorting for one supply
+# cannot be picked from sorting for another supply.
+@pytest.mark.asyncio
+async def test_fbs_pick_sorting_excludes_unit_assigned_to_other_supply(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
+        async_client, headers, suffix
+    )
+    barcode = f"BAR-CROSS-{suffix[-8:]}"
+    product_id = await _create_product(
+        async_client, headers, seller_id, sku=f"SKU-C-{suffix}", barcode=barcode
+    )
+    first_supply_id, _first_orders, _location_code = await _seed_pick_supply(
+        async_client,
+        headers,
+        tenant_id,
+        seller_id,
+        warehouse_id,
+        location_id,
+        product_id,
+        stock_qty=1,
+        order_specs=[(1, timedelta(hours=24))],
+        barcode=barcode,
+    )
+    second_supply_id, _second_orders, _location_code = await _seed_pick_supply(
+        async_client,
+        headers,
+        tenant_id,
+        seller_id,
+        warehouse_id,
+        location_id,
+        product_id,
+        stock_qty=0,
+        order_specs=[(2, timedelta(hours=48))],
+        barcode=barcode,
+    )
+    first_pick = await _scan_product(
+        async_client,
+        headers,
+        first_supply_id,
+        location_id=location_id,
+        barcode=barcode,
+        idempotency_key=str(uuid.uuid4()),
+    )
+    assert first_pick.status_code == 200, first_pick.text
+    async with SessionLocal() as session:
+        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+        sorting_id = sorting.id
+
+    second_pick = await _scan_product(
+        async_client,
+        headers,
+        second_supply_id,
+        location_id=sorting_id,
+        barcode=barcode,
+        idempotency_key=str(uuid.uuid4()),
+    )
+    assert second_pick.status_code == 409, second_pick.text
+    assert second_pick.json()["detail"]["code"] == "insufficient_unpacked"
 
 
 # TC-08 refresh keeps progress
