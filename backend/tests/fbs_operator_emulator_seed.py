@@ -192,6 +192,7 @@ async def seed_operator_emulator_wms(
                 # явно, иначе остаток не уедет в эмулятор и тот откажется
                 # создавать заказ, отвечая rejected_no_stock.
                 row.fbs_stock_sync_enabled = True
+                row.fbs_percent = 100
                 await session.commit()
 
                 await inventory_service.record_movement_and_adjust_balance(

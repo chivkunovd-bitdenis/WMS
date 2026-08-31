@@ -28,6 +28,7 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.inventory_balance import InventoryBalance
+from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.services import inventory_service
 from app.services.sorting_location_service import get_or_create_sorting_location
@@ -104,7 +105,14 @@ async def _create_product(
         },
     )
     assert product.status_code in (200, 201), product.text
-    return uuid.UUID(product.json()["id"])
+    product_id = uuid.UUID(product.json()["id"])
+    async with SessionLocal() as session:
+        row = await session.get(Product, product_id)
+        assert row is not None
+        row.fbs_stock_sync_enabled = True
+        row.fbs_percent = 100
+        await session.commit()
+    return product_id
 
 
 async def _seed_pick_supply(

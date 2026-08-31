@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import String, and_, func, or_, select
+from sqlalchemy import String, and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
@@ -26,6 +26,7 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_PACKED,
     FBS_ORDER_STATUS_SORTED,
     MAPPING_STATUS_MISSING,
+    RESERVE_STATUS_NOT_PUBLISHED,
     FbsOrder,
     FbsOrderMarking,
     FbsOrderProduct,
@@ -37,6 +38,7 @@ from app.models.fbs_print_asset import (
     PRINT_ASSET_STATUS_READY,
     FbsPrintAsset,
 )
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_reservation import InventoryReservation
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
@@ -194,7 +196,20 @@ async def _fetch_orders_page(
     cursor: str | None,
     server_now: datetime,
 ) -> list[FbsOrder]:
-    stmt = select(FbsOrder).where(FbsOrder.tenant_id == tenant_id)
+    served_wb_binding = exists(
+        select(FbsWarehouseBinding.id).where(
+            FbsWarehouseBinding.tenant_id == FbsOrder.tenant_id,
+            FbsWarehouseBinding.seller_id == FbsOrder.seller_id,
+            FbsWarehouseBinding.marketplace == "wb",
+            FbsWarehouseBinding.wb_warehouse_id == FbsOrder.wb_warehouse_id,
+            FbsWarehouseBinding.is_active.is_(True),
+            FbsWarehouseBinding.served.is_(True),
+        )
+    )
+    stmt = select(FbsOrder).where(
+        FbsOrder.tenant_id == tenant_id,
+        or_(FbsOrder.marketplace != "wb", served_wb_binding),
+    )
     if seller_id is not None:
         stmt = stmt.where(FbsOrder.seller_id == seller_id)
     if marketplace is not None:
@@ -273,6 +288,16 @@ async def _fetch_warehouse_options(
     status_group: str | None,
     server_now: datetime,
 ) -> list[dict[str, Any]]:
+    served_wb_binding = exists(
+        select(FbsWarehouseBinding.id).where(
+            FbsWarehouseBinding.tenant_id == FbsOrder.tenant_id,
+            FbsWarehouseBinding.seller_id == FbsOrder.seller_id,
+            FbsWarehouseBinding.marketplace == "wb",
+            FbsWarehouseBinding.wb_warehouse_id == FbsOrder.wb_warehouse_id,
+            FbsWarehouseBinding.is_active.is_(True),
+            FbsWarehouseBinding.served.is_(True),
+        )
+    )
     stmt = (
         select(
             FbsOrder.wb_warehouse_id,
@@ -289,6 +314,7 @@ async def _fetch_warehouse_options(
         .where(
             FbsOrder.tenant_id == tenant_id,
             FbsOrder.wb_warehouse_id.is_not(None),
+            or_(FbsOrder.marketplace != "wb", served_wb_binding),
         )
     )
     if seller_id is not None:
@@ -693,6 +719,13 @@ def compute_selection_blockers(
     if order.mapping_status == MAPPING_STATUS_MISSING or order.product_id is None:
         blockers.append(
             {"code": "product_not_mapped", "message": "Товар не сопоставлен с карточкой."}
+        )
+    if order.reserve_status == RESERVE_STATUS_NOT_PUBLISHED:
+        blockers.append(
+            {
+                "code": "not_published",
+                "message": "Публикация FBS-остатка для товара выключена.",
+            }
         )
     if order.warehouse_id is None:
         blockers.append(

@@ -65,6 +65,10 @@ _BLOCKER_TO_ISSUE: dict[str, tuple[str, str]] = {
     "already_in_supply": ("already_in_supply", "Заказ уже в поставке."),
     "product_not_mapped": ("product_not_mapped", "Товар не сопоставлен с карточкой."),
     "warehouse_unmapped": ("warehouse_unmapped", "Склад WB не привязан к WMS."),
+    "not_published": (
+        "not_published",
+        "Публикация FBS-остатка для товара выключена.",
+    ),
     "insufficient_stock": ("insufficient_stock", "Недостаточно неупакованного остатка."),
     "deadline_passed": ("deadline_passed", "Срок сборки истёк."),
     "order_external_processing": ("order_bad_status", "Заказ уже ушёл в кабинете WB."),

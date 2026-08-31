@@ -145,6 +145,8 @@ async def _seed_reserved_order(
             name="Cancel product",
             sku_code=f"CNL-{wb_order_id}",
             wb_barcode=barcode,
+            fbs_stock_sync_enabled=True,
+            fbs_percent=100,
         )
         session.add(product)
         await session.flush()

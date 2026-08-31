@@ -34,6 +34,7 @@ from app.models.fbs_trbx import FbsTrbx
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryMovement
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
+from app.models.product import Product
 from app.models.warehouse_box import WarehouseBox
 from app.services import inventory_service
 from app.services.fbs_packaging_integration_service import create_packaging_task_for_supply
@@ -127,6 +128,12 @@ async def _create_product(
         },
     )
     assert product.status_code in (200, 201), product.text
+    async with SessionLocal() as session:
+        row = await session.get(Product, uuid.UUID(product.json()["id"]))
+        assert row is not None
+        row.fbs_stock_sync_enabled = True
+        row.fbs_percent = 100
+        await session.commit()
     return product.json()["id"]
 
 

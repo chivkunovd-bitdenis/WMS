@@ -184,6 +184,9 @@ async def _create_product(
     async with SessionLocal() as session:
         product = await session.get(Product, uuid.UUID(resp.json()["id"]))
         assert product is not None
+        product.fbs_stock_sync_enabled = True
+        product.fbs_percent = 100
+        await session.commit()
         return product
 
 
