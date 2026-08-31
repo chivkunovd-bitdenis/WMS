@@ -115,6 +115,9 @@ test('old FBS stock route redirects to catalog and catalog warehouse binding wor
   await expect(page.getByTestId('fbs-stock-percent-501003')).toHaveCount(0)
 
   const bindingSelect = page.getByTestId('fbs-stock-bind-501003')
+  const servedToggle = page.getByTestId('fbs-stock-served-501003')
+  await expect(servedToggle).not.toBeChecked()
+  await expect(servedToggle).toBeDisabled()
   await expect(bindingSelect.locator('option')).toHaveText([
     'не сопоставлен',
     warehouseA.name,
@@ -130,10 +133,28 @@ test('old FBS stock route redirects to catalog and catalog warehouse binding wor
     bindingSelect.selectOption(warehouseB.id),
   ])
   expect(bindingRequest.postDataJSON()).toEqual({
-    served: true,
     wms_warehouse_id: warehouseB.id,
   })
   await expect(bindingSelect).toHaveValue(warehouseB.id)
+  await expect(bindingSelect).toBeDisabled()
+  await expect(servedToggle).not.toBeChecked()
+  await expect(servedToggle).toBeEnabled()
+  await expect(page.getByTestId('fbs-stock-percent-501003')).toHaveCount(0)
+
+  const [servedRequest] = await Promise.all([
+    page.waitForRequest(
+      (request) =>
+        request.method() === 'PUT' &&
+        request.url().includes(`/api/fbs-sellers/${seller.id}/warehouses/501003`),
+    ),
+    servedToggle.click(),
+  ])
+  await expect(servedToggle).toBeChecked()
+  expect(servedRequest.postDataJSON()).toEqual({
+    served: true,
+    wms_warehouse_id: warehouseB.id,
+  })
+  await expect(bindingSelect).toBeEnabled()
   await expect(page.getByTestId('fbs-stock-percent-501003')).toBeVisible()
 
   // TC-NEW-FBS-STOCK-UI-002 — галочка «обслуживаем склад» выключает направление.
@@ -142,9 +163,6 @@ test('old FBS stock route redirects to catalog and catalog warehouse binding wor
   // Then: уходит PUT со served=false и сохранённым складом, ползунок доли пропадает;
   // negative/ограничение: у выключенного направления выпадашка склада заперта, чтобы
   // выбор склада не включил его обратно молча; повторная галочка возвращает ползунок.
-  const servedToggle = page.getByTestId('fbs-stock-served-501003')
-  await expect(servedToggle).toBeChecked()
-
   const [unservedRequest] = await Promise.all([
     page.waitForRequest(
       (request) =>

@@ -632,7 +632,7 @@ export function FfProductsCatalogScreen({
   const saveFbsWarehouse = useCallback(
     async (
       wbWarehouseId: string,
-      next: { served: boolean; wmsWarehouseId: string | null },
+      next: { served?: boolean; wmsWarehouseId: string | null },
       failureMessage: string,
     ) => {
       if (!fbsDialog) return
@@ -644,12 +644,16 @@ export function FfProductsCatalogScreen({
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
             body: JSON.stringify({
-              served: next.served,
+              ...(next.served === undefined ? {} : { served: next.served }),
               wms_warehouse_id: next.wmsWarehouseId,
             }),
           },
         )
         if (!res.ok) throw new Error(await readApiErrorMessage(res))
+        const saved = (await res.json()) as {
+          served: boolean
+          wms_warehouse_id: string | null
+        }
         setFbsDialog((current) => {
           if (!current) return current
           return {
@@ -658,7 +662,11 @@ export function FfProductsCatalogScreen({
               ...current.seller,
               warehouses: current.seller.warehouses.map((one) =>
                 one.id === wbWarehouseId
-                  ? { ...one, boundTo: next.wmsWarehouseId, fbsEnabled: next.served }
+                  ? {
+                      ...one,
+                      boundTo: saved.wms_warehouse_id,
+                      fbsEnabled: saved.served,
+                    }
                   : one,
               ),
             },
@@ -676,14 +684,13 @@ export function FfProductsCatalogScreen({
     // Пустое значение не превращаем в served=false: иначе обслуживаемое
     // WB-направление исчезнет из dialog и вернуть его отсюда будет невозможно.
     if (!wmsWarehouseId) return
-    // Сопоставление означает «склад наш»: served=true. Отправлять здесь false
-    // нельзя — у неразобранного склада строки привязки ещё нет, и явный false
-    // создал бы её со значением «чужой». Тогда заказы этого склада перестали бы
-    // импортироваться совсем, вместо того чтобы прийти как «склад не сопоставлен».
-    // Выключается склад только галочкой; у выключенного выпадашка заперта.
+    // Сопоставление и решение обслуживать склад — два разных действия.
+    // Поэтому served здесь не отправляем: новая привязка останется выключенной,
+    // а существующая сохранит своё текущее состояние. После выбора WMS-склада
+    // оператор отдельно включает направление явной галочкой.
     await saveFbsWarehouse(
       wbWarehouseId,
-      { served: true, wmsWarehouseId },
+      { wmsWarehouseId },
       'Не удалось сопоставить склад',
     )
   }, [fbsDialog, saveFbsWarehouse])
