@@ -135,4 +135,47 @@ test('old FBS stock route redirects to catalog and catalog warehouse binding wor
   })
   await expect(bindingSelect).toHaveValue(warehouseB.id)
   await expect(page.getByTestId('fbs-stock-percent-501003')).toBeVisible()
+
+  // TC-NEW-FBS-STOCK-UI-002 — галочка «обслуживаем склад» выключает направление.
+  // Given: направление 501003 сопоставлено и обслуживается;
+  // When: оператор снимает галочку в той же модалке;
+  // Then: уходит PUT со served=false и сохранённым складом, ползунок доли пропадает;
+  // negative/ограничение: у выключенного направления выпадашка склада заперта, чтобы
+  // выбор склада не включил его обратно молча; повторная галочка возвращает ползунок.
+  const servedToggle = page.getByTestId('fbs-stock-served-501003')
+  await expect(servedToggle).toBeChecked()
+
+  const [unservedRequest] = await Promise.all([
+    page.waitForRequest(
+      (request) =>
+        request.method() === 'PUT' &&
+        request.url().includes(`/api/fbs-sellers/${seller.id}/warehouses/501003`),
+    ),
+    // Галка управляемая: состояние меняется только после ответа сервера,
+    // поэтому click, а не uncheck — тот требует смены состояния сразу.
+    servedToggle.click(),
+  ])
+  await expect(servedToggle).not.toBeChecked()
+  expect(unservedRequest.postDataJSON()).toEqual({
+    served: false,
+    wms_warehouse_id: warehouseB.id,
+  })
+
+  await expect(page.getByTestId('fbs-stock-percent-501003')).toHaveCount(0)
+  await expect(bindingSelect).toBeDisabled()
+
+  const [servedAgainRequest] = await Promise.all([
+    page.waitForRequest(
+      (request) =>
+        request.method() === 'PUT' &&
+        request.url().includes(`/api/fbs-sellers/${seller.id}/warehouses/501003`),
+    ),
+    servedToggle.click(),
+  ])
+  await expect(servedToggle).toBeChecked()
+  expect(servedAgainRequest.postDataJSON()).toEqual({
+    served: true,
+    wms_warehouse_id: warehouseB.id,
+  })
+  await expect(page.getByTestId('fbs-stock-percent-501003')).toBeVisible()
 })

@@ -39,6 +39,7 @@ export function FbsStockDialog({
   onClose,
   onSave,
   onBind,
+  onServedChange,
   saveError,
 }: {
   open: boolean
@@ -49,6 +50,8 @@ export function FbsStockDialog({
   onClose: () => void
   onSave: (rule: FbsRule) => void
   onBind: (warehouseId: string, wbWarehouseId: string) => void
+  /** Обслуживаем ли мы склад продавца. Свойство продавца, не товара. */
+  onServedChange?: (warehouseId: string, served: boolean) => void
   /** Отказ сервера. Показываем прямо здесь: окно с введённым не закрываем. */
   saveError?: string | null
 }) {
@@ -61,6 +64,7 @@ export function FbsStockDialog({
       onClose={onClose}
       onSave={onSave}
       onBind={onBind}
+      onServedChange={onServedChange}
       saveError={saveError}
     />
   )
@@ -73,6 +77,7 @@ function FbsStockDialogBody({
   onClose,
   onSave,
   onBind,
+  onServedChange,
   saveError,
 }: {
   products: Product[]
@@ -81,6 +86,7 @@ function FbsStockDialogBody({
   onClose: () => void
   onSave: (rule: FbsRule) => void
   onBind: (warehouseId: string, wbWarehouseId: string) => void
+  onServedChange?: (warehouseId: string, served: boolean) => void
   saveError?: string | null
 }) {
   // Черновик начинается с текущего правила; тело монтируется на каждое открытие,
@@ -211,8 +217,37 @@ function FbsStockDialogBody({
           {seller.warehouses.map((warehouse) => (
             <Stack key={warehouse.id} spacing={1}>
               <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                <Typography variant="subtitle2">{warehouse.name}</Typography>
-                {warehouse.boundTo === null ? (
+                {/* Галочка «обслуживаем» — свойство продавца, а не товара, но живёт
+                    здесь же: оператор видит склады продавца именно в этом окне, и
+                    гонять его на другой экран ради одной галки незачем. Она решает
+                    сразу две вещи: чьи заказы наши и по каким складам раздаём
+                    остаток. Снятая галка — склад чужого фулфилмента. */}
+                <CheckboxInput
+                  label={`Обслуживаем склад ${warehouse.name}`}
+                  hideLabel
+                  checked={warehouse.fbsEnabled}
+                  onChange={(checked) => onServedChange?.(warehouse.id, checked)}
+                  disabledReason={
+                    !onServedChange
+                      ? 'Настройка доступна из каталога'
+                      : warehouse.boundTo === null && !warehouse.fbsEnabled
+                        ? 'Сначала выберите склад WMS'
+                        : undefined
+                  }
+                  testId={`fbs-stock-served-${warehouse.id}`}
+                />
+                <Typography
+                  variant="subtitle2"
+                  color={warehouse.fbsEnabled ? undefined : 'text.disabled'}
+                >
+                  {warehouse.name}
+                </Typography>
+                {!warehouse.fbsEnabled ? (
+                  <StatusChip
+                    label="не обслуживаем"
+                    hint="Заказы с этого склада к нам не приходят, остаток на него не отправляется"
+                  />
+                ) : warehouse.boundTo === null ? (
                   <StatusChip
                     label="склад не сопоставлен"
                     tone="warn"
@@ -221,12 +256,16 @@ function FbsStockDialogBody({
                 ) : null}
                 <Box sx={{ flexGrow: 1 }} />
                 <Box sx={{ minWidth: 240 }}>
+                  {/* У отключённого склада выбор заперт: сопоставление означает
+                      «склад наш» и включило бы его обратно молча. Сначала галочка,
+                      потом склад. */}
                   <SelectInput
                     label="Склад WMS"
                     value={warehouse.boundTo ?? ''}
                     onChange={(value) => onBind(warehouse.id, value)}
                     options={seller.wbWarehouses.map((one) => ({ value: one.id, label: one.name }))}
                     emptyLabel="не сопоставлен"
+                    disabled={!warehouse.fbsEnabled && warehouse.boundTo !== null}
                     testId={`fbs-stock-bind-${warehouse.id}`}
                   />
                 </Box>
