@@ -14,11 +14,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.fbs_order import (
-    FBS_ORDER_STATUS_CANCELLED,
-    PACK_STATUS_PACKED,
-    FbsOrder,
-)
+from app.models.fbs_order import PACK_STATUS_PACKED, FbsOrder
 from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_DONE,
@@ -69,14 +65,13 @@ async def get_delivery_box_readiness(
     )
     supply = await _get_supply(session, tenant_id, supply_id)
     without_distribution = await _supply_without_distribution(session, supply)
+    # Packaging remains optional for WB.  An unpacked order must not become a
+    # dead-end merely because boxes were already created in distribution mode:
+    # the unchanged UI only offers packed orders for manual box assignment.
+    # If the operator did record packaging, that packed order still has to be
+    # assigned unless the durable "without distribution" mode was selected.
     assignment_required_order_ids = {
-        order.id
-        for order in orders
-        if (
-            order.status != FBS_ORDER_STATUS_CANCELLED
-            if supply.marketplace == "wb"
-            else order.pack_status == PACK_STATUS_PACKED
-        )
+        order.id for order in orders if order.pack_status == PACK_STATUS_PACKED
     }
     if not assignment_required_order_ids or without_distribution:
         return DeliveryBoxReadiness(bool(boxes), without_distribution, frozenset())

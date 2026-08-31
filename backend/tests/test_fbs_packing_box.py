@@ -34,6 +34,7 @@ from app.models.fbs_wb_operation import (
 from app.services import fbs_shipment_pvz_service as pvz_svc
 from app.services.fbs_packing_box_service import (
     FbsPackingBoxError,
+    get_delivery_box_readiness,
     set_boxes_without_distribution,
 )
 from app.services.fbs_supply_reconcile_service import OPERATION_KIND_CARGO_PLACES_CREATE
@@ -201,6 +202,42 @@ async def test_warehouse_boxes_get_cargo_places_and_orders_are_exclusive(
     )
     assert deleted.status_code == 200, deleted.text
     assert len(deleted.json()["boxes"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_unpacked_wb_orders_do_not_block_existing_distribution_boxes(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, supply_id, order_ids = await _packed_supply(async_client)
+    created = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes",
+        headers=headers,
+        json={"count": 1, "idempotency_key": "unpacked-readiness-box"},
+    )
+    assert created.status_code == 201, created.text
+
+    async with SessionLocal() as session:
+        orders = list(
+            (
+                await session.scalars(
+                    select(FbsOrder).where(FbsOrder.id.in_(order_ids))
+                )
+            ).all()
+        )
+        for order in orders:
+            order.pack_status = "pending"
+        await session.flush()
+        readiness = await get_delivery_box_readiness(
+            session,
+            orders[0].tenant_id,
+            supply_id,
+            orders,
+        )
+
+    assert readiness.has_physical_boxes is True
+    assert readiness.without_distribution is False
+    assert readiness.unassigned_packed_order_ids == frozenset()
 
 
 @pytest.mark.asyncio
