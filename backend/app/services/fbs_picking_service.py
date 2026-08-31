@@ -16,11 +16,9 @@ from app.models.fbs_order import (
     PACK_STATUS_PACKED,
     PICK_STATUS_PENDING,
     PICK_STATUS_PICKED,
-    RESERVE_STATUS_RESERVED,
     FbsOrder,
     FbsOrderProduct,
     FbsOrderProductPick,
-    FbsOrderReservation,
 )
 from app.models.fbs_order_pick import (
     PICK_EVENT_PICKED,
@@ -1056,19 +1054,19 @@ async def scan_pick_product(
             session, tenant_id, transfer_group_id
         )
     elif available < 1:
-        movement = await inventory_service.record_movement_and_adjust_balance(
-            session,
-            tenant_id=tenant_id,
-            product_id=product.id,
-            storage_location_id=sorting_location.id,
-            quantity_delta=1,
-            movement_type="fbs_order_pick",
-            actor_user_id=actor.id,
+        raise FbsPickingError(
+            "insufficient_unpacked",
+            "Недостаточно товара в выбранном месте подбора.",
+            context={
+                "order_id": str(target_order.id),
+                "product_id": str(product.id),
+                "location_id": str(location.id),
+                "location_code": location.code,
+                "requested": 1,
+                "available": int(available),
+                "recommended_action": "Выберите другую ячейку или тару с доступным остатком.",
+            },
         )
-        if supply.marketplace != "ozon":
-            await _ensure_order_reservation(session, target_order, supply)
-        await session.flush()
-        movement_id = movement.id
     picked_at = datetime.now(tz=UTC)
     if supply.marketplace == "ozon":
         assert target_position is not None
@@ -1430,31 +1428,6 @@ async def undo_pick(
         product=await session.get(Product, pick.product_id),
     )
     return await get_supply_workspace(session, tenant_id, supply_id)
-
-
-async def _ensure_order_reservation(
-    session: AsyncSession,
-    order: FbsOrder,
-    supply: FbsSupply,
-) -> None:
-    if order.product_id is None:
-        return
-    existing_id = await session.scalar(
-        select(FbsOrderReservation.id).where(FbsOrderReservation.fbs_order_id == order.id)
-    )
-    if existing_id is not None:
-        order.reserve_status = RESERVE_STATUS_RESERVED
-        return
-    session.add(
-        FbsOrderReservation(
-            tenant_id=order.tenant_id,
-            fbs_order_id=order.id,
-            product_id=order.product_id,
-            warehouse_id=supply.warehouse_id,
-            quantity=1,
-        )
-    )
-    order.reserve_status = RESERVE_STATUS_RESERVED
 
 
 async def _load_supply(

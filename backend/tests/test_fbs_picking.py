@@ -352,6 +352,67 @@ async def test_fbs_pick_concurrent_scan_stock_one_one_success(
     assert ws2.json()["progress"] == ws.json()["progress"]
 
 
+# TC-NEW-FBS-PICK-STOCK-001 — the pick step is the stock gate: zero physical
+# stock must not create a synthetic sorting balance or mark an order picked.
+@pytest.mark.asyncio
+async def test_fbs_pick_zero_stock_does_not_create_synthetic_pick(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
+        async_client, headers, suffix
+    )
+    barcode = f"BAR-ZERO-{suffix[-8:]}"
+    product_id = await _create_product(
+        async_client, headers, seller_id, sku=f"SKU-Z-{suffix}", barcode=barcode
+    )
+    supply_id, _order_ids, _location_code = await _seed_pick_supply(
+        async_client,
+        headers,
+        tenant_id,
+        seller_id,
+        warehouse_id,
+        location_id,
+        product_id,
+        stock_qty=0,
+        order_specs=[(1, timedelta(hours=24))],
+        barcode=barcode,
+    )
+
+    blocked = await _scan_product(
+        async_client,
+        headers,
+        supply_id,
+        location_id=location_id,
+        barcode=barcode,
+        idempotency_key=str(uuid.uuid4()),
+    )
+    assert blocked.status_code == 409, blocked.text
+    assert blocked.json()["detail"]["code"] == "insufficient_unpacked"
+    assert blocked.json()["detail"]["context"]["available"] == 0
+
+    workspace = await _workspace(async_client, headers, supply_id)
+    assert workspace.status_code == 200, workspace.text
+    assert workspace.json()["progress"]["picked"] == 0
+    async with SessionLocal() as session:
+        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+        sorting_quantity = await session.scalar(
+            select(InventoryBalance.quantity).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+                InventoryBalance.storage_location_id == sorting.id,
+            )
+        )
+        active_pick = await session.scalar(
+            select(FbsOrderPick.id).where(
+                FbsOrderPick.fbs_supply_id == supply_id,
+                FbsOrderPick.undone_at.is_(None),
+            )
+        )
+    assert int(sorting_quantity or 0) == 0
+    assert active_pick is None
+
+
 # TC-08 refresh keeps progress
 @pytest.mark.asyncio
 async def test_fbs_pick_refresh_keeps_progress(async_client: AsyncClient) -> None:
