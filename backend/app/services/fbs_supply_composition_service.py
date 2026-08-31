@@ -212,6 +212,12 @@ async def reconcile_actual_wb_supply_composition(
                     http_client,
                     api_token=api_token,
                     wb_supply_id=wb_supply_id,
+                    # The real WB call ignores this hint.  The in-process WB
+                    # emulator uses it as its readback because it has no
+                    # external cabinet state of its own.
+                    expected_order_ids=sorted(
+                        int(order.wb_order_id) for order in supply.orders
+                    ),
                 )
             )
         )
