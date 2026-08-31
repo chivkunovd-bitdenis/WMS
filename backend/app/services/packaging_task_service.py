@@ -41,6 +41,7 @@ from app.services import marketplace_unload_service as mu_svc
 from app.services import sorting_location_service as sorting_loc_svc
 from app.services import staff_packaging_billing_service as billing_svc
 from app.services import tenant_settings_service as tenant_settings_svc
+from app.services.catalog_service import get_product
 from app.services.document_number_service import (
     DOC_TYPE_PACKAGING,
     assign_display_number_if_missing,
@@ -1198,10 +1199,8 @@ async def _assert_marking_ready_for_full_completion(
     task: PackagingTask,
 ) -> None:
     """Validate markings against the final task quantity before FBS mutation."""
-    from app.services import marking_code_service as mc_svc
-
     for line in task.lines:
-        product = await mc_svc.get_product(session, tenant_id, line.product_id)
+        product = await get_product(session, tenant_id, line.product_id)
         if product is None or not product.requires_honest_sign:
             continue
         marked = int(line.qty_marking_printed) + int(line.qty_marking_external or 0)

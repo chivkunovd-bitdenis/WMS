@@ -415,7 +415,7 @@ async def _active_pick_count_for_sorting_source(
     # container reference. Counting all of them at this sorting location is
     # conservative: it may ask the operator to choose another source, but it
     # can never assign one physical unit twice.
-    ozon_count = await session.scalar(
+    ozon_stmt = (
         select(func.count(FbsOrderProductPick.id))
         .join(FbsSupply, FbsSupply.id == FbsOrderProductPick.fbs_supply_id)
         .where(
@@ -426,13 +426,13 @@ async def _active_pick_count_for_sorting_source(
             FbsSupply.status.notin_(
                 (FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE)
             ),
-            (
-                FbsOrderProductPick.source_storage_location_id == storage_location_id
-                if container_id is not None
-                else True
-            ),
         )
     )
+    if container_id is not None:
+        ozon_stmt = ozon_stmt.where(
+            FbsOrderProductPick.source_storage_location_id == storage_location_id
+        )
+    ozon_count = await session.scalar(ozon_stmt)
     return int(wb_count or 0) + int(ozon_count or 0)
 
 
