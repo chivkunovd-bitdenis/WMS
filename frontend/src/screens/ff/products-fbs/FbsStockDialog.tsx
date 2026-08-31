@@ -10,6 +10,7 @@ import {
   SecondaryAction,
   SelectInput,
   StatusChip,
+  WarningNotice,
 } from '../../../ui-kit'
 import {
   freeStock,
@@ -100,6 +101,10 @@ function FbsStockDialogBody({
   // Раздаём остаток только по складам, которые обслуживаем. Если он один —
   // делить не с кем, и выбор складов на экране только мешает: один ползунок.
   const served = servedWarehouses(seller)
+  // Ни одного обслуживаемого склада — раздавать долю некуда. Ползунок в этом
+  // состоянии обманывает: он показывает штуки, которых в кабинете не появится,
+  // потому что публикация идёт только по обслуживаемым складам.
+  const noneServed = served.length === 0
   const single = served.length <= 1
 
   const spent = served.reduce(
@@ -150,10 +155,20 @@ function FbsStockDialogBody({
           </Typography>
         </Stack>
 
+        {noneServed ? (
+          <WarningNotice testId="fbs-stock-none-served">
+            Ни один склад Wildberries не выбран. Выберите ниже физический склад WMS хотя бы для
+            одного направления — до этого доля не задаётся и остаток в Wildberries не уйдёт.
+          </WarningNotice>
+        ) : null}
+
         <CheckboxInput
           label="Передавать остаток в Wildberries"
           checked={draft.publish}
           onChange={(publish) => setDraft((one) => ({ ...one, publish }))}
+          disabledReason={
+            noneServed ? 'Сначала выберите хотя бы один склад Wildberries' : undefined
+          }
           testId="fbs-stock-publish"
         />
 
@@ -162,8 +177,12 @@ function FbsStockDialogBody({
           value={draft.percent}
           onChange={(percent) => setDraft((one) => ({ ...one, percent }))}
           base={base}
-          disabled={!single && !draft.sameEverywhere}
-          disabledReason="Сейчас доля задаётся по каждому складу отдельно"
+          disabled={noneServed || (!single && !draft.sameEverywhere)}
+          disabledReason={
+            noneServed
+              ? 'Сначала выберите хотя бы один склад Wildberries'
+              : 'Сейчас доля задаётся по каждому складу отдельно'
+          }
           testId="fbs-stock-percent"
         />
 
@@ -242,9 +261,11 @@ function FbsStockDialogBody({
             {willPublish.toLocaleString('ru-RU')} шт
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {draft.publish
-              ? 'уйдёт в Wildberries прямо сейчас и будет пересчитываться само'
-              : 'передача выключена — в Wildberries не уйдёт ничего'}
+            {noneServed
+              ? 'ни один склад Wildberries не выбран — отправлять некуда'
+              : draft.publish
+                ? 'уйдёт в Wildberries прямо сейчас и будет пересчитываться само'
+                : 'передача выключена — в Wildberries не уйдёт ничего'}
           </Typography>
         </Stack>
 

@@ -164,6 +164,10 @@ export function ruleFor(rules: FbsRule[], productId: string): FbsRule {
 /** Сколько уйдёт в Wildberries по этому правилу прямо сейчас. */
 export function publishedQty(product: Product, rule: FbsRule, seller: Seller): number {
   if (!rule.publish) return 0
+  // Остаток уходит только на обслуживаемые склады. Если не выбран ни один,
+  // отправлять некуда, и показывать посчитанное по проценту число нельзя:
+  // оператор решит, что товар выставлен, а в кабинет не уйдёт ничего.
+  if (servedWarehouses(seller).length === 0) return 0
   const base = freeStock(product)
   if (rule.sameEverywhere) return Math.floor((base * rule.percent) / 100)
   // Доли складов делят один и тот же свободный остаток, поэтому суммируются
