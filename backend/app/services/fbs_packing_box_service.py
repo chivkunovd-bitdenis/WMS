@@ -65,8 +65,15 @@ async def get_delivery_box_readiness(
     )
     supply = await _get_supply(session, tenant_id, supply_id)
     without_distribution = await _supply_without_distribution(session, supply)
-    packed_order_ids = {order.id for order in orders if order.pack_status == PACK_STATUS_PACKED}
-    if not packed_order_ids or without_distribution:
+    # Packaging remains optional for WB.  An unpacked order must not become a
+    # dead-end merely because boxes were already created in distribution mode:
+    # the unchanged UI only offers packed orders for manual box assignment.
+    # If the operator did record packaging, that packed order still has to be
+    # assigned unless the durable "without distribution" mode was selected.
+    assignment_required_order_ids = {
+        order.id for order in orders if order.pack_status == PACK_STATUS_PACKED
+    }
+    if not assignment_required_order_ids or without_distribution:
         return DeliveryBoxReadiness(bool(boxes), without_distribution, frozenset())
     assigned_order_ids = set(
         (
@@ -76,7 +83,7 @@ async def get_delivery_box_readiness(
                 .where(
                     FbsPackingBoxItem.tenant_id == tenant_id,
                     FbsPackingBox.supply_id == supply_id,
-                    FbsPackingBoxItem.fbs_order_id.in_(packed_order_ids),
+                    FbsPackingBoxItem.fbs_order_id.in_(assignment_required_order_ids),
                 )
             )
         ).all()
@@ -84,7 +91,9 @@ async def get_delivery_box_readiness(
     return DeliveryBoxReadiness(
         has_physical_boxes=bool(boxes),
         without_distribution=without_distribution,
-        unassigned_packed_order_ids=frozenset(packed_order_ids - assigned_order_ids),
+        unassigned_packed_order_ids=frozenset(
+            assignment_required_order_ids - assigned_order_ids
+        ),
     )
 
 
@@ -284,6 +293,7 @@ async def assign_orders(
     actor_user_id: uuid.UUID | None,
 ) -> None:
     supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
+    _assert_supply_mutable(supply)
     box = await _get_box(session, tenant_id, supply_id, box_id)
     if await _supply_without_distribution(session, supply):
         raise FbsPackingBoxError("box_without_distribution")
@@ -300,7 +310,9 @@ async def assign_orders(
     orders = {order.id: order for order in result.scalars().all()}
     if len(orders) != len(unique_ids):
         raise FbsPackingBoxError("order_not_in_supply")
-    if any(order.pack_status != PACK_STATUS_PACKED for order in orders.values()):
+    if supply.marketplace != "wb" and any(
+        order.pack_status != PACK_STATUS_PACKED for order in orders.values()
+    ):
         raise FbsPackingBoxError("order_not_packed")
     assigned = await session.execute(
         select(FbsPackingBoxItem).where(

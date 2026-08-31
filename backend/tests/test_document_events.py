@@ -33,9 +33,9 @@ from app.models.document_event import (
 from app.models.fbs_order import FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DONE, FbsOrder
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
-    FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
+from app.models.fbs_wb_operation import FbsWbOperation
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
 from app.models.marketplace_unload import (
@@ -56,6 +56,10 @@ from app.services.document_event_service import (
     document_event_actor,
     record_document_event,
     system_document_events,
+)
+from app.services.fbs_shipment_source_service import (
+    FbsShipmentSourceRequest,
+    plan_fbs_shipment_sources,
 )
 from app.services.marketplace_provider import FakeMarketplaceTransport, OzonMarketplaceProvider
 from app.services.tokens import decode_access_token
@@ -439,10 +443,6 @@ async def test_fbs_and_marketplace_unload_status_sequences(
         session.add(order)
         await session.commit()
 
-        async def fulfillment_ready(*_args: object, **_kwargs: object) -> bool:
-            return True
-
-        monkeypatch.setattr(fbs_packaging_svc, "_all_active_orders_fulfilled", fulfillment_ready)
         with document_event_actor(actor_id):
             supply = await fbs_packaging_svc.update_supply_status(
                 session,
@@ -457,11 +457,39 @@ async def test_fbs_and_marketplace_unload_status_sequences(
                 session, tenant_id, supply.id, actor_user_id=actor_id
             )
             assert promoted is not None
-            assert promoted.status == FBS_SUPPLY_STATUS_PACKED
+            # WB packaging is an optional fact and must not promote the whole
+            # supply.  Delivery now moves the supply directly from assembling.
+            assert promoted.status == FBS_SUPPLY_STATUS_ASSEMBLING
             await session.commit()
             await session.refresh(supply, attribute_names=["orders"])
+            source_plan = await plan_fbs_shipment_sources(
+                session,
+                tenant_id=tenant_id,
+                supply_warehouse_id=warehouse_id,
+                requests=[
+                    FbsShipmentSourceRequest(
+                        fbs_order_id=order.id,
+                        product_id=product_id,
+                        quantity=1,
+                    )
+                ],
+            )
+            operation = FbsWbOperation(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                operation_kind="supply_deliver",
+                idempotency_key=f"journal-deliver-{supply.id}",
+                state="confirmed",
+            )
+            session.add(operation)
+            await session.flush()
             await fbs_shipment_svc._apply_local_delivered(
-                session, supply, list(supply.orders), None
+                session,
+                supply,
+                list(supply.orders),
+                actor_id,
+                source_plan,
+                operation,
             )
             await session.commit()
             order.status = FBS_ORDER_STATUS_DONE
@@ -585,11 +613,10 @@ async def test_fbs_and_marketplace_unload_status_sequences(
         )
     assert [(row.payload_json["from"], row.payload_json["to"]) for row in fbs_events] == [
         ("draft", "assembling"),
-        ("assembling", "packed"),
-        ("packed", "in_delivery"),
+        ("assembling", "in_delivery"),
         ("in_delivery", "done"),
     ]
-    assert [row.qty for row in fbs_events] == [1, 1, 1, 1]
+    assert [row.qty for row in fbs_events] == [1, 1, 1]
     assert [(row.payload_json["from"], row.payload_json["to"]) for row in unload_events] == [
         ("draft", "submitted"),
         ("submitted", "draft"),

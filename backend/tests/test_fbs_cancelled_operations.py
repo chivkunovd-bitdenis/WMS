@@ -14,7 +14,6 @@ from app.models.fbs_order import FBS_ORDER_STATUS_CANCELLED, FbsOrder
 from app.models.fbs_supply import FBS_SUPPLY_STATUS_ASSEMBLING, FbsSupply
 from tests.test_fbs_packaging_integration import (
     _create_supply_with_orders,
-    _seed_picks_for_supply_orders,
     _setup_seller_with_token,
 )
 from tests.test_fbs_picking import (
@@ -197,8 +196,6 @@ async def test_cancelled_order_cannot_be_packed(
     )
     assert response.status_code == 200, response.text
     task_id = uuid.UUID(response.json()["packaging_task_id"])
-    await _seed_picks_for_supply_orders(tenant_id, supply_id, uuid.UUID(warehouse_id))
-
     async with SessionLocal() as session:
         supply = await session.get(FbsSupply, supply_id)
         order = await session.get(FbsOrder, order_ids[0])

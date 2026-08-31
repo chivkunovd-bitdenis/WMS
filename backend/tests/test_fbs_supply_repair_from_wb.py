@@ -143,7 +143,7 @@ def _patch_wb_composition(monkeypatch: pytest.MonkeyPatch, wb_order_ids: list[in
         return list(wb_order_ids)
 
     monkeypatch.setattr(
-        "app.services.fbs_supply_service.fetch_wb_supply_order_ids",
+        "app.services.fbs_supply_composition_service.fetch_wb_supply_order_ids",
         fake_order_ids,
     )
 

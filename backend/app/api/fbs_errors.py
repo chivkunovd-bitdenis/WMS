@@ -96,6 +96,19 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "order_cancelled": "Заказ отменён на Wildberries.",
     "supply_bad_status": "Неверный статус поставки.",
     "stale_preflight": "Чек-лист устарел — обновите preflight.",
+    "negative_stock_confirmation_required": (
+        "Остатка не хватает. Подтвердите актуальный план списания в минус."
+    ),
+    "wb_supply_composition_discrepancy": (
+        "Фактический состав поставки WB не совпадает с данными WMS."
+    ),
+    "order_terminal": "Заказ из поставки уже отменён или закрыт.",
+    "fbs_shipment_product_missing": "У заказа не определён товар для списания.",
+    "fbs_shipment_source_missing": "Не удалось определить источник списания товара.",
+    "fbs_shipment_checkpoint_incomplete": (
+        "Не удалось восстановить подтверждённый план списания поставки."
+    ),
+    "supply_without_wb_id": "У поставки ещё нет номера Wildberries.",
     "trbx_oversized": "Сторона коробки превышает 60 см.",
     "trbx_sides_sum_exceeded": "Сумма сторон коробки превышает 140 см.",
     "trbx_overweight": "Вес коробки превышает 5 кг.",

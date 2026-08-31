@@ -1,4 +1,4 @@
-"""Server-side FBS pick scans: location → product → sorting transfer."""
+"""Server-side FBS pick scans and source allocation."""
 
 from __future__ import annotations
 
@@ -1086,7 +1086,7 @@ async def scan_pick_product(
         target_order = min(eligible_orders, key=lambda o: o.deadline_at)
 
     assert target_order is not None
-    if target_order.pack_status == PACK_STATUS_PACKED:
+    if supply.marketplace != "wb" and target_order.pack_status == PACK_STATUS_PACKED:
         raise FbsPickingError(
             "order_already_packed",
             "Подбор недоступен после упаковки заказа.",
@@ -1141,7 +1141,11 @@ async def scan_pick_product(
             container_id,
         )
     movement_id: uuid.UUID | None = None
-    if available >= 1 and location.id != sorting_location.id:
+    if (
+        supply.marketplace != "wb"
+        and available >= 1
+        and location.id != sorting_location.id
+    ):
         try:
             transfer_group_id = await inventory_service.transfer_on_hand_between_locations(
                 session,
@@ -1341,7 +1345,7 @@ async def undo_pick(
             http_status=404,
             context={"order_id": str(order_id)},
         )
-    if order.pack_status == PACK_STATUS_PACKED:
+    if supply.marketplace != "wb" and order.pack_status == PACK_STATUS_PACKED:
         raise FbsPickingError(
             "pick_undo_not_allowed",
             "Отмена подбора недоступна после упаковки.",

@@ -417,6 +417,7 @@ async def test_confirmed_fbs_delivery_is_allowed_to_go_negative(
             storage_location_id=location.id,
             quantity=3,
             actor_user_id=None,
+            allow_negative=True,
         )
         await session.commit()
         balance = (

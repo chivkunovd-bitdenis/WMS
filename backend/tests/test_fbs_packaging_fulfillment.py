@@ -19,15 +19,14 @@ from app.models.fbs_order import (
     MAPPING_STATUS_MAPPED,
     PACK_STATUS_PACKED,
     PACK_STATUS_PENDING,
-    PICK_STATUS_PICKED,
     RESERVE_STATUS_RESERVED,
     FbsOrder,
     FbsOrderProduct,
 )
-from app.models.fbs_order_pick import FbsOrderPick
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+    FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_DRAFT,
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
@@ -141,43 +140,6 @@ async def _create_product(
     return uuid.UUID(product.json()["id"])
 
 
-async def _seed_pick_for_order(
-    session: object,
-    *,
-    tenant_id: uuid.UUID,
-    supply_id: uuid.UUID,
-    warehouse_id: uuid.UUID,
-    order: FbsOrder,
-    source_location_id: uuid.UUID,
-    scan_key: str,
-) -> None:
-    sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
-    await inventory_service.transfer_on_hand_between_locations(
-        session,
-        tenant_id=tenant_id,
-        product_id=order.product_id,
-        from_storage_location_id=source_location_id,
-        to_storage_location_id=sorting.id,
-        quantity=1,
-        actor_user_id=None,
-    )
-    now = datetime.now(UTC)
-    session.add(
-        FbsOrderPick(
-            tenant_id=tenant_id,
-            fbs_order_id=order.id,
-            fbs_supply_id=supply_id,
-            source_storage_location_id=source_location_id,
-            sorting_storage_location_id=sorting.id,
-            product_id=order.product_id,
-            picked_at=now,
-            scan_idempotency_key=scan_key,
-        )
-    )
-    order.pick_status = PICK_STATUS_PICKED
-    order.picked_at = now
-
-
 @pytest.fixture
 def enable_wb_marketplace_supplies_mock(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.core.settings import settings
@@ -185,9 +147,9 @@ def enable_wb_marketplace_supplies_mock(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
 
 
-# TC-10 — picked item packed via PackagingTask; inventory unpacked→packed
+# TC-10 — WB packaging records a fact and leaves inventory unpacked.
 @pytest.mark.asyncio
-async def test_fbs_pack_picked_item_keeps_packed_stock_until_delivery(
+async def test_fbs_pack_fact_keeps_stock_unpacked_until_delivery(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
@@ -247,24 +209,11 @@ async def test_fbs_pack_picked_item_keeps_packed_stock_until_delivery(
     task_id = status_resp.json()["packaging_task_id"]
 
     async with SessionLocal() as session:
-        order = await session.get(FbsOrder, order_id)
-        assert order is not None
-        await _seed_pick_for_order(
-            session,
-            tenant_id=tenant_id,
-            supply_id=supply_id,
-            warehouse_id=warehouse_id,
-            order=order,
-            source_location_id=source_location_id,
-            scan_key=f"pick-{order_id}",
-        )
-        await session.commit()
-        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
         before = await session.scalar(
             select(InventoryBalance).where(
                 InventoryBalance.tenant_id == tenant_id,
                 InventoryBalance.product_id == product_id,
-                InventoryBalance.storage_location_id == sorting.id,
+                InventoryBalance.storage_location_id == source_location_id,
             )
         )
         assert before is not None
@@ -290,17 +239,16 @@ async def test_fbs_pack_picked_item_keeps_packed_stock_until_delivery(
     assert body["fulfilled_order"]["pack_status"] == PACK_STATUS_PACKED
 
     async with SessionLocal() as session:
-        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
         after = await session.scalar(
             select(InventoryBalance).where(
                 InventoryBalance.tenant_id == tenant_id,
                 InventoryBalance.product_id == product_id,
-                InventoryBalance.storage_location_id == sorting.id,
+                InventoryBalance.storage_location_id == source_location_id,
             )
         )
         assert after is not None
-        assert int(after.quantity_unpacked) == 0
-        assert int(after.quantity_packed) == 1
+        assert int(after.quantity_unpacked) == 1
+        assert int(after.quantity_packed) == 0
 
     complete = await async_client.post(
         f"/operations/packaging-tasks/{task_id}/complete",
@@ -313,7 +261,7 @@ async def test_fbs_pack_picked_item_keeps_packed_stock_until_delivery(
         f"/operations/fbs-supplies/{supply_id}",
         headers=headers,
     )
-    assert supply.json()["status"] == FBS_SUPPLY_STATUS_PACKED
+    assert supply.json()["status"] == FBS_SUPPLY_STATUS_ASSEMBLING
 
     async with SessionLocal() as session:
         write_off_qty = await session.scalar(
@@ -324,11 +272,19 @@ async def test_fbs_pack_picked_item_keeps_packed_stock_until_delivery(
             )
         )
         assert int(write_off_qty) == 0
+        packaging_movement_count = await session.scalar(
+            select(func.count(InventoryMovement.id)).where(
+                InventoryMovement.tenant_id == tenant_id,
+                InventoryMovement.product_id == product_id,
+                InventoryMovement.movement_type == "packaging_convert",
+            )
+        )
+        assert int(packaging_movement_count or 0) == 0
 
 
-# TC-10 negative — cannot pack without pick
+# TC-10 — WB packaging has no pick prerequisite.
 @pytest.mark.asyncio
-async def test_fbs_pack_rejected_without_pick(
+async def test_fbs_pack_and_complete_without_pick(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
@@ -375,6 +331,7 @@ async def test_fbs_pack_rejected_without_pick(
             actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await session.commit()
+        sorting_id = sorting.id
 
     status_resp = await async_client.put(
         f"/operations/fbs-supplies/{supply_id}/status",
@@ -387,35 +344,46 @@ async def test_fbs_pack_rejected_without_pick(
         headers=headers,
     )
     line = task.json()["lines"][0]
-    blocked = await async_client.post(
+    packed = await async_client.post(
         f"/operations/packaging-tasks/{task_id}/lines/{line['id']}/pack",
         headers=headers,
         json={"quantity": 1},
     )
-    assert blocked.status_code == 409
-    assert blocked.json()["detail"] == "order_not_picked"
+    assert packed.status_code == 200, packed.text
+    assert packed.json()["fulfilled_order"] is not None
 
-    atomic_blocked = await async_client.post(
+    completed = await async_client.post(
         f"/operations/packaging-tasks/{task_id}/pack-all-and-complete",
         headers=headers,
     )
-    assert atomic_blocked.status_code == 409, atomic_blocked.text
-    assert atomic_blocked.json()["detail"]["code"] == "order_not_picked"
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["packaging_task"]["status"] == "done"
     async with SessionLocal() as session:
         task_after = await session.get(PackagingTask, uuid.UUID(task_id))
         assert task_after is not None
-        assert task_after.status == "draft"
+        assert task_after.status == "done"
         assert await session.scalar(
             select(func.count(FbsPackagingFulfillment.id)).where(
                 FbsPackagingFulfillment.packaging_task_id == uuid.UUID(task_id)
             )
-        ) == 0
+        ) == 1
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        assert supply.status == FBS_SUPPLY_STATUS_ASSEMBLING
+        balance = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+                InventoryBalance.storage_location_id == sorting_id,
+            )
+        )
+        assert balance is not None
+        assert (int(balance.quantity_unpacked), int(balance.quantity_packed)) == (1, 0)
 
 
-# TC-NEW-FBS-EMERG-001 — marking is checked before the transaction changes
-# stock, unit fulfillments, line counters, events, task or supply status.
+# TC-NEW-FBS-EMERG-001 — WB packaging has no marking gate.
 @pytest.mark.asyncio
-async def test_fbs_pack_all_marking_failure_rolls_back_everything(
+async def test_fbs_pack_all_completes_without_marking_or_stock_conversion(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
@@ -481,33 +449,34 @@ async def test_fbs_pack_all_marking_failure_rolls_back_everything(
     assert assembling.status_code == 200, assembling.text
     task_id = uuid.UUID(assembling.json()["packaging_task_id"])
 
-    blocked = await async_client.post(
+    completed = await async_client.post(
         f"/operations/packaging-tasks/{task_id}/pack-all-and-complete",
         headers=headers,
     )
-    assert blocked.status_code == 422, blocked.text
-    assert blocked.json()["detail"]["code"] == "marking_not_done"
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["packaging_task"]["status"] == "done"
+    assert completed.json()["warnings"] is None
 
     async with SessionLocal() as session:
         task = await session.get(PackagingTask, task_id)
         assert task is not None
-        assert task.status == "draft"
-        assert task.completed_at is None
+        assert task.status == "done"
+        assert task.completed_at is not None
         line = await session.scalar(
             select(PackagingTaskLine).where(PackagingTaskLine.task_id == task_id)
         )
         assert line is not None
-        assert line.qty_packed_in_task == 0
+        assert line.qty_packed_in_task == 1
         event_count = await session.scalar(
             select(func.count(PackagingTaskEvent.id)).where(PackagingTaskEvent.task_id == task_id)
         )
-        assert event_count == 0
+        assert event_count == 2
         fulfillment_count = await session.scalar(
             select(func.count(FbsPackagingFulfillment.id)).where(
                 FbsPackagingFulfillment.packaging_task_id == task_id
             )
         )
-        assert fulfillment_count == 0
+        assert fulfillment_count == 1
         balance = await session.scalar(
             select(InventoryBalance).where(
                 InventoryBalance.tenant_id == tenant_id,
@@ -524,12 +493,15 @@ async def test_fbs_pack_all_marking_failure_rolls_back_everything(
             1,
             0,
         )
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        assert supply.status == FBS_SUPPLY_STATUS_ASSEMBLING
 
 
-# TC-NEW-FBS-EMERG-003 — the existing «Сдать без Честного знака»
-# decision applies to the atomic completion path and supply promotion.
+# TC-NEW-FBS-EMERG-003 — honest-sign skip is independent from packaging,
+# and packaging completion does not promote a WB supply.
 @pytest.mark.asyncio
-async def test_fbs_pack_all_honest_sign_skip_completes_and_promotes_supply(
+async def test_fbs_pack_all_honest_sign_skip_completes_without_promotion(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
@@ -581,7 +553,6 @@ async def test_fbs_pack_all_honest_sign_skip_completes_and_promotes_supply(
             actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await session.commit()
-        order_id = order.id
 
     assembling = await async_client.put(
         f"/operations/fbs-supplies/{supply_id}/status",
@@ -590,20 +561,6 @@ async def test_fbs_pack_all_honest_sign_skip_completes_and_promotes_supply(
     )
     assert assembling.status_code == 200, assembling.text
     task_id = uuid.UUID(assembling.json()["packaging_task_id"])
-    async with SessionLocal() as session:
-        order = await session.get(FbsOrder, order_id)
-        assert order is not None
-        await _seed_pick_for_order(
-            session,
-            tenant_id=tenant_id,
-            supply_id=supply_id,
-            warehouse_id=warehouse_id,
-            order=order,
-            source_location_id=source_location_id,
-            scan_key=f"marking-skip-pick-{order_id}",
-        )
-        await session.commit()
-
     skipped = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/honest-sign-skip",
         headers=headers,
@@ -619,7 +576,16 @@ async def test_fbs_pack_all_honest_sign_skip_completes_and_promotes_supply(
         supply = await session.get(FbsSupply, supply_id)
         assert supply is not None
         assert supply.honest_sign_skipped_at is not None
-        assert supply.status == FBS_SUPPLY_STATUS_PACKED
+        assert supply.status == FBS_SUPPLY_STATUS_ASSEMBLING
+        balance = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+                InventoryBalance.storage_location_id == source_location_id,
+            )
+        )
+        assert balance is not None
+        assert (int(balance.quantity_unpacked), int(balance.quantity_packed)) == (1, 0)
 
 
 # TC-NEW-FBS-EMERG-004 — atomic pack-all must not block the operator when the
@@ -686,29 +652,6 @@ async def test_fbs_pack_all_insufficient_stock_completes_without_cross_warehouse
     assert assembling.status_code == 200, assembling.text
     task_id = uuid.UUID(assembling.json()["packaging_task_id"])
     async with SessionLocal() as session:
-        order = await session.get(FbsOrder, order_id)
-        assert order is not None
-        await _seed_pick_for_order(
-            session,
-            tenant_id=tenant_id,
-            supply_id=supply_id,
-            warehouse_id=warehouse_id,
-            order=order,
-            source_location_id=source_location_id,
-            scan_key=f"no-stock-pick-{order_id}",
-        )
-        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
-        balance = await session.scalar(
-            select(InventoryBalance).where(
-                InventoryBalance.tenant_id == tenant_id,
-                InventoryBalance.product_id == product_id,
-                InventoryBalance.storage_location_id == sorting.id,
-            )
-        )
-        assert balance is not None
-        balance.quantity = 0
-        balance.quantity_unpacked = 0
-        balance.quantity_packed = 0
         alternative_sorting = await get_or_create_sorting_location(
             session, tenant_id, alternative_warehouse_id
         )
@@ -730,8 +673,7 @@ async def test_fbs_pack_all_insufficient_stock_completes_without_cross_warehouse
     assert completed.status_code == 200, completed.text
     body = completed.json()
     assert body["packaging_task"]["status"] == "done"
-    assert body["warnings"]
-    assert "Упаковка продолжена, остаток не списан" in body["warnings"][0]
+    assert body["warnings"] is None
 
     async with SessionLocal() as session:
         task = await session.get(PackagingTask, task_id)
@@ -752,7 +694,7 @@ async def test_fbs_pack_all_insufficient_stock_completes_without_cross_warehouse
         ) == 1
         supply = await session.get(FbsSupply, supply_id)
         assert supply is not None
-        assert supply.status == FBS_SUPPLY_STATUS_PACKED
+        assert supply.status == FBS_SUPPLY_STATUS_ASSEMBLING
         order = await session.get(FbsOrder, order_id)
         assert order is not None
         assert order.pack_status == PACK_STATUS_PACKED
@@ -771,6 +713,19 @@ async def test_fbs_pack_all_insufficient_stock_completes_without_cross_warehouse
             int(alternative_balance.quantity),
             int(alternative_balance.quantity_unpacked),
             int(alternative_balance.quantity_packed),
+        ) == (1, 1, 0)
+        source_balance = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+                InventoryBalance.storage_location_id == source_location_id,
+            )
+        )
+        assert source_balance is not None
+        assert (
+            int(source_balance.quantity),
+            int(source_balance.quantity_unpacked),
+            int(source_balance.quantity_packed),
         ) == (1, 1, 0)
 
 
@@ -830,7 +785,6 @@ async def test_fbs_pack_all_completes_atomically_and_is_idempotent(
         second_order.supply_id = supply_id
         second_order.status = FBS_ORDER_STATUS_IN_SUPPLY
         await session.commit()
-        order_ids = [order.id, second_order.id]
 
     assembling = await async_client.put(
         f"/operations/fbs-supplies/{supply_id}/status",
@@ -839,20 +793,6 @@ async def test_fbs_pack_all_completes_atomically_and_is_idempotent(
     )
     assert assembling.status_code == 200, assembling.text
     task_id = uuid.UUID(assembling.json()["packaging_task_id"])
-    async with SessionLocal() as session:
-        for order_id in order_ids:
-            order = await session.get(FbsOrder, order_id)
-            assert order is not None
-            await _seed_pick_for_order(
-                session,
-                tenant_id=tenant_id,
-                supply_id=supply_id,
-                warehouse_id=warehouse_id,
-                order=order,
-                source_location_id=source_location_id,
-                scan_key=f"atomic-pick-{order_id}",
-            )
-        await session.commit()
 
     task_before = await async_client.get(
         f"/operations/packaging-tasks/{task_id}", headers=headers
@@ -887,12 +827,11 @@ async def test_fbs_pack_all_completes_atomically_and_is_idempotent(
             )
         )
         assert fulfillments == 2
-        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
         balance = await session.scalar(
             select(InventoryBalance).where(
                 InventoryBalance.tenant_id == tenant_id,
                 InventoryBalance.product_id == product_id,
-                InventoryBalance.storage_location_id == sorting.id,
+                InventoryBalance.storage_location_id == source_location_id,
             )
         )
         assert balance is not None
@@ -902,8 +841,8 @@ async def test_fbs_pack_all_completes_atomically_and_is_idempotent(
             int(balance.quantity_packed),
         ) == (
             2,
-            0,
             2,
+            0,
         )
         physical_total = await session.scalar(
             select(func.coalesce(func.sum(InventoryBalance.quantity), 0)).where(
@@ -988,21 +927,6 @@ async def test_fbs_pack_same_sku_two_orders_third_rejected(
         json={"status": "assembling"},
     )
     task_id = status_resp.json()["packaging_task_id"]
-
-    async with SessionLocal() as session:
-        for order_id in order_ids:
-            order = await session.get(FbsOrder, order_id)
-            assert order is not None
-            await _seed_pick_for_order(
-                session,
-                tenant_id=tenant_id,
-                supply_id=supply_id,
-                warehouse_id=warehouse_id,
-                order=order,
-                source_location_id=source_location_id,
-                scan_key=f"pick-{order_id}",
-            )
-        await session.commit()
 
     task = await async_client.get(
         f"/operations/packaging-tasks/{task_id}",
@@ -1116,27 +1040,13 @@ async def test_fbs_pack_succeeds_when_line_balance_already_marked_packed(
     task_id = status_resp.json()["packaging_task_id"]
 
     async with SessionLocal() as session:
-        order = await session.get(FbsOrder, order_id)
-        assert order is not None
-        await _seed_pick_for_order(
-            session,
-            tenant_id=tenant_id,
-            supply_id=supply_id,
-            warehouse_id=warehouse_id,
-            order=order,
-            source_location_id=source_location_id,
-            scan_key=f"pick-{order_id}",
-        )
-        await session.commit()
-
-        # Flip the sorting-location balance so the unit is already recorded as
+        # Flip the source balance so the unit is already recorded as
         # "packed" rather than "unpacked" — total stays 1, only the split changes.
-        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
         balance = await session.scalar(
             select(InventoryBalance).where(
                 InventoryBalance.tenant_id == tenant_id,
                 InventoryBalance.product_id == product_id,
-                InventoryBalance.storage_location_id == sorting.id,
+                InventoryBalance.storage_location_id == source_location_id,
             )
         )
         assert balance is not None
@@ -1173,7 +1083,18 @@ async def test_fbs_pack_succeeds_when_line_balance_already_marked_packed(
         f"/operations/fbs-supplies/{supply_id}",
         headers=headers,
     )
-    assert supply.json()["status"] == FBS_SUPPLY_STATUS_PACKED
+    assert supply.json()["status"] == FBS_SUPPLY_STATUS_ASSEMBLING
+
+    async with SessionLocal() as session:
+        balance = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+                InventoryBalance.storage_location_id == source_location_id,
+            )
+        )
+        assert balance is not None
+        assert (int(balance.quantity_unpacked), int(balance.quantity_packed)) == (0, 1)
 
 
 # Regression counterpart — when the product genuinely isn't there at all (total
@@ -1226,7 +1147,6 @@ async def test_fbs_pack_continues_when_location_has_no_stock_at_all(
             actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await session.commit()
-        order_id = order.id
 
     status_resp = await async_client.put(
         f"/operations/fbs-supplies/{supply_id}/status",
@@ -1237,27 +1157,13 @@ async def test_fbs_pack_continues_when_location_has_no_stock_at_all(
     task_id = status_resp.json()["packaging_task_id"]
 
     async with SessionLocal() as session:
-        order = await session.get(FbsOrder, order_id)
-        assert order is not None
-        await _seed_pick_for_order(
-            session,
-            tenant_id=tenant_id,
-            supply_id=supply_id,
-            warehouse_id=warehouse_id,
-            order=order,
-            source_location_id=source_location_id,
-            scan_key=f"pick-{order_id}",
-        )
-        await session.commit()
-
-        # Drain the sorting-location balance entirely — the product is genuinely
+        # Drain the source balance entirely — the product is genuinely
         # not there (e.g. written off or moved out by hand), total is zero.
-        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
         balance = await session.scalar(
             select(InventoryBalance).where(
                 InventoryBalance.tenant_id == tenant_id,
                 InventoryBalance.product_id == product_id,
-                InventoryBalance.storage_location_id == sorting.id,
+                InventoryBalance.storage_location_id == source_location_id,
             )
         )
         assert balance is not None
@@ -1273,10 +1179,7 @@ async def test_fbs_pack_continues_when_location_has_no_stock_at_all(
     assert task.status_code == 200, task.text
     line = task.json()["lines"][0]
 
-    # 21.08.2026: пустая ячейка больше не повод останавливать упаковку. Подбор уже
-    # прошёл, товар физически собран, а остаток мог остаться в ячейке сортировки другого
-    # склада. Раньше здесь ждали ответ 409 и вставший склад. Теперь упаковка проходит,
-    # а несписанный остаток честно называется оператору словами.
+    # WB packaging is only a fact and does not inspect inventory.
     packed = await async_client.post(
         f"/operations/packaging-tasks/{task_id}/lines/{line['id']}/pack",
         headers=headers,
@@ -1285,12 +1188,7 @@ async def test_fbs_pack_continues_when_location_has_no_stock_at_all(
     assert packed.status_code == 200, packed.text
     body = packed.json()
     assert body["fulfilled_order"] is not None
-    warnings = body.get("warnings") or []
-    assert warnings, "оператор должен увидеть, что остаток не списан"
-    joined = " ".join(warnings)
-    assert "остаток не списан" in joined
-    # В сообщении по-прежнему видно, чего и где не хватило.
-    assert "0" in joined
+    assert body.get("warnings") is None
 
     async with SessionLocal() as session:
         balances = (

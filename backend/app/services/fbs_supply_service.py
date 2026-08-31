@@ -18,9 +18,6 @@ from sqlalchemy.orm import selectinload
 from app.core.settings import settings
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_ASSEMBLING,
-    FBS_ORDER_STATUS_CANCELLED,
-    FBS_ORDER_STATUS_DEFECT,
-    FBS_ORDER_STATUS_DONE,
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
     FbsOrder,
@@ -60,9 +57,14 @@ from app.services.fbs_sticker_code_service import (
     sticker_barcode_from_wb_row,
     sticker_code_from_wb_row,
 )
+from app.services.fbs_supply_composition_service import (
+    FbsSupplyCompositionError,
+    link_order_to_wb_supply_if_compatible,
+    reconcile_actual_wb_supply_composition,
+    supply_order_link_discrepancy,
+)
 from app.services.fbs_supply_reconcile_service import (
     create_pending_operation,
-    fetch_wb_supply_order_ids,
     get_operation_by_idempotency,
     mark_operation_confirmed,
     mark_operation_failed,
@@ -336,6 +338,29 @@ async def _sync_existing_packaging_task_for_added_orders(
 ) -> None:
     if supply.packaging_task_id is None or not orders:
         return
+    try:
+        async with session.begin_nested():
+            await _apply_existing_packaging_task_projection(
+                session,
+                tenant_id,
+                supply,
+                orders,
+            )
+    except Exception:
+        logger.warning(
+            "fbs packaging compatibility projection failed: supply=%s added_orders=%s",
+            supply.id,
+            [int(order.wb_order_id) for order in orders],
+            exc_info=True,
+        )
+
+
+async def _apply_existing_packaging_task_projection(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    orders: list[FbsOrder],
+) -> None:
     task = await session.scalar(
         select(PackagingTask)
         .options(selectinload(PackagingTask.lines))
@@ -1277,9 +1302,6 @@ async def update_planned_shipment_date(
 REPAIRABLE_SUPPLY_STATUSES = frozenset(
     {FBS_SUPPLY_STATUS_DRAFT, FBS_SUPPLY_STATUS_ASSEMBLING}
 )
-TERMINAL_ORDER_STATUSES = frozenset(
-    {FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DONE, FBS_ORDER_STATUS_DEFECT}
-)
 # За один цикл автоопроса чиним не больше этого числа поставок на селлера.
 PENDING_SUPPLY_REPAIR_BATCH = 10
 
@@ -1346,10 +1368,12 @@ async def repair_supply_composition_from_wb(
 
     token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
     try:
-        wb_order_ids = await fetch_wb_supply_order_ids(
-            http_client,
+        composition = await reconcile_actual_wb_supply_composition(
+            session,
+            tenant_id,
+            supply.id,
+            http_client=http_client,
             api_token=token,
-            wb_supply_id=wb_supply_id,
         )
     except WildberriesClientError as exc:
         raise _fbs_supply_error_from_wb(
@@ -1362,66 +1386,29 @@ async def repair_supply_composition_from_wb(
             retryable=True,
             http_status=502,
         ) from exc
+    except FbsSupplyCompositionError as exc:
+        raise FbsSupplyError(exc.code, http_status=409) from exc
 
-    if not wb_order_ids:
-        return {
-            "supply_id": str(supply.id),
-            "wb_supply_id": wb_supply_id,
-            "wb_orders": 0,
-            "linked": 0,
-            "skipped": [],
-            "missing_in_wms": [],
+    wb_order_ids = list(composition.wb_order_ids)
+    skipped = [
+        {
+            "wb_order_id": discrepancy.wb_order_id,
+            "order_id": (
+                str(discrepancy.local_order_id)
+                if discrepancy.local_order_id is not None
+                else None
+            ),
+            "reason": discrepancy.code,
         }
-
-    stmt = (
-        select(FbsOrder)
-        .where(
-            FbsOrder.tenant_id == tenant_id,
-            FbsOrder.seller_id == supply.seller_id,
-            FbsOrder.wb_order_id.in_(sorted(wb_order_ids)),
-        )
-        .with_for_update()
+        for discrepancy in composition.discrepancies
+        if discrepancy.code != "unknown_wb_order"
+    ]
+    missing_in_wms = sorted(
+        discrepancy.wb_order_id
+        for discrepancy in composition.discrepancies
+        if discrepancy.code == "unknown_wb_order"
     )
-    orders = list((await session.execute(stmt)).scalars().all())
-    found_wb_ids = {int(order.wb_order_id) for order in orders}
-
-    bound_status = (
-        FBS_ORDER_STATUS_IN_SUPPLY
-        if supply.status == FBS_SUPPLY_STATUS_DRAFT
-        else FBS_ORDER_STATUS_ASSEMBLING
-    )
-    to_bind: list[FbsOrder] = []
-    skipped: list[dict[str, Any]] = []
-    unresolved: list[int] = []
-    for order in orders:
-        # Прямой ответ WB — источник истины о том, в какой поставке лежит заказ.
-        order.wb_supply_id = wb_supply_id
-        if order.supply_id == supply.id:
-            continue
-        wb_order_id = int(order.wb_order_id)
-        if order.status in TERMINAL_ORDER_STATUSES:
-            # Отменённые и выкупленные из поставки выводятся, а не привязываются.
-            skipped.append({"wb_order_id": wb_order_id, "reason": order.status})
-            continue
-        if order.supply_id is not None:
-            skipped.append({"wb_order_id": wb_order_id, "reason": "other_supply"})
-            unresolved.append(wb_order_id)
-            continue
-        if order.warehouse_id != supply.warehouse_id:
-            skipped.append({"wb_order_id": wb_order_id, "reason": "warehouse_mismatch"})
-            unresolved.append(wb_order_id)
-            continue
-        to_bind.append(order)
-
-    for order in to_bind:
-        order.supply_id = supply.id
-        order.status = bound_status
-    if to_bind:
-        supply.cargo_type = to_bind[0].cargo_type
-    await session.flush()
-
-    missing_in_wms = sorted(set(wb_order_ids) - found_wb_ids)
-    unresolved.extend(missing_in_wms)
+    unresolved = [discrepancy.wb_order_id for discrepancy in composition.discrepancies]
     await _close_pending_operation_if_complete(
         session,
         supply,
@@ -1429,14 +1416,14 @@ async def repair_supply_composition_from_wb(
         unresolved=unresolved,
     )
 
-    if to_bind or missing_in_wms or skipped:
+    if composition.delta.linked_order_ids or missing_in_wms or skipped:
         logger.info(
             "fbs supply repair from WB: supply=%s wb_supply_id=%s wb_orders=%s "
             "linked=%s skipped=%s missing_in_wms=%s",
             supply.id,
             wb_supply_id,
             len(wb_order_ids),
-            len(to_bind),
+            len(composition.delta.linked_order_ids),
             len(skipped),
             len(missing_in_wms),
         )
@@ -1444,7 +1431,7 @@ async def repair_supply_composition_from_wb(
         "supply_id": str(supply.id),
         "wb_supply_id": wb_supply_id,
         "wb_orders": len(wb_order_ids),
-        "linked": len(to_bind),
+        "linked": len(composition.delta.linked_order_ids),
         "skipped": skipped,
         "missing_in_wms": missing_in_wms,
     }
@@ -1580,6 +1567,17 @@ async def add_order_to_supply(
         and order.supplier_status.strip().lower() != FBS_ORDER_STATUS_NEW
     ):
         raise FbsSupplyError("order_bad_status")
+    link_issue = supply_order_link_discrepancy(
+        supply,
+        order,
+        existing_orders=supply.orders,
+    )
+    if link_issue is not None:
+        raise FbsSupplyError(
+            link_issue.code,
+            context={"wb_order_id": link_issue.wb_order_id},
+            http_status=409,
+        )
 
     token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
     try:
@@ -1600,18 +1598,32 @@ async def add_order_to_supply(
             extra_context={"wb_order_id": int(order.wb_order_id)},
         ) from exc
 
-    order.supply_id = supply.id
-    order.status = FBS_ORDER_STATUS_IN_SUPPLY
-    await session.flush()
+    link_result = await link_order_to_wb_supply_if_compatible(
+        session,
+        supply,
+        order,
+        existing_orders=supply.orders,
+    )
+    if link_result.discrepancy is not None:
+        raise FbsSupplyError(
+            link_result.discrepancy.code,
+            context={"wb_order_id": int(order.wb_order_id)},
+            http_status=409,
+        )
+    if link_result.linked:
+        await _sync_existing_packaging_task_for_added_orders(
+            session,
+            tenant_id,
+            supply,
+            [order],
+        )
+    # Linking may fill ``cargo_type`` and therefore expire server-managed
+    # columns such as ``updated_at`` after the flush.  Reload the scalar state
+    # before the API commits and serializes this instance; async SQLAlchemy
+    # cannot perform an implicit refresh from the synchronous serializer.
+    await session.refresh(supply)
     await session.refresh(supply, attribute_names=["orders"])
     return supply
-
-
-def _supply_existing_wb_warehouse_id(supply: FbsSupply) -> int | None:
-    for order in supply.orders:
-        if order.wb_warehouse_id is not None:
-            return int(order.wb_warehouse_id)
-    return None
 
 
 def _existing_supply_issues(
@@ -1619,40 +1631,22 @@ def _existing_supply_issues(
     orders: list[FbsOrder],
 ) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
-    existing_wb_wh = _supply_existing_wb_warehouse_id(supply)
+    comparison_orders = list(supply.orders)
     for order in orders:
-        if order.seller_id != supply.seller_id:
+        discrepancy = supply_order_link_discrepancy(
+            supply,
+            order,
+            existing_orders=comparison_orders,
+        )
+        if discrepancy is not None:
             issues.append(
                 {
                     "order_id": str(order.id),
-                    "code": "different_seller",
-                    "message": "Заказ принадлежит другому селлеру.",
+                    "code": discrepancy.code,
+                    "message": "Заказ несовместим с составом поставки.",
                 }
             )
-        if order.warehouse_id != supply.warehouse_id:
-            issues.append(
-                {
-                    "order_id": str(order.id),
-                    "code": "different_wms_warehouse",
-                    "message": "Заказ относится к другому WMS-складу.",
-                }
-            )
-        if existing_wb_wh is not None and int(order.wb_warehouse_id or 0) != existing_wb_wh:
-            issues.append(
-                {
-                    "order_id": str(order.id),
-                    "code": "different_wb_warehouse",
-                    "message": "Заказ относится к другому складу WB.",
-                }
-            )
-        if supply.cargo_type and order.cargo_type and order.cargo_type != supply.cargo_type:
-            issues.append(
-                {
-                    "order_id": str(order.id),
-                    "code": "different_cargo_type",
-                    "message": "Тип груза не совпадает с поставкой.",
-                }
-            )
+        comparison_orders.append(order)
     return issues
 
 
@@ -1749,20 +1743,26 @@ async def add_orders_to_existing_supply(
             retryable=True,
             http_status=504,
         )
-    status_after_bind = (
-        FBS_ORDER_STATUS_ASSEMBLING
-        if supply.status == FBS_SUPPLY_STATUS_ASSEMBLING
-        else FBS_ORDER_STATUS_IN_SUPPLY
-    )
+    linked_orders: list[FbsOrder] = []
     for order in accepted_orders:
-        order.supply_id = supply.id
-        order.status = status_after_bind
-    if accepted_orders:
-        supply.cargo_type = supply.cargo_type or accepted_orders[0].cargo_type
-        await session.flush()
+        link_result = await link_order_to_wb_supply_if_compatible(
+            session,
+            supply,
+            order,
+            existing_orders=supply.orders,
+        )
+        if link_result.discrepancy is not None:
+            raise FbsSupplyError(
+                link_result.discrepancy.code,
+                context={"wb_order_id": int(order.wb_order_id)},
+                http_status=409,
+            )
+        if link_result.linked:
+            linked_orders.append(order)
+    if linked_orders:
         await session.refresh(supply, attribute_names=["orders"])
         await _sync_existing_packaging_task_for_added_orders(
-            session, tenant_id, supply, accepted_orders
+            session, tenant_id, supply, linked_orders
         )
     partial_summary = None
     if len(accepted_orders) != len(orders):

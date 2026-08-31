@@ -55,26 +55,24 @@ def _mock_order(status: str, *, order_id: uuid.UUID | None = None) -> SimpleName
     )
 
 
-def test_deliver_blocked_for_in_supply() -> None:
+def test_deliver_allows_optional_pick_pack_for_in_supply() -> None:
     checks = _build_delivery_checks(
         _mock_supply(),
         [_mock_order(FBS_ORDER_STATUS_IN_SUPPLY)],
         cargo_qr_ready=True,
     )
-    with pytest.raises(FbsShipmentError) as exc:
-        _validate_checks_pass(checks)
-    assert exc.value.code == "packaging_required"
+    _validate_checks_pass(checks)
+    assert all(check.code != "packaging_required" for check in checks)
 
 
-def test_deliver_blocked_for_assembling() -> None:
+def test_deliver_allows_optional_pick_pack_for_assembling() -> None:
     checks = _build_delivery_checks(
         _mock_supply(),
         [_mock_order(FBS_ORDER_STATUS_ASSEMBLING)],
         cargo_qr_ready=True,
     )
-    with pytest.raises(FbsShipmentError) as exc:
-        _validate_checks_pass(checks)
-    assert exc.value.code == "packaging_required"
+    _validate_checks_pass(checks)
+    assert all(check.code != "packaging_required" for check in checks)
 
 
 def test_deliver_ok_when_packed() -> None:
@@ -115,15 +113,15 @@ def test_non_wb_delivery_does_not_require_wb_order_sticker() -> None:
     _validate_checks_pass(checks)
 
 
-def test_cancelled_order_check_not_ok() -> None:
+def test_terminal_order_check_not_ok() -> None:
     checks = _build_delivery_checks(
         _mock_supply(),
         [_mock_order(FBS_ORDER_STATUS_CANCELLED)],
         cargo_qr_ready=True,
     )
-    cancelled = [check for check in checks if check.code == "order_cancelled"]
-    assert len(cancelled) == 1
-    assert cancelled[0].ok is False
+    terminal = [check for check in checks if check.code == "order_terminal"]
+    assert len(terminal) == 1
+    assert terminal[0].ok is False
 
 
 def test_warehouse_route_has_no_cargo_checks() -> None:

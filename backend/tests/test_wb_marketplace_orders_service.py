@@ -156,12 +156,12 @@ async def _create_product(
         return product
 
 
-# TC-NEW-SUPPLY-SYNC-001: adoption with supplies list: done=True updates status and name
+# TC-NEW-SUPPLY-SYNC-001: a terminal WB supply is adopted but never receives an order
 @pytest.mark.asyncio
 async def test_adoption_with_supplies_list_done_true(
     async_client: AsyncClient,
 ) -> None:
-    """Supplies list with done=True: new supply created with done status and real name."""
+    """A done WB supply is recorded, but its order remains unlinked for safe repair."""
     tenant_id, seller_id, warehouse_id, _location_id = await _register_tenant_and_seller(
         async_client
     )
@@ -245,7 +245,18 @@ async def test_adoption_with_supplies_list_done_true(
         assert supply.status == FBS_SUPPLY_STATUS_DONE
         assert supply.name == "ПИТЕР Поставка 18.08.2026"
         assert result["supply_links_created"] == 1
-        assert result["supply_linked_orders"] == 1
+        assert result["supply_linked_orders"] == 0
+        order = await session.scalar(select(FbsOrder).where(FbsOrder.wb_order_id == 1001))
+        assert order is not None
+        assert result["supply_link_discrepancies"] == [
+            {
+                "wb_supply_id": "WB-GI-266355621",
+                "wb_order_id": 1001,
+                "order_id": str(order.id),
+                "reason": "terminal_supply",
+            }
+        ]
+        assert order.supply_id is None
 
 
 # TC-NEW-SUPPLY-SYNC-002: adoption uses supplies_dict without individual fetch
@@ -561,7 +572,18 @@ async def test_supplies_pagination_merged_into_dict(
         assert supply2.name == "Page 2 Supply 2"
         assert supply2.status == FBS_SUPPLY_STATUS_DONE
         assert result["supply_links_created"] == 2
-        assert result["supply_linked_orders"] == 2
+        assert result["supply_linked_orders"] == 1
+        assert [row["reason"] for row in result["supply_link_discrepancies"]] == [
+            "terminal_supply"
+        ]
+        page1_order = await session.scalar(
+            select(FbsOrder).where(FbsOrder.wb_order_id == 2001)
+        )
+        page2_order = await session.scalar(
+            select(FbsOrder).where(FbsOrder.wb_order_id == 2002)
+        )
+        assert page1_order is not None and page1_order.supply_id == supply1.id
+        assert page2_order is not None and page2_order.supply_id is None
         # Verify pagination happened (two page requests)
         assert len(page_requests) == 2
 

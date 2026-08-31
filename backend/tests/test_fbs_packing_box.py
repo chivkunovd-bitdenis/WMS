@@ -21,6 +21,7 @@ from app.models.fbs_order import PACK_STATUS_PACKED, FbsOrder
 from app.models.fbs_packing_box import FbsPackingBox
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+    FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
@@ -33,6 +34,7 @@ from app.models.fbs_wb_operation import (
 from app.services import fbs_shipment_pvz_service as pvz_svc
 from app.services.fbs_packing_box_service import (
     FbsPackingBoxError,
+    get_delivery_box_readiness,
     set_boxes_without_distribution,
 )
 from app.services.fbs_supply_reconcile_service import OPERATION_KIND_CARGO_PLACES_CREATE
@@ -139,13 +141,29 @@ async def test_warehouse_boxes_get_cargo_places_and_orders_are_exclusive(
         assert order is not None
         order.pack_status = "pending"
         await session.commit()
-    unpacked = await async_client.post(
+    assigned_unpacked = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/boxes/{first}/orders",
         headers=headers,
         json={"order_ids": [str(order_ids[1])]},
     )
-    assert unpacked.status_code == 400, unpacked.text
-    assert unpacked.json()["detail"]["code"] == "order_not_packed"
+    assert assigned_unpacked.status_code == 200, assigned_unpacked.text
+    assert assigned_unpacked.json()["boxes"][0]["assigned_order_ids"] == [
+        str(order_ids[1])
+    ]
+
+    unpacked_duplicate = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes/{second}/orders",
+        headers=headers,
+        json={"order_ids": [str(order_ids[1])]},
+    )
+    assert unpacked_duplicate.status_code == 409, unpacked_duplicate.text
+    assert unpacked_duplicate.json()["detail"]["code"] == "order_already_in_box"
+
+    removed_unpacked = await async_client.delete(
+        f"/operations/fbs-supplies/{supply_id}/boxes/{first}/orders/{order_ids[1]}",
+        headers=headers,
+    )
+    assert removed_unpacked.status_code == 200, removed_unpacked.text
 
     assigned = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/boxes/{first}/orders",
@@ -184,6 +202,42 @@ async def test_warehouse_boxes_get_cargo_places_and_orders_are_exclusive(
     )
     assert deleted.status_code == 200, deleted.text
     assert len(deleted.json()["boxes"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_unpacked_wb_orders_do_not_block_existing_distribution_boxes(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, supply_id, order_ids = await _packed_supply(async_client)
+    created = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes",
+        headers=headers,
+        json={"count": 1, "idempotency_key": "unpacked-readiness-box"},
+    )
+    assert created.status_code == 201, created.text
+
+    async with SessionLocal() as session:
+        orders = list(
+            (
+                await session.scalars(
+                    select(FbsOrder).where(FbsOrder.id.in_(order_ids))
+                )
+            ).all()
+        )
+        for order in orders:
+            order.pack_status = "pending"
+        await session.flush()
+        readiness = await get_delivery_box_readiness(
+            session,
+            orders[0].tenant_id,
+            supply_id,
+            orders,
+        )
+
+    assert readiness.has_physical_boxes is True
+    assert readiness.without_distribution is False
+    assert readiness.unassigned_packed_order_ids == frozenset()
 
 
 @pytest.mark.asyncio
@@ -1022,9 +1076,10 @@ async def test_boxes_without_distribution_api_conflicts_when_order_is_assigned(
     assert workspace.json()["supply"]["boxes_without_distribution"] is False
 
 
-def test_workspace_handoff_requires_boxes_and_every_packed_order_assignment() -> None:
+def test_workspace_distribution_enabled_requires_boxes_and_order_assignment() -> None:
     order_id = uuid.uuid4()
     supply = SimpleNamespace(
+        marketplace="wb",
         status=FBS_SUPPLY_STATUS_PACKED,
         delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
         trbxes=[],
@@ -1062,6 +1117,7 @@ def test_workspace_handoff_requires_boxes_and_every_packed_order_assignment() ->
 def test_workspace_opens_boxes_while_order_sticker_is_not_ready() -> None:
     order_id = uuid.uuid4()
     supply = SimpleNamespace(
+        marketplace="wb",
         status=FBS_SUPPLY_STATUS_PACKED,
         delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
         trbxes=[],
@@ -1101,9 +1157,44 @@ def test_workspace_opens_boxes_while_order_sticker_is_not_ready() -> None:
     assert any(item["code"] == "stickers_not_ready" for item in blockers)
 
 
+def test_workspace_active_wb_unlocks_handoff_before_pick_and_pack() -> None:
+    order_id = uuid.uuid4()
+    supply = SimpleNamespace(
+        marketplace="wb",
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+        trbxes=[],
+    )
+    order = SimpleNamespace(
+        id=order_id,
+        wb_order_id=774,
+        pick_status="pending",
+        metadata_delivery_allowed=True,
+        required_meta_json=[],
+    )
+    progress = WorkspaceProgress(
+        picked=0,
+        packed=0,
+        metadata_ready=1,
+        stickers_ready=0,
+        total=1,
+    )
+
+    stage = _compute_stage(
+        supply,
+        [order],
+        progress,
+        has_physical_boxes=False,
+        unassigned_packed_order_ids={order_id},
+    )
+
+    assert stage == "handoff_prep"
+
+
 def test_workspace_without_distribution_skips_assignment_gate() -> None:
     order_id = uuid.uuid4()
     supply = SimpleNamespace(
+        marketplace="wb",
         status=FBS_SUPPLY_STATUS_PACKED,
         delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
         trbxes=[],
