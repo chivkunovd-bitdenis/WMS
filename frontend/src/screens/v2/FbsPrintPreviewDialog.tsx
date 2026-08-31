@@ -13,6 +13,7 @@ import {
   Stack,
   TextField,
   Typography,
+  LinearProgress,
 } from '@mui/material'
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
 import { resolveFbsAssetUrl, type FbsPrintAsset, type FbsPrintBatch } from './fbsApi'
@@ -49,6 +50,7 @@ export function FbsPrintPreviewDialog({
 }: Props) {
   const [previews, setPreviews] = useState<Preview[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadedCount, setLoadedCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [applyingId, setApplyingId] = useState<string | null>(null)
   const [copies, setCopies] = useState(1)
@@ -67,25 +69,62 @@ export function FbsPrintPreviewDialog({
     let active = true
     const objectUrls: string[] = []
     setLoading(true)
+    setPreviews([])
+    setLoadedCount(0)
     setError(null)
-    void Promise.allSettled(
-      readyAssets.map(async (asset) => {
-        const response = await fetch(resolveFbsAssetUrl(asset.preview_url!), {
-          headers: { ...authHeaders(token) },
-        })
-        if (!response.ok) throw new Error(`Предпросмотр ${asset.id} недоступен (${response.status}).`)
-        const objectUrl = URL.createObjectURL(await response.blob())
-        objectUrls.push(objectUrl)
-        return { asset, objectUrl }
-      }),
-    )
-      .then((results) => {
+
+    // Поставка на двести заказов — это триста этикеток. Раньше все запросы
+    // уходили разом и окно показывало один кружок до последней картинки:
+    // браузер держит около шести соединений, остальные стоят в очереди, а
+    // оператор видит намертво замерший экран (бой 31.08.2026). Теперь качаем
+    // порциями и показываем каждую этикетку сразу, как она пришла.
+    const CONCURRENCY = 6
+    const orderIndex = new Map(readyAssets.map((asset, index) => [asset.id, index]))
+    let failedCount = 0
+    let cursor = 0
+
+    const loadOne = async (asset: (typeof readyAssets)[number]) => {
+      const response = await fetch(resolveFbsAssetUrl(asset.preview_url!), {
+        headers: { ...authHeaders(token) },
+      })
+      if (!response.ok) throw new Error(`Предпросмотр ${asset.id} недоступен (${response.status}).`)
+      const objectUrl = URL.createObjectURL(await response.blob())
+      objectUrls.push(objectUrl)
+      return { asset, objectUrl }
+    }
+
+    const worker = async () => {
+      while (active) {
+        const index = cursor
+        cursor += 1
+        const asset = readyAssets[index]
+        if (!asset) return
+        try {
+          const loaded = await loadOne(asset)
+          if (!active) {
+            URL.revokeObjectURL(loaded.objectUrl)
+            return
+          }
+          // Порядок этикеток обязан совпадать с порядком заказов: печатают
+          // пачкой и раскладывают по коробам подряд. Сеть возвращает картинки
+          // вразнобой, поэтому вставляем на своё место, а не в конец.
+          setPreviews((current) => {
+            const next = [...current, loaded]
+            next.sort((a, b) => orderIndex.get(a.asset.id)! - orderIndex.get(b.asset.id)!)
+            return next
+          })
+        } catch {
+          failedCount += 1
+        }
+        if (active) {
+          setLoadedCount((current) => current + 1)
+        }
+      }
+    }
+
+    void Promise.all(Array.from({ length: Math.min(CONCURRENCY, readyAssets.length) }, worker))
+      .then(() => {
         if (!active) return
-        const next = results.flatMap((result) => (
-          result.status === 'fulfilled' ? [result.value] : []
-        ))
-        const failedCount = results.length - next.length
-        setPreviews(next)
         setError(failedCount > 0
           ? `Не загрузилось изображений: ${failedCount}. Остальные QR можно напечатать.`
           : null)
@@ -165,7 +204,9 @@ export function FbsPrintPreviewDialog({
                 а файла на диске не быть — тогда «Готово N» рядом с «готовых нет»
                 сбивало оператора с толку (бой 27.08.2026). */}
             <Chip
-              label={`Готово ${loading ? (batch?.ready ?? 0) : previews.length}`}
+              label={loading
+                ? `Загружено ${previews.length} из ${readyAssets.length}`
+                : `Готово ${previews.length}`}
               color={!loading && previews.length === 0 ? 'default' : 'success'}
             />
             {batch?.missing ? <Chip label={`Не получено ${batch.missing}`} color="warning" /> : null}
@@ -197,9 +238,19 @@ export function FbsPrintPreviewDialog({
             </Alert>
           ))}
           {loading ? (
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', py: 4 }}>
-              <CircularProgress size={22} />
-              <Typography>Загружаем защищённые PNG для preview…</Typography>
+            <Stack spacing={1} sx={{ py: 2 }}>
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                <CircularProgress size={22} />
+                <Typography>
+                  Загружаем этикетки: {loadedCount} из {readyAssets.length}. Готовые
+                  можно печатать, не дожидаясь остальных.
+                </Typography>
+              </Stack>
+              <LinearProgress
+                variant="determinate"
+                value={readyAssets.length > 0 ? (loadedCount / readyAssets.length) * 100 : 0}
+                data-testid="fbs-print-preview-progress"
+              />
             </Stack>
           ) : null}
           {!loading && previews.length === 0 ? (
@@ -227,9 +278,9 @@ export function FbsPrintPreviewDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading || Boolean(applyingId)}>Закрыть</Button>
-        <Button variant="contained" startIcon={<PrintOutlinedIcon />} disabled={previews.length === 0 || loading} onClick={() => print(previews)} data-task-id="FBS-10">
-          {previews.length === 1 ? 'Печать' : 'Печать всех готовых'}
+        <Button onClick={onClose} disabled={Boolean(applyingId)}>Закрыть</Button>
+        <Button variant="contained" startIcon={<PrintOutlinedIcon />} disabled={previews.length === 0} onClick={() => print(previews)} data-task-id="FBS-10">
+          {previews.length === 1 ? 'Печать' : `Печать готовых (${previews.length})`}
         </Button>
       </DialogActions>
     </Dialog>
