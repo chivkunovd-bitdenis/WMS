@@ -69,7 +69,7 @@
 
 ## Что за проект
 
-WMS фулфилмент-центра (3PL для маркетплейсов). Backend — FastAPI, frontend — React + MUI + Playwright, mobile — Android ТСД (терминал сбора данных).
+WMS фулфилмент-центра (3PL для маркетплейсов). Backend — FastAPI, frontend — React + MUI, mobile — Android ТСД (терминал сбора данных).
 
 **Слои backend (не смешивать):** роуты — `backend/app/api`, логика — `backend/app/services`, модели — `backend/app/models`, БД — `backend/app/db`, фоновые задачи (Celery/BackgroundTasks) — `backend/app/tasks`.
 
@@ -113,14 +113,19 @@ alembic откажется стартовать с «Can't locate revision».
 
 ## Гейт перед push
 
-- backend: `cd backend && ruff check . && mypy . && pytest` (есть `backend/.venv`)
-- frontend (при изменениях): `cd frontend && npm run build && npm run test:e2e`; юнит — `npm run test:unit` (vitest)
+Локально гоняем только то, чего касались. Полный набор крутит CI — там он
+идёт 4 минуты 48 секунд, локально в один поток 20 минут 38 секунд.
+
+- backend: `cd backend && ruff check . && mypy . && pytest -n auto tests/<файл>` (есть `backend/.venv`)
+- полный набор бэка, если он правда нужен: `pytest -n auto` — **всегда с `-n auto`**
+- frontend (при изменениях): `cd frontend && npx tsc --noEmit -p tsconfig.app.json && npm run build`; юнит — `npm run test:unit` (vitest)
+- браузерных тестов нет: Playwright снят 31.08.2026, экран проверяем руками
 
 ## Процесс
 
 - **Ветвление:** фича-ветка (`feat/…`, `fix/…`, `chore/…`) → PR → зелёный CI → merge. Прямо в `main` не коммитим.
-- **CI-контракт:** PR, трогающий `backend/app/api|services` или `frontend/src`, обязан нести в описании блок `### Test coverage` с `TC-ID` и маркерами Given/When/Then (см. AGENTS.md), иначе CI красный. Таблицу берём из `tasks/<slug>/04-test-cases.md`.
-- **Регламент задачи** — [`.dev/PROCESS.md`](.dev/PROCESS.md), читать перед работой. Арх-карта — [`.dev/ARCHITECTURE.md`](.dev/ARCHITECTURE.md).
+- **CI:** только два задания — бэк (ruff, mypy, pytest -n auto) и сборка фронта. Ни таблиц тест-кейсов, ни продуктовых вердиктов, ни браузерных сценариев. Конвейер агентов снят 31.08.2026.
+- **Арх-карта** — [`.dev/ARCHITECTURE.md`](.dev/ARCHITECTURE.md).
 - **На каждый ответ:** [`.dev/COMMUNICATION.md`](.dev/COMMUNICATION.md) (по-человечески, пояснять термины) и [`.dev/LEARNING.md`](.dev/LEARNING.md).
 - **Терминология (UI и общение):** «приёмка» = селлер→ФФ (`inbound`), «отгрузка» = ФФ→маркетплейс (`marketplace_unload`). Слово «поставка» в пользовательском UI для селлер→ФФ не используем. Источник — `docs/MVP_DECISIONS_RU.md`.
 - **Ритм:** маленькие связные коммиты после каждой единицы; не оставлять грязное дерево; не тащить несвязанный рефактор в задачу.
