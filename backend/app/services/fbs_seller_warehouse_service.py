@@ -10,6 +10,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.settings import settings
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.services.wildberries_client import (
     WildberriesClientError,
@@ -105,7 +106,9 @@ async def list_seller_warehouses(
     for attempt, token in enumerate(tokens, start=1):
         try:
             rows = await fetch_marketplace_seller_warehouses(
-                http_client, api_token=token
+                http_client,
+                api_token=token,
+                marketplace_api_base=settings.wildberries_marketplace_warehouse_api_base,
             )
             break
         except WildberriesClientError as exc:
@@ -171,7 +174,11 @@ async def list_seller_offices(
     rows: list[dict[str, Any]] = []
     for attempt, token in enumerate(tokens, start=1):
         try:
-            rows = await fetch_marketplace_seller_offices(http_client, api_token=token)
+            rows = await fetch_marketplace_seller_offices(
+                http_client,
+                api_token=token,
+                marketplace_api_base=settings.wildberries_marketplace_warehouse_api_base,
+            )
             break
         except WildberriesClientError as exc:
             last_exc = exc

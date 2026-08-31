@@ -48,6 +48,14 @@ class Settings(BaseSettings):
         default="https://marketplace-api.wildberries.ru",
         description="WB Marketplace API host (FBS orders; override in tests/mocks).",
     )
+    wildberries_marketplace_warehouse_api_base: str | None = Field(
+        default=None,
+        description=(
+            "Optional read-only WB Marketplace host for seller warehouse discovery. "
+            "Unset: use wildberries_marketplace_api_base. This allows staging to read "
+            "real warehouse names while all mutating FBS calls remain on the emulator."
+        ),
+    )
     wms_secrets_fernet_key: str | None = Field(
         default=None,
         description="Optional Fernet key (urlsafe base64) for integration tokens. "
