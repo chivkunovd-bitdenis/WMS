@@ -90,6 +90,7 @@ async def get_or_create_binding_for_sole_operational_warehouse(
         wms_warehouse_id=physical_warehouse.id,
         is_active=True,
         stock_sync_enabled=False,
+        served=False,
     )
     try:
         async with session.begin_nested():
@@ -295,20 +296,20 @@ async def configure_seller_warehouse(
     seller_id: uuid.UUID,
     wb_warehouse_id: int,
     *,
-    served: bool,
+    served: bool | None,
     wms_warehouse_id: uuid.UUID | None,
 ) -> FbsWarehouseBinding | None:
-    """Настроить принадлежность склада продавца без создания ложной привязки.
+    """Настроить сопоставление и обслуживание внешнего склада независимо.
 
-    Отсутствие строки означает «склад ещё не разобран»: его заказы импортируются
-    со статусом ``warehouse_unmapped``. Явная строка с ``served=false`` означает
-    склад другого фулфилмента, и его заказы отбрасываются до записи в базу.
+    ``wms_warehouse_id`` меняет только сопоставление, а ``served`` — только
+    решение обслуживать склад. Если ``served`` не передан, новая
+    привязка создаётся выключенной, а у существующей галка не меняется.
     """
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
         raise FbsWarehouseBindingError("seller_not_found")
     if wb_warehouse_id <= 0:
         raise FbsWarehouseBindingError("invalid_wb_warehouse_id")
-    if served and wms_warehouse_id is None:
+    if served is True and wms_warehouse_id is None:
         raise FbsWarehouseBindingError(
             "wms_warehouse_required",
             message="Для обслуживаемого склада выберите склад WMS.",
@@ -323,20 +324,18 @@ async def configure_seller_warehouse(
         session, tenant_id, seller_id, wb_warehouse_id, for_update=True
     )
     if existing is None:
-        if not served and wms_warehouse_id is None:
-            # Это по-прежнему непривязанный склад, а не явно чужой. Не создаём
-            # фиктивную привязку: именно отсутствие строки сохраняет отдельный
-            # путь warehouse_unmapped при первом заказе.
+        if wms_warehouse_id is None:
             return None
         assert wms_warehouse_id is not None
+        initial_served = bool(served) if served is not None else False
         existing = FbsWarehouseBinding(
             tenant_id=tenant_id,
             seller_id=seller_id,
             wb_warehouse_id=wb_warehouse_id,
             wms_warehouse_id=wms_warehouse_id,
             is_active=True,
-            stock_sync_enabled=served,
-            served=served,
+            stock_sync_enabled=initial_served,
+            served=initial_served,
         )
         session.add(existing)
     else:
@@ -347,8 +346,9 @@ async def configure_seller_warehouse(
                 raise FbsWarehouseBindingError("active_fbs_reservations")
             existing.wms_warehouse_id = wms_warehouse_id
         existing.is_active = True
-        existing.served = served
-        existing.stock_sync_enabled = served
+        if served is not None:
+            existing.served = served
+            existing.stock_sync_enabled = served
 
     try:
         await session.commit()

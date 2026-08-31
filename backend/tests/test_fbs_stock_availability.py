@@ -534,3 +534,143 @@ async def test_sold_release_does_not_resurrect_available_after_fbs_write_off(
         )
         assert available_after_sold == 4
         assert available_after_sold != 5
+
+
+# TC-S17-032: OWN-18 full invariant — reserve decreases
+# availability, release restores it, reserve-to-write-off does not subtract
+# twice, and exhausted physical stock publishes zero.
+@pytest.mark.asyncio
+async def test_fbs_available_stock_reserve_release_writeoff_sequence(
+    async_client: AsyncClient,
+) -> None:
+    _headers, seller_id, warehouse_id, product_id, storage_loc_id = (
+        await _setup_tenant_product(async_client)
+    )
+
+    async with SessionLocal() as session:
+        product = await session.get(Product, product_id)
+        assert product is not None
+        tenant_id = product.tenant_id
+        actor_user_id = await resolve_test_actor_user_id(session, tenant_id)
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=storage_loc_id,
+            quantity_delta=100,
+            movement_type="inbound_intake",
+            actor_user_id=actor_user_id,
+        )
+
+        first_order = FbsOrder(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            warehouse_id=warehouse_id,
+            product_id=product_id,
+            wb_order_id=903_001,
+            created_at_wb=product.created_at,
+            deadline_at=product.created_at,
+            mapping_status="mapped",
+            reserve_status="reserved",
+        )
+        session.add(first_order)
+        await session.flush()
+        session.add(
+            FbsOrderReservation(
+                tenant_id=tenant_id,
+                fbs_order_id=first_order.id,
+                product_id=product_id,
+                warehouse_id=warehouse_id,
+                quantity=1,
+            )
+        )
+        await session.commit()
+
+        assert (
+            await fbs_available_qty_for_product(
+                session, tenant_id, warehouse_id, product_id
+            )
+            == 99
+        )
+
+        from app.services.wb_marketplace_orders_service import _release_reservation
+
+        await _release_reservation(session, first_order)
+        await session.commit()
+        assert (
+            await fbs_available_qty_for_product(
+                session, tenant_id, warehouse_id, product_id
+            )
+            == 100
+        )
+
+        sold_order = FbsOrder(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            warehouse_id=warehouse_id,
+            product_id=product_id,
+            wb_order_id=903_002,
+            created_at_wb=product.created_at,
+            deadline_at=product.created_at,
+            mapping_status="mapped",
+            reserve_status="reserved",
+        )
+        session.add(sold_order)
+        await session.flush()
+        session.add(
+            FbsOrderReservation(
+                tenant_id=tenant_id,
+                fbs_order_id=sold_order.id,
+                product_id=product_id,
+                warehouse_id=warehouse_id,
+                quantity=1,
+            )
+        )
+        await session.commit()
+
+        await inventory_service.apply_packaging_convert(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=storage_loc_id,
+            quantity=1,
+        )
+        await inventory_service.apply_fbs_supply_write_off(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=storage_loc_id,
+            quantity=1,
+            actor_user_id=actor_user_id,
+        )
+        await _release_reservation(session, sold_order)
+        await session.commit()
+        assert (
+            await fbs_available_qty_for_product(
+                session, tenant_id, warehouse_id, product_id
+            )
+            == 99
+        )
+
+        await inventory_service.apply_packaging_convert(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=storage_loc_id,
+            quantity=99,
+        )
+        await inventory_service.apply_fbs_supply_write_off(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=storage_loc_id,
+            quantity=99,
+            actor_user_id=actor_user_id,
+        )
+        await session.commit()
+        assert (
+            await fbs_available_qty_for_product(
+                session, tenant_id, warehouse_id, product_id
+            )
+            == 0
+        )

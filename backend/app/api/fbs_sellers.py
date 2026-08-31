@@ -102,7 +102,7 @@ class FbsWarehouseBindingUpsert(BaseModel):
 
 
 class FbsSellerWarehouseConfigure(BaseModel):
-    served: bool
+    served: bool | None = None
     wms_warehouse_id: uuid.UUID | None = None
 
 
@@ -234,9 +234,6 @@ async def configure_fbs_seller_warehouse(
         )
     except binding_svc.FbsWarehouseBindingError as exc:
         _raise_from_binding_service(exc)
-
-    if row is not None and not body.served:
-        schedule_explicit_zero_publish(user.tenant_id, seller_id, row.id)
 
     return FbsSellerWarehouseOut(
         id=wb_warehouse_id,

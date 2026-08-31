@@ -415,7 +415,7 @@ async def _active_pick_count_for_sorting_source(
     # container reference. Counting all of them at this sorting location is
     # conservative: it may ask the operator to choose another source, but it
     # can never assign one physical unit twice.
-    ozon_count = await session.scalar(
+    ozon_stmt = (
         select(func.count(FbsOrderProductPick.id))
         .join(FbsSupply, FbsSupply.id == FbsOrderProductPick.fbs_supply_id)
         .where(
@@ -426,13 +426,13 @@ async def _active_pick_count_for_sorting_source(
             FbsSupply.status.notin_(
                 (FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE)
             ),
-            (
-                FbsOrderProductPick.source_storage_location_id == storage_location_id
-                if container_id is not None
-                else True
-            ),
         )
     )
+    if container_id is not None:
+        ozon_stmt = ozon_stmt.where(
+            FbsOrderProductPick.source_storage_location_id == storage_location_id
+        )
+    ozon_count = await session.scalar(ozon_stmt)
     return int(wb_count or 0) + int(ozon_count or 0)
 
 
@@ -778,6 +778,30 @@ async def pick_scan(
             product.id,
             address_storage_enabled=address_storage_enabled,
         )
+        # Product-first picking without address storage still has to preserve
+        # the physical container source. If there is exactly one positive
+        # container balance at the implicit location, use it instead of
+        # incorrectly checking only the loose (container=NULL) balance.
+        if container_kind is None and container_id is None:
+            container_rows = (
+                await session.execute(
+                    select(
+                        InventoryBalance.container_kind,
+                        InventoryBalance.container_id,
+                    ).where(
+                        InventoryBalance.tenant_id == tenant_id,
+                        InventoryBalance.product_id == product.id,
+                        InventoryBalance.storage_location_id == location.id,
+                        InventoryBalance.container_kind.is_not(None),
+                        InventoryBalance.container_id.is_not(None),
+                        InventoryBalance.quantity > 0,
+                        InventoryBalance.quantity_unpacked > 0,
+                    )
+                )
+            ).all()
+            if len(container_rows) == 1:
+                container_kind = cast(ContainerKind, container_rows[0][0])
+                container_id = container_rows[0][1]
 
     await scan_pick_product(
         session,

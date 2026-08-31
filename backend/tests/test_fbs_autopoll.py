@@ -19,9 +19,11 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_SORTED,
     FbsOrder,
 )
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.tenant import Tenant
+from app.models.warehouse import Warehouse
 from app.services.fbs_autopoll_service import (
     SellerPollTarget,
     list_sellers_with_marketplace_token,
@@ -102,6 +104,38 @@ async def _seed_seller_with_marketplace_token(
     return seller_id
 
 
+async def _seed_served_binding(
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    *,
+    suffix: str,
+    wb_warehouse_id: int = DEFAULT_WB_WAREHOUSE_ID,
+) -> uuid.UUID:
+    warehouse_id = uuid.uuid4()
+    async with SessionLocal() as session:
+        session.add(
+            Warehouse(
+                id=warehouse_id,
+                tenant_id=tenant_id,
+                name=f"WH {suffix}",
+                code=f"wh-{suffix}-{time.time_ns()}",
+            )
+        )
+        session.add(
+            FbsWarehouseBinding(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                wb_warehouse_id=wb_warehouse_id,
+                wms_warehouse_id=warehouse_id,
+                is_active=True,
+                stock_sync_enabled=False,
+                served=True,
+            )
+        )
+        await session.commit()
+    return warehouse_id
+
+
 def _patch_wb_order_fetches(
     monkeypatch: pytest.MonkeyPatch,
     *,
@@ -162,8 +196,6 @@ async def test_fbs_autopoll_syncs_orders_for_one_seller(
     seller_id = await _seed_seller_with_marketplace_token(tenant_id, token_suffix="one")
 
     async with SessionLocal() as session:
-        from app.models.warehouse import Warehouse
-
         session.add(
             Warehouse(
                 id=warehouse_id,
@@ -171,6 +203,12 @@ async def test_fbs_autopoll_syncs_orders_for_one_seller(
                 name="WH",
                 code=f"wh-{time.time_ns()}",
             )
+        )
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            wms_warehouse_id=warehouse_id,
         )
         await session.commit()
 
@@ -208,6 +246,8 @@ async def test_fbs_autopoll_iterates_multiple_sellers(
         await _seed_seller_with_marketplace_token(tenant_id, token_suffix=f"s{i}")
         for i in range(3)
     ]
+    for idx, seller_id in enumerate(seller_ids):
+        await _seed_served_binding(tenant_id, seller_id, suffix=f"s{idx}")
 
     calls: list[tuple[uuid.UUID, bool]] = []
 
@@ -249,6 +289,8 @@ async def test_fbs_autopoll_continues_after_seller_error(
         await _seed_seller_with_marketplace_token(tenant_id, token_suffix=f"e{i}")
         for i in range(3)
     ]
+    for idx, seller_id in enumerate(seller_ids):
+        await _seed_served_binding(tenant_id, seller_id, suffix=f"e{idx}")
     failing = seller_ids[1]
 
     async def fake_sync(
@@ -286,8 +328,6 @@ async def test_fbs_autopoll_idempotent_upsert(
     seller_id = await _seed_seller_with_marketplace_token(tenant_id, token_suffix="idem")
 
     async with SessionLocal() as session:
-        from app.models.warehouse import Warehouse
-
         session.add(
             Warehouse(
                 id=warehouse_id,
@@ -295,6 +335,12 @@ async def test_fbs_autopoll_idempotent_upsert(
                 name="WH",
                 code=f"wh-{time.time_ns()}",
             )
+        )
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            wms_warehouse_id=warehouse_id,
         )
         await session.commit()
 
@@ -609,6 +655,7 @@ async def test_fbs_autopoll_supplier_status_new_keeps_order_new(
 
 
 @pytest.mark.asyncio
+# TC-S17-028
 async def test_list_sellers_with_marketplace_token_filters(
     async_client: AsyncClient,
 ) -> None:
@@ -639,13 +686,59 @@ async def test_list_sellers_with_marketplace_token_filters(
             )
         )
         session.add(SellerWildberriesCredentials(seller_id=without_token))
+        served_warehouse = Warehouse(
+            tenant_id=tenant_id,
+            name="Served warehouse",
+            code=f"served-{time.time_ns()}",
+        )
+        unserved_warehouse = Warehouse(
+            tenant_id=tenant_id,
+            name="Unserved warehouse",
+            code=f"unserved-{time.time_ns()}",
+        )
+        no_token_warehouse = Warehouse(
+            tenant_id=tenant_id,
+            name="No token warehouse",
+            code=f"no-token-{time.time_ns()}",
+        )
+        session.add_all([served_warehouse, unserved_warehouse, no_token_warehouse])
+        await session.flush()
+        session.add_all(
+            [
+                FbsWarehouseBinding(
+                    tenant_id=tenant_id,
+                    seller_id=with_token,
+                    wb_warehouse_id=501001,
+                    wms_warehouse_id=served_warehouse.id,
+                    is_active=True,
+                    stock_sync_enabled=False,
+                    served=True,
+                ),
+                FbsWarehouseBinding(
+                    tenant_id=tenant_id,
+                    seller_id=with_unified_content_token,
+                    wb_warehouse_id=501002,
+                    wms_warehouse_id=unserved_warehouse.id,
+                    is_active=True,
+                    stock_sync_enabled=True,
+                    served=False,
+                ),
+                FbsWarehouseBinding(
+                    tenant_id=tenant_id,
+                    seller_id=without_token,
+                    wb_warehouse_id=501003,
+                    wms_warehouse_id=no_token_warehouse.id,
+                    is_active=True,
+                    stock_sync_enabled=True,
+                    served=True,
+                ),
+            ]
+        )
         await session.commit()
         targets = await list_sellers_with_marketplace_token(session)
 
     seller_ids = {target.seller_id for target in targets if target.tenant_id == tenant_id}
-    assert with_token in seller_ids
-    assert with_unified_content_token in seller_ids
-    assert without_token not in seller_ids
+    assert seller_ids == {with_token}
 
 
 @pytest.mark.asyncio
@@ -654,7 +747,8 @@ async def test_fbs_statuses_autopoll_all_sellers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     tenant_id = uuid.uuid4()
-    await _seed_seller_with_marketplace_token(tenant_id, token_suffix="all")
+    seller_id = await _seed_seller_with_marketplace_token(tenant_id, token_suffix="all")
+    await _seed_served_binding(tenant_id, seller_id, suffix="all")
 
     async def fake_sync(
         session: object,
@@ -841,6 +935,8 @@ async def test_fbs_autopoll_all_sellers_skips_stock_sync(
         await _seed_seller_with_marketplace_token(tenant_id, token_suffix=f"sa{i}")
         for i in range(2)
     ]
+    for idx, seller_id in enumerate(seller_ids):
+        await _seed_served_binding(tenant_id, seller_id, suffix=f"sa{idx}")
     failing = seller_ids[0]
     stock_calls: list[uuid.UUID] = []
 

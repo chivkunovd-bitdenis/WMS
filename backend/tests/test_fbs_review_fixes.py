@@ -419,6 +419,8 @@ async def test_concurrent_reserve_only_one_succeeds(
             name="P",
             sku_code=f"SKU-C-{suffix[-6:]}",
             wb_barcode=f"BC-C-{suffix[-6:]}",
+            fbs_stock_sync_enabled=True,
+            fbs_percent=100,
         )
         session.add(product)
         await session.flush()
