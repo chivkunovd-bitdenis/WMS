@@ -1,0 +1,4004 @@
+Reading additional input from stdin...
+2026-08-28T22:19:28.839099Z ERROR codex_models_manager::manager: failed to load models cache: missing field `supports_parallel_tool_calls` at line 97 column 5
+OpenAI Codex v0.147.0
+--------
+workdir: /Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/deniscivkunov/Projects/WMS/.git]
+reasoning effort: high
+reasoning summaries: none
+session id: 01a04a74-e346-7131-95fe-36cb356b1b72
+--------
+user
+> **Разрешение на рабочий каталог.** Ты в git worktree внутри
+> `/Users/deniscivkunov/Projects/WMS/.worktrees/` — правилами проекта это прямо
+> разрешено. Не останавливайся из-за проверки `pwd`.
+
+> **ТОЛЬКО БЭКЕНД.** `frontend/` не трогай вообще: фронт правят параллельно.
+
+# Задание: пороги времени сборки в ручке assembly-time
+
+## Что есть
+
+`GET /fbs/orders/assembly-time` (`backend/app/api/fbs_orders.py:143`) отдаёт
+`{hours, orders}` — среднее время сборки за период и количество заказов.
+Считает `calculate_fbs_assembly_time`.
+
+## Чего не хватает
+
+Владелец согласовал блок над таблицей FBS, где кроме среднего показаны **два
+порога**: сколько процентов заказов уложилось в 12 часов и сколько в 24 часа.
+Его слова: «давай ещё добавим красиво туда же — кол-во отгруженных заказов и
+разбивку: две метрики времени выбери и сколько % заказов туда умещаются».
+
+Сейчас этих процентов сервер не отдаёт, и на экране они стоят вписанными руками.
+
+## Что сделать
+
+Дополнить ответ `assembly-time` двумя долями: процент заказов, уложившихся в 12
+часов, и процент уложившихся в 24 часа. Имена полей выбери в стиле соседних
+полей ответа. Считать по тем же заказам и по той же границе периода, что уже
+использует `calculate_fbs_assembly_time` — иначе среднее и проценты будут про
+разные множества, и это заметят.
+
+Порог задай именованными константами (12 и 24 часа), а не числами по коду.
+
+Округление процентов — до целого. Ноль заказов за период не должен давать
+деление на ноль: тогда проценты нулевые, а не ошибка.
+
+## Тесты
+
+- период с заказами: проценты считаются по тем же заказам, что и среднее;
+- заказ ровно на границе 12 часов попадает внутрь порога (граница включительно);
+- пустой период: `hours=0`, `orders=0`, оба процента 0, без исключения;
+- отбор по продавцу продолжает работать и для процентов тоже.
+
+**Полный pytest НЕ ЗАПУСКАЙ**, только свои файлы точечно. Playwright и npm не
+запускай. Протокола BA / Product / Code Review в репозитории нет — агентов-
+приёмщиков не запускай.
+
+## Ворота
+
+`ruff check .`, `mypy .` из `backend/`. Питон:
+`/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python`.
+
+## Итог
+
+Коротко: какие поля добавил, как назвал, какие тесты написал.
+warning: Under-development features enabled: chronicle. Under-development features are incomplete and may behave unpredictably. To suppress this warning, set `suppress_unstable_features_warning = true` in /Users/deniscivkunov/.codex/config.toml.
+codex
+Сначала сверю состояние worktree и текущую реализацию ручки, затем добавлю расчёт и точечные backend-тесты. Использую только этот разрешённый worktree, `frontend/` не затрагиваю и никаких агентов не запускаю.
+exec
+/bin/zsh -lc 'pwd && git status --short --branch && rg -n "assembly-time|calculate_fbs_assembly_time|assembly_time" backend/app backend/tests docs/MVP_DECISIONS_RU.md /Users/deniscivkunov/.codex/memories/MEMORY.md' in /Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4
+ succeeded in 459ms:
+## codex/assembly-time-thresholds-20260829
+backend/tests/test_fbs_stock_share_wave2.py:242:async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+backend/tests/test_fbs_stock_share_wave2.py:284:    missing_period = await async_client.get("/fbs/assembly-time", headers=headers)
+backend/tests/test_fbs_stock_share_wave2.py:288:        "/fbs/assembly-time",
+backend/tests/test_fbs_stock_share_wave2.py:325:        "/fbs/assembly-time",
+backend/app/api/fbs_orders.py:27:from app.services.fbs_assembly_time_service import calculate_fbs_assembly_time
+backend/app/api/fbs_orders.py:143:@contract_router.get("/assembly-time", response_model=FbsAssemblyTimeOut)
+backend/app/api/fbs_orders.py:144:async def get_fbs_assembly_time(
+backend/app/api/fbs_orders.py:156:        result = await calculate_fbs_assembly_time(
+backend/app/services/fbs_assembly_time_service.py:22:async def calculate_fbs_assembly_time(
+
+exec
+/bin/zsh -lc "sed -n '1,230p' backend/app/api/fbs_orders.py && sed -n '1,220p' backend/app/services/fbs_assembly_time_service.py && sed -n '220,360p' backend/tests/test_fbs_stock_share_wave2.py && sed -n '1,220p' docs/MVP_DECISIONS_RU.md && rg -n \"class FbsAssemblyTimeOut|FbsAssemblyTimeOut\" backend/app" in /Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4
+ succeeded in 0ms:
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+from typing import Annotated, Any, Literal
+
+import httpx
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import (
+    get_effective_seller_id,
+    require_fbs_operator_access,
+    require_fulfillment_admin,
+)
+from app.api.fbs_errors import envelope_from_exc, raise_fbs_http
+from app.core.settings import settings
+from app.db.session import get_db
+from app.models.fbs_order import FbsOrder
+from app.models.marketplace_account import MarketplaceAccount
+from app.models.seller import Seller
+from app.models.user import User
+from app.services import background_job_service as job_svc
+from app.services.background_job_service import JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC
+from app.services.fbs_assembly_time_service import calculate_fbs_assembly_time
+from app.services.fbs_cancellation_service import (
+    FbsCancellationError,
+    cancel_order,
+    sync_seller_order_statuses,
+)
+from app.services.fbs_cancelled_after_pack_service import fetch_cancelled_after_pack_page
+from app.services.fbs_worklist_service import fetch_worklist_page
+from app.services.marketplace_provider import (
+    FakeMarketplaceTransport,
+    MarketplaceProviderError,
+    OzonMarketplaceProvider,
+    provider_error_message,
+)
+from app.services.wb_marketplace_orders_service import list_orders
+
+router = APIRouter(
+    prefix="/operations/fbs-orders",
+    tags=["operations"],
+)
+contract_router = APIRouter(prefix="/fbs", tags=["operations"])
+
+
+class FbsOrderSyncBody(BaseModel):
+    seller_id: uuid.UUID
+    marketplace: Literal["wb", "ozon"] = "wb"
+    # Ignored: WMS warehouse is resolved from WB warehouse bindings on each order row.
+    warehouse_id: uuid.UUID | None = None
+
+
+class FbsOrderSyncStatusesBody(BaseModel):
+    seller_id: uuid.UUID
+    marketplace: Literal["wb", "ozon"] = "wb"
+
+
+class FbsOrderSyncStatusesOut(BaseModel):
+    statuses_updated: int
+
+
+class FbsOrderSyncOut(BaseModel):
+    id: str
+    status: str
+
+
+class FbsAssemblyTimeOut(BaseModel):
+    hours: float
+    orders: int
+
+
+class FbsCancelledProductOut(BaseModel):
+    id: str | None
+    name: str
+    article: str | None
+    wb_article: str | None
+    size: str | None
+
+
+class FbsCancelledSellerOut(BaseModel):
+    id: str
+    name: str
+
+
+class FbsCancelledSupplyOut(BaseModel):
+    id: str | None
+    wb_supply_id: str | None
+    name: str | None
+    status: str | None
+
+
+class FbsCancelledCargoPlaceOut(BaseModel):
+    box_id: str
+    box_number: int
+    box_barcode: str
+    trbx_id: str | None
+    wb_trbx_id: str | None
+
+
+class FbsCancelledAfterPackItemOut(BaseModel):
+    order_id: str
+    wb_order_id: int
+    product: FbsCancelledProductOut
+    seller: FbsCancelledSellerOut
+    supply: FbsCancelledSupplyOut
+    cargo_place: FbsCancelledCargoPlaceOut | None
+    assembled_at: datetime | None
+    picked_at: datetime | None
+    packed_at: datetime | None
+    cancelled_at: datetime
+    cancellation_code: str
+    cancellation_reason: str
+    sticker_printed: bool
+    sticker_printed_at: datetime | None
+    supply_departed: bool | None
+
+
+class FbsCancelledAfterPackPageOut(BaseModel):
+    items: list[FbsCancelledAfterPackItemOut]
+    total: int
+    limit: int
+    offset: int
+
+
+async def _active_ozon_account_exists(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+) -> bool:
+    stmt = select(MarketplaceAccount.id).where(
+        MarketplaceAccount.tenant_id == tenant_id,
+        MarketplaceAccount.seller_id == seller_id,
+        MarketplaceAccount.marketplace == "ozon",
+        MarketplaceAccount.is_active.is_(True),
+    )
+    return (await session.execute(stmt)).scalar_one_or_none() is not None
+
+
+@contract_router.get("/assembly-time", response_model=FbsAssemblyTimeOut)
+async def get_fbs_assembly_time(
+    period_from: Annotated[datetime, Query(alias="from")],
+    period_to: Annotated[datetime, Query(alias="to")],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+) -> FbsAssemblyTimeOut:
+    if seller_id is not None:
+        seller = await session.get(Seller, seller_id)
+        if seller is None or seller.tenant_id != user.tenant_id:
+            raise_fbs_http(status.HTTP_404_NOT_FOUND, "seller_not_found")
+    try:
+        result = await calculate_fbs_assembly_time(
+            session,
+            user.tenant_id,
+            period_from=period_from,
+            period_to=period_to,
+            seller_id=seller_id,
+        )
+    except ValueError as exc:
+        if str(exc) == "invalid_period":
+            raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+        raise
+    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
+
+
+@contract_router.get(
+    "/cancelled-after-pack",
+    response_model=FbsCancelledAfterPackPageOut,
+)
+async def get_fbs_cancelled_after_pack(
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    supply_id: Annotated[uuid.UUID | None, Query()] = None,
+    cancelled_from: Annotated[datetime | None, Query()] = None,
+    cancelled_to: Annotated[datetime | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> FbsCancelledAfterPackPageOut:
+    filter_seller = seller_id if seller_id is not None else effective_seller_id
+    if filter_seller is not None:
+        seller = await session.get(Seller, filter_seller)
+        if seller is None or seller.tenant_id != user.tenant_id:
+            raise_fbs_http(status.HTTP_404_NOT_FOUND, "seller_not_found")
+    try:
+        page = await fetch_cancelled_after_pack_page(
+            session,
+            user.tenant_id,
+            seller_id=filter_seller,
+            supply_id=supply_id,
+            cancelled_from=cancelled_from,
+            cancelled_to=cancelled_to,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        if code == "supply_not_found":
+            raise_fbs_http(status.HTTP_404_NOT_FOUND, code)
+        if code == "invalid_period":
+            raise_fbs_http(status.HTTP_400_BAD_REQUEST, code)
+        raise
+    return FbsCancelledAfterPackPageOut(
+        items=[FbsCancelledAfterPackItemOut.model_validate(item) for item in page.items],
+        total=page.total,
+        limit=page.limit,
+        offset=page.offset,
+    )
+
+
+async def _run_blocked_ozon_fake() -> None:
+    error = MarketplaceProviderError("ozon", 403, {"code": 7})
+    provider = OzonMarketplaceProvider(
+        transport=FakeMarketplaceTransport(errors={"fetch_orders": error})
+    )
+    try:
+        await provider.fetch_orders(client_id="fake", api_key="fake")
+    except MarketplaceProviderError as exc:
+        raise_fbs_http(
+            status.HTTP_403_FORBIDDEN,
+            "ozon_account_blocked",
+            message=provider_error_message(exc),
+        )
+
+
+"""Среднее время от появления заказа WB до отгрузки его поставки."""
+
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass
+from datetime import datetime
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.fbs_order import FbsOrder
+from app.models.fbs_supply import FbsSupply
+
+
+@dataclass(frozen=True)
+class FbsAssemblyTime:
+    hours: float
+    orders: int
+
+
+async def calculate_fbs_assembly_time(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    period_from: datetime,
+    period_to: datetime,
+    seller_id: uuid.UUID | None = None,
+) -> FbsAssemblyTime:
+    if period_from >= period_to:
+        raise ValueError("invalid_period")
+
+    stmt = (
+        select(FbsOrder.created_at_wb, FbsSupply.delivered_at)
+        .join(FbsSupply, FbsSupply.id == FbsOrder.supply_id)
+        .where(
+            FbsOrder.tenant_id == tenant_id,
+            FbsSupply.tenant_id == tenant_id,
+            FbsSupply.delivered_at.is_not(None),
+            FbsOrder.created_at_wb >= period_from,
+            FbsOrder.created_at_wb < period_to,
+        )
+    )
+    if seller_id is not None:
+        stmt = stmt.where(
+            FbsOrder.seller_id == seller_id,
+            FbsSupply.seller_id == seller_id,
+        )
+    rows = (await session.execute(stmt)).all()
+    durations = [
+        (delivered_at - created_at_wb).total_seconds()
+        for created_at_wb, delivered_at in rows
+        if delivered_at is not None and delivered_at >= created_at_wb
+    ]
+    if not durations:
+        return FbsAssemblyTime(hours=0.0, orders=0)
+    average_hours = sum(durations) / len(durations) / 3600
+    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
+
+    assert result["orders_received"] == 2
+    assert result["orders_upserted"] == 1
+    assert result["orders_created"] == 1
+    assert result["orders_skipped_unserved"] == 1
+    async with SessionLocal() as session:
+        orders = list(
+            (
+                await session.execute(
+                    select(FbsOrder).where(FbsOrder.seller_id == uuid.UUID(seller_id))
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert [order.wb_order_id for order in orders] == [920002]
+    assert orders[0].warehouse_id is None
+    assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+
+
+# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
+@pytest.mark.asyncio
+async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+    headers, suffix = await _register_admin(async_client)
+    seller_a = await _create_seller(async_client, headers, suffix, "Seller A")
+    seller_b = await _create_seller(async_client, headers, suffix, "Seller B")
+    warehouse_id = await _create_warehouse(async_client, headers, suffix)
+    period_from = datetime(2026, 8, 20, tzinfo=UTC)
+
+    async with SessionLocal() as session:
+        seller = await session.get(Seller, uuid.UUID(seller_a))
+        assert seller is not None
+        tenant_id = seller.tenant_id
+        for index, (seller_id, hours) in enumerate(
+            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
+        ):
+            created_at = period_from + timedelta(days=index)
+            supply = FbsSupply(
+                tenant_id=tenant_id,
+                seller_id=uuid.UUID(seller_id),
+                warehouse_id=uuid.UUID(warehouse_id),
+                wb_supply_id=f"W2-SUP-{index}",
+                name=f"Supply {index}",
+                status=FBS_SUPPLY_STATUS_DONE,
+                delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+                delivered_at=created_at + timedelta(hours=hours),
+            )
+            session.add(supply)
+            await session.flush()
+            session.add(
+                FbsOrder(
+                    tenant_id=tenant_id,
+                    seller_id=uuid.UUID(seller_id),
+                    warehouse_id=uuid.UUID(warehouse_id),
+                    wb_order_id=930000 + index,
+                    supply_id=supply.id,
+                    created_at_wb=created_at,
+                    deadline_at=created_at + timedelta(hours=24),
+                    mapping_status=MAPPING_STATUS_MAPPED,
+                    reserve_status=RESERVE_STATUS_NO_STOCK,
+                )
+            )
+        await session.commit()
+
+    missing_period = await async_client.get("/fbs/assembly-time", headers=headers)
+    assert missing_period.status_code == 422
+
+    response = await async_client.get(
+        "/fbs/assembly-time",
+        headers=headers,
+        params={
+            "from": period_from.isoformat(),
+            "to": (period_from + timedelta(days=7)).isoformat(),
+            "seller_id": seller_a,
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {"hours": 8.0, "orders": 2}
+# TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+@pytest.mark.asyncio
+async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+    owner_headers, owner_suffix = await _register_admin(async_client)
+    owner_seller_id = await _create_seller(
+        async_client, owner_headers, owner_suffix, "Owner seller"
+    )
+
+    outsider_headers, outsider_suffix = await _register_admin(async_client)
+    outsider_warehouse_id = await _create_warehouse(
+        async_client, outsider_headers, outsider_suffix
+    )
+
+    warehouses = await async_client.get(
+        f"/fbs-sellers/{owner_seller_id}/warehouses", headers=outsider_headers
+    )
+    assert warehouses.status_code == 404
+
+    configure = await async_client.put(
+        f"/fbs-sellers/{owner_seller_id}/warehouses/{WB_WAREHOUSE_OURS}",
+        headers=outsider_headers,
+        json={"served": True, "wms_warehouse_id": outsider_warehouse_id},
+    )
+    assert configure.status_code == 404
+
+    period_from = datetime(2026, 8, 20, tzinfo=UTC)
+    assembly = await async_client.get(
+        "/fbs/assembly-time",
+        headers=outsider_headers,
+        params={
+            "from": period_from.isoformat(),
+            "to": (period_from + timedelta(days=7)).isoformat(),
+            "seller_id": owner_seller_id,
+        },
+    )
+    assert assembly.status_code == 404
+
+
+# TC-NEW-FBS-SHARE-W2-004: legacy values reset only by the explicit second step.
+@pytest.mark.asyncio
+async def test_fbs_legacy_limits_reset_requires_rule_and_zeros_all_old_values(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix = await _register_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    warehouse_id = await _create_warehouse(async_client, headers, suffix)
+    configured = await async_client.put(
+        f"/fbs-sellers/{seller_id}/warehouses/{WB_WAREHOUSE_OURS}",
+        headers=headers,
+        json={"served": True, "wms_warehouse_id": warehouse_id},
+    )
+    assert configured.status_code == 200, configured.text
+
+    async def create_product(label: str) -> str:
+        response = await async_client.post(
+            "/products",
+            headers=headers,
+            json={
+                "name": label,
+                "sku_code": f"{label}-{suffix}",
+                "seller_id": seller_id,
+            },
+        )
+# Решения для старта разработки WMS (зафиксировано)
+
+Документ — **единый источник правды** для автопилота: что строим в MVP, какие интеграции, какие границы. Обновляется только осознанно (через PR).
+
+## Продукт и тенантность
+
+- **Модель**: SaaS — один инстанс → много фулфилментов (тенантов) → у каждого много селлеров.
+- **MVP по контуру**: операции склада + **кабинет селлера** + **биллинг v1**.
+- **Язык интерфейса**: русский (аккаунт/продукт ориентированы на RU).
+
+## Биллинг v1
+
+- **Хранение**: **литр‑день** — тариф «рубль за литр в сутки» (или копейки; точность в настройках тарифа).
+- **Объём**:
+  - если у SKU заданы габариты — \(Д \times Ш \times В\) → литры на штуку × количество;
+  - иначе — объём **тары/места** (короб/пакет/лот);
+  - допускается **ручной override** объёма на позицию/поставку на период онбординга.
+- **Граница суток и валюта**: **МСК**, **RUB**, **НДС в MVP не считаем** (отдельный эпик позже).
+
+## Аутентификация
+
+- **Email + пароль** (+ восстановление пароля по плану реализации).
+- Роли и изоляция данных обязательны с первых релизов кабинета и мультитенантности.
+
+## Wildberries (первая интеграция)
+
+### Принцип
+
+- **Только импорт (read/sync в нашу систему)** для **FBW** (карточки, FBW-поставки) и прочих read-only интеграций. Создание **FBW**-поставок и карточек **в WB через наш продукт в MVP не делаем** (нет исходящих «create» в сторону WB для FBW).
+
+### Исключение: FBS operator flow (осознанное, FBSFLOW-130)
+
+- **FBS (Wildberries «Маркетплейс»)** — полный операторский цикл **с исходящими вызовами WB**: создание поставки, batch-добавление заказов, metadata/КИЗ, стикеры, грузоместа ПВЗ, передача в доставку, post-delivery sync.
+- Контракт, ошибки и тест-кейсы: `tasks/fbs-operator-flow/` (`BACKEND_CONTRACT.md`, `ERROR_CATALOG_RU.md`, `OPENAPI_NOTES.md`, `TEST_CASES.md` → `docs/IMPLEMENTED_PRODUCT_SCENARIOS_TEST_CASES_EN.md` §S17).
+- Эмулятор WB в CI **не заменяет** live smoke (`TC-S17-024`); секреты — только env / manual job.
+- Старые задачи `tasks/fbs-frontend-*` и `tasks/fbs-marketplace-orders/SPEC.md` описывают **ранний** контракт (`sticker_file`, bind order→trbx) и **deprecated** для нового frontend.
+
+### Методы API (ориентир документации WB)
+
+| Назначение | Метод | Базовый хост (по документации) |
+|------------|--------|--------------------------------|
+| Список карточек товаров | `POST /content/v2/get/cards/list` | `https://content-api.wildberries.ru` |
+| Список поставок FBW | `POST /api/v1/supplies` | `https://supplies-api.wildberries.ru` |
+| Детали поставки | `GET /api/v1/supplies/{ID}` | `https://supplies-api.wildberries.ru` |
+| Товары поставки | `GET /api/v1/supplies/{ID}/goods` | `https://supplies-api.wildberries.ru` |
+
+Ссылки на портал WB API:
+
+- [Карточки товаров — список](https://dev.wildberries.ru/docs/openapi/work-with-products#tag/Kartochki-tovarov/paths/~1content~1v2~1get~1cards~1list/post)
+- [Поставки FBW — детали поставки](https://dev.wildberries.ru/docs/openapi/orders-fbw#tag/Informaciya-o-postavkah/paths/~1api~1v1~1supplies~1%7BID%7D/get)
+- [Поставки FBW — товары поставки](https://dev.wildberries.ru/docs/openapi/orders-fbw#tag/Informaciya-o-postavkah/paths/~1api~1v1~1supplies~1%7BID%7D~1goods/get)
+
+### Токены и лимиты
+
+- У WB разные категории доступа (**Контент**, **Поставки** и т.д.) — в продукте хранить секреты **только** в env / secrets, раздельно по тенанту/селлеру.
+- Соблюдать лимиты запросов из документации (очередь, backoff, идемпотентность по `requestId` где применимо).
+
+## Терминология (фулфилмент ↔ маркетплейс, RU)
+
+Закреплено для продукта и UI; в коде/API могут оставаться исторические имена (`marketplace_unload`, `outbound` и т.д.) — смысл в интерфейсе и документации **только** по таблице ниже.
+
+| Термин (RU) | Смысл | Кто создаёт / инициатор |
+|-------------|--------|-------------------------|
+| **Приёмка** (ранее «поставка» в UI) | Товар идёт **от селлера на фулфилмент** (входящий поток на склад ФФ). В портале ФФ — раздел **«Приёмка»**; в коде/API — `inbound` / `inbound_intake`. | **Селлер** создаёт заявку; **ФФ** ведёт приёмку в очереди «Приёмка» → «Сортировка». |
+| **Отгрузка** (в смысле «на МП») | Фулфилмент **отгружает на маркетплейс** (склад МП / вывоз на площадку). **Не** называем это «выгрузкой» или *download* в пользовательских текстах. | **ФФ** (операции; документ в системе может называться технически `marketplace_unload` и т.п.). |
+
+Если в сообщении без контекста неясно, о какой цепочке речь — **уточнять у автора**: приёмка (селлер→ФФ) или отгрузка (ФФ→МП). Термин «поставка» в пользовательском UI **не используем** для селлер→ФФ (кроме импорта WB FBW, если явно про склад МП).
+
+## Онбординг селлера (кто и как)
+
+- **Добавляет только админ FF** (раздел «Селлеры» в портале): название бренда + **email**.
+- Цепочка API: `POST /sellers` → `POST /auth/seller-accounts` **без пароля** → в БД случайный hash и `must_set_password=true`.
+- Админ передаёт селлеру **email** и URL портала селлера; **пароль по API не возвращается**.
+- **Первый вход селлера:** email + **пустой пароль** → экран задания пароля → дальше обычный вход.
+- UI FF: только MUI, см. `docs/UI_DESIGN_SYSTEM_RU.md`.
+
+## Кабинет селлера (MVP — функции)
+
+Селлер в кабинете должен иметь как минимум:
+
+1. **Создание заявок** (входящие процессы: приёмка / отгрузка — формулировка бизнес‑сущности «заявка» в терминах WMS).
+2. **Приём** — сценарий участия/контроля приёмки со стороны селлера (в объёме MVP: статусы, состав, расхождения — по мере готовности бэкенда).
+3. **Отгрузка** — создание/отслеживание отгрузки на стороне фулфилмента; синхронизация с импортом WB для FBW — **только отображение импортированных поставок**, без создания в WB из UI в MVP.
+
+## Печать
+
+- **Накладная поставки (приёмка на ФФ):** в документе поставки (приёмка) — кнопка «Печать накладной», A4 в браузере; для сотрудника склада перед приёмкой по составу и коробам.
+- **Накладная отгрузки:** отгрузка на МП и operational outbound — отдельные кнопки в соответствующих документах.
+- **Этикетки коробов:** термо **58×40**, CODE128 — в блоке коробов приёмки (не путать с накладной).
+- Принтер этикеток: **термо 58 мм**, лента **40 мм** (детали ESC/POS/ZPL — в задаче на модуль печати).
+
+## Упаковка и задание на упаковку
+
+Полное описание процесса: **[docs/PACKAGING_RU.md](PACKAGING_RU.md)**.
+
+- **Документ «Задание на упаковку»** — один тип, одна форма; раздел **«Упаковка»** в операциях ФФ. Не этап жизненного цикла приёмки.
+- **Остаток в месте** делится на **не упаковано** и **упаковано**; задание переводит количество между ними без смены ячейки.
+- **Три входа** (приёмка/сортировка, ручное задание, отгрузка на МП) — один и тот же документ; из сортировки можно упаковать **часть** товара **без** отгрузки.
+- **Отгрузка на МП:** задание на упаковку создаётся при **«Утверждено»** (`confirmed`), на **весь план** (1:1 с документом отгрузки). Сборка в короба и упаковка идут **параллельно** — незавершённая упаковка **не блокирует** создание и наполнение коробов. **«Отгружено»** (ship) — только при **завершённом** задании упаковки + распределении по коробам + ЧЗ где нужно. UI документа: **2 вкладки** («Товары», «Упаковка»); короба и ship — на «Товарах» / в footer. Прогресс упаковки для MP — **счётчик в задании** (без колонки «На полке упак.» и без `apply_packaging_convert` по ячейкам). Печать с вкладки упаковки — **MarkingPrintDialog** (конструктор ленты).
+- Строка задания (общий тип «Упаковка»): для заданий **не** из MP — всего / упаковано на полке / …; для MP-unload — только прогресс «упаковано в работе» по строкам.
+
+## Адресное хранение (отгрузка на МП и приёмка)
+
+- **DEC-009:** для нового ФФ адресное хранение **включено** по умолчанию (`tenants.address_storage_enabled`).
+- **DEC-018:** «зона сортировки» = виртуальная `StorageLocation` приёмки; источник списания, пока товар не разложен по ячейкам.
+- **DEC-019:** при выключении адресного хранения (`true → false`) система **атомарно переносит** все ненулевые остатки с адресных ячеек на виртуальную ячейку зоны сортировки (DEC-018). Toggle **не блокируется**; обратной автомиграции при включении нет. В настройках ФФ после успешного выключения — info «Остатки с ячеек перенесены на зону сортировки».
+
+## Резерв под внутреннюю отгрузку (outbound)
+
+- В `draft` / `submitted`: резерв по строке — **по ячейке**, если ячейка назначена; иначе **по складу ФФ** (суммарно по SKU, без привязки к ячейке).
+- **Submit** разрешён без ячейки: предварительный резерв держит доступное на складе.
+- **Списание / фактический подбор** — только с назначенными ячейками (`lines_missing_storage` при проведении, если ячейки нет).
+- Ячейку можно назначить при добавлении строки, в черновике или при подборе после submit.
+
+## E2E и автопилот
+
+- Каждая фича с UI → минимум один Playwright‑сценарий **пользовательского** пути + стабильные `data-testid`.
+- Внешний WB API в CI **мокируется** (фикстуры/Wiremock/записанные ответы); отдельные «живые» смоук‑тесты — вручную или в ночном job с секретами.
+
+## Что сознательно не входит в MVP (по текущим решениям)
+
+- Создание поставок и карточек в WB через API из продукта.
+- НДС и бухгалтерия полного цикла.
+backend/app/api/fbs_orders.py:71:class FbsAssemblyTimeOut(BaseModel):
+backend/app/api/fbs_orders.py:143:@contract_router.get("/assembly-time", response_model=FbsAssemblyTimeOut)
+backend/app/api/fbs_orders.py:150:) -> FbsAssemblyTimeOut:
+backend/app/api/fbs_orders.py:167:    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
+
+exec
+/bin/zsh -lc 'rg -n "percent|percentage|_pct|within_.*hours|hours.*percent" backend/app backend/tests | head -200 && git log -5 --oneline --decorate && git status --porcelain=v1' in /Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4
+ succeeded in 0ms:
+backend/app/schemas/ozon_returns_api.py:154:    commission_percent: float = Field(_OPTIONAL_FIELD_DEFAULT, description='Процент комиссии.', json_schema_extra={'format': 'double'})
+backend/app/schemas/ozon_fbs_api.py:246:    total_discount_percent: float = Field(_OPTIONAL_FIELD_DEFAULT, description='Процент скидки.', json_schema_extra={'format': 'double'})
+backend/app/schemas/ozon_fbs_api.py:255:    percent: int = Field(_OPTIONAL_FIELD_DEFAULT, description='Процент комиссии.', json_schema_extra={'format': 'int64'})
+backend/app/schemas/ozon_fbs_api.py:600:    total_discount_percent: float = Field(_OPTIONAL_FIELD_DEFAULT, description='Процент скидки.', json_schema_extra={'format': 'double'})
+backend/app/schemas/ozon_fbs_api.py:609:    percent: int = Field(_OPTIONAL_FIELD_DEFAULT, description='Процент комиссии.', json_schema_extra={'format': 'int64'})
+backend/app/schemas/ozon_fbs_api.py:874:    commission_percent: int = Field(_OPTIONAL_FIELD_DEFAULT, description='Процент комиссии.', json_schema_extra={'format': 'int64'})
+backend/app/schemas/ozon_fbs_api.py:882:    total_discount_percent: float = Field(_OPTIONAL_FIELD_DEFAULT, description='Процент скидки.', json_schema_extra={'format': 'double'})
+backend/app/models/product.py:97:    fbs_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+backend/app/api/products.py:355:    percent: int = Field(ge=0, le=100)
+backend/app/api/products.py:1467:        percent=body.percent,
+backend/app/api/products.py:1479:        percent=view.rule.percent,
+backend/app/api/products.py:1526:        percent=view.rule.percent,
+backend/app/models/fbs_binding_stock_pool.py:68:    percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+backend/tests/test_reports_overview.py:152:    assert body["comparison"] == {"previous_out_qty": 0, "change_percent": None, "change": 4}
+backend/app/services/reporting_service.py:711:            "change_percent": None if previous_out == 0 else round(
+backend/tests/test_fbs_stock_share_wave2.py:387:            "percent": 50,
+backend/tests/test_product_fbs_rule_bulk_read_api.py:92:    percent: int,
+backend/tests/test_product_fbs_rule_bulk_read_api.py:100:            "percent": percent,
+backend/tests/test_product_fbs_rule_bulk_read_api.py:133:    assert [item["percent"] for item in items] == [70, 30]
+backend/app/services/fbs_stock_rule_service.py:52:    percent: int
+backend/app/services/fbs_stock_rule_service.py:68:def amount_from_percent(free_stock: int, percent: int) -> int:
+backend/app/services/fbs_stock_rule_service.py:70:    if free_stock <= 0 or percent <= 0:
+backend/app/services/fbs_stock_rule_service.py:72:    return (free_stock * percent) // 100
+backend/app/services/fbs_stock_rule_service.py:82:    _check_percent(rule.percent)
+backend/app/services/fbs_stock_rule_service.py:83:    for percent in rule.by_warehouse.values():
+backend/app/services/fbs_stock_rule_service.py:84:        _check_percent(percent)
+backend/app/services/fbs_stock_rule_service.py:89:        total = rule.percent * max(served_warehouse_count, 1)
+backend/app/services/fbs_stock_rule_service.py:94:            "percent_sum_exceeded",
+backend/app/services/fbs_stock_rule_service.py:103:def _check_percent(percent: int) -> None:
+backend/app/services/fbs_stock_rule_service.py:104:    if percent < 0 or percent > PERCENT_MAX:
+backend/app/services/fbs_stock_rule_service.py:106:            "invalid_percent",
+backend/app/services/fbs_stock_rule_service.py:108:            context={"percent": percent},
+backend/app/services/fbs_stock_rule_service.py:110:    if percent % PERCENT_STEP != 0:
+backend/app/services/fbs_stock_rule_service.py:112:            "invalid_percent",
+backend/app/services/fbs_stock_rule_service.py:114:            context={"percent": percent},
+backend/app/services/fbs_stock_rule_service.py:188:        if pool is None or pool.percent is None:
+backend/app/services/fbs_stock_rule_service.py:190:        by_warehouse[int(binding.wb_warehouse_id)] = int(pool.percent)
+backend/app/services/fbs_stock_rule_service.py:194:        percent=int(product.fbs_percent or 0),
+backend/app/services/fbs_stock_rule_service.py:218:            percent = rule.percent
+backend/app/services/fbs_stock_rule_service.py:220:            percent = rule.by_warehouse.get(int(binding.wb_warehouse_id), 0)
+backend/app/services/fbs_stock_rule_service.py:221:        share = amount_from_percent(free_stock, percent)
+backend/app/services/fbs_stock_rule_service.py:400:        product.fbs_percent = rule.percent
+backend/app/services/fbs_stock_rule_service.py:403:            percent = rule.by_warehouse.get(wb_warehouse_id)
+backend/app/services/fbs_stock_rule_service.py:406:                if percent is None:
+backend/app/services/fbs_stock_rule_service.py:413:                    percent=percent,
+backend/app/services/fbs_stock_rule_service.py:418:            pool.percent = percent
+backend/app/services/fbs_stock_rule_service.py:444:    if any(product.fbs_percent is None for product in products):
+backend/app/services/fbs_stock_rule_service.py:481:        if product.fbs_stock_sync_enabled and product.fbs_percent is not None
+backend/tests/test_fbs_stock_rule_service.py:32:    amount_from_percent,
+backend/tests/test_fbs_stock_rule_service.py:122:def test_amount_from_percent_rounds_down() -> None:
+backend/tests/test_fbs_stock_rule_service.py:124:    assert amount_from_percent(324, 50) == 162
+backend/tests/test_fbs_stock_rule_service.py:126:    assert amount_from_percent(7, 30) == 2
+backend/tests/test_fbs_stock_rule_service.py:128:    assert amount_from_percent(0, 100) == 0
+backend/tests/test_fbs_stock_rule_service.py:129:    assert amount_from_percent(-5, 50) == 0
+backend/tests/test_fbs_stock_rule_service.py:137:        percent=0,
+backend/tests/test_fbs_stock_rule_service.py:143:    assert exc.value.code == "percent_sum_exceeded"
+backend/tests/test_fbs_stock_rule_service.py:146:    same = FbsRule(publish=True, same_everywhere=True, percent=60, by_warehouse={})
+backend/tests/test_fbs_stock_rule_service.py:153:def test_validate_rule_rejects_off_step_percent() -> None:
+backend/tests/test_fbs_stock_rule_service.py:155:    rule = FbsRule(publish=True, same_everywhere=True, percent=55, by_warehouse={})
+backend/tests/test_fbs_stock_rule_service.py:158:    assert exc.value.code == "invalid_percent"
+backend/tests/test_fbs_stock_rule_service.py:174:    rule = FbsRule(publish=True, same_everywhere=True, percent=100, by_warehouse={})
+backend/tests/test_fbs_stock_rule_service.py:190:        FbsRule(publish=True, same_everywhere=True, percent=50, by_warehouse={}),
+backend/tests/test_fbs_stock_rule_service.py:199:    assert view.rule.percent == 50
+backend/tests/test_fbs_stock_rule_service.py:243:        FbsRule(publish=True, same_everywhere=True, percent=50, by_warehouse={}),
+backend/tests/test_fbs_stock_rule_service.py:277:            FbsRule(publish=True, same_everywhere=True, percent=50, by_warehouse={}),
+backend/tests/test_fbs_stock_rule_service.py:290:        FbsRule(publish=True, same_everywhere=True, percent=30, by_warehouse={}),
+6a4a9dad (HEAD -> codex/assembly-time-thresholds-20260829, origin/staging, integration/vse-v-etalon-20260828) fix(sorting-objects): «Закрыть» уводит с экрана, «Сохранить» и «Завершить» больше не притворяются
+2f3513c9 fix(sorting-objects): убрать макетные заглушки с живого экрана раскладки
+269a1e0a perf(fbs-stock): правила остатка одним запросом вместо двухсот
+88b1da85 (codex/backend-two-defects-20260829) feat(fbs-stock): добавить пакетное чтение правил
+8382ab16 fix(inventory): скрыть код зоны сортировки в пересчёте
+
+codex
+Текущая выборка уже задаёт правильное множество: заказы берутся по `created_at_wb` в полуинтервале `[from, to)`, с отгруженной поставкой, а отрицательные длительности отбрасываются. Проценты посчитаю именно из этого же списка длительностей, чтобы знаменатель полностью совпадал с `orders` и средним. Поля назову `within_12_hours_percent` и `within_24_hours_percent`; пороги вынесу в константы сервиса.
+exec
+/bin/zsh -lc "rg -n \"within_12|within_24|assembly.*percent|12.*24.*percent|assembly-time\" . --glob '"'!frontend/**'"' --glob '"'!backend/.venv/**'"' && sed -n '1,130p' backend/tests/test_fbs_stock_share_wave2.py && rg -n \"class FbsOrder|created_at_wb|class FbsSupply|delivered_at\" backend/app/models/fbs_order.py backend/app/models/fbs_supply.py" in /Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4
+ succeeded in 22ms:
+"""Wave 2: seller warehouse scope, intake privacy, assembly time and legacy reset."""
+
+from __future__ import annotations
+
+import time
+import uuid
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import httpx
+import pytest
+from httpx import AsyncClient
+from sqlalchemy import func, select
+
+from app.core.settings import settings
+from app.db.session import SessionLocal
+from app.models.fbs_binding_stock_pool import FbsBindingStockPool
+from app.models.fbs_order import (
+    MAPPING_STATUS_MAPPED,
+    RESERVE_STATUS_NO_STOCK,
+    RESERVE_STATUS_WAREHOUSE_UNMAPPED,
+    FbsOrder,
+)
+from app.models.fbs_supply import (
+    FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+    FBS_SUPPLY_STATUS_DONE,
+    FbsSupply,
+)
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.product import Product
+from app.models.seller import Seller
+from app.services.wb_marketplace_orders_service import sync_seller_orders
+
+WB_WAREHOUSE_OURS = 501001
+WB_WAREHOUSE_UNMAPPED = 777888
+
+
+async def _register_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
+    suffix = str(time.time_ns())
+    response = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": f"Wave 2 {suffix}",
+            "slug": f"wave-2-{suffix}",
+            "admin_email": f"wave-2-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert response.status_code == 200, response.text
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}, suffix
+
+
+async def _create_seller(
+    async_client: AsyncClient, headers: dict[str, str], suffix: str, label: str = "Seller"
+) -> str:
+    response = await async_client.post(
+        "/sellers", headers=headers, json={"name": f"{label} {suffix}"}
+    )
+    assert response.status_code in (200, 201), response.text
+    return response.json()["id"]
+
+
+async def _create_warehouse(
+    async_client: AsyncClient, headers: dict[str, str], suffix: str
+) -> str:
+    response = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": "Wave 2 WH", "code": f"wave-2-{suffix}"},
+    )
+    assert response.status_code in (200, 201), response.text
+    return response.json()["id"]
+
+
+async def _set_marketplace_token(
+    async_client: AsyncClient, headers: dict[str, str], seller_id: str
+) -> None:
+    response = await async_client.patch(
+        f"/integrations/wildberries/sellers/{seller_id}/tokens",
+        headers=headers,
+        json={"marketplace_api_token": "wave-2-marketplace-token"},
+    )
+    assert response.status_code == 200, response.text
+
+
+def _wb_order(order_id: int, warehouse_id: int, barcode: str) -> dict[str, Any]:
+    return {
+        "id": order_id,
+        "rid": f"rid-{order_id}",
+        "createdAt": "2026-08-28T08:00:00Z",
+        "warehouseId": warehouse_id,
+        "officeId": 601001,
+        "nmId": order_id,
+        "chrtId": order_id,
+        "article": f"article-{order_id}",
+        "skus": [barcode],
+        "price": 1000,
+    }
+
+
+# TC-NEW-FBS-SHARE-W2-001: WB list is enriched and PUT persists served.
+@pytest.mark.asyncio
+async def test_fbs_seller_warehouses_contract_get_and_put(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_warehouses", True)
+    headers, suffix = await _register_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    warehouse_id = await _create_warehouse(async_client, headers, suffix)
+    await _set_marketplace_token(async_client, headers, seller_id)
+
+    initial = await async_client.get(f"/fbs-sellers/{seller_id}/warehouses", headers=headers)
+    assert initial.status_code == 200, initial.text
+    row = initial.json()[0]
+    assert row["wb_warehouse_id"] == WB_WAREHOUSE_OURS
+    assert row["name"] == "E2E Seller Warehouse"
+    assert row["served"] is False
+    assert row["wms_warehouse_id"] is None
+
+    missing_wms = await async_client.put(
+        f"/fbs-sellers/{seller_id}/warehouses/{WB_WAREHOUSE_OURS}",
+        headers=headers,
+        json={"served": True, "wms_warehouse_id": None},
+    )
+    assert missing_wms.status_code == 422
+
+    configured = await async_client.put(
+        f"/fbs-sellers/{seller_id}/warehouses/{WB_WAREHOUSE_OURS}",
+        headers=headers,
+backend/app/models/fbs_supply.py:36:class FbsSupply(Base):
+backend/app/models/fbs_supply.py:109:    created_at_wb: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+backend/app/models/fbs_supply.py:110:    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+backend/app/models/fbs_order.py:148:class FbsOrder(Base):
+backend/app/models/fbs_order.py:237:    created_at_wb: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+backend/app/models/fbs_order.py:322:class FbsOrderProduct(Base):
+backend/app/models/fbs_order.py:369:class FbsOrderProductReservation(Base):
+backend/app/models/fbs_order.py:399:class FbsOrderProductPick(Base):
+backend/app/models/fbs_order.py:447:class FbsOrderMarking(Base):
+backend/app/models/fbs_order.py:547:class FbsOrderReservation(Base):
+
+apply patch
+patch: completed
+/Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4/backend/app/api/fbs_orders.py
+/Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4/backend/app/services/fbs_assembly_time_service.py
+/Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4/backend/tests/test_fbs_stock_share_wave2.py
+diff --git a/backend/app/api/fbs_orders.py b/backend/app/api/fbs_orders.py
+index 70b0fdc42cebde555e9144b4da4970cb57067fc7..4c7b3441c48b6346341ed6a706961fc0e0b179a6
+--- a/backend/app/api/fbs_orders.py
++++ b/backend/app/api/fbs_orders.py
+@@ -71,6 +71,8 @@
+ class FbsAssemblyTimeOut(BaseModel):
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
+ 
+ 
+ class FbsCancelledProductOut(BaseModel):
+@@ -164,7 +166,12 @@
+         if str(exc) == "invalid_period":
+             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+         raise
+-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
++    return FbsAssemblyTimeOut(
++        hours=result.hours,
++        orders=result.orders,
++        within_12_hours_percent=result.within_12_hours_percent,
++        within_24_hours_percent=result.within_24_hours_percent,
++    )
+ 
+ 
+ @contract_router.get(
+diff --git a/backend/app/services/fbs_assembly_time_service.py b/backend/app/services/fbs_assembly_time_service.py
+index e37ee732a113230d7218b383416711a8c5e7d708..0f4c30e5ebecb07ab8bfff412ac2fe711c299f29
+--- a/backend/app/services/fbs_assembly_time_service.py
++++ b/backend/app/services/fbs_assembly_time_service.py
+@@ -13,10 +13,31 @@
+ from app.models.fbs_supply import FbsSupply
+ 
+ 
++ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
++ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
++SECONDS_PER_HOUR = 3600
++
++
+ @dataclass(frozen=True)
+ class FbsAssemblyTime:
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
++
++
++def _percentage_within_threshold(
++    durations_seconds: list[float],
++    threshold_hours: int,
++) -> int:
++    if not durations_seconds:
++        return 0
++    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
++    matching_orders = sum(
++        duration_seconds <= threshold_seconds
++        for duration_seconds in durations_seconds
++    )
++    return round(matching_orders * 100 / len(durations_seconds))
+ 
+ 
+ async def calculate_fbs_assembly_time(
+@@ -53,6 +74,22 @@
+         if delivered_at is not None and delivered_at >= created_at_wb
+     ]
+     if not durations:
+-        return FbsAssemblyTime(hours=0.0, orders=0)
+-    average_hours = sum(durations) / len(durations) / 3600
+-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
++        return FbsAssemblyTime(
++            hours=0.0,
++            orders=0,
++            within_12_hours_percent=0,
++            within_24_hours_percent=0,
++        )
++    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
++    return FbsAssemblyTime(
++        hours=round(average_hours, 1),
++        orders=len(durations),
++        within_12_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
++        ),
++        within_24_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
++        ),
++    )
+diff --git a/backend/tests/test_fbs_stock_share_wave2.py b/backend/tests/test_fbs_stock_share_wave2.py
+index 6b428b4d70ce19da5695e16649b4da646a6e208d..66ad5973f6474bca8a0d71aa496aaa9c3195bb82
+--- a/backend/tests/test_fbs_stock_share_wave2.py
++++ b/backend/tests/test_fbs_stock_share_wave2.py
+@@ -237,7 +237,7 @@
+     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+ 
+ 
+-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
++# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
+ @pytest.mark.asyncio
+ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+     headers, suffix = await _register_admin(async_client)
+@@ -251,7 +251,7 @@
+         assert seller is not None
+         tenant_id = seller.tenant_id
+         for index, (seller_id, hours) in enumerate(
+-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
++            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
+         ):
+             created_at = period_from + timedelta(days=index)
+             supply = FbsSupply(
+@@ -294,7 +294,44 @@
+         },
+     )
+     assert response.status_code == 200, response.text
+-    assert response.json() == {"hours": 8.0, "orders": 2}
++    assert response.json() == {
++        "hours": 9.0,
++        "orders": 2,
++        "within_12_hours_percent": 100,
++        "within_24_hours_percent": 100,
++    }
++
++    all_sellers_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=7)).isoformat(),
++        },
++    )
++    assert all_sellers_response.status_code == 200, all_sellers_response.text
++    assert all_sellers_response.json() == {
++        "hours": 16.0,
++        "orders": 3,
++        "within_12_hours_percent": 67,
++        "within_24_hours_percent": 67,
++    }
++
++    empty_period_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": (period_from + timedelta(days=30)).isoformat(),
++            "to": (period_from + timedelta(days=31)).isoformat(),
++        },
++    )
++    assert empty_period_response.status_code == 200, empty_period_response.text
++    assert empty_period_response.json() == {
++        "hours": 0.0,
++        "orders": 0,
++        "within_12_hours_percent": 0,
++        "within_24_hours_percent": 0,
++    }
+ # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+ @pytest.mark.asyncio
+ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+
+diff --git a/backend/app/api/fbs_orders.py b/backend/app/api/fbs_orders.py
+index 70b0fdc42cebde555e9144b4da4970cb57067fc7..4c7b3441c48b6346341ed6a706961fc0e0b179a6
+--- a/backend/app/api/fbs_orders.py
++++ b/backend/app/api/fbs_orders.py
+@@ -71,6 +71,8 @@
+ class FbsAssemblyTimeOut(BaseModel):
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
+ 
+ 
+ class FbsCancelledProductOut(BaseModel):
+@@ -164,7 +166,12 @@
+         if str(exc) == "invalid_period":
+             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+         raise
+-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
++    return FbsAssemblyTimeOut(
++        hours=result.hours,
++        orders=result.orders,
++        within_12_hours_percent=result.within_12_hours_percent,
++        within_24_hours_percent=result.within_24_hours_percent,
++    )
+ 
+ 
+ @contract_router.get(
+diff --git a/backend/app/services/fbs_assembly_time_service.py b/backend/app/services/fbs_assembly_time_service.py
+index e37ee732a113230d7218b383416711a8c5e7d708..0f4c30e5ebecb07ab8bfff412ac2fe711c299f29
+--- a/backend/app/services/fbs_assembly_time_service.py
++++ b/backend/app/services/fbs_assembly_time_service.py
+@@ -13,10 +13,31 @@
+ from app.models.fbs_supply import FbsSupply
+ 
+ 
++ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
++ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
++SECONDS_PER_HOUR = 3600
++
++
+ @dataclass(frozen=True)
+ class FbsAssemblyTime:
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
++
++
++def _percentage_within_threshold(
++    durations_seconds: list[float],
++    threshold_hours: int,
++) -> int:
++    if not durations_seconds:
++        return 0
++    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
++    matching_orders = sum(
++        duration_seconds <= threshold_seconds
++        for duration_seconds in durations_seconds
++    )
++    return round(matching_orders * 100 / len(durations_seconds))
+ 
+ 
+ async def calculate_fbs_assembly_time(
+@@ -53,6 +74,22 @@
+         if delivered_at is not None and delivered_at >= created_at_wb
+     ]
+     if not durations:
+-        return FbsAssemblyTime(hours=0.0, orders=0)
+-    average_hours = sum(durations) / len(durations) / 3600
+-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
++        return FbsAssemblyTime(
++            hours=0.0,
++            orders=0,
++            within_12_hours_percent=0,
++            within_24_hours_percent=0,
++        )
++    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
++    return FbsAssemblyTime(
++        hours=round(average_hours, 1),
++        orders=len(durations),
++        within_12_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
++        ),
++        within_24_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
++        ),
++    )
+diff --git a/backend/tests/test_fbs_stock_share_wave2.py b/backend/tests/test_fbs_stock_share_wave2.py
+index 6b428b4d70ce19da5695e16649b4da646a6e208d..66ad5973f6474bca8a0d71aa496aaa9c3195bb82
+--- a/backend/tests/test_fbs_stock_share_wave2.py
++++ b/backend/tests/test_fbs_stock_share_wave2.py
+@@ -237,7 +237,7 @@
+     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+ 
+ 
+-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
++# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
+ @pytest.mark.asyncio
+ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+     headers, suffix = await _register_admin(async_client)
+@@ -251,7 +251,7 @@
+         assert seller is not None
+         tenant_id = seller.tenant_id
+         for index, (seller_id, hours) in enumerate(
+-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
++            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
+         ):
+             created_at = period_from + timedelta(days=index)
+             supply = FbsSupply(
+@@ -294,7 +294,44 @@
+         },
+     )
+     assert response.status_code == 200, response.text
+-    assert response.json() == {"hours": 8.0, "orders": 2}
++    assert response.json() == {
++        "hours": 9.0,
++        "orders": 2,
++        "within_12_hours_percent": 100,
++        "within_24_hours_percent": 100,
++    }
++
++    all_sellers_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=7)).isoformat(),
++        },
++    )
++    assert all_sellers_response.status_code == 200, all_sellers_response.text
++    assert all_sellers_response.json() == {
++        "hours": 16.0,
++        "orders": 3,
++        "within_12_hours_percent": 67,
++        "within_24_hours_percent": 67,
++    }
++
++    empty_period_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": (period_from + timedelta(days=30)).isoformat(),
++            "to": (period_from + timedelta(days=31)).isoformat(),
++        },
++    )
++    assert empty_period_response.status_code == 200, empty_period_response.text
++    assert empty_period_response.json() == {
++        "hours": 0.0,
++        "orders": 0,
++        "within_12_hours_percent": 0,
++        "within_24_hours_percent": 0,
++    }
+ # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+ @pytest.mark.asyncio
+ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+
+exec
+/bin/zsh -lc 'git diff --check && git diff -- backend/app/services/fbs_assembly_time_service.py backend/app/api/fbs_orders.py backend/tests/test_fbs_stock_share_wave2.py && /Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python -m pytest tests/test_fbs_stock_share_wave2.py::test_fbs_assembly_time_period_and_seller_filter -q' in /Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4/backend
+ succeeded in 3962ms:
+.                                                                        [100%]
+1 passed in 1.07s
+
+diff --git a/backend/app/api/fbs_orders.py b/backend/app/api/fbs_orders.py
+index 70b0fdc42cebde555e9144b4da4970cb57067fc7..4c7b3441c48b6346341ed6a706961fc0e0b179a6
+--- a/backend/app/api/fbs_orders.py
++++ b/backend/app/api/fbs_orders.py
+@@ -71,6 +71,8 @@
+ class FbsAssemblyTimeOut(BaseModel):
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
+ 
+ 
+ class FbsCancelledProductOut(BaseModel):
+@@ -164,7 +166,12 @@
+         if str(exc) == "invalid_period":
+             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+         raise
+-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
++    return FbsAssemblyTimeOut(
++        hours=result.hours,
++        orders=result.orders,
++        within_12_hours_percent=result.within_12_hours_percent,
++        within_24_hours_percent=result.within_24_hours_percent,
++    )
+ 
+ 
+ @contract_router.get(
+diff --git a/backend/app/services/fbs_assembly_time_service.py b/backend/app/services/fbs_assembly_time_service.py
+index e37ee732a113230d7218b383416711a8c5e7d708..0f4c30e5ebecb07ab8bfff412ac2fe711c299f29
+--- a/backend/app/services/fbs_assembly_time_service.py
++++ b/backend/app/services/fbs_assembly_time_service.py
+@@ -13,10 +13,31 @@
+ from app.models.fbs_supply import FbsSupply
+ 
+ 
++ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
++ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
++SECONDS_PER_HOUR = 3600
++
++
+ @dataclass(frozen=True)
+ class FbsAssemblyTime:
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
++
++
++def _percentage_within_threshold(
++    durations_seconds: list[float],
++    threshold_hours: int,
++) -> int:
++    if not durations_seconds:
++        return 0
++    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
++    matching_orders = sum(
++        duration_seconds <= threshold_seconds
++        for duration_seconds in durations_seconds
++    )
++    return round(matching_orders * 100 / len(durations_seconds))
+ 
+ 
+ async def calculate_fbs_assembly_time(
+@@ -53,6 +74,22 @@
+         if delivered_at is not None and delivered_at >= created_at_wb
+     ]
+     if not durations:
+-        return FbsAssemblyTime(hours=0.0, orders=0)
+-    average_hours = sum(durations) / len(durations) / 3600
+-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
++        return FbsAssemblyTime(
++            hours=0.0,
++            orders=0,
++            within_12_hours_percent=0,
++            within_24_hours_percent=0,
++        )
++    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
++    return FbsAssemblyTime(
++        hours=round(average_hours, 1),
++        orders=len(durations),
++        within_12_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
++        ),
++        within_24_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
++        ),
++    )
+diff --git a/backend/tests/test_fbs_stock_share_wave2.py b/backend/tests/test_fbs_stock_share_wave2.py
+index 6b428b4d70ce19da5695e16649b4da646a6e208d..66ad5973f6474bca8a0d71aa496aaa9c3195bb82
+--- a/backend/tests/test_fbs_stock_share_wave2.py
++++ b/backend/tests/test_fbs_stock_share_wave2.py
+@@ -237,7 +237,7 @@
+     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+ 
+ 
+-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
++# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
+ @pytest.mark.asyncio
+ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+     headers, suffix = await _register_admin(async_client)
+@@ -251,7 +251,7 @@
+         assert seller is not None
+         tenant_id = seller.tenant_id
+         for index, (seller_id, hours) in enumerate(
+-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
++            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
+         ):
+             created_at = period_from + timedelta(days=index)
+             supply = FbsSupply(
+@@ -294,7 +294,44 @@
+         },
+     )
+     assert response.status_code == 200, response.text
+-    assert response.json() == {"hours": 8.0, "orders": 2}
++    assert response.json() == {
++        "hours": 9.0,
++        "orders": 2,
++        "within_12_hours_percent": 100,
++        "within_24_hours_percent": 100,
++    }
++
++    all_sellers_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=7)).isoformat(),
++        },
++    )
++    assert all_sellers_response.status_code == 200, all_sellers_response.text
++    assert all_sellers_response.json() == {
++        "hours": 16.0,
++        "orders": 3,
++        "within_12_hours_percent": 67,
++        "within_24_hours_percent": 67,
++    }
++
++    empty_period_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": (period_from + timedelta(days=30)).isoformat(),
++            "to": (period_from + timedelta(days=31)).isoformat(),
++        },
++    )
++    assert empty_period_response.status_code == 200, empty_period_response.text
++    assert empty_period_response.json() == {
++        "hours": 0.0,
++        "orders": 0,
++        "within_12_hours_percent": 0,
++        "within_24_hours_percent": 0,
++    }
+ # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+ @pytest.mark.asyncio
+ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+
+codex
+Точечный интеграционный тест ручки уже проходит. В нём заказ с длительностью ровно 12 часов учитывается, а запрос с `seller_id` даёт свои проценты, отличающиеся от общей выборки. Сейчас отделю пустой период в самостоятельный тест, после чего прогоню обязательные `ruff` и `mypy` по всему backend.
+apply patch
+patch: completed
+/Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4/backend/tests/test_fbs_stock_share_wave2.py
+diff --git a/backend/app/api/fbs_orders.py b/backend/app/api/fbs_orders.py
+index 70b0fdc42cebde555e9144b4da4970cb57067fc7..4c7b3441c48b6346341ed6a706961fc0e0b179a6
+--- a/backend/app/api/fbs_orders.py
++++ b/backend/app/api/fbs_orders.py
+@@ -71,6 +71,8 @@
+ class FbsAssemblyTimeOut(BaseModel):
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
+ 
+ 
+ class FbsCancelledProductOut(BaseModel):
+@@ -164,7 +166,12 @@
+         if str(exc) == "invalid_period":
+             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+         raise
+-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
++    return FbsAssemblyTimeOut(
++        hours=result.hours,
++        orders=result.orders,
++        within_12_hours_percent=result.within_12_hours_percent,
++        within_24_hours_percent=result.within_24_hours_percent,
++    )
+ 
+ 
+ @contract_router.get(
+diff --git a/backend/app/services/fbs_assembly_time_service.py b/backend/app/services/fbs_assembly_time_service.py
+index e37ee732a113230d7218b383416711a8c5e7d708..0f4c30e5ebecb07ab8bfff412ac2fe711c299f29
+--- a/backend/app/services/fbs_assembly_time_service.py
++++ b/backend/app/services/fbs_assembly_time_service.py
+@@ -13,10 +13,31 @@
+ from app.models.fbs_supply import FbsSupply
+ 
+ 
++ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
++ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
++SECONDS_PER_HOUR = 3600
++
++
+ @dataclass(frozen=True)
+ class FbsAssemblyTime:
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
++
++
++def _percentage_within_threshold(
++    durations_seconds: list[float],
++    threshold_hours: int,
++) -> int:
++    if not durations_seconds:
++        return 0
++    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
++    matching_orders = sum(
++        duration_seconds <= threshold_seconds
++        for duration_seconds in durations_seconds
++    )
++    return round(matching_orders * 100 / len(durations_seconds))
+ 
+ 
+ async def calculate_fbs_assembly_time(
+@@ -53,6 +74,22 @@
+         if delivered_at is not None and delivered_at >= created_at_wb
+     ]
+     if not durations:
+-        return FbsAssemblyTime(hours=0.0, orders=0)
+-    average_hours = sum(durations) / len(durations) / 3600
+-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
++        return FbsAssemblyTime(
++            hours=0.0,
++            orders=0,
++            within_12_hours_percent=0,
++            within_24_hours_percent=0,
++        )
++    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
++    return FbsAssemblyTime(
++        hours=round(average_hours, 1),
++        orders=len(durations),
++        within_12_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
++        ),
++        within_24_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
++        ),
++    )
+diff --git a/backend/tests/test_fbs_stock_share_wave2.py b/backend/tests/test_fbs_stock_share_wave2.py
+index 6b428b4d70ce19da5695e16649b4da646a6e208d..a0fabf634e55ab3c773bdd4e4d8cfe8d2e5535ee
+--- a/backend/tests/test_fbs_stock_share_wave2.py
++++ b/backend/tests/test_fbs_stock_share_wave2.py
+@@ -237,7 +237,7 @@
+     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+ 
+ 
+-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
++# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
+ @pytest.mark.asyncio
+ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+     headers, suffix = await _register_admin(async_client)
+@@ -251,7 +251,7 @@
+         assert seller is not None
+         tenant_id = seller.tenant_id
+         for index, (seller_id, hours) in enumerate(
+-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
++            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
+         ):
+             created_at = period_from + timedelta(days=index)
+             supply = FbsSupply(
+@@ -294,7 +294,52 @@
+         },
+     )
+     assert response.status_code == 200, response.text
+-    assert response.json() == {"hours": 8.0, "orders": 2}
++    assert response.json() == {
++        "hours": 9.0,
++        "orders": 2,
++        "within_12_hours_percent": 100,
++        "within_24_hours_percent": 100,
++    }
++
++    all_sellers_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=7)).isoformat(),
++        },
++    )
++    assert all_sellers_response.status_code == 200, all_sellers_response.text
++    assert all_sellers_response.json() == {
++        "hours": 16.0,
++        "orders": 3,
++        "within_12_hours_percent": 67,
++        "within_24_hours_percent": 67,
++    }
++
++
++
++# TC-NEW-FBS-SHARE-W2-003: an empty period returns zeroed assembly metrics.
++@pytest.mark.asyncio
++async def test_fbs_assembly_time_empty_period(async_client: AsyncClient) -> None:
++    headers, _ = await _register_admin(async_client)
++    period_from = datetime(2026, 9, 20, tzinfo=UTC)
++
++    response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=1)).isoformat(),
++        },
++    )
++    assert response.status_code == 200, response.text
++    assert response.json() == {
++        "hours": 0.0,
++        "orders": 0,
++        "within_12_hours_percent": 0,
++        "within_24_hours_percent": 0,
++    }
+ # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+ @pytest.mark.asyncio
+ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+
+diff --git a/backend/app/api/fbs_orders.py b/backend/app/api/fbs_orders.py
+index 70b0fdc42cebde555e9144b4da4970cb57067fc7..4c7b3441c48b6346341ed6a706961fc0e0b179a6
+--- a/backend/app/api/fbs_orders.py
++++ b/backend/app/api/fbs_orders.py
+@@ -71,6 +71,8 @@
+ class FbsAssemblyTimeOut(BaseModel):
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
+ 
+ 
+ class FbsCancelledProductOut(BaseModel):
+@@ -164,7 +166,12 @@
+         if str(exc) == "invalid_period":
+             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+         raise
+-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
++    return FbsAssemblyTimeOut(
++        hours=result.hours,
++        orders=result.orders,
++        within_12_hours_percent=result.within_12_hours_percent,
++        within_24_hours_percent=result.within_24_hours_percent,
++    )
+ 
+ 
+ @contract_router.get(
+diff --git a/backend/app/services/fbs_assembly_time_service.py b/backend/app/services/fbs_assembly_time_service.py
+index e37ee732a113230d7218b383416711a8c5e7d708..0f4c30e5ebecb07ab8bfff412ac2fe711c299f29
+--- a/backend/app/services/fbs_assembly_time_service.py
++++ b/backend/app/services/fbs_assembly_time_service.py
+@@ -13,10 +13,31 @@
+ from app.models.fbs_supply import FbsSupply
+ 
+ 
++ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
++ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
++SECONDS_PER_HOUR = 3600
++
++
+ @dataclass(frozen=True)
+ class FbsAssemblyTime:
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
++
++
++def _percentage_within_threshold(
++    durations_seconds: list[float],
++    threshold_hours: int,
++) -> int:
++    if not durations_seconds:
++        return 0
++    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
++    matching_orders = sum(
++        duration_seconds <= threshold_seconds
++        for duration_seconds in durations_seconds
++    )
++    return round(matching_orders * 100 / len(durations_seconds))
+ 
+ 
+ async def calculate_fbs_assembly_time(
+@@ -53,6 +74,22 @@
+         if delivered_at is not None and delivered_at >= created_at_wb
+     ]
+     if not durations:
+-        return FbsAssemblyTime(hours=0.0, orders=0)
+-    average_hours = sum(durations) / len(durations) / 3600
+-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
++        return FbsAssemblyTime(
++            hours=0.0,
++            orders=0,
++            within_12_hours_percent=0,
++            within_24_hours_percent=0,
++        )
++    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
++    return FbsAssemblyTime(
++        hours=round(average_hours, 1),
++        orders=len(durations),
++        within_12_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
++        ),
++        within_24_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
++        ),
++    )
+diff --git a/backend/tests/test_fbs_stock_share_wave2.py b/backend/tests/test_fbs_stock_share_wave2.py
+index 6b428b4d70ce19da5695e16649b4da646a6e208d..a0fabf634e55ab3c773bdd4e4d8cfe8d2e5535ee
+--- a/backend/tests/test_fbs_stock_share_wave2.py
++++ b/backend/tests/test_fbs_stock_share_wave2.py
+@@ -237,7 +237,7 @@
+     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+ 
+ 
+-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
++# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
+ @pytest.mark.asyncio
+ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+     headers, suffix = await _register_admin(async_client)
+@@ -251,7 +251,7 @@
+         assert seller is not None
+         tenant_id = seller.tenant_id
+         for index, (seller_id, hours) in enumerate(
+-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
++            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
+         ):
+             created_at = period_from + timedelta(days=index)
+             supply = FbsSupply(
+@@ -294,7 +294,52 @@
+         },
+     )
+     assert response.status_code == 200, response.text
+-    assert response.json() == {"hours": 8.0, "orders": 2}
++    assert response.json() == {
++        "hours": 9.0,
++        "orders": 2,
++        "within_12_hours_percent": 100,
++        "within_24_hours_percent": 100,
++    }
++
++    all_sellers_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=7)).isoformat(),
++        },
++    )
++    assert all_sellers_response.status_code == 200, all_sellers_response.text
++    assert all_sellers_response.json() == {
++        "hours": 16.0,
++        "orders": 3,
++        "within_12_hours_percent": 67,
++        "within_24_hours_percent": 67,
++    }
++
++
++
++# TC-NEW-FBS-SHARE-W2-003: an empty period returns zeroed assembly metrics.
++@pytest.mark.asyncio
++async def test_fbs_assembly_time_empty_period(async_client: AsyncClient) -> None:
++    headers, _ = await _register_admin(async_client)
++    period_from = datetime(2026, 9, 20, tzinfo=UTC)
++
++    response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=1)).isoformat(),
++        },
++    )
++    assert response.status_code == 200, response.text
++    assert response.json() == {
++        "hours": 0.0,
++        "orders": 0,
++        "within_12_hours_percent": 0,
++        "within_24_hours_percent": 0,
++    }
+ # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+ @pytest.mark.asyncio
+ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+
+exec
+/bin/zsh -lc '/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/ruff check .' in /Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4/backend
+exec
+/bin/zsh -lc '/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/mypy .' in /Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4/backend
+exec
+/bin/zsh -lc '/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python -m pytest tests/test_fbs_stock_share_wave2.py::test_fbs_assembly_time_period_and_seller_filter tests/test_fbs_stock_share_wave2.py::test_fbs_assembly_time_empty_period -q' in /Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4/backend
+ exited 1 in 76ms:
+I001 [*] Import block is un-sorted or un-formatted
+  --> app/services/fbs_assembly_time_service.py:3:1
+   |
+ 1 |   """Среднее время от появления заказа WB до отгрузки его поставки."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | import uuid
+ 6 | | from dataclasses import dataclass
+ 7 | | from datetime import datetime
+ 8 | |
+ 9 | | from sqlalchemy import select
+10 | | from sqlalchemy.ext.asyncio import AsyncSession
+11 | |
+12 | | from app.models.fbs_order import FbsOrder
+13 | | from app.models.fbs_supply import FbsSupply
+   | |___________________________________________^
+help: Organize imports
+   |
+14 |
+   -
+15 | ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
+   |
+
+Found 1 error.
+[*] 1 fixable with the `--fix` option.
+
+ succeeded in 4832ms:
+..                                                                       [100%]
+2 passed in 2.35s
+
+diff --git a/backend/app/api/fbs_orders.py b/backend/app/api/fbs_orders.py
+index 70b0fdc42cebde555e9144b4da4970cb57067fc7..4c7b3441c48b6346341ed6a706961fc0e0b179a6
+--- a/backend/app/api/fbs_orders.py
++++ b/backend/app/api/fbs_orders.py
+@@ -71,6 +71,8 @@
+ class FbsAssemblyTimeOut(BaseModel):
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
+ 
+ 
+ class FbsCancelledProductOut(BaseModel):
+@@ -164,7 +166,12 @@
+         if str(exc) == "invalid_period":
+             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+         raise
+-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
++    return FbsAssemblyTimeOut(
++        hours=result.hours,
++        orders=result.orders,
++        within_12_hours_percent=result.within_12_hours_percent,
++        within_24_hours_percent=result.within_24_hours_percent,
++    )
+ 
+ 
+ @contract_router.get(
+diff --git a/backend/app/services/fbs_assembly_time_service.py b/backend/app/services/fbs_assembly_time_service.py
+index e37ee732a113230d7218b383416711a8c5e7d708..0f4c30e5ebecb07ab8bfff412ac2fe711c299f29
+--- a/backend/app/services/fbs_assembly_time_service.py
++++ b/backend/app/services/fbs_assembly_time_service.py
+@@ -13,10 +13,31 @@
+ from app.models.fbs_supply import FbsSupply
+ 
+ 
++ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
++ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
++SECONDS_PER_HOUR = 3600
++
++
+ @dataclass(frozen=True)
+ class FbsAssemblyTime:
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
++
++
++def _percentage_within_threshold(
++    durations_seconds: list[float],
++    threshold_hours: int,
++) -> int:
++    if not durations_seconds:
++        return 0
++    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
++    matching_orders = sum(
++        duration_seconds <= threshold_seconds
++        for duration_seconds in durations_seconds
++    )
++    return round(matching_orders * 100 / len(durations_seconds))
+ 
+ 
+ async def calculate_fbs_assembly_time(
+@@ -53,6 +74,22 @@
+         if delivered_at is not None and delivered_at >= created_at_wb
+     ]
+     if not durations:
+-        return FbsAssemblyTime(hours=0.0, orders=0)
+-    average_hours = sum(durations) / len(durations) / 3600
+-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
++        return FbsAssemblyTime(
++            hours=0.0,
++            orders=0,
++            within_12_hours_percent=0,
++            within_24_hours_percent=0,
++        )
++    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
++    return FbsAssemblyTime(
++        hours=round(average_hours, 1),
++        orders=len(durations),
++        within_12_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
++        ),
++        within_24_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
++        ),
++    )
+diff --git a/backend/tests/test_fbs_stock_share_wave2.py b/backend/tests/test_fbs_stock_share_wave2.py
+index 6b428b4d70ce19da5695e16649b4da646a6e208d..a0fabf634e55ab3c773bdd4e4d8cfe8d2e5535ee
+--- a/backend/tests/test_fbs_stock_share_wave2.py
++++ b/backend/tests/test_fbs_stock_share_wave2.py
+@@ -237,7 +237,7 @@
+     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+ 
+ 
+-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
++# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
+ @pytest.mark.asyncio
+ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+     headers, suffix = await _register_admin(async_client)
+@@ -251,7 +251,7 @@
+         assert seller is not None
+         tenant_id = seller.tenant_id
+         for index, (seller_id, hours) in enumerate(
+-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
++            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
+         ):
+             created_at = period_from + timedelta(days=index)
+             supply = FbsSupply(
+@@ -294,7 +294,52 @@
+         },
+     )
+     assert response.status_code == 200, response.text
+-    assert response.json() == {"hours": 8.0, "orders": 2}
++    assert response.json() == {
++        "hours": 9.0,
++        "orders": 2,
++        "within_12_hours_percent": 100,
++        "within_24_hours_percent": 100,
++    }
++
++    all_sellers_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=7)).isoformat(),
++        },
++    )
++    assert all_sellers_response.status_code == 200, all_sellers_response.text
++    assert all_sellers_response.json() == {
++        "hours": 16.0,
++        "orders": 3,
++        "within_12_hours_percent": 67,
++        "within_24_hours_percent": 67,
++    }
++
++
++
++# TC-NEW-FBS-SHARE-W2-003: an empty period returns zeroed assembly metrics.
++@pytest.mark.asyncio
++async def test_fbs_assembly_time_empty_period(async_client: AsyncClient) -> None:
++    headers, _ = await _register_admin(async_client)
++    period_from = datetime(2026, 9, 20, tzinfo=UTC)
++
++    response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=1)).isoformat(),
++        },
++    )
++    assert response.status_code == 200, response.text
++    assert response.json() == {
++        "hours": 0.0,
++        "orders": 0,
++        "within_12_hours_percent": 0,
++        "within_24_hours_percent": 0,
++    }
+ # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+ @pytest.mark.asyncio
+ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+
+ succeeded in 12657ms:
+Success: no issues found in 386 source files
+
+diff --git a/backend/app/api/fbs_orders.py b/backend/app/api/fbs_orders.py
+index 70b0fdc42cebde555e9144b4da4970cb57067fc7..4c7b3441c48b6346341ed6a706961fc0e0b179a6
+--- a/backend/app/api/fbs_orders.py
++++ b/backend/app/api/fbs_orders.py
+@@ -71,6 +71,8 @@
+ class FbsAssemblyTimeOut(BaseModel):
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
+ 
+ 
+ class FbsCancelledProductOut(BaseModel):
+@@ -164,7 +166,12 @@
+         if str(exc) == "invalid_period":
+             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+         raise
+-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
++    return FbsAssemblyTimeOut(
++        hours=result.hours,
++        orders=result.orders,
++        within_12_hours_percent=result.within_12_hours_percent,
++        within_24_hours_percent=result.within_24_hours_percent,
++    )
+ 
+ 
+ @contract_router.get(
+diff --git a/backend/app/services/fbs_assembly_time_service.py b/backend/app/services/fbs_assembly_time_service.py
+index e37ee732a113230d7218b383416711a8c5e7d708..0f4c30e5ebecb07ab8bfff412ac2fe711c299f29
+--- a/backend/app/services/fbs_assembly_time_service.py
++++ b/backend/app/services/fbs_assembly_time_service.py
+@@ -13,10 +13,31 @@
+ from app.models.fbs_supply import FbsSupply
+ 
+ 
++ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
++ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
++SECONDS_PER_HOUR = 3600
++
++
+ @dataclass(frozen=True)
+ class FbsAssemblyTime:
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
++
++
++def _percentage_within_threshold(
++    durations_seconds: list[float],
++    threshold_hours: int,
++) -> int:
++    if not durations_seconds:
++        return 0
++    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
++    matching_orders = sum(
++        duration_seconds <= threshold_seconds
++        for duration_seconds in durations_seconds
++    )
++    return round(matching_orders * 100 / len(durations_seconds))
+ 
+ 
+ async def calculate_fbs_assembly_time(
+@@ -53,6 +74,22 @@
+         if delivered_at is not None and delivered_at >= created_at_wb
+     ]
+     if not durations:
+-        return FbsAssemblyTime(hours=0.0, orders=0)
+-    average_hours = sum(durations) / len(durations) / 3600
+-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
++        return FbsAssemblyTime(
++            hours=0.0,
++            orders=0,
++            within_12_hours_percent=0,
++            within_24_hours_percent=0,
++        )
++    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
++    return FbsAssemblyTime(
++        hours=round(average_hours, 1),
++        orders=len(durations),
++        within_12_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
++        ),
++        within_24_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
++        ),
++    )
+diff --git a/backend/tests/test_fbs_stock_share_wave2.py b/backend/tests/test_fbs_stock_share_wave2.py
+index 6b428b4d70ce19da5695e16649b4da646a6e208d..a0fabf634e55ab3c773bdd4e4d8cfe8d2e5535ee
+--- a/backend/tests/test_fbs_stock_share_wave2.py
++++ b/backend/tests/test_fbs_stock_share_wave2.py
+@@ -237,7 +237,7 @@
+     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+ 
+ 
+-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
++# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
+ @pytest.mark.asyncio
+ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+     headers, suffix = await _register_admin(async_client)
+@@ -251,7 +251,7 @@
+         assert seller is not None
+         tenant_id = seller.tenant_id
+         for index, (seller_id, hours) in enumerate(
+-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
++            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
+         ):
+             created_at = period_from + timedelta(days=index)
+             supply = FbsSupply(
+@@ -294,7 +294,52 @@
+         },
+     )
+     assert response.status_code == 200, response.text
+-    assert response.json() == {"hours": 8.0, "orders": 2}
++    assert response.json() == {
++        "hours": 9.0,
++        "orders": 2,
++        "within_12_hours_percent": 100,
++        "within_24_hours_percent": 100,
++    }
++
++    all_sellers_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=7)).isoformat(),
++        },
++    )
++    assert all_sellers_response.status_code == 200, all_sellers_response.text
++    assert all_sellers_response.json() == {
++        "hours": 16.0,
++        "orders": 3,
++        "within_12_hours_percent": 67,
++        "within_24_hours_percent": 67,
++    }
++
++
++
++# TC-NEW-FBS-SHARE-W2-003: an empty period returns zeroed assembly metrics.
++@pytest.mark.asyncio
++async def test_fbs_assembly_time_empty_period(async_client: AsyncClient) -> None:
++    headers, _ = await _register_admin(async_client)
++    period_from = datetime(2026, 9, 20, tzinfo=UTC)
++
++    response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=1)).isoformat(),
++        },
++    )
++    assert response.status_code == 200, response.text
++    assert response.json() == {
++        "hours": 0.0,
++        "orders": 0,
++        "within_12_hours_percent": 0,
++        "within_24_hours_percent": 0,
++    }
+ # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+ @pytest.mark.asyncio
+ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+
+codex
+Два точечных теста прошли, `mypy` тоже зелёный. `ruff` нашёл только форматирование блока импортов в изменённом сервисе; применяю его безопасное автоисправление к одному файлу и повторяю ворота.
+exec
+/bin/zsh -lc '/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/ruff check app/services/fbs_assembly_time_service.py --fix && git diff --check && git diff --stat && git diff -- app/services/fbs_assembly_time_service.py app/api/fbs_orders.py tests/test_fbs_stock_share_wave2.py' in /Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4/backend
+ succeeded in 42ms:
+ backend/app/api/fbs_orders.py                     |  9 +++-
+ backend/app/services/fbs_assembly_time_service.py | 42 +++++++++++++++++--
+ backend/tests/test_fbs_stock_share_wave2.py       | 51 +++++++++++++++++++++--
+ 3 files changed, 95 insertions(+), 7 deletions(-)
+diff --git a/backend/app/api/fbs_orders.py b/backend/app/api/fbs_orders.py
+index 70b0fdc4..4c7b3441 100644
+--- a/backend/app/api/fbs_orders.py
++++ b/backend/app/api/fbs_orders.py
+@@ -71,6 +71,8 @@ class FbsOrderSyncOut(BaseModel):
+ class FbsAssemblyTimeOut(BaseModel):
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
+ 
+ 
+ class FbsCancelledProductOut(BaseModel):
+@@ -164,7 +166,12 @@ async def get_fbs_assembly_time(
+         if str(exc) == "invalid_period":
+             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+         raise
+-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
++    return FbsAssemblyTimeOut(
++        hours=result.hours,
++        orders=result.orders,
++        within_12_hours_percent=result.within_12_hours_percent,
++        within_24_hours_percent=result.within_24_hours_percent,
++    )
+ 
+ 
+ @contract_router.get(
+diff --git a/backend/app/services/fbs_assembly_time_service.py b/backend/app/services/fbs_assembly_time_service.py
+index e37ee732..b83dbff0 100644
+--- a/backend/app/services/fbs_assembly_time_service.py
++++ b/backend/app/services/fbs_assembly_time_service.py
+@@ -12,11 +12,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
+ from app.models.fbs_order import FbsOrder
+ from app.models.fbs_supply import FbsSupply
+ 
++ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
++ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
++SECONDS_PER_HOUR = 3600
++
+ 
+ @dataclass(frozen=True)
+ class FbsAssemblyTime:
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
++
++
++def _percentage_within_threshold(
++    durations_seconds: list[float],
++    threshold_hours: int,
++) -> int:
++    if not durations_seconds:
++        return 0
++    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
++    matching_orders = sum(
++        duration_seconds <= threshold_seconds
++        for duration_seconds in durations_seconds
++    )
++    return round(matching_orders * 100 / len(durations_seconds))
+ 
+ 
+ async def calculate_fbs_assembly_time(
+@@ -53,6 +73,22 @@ async def calculate_fbs_assembly_time(
+         if delivered_at is not None and delivered_at >= created_at_wb
+     ]
+     if not durations:
+-        return FbsAssemblyTime(hours=0.0, orders=0)
+-    average_hours = sum(durations) / len(durations) / 3600
+-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
++        return FbsAssemblyTime(
++            hours=0.0,
++            orders=0,
++            within_12_hours_percent=0,
++            within_24_hours_percent=0,
++        )
++    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
++    return FbsAssemblyTime(
++        hours=round(average_hours, 1),
++        orders=len(durations),
++        within_12_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
++        ),
++        within_24_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
++        ),
++    )
+diff --git a/backend/tests/test_fbs_stock_share_wave2.py b/backend/tests/test_fbs_stock_share_wave2.py
+index 6b428b4d..a0fabf63 100644
+--- a/backend/tests/test_fbs_stock_share_wave2.py
++++ b/backend/tests/test_fbs_stock_share_wave2.py
+@@ -237,7 +237,7 @@ async def test_fbs_import_skips_unserved_but_keeps_unmapped(
+     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+ 
+ 
+-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
++# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
+ @pytest.mark.asyncio
+ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+     headers, suffix = await _register_admin(async_client)
+@@ -251,7 +251,7 @@ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncCli
+         assert seller is not None
+         tenant_id = seller.tenant_id
+         for index, (seller_id, hours) in enumerate(
+-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
++            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
+         ):
+             created_at = period_from + timedelta(days=index)
+             supply = FbsSupply(
+@@ -294,7 +294,52 @@ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncCli
+         },
+     )
+     assert response.status_code == 200, response.text
+-    assert response.json() == {"hours": 8.0, "orders": 2}
++    assert response.json() == {
++        "hours": 9.0,
++        "orders": 2,
++        "within_12_hours_percent": 100,
++        "within_24_hours_percent": 100,
++    }
++
++    all_sellers_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=7)).isoformat(),
++        },
++    )
++    assert all_sellers_response.status_code == 200, all_sellers_response.text
++    assert all_sellers_response.json() == {
++        "hours": 16.0,
++        "orders": 3,
++        "within_12_hours_percent": 67,
++        "within_24_hours_percent": 67,
++    }
++
++
++
++# TC-NEW-FBS-SHARE-W2-003: an empty period returns zeroed assembly metrics.
++@pytest.mark.asyncio
++async def test_fbs_assembly_time_empty_period(async_client: AsyncClient) -> None:
++    headers, _ = await _register_admin(async_client)
++    period_from = datetime(2026, 9, 20, tzinfo=UTC)
++
++    response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=1)).isoformat(),
++        },
++    )
++    assert response.status_code == 200, response.text
++    assert response.json() == {
++        "hours": 0.0,
++        "orders": 0,
++        "within_12_hours_percent": 0,
++        "within_24_hours_percent": 0,
++    }
+ # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+ @pytest.mark.asyncio
+ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+
+diff --git a/backend/app/api/fbs_orders.py b/backend/app/api/fbs_orders.py
+index 70b0fdc42cebde555e9144b4da4970cb57067fc7..4c7b3441c48b6346341ed6a706961fc0e0b179a6
+--- a/backend/app/api/fbs_orders.py
++++ b/backend/app/api/fbs_orders.py
+@@ -71,6 +71,8 @@
+ class FbsAssemblyTimeOut(BaseModel):
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
+ 
+ 
+ class FbsCancelledProductOut(BaseModel):
+@@ -164,7 +166,12 @@
+         if str(exc) == "invalid_period":
+             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+         raise
+-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
++    return FbsAssemblyTimeOut(
++        hours=result.hours,
++        orders=result.orders,
++        within_12_hours_percent=result.within_12_hours_percent,
++        within_24_hours_percent=result.within_24_hours_percent,
++    )
+ 
+ 
+ @contract_router.get(
+diff --git a/backend/app/services/fbs_assembly_time_service.py b/backend/app/services/fbs_assembly_time_service.py
+index e37ee732a113230d7218b383416711a8c5e7d708..0f4c30e5ebecb07ab8bfff412ac2fe711c299f29
+--- a/backend/app/services/fbs_assembly_time_service.py
++++ b/backend/app/services/fbs_assembly_time_service.py
+@@ -13,10 +13,31 @@
+ from app.models.fbs_supply import FbsSupply
+ 
+ 
++ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
++ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
++SECONDS_PER_HOUR = 3600
++
++
+ @dataclass(frozen=True)
+ class FbsAssemblyTime:
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
++
++
++def _percentage_within_threshold(
++    durations_seconds: list[float],
++    threshold_hours: int,
++) -> int:
++    if not durations_seconds:
++        return 0
++    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
++    matching_orders = sum(
++        duration_seconds <= threshold_seconds
++        for duration_seconds in durations_seconds
++    )
++    return round(matching_orders * 100 / len(durations_seconds))
+ 
+ 
+ async def calculate_fbs_assembly_time(
+@@ -53,6 +74,22 @@
+         if delivered_at is not None and delivered_at >= created_at_wb
+     ]
+     if not durations:
+-        return FbsAssemblyTime(hours=0.0, orders=0)
+-    average_hours = sum(durations) / len(durations) / 3600
+-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
++        return FbsAssemblyTime(
++            hours=0.0,
++            orders=0,
++            within_12_hours_percent=0,
++            within_24_hours_percent=0,
++        )
++    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
++    return FbsAssemblyTime(
++        hours=round(average_hours, 1),
++        orders=len(durations),
++        within_12_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
++        ),
++        within_24_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
++        ),
++    )
+diff --git a/backend/tests/test_fbs_stock_share_wave2.py b/backend/tests/test_fbs_stock_share_wave2.py
+index 6b428b4d70ce19da5695e16649b4da646a6e208d..a0fabf634e55ab3c773bdd4e4d8cfe8d2e5535ee
+--- a/backend/tests/test_fbs_stock_share_wave2.py
++++ b/backend/tests/test_fbs_stock_share_wave2.py
+@@ -237,7 +237,7 @@
+     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+ 
+ 
+-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
++# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
+ @pytest.mark.asyncio
+ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+     headers, suffix = await _register_admin(async_client)
+@@ -251,7 +251,7 @@
+         assert seller is not None
+         tenant_id = seller.tenant_id
+         for index, (seller_id, hours) in enumerate(
+-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
++            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
+         ):
+             created_at = period_from + timedelta(days=index)
+             supply = FbsSupply(
+@@ -294,7 +294,52 @@
+         },
+     )
+     assert response.status_code == 200, response.text
+-    assert response.json() == {"hours": 8.0, "orders": 2}
++    assert response.json() == {
++        "hours": 9.0,
++        "orders": 2,
++        "within_12_hours_percent": 100,
++        "within_24_hours_percent": 100,
++    }
++
++    all_sellers_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=7)).isoformat(),
++        },
++    )
++    assert all_sellers_response.status_code == 200, all_sellers_response.text
++    assert all_sellers_response.json() == {
++        "hours": 16.0,
++        "orders": 3,
++        "within_12_hours_percent": 67,
++        "within_24_hours_percent": 67,
++    }
++
++
++
++# TC-NEW-FBS-SHARE-W2-003: an empty period returns zeroed assembly metrics.
++@pytest.mark.asyncio
++async def test_fbs_assembly_time_empty_period(async_client: AsyncClient) -> None:
++    headers, _ = await _register_admin(async_client)
++    period_from = datetime(2026, 9, 20, tzinfo=UTC)
++
++    response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=1)).isoformat(),
++        },
++    )
++    assert response.status_code == 200, response.text
++    assert response.json() == {
++        "hours": 0.0,
++        "orders": 0,
++        "within_12_hours_percent": 0,
++        "within_24_hours_percent": 0,
++    }
+ # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+ @pytest.mark.asyncio
+ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+
+apply patch
+patch: completed
+/Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4/backend/tests/test_fbs_stock_share_wave2.py
+diff --git a/backend/app/api/fbs_orders.py b/backend/app/api/fbs_orders.py
+index 70b0fdc42cebde555e9144b4da4970cb57067fc7..4c7b3441c48b6346341ed6a706961fc0e0b179a6
+--- a/backend/app/api/fbs_orders.py
++++ b/backend/app/api/fbs_orders.py
+@@ -71,6 +71,8 @@
+ class FbsAssemblyTimeOut(BaseModel):
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
+ 
+ 
+ class FbsCancelledProductOut(BaseModel):
+@@ -164,7 +166,12 @@
+         if str(exc) == "invalid_period":
+             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+         raise
+-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
++    return FbsAssemblyTimeOut(
++        hours=result.hours,
++        orders=result.orders,
++        within_12_hours_percent=result.within_12_hours_percent,
++        within_24_hours_percent=result.within_24_hours_percent,
++    )
+ 
+ 
+ @contract_router.get(
+diff --git a/backend/app/services/fbs_assembly_time_service.py b/backend/app/services/fbs_assembly_time_service.py
+index e37ee732a113230d7218b383416711a8c5e7d708..0f4c30e5ebecb07ab8bfff412ac2fe711c299f29
+--- a/backend/app/services/fbs_assembly_time_service.py
++++ b/backend/app/services/fbs_assembly_time_service.py
+@@ -13,10 +13,31 @@
+ from app.models.fbs_supply import FbsSupply
+ 
+ 
++ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
++ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
++SECONDS_PER_HOUR = 3600
++
++
+ @dataclass(frozen=True)
+ class FbsAssemblyTime:
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
++
++
++def _percentage_within_threshold(
++    durations_seconds: list[float],
++    threshold_hours: int,
++) -> int:
++    if not durations_seconds:
++        return 0
++    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
++    matching_orders = sum(
++        duration_seconds <= threshold_seconds
++        for duration_seconds in durations_seconds
++    )
++    return round(matching_orders * 100 / len(durations_seconds))
+ 
+ 
+ async def calculate_fbs_assembly_time(
+@@ -53,6 +74,22 @@
+         if delivered_at is not None and delivered_at >= created_at_wb
+     ]
+     if not durations:
+-        return FbsAssemblyTime(hours=0.0, orders=0)
+-    average_hours = sum(durations) / len(durations) / 3600
+-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
++        return FbsAssemblyTime(
++            hours=0.0,
++            orders=0,
++            within_12_hours_percent=0,
++            within_24_hours_percent=0,
++        )
++    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
++    return FbsAssemblyTime(
++        hours=round(average_hours, 1),
++        orders=len(durations),
++        within_12_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
++        ),
++        within_24_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
++        ),
++    )
+diff --git a/backend/tests/test_fbs_stock_share_wave2.py b/backend/tests/test_fbs_stock_share_wave2.py
+index 6b428b4d70ce19da5695e16649b4da646a6e208d..9b77ef0126be49c2382c30fbb3ef9521d7c1d167
+--- a/backend/tests/test_fbs_stock_share_wave2.py
++++ b/backend/tests/test_fbs_stock_share_wave2.py
+@@ -237,7 +237,7 @@
+     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+ 
+ 
+-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
++# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
+ @pytest.mark.asyncio
+ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+     headers, suffix = await _register_admin(async_client)
+@@ -251,7 +251,7 @@
+         assert seller is not None
+         tenant_id = seller.tenant_id
+         for index, (seller_id, hours) in enumerate(
+-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
++            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
+         ):
+             created_at = period_from + timedelta(days=index)
+             supply = FbsSupply(
+@@ -294,7 +294,53 @@
+         },
+     )
+     assert response.status_code == 200, response.text
+-    assert response.json() == {"hours": 8.0, "orders": 2}
++    assert response.json() == {
++        "hours": 9.0,
++        "orders": 2,
++        "within_12_hours_percent": 100,
++        "within_24_hours_percent": 100,
++    }
++
++    all_sellers_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=7)).isoformat(),
++        },
++    )
++    assert all_sellers_response.status_code == 200, all_sellers_response.text
++    assert all_sellers_response.json() == {
++        "hours": 16.0,
++        "orders": 3,
++        "within_12_hours_percent": 67,
++        "within_24_hours_percent": 67,
++    }
++
++
++# TC-NEW-FBS-SHARE-W2-003: an empty period returns zeroed assembly metrics.
++@pytest.mark.asyncio
++async def test_fbs_assembly_time_empty_period(async_client: AsyncClient) -> None:
++    headers, _ = await _register_admin(async_client)
++    period_from = datetime(2026, 9, 20, tzinfo=UTC)
++
++    response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=1)).isoformat(),
++        },
++    )
++    assert response.status_code == 200, response.text
++    assert response.json() == {
++        "hours": 0.0,
++        "orders": 0,
++        "within_12_hours_percent": 0,
++        "within_24_hours_percent": 0,
++    }
++
++
+ # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+ @pytest.mark.asyncio
+ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+
+diff --git a/backend/app/api/fbs_orders.py b/backend/app/api/fbs_orders.py
+index 70b0fdc42cebde555e9144b4da4970cb57067fc7..4c7b3441c48b6346341ed6a706961fc0e0b179a6
+--- a/backend/app/api/fbs_orders.py
++++ b/backend/app/api/fbs_orders.py
+@@ -71,6 +71,8 @@
+ class FbsAssemblyTimeOut(BaseModel):
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
+ 
+ 
+ class FbsCancelledProductOut(BaseModel):
+@@ -164,7 +166,12 @@
+         if str(exc) == "invalid_period":
+             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+         raise
+-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
++    return FbsAssemblyTimeOut(
++        hours=result.hours,
++        orders=result.orders,
++        within_12_hours_percent=result.within_12_hours_percent,
++        within_24_hours_percent=result.within_24_hours_percent,
++    )
+ 
+ 
+ @contract_router.get(
+diff --git a/backend/app/services/fbs_assembly_time_service.py b/backend/app/services/fbs_assembly_time_service.py
+index e37ee732a113230d7218b383416711a8c5e7d708..0f4c30e5ebecb07ab8bfff412ac2fe711c299f29
+--- a/backend/app/services/fbs_assembly_time_service.py
++++ b/backend/app/services/fbs_assembly_time_service.py
+@@ -13,10 +13,31 @@
+ from app.models.fbs_supply import FbsSupply
+ 
+ 
++ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
++ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
++SECONDS_PER_HOUR = 3600
++
++
+ @dataclass(frozen=True)
+ class FbsAssemblyTime:
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
++
++
++def _percentage_within_threshold(
++    durations_seconds: list[float],
++    threshold_hours: int,
++) -> int:
++    if not durations_seconds:
++        return 0
++    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
++    matching_orders = sum(
++        duration_seconds <= threshold_seconds
++        for duration_seconds in durations_seconds
++    )
++    return round(matching_orders * 100 / len(durations_seconds))
+ 
+ 
+ async def calculate_fbs_assembly_time(
+@@ -53,6 +74,22 @@
+         if delivered_at is not None and delivered_at >= created_at_wb
+     ]
+     if not durations:
+-        return FbsAssemblyTime(hours=0.0, orders=0)
+-    average_hours = sum(durations) / len(durations) / 3600
+-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
++        return FbsAssemblyTime(
++            hours=0.0,
++            orders=0,
++            within_12_hours_percent=0,
++            within_24_hours_percent=0,
++        )
++    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
++    return FbsAssemblyTime(
++        hours=round(average_hours, 1),
++        orders=len(durations),
++        within_12_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
++        ),
++        within_24_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
++        ),
++    )
+diff --git a/backend/tests/test_fbs_stock_share_wave2.py b/backend/tests/test_fbs_stock_share_wave2.py
+index 6b428b4d70ce19da5695e16649b4da646a6e208d..9b77ef0126be49c2382c30fbb3ef9521d7c1d167
+--- a/backend/tests/test_fbs_stock_share_wave2.py
++++ b/backend/tests/test_fbs_stock_share_wave2.py
+@@ -237,7 +237,7 @@
+     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+ 
+ 
+-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
++# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
+ @pytest.mark.asyncio
+ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+     headers, suffix = await _register_admin(async_client)
+@@ -251,7 +251,7 @@
+         assert seller is not None
+         tenant_id = seller.tenant_id
+         for index, (seller_id, hours) in enumerate(
+-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
++            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
+         ):
+             created_at = period_from + timedelta(days=index)
+             supply = FbsSupply(
+@@ -294,7 +294,53 @@
+         },
+     )
+     assert response.status_code == 200, response.text
+-    assert response.json() == {"hours": 8.0, "orders": 2}
++    assert response.json() == {
++        "hours": 9.0,
++        "orders": 2,
++        "within_12_hours_percent": 100,
++        "within_24_hours_percent": 100,
++    }
++
++    all_sellers_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=7)).isoformat(),
++        },
++    )
++    assert all_sellers_response.status_code == 200, all_sellers_response.text
++    assert all_sellers_response.json() == {
++        "hours": 16.0,
++        "orders": 3,
++        "within_12_hours_percent": 67,
++        "within_24_hours_percent": 67,
++    }
++
++
++# TC-NEW-FBS-SHARE-W2-003: an empty period returns zeroed assembly metrics.
++@pytest.mark.asyncio
++async def test_fbs_assembly_time_empty_period(async_client: AsyncClient) -> None:
++    headers, _ = await _register_admin(async_client)
++    period_from = datetime(2026, 9, 20, tzinfo=UTC)
++
++    response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=1)).isoformat(),
++        },
++    )
++    assert response.status_code == 200, response.text
++    assert response.json() == {
++        "hours": 0.0,
++        "orders": 0,
++        "within_12_hours_percent": 0,
++        "within_24_hours_percent": 0,
++    }
++
++
+ # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+ @pytest.mark.asyncio
+ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+
+2026-08-28T22:21:51.548533Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+exec
+/bin/zsh -lc '/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/ruff check .' in /Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4/backend
+exec
+/bin/zsh -lc '/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/mypy .' in /Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4/backend
+ succeeded in 8ms:
+All checks passed!
+
+exec
+/bin/zsh -lc '/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python -m pytest tests/test_fbs_stock_share_wave2.py::test_fbs_assembly_time_period_and_seller_filter tests/test_fbs_stock_share_wave2.py::test_fbs_assembly_time_empty_period -q' in /Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4/backend
+ succeeded in 1618ms:
+Success: no issues found in 386 source files
+
+ succeeded in 5660ms:
+..                                                                       [100%]
+2 passed in 2.40s
+
+diff --git a/backend/app/api/fbs_orders.py b/backend/app/api/fbs_orders.py
+index 70b0fdc42cebde555e9144b4da4970cb57067fc7..4c7b3441c48b6346341ed6a706961fc0e0b179a6
+--- a/backend/app/api/fbs_orders.py
++++ b/backend/app/api/fbs_orders.py
+@@ -71,6 +71,8 @@
+ class FbsAssemblyTimeOut(BaseModel):
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
+ 
+ 
+ class FbsCancelledProductOut(BaseModel):
+@@ -164,7 +166,12 @@
+         if str(exc) == "invalid_period":
+             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+         raise
+-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
++    return FbsAssemblyTimeOut(
++        hours=result.hours,
++        orders=result.orders,
++        within_12_hours_percent=result.within_12_hours_percent,
++        within_24_hours_percent=result.within_24_hours_percent,
++    )
+ 
+ 
+ @contract_router.get(
+diff --git a/backend/app/services/fbs_assembly_time_service.py b/backend/app/services/fbs_assembly_time_service.py
+index e37ee732a113230d7218b383416711a8c5e7d708..0f4c30e5ebecb07ab8bfff412ac2fe711c299f29
+--- a/backend/app/services/fbs_assembly_time_service.py
++++ b/backend/app/services/fbs_assembly_time_service.py
+@@ -13,10 +13,31 @@
+ from app.models.fbs_supply import FbsSupply
+ 
+ 
++ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
++ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
++SECONDS_PER_HOUR = 3600
++
++
+ @dataclass(frozen=True)
+ class FbsAssemblyTime:
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
++
++
++def _percentage_within_threshold(
++    durations_seconds: list[float],
++    threshold_hours: int,
++) -> int:
++    if not durations_seconds:
++        return 0
++    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
++    matching_orders = sum(
++        duration_seconds <= threshold_seconds
++        for duration_seconds in durations_seconds
++    )
++    return round(matching_orders * 100 / len(durations_seconds))
+ 
+ 
+ async def calculate_fbs_assembly_time(
+@@ -53,6 +74,22 @@
+         if delivered_at is not None and delivered_at >= created_at_wb
+     ]
+     if not durations:
+-        return FbsAssemblyTime(hours=0.0, orders=0)
+-    average_hours = sum(durations) / len(durations) / 3600
+-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
++        return FbsAssemblyTime(
++            hours=0.0,
++            orders=0,
++            within_12_hours_percent=0,
++            within_24_hours_percent=0,
++        )
++    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
++    return FbsAssemblyTime(
++        hours=round(average_hours, 1),
++        orders=len(durations),
++        within_12_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
++        ),
++        within_24_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
++        ),
++    )
+diff --git a/backend/tests/test_fbs_stock_share_wave2.py b/backend/tests/test_fbs_stock_share_wave2.py
+index 6b428b4d70ce19da5695e16649b4da646a6e208d..9b77ef0126be49c2382c30fbb3ef9521d7c1d167
+--- a/backend/tests/test_fbs_stock_share_wave2.py
++++ b/backend/tests/test_fbs_stock_share_wave2.py
+@@ -237,7 +237,7 @@
+     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+ 
+ 
+-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
++# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
+ @pytest.mark.asyncio
+ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+     headers, suffix = await _register_admin(async_client)
+@@ -251,7 +251,7 @@
+         assert seller is not None
+         tenant_id = seller.tenant_id
+         for index, (seller_id, hours) in enumerate(
+-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
++            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
+         ):
+             created_at = period_from + timedelta(days=index)
+             supply = FbsSupply(
+@@ -294,7 +294,53 @@
+         },
+     )
+     assert response.status_code == 200, response.text
+-    assert response.json() == {"hours": 8.0, "orders": 2}
++    assert response.json() == {
++        "hours": 9.0,
++        "orders": 2,
++        "within_12_hours_percent": 100,
++        "within_24_hours_percent": 100,
++    }
++
++    all_sellers_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=7)).isoformat(),
++        },
++    )
++    assert all_sellers_response.status_code == 200, all_sellers_response.text
++    assert all_sellers_response.json() == {
++        "hours": 16.0,
++        "orders": 3,
++        "within_12_hours_percent": 67,
++        "within_24_hours_percent": 67,
++    }
++
++
++# TC-NEW-FBS-SHARE-W2-003: an empty period returns zeroed assembly metrics.
++@pytest.mark.asyncio
++async def test_fbs_assembly_time_empty_period(async_client: AsyncClient) -> None:
++    headers, _ = await _register_admin(async_client)
++    period_from = datetime(2026, 9, 20, tzinfo=UTC)
++
++    response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=1)).isoformat(),
++        },
++    )
++    assert response.status_code == 200, response.text
++    assert response.json() == {
++        "hours": 0.0,
++        "orders": 0,
++        "within_12_hours_percent": 0,
++        "within_24_hours_percent": 0,
++    }
++
++
+ # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+ @pytest.mark.asyncio
+ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+
+2026-08-28T22:22:03.195611Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+codex
+Проверки теперь полностью зелёные: два целевых pytest-сценария, весь `ruff check .` и весь `mypy .`. Перед сохранением проверяю, что в diff только три backend-файла и нет чужих изменений; затем сделаю отдельный commit и опубликую именованную ветку, чтобы результат был восстановим и доступен параллельной фронтенд-работе.
+exec
+/bin/zsh -lc 'git status --short --branch && git diff --check && git diff --name-only && git diff -- backend/app/api/fbs_orders.py backend/app/services/fbs_assembly_time_service.py backend/tests/test_fbs_stock_share_wave2.py' in /Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4
+ succeeded in 0ms:
+## codex/assembly-time-thresholds-20260829
+ M backend/app/api/fbs_orders.py
+ M backend/app/services/fbs_assembly_time_service.py
+ M backend/tests/test_fbs_stock_share_wave2.py
+backend/app/api/fbs_orders.py
+backend/app/services/fbs_assembly_time_service.py
+backend/tests/test_fbs_stock_share_wave2.py
+diff --git a/backend/app/api/fbs_orders.py b/backend/app/api/fbs_orders.py
+index 70b0fdc4..4c7b3441 100644
+--- a/backend/app/api/fbs_orders.py
++++ b/backend/app/api/fbs_orders.py
+@@ -71,6 +71,8 @@ class FbsOrderSyncOut(BaseModel):
+ class FbsAssemblyTimeOut(BaseModel):
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
+ 
+ 
+ class FbsCancelledProductOut(BaseModel):
+@@ -164,7 +166,12 @@ async def get_fbs_assembly_time(
+         if str(exc) == "invalid_period":
+             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+         raise
+-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
++    return FbsAssemblyTimeOut(
++        hours=result.hours,
++        orders=result.orders,
++        within_12_hours_percent=result.within_12_hours_percent,
++        within_24_hours_percent=result.within_24_hours_percent,
++    )
+ 
+ 
+ @contract_router.get(
+diff --git a/backend/app/services/fbs_assembly_time_service.py b/backend/app/services/fbs_assembly_time_service.py
+index e37ee732..b83dbff0 100644
+--- a/backend/app/services/fbs_assembly_time_service.py
++++ b/backend/app/services/fbs_assembly_time_service.py
+@@ -12,11 +12,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
+ from app.models.fbs_order import FbsOrder
+ from app.models.fbs_supply import FbsSupply
+ 
++ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
++ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
++SECONDS_PER_HOUR = 3600
++
+ 
+ @dataclass(frozen=True)
+ class FbsAssemblyTime:
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
++
++
++def _percentage_within_threshold(
++    durations_seconds: list[float],
++    threshold_hours: int,
++) -> int:
++    if not durations_seconds:
++        return 0
++    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
++    matching_orders = sum(
++        duration_seconds <= threshold_seconds
++        for duration_seconds in durations_seconds
++    )
++    return round(matching_orders * 100 / len(durations_seconds))
+ 
+ 
+ async def calculate_fbs_assembly_time(
+@@ -53,6 +73,22 @@ async def calculate_fbs_assembly_time(
+         if delivered_at is not None and delivered_at >= created_at_wb
+     ]
+     if not durations:
+-        return FbsAssemblyTime(hours=0.0, orders=0)
+-    average_hours = sum(durations) / len(durations) / 3600
+-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
++        return FbsAssemblyTime(
++            hours=0.0,
++            orders=0,
++            within_12_hours_percent=0,
++            within_24_hours_percent=0,
++        )
++    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
++    return FbsAssemblyTime(
++        hours=round(average_hours, 1),
++        orders=len(durations),
++        within_12_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
++        ),
++        within_24_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
++        ),
++    )
+diff --git a/backend/tests/test_fbs_stock_share_wave2.py b/backend/tests/test_fbs_stock_share_wave2.py
+index 6b428b4d..9b77ef01 100644
+--- a/backend/tests/test_fbs_stock_share_wave2.py
++++ b/backend/tests/test_fbs_stock_share_wave2.py
+@@ -237,7 +237,7 @@ async def test_fbs_import_skips_unserved_but_keeps_unmapped(
+     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+ 
+ 
+-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
++# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
+ @pytest.mark.asyncio
+ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+     headers, suffix = await _register_admin(async_client)
+@@ -251,7 +251,7 @@ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncCli
+         assert seller is not None
+         tenant_id = seller.tenant_id
+         for index, (seller_id, hours) in enumerate(
+-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
++            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
+         ):
+             created_at = period_from + timedelta(days=index)
+             supply = FbsSupply(
+@@ -294,7 +294,53 @@ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncCli
+         },
+     )
+     assert response.status_code == 200, response.text
+-    assert response.json() == {"hours": 8.0, "orders": 2}
++    assert response.json() == {
++        "hours": 9.0,
++        "orders": 2,
++        "within_12_hours_percent": 100,
++        "within_24_hours_percent": 100,
++    }
++
++    all_sellers_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=7)).isoformat(),
++        },
++    )
++    assert all_sellers_response.status_code == 200, all_sellers_response.text
++    assert all_sellers_response.json() == {
++        "hours": 16.0,
++        "orders": 3,
++        "within_12_hours_percent": 67,
++        "within_24_hours_percent": 67,
++    }
++
++
++# TC-NEW-FBS-SHARE-W2-003: an empty period returns zeroed assembly metrics.
++@pytest.mark.asyncio
++async def test_fbs_assembly_time_empty_period(async_client: AsyncClient) -> None:
++    headers, _ = await _register_admin(async_client)
++    period_from = datetime(2026, 9, 20, tzinfo=UTC)
++
++    response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=1)).isoformat(),
++        },
++    )
++    assert response.status_code == 200, response.text
++    assert response.json() == {
++        "hours": 0.0,
++        "orders": 0,
++        "within_12_hours_percent": 0,
++        "within_24_hours_percent": 0,
++    }
++
++
+ # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+ @pytest.mark.asyncio
+ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+
+diff --git a/backend/app/api/fbs_orders.py b/backend/app/api/fbs_orders.py
+index 70b0fdc42cebde555e9144b4da4970cb57067fc7..4c7b3441c48b6346341ed6a706961fc0e0b179a6
+--- a/backend/app/api/fbs_orders.py
++++ b/backend/app/api/fbs_orders.py
+@@ -71,6 +71,8 @@
+ class FbsAssemblyTimeOut(BaseModel):
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
+ 
+ 
+ class FbsCancelledProductOut(BaseModel):
+@@ -164,7 +166,12 @@
+         if str(exc) == "invalid_period":
+             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+         raise
+-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
++    return FbsAssemblyTimeOut(
++        hours=result.hours,
++        orders=result.orders,
++        within_12_hours_percent=result.within_12_hours_percent,
++        within_24_hours_percent=result.within_24_hours_percent,
++    )
+ 
+ 
+ @contract_router.get(
+diff --git a/backend/app/services/fbs_assembly_time_service.py b/backend/app/services/fbs_assembly_time_service.py
+index e37ee732a113230d7218b383416711a8c5e7d708..0f4c30e5ebecb07ab8bfff412ac2fe711c299f29
+--- a/backend/app/services/fbs_assembly_time_service.py
++++ b/backend/app/services/fbs_assembly_time_service.py
+@@ -13,10 +13,31 @@
+ from app.models.fbs_supply import FbsSupply
+ 
+ 
++ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
++ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
++SECONDS_PER_HOUR = 3600
++
++
+ @dataclass(frozen=True)
+ class FbsAssemblyTime:
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
++
++
++def _percentage_within_threshold(
++    durations_seconds: list[float],
++    threshold_hours: int,
++) -> int:
++    if not durations_seconds:
++        return 0
++    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
++    matching_orders = sum(
++        duration_seconds <= threshold_seconds
++        for duration_seconds in durations_seconds
++    )
++    return round(matching_orders * 100 / len(durations_seconds))
+ 
+ 
+ async def calculate_fbs_assembly_time(
+@@ -53,6 +74,22 @@
+         if delivered_at is not None and delivered_at >= created_at_wb
+     ]
+     if not durations:
+-        return FbsAssemblyTime(hours=0.0, orders=0)
+-    average_hours = sum(durations) / len(durations) / 3600
+-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
++        return FbsAssemblyTime(
++            hours=0.0,
++            orders=0,
++            within_12_hours_percent=0,
++            within_24_hours_percent=0,
++        )
++    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
++    return FbsAssemblyTime(
++        hours=round(average_hours, 1),
++        orders=len(durations),
++        within_12_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
++        ),
++        within_24_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
++        ),
++    )
+diff --git a/backend/tests/test_fbs_stock_share_wave2.py b/backend/tests/test_fbs_stock_share_wave2.py
+index 6b428b4d70ce19da5695e16649b4da646a6e208d..9b77ef0126be49c2382c30fbb3ef9521d7c1d167
+--- a/backend/tests/test_fbs_stock_share_wave2.py
++++ b/backend/tests/test_fbs_stock_share_wave2.py
+@@ -237,7 +237,7 @@
+     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+ 
+ 
+-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
++# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
+ @pytest.mark.asyncio
+ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+     headers, suffix = await _register_admin(async_client)
+@@ -251,7 +251,7 @@
+         assert seller is not None
+         tenant_id = seller.tenant_id
+         for index, (seller_id, hours) in enumerate(
+-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
++            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
+         ):
+             created_at = period_from + timedelta(days=index)
+             supply = FbsSupply(
+@@ -294,7 +294,53 @@
+         },
+     )
+     assert response.status_code == 200, response.text
+-    assert response.json() == {"hours": 8.0, "orders": 2}
++    assert response.json() == {
++        "hours": 9.0,
++        "orders": 2,
++        "within_12_hours_percent": 100,
++        "within_24_hours_percent": 100,
++    }
++
++    all_sellers_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=7)).isoformat(),
++        },
++    )
++    assert all_sellers_response.status_code == 200, all_sellers_response.text
++    assert all_sellers_response.json() == {
++        "hours": 16.0,
++        "orders": 3,
++        "within_12_hours_percent": 67,
++        "within_24_hours_percent": 67,
++    }
++
++
++# TC-NEW-FBS-SHARE-W2-003: an empty period returns zeroed assembly metrics.
++@pytest.mark.asyncio
++async def test_fbs_assembly_time_empty_period(async_client: AsyncClient) -> None:
++    headers, _ = await _register_admin(async_client)
++    period_from = datetime(2026, 9, 20, tzinfo=UTC)
++
++    response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=1)).isoformat(),
++        },
++    )
++    assert response.status_code == 200, response.text
++    assert response.json() == {
++        "hours": 0.0,
++        "orders": 0,
++        "within_12_hours_percent": 0,
++        "within_24_hours_percent": 0,
++    }
++
++
+ # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+ @pytest.mark.asyncio
+ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+
+2026-08-28T22:22:11.409872Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+exec
+/bin/zsh -lc 'git add backend/app/api/fbs_orders.py backend/app/services/fbs_assembly_time_service.py backend/tests/test_fbs_stock_share_wave2.py && git commit -m "feat(fbs): add assembly time threshold percentages"' in /Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4
+ succeeded in 0ms:
+[codex/assembly-time-thresholds-20260829 81717cb7] feat(fbs): add assembly time threshold percentages
+ 3 files changed, 96 insertions(+), 7 deletions(-)
+
+diff --git a/backend/app/api/fbs_orders.py b/backend/app/api/fbs_orders.py
+index 70b0fdc42cebde555e9144b4da4970cb57067fc7..4c7b3441c48b6346341ed6a706961fc0e0b179a6
+--- a/backend/app/api/fbs_orders.py
++++ b/backend/app/api/fbs_orders.py
+@@ -71,6 +71,8 @@
+ class FbsAssemblyTimeOut(BaseModel):
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
+ 
+ 
+ class FbsCancelledProductOut(BaseModel):
+@@ -164,7 +166,12 @@
+         if str(exc) == "invalid_period":
+             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+         raise
+-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
++    return FbsAssemblyTimeOut(
++        hours=result.hours,
++        orders=result.orders,
++        within_12_hours_percent=result.within_12_hours_percent,
++        within_24_hours_percent=result.within_24_hours_percent,
++    )
+ 
+ 
+ @contract_router.get(
+diff --git a/backend/app/services/fbs_assembly_time_service.py b/backend/app/services/fbs_assembly_time_service.py
+index e37ee732a113230d7218b383416711a8c5e7d708..0f4c30e5ebecb07ab8bfff412ac2fe711c299f29
+--- a/backend/app/services/fbs_assembly_time_service.py
++++ b/backend/app/services/fbs_assembly_time_service.py
+@@ -13,10 +13,31 @@
+ from app.models.fbs_supply import FbsSupply
+ 
+ 
++ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
++ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
++SECONDS_PER_HOUR = 3600
++
++
+ @dataclass(frozen=True)
+ class FbsAssemblyTime:
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
++
++
++def _percentage_within_threshold(
++    durations_seconds: list[float],
++    threshold_hours: int,
++) -> int:
++    if not durations_seconds:
++        return 0
++    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
++    matching_orders = sum(
++        duration_seconds <= threshold_seconds
++        for duration_seconds in durations_seconds
++    )
++    return round(matching_orders * 100 / len(durations_seconds))
+ 
+ 
+ async def calculate_fbs_assembly_time(
+@@ -53,6 +74,22 @@
+         if delivered_at is not None and delivered_at >= created_at_wb
+     ]
+     if not durations:
+-        return FbsAssemblyTime(hours=0.0, orders=0)
+-    average_hours = sum(durations) / len(durations) / 3600
+-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
++        return FbsAssemblyTime(
++            hours=0.0,
++            orders=0,
++            within_12_hours_percent=0,
++            within_24_hours_percent=0,
++        )
++    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
++    return FbsAssemblyTime(
++        hours=round(average_hours, 1),
++        orders=len(durations),
++        within_12_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
++        ),
++        within_24_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
++        ),
++    )
+diff --git a/backend/tests/test_fbs_stock_share_wave2.py b/backend/tests/test_fbs_stock_share_wave2.py
+index 6b428b4d70ce19da5695e16649b4da646a6e208d..9b77ef0126be49c2382c30fbb3ef9521d7c1d167
+--- a/backend/tests/test_fbs_stock_share_wave2.py
++++ b/backend/tests/test_fbs_stock_share_wave2.py
+@@ -237,7 +237,7 @@
+     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+ 
+ 
+-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
++# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
+ @pytest.mark.asyncio
+ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+     headers, suffix = await _register_admin(async_client)
+@@ -251,7 +251,7 @@
+         assert seller is not None
+         tenant_id = seller.tenant_id
+         for index, (seller_id, hours) in enumerate(
+-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
++            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
+         ):
+             created_at = period_from + timedelta(days=index)
+             supply = FbsSupply(
+@@ -294,7 +294,53 @@
+         },
+     )
+     assert response.status_code == 200, response.text
+-    assert response.json() == {"hours": 8.0, "orders": 2}
++    assert response.json() == {
++        "hours": 9.0,
++        "orders": 2,
++        "within_12_hours_percent": 100,
++        "within_24_hours_percent": 100,
++    }
++
++    all_sellers_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=7)).isoformat(),
++        },
++    )
++    assert all_sellers_response.status_code == 200, all_sellers_response.text
++    assert all_sellers_response.json() == {
++        "hours": 16.0,
++        "orders": 3,
++        "within_12_hours_percent": 67,
++        "within_24_hours_percent": 67,
++    }
++
++
++# TC-NEW-FBS-SHARE-W2-003: an empty period returns zeroed assembly metrics.
++@pytest.mark.asyncio
++async def test_fbs_assembly_time_empty_period(async_client: AsyncClient) -> None:
++    headers, _ = await _register_admin(async_client)
++    period_from = datetime(2026, 9, 20, tzinfo=UTC)
++
++    response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=1)).isoformat(),
++        },
++    )
++    assert response.status_code == 200, response.text
++    assert response.json() == {
++        "hours": 0.0,
++        "orders": 0,
++        "within_12_hours_percent": 0,
++        "within_24_hours_percent": 0,
++    }
++
++
+ # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+ @pytest.mark.asyncio
+ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+
+2026-08-28T22:22:17.725700Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+exec
+/bin/zsh -lc 'git push -u origin codex/assembly-time-thresholds-20260829' in /Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4
+ exited 128 in 0ms:
+fatal: unable to access 'https://github.com/chivkunovd-bitdenis/WMS.git/': Could not resolve host: github.com
+
+diff --git a/backend/app/api/fbs_orders.py b/backend/app/api/fbs_orders.py
+index 70b0fdc42cebde555e9144b4da4970cb57067fc7..4c7b3441c48b6346341ed6a706961fc0e0b179a6
+--- a/backend/app/api/fbs_orders.py
++++ b/backend/app/api/fbs_orders.py
+@@ -71,6 +71,8 @@
+ class FbsAssemblyTimeOut(BaseModel):
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
+ 
+ 
+ class FbsCancelledProductOut(BaseModel):
+@@ -164,7 +166,12 @@
+         if str(exc) == "invalid_period":
+             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+         raise
+-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
++    return FbsAssemblyTimeOut(
++        hours=result.hours,
++        orders=result.orders,
++        within_12_hours_percent=result.within_12_hours_percent,
++        within_24_hours_percent=result.within_24_hours_percent,
++    )
+ 
+ 
+ @contract_router.get(
+diff --git a/backend/app/services/fbs_assembly_time_service.py b/backend/app/services/fbs_assembly_time_service.py
+index e37ee732a113230d7218b383416711a8c5e7d708..0f4c30e5ebecb07ab8bfff412ac2fe711c299f29
+--- a/backend/app/services/fbs_assembly_time_service.py
++++ b/backend/app/services/fbs_assembly_time_service.py
+@@ -13,10 +13,31 @@
+ from app.models.fbs_supply import FbsSupply
+ 
+ 
++ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
++ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
++SECONDS_PER_HOUR = 3600
++
++
+ @dataclass(frozen=True)
+ class FbsAssemblyTime:
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
++
++
++def _percentage_within_threshold(
++    durations_seconds: list[float],
++    threshold_hours: int,
++) -> int:
++    if not durations_seconds:
++        return 0
++    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
++    matching_orders = sum(
++        duration_seconds <= threshold_seconds
++        for duration_seconds in durations_seconds
++    )
++    return round(matching_orders * 100 / len(durations_seconds))
+ 
+ 
+ async def calculate_fbs_assembly_time(
+@@ -53,6 +74,22 @@
+         if delivered_at is not None and delivered_at >= created_at_wb
+     ]
+     if not durations:
+-        return FbsAssemblyTime(hours=0.0, orders=0)
+-    average_hours = sum(durations) / len(durations) / 3600
+-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
++        return FbsAssemblyTime(
++            hours=0.0,
++            orders=0,
++            within_12_hours_percent=0,
++            within_24_hours_percent=0,
++        )
++    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
++    return FbsAssemblyTime(
++        hours=round(average_hours, 1),
++        orders=len(durations),
++        within_12_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
++        ),
++        within_24_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
++        ),
++    )
+diff --git a/backend/tests/test_fbs_stock_share_wave2.py b/backend/tests/test_fbs_stock_share_wave2.py
+index 6b428b4d70ce19da5695e16649b4da646a6e208d..9b77ef0126be49c2382c30fbb3ef9521d7c1d167
+--- a/backend/tests/test_fbs_stock_share_wave2.py
++++ b/backend/tests/test_fbs_stock_share_wave2.py
+@@ -237,7 +237,7 @@
+     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+ 
+ 
+-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
++# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
+ @pytest.mark.asyncio
+ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+     headers, suffix = await _register_admin(async_client)
+@@ -251,7 +251,7 @@
+         assert seller is not None
+         tenant_id = seller.tenant_id
+         for index, (seller_id, hours) in enumerate(
+-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
++            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
+         ):
+             created_at = period_from + timedelta(days=index)
+             supply = FbsSupply(
+@@ -294,7 +294,53 @@
+         },
+     )
+     assert response.status_code == 200, response.text
+-    assert response.json() == {"hours": 8.0, "orders": 2}
++    assert response.json() == {
++        "hours": 9.0,
++        "orders": 2,
++        "within_12_hours_percent": 100,
++        "within_24_hours_percent": 100,
++    }
++
++    all_sellers_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=7)).isoformat(),
++        },
++    )
++    assert all_sellers_response.status_code == 200, all_sellers_response.text
++    assert all_sellers_response.json() == {
++        "hours": 16.0,
++        "orders": 3,
++        "within_12_hours_percent": 67,
++        "within_24_hours_percent": 67,
++    }
++
++
++# TC-NEW-FBS-SHARE-W2-003: an empty period returns zeroed assembly metrics.
++@pytest.mark.asyncio
++async def test_fbs_assembly_time_empty_period(async_client: AsyncClient) -> None:
++    headers, _ = await _register_admin(async_client)
++    period_from = datetime(2026, 9, 20, tzinfo=UTC)
++
++    response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=1)).isoformat(),
++        },
++    )
++    assert response.status_code == 200, response.text
++    assert response.json() == {
++        "hours": 0.0,
++        "orders": 0,
++        "within_12_hours_percent": 0,
++        "within_24_hours_percent": 0,
++    }
++
++
+ # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+ @pytest.mark.asyncio
+ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+
+2026-08-28T22:22:22.376216Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+codex
+Изменения сохранены отдельным commit `81717cb7`. Публикация ветки не прошла из-за недоступности GitHub из окружения (`Could not resolve host: github.com`), поэтому честный статус — локально реализовано и закоммичено, но ветка пока не опубликована. Сейчас зафиксирую финальное состояние worktree и SHA.
+exec
+/bin/zsh -lc 'git status --short --branch && git rev-parse HEAD && git show --stat --oneline --decorate --no-renames HEAD && git show --format= --name-only HEAD' in /Users/deniscivkunov/Projects/WMS/.worktrees/codex-bek4
+ succeeded in 20ms:
+81717cb7 (HEAD -> codex/assembly-time-thresholds-20260829) feat(fbs): add assembly time threshold percentages
+ backend/app/api/fbs_orders.py                     |  9 +++-
+ backend/app/services/fbs_assembly_time_service.py | 42 ++++++++++++++++--
+ backend/tests/test_fbs_stock_share_wave2.py       | 52 +++++++++++++++++++++--
+ 3 files changed, 96 insertions(+), 7 deletions(-)
+backend/app/api/fbs_orders.py
+backend/app/services/fbs_assembly_time_service.py
+backend/tests/test_fbs_stock_share_wave2.py
+
+diff --git a/backend/app/api/fbs_orders.py b/backend/app/api/fbs_orders.py
+index 70b0fdc42cebde555e9144b4da4970cb57067fc7..4c7b3441c48b6346341ed6a706961fc0e0b179a6
+--- a/backend/app/api/fbs_orders.py
++++ b/backend/app/api/fbs_orders.py
+@@ -71,6 +71,8 @@
+ class FbsAssemblyTimeOut(BaseModel):
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
+ 
+ 
+ class FbsCancelledProductOut(BaseModel):
+@@ -164,7 +166,12 @@
+         if str(exc) == "invalid_period":
+             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+         raise
+-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
++    return FbsAssemblyTimeOut(
++        hours=result.hours,
++        orders=result.orders,
++        within_12_hours_percent=result.within_12_hours_percent,
++        within_24_hours_percent=result.within_24_hours_percent,
++    )
+ 
+ 
+ @contract_router.get(
+diff --git a/backend/app/services/fbs_assembly_time_service.py b/backend/app/services/fbs_assembly_time_service.py
+index e37ee732a113230d7218b383416711a8c5e7d708..0f4c30e5ebecb07ab8bfff412ac2fe711c299f29
+--- a/backend/app/services/fbs_assembly_time_service.py
++++ b/backend/app/services/fbs_assembly_time_service.py
+@@ -13,10 +13,31 @@
+ from app.models.fbs_supply import FbsSupply
+ 
+ 
++ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
++ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
++SECONDS_PER_HOUR = 3600
++
++
+ @dataclass(frozen=True)
+ class FbsAssemblyTime:
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
++
++
++def _percentage_within_threshold(
++    durations_seconds: list[float],
++    threshold_hours: int,
++) -> int:
++    if not durations_seconds:
++        return 0
++    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
++    matching_orders = sum(
++        duration_seconds <= threshold_seconds
++        for duration_seconds in durations_seconds
++    )
++    return round(matching_orders * 100 / len(durations_seconds))
+ 
+ 
+ async def calculate_fbs_assembly_time(
+@@ -53,6 +74,22 @@
+         if delivered_at is not None and delivered_at >= created_at_wb
+     ]
+     if not durations:
+-        return FbsAssemblyTime(hours=0.0, orders=0)
+-    average_hours = sum(durations) / len(durations) / 3600
+-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
++        return FbsAssemblyTime(
++            hours=0.0,
++            orders=0,
++            within_12_hours_percent=0,
++            within_24_hours_percent=0,
++        )
++    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
++    return FbsAssemblyTime(
++        hours=round(average_hours, 1),
++        orders=len(durations),
++        within_12_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
++        ),
++        within_24_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
++        ),
++    )
+diff --git a/backend/tests/test_fbs_stock_share_wave2.py b/backend/tests/test_fbs_stock_share_wave2.py
+index 6b428b4d70ce19da5695e16649b4da646a6e208d..9b77ef0126be49c2382c30fbb3ef9521d7c1d167
+--- a/backend/tests/test_fbs_stock_share_wave2.py
++++ b/backend/tests/test_fbs_stock_share_wave2.py
+@@ -237,7 +237,7 @@
+     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+ 
+ 
+-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
++# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
+ @pytest.mark.asyncio
+ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+     headers, suffix = await _register_admin(async_client)
+@@ -251,7 +251,7 @@
+         assert seller is not None
+         tenant_id = seller.tenant_id
+         for index, (seller_id, hours) in enumerate(
+-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
++            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
+         ):
+             created_at = period_from + timedelta(days=index)
+             supply = FbsSupply(
+@@ -294,7 +294,53 @@
+         },
+     )
+     assert response.status_code == 200, response.text
+-    assert response.json() == {"hours": 8.0, "orders": 2}
++    assert response.json() == {
++        "hours": 9.0,
++        "orders": 2,
++        "within_12_hours_percent": 100,
++        "within_24_hours_percent": 100,
++    }
++
++    all_sellers_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=7)).isoformat(),
++        },
++    )
++    assert all_sellers_response.status_code == 200, all_sellers_response.text
++    assert all_sellers_response.json() == {
++        "hours": 16.0,
++        "orders": 3,
++        "within_12_hours_percent": 67,
++        "within_24_hours_percent": 67,
++    }
++
++
++# TC-NEW-FBS-SHARE-W2-003: an empty period returns zeroed assembly metrics.
++@pytest.mark.asyncio
++async def test_fbs_assembly_time_empty_period(async_client: AsyncClient) -> None:
++    headers, _ = await _register_admin(async_client)
++    period_from = datetime(2026, 9, 20, tzinfo=UTC)
++
++    response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=1)).isoformat(),
++        },
++    )
++    assert response.status_code == 200, response.text
++    assert response.json() == {
++        "hours": 0.0,
++        "orders": 0,
++        "within_12_hours_percent": 0,
++        "within_24_hours_percent": 0,
++    }
++
++
+ # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+ @pytest.mark.asyncio
+ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+
+codex
+Локально реализовано и сохранено в Git, commit `81717cb7ad4670fe90718453b5fa7b7544b71b9e`.
+
+Добавлены поля:
+
+- `within_12_hours_percent`
+- `within_24_hours_percent`
+
+Проценты округляются до целых, границы 12/24 часа включены, пустой период возвращает нули. Тесты проверяют расчёт, границу 12 часов, фильтр продавца и пустой период.
+
+Проверки:
+
+- 2 точечных pytest-теста — прошли
+- `ruff check .` — прошёл
+- `mypy .` — прошёл
+- `frontend/` не изменялся
+
+Ветка `codex/assembly-time-thresholds-20260829` не опубликована: GitHub недоступен из окружения (`Could not resolve host: github.com`).
+diff --git a/backend/app/api/fbs_orders.py b/backend/app/api/fbs_orders.py
+index 70b0fdc42cebde555e9144b4da4970cb57067fc7..4c7b3441c48b6346341ed6a706961fc0e0b179a6
+--- a/backend/app/api/fbs_orders.py
++++ b/backend/app/api/fbs_orders.py
+@@ -71,6 +71,8 @@
+ class FbsAssemblyTimeOut(BaseModel):
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
+ 
+ 
+ class FbsCancelledProductOut(BaseModel):
+@@ -164,7 +166,12 @@
+         if str(exc) == "invalid_period":
+             raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_period")
+         raise
+-    return FbsAssemblyTimeOut(hours=result.hours, orders=result.orders)
++    return FbsAssemblyTimeOut(
++        hours=result.hours,
++        orders=result.orders,
++        within_12_hours_percent=result.within_12_hours_percent,
++        within_24_hours_percent=result.within_24_hours_percent,
++    )
+ 
+ 
+ @contract_router.get(
+diff --git a/backend/app/services/fbs_assembly_time_service.py b/backend/app/services/fbs_assembly_time_service.py
+index e37ee732a113230d7218b383416711a8c5e7d708..0f4c30e5ebecb07ab8bfff412ac2fe711c299f29
+--- a/backend/app/services/fbs_assembly_time_service.py
++++ b/backend/app/services/fbs_assembly_time_service.py
+@@ -13,10 +13,31 @@
+ from app.models.fbs_supply import FbsSupply
+ 
+ 
++ASSEMBLY_TIME_THRESHOLD_12_HOURS = 12
++ASSEMBLY_TIME_THRESHOLD_24_HOURS = 24
++SECONDS_PER_HOUR = 3600
++
++
+ @dataclass(frozen=True)
+ class FbsAssemblyTime:
+     hours: float
+     orders: int
++    within_12_hours_percent: int
++    within_24_hours_percent: int
++
++
++def _percentage_within_threshold(
++    durations_seconds: list[float],
++    threshold_hours: int,
++) -> int:
++    if not durations_seconds:
++        return 0
++    threshold_seconds = threshold_hours * SECONDS_PER_HOUR
++    matching_orders = sum(
++        duration_seconds <= threshold_seconds
++        for duration_seconds in durations_seconds
++    )
++    return round(matching_orders * 100 / len(durations_seconds))
+ 
+ 
+ async def calculate_fbs_assembly_time(
+@@ -53,6 +74,22 @@
+         if delivered_at is not None and delivered_at >= created_at_wb
+     ]
+     if not durations:
+-        return FbsAssemblyTime(hours=0.0, orders=0)
+-    average_hours = sum(durations) / len(durations) / 3600
+-    return FbsAssemblyTime(hours=round(average_hours, 1), orders=len(durations))
++        return FbsAssemblyTime(
++            hours=0.0,
++            orders=0,
++            within_12_hours_percent=0,
++            within_24_hours_percent=0,
++        )
++    average_hours = sum(durations) / len(durations) / SECONDS_PER_HOUR
++    return FbsAssemblyTime(
++        hours=round(average_hours, 1),
++        orders=len(durations),
++        within_12_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_12_HOURS,
++        ),
++        within_24_hours_percent=_percentage_within_threshold(
++            durations,
++            ASSEMBLY_TIME_THRESHOLD_24_HOURS,
++        ),
++    )
+diff --git a/backend/tests/test_fbs_stock_share_wave2.py b/backend/tests/test_fbs_stock_share_wave2.py
+index 6b428b4d70ce19da5695e16649b4da646a6e208d..9b77ef0126be49c2382c30fbb3ef9521d7c1d167
+--- a/backend/tests/test_fbs_stock_share_wave2.py
++++ b/backend/tests/test_fbs_stock_share_wave2.py
+@@ -237,7 +237,7 @@
+     assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+ 
+ 
+-# TC-NEW-FBS-SHARE-W2-003: period is required and seller filter is tenant-scoped.
++# TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.
+ @pytest.mark.asyncio
+ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncClient) -> None:
+     headers, suffix = await _register_admin(async_client)
+@@ -251,7 +251,7 @@
+         assert seller is not None
+         tenant_id = seller.tenant_id
+         for index, (seller_id, hours) in enumerate(
+-            ((seller_a, 6), (seller_a, 10), (seller_b, 20)), start=1
++            ((seller_a, 6), (seller_a, 12), (seller_b, 30)), start=1
+         ):
+             created_at = period_from + timedelta(days=index)
+             supply = FbsSupply(
+@@ -294,7 +294,53 @@
+         },
+     )
+     assert response.status_code == 200, response.text
+-    assert response.json() == {"hours": 8.0, "orders": 2}
++    assert response.json() == {
++        "hours": 9.0,
++        "orders": 2,
++        "within_12_hours_percent": 100,
++        "within_24_hours_percent": 100,
++    }
++
++    all_sellers_response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=7)).isoformat(),
++        },
++    )
++    assert all_sellers_response.status_code == 200, all_sellers_response.text
++    assert all_sellers_response.json() == {
++        "hours": 16.0,
++        "orders": 3,
++        "within_12_hours_percent": 67,
++        "within_24_hours_percent": 67,
++    }
++
++
++# TC-NEW-FBS-SHARE-W2-003: an empty period returns zeroed assembly metrics.
++@pytest.mark.asyncio
++async def test_fbs_assembly_time_empty_period(async_client: AsyncClient) -> None:
++    headers, _ = await _register_admin(async_client)
++    period_from = datetime(2026, 9, 20, tzinfo=UTC)
++
++    response = await async_client.get(
++        "/fbs/assembly-time",
++        headers=headers,
++        params={
++            "from": period_from.isoformat(),
++            "to": (period_from + timedelta(days=1)).isoformat(),
++        },
++    )
++    assert response.status_code == 200, response.text
++    assert response.json() == {
++        "hours": 0.0,
++        "orders": 0,
++        "within_12_hours_percent": 0,
++        "within_24_hours_percent": 0,
++    }
++
++
+ # TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+ @pytest.mark.asyncio
+ async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+
+tokens used
+58 878
+Локально реализовано и сохранено в Git, commit `81717cb7ad4670fe90718453b5fa7b7544b71b9e`.
+
+Добавлены поля:
+
+- `within_12_hours_percent`
+- `within_24_hours_percent`
+
+Проценты округляются до целых, границы 12/24 часа включены, пустой период возвращает нули. Тесты проверяют расчёт, границу 12 часов, фильтр продавца и пустой период.
+
+Проверки:
+
+- 2 точечных pytest-теста — прошли
+- `ruff check .` — прошёл
+- `mypy .` — прошёл
+- `frontend/` не изменялся
+
+Ветка `codex/assembly-time-thresholds-20260829` не опубликована: GitHub недоступен из окружения (`Could not resolve host: github.com`).

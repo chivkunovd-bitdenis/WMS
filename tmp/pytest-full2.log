@@ -1,0 +1,1141 @@
+
+==================================== ERRORS ====================================
+_______ ERROR collecting backend/tests/test_billing_configuration_api.py _______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_billing_configuration_api.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_billing_configuration_api.py:13: in <module>
+    from app.api.billing import _matrix_out
+E   ImportError: cannot import name '_matrix_out' from 'app.api.billing' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/api/billing.py)
+________ ERROR collecting backend/tests/test_billing_invoice_v2_api.py _________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_billing_invoice_v2_api.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_billing_invoice_v2_api.py:14: in <module>
+    from app.models.billing import (
+E   ImportError: cannot import name 'BillingInvoiceV2Source' from 'app.models.billing' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/models/billing.py)
+_______ ERROR collecting backend/tests/test_billing_seller_report_api.py _______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_billing_seller_report_api.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_billing_seller_report_api.py:13: in <module>
+    from app.models.billing import BillingInvoice, BillingLedgerEntry, BillingLedgerLine
+E   ImportError: cannot import name 'BillingLedgerLine' from 'app.models.billing' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/models/billing.py)
+_____ ERROR collecting backend/tests/test_billing_seller_report_service.py _____
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_billing_seller_report_service.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_billing_seller_report_service.py:11: in <module>
+    from app.services import billing_seller_report_service
+E   ImportError: cannot import name 'billing_seller_report_service' from 'app.services' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/services/__init__.py)
+_____ ERROR collecting backend/tests/test_billing_storage_tariff_matrix.py _____
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_billing_storage_tariff_matrix.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_billing_storage_tariff_matrix.py:19: in <module>
+    from app.models.billing import BillingTariffVersionV2
+E   ImportError: cannot import name 'BillingTariffVersionV2' from 'app.models.billing' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/models/billing.py)
+_________ ERROR collecting backend/tests/test_billing_tariff_matrix.py _________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_billing_tariff_matrix.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_billing_tariff_matrix.py:19: in <module>
+    from app.models.billing import (
+E   ImportError: cannot import name 'BillingLedgerLine' from 'app.models.billing' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/models/billing.py)
+________ ERROR collecting backend/tests/test_billing_tariff_priority.py ________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_billing_tariff_priority.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_billing_tariff_priority.py:19: in <module>
+    from app.models.billing import BillingTariffVersionV2
+E   ImportError: cannot import name 'BillingTariffVersionV2' from 'app.models.billing' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/models/billing.py)
+____ ERROR collecting backend/tests/test_bootstrap_billing_tariff_matrix.py ____
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_bootstrap_billing_tariff_matrix.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_bootstrap_billing_tariff_matrix.py:9: in <module>
+    from app.models.billing import BillingTariffMatrixConfig
+E   ImportError: cannot import name 'BillingTariffMatrixConfig' from 'app.models.billing' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/models/billing.py)
+__________ ERROR collecting backend/tests/test_box_barcode_service.py __________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_box_barcode_service.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_box_barcode_service.py:24: in <module>
+    from app.services.box_barcode_service import (
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+_____ ERROR collecting backend/tests/test_cleanup_fbs_stub_test_orders.py ______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_cleanup_fbs_stub_test_orders.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_cleanup_fbs_stub_test_orders.py:24: in <module>
+    from scripts.cleanup_fbs_stub_test_orders import (
+E   ModuleNotFoundError: No module named 'scripts.cleanup_fbs_stub_test_orders'
+____________ ERROR collecting backend/tests/test_document_events.py ____________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_document_events.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_document_events.py:22: in <module>
+    from app.models.document_event import (
+E   ModuleNotFoundError: No module named 'app.models.document_event'
+________ ERROR collecting backend/tests/test_document_number_service.py ________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_document_number_service.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_document_number_service.py:10: in <module>
+    from test_packaging_tasks import _inventory_at_location
+backend/tests/test_packaging_tasks.py:12: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+_____________ ERROR collecting backend/tests/test_fbs_autopoll.py ______________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_autopoll.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_autopoll.py:40: in <module>
+    from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+E   ModuleNotFoundError: No module named 'tests.fbs_seed_helpers'
+__ ERROR collecting backend/tests/test_fbs_box_clear_and_workspace_extras.py ___
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_box_clear_and_workspace_extras.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_box_clear_and_workspace_extras.py:31: in <module>
+    from tests.test_fbs_picking import (
+E   ModuleNotFoundError: No module named 'tests.test_fbs_picking'
+___________ ERROR collecting backend/tests/test_fbs_cancellations.py ___________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_cancellations.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_cancellations.py:34: in <module>
+    from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+E   ModuleNotFoundError: No module named 'tests.fbs_seed_helpers'
+_______ ERROR collecting backend/tests/test_fbs_cancelled_after_pack.py ________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_cancelled_after_pack.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_cancelled_after_pack.py:27: in <module>
+    from tests.test_fbs_picking import (
+E   ModuleNotFoundError: No module named 'tests.test_fbs_picking'
+_______ ERROR collecting backend/tests/test_fbs_cancelled_operations.py ________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_cancelled_operations.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_cancelled_operations.py:15: in <module>
+    from tests.test_fbs_packaging_integration import (
+E   ModuleNotFoundError: No module named 'tests.test_fbs_packaging_integration'
+______ ERROR collecting backend/tests/test_fbs_contract_error_envelope.py ______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_contract_error_envelope.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_contract_error_envelope.py:16: in <module>
+    from tests.test_fbs_shipment_pvz import (
+E   ModuleNotFoundError: No module named 'tests.test_fbs_shipment_pvz'
+________ ERROR collecting backend/tests/test_fbs_kiz_sticker_lookup.py _________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_kiz_sticker_lookup.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_kiz_sticker_lookup.py:8: in <module>
+    from app.services.fbs_kiz_service import (
+E   ImportError: cannot import name 'sticker_scan_candidates' from 'app.services.fbs_kiz_service' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/services/fbs_kiz_service.py)
+____________ ERROR collecting backend/tests/test_fbs_manual_pick.py ____________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_manual_pick.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_manual_pick.py:14: in <module>
+    from tests.test_fbs_picking import (
+E   ModuleNotFoundError: No module named 'tests.test_fbs_picking'
+______________ ERROR collecting backend/tests/test_fbs_marking.py ______________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_marking.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_marking.py:31: in <module>
+    from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+E   ModuleNotFoundError: No module named 'tests.fbs_seed_helpers'
+__________ ERROR collecting backend/tests/test_fbs_operation_actor.py __________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_operation_actor.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_operation_actor.py:34: in <module>
+    from tests import test_fbs_shipment_warehouse_sc as deliver_helpers
+E   ImportError: cannot import name 'test_fbs_shipment_warehouse_sc' from 'tests' (unknown location)
+_______ ERROR collecting backend/tests/test_fbs_operator_flow_handoff.py _______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_operator_flow_handoff.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_operator_flow_handoff.py:42: in <module>
+    from tests.fbs_operator_emulator_seed import (
+E   ModuleNotFoundError: No module named 'tests.fbs_operator_emulator_seed'
+___________ ERROR collecting backend/tests/test_fbs_orders_intake.py ___________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_orders_intake.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_orders_intake.py:44: in <module>
+    from tests.inventory_actor_helpers import resolve_test_actor_user_id
+E   ModuleNotFoundError: No module named 'tests.inventory_actor_helpers'
+_____________ ERROR collecting backend/tests/test_fbs_ozon_lane.py _____________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_ozon_lane.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_ozon_lane.py:17: in <module>
+    from app.api.fbs_orders import _run_blocked_ozon_fake
+E   ImportError: cannot import name '_run_blocked_ozon_fake' from 'app.api.fbs_orders' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/api/fbs_orders.py)
+_______ ERROR collecting backend/tests/test_fbs_packaging_fulfillment.py _______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_packaging_fulfillment.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_packaging_fulfillment.py:15: in <module>
+    from app.models.fbs_order import (
+E   ImportError: cannot import name 'FbsOrderProduct' from 'app.models.fbs_order' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/models/fbs_order.py)
+_______ ERROR collecting backend/tests/test_fbs_packaging_integration.py _______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_packaging_integration.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_packaging_integration.py:43: in <module>
+    from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+E   ModuleNotFoundError: No module named 'tests.fbs_seed_helpers'
+____________ ERROR collecting backend/tests/test_fbs_packing_box.py ____________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_packing_box.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_packing_box.py:36: in <module>
+    from tests.test_fbs_picking import (
+E   ModuleNotFoundError: No module named 'tests.test_fbs_picking'
+______________ ERROR collecting backend/tests/test_fbs_picking.py ______________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_picking.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_picking.py:16: in <module>
+    from app.models.fbs_order import (
+E   ImportError: cannot import name 'FbsOrderProduct' from 'app.models.fbs_order' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/models/fbs_order.py)
+___________ ERROR collecting backend/tests/test_fbs_print_assets.py ____________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_print_assets.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_print_assets.py:22: in <module>
+    from tests.test_fbs_supply_assembly import (
+E   ModuleNotFoundError: No module named 'tests.test_fbs_supply_assembly'
+___________ ERROR collecting backend/tests/test_fbs_review_fixes.py ____________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_review_fixes.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_review_fixes.py:55: in <module>
+    from app.services.fbs_shipment_service import _write_off_delivered_orders_once
+E   ImportError: cannot import name '_write_off_delivered_orders_once' from 'app.services.fbs_shipment_service' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/services/fbs_shipment_service.py)
+_________ ERROR collecting backend/tests/test_fbs_shipment_delivery.py _________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_shipment_delivery.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_shipment_delivery.py:25: in <module>
+    from tests.test_fbs_shipment_pvz import _prepare_pvz_supply
+E   ModuleNotFoundError: No module named 'tests.test_fbs_shipment_pvz'
+___________ ERROR collecting backend/tests/test_fbs_shipment_pvz.py ____________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_shipment_pvz.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_shipment_pvz.py:23: in <module>
+    from tests.test_fbs_shipment_warehouse_sc import (
+E   ModuleNotFoundError: No module named 'tests.test_fbs_shipment_warehouse_sc'
+_______ ERROR collecting backend/tests/test_fbs_shipment_warehouse_sc.py _______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_shipment_warehouse_sc.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_shipment_warehouse_sc.py:42: in <module>
+    from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+E   ModuleNotFoundError: No module named 'tests.fbs_seed_helpers'
+________ ERROR collecting backend/tests/test_fbs_stock_availability.py _________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_stock_availability.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_stock_availability.py:27: in <module>
+    from tests.inventory_actor_helpers import resolve_test_actor_user_id
+E   ModuleNotFoundError: No module named 'tests.inventory_actor_helpers'
+____ ERROR collecting backend/tests/test_fbs_stock_emulator_integration.py _____
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_stock_emulator_integration.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_stock_emulator_integration.py:51: in <module>
+    from tests.inventory_actor_helpers import resolve_test_actor_user_id
+E   ModuleNotFoundError: No module named 'tests.inventory_actor_helpers'
+_____ ERROR collecting backend/tests/test_fbs_stock_publish_on_movement.py _____
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_stock_publish_on_movement.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_stock_publish_on_movement.py:21: in <module>
+    from tests.inventory_actor_helpers import resolve_test_actor_user_id
+E   ModuleNotFoundError: No module named 'tests.inventory_actor_helpers'
+________ ERROR collecting backend/tests/test_fbs_stock_rule_service.py _________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_stock_rule_service.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_stock_rule_service.py:29: in <module>
+    from app.services.fbs_stock_rule_service import (
+E   ModuleNotFoundError: No module named 'app.services.fbs_stock_rule_service'
+__________ ERROR collecting backend/tests/test_fbs_supply_assembly.py __________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_supply_assembly.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_supply_assembly.py:21: in <module>
+    from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+E   ModuleNotFoundError: No module named 'tests.fbs_seed_helpers'
+________ ERROR collecting backend/tests/test_fbs_supply_from_orders.py _________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_supply_from_orders.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_supply_from_orders.py:35: in <module>
+    from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+E   ModuleNotFoundError: No module named 'tests.fbs_seed_helpers'
+______ ERROR collecting backend/tests/test_fbs_supply_honest_sign_skip.py ______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_supply_honest_sign_skip.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_supply_honest_sign_skip.py:12: in <module>
+    from tests.test_fbs_shipment_warehouse_sc import (
+E   ModuleNotFoundError: No module named 'tests.test_fbs_shipment_warehouse_sc'
+_______ ERROR collecting backend/tests/test_fbs_supply_repair_from_wb.py _______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_supply_repair_from_wb.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_supply_repair_from_wb.py:33: in <module>
+    from tests.test_fbs_supply_from_orders import (
+E   ModuleNotFoundError: No module named 'tests.test_fbs_supply_from_orders'
+_____________ ERROR collecting backend/tests/test_fbs_tracking.py ______________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_tracking.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_tracking.py:38: in <module>
+    from tests.fbs_seed_helpers import seed_fbs_warehouse_binding
+E   ModuleNotFoundError: No module named 'tests.fbs_seed_helpers'
+__ ERROR collecting backend/tests/test_fbs_tracking_supply_done_rate_limit.py __
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_tracking_supply_done_rate_limit.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_tracking_supply_done_rate_limit.py:47: in <module>
+    from app.services.wildberries_fbs_client import (
+E   ImportError: cannot import name 'MAX_RETRY_AFTER_WAIT_SECONDS' from 'app.services.wildberries_fbs_client' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/services/wildberries_fbs_client.py)
+_______ ERROR collecting backend/tests/test_fbs_worklist_query_count.py ________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_fbs_worklist_query_count.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fbs_worklist_query_count.py:31: in <module>
+    from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+E   ModuleNotFoundError: No module named 'tests.fbs_seed_helpers'
+________ ERROR collecting backend/tests/test_inbound_box_acceptance.py _________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_inbound_box_acceptance.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_inbound_box_acceptance.py:8: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+______ ERROR collecting backend/tests/test_inventory_atomic_increment.py _______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_inventory_atomic_increment.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_inventory_atomic_increment.py:26: in <module>
+    from tests.inventory_actor_helpers import resolve_test_actor_user_id
+E   ModuleNotFoundError: No module named 'tests.inventory_actor_helpers'
+___________ ERROR collecting backend/tests/test_inventory_counts.py ____________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_inventory_counts.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_inventory_counts.py:17: in <module>
+    from app.models.pallet import Pallet
+E   ModuleNotFoundError: No module named 'app.models.pallet'
+____ ERROR collecting backend/tests/test_inventory_movement_actor_flows.py _____
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_inventory_movement_actor_flows.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_inventory_movement_actor_flows.py:10: in <module>
+    from test_fbs_packaging_fulfillment import (
+backend/tests/test_fbs_packaging_fulfillment.py:15: in <module>
+    from app.models.fbs_order import (
+E   ImportError: cannot import name 'FbsOrderProduct' from 'app.models.fbs_order' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/models/fbs_order.py)
+_ ERROR collecting backend/tests/test_inventory_service_reporting_dimensions.py _
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_inventory_service_reporting_dimensions.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_inventory_service_reporting_dimensions.py:16: in <module>
+    from tests.inventory_actor_helpers import resolve_test_actor_user_id
+E   ModuleNotFoundError: No module named 'tests.inventory_actor_helpers'
+__ ERROR collecting backend/tests/test_marketplace_unload_address_storage.py ___
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marketplace_unload_address_storage.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marketplace_unload_address_storage.py:9: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import (
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+_ ERROR collecting backend/tests/test_marketplace_unload_and_discrepancy_acts.py _
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marketplace_unload_and_discrepancy_acts.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+____ ERROR collecting backend/tests/test_marketplace_unload_availability.py ____
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marketplace_unload_availability.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marketplace_unload_availability.py:19: in <module>
+    from tests.inventory_actor_helpers import resolve_test_actor_user_id
+E   ModuleNotFoundError: No module named 'tests.inventory_actor_helpers'
+_____ ERROR collecting backend/tests/test_marketplace_unload_completion.py _____
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marketplace_unload_completion.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marketplace_unload_completion.py:14: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import (
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+_ ERROR collecting backend/tests/test_marketplace_unload_tsd_scan_contract.py __
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marketplace_unload_tsd_scan_contract.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marketplace_unload_tsd_scan_contract.py:9: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import (
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+__________ ERROR collecting backend/tests/test_marking_code_events.py __________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marking_code_events.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marking_code_events.py:9: in <module>
+    from test_packaging_tasks import _inventory_at_location, _register_admin
+backend/tests/test_packaging_tasks.py:12: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+_____________ ERROR collecting backend/tests/test_marking_codes.py _____________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marking_codes.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marking_codes.py:8: in <module>
+    from test_packaging_tasks import _inventory_at_location, _register_admin
+backend/tests/test_packaging_tasks.py:12: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+___________ ERROR collecting backend/tests/test_marking_forecast.py ____________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marking_forecast.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marking_forecast.py:10: in <module>
+    from test_packaging_tasks import _register_admin
+backend/tests/test_packaging_tasks.py:12: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+_________ ERROR collecting backend/tests/test_marking_import_pools.py __________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marking_import_pools.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marking_import_pools.py:9: in <module>
+    from test_packaging_tasks import _register_admin
+backend/tests/test_packaging_tasks.py:12: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+____ ERROR collecting backend/tests/test_marking_ledger_import_aggregate.py ____
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marking_ledger_import_aggregate.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marking_ledger_import_aggregate.py:8: in <module>
+    from test_packaging_tasks import _inventory_at_location, _register_admin
+backend/tests/test_packaging_tasks.py:12: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+______ ERROR collecting backend/tests/test_marking_pdf_label_artifact.py _______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marking_pdf_label_artifact.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marking_pdf_label_artifact.py:12: in <module>
+    from test_packaging_tasks import _register_admin
+backend/tests/test_packaging_tasks.py:12: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+____________ ERROR collecting backend/tests/test_marking_pending.py ____________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marking_pending.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marking_pending.py:8: in <module>
+    from test_packaging_tasks import _inventory_at_location, _register_admin
+backend/tests/test_packaging_tasks.py:12: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+__________ ERROR collecting backend/tests/test_marking_pools_read.py ___________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marking_pools_read.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marking_pools_read.py:12: in <module>
+    from test_packaging_tasks import _register_admin
+backend/tests/test_packaging_tasks.py:12: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+___________ ERROR collecting backend/tests/test_marking_print_all.py ___________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marking_print_all.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marking_print_all.py:10: in <module>
+    from test_packaging_tasks import _inventory_at_location, _register_admin
+backend/tests/test_packaging_tasks.py:12: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+__________ ERROR collecting backend/tests/test_marking_print_pool.py ___________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marking_print_pool.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marking_print_pool.py:10: in <module>
+    from test_packaging_tasks import _inventory_at_location, _register_admin
+backend/tests/test_packaging_tasks.py:12: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+___ ERROR collecting backend/tests/test_marking_product_codes_pool_filter.py ___
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marking_product_codes_pool_filter.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marking_product_codes_pool_filter.py:11: in <module>
+    from test_packaging_tasks import _register_admin
+backend/tests/test_packaging_tasks.py:12: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+________ ERROR collecting backend/tests/test_marking_reprint_defect.py _________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marking_reprint_defect.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marking_reprint_defect.py:9: in <module>
+    from test_packaging_tasks import _inventory_at_location, _register_admin
+backend/tests/test_packaging_tasks.py:12: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+__________ ERROR collecting backend/tests/test_marking_scan_print.py ___________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marking_scan_print.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marking_scan_print.py:8: in <module>
+    from test_packaging_tasks import _inventory_at_location, _register_admin
+backend/tests/test_packaging_tasks.py:12: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+__________ ERROR collecting backend/tests/test_marking_verify_pair.py __________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marking_verify_pair.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marking_verify_pair.py:9: in <module>
+    from test_packaging_tasks import _inventory_at_location, _register_admin
+backend/tests/test_packaging_tasks.py:12: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+_____ ERROR collecting backend/tests/test_marking_write_off_invariants.py ______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_marking_write_off_invariants.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_marking_write_off_invariants.py:14: in <module>
+    from test_packaging_tasks import _inventory_at_location, _register_admin
+backend/tests/test_packaging_tasks.py:12: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+________ ERROR collecting backend/tests/test_operation_fact_recovery.py ________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_operation_fact_recovery.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_operation_fact_recovery.py:12: in <module>
+    from app.models.operation_fact import OperationFact, OperationFactCutover
+E   ModuleNotFoundError: No module named 'app.models.operation_fact'
+____________ ERROR collecting backend/tests/test_operation_facts.py ____________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_operation_facts.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_operation_facts.py:13: in <module>
+    from app.models.operation_fact import OperationFact, OperationFactLine
+E   ModuleNotFoundError: No module named 'app.models.operation_fact'
+______ ERROR collecting backend/tests/test_ownership_transfer_service.py _______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_ownership_transfer_service.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_ownership_transfer_service.py:24: in <module>
+    from app.services.ownership_transfer_service import (
+E   ModuleNotFoundError: No module named 'app.services.ownership_transfer_service'
+________ ERROR collecting backend/tests/test_ozon_fbs_openapi_models.py ________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_ozon_fbs_openapi_models.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_ozon_fbs_openapi_models.py:11: in <module>
+    from app.schemas.ozon_fbs_api import MODEL_BY_OPENAPI_NAME
+E   ModuleNotFoundError: No module named 'app.schemas'
+__________ ERROR collecting backend/tests/test_ozon_return_service.py __________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_ozon_return_service.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_ozon_return_service.py:19: in <module>
+    from app.models.ozon_return import InboundOzonReturnGiveout
+E   ModuleNotFoundError: No module named 'app.models.ozon_return'
+___________ ERROR collecting backend/tests/test_ozon_returns_api.py ____________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_ozon_returns_api.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_ozon_returns_api.py:14: in <module>
+    from app.api.inbound_intake import _refresh_ozon_return_statuses_after_posting
+E   ImportError: cannot import name '_refresh_ozon_return_statuses_after_posting' from 'app.api.inbound_intake' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/api/inbound_intake.py)
+______ ERROR collecting backend/tests/test_ozon_returns_openapi_models.py ______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_ozon_returns_openapi_models.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_ozon_returns_openapi_models.py:11: in <module>
+    from app.schemas.ozon_returns_api import MODEL_BY_OPENAPI_NAME
+E   ModuleNotFoundError: No module named 'app.schemas'
+____________ ERROR collecting backend/tests/test_packaging_tasks.py ____________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_packaging_tasks.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_packaging_tasks.py:12: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+____ ERROR collecting backend/tests/test_product_packaging_instructions.py _____
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_product_packaging_instructions.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_product_packaging_instructions.py:10: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import (
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+___ ERROR collecting backend/tests/test_reconcile_fbs_unlinked_shipments.py ____
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_reconcile_fbs_unlinked_shipments.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_reconcile_fbs_unlinked_shipments.py:9: in <module>
+    from app.cli.reconcile_fbs_unlinked_shipments import reconcile
+E   ModuleNotFoundError: No module named 'app.cli.reconcile_fbs_unlinked_shipments'
+__ ERROR collecting backend/tests/test_return_intake_shortcut_and_defects.py ___
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_return_intake_shortcut_and_defects.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_return_intake_shortcut_and_defects.py:15: in <module>
+    from app.services.defect_warehouse_service import DEFECT_WAREHOUSE_CODE
+E   ModuleNotFoundError: No module named 'app.services.defect_warehouse_service'
+_________ ERROR collecting backend/tests/test_scan_resolver_service.py _________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_scan_resolver_service.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_scan_resolver_service.py:33: in <module>
+    from app.services.scan_resolver_service import ScanResolverError, resolve_any_scan
+E   ModuleNotFoundError: No module named 'app.services.scan_resolver_service'
+_______ ERROR collecting backend/tests/test_seller_marketplace_unload.py _______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_seller_marketplace_unload.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_seller_marketplace_unload.py:9: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import (
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+______________ ERROR collecting backend/tests/test_shift_lead.py _______________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_shift_lead.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_shift_lead.py:7: in <module>
+    from test_marking_reprint_defect import _seed_printed_code
+backend/tests/test_marking_reprint_defect.py:9: in <module>
+    from test_packaging_tasks import _inventory_at_location, _register_admin
+backend/tests/test_packaging_tasks.py:12: in <module>
+    from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
+backend/tests/test_marketplace_unload_and_discrepancy_acts.py:17: in <module>
+    from app.services.box_barcode_service import is_wb_compatible_box_barcode
+E   ModuleNotFoundError: No module named 'app.services.box_barcode_service'
+______ ERROR collecting backend/tests/test_sorting_object_creation_api.py ______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_sorting_object_creation_api.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_sorting_object_creation_api.py:11: in <module>
+    from app.models.pallet import Pallet
+E   ModuleNotFoundError: No module named 'app.models.pallet'
+___________ ERROR collecting backend/tests/test_stock_directions.py ____________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_stock_directions.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_stock_directions.py:19: in <module>
+    from tests.inventory_actor_helpers import resolve_test_actor_user_id
+E   ModuleNotFoundError: No module named 'tests.inventory_actor_helpers'
+________ ERROR collecting backend/tests/test_storage_movement_scope.py _________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_storage_movement_scope.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_storage_movement_scope.py:18: in <module>
+    from tests.inventory_actor_helpers import resolve_test_actor_user_id
+E   ModuleNotFoundError: No module named 'tests.inventory_actor_helpers'
+_______ ERROR collecting backend/tests/test_storage_statement_matrix.py ________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_storage_statement_matrix.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_storage_statement_matrix.py:18: in <module>
+    from app.models.billing import BillingTariffVersion, BillingTariffVersionV2
+E   ImportError: cannot import name 'BillingTariffVersionV2' from 'app.models.billing' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/models/billing.py)
+_______ ERROR collecting backend/tests/test_storage_statement_service.py _______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_storage_statement_service.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_storage_statement_service.py:18: in <module>
+    from app.models.billing import BillingLedgerEntry, BillingTariffVersion, BillingTariffVersionV2
+E   ImportError: cannot import name 'BillingTariffVersionV2' from 'app.models.billing' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/models/billing.py)
+__________ ERROR collecting backend/tests/test_storage_tariff_api.py ___________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_storage_tariff_api.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_storage_tariff_api.py:25: in <module>
+    from app.models.billing import BillingLedgerEntry, BillingTariffVersion, BillingTariffVersionV2
+E   ImportError: cannot import name 'BillingTariffVersionV2' from 'app.models.billing' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/models/billing.py)
+___________ ERROR collecting backend/tests/test_warehouse_map_api.py ___________
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_warehouse_map_api.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_warehouse_map_api.py:16: in <module>
+    from app.models.pallet import Pallet
+E   ModuleNotFoundError: No module named 'app.models.pallet'
+_______ ERROR collecting backend/tests/test_warehouse_structure_wave1.py _______
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_warehouse_structure_wave1.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_warehouse_structure_wave1.py:28: in <module>
+    from app.services import (
+E   ImportError: cannot import name 'inbound_cargo_place_service' from 'app.services' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/services/__init__.py)
+_____ ERROR collecting backend/tests/test_wb_marketplace_orders_service.py _____
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_wb_marketplace_orders_service.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_wb_marketplace_orders_service.py:29: in <module>
+    from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+E   ModuleNotFoundError: No module named 'tests.fbs_seed_helpers'
+__ ERROR collecting backend/tests/test_wildberries_marketplace_fbs_client.py ___
+ImportError while importing test module '/Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/backend/tests/test_wildberries_marketplace_fbs_client.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_wildberries_marketplace_fbs_client.py:27: in <module>
+    from app.services.wildberries_fbs_client import (
+E   ImportError: cannot import name 'MAX_RETRY_AFTER_WAIT_SECONDS' from 'app.services.wildberries_fbs_client' (/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-catalog-20260825/backend/app/services/wildberries_fbs_client.py)
+=============================== warnings summary ===============================
+../../backend/.venv/lib/python3.14/site-packages/fastapi/testclient.py:1
+  /Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR backend/tests/test_billing_configuration_api.py
+ERROR backend/tests/test_billing_invoice_v2_api.py
+ERROR backend/tests/test_billing_seller_report_api.py
+ERROR backend/tests/test_billing_seller_report_service.py
+ERROR backend/tests/test_billing_storage_tariff_matrix.py
+ERROR backend/tests/test_billing_tariff_matrix.py
+ERROR backend/tests/test_billing_tariff_priority.py
+ERROR backend/tests/test_bootstrap_billing_tariff_matrix.py
+ERROR backend/tests/test_box_barcode_service.py
+ERROR backend/tests/test_cleanup_fbs_stub_test_orders.py
+ERROR backend/tests/test_document_events.py
+ERROR backend/tests/test_document_number_service.py
+ERROR backend/tests/test_fbs_autopoll.py
+ERROR backend/tests/test_fbs_box_clear_and_workspace_extras.py
+ERROR backend/tests/test_fbs_cancellations.py
+ERROR backend/tests/test_fbs_cancelled_after_pack.py
+ERROR backend/tests/test_fbs_cancelled_operations.py
+ERROR backend/tests/test_fbs_contract_error_envelope.py
+ERROR backend/tests/test_fbs_kiz_sticker_lookup.py
+ERROR backend/tests/test_fbs_manual_pick.py
+ERROR backend/tests/test_fbs_marking.py
+ERROR backend/tests/test_fbs_operation_actor.py
+ERROR backend/tests/test_fbs_operator_flow_handoff.py
+ERROR backend/tests/test_fbs_orders_intake.py
+ERROR backend/tests/test_fbs_ozon_lane.py
+ERROR backend/tests/test_fbs_packaging_fulfillment.py
+ERROR backend/tests/test_fbs_packaging_integration.py
+ERROR backend/tests/test_fbs_packing_box.py
+ERROR backend/tests/test_fbs_picking.py
+ERROR backend/tests/test_fbs_print_assets.py
+ERROR backend/tests/test_fbs_review_fixes.py
+ERROR backend/tests/test_fbs_shipment_delivery.py
+ERROR backend/tests/test_fbs_shipment_pvz.py
+ERROR backend/tests/test_fbs_shipment_warehouse_sc.py
+ERROR backend/tests/test_fbs_stock_availability.py
+ERROR backend/tests/test_fbs_stock_emulator_integration.py
+ERROR backend/tests/test_fbs_stock_publish_on_movement.py
+ERROR backend/tests/test_fbs_stock_rule_service.py
+ERROR backend/tests/test_fbs_supply_assembly.py
+ERROR backend/tests/test_fbs_supply_from_orders.py
+ERROR backend/tests/test_fbs_supply_honest_sign_skip.py
+ERROR backend/tests/test_fbs_supply_repair_from_wb.py
+ERROR backend/tests/test_fbs_tracking.py
+ERROR backend/tests/test_fbs_tracking_supply_done_rate_limit.py
+ERROR backend/tests/test_fbs_worklist_query_count.py
+ERROR backend/tests/test_inbound_box_acceptance.py
+ERROR backend/tests/test_inventory_atomic_increment.py
+ERROR backend/tests/test_inventory_counts.py
+ERROR backend/tests/test_inventory_movement_actor_flows.py
+ERROR backend/tests/test_inventory_service_reporting_dimensions.py
+ERROR backend/tests/test_marketplace_unload_address_storage.py
+ERROR backend/tests/test_marketplace_unload_and_discrepancy_acts.py
+ERROR backend/tests/test_marketplace_unload_availability.py
+ERROR backend/tests/test_marketplace_unload_completion.py
+ERROR backend/tests/test_marketplace_unload_tsd_scan_contract.py
+ERROR backend/tests/test_marking_code_events.py
+ERROR backend/tests/test_marking_codes.py
+ERROR backend/tests/test_marking_forecast.py
+ERROR backend/tests/test_marking_import_pools.py
+ERROR backend/tests/test_marking_ledger_import_aggregate.py
+ERROR backend/tests/test_marking_pdf_label_artifact.py
+ERROR backend/tests/test_marking_pending.py
+ERROR backend/tests/test_marking_pools_read.py
+ERROR backend/tests/test_marking_print_all.py
+ERROR backend/tests/test_marking_print_pool.py
+ERROR backend/tests/test_marking_product_codes_pool_filter.py
+ERROR backend/tests/test_marking_reprint_defect.py
+ERROR backend/tests/test_marking_scan_print.py
+ERROR backend/tests/test_marking_verify_pair.py
+ERROR backend/tests/test_marking_write_off_invariants.py
+ERROR backend/tests/test_operation_fact_recovery.py
+ERROR backend/tests/test_operation_facts.py
+ERROR backend/tests/test_ownership_transfer_service.py
+ERROR backend/tests/test_ozon_fbs_openapi_models.py
+ERROR backend/tests/test_ozon_return_service.py
+ERROR backend/tests/test_ozon_returns_api.py
+ERROR backend/tests/test_ozon_returns_openapi_models.py
+ERROR backend/tests/test_packaging_tasks.py
+ERROR backend/tests/test_product_packaging_instructions.py
+ERROR backend/tests/test_reconcile_fbs_unlinked_shipments.py
+ERROR backend/tests/test_return_intake_shortcut_and_defects.py
+ERROR backend/tests/test_scan_resolver_service.py
+ERROR backend/tests/test_seller_marketplace_unload.py
+ERROR backend/tests/test_shift_lead.py
+ERROR backend/tests/test_sorting_object_creation_api.py
+ERROR backend/tests/test_stock_directions.py
+ERROR backend/tests/test_storage_movement_scope.py
+ERROR backend/tests/test_storage_statement_matrix.py
+ERROR backend/tests/test_storage_statement_service.py
+ERROR backend/tests/test_storage_tariff_api.py
+ERROR backend/tests/test_warehouse_map_api.py
+ERROR backend/tests/test_warehouse_structure_wave1.py
+ERROR backend/tests/test_wb_marketplace_orders_service.py
+ERROR backend/tests/test_wildberries_marketplace_fbs_client.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 94 errors during collection !!!!!!!!!!!!!!!!!!!
+6 warnings, 94 errors in 3.96s
+<sys>:0: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
