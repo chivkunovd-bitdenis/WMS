@@ -18,7 +18,6 @@ from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
     MAPPING_STATUS_MAPPED,
     RESERVE_STATUS_NO_STOCK,
-    RESERVE_STATUS_WAREHOUSE_UNMAPPED,
     FbsOrder,
 )
 from app.models.fbs_supply import (
@@ -157,9 +156,10 @@ async def test_fbs_seller_warehouses_contract_get_and_put(
         assert binding.served is False
 
 
-# TC-NEW-FBS-SHARE-W2-002: explicitly foreign is discarded; unmapped is retained.
+# TC-NEW-FBS-SHARE-W2-002: explicitly foreign is discarded; an unknown WB
+# warehouse is bound to the sole physical WMS warehouse.
 @pytest.mark.asyncio
-async def test_fbs_import_skips_unserved_but_keeps_unmapped(
+async def test_fbs_import_skips_unserved_but_binds_unknown_to_sole_warehouse(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -233,8 +233,19 @@ async def test_fbs_import_skips_unserved_but_keeps_unmapped(
             .all()
         )
     assert [order.wb_order_id for order in orders] == [920002]
-    assert orders[0].warehouse_id is None
-    assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+    assert orders[0].warehouse_id == uuid.UUID(warehouse_id)
+    assert orders[0].reserve_status == RESERVE_STATUS_NO_STOCK
+    async with SessionLocal() as session:
+        binding = await session.scalar(
+            select(FbsWarehouseBinding).where(
+                FbsWarehouseBinding.seller_id == uuid.UUID(seller_id),
+                FbsWarehouseBinding.wb_warehouse_id == WB_WAREHOUSE_UNMAPPED,
+            )
+        )
+    assert binding is not None
+    assert binding.wms_warehouse_id == uuid.UUID(warehouse_id)
+    assert binding.served is True
+    assert binding.stock_sync_enabled is False
 
 
 # TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.

@@ -1357,7 +1357,12 @@ async def pack_all_and_complete_fbs_task(
                     remaining,
                     acting_user_id=acting_user_id,
                     idempotency_key=f"pack-all:{task.id}:{line.id}",
-                    fail_on_insufficient_stock=True,
+                    # Physical packing must not dead-end because the sorting
+                    # balance is already inconsistent. Keep the operator flow
+                    # moving, but do not silently consume stock from another
+                    # warehouse to compensate for the mismatch.
+                    fail_on_insufficient_stock=False,
+                    allow_alternative_sorting_fallback=False,
                 )
             except FbsPackagingIntegrationError as exc:
                 raise PackagingTaskServiceError(exc.code, message=exc.message) from exc

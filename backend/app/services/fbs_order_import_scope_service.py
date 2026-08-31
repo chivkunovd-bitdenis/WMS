@@ -64,7 +64,11 @@ async def import_wb_order_rows(
             seller_id,
             row,
             pool_debit_totals=pool_debit_totals,
-            preserve_unmapped_warehouse=scope is None,
+            # An unknown WB warehouse is not explicitly foreign. Let the normal
+            # resolver bind it when the fulfillment center has one physical
+            # warehouse. Existing bindings with served=False remain excluded
+            # above and are never silently re-enabled.
+            preserve_unmapped_warehouse=False,
         )
         stats.upserted += 1
         stats.created += int(was_created)
