@@ -110,6 +110,7 @@ function FbsStockDialogBody({
   // Ни одного обслуживаемого склада — раздавать долю некуда. Ползунок в этом
   // состоянии обманывает: он показывает штуки, которых в кабинете не появится,
   // потому что публикация идёт только по обслуживаемым складам.
+  const noWarehouses = seller.warehouses.length === 0
   const noneServed = served.length === 0
   const single = served.length <= 1
 
@@ -163,8 +164,9 @@ function FbsStockDialogBody({
 
         {noneServed ? (
           <WarningNotice testId="fbs-stock-none-served">
-            Ни один склад Wildberries не выбран. Выберите ниже физический склад WMS хотя бы для
-            одного направления — до этого доля не задаётся и остаток в Wildberries не уйдёт.
+            {noWarehouses
+              ? 'Склады Wildberries не загрузились. Выбор склада WMS появится здесь после загрузки хотя бы одного направления WB.'
+              : 'Ни один склад Wildberries не выбран. Выберите ниже физический склад WMS хотя бы для одного направления — до этого доля не задаётся и остаток в Wildberries не уйдёт.'}
           </WarningNotice>
         ) : null}
 
@@ -214,6 +216,11 @@ function FbsStockDialogBody({
         )}
 
         <Stack spacing={2}>
+          {noWarehouses ? (
+            <Typography color="text.secondary" data-testid="fbs-stock-no-warehouses">
+              Нет направлений Wildberries, которые можно сопоставить со складом WMS.
+            </Typography>
+          ) : null}
           {seller.warehouses.map((warehouse) => (
             <Stack key={warehouse.id} spacing={1}>
               <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -223,8 +230,7 @@ function FbsStockDialogBody({
                     сразу две вещи: чьи заказы наши и по каким складам раздаём
                     остаток. Снятая галка — склад чужого фулфилмента. */}
                 <CheckboxInput
-                  label={`Обслуживаем склад ${warehouse.name}`}
-                  hideLabel
+                  label={`Обслуживаем склад «${warehouse.name}»`}
                   checked={warehouse.fbsEnabled}
                   onChange={(checked) => onServedChange?.(warehouse.id, checked)}
                   disabledReason={
@@ -236,12 +242,6 @@ function FbsStockDialogBody({
                   }
                   testId={`fbs-stock-served-${warehouse.id}`}
                 />
-                <Typography
-                  variant="subtitle2"
-                  color={warehouse.fbsEnabled ? undefined : 'text.disabled'}
-                >
-                  {warehouse.name}
-                </Typography>
                 {!warehouse.fbsEnabled ? (
                   <StatusChip
                     label="не обслуживаем"

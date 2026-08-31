@@ -116,6 +116,7 @@ test('old FBS stock route redirects to catalog and catalog warehouse binding wor
 
   const bindingSelect = page.getByTestId('fbs-stock-bind-501003')
   const servedToggle = page.getByTestId('fbs-stock-served-501003')
+  await expect(servedToggle).toContainText('Обслуживаем склад «E2E Unserved WB»')
   await expect(servedToggle).not.toBeChecked()
   await expect(servedToggle).toBeDisabled()
   await expect(bindingSelect.locator('option')).toHaveText([
@@ -196,4 +197,44 @@ test('old FBS stock route redirects to catalog and catalog warehouse binding wor
     wms_warehouse_id: warehouseB.id,
   })
   await expect(page.getByTestId('fbs-stock-percent-501003')).toBeVisible()
+})
+
+// TC-NEW-FBS-STOCK-UI-003 — ошибка загрузки WB-складов не выглядит пустым выбором.
+// Given: у селлера есть товар и WMS-склад, но backend не получил пригодный Marketplace-ключ;
+// When: администратор открывает настройку FBS-остатка;
+// Then: модалка прямо объясняет блокер и не обещает несуществующий выбор «ниже»;
+// negative/ограничение: WMS-склад нельзя выбрать без конкретного направления WB.
+test('catalog explains why WMS warehouse selector is unavailable', async ({ page }) => {
+  await registerFf(page, 'warehouse-load-error')
+
+  const token = (await page.evaluate(() => localStorage.getItem('wms_token_ff'))) ?? ''
+  const h = { Authorization: `Bearer ${token}` }
+  const seller = (await (
+    await page.request.post('/api/sellers', { headers: h, data: { name: 'Селлер без WB-складов' } })
+  ).json()) as { id: string }
+  const product = (await (
+    await page.request.post('/api/products', {
+      headers: h,
+      data: {
+        name: 'Товар без WB-направления',
+        sku_code: `SKU-NO-WB-WH-${Date.now()}`,
+        length_mm: 10,
+        width_mm: 10,
+        height_mm: 10,
+        seller_id: seller.id,
+      },
+    })
+  ).json()) as { id: string }
+
+  await page.reload()
+  await page.getByTestId(`ff-catalog-fbs-row-${product.id}`).click()
+
+  await expect(page.getByTestId('fbs-stock-dialog')).toBeVisible()
+  await expect(page.getByTestId('fbs-stock-error')).toContainText(
+    'Backend не нашёл ключ, пригодный для Marketplace',
+  )
+  await expect(page.getByTestId('fbs-stock-no-warehouses')).toContainText(
+    'Нет направлений Wildberries',
+  )
+  await expect(page.getByTestId(/^fbs-stock-bind-/)).toHaveCount(0)
 })

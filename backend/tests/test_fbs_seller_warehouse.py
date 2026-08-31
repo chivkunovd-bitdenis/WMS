@@ -139,6 +139,79 @@ async def test_fbs_seller_warehouses_supplies_only_fallback_ok(
     assert r.json()[0]["id"] == 501001
 
 
+# TC-NEW-FBS-WHTOKEN-005 — старый единый ключ мог остаться только в content-поле
+@pytest.mark.asyncio
+async def test_fbs_seller_warehouses_content_only_fallback_ok(
+    async_client: AsyncClient,
+    enable_wb_marketplace_warehouses_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+
+    tok = await async_client.patch(
+        f"/integrations/wildberries/sellers/{seller_id}/tokens",
+        headers=headers,
+        json={
+            "content_api_token": "wb-unified-content-token",
+            "marketplace_api_token": None,
+        },
+    )
+    assert tok.status_code == 200, tok.text
+    assert tok.json()["has_content_token"] is True
+    assert tok.json()["has_marketplace_token"] is False
+
+    r = await async_client.get(
+        f"/operations/fbs-sellers/{seller_id}/warehouses",
+        headers=headers,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()[0]["id"] == 501001
+
+
+# TC-NEW-FBS-WHTOKEN-006 — протухший marketplace-ключ не заслоняет актуальный единый
+@pytest.mark.asyncio
+async def test_fbs_seller_warehouses_stale_marketplace_falls_back_to_content(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.wildberries_client import WildberriesClientError
+
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    tok = await async_client.patch(
+        f"/integrations/wildberries/sellers/{seller_id}/tokens",
+        headers=headers,
+        json={
+            "content_api_token": "wb-current-unified-token",
+            "marketplace_api_token": "wb-stale-marketplace-token",
+        },
+    )
+    assert tok.status_code == 200, tok.text
+
+    attempts: list[str] = []
+
+    async def fake_warehouses(
+        client: object, *, api_token: str, marketplace_api_base: str | None = None
+    ) -> list[dict[str, Any]]:
+        attempts.append(api_token)
+        if api_token == "wb-stale-marketplace-token":
+            raise WildberriesClientError("upstream_error", status_code=401)
+        return [{"id": 501006, "name": "Fallback Seller Warehouse"}]
+
+    monkeypatch.setattr(
+        "app.services.fbs_seller_warehouse_service.fetch_marketplace_seller_warehouses",
+        fake_warehouses,
+    )
+
+    r = await async_client.get(
+        f"/operations/fbs-sellers/{seller_id}/warehouses",
+        headers=headers,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()[0]["id"] == 501006
+    assert attempts == ["wb-stale-marketplace-token", "wb-current-unified-token"]
+
+
 # TC-NEW-FBS-WHTOKEN-004 — cross-tenant isolation → 404
 @pytest.mark.asyncio
 async def test_fbs_seller_warehouses_cross_tenant_404(
