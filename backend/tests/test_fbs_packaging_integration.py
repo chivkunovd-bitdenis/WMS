@@ -19,6 +19,7 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_NEW,
     META_STATUS_PENDING,
     PICK_STATUS_PICKED,
+    STICKER_STATUS_READY,
     FbsOrder,
     FbsOrderMarking,
     FbsOrderReservation,
@@ -459,6 +460,9 @@ async def test_fbs_supply_packed_after_packaging_complete(
                 movement_type="inbound_intake",
                 actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
             )
+        for order in orders:
+            order.sticker_status = STICKER_STATUS_READY
+            order.sticker_file = f"fbs/orders/{order.id}.png"
         await session.commit()
 
     await _seed_picks_for_supply_orders(
