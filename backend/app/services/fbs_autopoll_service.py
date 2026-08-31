@@ -7,7 +7,7 @@ import uuid
 from dataclasses import dataclass, field
 
 import httpx
-from sqlalchemy import or_, select
+from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
@@ -117,7 +117,16 @@ async def list_sellers_with_marketplace_token(
             or_(
                 SellerWildberriesCredentials.marketplace_token_encrypted.isnot(None),
                 SellerWildberriesCredentials.content_token_encrypted.isnot(None),
-            )
+            ),
+            exists(
+                select(FbsWarehouseBinding.id).where(
+                    FbsWarehouseBinding.tenant_id == Seller.tenant_id,
+                    FbsWarehouseBinding.seller_id == Seller.id,
+                    FbsWarehouseBinding.marketplace == "wb",
+                    FbsWarehouseBinding.is_active.is_(True),
+                    FbsWarehouseBinding.served.is_(True),
+                )
+            ),
         )
         .order_by(Seller.tenant_id, Seller.id)
     )

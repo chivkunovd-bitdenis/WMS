@@ -23,6 +23,7 @@ from app.models.fbs_order import (
     RESERVE_STATUS_RESERVED,
     FbsOrder,
 )
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
@@ -487,6 +488,42 @@ async def test_fbs_worklist_filters_new_orders_by_warehouse(async_client: AsyncC
     assert [item["id"] for item in body["items"]] == [str(order_b_id)]
     assert {option["id"] for option in body["warehouse_options"]} == option_ids
     assert str(order_ids[0]) not in {item["id"] for item in body["items"]}
+
+
+# TC-S17-029: disabling a served WB warehouse removes its
+# already-imported orders from work tabs without deleting order history.
+@pytest.mark.asyncio
+async def test_fbs_worklist_hides_orders_from_unserved_warehouse(
+    async_client: AsyncClient,
+) -> None:
+    headers, seller_id, _, _, _, order_ids = await _setup_ff_admin_with_stock(
+        async_client, order_count=1
+    )
+
+    async with SessionLocal() as session:
+        binding = await session.scalar(
+            select(FbsWarehouseBinding).where(
+                FbsWarehouseBinding.seller_id == seller_id,
+                FbsWarehouseBinding.wb_warehouse_id == DEFAULT_WB_WAREHOUSE_ID,
+            )
+        )
+        assert binding is not None
+        binding.served = False
+        binding.stock_sync_enabled = False
+        await session.commit()
+
+    response = await async_client.get(
+        "/operations/fbs-orders/worklist",
+        headers=headers,
+        params={"seller_id": str(seller_id), "status_group": "new", "limit": 10},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["items"] == []
+    assert response.json()["warehouse_options"] == []
+
+    async with SessionLocal() as session:
+        persisted = await session.get(FbsOrder, order_ids[0])
+    assert persisted is not None
 
 
 @pytest.mark.asyncio

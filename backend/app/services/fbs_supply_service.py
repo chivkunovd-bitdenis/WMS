@@ -23,14 +23,7 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_DONE,
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
-    PICK_STATUS_PENDING,
-    PICK_STATUS_PICKED,
     FbsOrder,
-)
-from app.models.fbs_order_pick import (
-    PICK_EVENT_PICKED,
-    FbsOrderPick,
-    FbsOrderPickEvent,
 )
 from app.models.fbs_packing_box import FbsPackingBox
 from app.models.fbs_supply import (
@@ -52,11 +45,9 @@ from app.models.fbs_wb_operation import (
     FbsWbOperation,
 )
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
-from app.models.product import Product
 from app.models.tenant import Tenant
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.services import sorting_location_service as sorting_loc_svc
-from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import get_warehouse
 from app.services.fbs_packaging_integration_service import create_packaging_task_for_supply
 from app.services.fbs_picking_order_service import (
@@ -92,7 +83,6 @@ from app.services.marketplace_provider import (
     OzonMarketplaceProvider,
 )
 from app.services.marketplace_seller_lock_service import marketplace_seller_lock
-from app.services.operation_fact_service import record_fbs_pick
 from app.services.wildberries_client import (
     WildberriesClientError,
     add_order_to_marketplace_supply,
@@ -1025,109 +1015,6 @@ async def _resume_from_orders_operation(
     )
 
 
-async def _has_regular_pick_distribution(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    orders: list[FbsOrder],
-) -> bool:
-    from app.models.inventory_balance import InventoryBalance
-    from app.models.storage_location import StorageLocation
-
-    product_ids = {order.product_id for order in orders if order.product_id is not None}
-    warehouse_ids = {order.warehouse_id for order in orders if order.warehouse_id is not None}
-    if not product_ids or not warehouse_ids:
-        return False
-    found = await session.scalar(
-        select(InventoryBalance.id)
-        .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
-        .where(
-            InventoryBalance.tenant_id == tenant_id,
-            InventoryBalance.product_id.in_(product_ids),
-            InventoryBalance.quantity_unpacked > 0,
-            StorageLocation.tenant_id == tenant_id,
-            StorageLocation.warehouse_id.in_(warehouse_ids),
-            StorageLocation.code != sorting_loc_svc.SORTING_LOCATION_CODE,
-        )
-        .limit(1)
-    )
-    return found is not None
-
-
-async def _auto_pass_picking_if_needed(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    supply: FbsSupply,
-    *,
-    actor_user_id: uuid.UUID | None,
-) -> None:
-    address_enabled = await tenant_settings_svc.is_address_storage_enabled(session, tenant_id)
-    has_distribution = await _has_regular_pick_distribution(session, tenant_id, list(supply.orders))
-    if address_enabled and has_distribution:
-        return
-    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
-        session, tenant_id, supply.warehouse_id
-    )
-    picked_at = datetime.now(tz=UTC)
-    for order in supply.orders:
-        if (
-            order.status == FBS_ORDER_STATUS_CANCELLED
-            or order.pick_status != PICK_STATUS_PENDING
-            or order.product_id is None
-        ):
-            continue
-        idempotency_key = f"auto-pick:{supply.id}:{order.id}"
-        existing = await session.scalar(
-            select(FbsOrderPick.id).where(
-                FbsOrderPick.tenant_id == tenant_id,
-                FbsOrderPick.fbs_supply_id == supply.id,
-                FbsOrderPick.scan_idempotency_key == idempotency_key,
-            )
-        )
-        if existing is not None:
-            order.pick_status = PICK_STATUS_PICKED
-            order.picked_at = order.picked_at or picked_at
-            continue
-        pick = FbsOrderPick(
-            tenant_id=tenant_id,
-            fbs_order_id=order.id,
-            fbs_supply_id=supply.id,
-            source_storage_location_id=sorting_loc.id,
-            sorting_storage_location_id=sorting_loc.id,
-            product_id=order.product_id,
-            scanned_product_barcode=order.wb_barcode,
-            picked_by_user_id=actor_user_id,
-            picked_at=picked_at,
-            inventory_movement_id=None,
-            scan_idempotency_key=idempotency_key,
-        )
-        session.add(pick)
-        await session.flush()
-        event = FbsOrderPickEvent(
-            pick_id=pick.id,
-            event_type=PICK_EVENT_PICKED,
-            actor_user_id=actor_user_id,
-            idempotency_key=idempotency_key,
-            source_storage_location_id=sorting_loc.id,
-            sorting_storage_location_id=sorting_loc.id,
-            inventory_movement_id=None,
-        )
-        session.add(event)
-        await session.flush()
-        await record_fbs_pick(
-            session,
-            supply=supply,
-            pick=pick,
-            source_event_id=event.id,
-            source_kind="fbs_order_pick_event",
-            actor_user_id=actor_user_id,
-            occurred_at=picked_at,
-            product=await session.get(Product, order.product_id),
-        )
-        order.pick_status = PICK_STATUS_PICKED
-        order.picked_at = picked_at
-    await session.flush()
-
-
 async def start_supply_work(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1148,7 +1035,6 @@ async def start_supply_work(
             if order.status == FBS_ORDER_STATUS_IN_SUPPLY:
                 order.status = FBS_ORDER_STATUS_ASSEMBLING
         await session.flush()
-    await _auto_pass_picking_if_needed(session, tenant_id, supply, actor_user_id=actor_user_id)
     if http_client is not None:
         await _request_order_stickers_for_picking(session, tenant_id, supply, http_client)
     return await get_supply_workspace(session, tenant_id, supply_id)
@@ -1878,10 +1764,6 @@ async def add_orders_to_existing_supply(
         await _sync_existing_packaging_task_for_added_orders(
             session, tenant_id, supply, accepted_orders
         )
-        if supply.status == FBS_SUPPLY_STATUS_ASSEMBLING:
-            await _auto_pass_picking_if_needed(
-                session, tenant_id, supply, actor_user_id=actor_user_id
-            )
     partial_summary = None
     if len(accepted_orders) != len(orders):
         partial_summary = _partial_from_orders_summary(

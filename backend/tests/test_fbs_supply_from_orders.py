@@ -20,6 +20,7 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_NEW,
     FbsOrder,
 )
+from app.models.fbs_order_pick import FbsOrderPick
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_trbx import FbsTrbx
 from app.models.fbs_wb_operation import (
@@ -183,6 +184,9 @@ async def _create_product(
     async with SessionLocal() as session:
         product = await session.get(Product, uuid.UUID(resp.json()["id"]))
         assert product is not None
+        product.fbs_stock_sync_enabled = True
+        product.fbs_percent = 100
+        await session.commit()
         return product
 
 
@@ -1412,3 +1416,13 @@ async def test_start_work_idempotent_packaging_task(
         first.json()["supply"]["packaging_task_id"]
         == second.json()["supply"]["packaging_task_id"]
     )
+    assert first.json()["progress"]["picked"] == 0
+    assert second.json()["progress"]["picked"] == 0
+    async with SessionLocal() as session:
+        active_pick = await session.scalar(
+            select(FbsOrderPick.id).where(
+                FbsOrderPick.fbs_supply_id == uuid.UUID(supply_id),
+                FbsOrderPick.undone_at.is_(None),
+            )
+        )
+    assert active_pick is None

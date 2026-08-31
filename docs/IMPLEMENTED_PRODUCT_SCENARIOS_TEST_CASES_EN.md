@@ -910,6 +910,56 @@ Full-cycle FBS: worklist → compatible selection → atomic WB supply → serve
 - **Then:** the table shows only orders for that selected WB warehouse and sends `wb_warehouse_id` to the worklist API.
 - **Negative / restriction:** changing seller or leaving **New** resets the warehouse filter; filtering must happen server-side so pagination cannot hide matching orders.
 
+### TC-S17-026 Disabling warehouse service is silent
+
+- **Actor:** fulfillment admin.
+- **Given:** a served WB warehouse has an explicit WMS mapping and WB may contain stock entered outside WMS.
+- **When:** the admin clears the warehouse **served** flag.
+- **Then:** WMS stops stock publication for that warehouse and sends no explicit zero or any other stock value.
+- **Negative / restriction:** disabling publication for a product is a separate action and may retain its one-time explicit-zero safety behavior.
+
+### TC-S17-027 Import only orders from served WB warehouses
+
+- **Given:** WB returns orders from an active served binding, an unserved binding, and an unknown warehouse.
+- **When:** the seller order sync runs.
+- **Then:** only the order from the active served WB binding is imported; every other row increments `orders_skipped_unserved` and creates no order history row.
+- **Negative / restriction:** a WMS warehouse supplied in a manual sync request must not bypass the WB warehouse binding decision.
+
+### TC-S17-028 Autopoll only sellers with a served WB warehouse
+
+- **Given:** sellers have WB marketplace credentials, but only one seller has an active served WB warehouse binding.
+- **When:** the automatic FBS polling target list is built.
+- **Then:** only the seller with both credentials and an active served WB binding is polled.
+- **Negative / restriction:** a token alone, an inactive binding, an unserved binding, or a non-WB binding is insufficient.
+
+### TC-S17-029 Unserved warehouse orders leave the worklist but retain history
+
+- **Given:** an already imported FBS order belongs to a WB warehouse that the admin stops serving.
+- **When:** the operator opens the FBS worklist and its warehouse filter options.
+- **Then:** the order and its warehouse option are absent from working tabs, while the order row remains stored for history.
+- **Negative / restriction:** the filter applies to active WB work views and must not delete or rewrite historical orders.
+
+### TC-S17-030 Unpublished product does not reserve stock
+
+- **Given:** an active served WB warehouse, a mapped product, and positive physical WMS stock, but FBS stock publication for that product is disabled.
+- **When:** a new WB FBS order is imported.
+- **Then:** no reservation is created; the order has `reserve_status=not_published` and exposes a visible integration blocker.
+- **Negative / restriction:** this state is distinct from `no_stock`; enabling publication and syncing again may reserve if free stock exists.
+
+### TC-S17-031 Warehouse mapping does not enable service implicitly
+
+- **Given:** a WB warehouse has no binding.
+- **When:** an admin saves only its WMS warehouse mapping without an explicit **served** decision.
+- **Then:** the binding is created with `served=false` and stock sync disabled.
+- **Negative / restriction:** mapping an existing binding without a `served` field preserves its current service state.
+
+### TC-S17-032 Published availability follows reserve lifecycle once
+
+- **Given:** a published product has physical stock 100 and no active reservations.
+- **When:** one unit is reserved, released, reserved and written off, then the remaining 99 units are written off.
+- **Then:** publishable availability changes `100 -> 99 -> 100 -> 99 -> 0`.
+- **Negative / restriction:** converting a reservation into physical expense must not subtract the same unit twice or produce a negative quantity.
+
 **Frontend browser paths (Codex, post-backend handoff):** worklist enrichment + live deadline; selection blockers + atomic create; full-screen workspace stages; persistent picking; embedded PackagingTask; marking row states; sticker preview; PVZ cargo + QR; warehouse/SC supply QR; WB timeout/409 never shows local success.
 
 ---

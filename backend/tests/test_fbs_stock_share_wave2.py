@@ -18,7 +18,6 @@ from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
     MAPPING_STATUS_MAPPED,
     RESERVE_STATUS_NO_STOCK,
-    RESERVE_STATUS_WAREHOUSE_UNMAPPED,
     FbsOrder,
 )
 from app.models.fbs_supply import (
@@ -98,13 +97,19 @@ def _wb_order(order_id: int, warehouse_id: int, barcode: str) -> dict[str, Any]:
     }
 
 
-# TC-NEW-FBS-SHARE-W2-001: WB list is enriched and PUT persists served.
+# TC-S17-026 / TC-S17-031: WB list is enriched, mapping defaults off, and
+# disabling service never schedules an explicit stock zero.
 @pytest.mark.asyncio
 async def test_fbs_seller_warehouses_contract_get_and_put(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_warehouses", True)
+    explicit_zero_calls: list[uuid.UUID] = []
+    monkeypatch.setattr(
+        "app.api.fbs_sellers.schedule_explicit_zero_publish",
+        lambda _tenant_id, _seller_id, binding_id: explicit_zero_calls.append(binding_id),
+    )
     headers, suffix = await _register_admin(async_client)
     seller_id = await _create_seller(async_client, headers, suffix)
     warehouse_id = await _create_warehouse(async_client, headers, suffix)
@@ -146,6 +151,16 @@ async def test_fbs_seller_warehouses_contract_get_and_put(
     )
     assert disabled.status_code == 200, disabled.text
     assert disabled.json()["served"] is False
+    assert explicit_zero_calls == []
+
+    mapped_only = await async_client.put(
+        f"/fbs-sellers/{seller_id}/warehouses/{WB_WAREHOUSE_UNMAPPED}",
+        headers=headers,
+        json={"wms_warehouse_id": warehouse_id},
+    )
+    assert mapped_only.status_code == 200, mapped_only.text
+    assert mapped_only.json()["served"] is False
+    assert mapped_only.json()["wms_warehouse_id"] == warehouse_id
     async with SessionLocal() as session:
         binding = await session.scalar(
             select(FbsWarehouseBinding).where(
@@ -157,9 +172,10 @@ async def test_fbs_seller_warehouses_contract_get_and_put(
         assert binding.served is False
 
 
-# TC-NEW-FBS-SHARE-W2-002: explicitly foreign is discarded; unmapped is retained.
+# TC-S17-027: explicitly foreign and unknown WB warehouses
+# are both discarded before an order can enter the local FBS database.
 @pytest.mark.asyncio
-async def test_fbs_import_skips_unserved_but_keeps_unmapped(
+async def test_fbs_import_skips_unserved_and_unknown_warehouses(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -219,9 +235,9 @@ async def test_fbs_import_skips_unserved_but_keeps_unmapped(
         )
 
     assert result["orders_received"] == 2
-    assert result["orders_upserted"] == 1
-    assert result["orders_created"] == 1
-    assert result["orders_skipped_unserved"] == 1
+    assert result["orders_upserted"] == 0
+    assert result["orders_created"] == 0
+    assert result["orders_skipped_unserved"] == 2
     async with SessionLocal() as session:
         orders = list(
             (
@@ -232,9 +248,15 @@ async def test_fbs_import_skips_unserved_but_keeps_unmapped(
             .scalars()
             .all()
         )
-    assert [order.wb_order_id for order in orders] == [920002]
-    assert orders[0].warehouse_id is None
-    assert orders[0].reserve_status == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+    assert orders == []
+    async with SessionLocal() as session:
+        binding = await session.scalar(
+            select(FbsWarehouseBinding).where(
+                FbsWarehouseBinding.seller_id == uuid.UUID(seller_id),
+                FbsWarehouseBinding.wb_warehouse_id == WB_WAREHOUSE_UNMAPPED,
+            )
+        )
+    assert binding is None
 
 
 # TC-NEW-FBS-SHARE-W2-003: assembly metrics share one period and seller scope.

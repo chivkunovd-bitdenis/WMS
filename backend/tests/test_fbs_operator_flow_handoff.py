@@ -27,6 +27,7 @@ from app.db.session import SessionLocal
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_NEW,
     FBS_ORDER_STATUS_PACKED,
+    STICKER_STATUS_READY,
     FbsOrder,
 )
 from app.models.fbs_supply import (
@@ -150,6 +151,8 @@ async def _promote_supply_packed(supply_id: str, order_ids: list[uuid.UUID]) -> 
             assert order is not None
             order.status = FBS_ORDER_STATUS_PACKED
             order.pack_status = "packed"
+            order.sticker_status = STICKER_STATUS_READY
+            order.sticker_file = f"fbs/orders/{order.id}.png"
         await session.commit()
 
 

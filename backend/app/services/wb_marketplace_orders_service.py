@@ -27,6 +27,7 @@ from app.models.fbs_order import (
     MAPPING_STATUS_MAPPED,
     MAPPING_STATUS_MISSING,
     RESERVE_STATUS_NO_STOCK,
+    RESERVE_STATUS_NOT_PUBLISHED,
     RESERVE_STATUS_RELEASED,
     RESERVE_STATUS_RESERVED,
     RESERVE_STATUS_SKIPPED_NO_PRODUCT,
@@ -483,13 +484,13 @@ async def _lock_product_for_fbs_reserve(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     product_id: uuid.UUID,
-) -> None:
+) -> Product | None:
     stmt = (
-        select(Product.id)
+        select(Product)
         .where(Product.id == product_id, Product.tenant_id == tenant_id)
         .with_for_update()
     )
-    await session.execute(stmt)
+    return (await session.execute(stmt)).scalar_one_or_none()
 
 
 async def _lock_fbs_reservations_for_product(
@@ -585,7 +586,16 @@ async def _try_reserve_order(
         return
     if await _order_has_reservation(session, order.id):
         return
-    await _lock_product_for_fbs_reserve(session, order.tenant_id, order.product_id)
+    product = await _lock_product_for_fbs_reserve(
+        session, order.tenant_id, order.product_id
+    )
+    if (
+        product is None
+        or not product.fbs_stock_sync_enabled
+        or product.fbs_percent is None
+    ):
+        order.reserve_status = RESERVE_STATUS_NOT_PUBLISHED
+        return
     await _lock_fbs_reservations_for_product(
         session, order.tenant_id, order.warehouse_id, order.product_id
     )

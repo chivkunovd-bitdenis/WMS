@@ -529,6 +529,7 @@ async def record_fbs_pack_progress(
     acting_user_id: uuid.UUID | None = None,
     idempotency_key: str | None = None,
     fail_on_insufficient_stock: bool = False,
+    allow_alternative_sorting_fallback: bool = True,
 ) -> FbsPackProgressResult:
     """Link each packed unit to one picked FBS order and convert sorting stock."""
     if qty < 1:
@@ -628,12 +629,17 @@ async def record_fbs_pack_progress(
                         "insufficient_packaging_stock",
                         message=insufficient_msg,
                     ) from exc
-                success, alt_location_code = await _try_deduct_from_alternative_sorting_location(
-                    session,
-                    tenant_id,
-                    line.product_id,
-                    line.storage_location_id,
-                )
+                success = False
+                alt_location_code: str | None = None
+                if allow_alternative_sorting_fallback:
+                    success, alt_location_code = (
+                        await _try_deduct_from_alternative_sorting_location(
+                            session,
+                            tenant_id,
+                            line.product_id,
+                            line.storage_location_id,
+                        )
+                    )
                 if success:
                     warnings.append(
                         f"Товар списан из другой ячейки сортировки: {alt_location_code}"

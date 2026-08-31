@@ -33,7 +33,7 @@ async def import_wb_order_rows(
     pool_debit_totals: dict[str, int],
     stats: FbsOrderImportStats,
 ) -> None:
-    """Импортировать наши и непривязанные заказы, не сохраняя явно чужие."""
+    """Импортировать только заказы явно обслуживаемых WB-складов."""
     from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 
     warehouse_ids = {
@@ -44,6 +44,7 @@ async def import_wb_order_rows(
         stmt = select(FbsWarehouseBinding).where(
             FbsWarehouseBinding.tenant_id == tenant_id,
             FbsWarehouseBinding.seller_id == seller_id,
+            FbsWarehouseBinding.marketplace == "wb",
             FbsWarehouseBinding.wb_warehouse_id.in_(warehouse_ids),
         )
         scopes = {
@@ -55,7 +56,7 @@ async def import_wb_order_rows(
     for row in rows:
         warehouse_id = _warehouse_id(row)
         scope = scopes.get(warehouse_id) if warehouse_id is not None else None
-        if scope is False:
+        if scope is not True:
             stats.skipped_unserved += 1
             continue
         _order, was_created = await upsert_order_from_wb_row(
@@ -64,7 +65,7 @@ async def import_wb_order_rows(
             seller_id,
             row,
             pool_debit_totals=pool_debit_totals,
-            preserve_unmapped_warehouse=scope is None,
+            preserve_unmapped_warehouse=False,
         )
         stats.upserted += 1
         stats.created += int(was_created)

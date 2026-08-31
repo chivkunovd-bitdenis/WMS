@@ -28,7 +28,6 @@ from app.models.fbs_order_pick import FbsOrderPick
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
-    FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_DRAFT,
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
@@ -623,10 +622,10 @@ async def test_fbs_pack_all_honest_sign_skip_completes_and_promotes_supply(
         assert supply.status == FBS_SUPPLY_STATUS_PACKED
 
 
-# TC-NEW-FBS-EMERG-004 — atomic pack-all is fail-closed at its own warehouse
-# and must not consume a same-tenant balance from another warehouse.
+# TC-NEW-FBS-EMERG-004 — atomic pack-all must not block the operator when the
+# sorting balance is stale and must not consume another warehouse's balance.
 @pytest.mark.asyncio
-async def test_fbs_pack_all_insufficient_stock_rolls_back_everything(
+async def test_fbs_pack_all_insufficient_stock_completes_without_cross_warehouse_write_off(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
@@ -724,39 +723,39 @@ async def test_fbs_pack_all_insufficient_stock_rolls_back_everything(
         )
         await session.commit()
 
-    blocked = await async_client.post(
+    completed = await async_client.post(
         f"/operations/packaging-tasks/{task_id}/pack-all-and-complete",
         headers=headers,
     )
-    assert blocked.status_code == 409, blocked.text
-    detail = blocked.json()["detail"]
-    assert detail["code"] == "insufficient_packaging_stock"
-    assert "Недостаточно" in detail["message"]
-    assert "нужна как минимум 1" in detail["message"]
+    assert completed.status_code == 200, completed.text
+    body = completed.json()
+    assert body["packaging_task"]["status"] == "done"
+    assert body["warnings"]
+    assert "Упаковка продолжена, остаток не списан" in body["warnings"][0]
 
     async with SessionLocal() as session:
         task = await session.get(PackagingTask, task_id)
         assert task is not None
-        assert task.status == "draft"
+        assert task.status == "done"
         line = await session.scalar(
             select(PackagingTaskLine).where(PackagingTaskLine.task_id == task_id)
         )
         assert line is not None
-        assert line.qty_packed_in_task == 0
+        assert line.qty_packed_in_task == 1
         assert await session.scalar(
             select(func.count(PackagingTaskEvent.id)).where(PackagingTaskEvent.task_id == task_id)
-        ) == 0
+        ) == 2
         assert await session.scalar(
             select(func.count(FbsPackagingFulfillment.id)).where(
                 FbsPackagingFulfillment.packaging_task_id == task_id
             )
-        ) == 0
+        ) == 1
         supply = await session.get(FbsSupply, supply_id)
         assert supply is not None
-        assert supply.status == FBS_SUPPLY_STATUS_ASSEMBLING
+        assert supply.status == FBS_SUPPLY_STATUS_PACKED
         order = await session.get(FbsOrder, order_id)
         assert order is not None
-        assert order.pack_status == PACK_STATUS_PENDING
+        assert order.pack_status == PACK_STATUS_PACKED
         alternative_sorting = await get_or_create_sorting_location(
             session, tenant_id, alternative_warehouse_id
         )
