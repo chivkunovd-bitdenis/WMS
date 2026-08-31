@@ -8,9 +8,12 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.models.fbs_order import PACK_STATUS_PACKED, FbsOrder
+from app.models.fbs_order_pick import FbsOrderPick
+from app.models.inventory_balance import InventoryBalance
 from tests.test_fbs_picking import (
     _create_product,
     _create_seller_and_warehouse,
@@ -126,7 +129,7 @@ async def test_manual_pick_selects_cell_and_picks_explicit_order_idempotently(
 
 
 @pytest.mark.asyncio
-async def test_manual_pick_rejects_wrong_cell_product_and_packed_order(
+async def test_manual_pick_rejects_wrong_cell_product_and_allows_packed_order(
     async_client: AsyncClient,
 ) -> None:
     headers, suffix, tenant_id = await _register_ff_admin(async_client)
@@ -193,5 +196,24 @@ async def test_manual_pick_rejects_wrong_cell_product_and_packed_order(
         order_id=order_ids[0],
         idempotency_key=str(uuid.uuid4()),
     )
-    assert packed.status_code == 409
-    assert packed.json()["detail"]["code"] == "order_already_packed"
+    assert packed.status_code == 200, packed.text
+    picked_order = next(
+        order for order in packed.json()["orders"] if order["id"] == str(order_ids[0])
+    )
+    assert picked_order["pick"]["status"] == "picked"
+
+    async with SessionLocal() as session:
+        stored_pick = await session.scalar(
+            select(FbsOrderPick).where(FbsOrderPick.fbs_order_id == order_ids[0])
+        )
+        source_balance = await session.scalar(
+            select(InventoryBalance.quantity_unpacked).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+                InventoryBalance.storage_location_id == location_id,
+            )
+        )
+        assert stored_pick is not None
+        assert stored_pick.source_storage_location_id == location_id
+        assert stored_pick.inventory_movement_id is None
+        assert int(source_balance or 0) == 1

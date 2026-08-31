@@ -30,6 +30,7 @@ from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
+from app.models.fbs_wb_operation import WB_OPERATION_STATE_CONFIRMED, FbsWbOperation
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryMovement
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
@@ -38,8 +39,14 @@ from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
+from app.services import fbs_shipment_service as shipment_service
 from app.services.fbs_ozon_packaging_service import write_off_order as write_off_ozon_order
 from app.services.fbs_shipment_service import _write_off_delivered_orders_once
+from app.services.fbs_shipment_source_service import (
+    FbsShipmentSourcePlan,
+    FbsShipmentSourceRequest,
+    plan_fbs_shipment_sources,
+)
 from app.services.ozon_fbs_sync_service import _apply_status
 
 
@@ -62,6 +69,7 @@ class _ShipmentCase:
     product_ids: tuple[uuid.UUID, ...]
     location_ids: tuple[uuid.UUID, ...]
     initial_quantity: int
+    operation: FbsWbOperation
 
 
 async def _seed_packed_order(
@@ -184,7 +192,16 @@ async def _seed_packed_order(
             ozon_packed_units_json=packed_units,
         )
     )
+    operation = FbsWbOperation(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        operation_kind="supply_deliver",
+        idempotency_key=f"deliver-{suffix}",
+        state="pending",
+    )
+    session.add(operation)
     await session.commit()
+    await session.refresh(operation)
 
     loaded_order = (
         await session.execute(
@@ -202,6 +219,33 @@ async def _seed_packed_order(
         product_ids=tuple(product.id for product in products),
         location_ids=tuple(location.id for location in locations),
         initial_quantity=initial_quantity,
+        operation=operation,
+    )
+
+
+async def _write_off_case(session: AsyncSession, case: _ShipmentCase) -> None:
+    source_plan: FbsShipmentSourcePlan | None = None
+    if case.order.marketplace == "wb":
+        assert case.order.product_id is not None
+        source_plan = await plan_fbs_shipment_sources(
+            session,
+            tenant_id=case.tenant_id,
+            supply_warehouse_id=case.supply.warehouse_id,
+            requests=[
+                FbsShipmentSourceRequest(
+                    fbs_order_id=case.order.id,
+                    product_id=case.order.product_id,
+                    quantity=1,
+                )
+            ],
+        )
+    await _write_off_delivered_orders_once(
+        session,
+        case.supply,
+        [case.order],
+        None,
+        source_plan=source_plan,
+        operation=case.operation,
     )
 
 
@@ -224,7 +268,7 @@ async def test_ozon_two_products_are_written_off_from_their_packed_locations(
     # TC-NEW-FBS-SHIPMENT-COMPOSITION-001
     case = await _seed_packed_order(db_session, (1, 1))
 
-    await _write_off_delivered_orders_once(db_session, case.supply, [case.order], None)
+    await _write_off_case(db_session, case)
 
     assert await _balances(db_session, case) == {
         product_id: case.initial_quantity - 1 for product_id in case.product_ids
@@ -254,7 +298,7 @@ async def test_ozon_quantity_above_one_is_written_off_in_full(
     # TC-NEW-FBS-SHIPMENT-COMPOSITION-002
     case = await _seed_packed_order(db_session, (3,))
 
-    await _write_off_delivered_orders_once(db_session, case.supply, [case.order], None)
+    await _write_off_case(db_session, case)
 
     assert await _balances(db_session, case) == {
         case.product_ids[0]: case.initial_quantity - 3
@@ -275,7 +319,7 @@ async def test_ozon_cancellation_restores_every_written_off_position(
 ) -> None:
     # TC-NEW-FBS-SHIPMENT-COMPOSITION-003
     case = await _seed_packed_order(db_session, (2, 3))
-    await _write_off_delivered_orders_once(db_session, case.supply, [case.order], None)
+    await _write_off_case(db_session, case)
 
     await _apply_status(db_session, case.order, "cancelled")
     await db_session.flush()
@@ -312,7 +356,7 @@ async def test_ozon_single_packed_unit_keeps_the_previous_one_unit_result(
     # TC-NEW-FBS-SHIPMENT-COMPOSITION-004
     case = await _seed_packed_order(db_session, (1,))
 
-    await _write_off_delivered_orders_once(db_session, case.supply, [case.order], None)
+    await _write_off_case(db_session, case)
 
     assert await _balances(db_session, case) == {
         case.product_ids[0]: case.initial_quantity - 1
@@ -340,7 +384,7 @@ async def test_ozon_packaging_write_off_then_delivery_debits_stock_once(
         order=case.order,
         actor_user_id=None,
     )
-    await _write_off_delivered_orders_once(db_session, case.supply, [case.order], None)
+    await _write_off_case(db_session, case)
 
     assert ledger.shipment_movement_id is not None
     assert await _balances(db_session, case) == {
@@ -369,8 +413,8 @@ async def test_wb_delivery_keeps_single_write_off_path(db_session: AsyncSession)
     # TC-NEW-FBS-OZON-WRITE-OFF-002: защита Ozon не меняет прежний путь WB.
     case = await _seed_packed_order(db_session, (1,), marketplace="wb")
 
-    await _write_off_delivered_orders_once(db_session, case.supply, [case.order], None)
-    await _write_off_delivered_orders_once(db_session, case.supply, [case.order], None)
+    await _write_off_case(db_session, case)
+    await _write_off_case(db_session, case)
 
     ledger = await db_session.scalar(
         select(FbsShipmentReversalLedger).where(
@@ -401,6 +445,85 @@ async def test_wb_delivery_keeps_single_write_off_path(db_session: AsyncSession)
 
 
 @pytest.mark.asyncio
+async def test_wb_confirmed_checkpoint_replays_local_write_off_without_replanning(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = await _seed_packed_order(db_session, (1,), marketplace="wb")
+    assert case.order.product_id is not None
+    source_plan = await plan_fbs_shipment_sources(
+        db_session,
+        tenant_id=case.tenant_id,
+        supply_warehouse_id=case.supply.warehouse_id,
+        requests=[
+            FbsShipmentSourceRequest(
+                fbs_order_id=case.order.id,
+                product_id=case.order.product_id,
+                quantity=1,
+            )
+        ],
+    )
+    original_apply = shipment_service._apply_local_delivered
+
+    async def crash_after_checkpoint(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("simulated local crash")
+
+    monkeypatch.setattr(shipment_service, "_apply_local_delivered", crash_after_checkpoint)
+    with pytest.raises(RuntimeError, match="simulated local crash"):
+        await shipment_service._persist_confirmed_delivery(
+            db_session,
+            case.supply,
+            [case.order],
+            case.operation,
+            None,
+            source_plan,
+        )
+    await db_session.rollback()
+
+    checkpointed_operation = await db_session.get(FbsWbOperation, case.operation.id)
+    ledger = await db_session.scalar(
+        select(FbsShipmentReversalLedger).where(
+            FbsShipmentReversalLedger.fbs_order_id == case.order.id
+        )
+    )
+    assert checkpointed_operation is not None
+    assert checkpointed_operation.state == WB_OPERATION_STATE_CONFIRMED
+    assert ledger is not None
+    assert ledger.shipment_movement_id is None
+    assert ledger.storage_location_id == source_plan.resolutions[0].storage_location_id
+
+    reloaded_supply = await db_session.get(FbsSupply, case.supply.id)
+    assert reloaded_supply is not None
+    checkpoint = await shipment_service._load_checkpointed_wb_delivery(
+        db_session,
+        reloaded_supply,
+        checkpointed_operation,
+    )
+    assert checkpoint is not None
+    checkpointed_orders, checkpointed_plan = checkpoint
+    monkeypatch.setattr(shipment_service, "_apply_local_delivered", original_apply)
+    await shipment_service._persist_confirmed_delivery(
+        db_session,
+        reloaded_supply,
+        checkpointed_orders,
+        checkpointed_operation,
+        None,
+        checkpointed_plan,
+    )
+
+    replayed_ledger = await db_session.scalar(
+        select(FbsShipmentReversalLedger).where(
+            FbsShipmentReversalLedger.fbs_order_id == case.order.id
+        )
+    )
+    assert replayed_ledger is not None
+    assert replayed_ledger.shipment_movement_id is not None
+    assert await _balances(db_session, case) == {
+        case.product_ids[0]: case.initial_quantity - 1
+    }
+
+
+@pytest.mark.asyncio
 async def test_ozon_cancelled_after_packaging_is_not_written_off_again(
     db_session: AsyncSession,
 ) -> None:
@@ -415,7 +538,7 @@ async def test_ozon_cancelled_after_packaging_is_not_written_off_again(
     )
 
     await _apply_status(db_session, case.order, "cancelled")
-    await _write_off_delivered_orders_once(db_session, case.supply, [case.order], None)
+    await _write_off_case(db_session, case)
 
     assert await _balances(db_session, case) == {
         case.product_ids[0]: case.initial_quantity

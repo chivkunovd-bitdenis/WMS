@@ -43,6 +43,7 @@ from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
+from app.models.fbs_wb_operation import FbsWbOperation
 from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryMovement
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
@@ -53,6 +54,10 @@ from app.services.fbs_packaging_integration_service import (
     try_promote_fbs_supply_if_ready,
 )
 from app.services.fbs_shipment_service import _write_off_delivered_orders_once
+from app.services.fbs_shipment_source_service import (
+    FbsShipmentSourceRequest,
+    plan_fbs_shipment_sources,
+)
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import (
     _apply_wb_status_to_order,
@@ -299,7 +304,7 @@ async def test_cancel_in_assembling_detaches_and_adjusts_packaging(
 
         supply = await session.get(FbsSupply, supply_id)
         assert supply is not None
-        assert supply.status == "packed"
+        assert supply.status == FBS_SUPPLY_STATUS_ASSEMBLING
 
 
 # TC-NEW-FBS-FIX-001 negative — last order cancel reverts supply to draft
@@ -570,7 +575,7 @@ async def test_sync_order_statuses_paginates_past_500(
 
 # TC-NEW-FBS-FIX-004 — PACKED waits for accepted required WB metadata
 @pytest.mark.asyncio
-async def test_promote_packed_requires_marking_ok(
+async def test_wb_packaging_promotion_is_disabled_even_after_marking_ok(
     async_client: AsyncClient,
 ) -> None:
     headers, suffix = await _register_ff_admin(async_client)
@@ -697,7 +702,7 @@ async def test_promote_packed_requires_marking_ok(
             session, tenant_id, supply_id, actor_user_id=actor_user_id
         )
         assert promoted is not None
-        assert promoted.status == "packed"
+        assert promoted.status == FBS_SUPPLY_STATUS_ASSEMBLING
 
 
 # TC-NEW-FBS-FIX-001 — cancel in packed supply demotes supply to assembling
@@ -865,9 +870,9 @@ async def test_sync_order_statuses_advances_sorted_to_sold(
         assert order.status == FBS_ORDER_STATUS_DONE
 
 
-# TC-NEW-FBS-REVERSAL-001 — shipment and reversal stay on the fulfilled line.
+# TC-NEW-FBS-REVERSAL-001 — shipment and reversal use the deterministic source plan.
 @pytest.mark.asyncio
-async def test_fbs_shipment_uses_each_order_fulfillment_location(
+async def test_fbs_shipment_uses_each_planned_source_location(
     async_client: AsyncClient,
 ) -> None:
     headers, suffix = await _register_ff_admin(async_client)
@@ -969,7 +974,36 @@ async def test_fbs_shipment_uses_each_order_fulfillment_location(
                 .options(selectinload(FbsSupply.orders))
             )
         ).scalar_one()
-        await _write_off_delivered_orders_once(session, supply, orders, None)
+        source_plan = await plan_fbs_shipment_sources(
+            session,
+            tenant_id=tenant_id,
+            supply_warehouse_id=warehouse_uuid,
+            requests=[
+                FbsShipmentSourceRequest(
+                    fbs_order_id=order.id,
+                    product_id=product.id,
+                    quantity=1,
+                )
+                for order in orders
+            ],
+        )
+        operation = FbsWbOperation(
+            tenant_id=tenant_id,
+            seller_id=seller_uuid,
+            operation_kind="supply_deliver",
+            idempotency_key=f"two-cell-deliver-{suffix}",
+            state="pending",
+        )
+        session.add(operation)
+        await session.flush()
+        await _write_off_delivered_orders_once(
+            session,
+            supply,
+            orders,
+            None,
+            source_plan=source_plan,
+            operation=operation,
+        )
         ledgers = list(
             (
                 await session.execute(

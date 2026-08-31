@@ -38,6 +38,7 @@ from tests import test_fbs_supply_from_orders as from_orders_helpers
 @pytest.fixture
 def enable_wb_marketplace_supplies_mock(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+    deliver_helpers._mock_actual_composition_from_local_links(monkeypatch)
 
 
 # TC-FBS-ACTOR-001 — create supply from orders records who did it
@@ -122,7 +123,9 @@ async def test_actor_recorded_for_deliver(
         async_client, headers, supply["id"], order_ids
     )
 
-    deliver = await deliver_helpers._deliver_direct(async_client, headers, supply["id"])
+    deliver = await deliver_helpers._deliver_with_preflight(
+        async_client, headers, supply["id"]
+    )
     assert deliver.status_code == 200, deliver.text
 
     async with SessionLocal() as session:

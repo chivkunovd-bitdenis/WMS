@@ -16,7 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
-    FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_DEFECT,
     FBS_ORDER_STATUS_DONE,
@@ -52,6 +51,9 @@ from app.services.fbs_marking_service import apply_wb_meta_requirements_to_order
 from app.services.fbs_order_import_scope_service import FbsOrderImportStats, import_wb_order_rows
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
+from app.services.fbs_supply_composition_service import (
+    link_order_to_wb_supply_if_compatible,
+)
 from app.services.fbs_warehouse_binding_service import (
     get_or_create_binding_for_sole_operational_warehouse,
     is_auto_fbs_wms_warehouse,
@@ -999,11 +1001,11 @@ async def _write_off_sold_order(session: AsyncSession, order: FbsOrder) -> None:
     Повторное списание невозможно: журнал `fbs_shipment_reversal_ledger`
     хранит запись на заказ, и она же проверяется первой.
     """
-    from app.models.fbs_order_pick import FbsOrderPick
     from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
+    from app.services import fbs_shipment_source_service as source_svc
     from app.services import inventory_service as inv_svc
 
-    if order.product_id is None:
+    if order.product_id is None or order.warehouse_id is None:
         return
 
     already = await session.scalar(
@@ -1015,28 +1017,33 @@ async def _write_off_sold_order(session: AsyncSession, order: FbsOrder) -> None:
     if already is not None:
         return
 
-    # Списываем оттуда, куда штуку положил подбор. Без подбора со склада ничего
-    # не брали — списывать нечего.
-    location_id = await session.scalar(
-        select(FbsOrderPick.sorting_storage_location_id).where(
-            FbsOrderPick.tenant_id == order.tenant_id,
-            FbsOrderPick.fbs_order_id == order.id,
-            FbsOrderPick.undone_at.is_(None),
-        )
+    plan = await source_svc.plan_fbs_shipment_sources(
+        session,
+        tenant_id=order.tenant_id,
+        supply_warehouse_id=order.warehouse_id,
+        requests=[
+            source_svc.FbsShipmentSourceRequest(
+                fbs_order_id=order.id,
+                product_id=order.product_id,
+                quantity=1,
+            )
+        ],
     )
-    if location_id is None:
-        return
+    resolution = plan.resolutions[0]
 
     try:
         movement = await inv_svc.apply_fbs_supply_write_off(
             session,
             tenant_id=order.tenant_id,
             product_id=order.product_id,
-            storage_location_id=location_id,
+            storage_location_id=resolution.storage_location_id,
             quantity=1,
             # Списание инициировал не человек, а обход статусов от WB:
             # заказ закрыт как проданный в обход упаковки.
             actor_user_id=None,
+            allow_negative=True,
+            container_kind=resolution.container_kind,
+            container_id=resolution.container_id,
         )
     except ValueError as exc:
         # Остатка в ячейке нет — не роняем синхронизацию статусов из-за одного
@@ -1048,7 +1055,7 @@ async def _write_off_sold_order(session: AsyncSession, order: FbsOrder) -> None:
             order.tenant_id,
             order.id,
             order.product_id,
-            location_id,
+            resolution.storage_location_id,
         )
         return
 
@@ -1063,9 +1070,16 @@ async def _write_off_sold_order(session: AsyncSession, order: FbsOrder) -> None:
             tenant_id=order.tenant_id,
             fbs_order_id=order.id,
             product_id=order.product_id,
-            storage_location_id=location_id,
+            storage_location_id=resolution.storage_location_id,
+            source_warehouse_id=resolution.source_warehouse_id,
+            container_kind=resolution.container_kind,
+            container_id=resolution.container_id,
+            source_mode=resolution.source_mode,
             quantity=1,
+            shortage_quantity=resolution.shortage_quantity,
+            negative_quantity=resolution.negative_quantity,
             shipment_movement_id=movement.id,
+            written_off_at=datetime.now(UTC),
         )
     )
     await session.flush()
@@ -1495,6 +1509,7 @@ def _empty_supply_link_result(**overrides: Any) -> dict[str, Any]:
         "supply_link_skipped_unmapped_warehouse": 0,
         "supply_link_skipped_unmapped_warehouse_supply_ids": [],
         "supply_link_skipped_warehouse_mismatch_orders": 0,
+        "supply_link_discrepancies": [],
     }
     result.update(overrides)
     return result
@@ -1619,6 +1634,7 @@ async def link_confirmed_orders_to_wb_supplies(
         supplies_scanned = len(candidates_by_supply_id)
         skipped_unmapped_warehouse_supply_ids: list[str] = []
         skipped_warehouse_mismatch_orders = 0
+        link_discrepancies: list[dict[str, Any]] = []
 
         for wb_supply_id, matching_orders in candidates_by_supply_id.items():
             existed_before = (
@@ -1646,6 +1662,16 @@ async def link_confirmed_orders_to_wb_supplies(
             if not existed_before:
                 supplies_created += 1
 
+            current_orders = list(
+                (
+                    await session.execute(
+                        select(FbsOrder).where(FbsOrder.supply_id == supply.id)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            added_orders: list[FbsOrder] = []
             for order in matching_orders:
                 if order.supply_id is not None:
                     continue
@@ -1653,23 +1679,47 @@ async def link_confirmed_orders_to_wb_supplies(
                     order.warehouse_id = await _resolve_wms_warehouse_for_wb(
                         session, tenant_id, seller_id, order.wb_warehouse_id
                     )
-                if order.warehouse_id != supply.warehouse_id:
+                link_result = await link_order_to_wb_supply_if_compatible(
+                    session,
+                    supply,
+                    order,
+                    existing_orders=current_orders,
+                )
+                if link_result.discrepancy is not None:
                     logger.warning(
                         "wb supply link skipped: seller=%s wb_supply_id=%s wb_order_id=%s "
-                        "reason=warehouse_mismatch",
+                        "reason=%s",
                         seller_id,
                         wb_supply_id,
                         order.wb_order_id,
+                        link_result.discrepancy.code,
                     )
-                    skipped_warehouse_mismatch_orders += 1
+                    if link_result.discrepancy.code == "different_wms_warehouse":
+                        skipped_warehouse_mismatch_orders += 1
+                    link_discrepancies.append(
+                        {
+                            "wb_supply_id": wb_supply_id,
+                            "wb_order_id": int(order.wb_order_id),
+                            "order_id": str(order.id),
+                            "reason": link_result.discrepancy.code,
+                        }
+                    )
                     continue
-                order.supply_id = supply.id
-                if order.status in {
-                    FBS_ORDER_STATUS_NEW,
-                    FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
-                }:
-                    order.status = FBS_ORDER_STATUS_ASSEMBLING
-                linked_orders += 1
+                if link_result.linked:
+                    added_orders.append(order)
+                    linked_orders += 1
+
+            if added_orders:
+                from app.services.fbs_supply_service import (
+                    _sync_existing_packaging_task_for_added_orders,
+                )
+
+                await _sync_existing_packaging_task_for_added_orders(
+                    session,
+                    tenant_id,
+                    supply,
+                    added_orders,
+                )
 
         await session.commit()
         result = _empty_supply_link_result(
@@ -1680,6 +1730,7 @@ async def link_confirmed_orders_to_wb_supplies(
             supply_link_skipped_unmapped_warehouse=len(skipped_unmapped_warehouse_supply_ids),
             supply_link_skipped_unmapped_warehouse_supply_ids=skipped_unmapped_warehouse_supply_ids,
             supply_link_skipped_warehouse_mismatch_orders=skipped_warehouse_mismatch_orders,
+            supply_link_discrepancies=link_discrepancies,
         )
         return result
 

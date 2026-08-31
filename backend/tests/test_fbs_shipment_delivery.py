@@ -21,6 +21,7 @@ from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_PENDING_CONFIRMATION,
     FbsWbOperation,
 )
+from app.models.product import Product
 from app.services.wildberries_client import WildberriesClientError
 from tests.test_fbs_shipment_pvz import _prepare_pvz_supply
 from tests.test_fbs_shipment_warehouse_sc import (
@@ -36,6 +37,46 @@ from tests.test_fbs_shipment_warehouse_sc import (
 @pytest.fixture
 def enable_wb_marketplace_supplies_mock(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+
+
+def _mock_actual_composition(
+    monkeypatch: pytest.MonkeyPatch,
+    supply_orders: dict[str, list[int]],
+) -> None:
+    async def fetch_actual_order_ids(
+        client: object,
+        *,
+        api_token: str,
+        wb_supply_id: str,
+        expected_order_ids: list[int] | None = None,
+    ) -> list[int]:
+        return list(supply_orders.get(wb_supply_id, ()))
+
+    monkeypatch.setattr(
+        "app.services.fbs_supply_composition_service.fetch_wb_supply_order_ids",
+        fetch_actual_order_ids,
+    )
+
+
+async def _attach_products(
+    tenant_id: uuid.UUID,
+    seller_id: str,
+    order_ids: list[uuid.UUID],
+) -> None:
+    async with SessionLocal() as session:
+        for index, order_id in enumerate(order_ids):
+            product = Product(
+                tenant_id=tenant_id,
+                seller_id=uuid.UUID(seller_id),
+                name=f"Shipment product {order_id}",
+                sku_code=f"SHIP-{order_id}-{index}",
+            )
+            session.add(product)
+            await session.flush()
+            order = await session.get(FbsOrder, order_id)
+            assert order is not None
+            order.product_id = product.id
+        await session.commit()
 
 
 # TC-19 — fresh sync checklist + stale preflight rejected
@@ -59,15 +100,18 @@ async def test_tc19_delivery_preflight_checklist_and_stale_version(
         wb_order_ids=[980001, 980002],
         supply_name="TC-19 checklist",
     )
+    await _attach_products(tenant_id, seller_id, order_ids)
+    _mock_actual_composition(monkeypatch, {supply["wb_supply_id"]: [980001, 980002]})
     await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
 
     preflight = await _delivery_preflight(async_client, headers, supply["id"])
-    assert preflight["can_deliver"] is True
+    assert preflight["can_deliver"] is True, preflight
     assert preflight["version"]
     assert preflight["checked_at"]
     check_codes = {check["code"] for check in preflight["checks"]}
-    assert "supply_packed" in check_codes
-    assert "order_packed" in check_codes
+    assert "supply_packed" not in check_codes
+    assert "order_packed" not in check_codes
+    assert "negative_stock" in check_codes
 
     stale_version = preflight["version"]
     async with SessionLocal() as session:
@@ -94,7 +138,7 @@ async def test_tc19_delivery_preflight_checklist_and_stale_version(
     refreshed = await _delivery_preflight(async_client, headers, supply["id"])
     assert refreshed["can_deliver"] is False
     assert any(
-        check["code"] == "order_cancelled" and not check["ok"]
+        check["code"] == "wb_supply_composition_discrepancy" and not check["ok"]
         for check in refreshed["checks"]
     )
 
@@ -120,11 +164,13 @@ async def test_tc20_pvz_deliver_timeout_pending_confirmation(
         wb_order_ids=[981001, 981002],
         supply_name="TC-20 PVZ deliver",
     )
+    await _attach_products(tenant_id, seller_id, order_ids)
+    _mock_actual_composition(monkeypatch, {supply["wb_supply_id"]: [981001, 981002]})
 
     await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
 
     preflight = await _delivery_preflight(async_client, headers, supply["id"])
-    assert preflight["can_deliver"] is True
+    assert preflight["can_deliver"] is True, preflight
     assert any(
         check["code"] == "cargo_places_ready" and check["ok"]
         for check in preflight["checks"]
@@ -154,6 +200,14 @@ async def test_tc20_pvz_deliver_timeout_pending_confirmation(
     monkeypatch.setattr(
         "app.services.fbs_shipment_service.deliver_marketplace_supply",
         timeout_then_ok,
+    )
+
+    async def confirmed_on_reconcile(*args: object, **kwargs: object) -> str:
+        return WB_OPERATION_STATE_CONFIRMED
+
+    monkeypatch.setattr(
+        "app.services.fbs_shipment_service.reconcile_supply_delivered",
+        confirmed_on_reconcile,
     )
 
     idem_key = str(uuid.uuid4())
@@ -192,7 +246,7 @@ async def test_tc20_pvz_deliver_timeout_pending_confirmation(
     )
     assert retry.status_code == 200, retry.text
     assert retry.json()["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
-    assert deliver_calls["count"] == 2
+    assert deliver_calls["count"] == 1
 
     async with SessionLocal() as session:
         op = await session.scalar(
@@ -216,6 +270,7 @@ async def test_tc20_pvz_deliver_timeout_pending_confirmation(
 async def test_tc21_warehouse_sc_qr_after_deliver_route_diff(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
@@ -232,13 +287,16 @@ async def test_tc21_warehouse_sc_qr_after_deliver_route_diff(
         supply_name="TC-21 warehouse",
         delivery_type="warehouse_sc",
     )
+    await _attach_products(tenant_id, seller_id, wh_order_ids)
     await _create_and_fill_physical_box(async_client, headers, wh_supply["id"], wh_order_ids)
+    actual_composition = {wh_supply["wb_supply_id"]: [982001]}
+    _mock_actual_composition(monkeypatch, actual_composition)
 
     wh_preflight = await _delivery_preflight(async_client, headers, wh_supply["id"])
     wh_codes = {check["code"] for check in wh_preflight["checks"]}
     assert "cargo_places_required" not in wh_codes
     assert "cargo_place_qr_not_ready" not in wh_codes
-    assert wh_preflight["can_deliver"] is True
+    assert wh_preflight["can_deliver"] is True, wh_preflight
 
     deliver = await _deliver_with_preflight(async_client, headers, wh_supply["id"])
     assert deliver.status_code == 200, deliver.text
@@ -261,6 +319,8 @@ async def test_tc21_warehouse_sc_qr_after_deliver_route_diff(
         wb_order_ids=[982002],
         supply_name="TC-21 PVZ route",
     )
+    await _attach_products(tenant_id, seller_id, pvz_order_ids)
+    actual_composition[pvz_supply["wb_supply_id"]] = [982002]
 
     # Route difference #1: PVZ cannot be delivered without physical boxes first
     # (warehouse/sc has no such requirement, see wh_preflight above).

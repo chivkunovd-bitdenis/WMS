@@ -834,6 +834,13 @@ def _raise_from_shipment_service(exc: shipment_svc.FbsShipmentError) -> None:
             "stale_preflight",
             "meta_validation_fail",
             "idempotency_key_reused",
+            "negative_stock_confirmation_required",
+            "wb_supply_composition_discrepancy",
+            "order_terminal",
+            "fbs_shipment_product_missing",
+            "fbs_shipment_source_missing",
+            "fbs_shipment_checkpoint_incomplete",
+            "supply_without_wb_id",
         }
     ):
         raise HTTPException(status_code=exc.http_status, detail=detail)

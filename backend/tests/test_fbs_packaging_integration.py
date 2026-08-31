@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import time
 import uuid
-from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -18,17 +17,14 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
     META_STATUS_PENDING,
-    PICK_STATUS_PICKED,
     STICKER_STATUS_READY,
     FbsOrder,
     FbsOrderMarking,
     FbsOrderReservation,
 )
-from app.models.fbs_order_pick import FbsOrderPick
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_IN_DELIVERY,
-    FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
 from app.models.fbs_trbx import FbsTrbx
@@ -198,46 +194,30 @@ async def _create_supply_with_orders(
     return supply_id, order_ids
 
 
-async def _seed_picks_for_supply_orders(
-    tenant_id: uuid.UUID,
-    supply_id: uuid.UUID,
-    warehouse_id: uuid.UUID,
-    *,
-    source_location_id: uuid.UUID | None = None,
-) -> None:
-    async with SessionLocal() as session:
-        orders = list(
-            (
-                await session.execute(
-                    select(FbsOrder).where(FbsOrder.supply_id == supply_id)
-                )
-            ).scalars()
-        )
-        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
-        for order in orders:
-            if order.product_id is None:
-                continue
-            now = datetime.now(UTC)
-            session.add(
-                FbsOrderPick(
-                    tenant_id=tenant_id,
-                    fbs_order_id=order.id,
-                    fbs_supply_id=supply_id,
-                    source_storage_location_id=source_location_id or sorting.id,
-                    sorting_storage_location_id=sorting.id,
-                    product_id=order.product_id,
-                    picked_at=now,
-                    scan_idempotency_key=f"test-pick-{order.id}",
-                )
-            )
-            order.pick_status = PICK_STATUS_PICKED
-            order.picked_at = now
-        await session.commit()
-
-
 @pytest.fixture
 def enable_wb_marketplace_supplies_mock(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+
+
+def _mock_actual_composition(
+    monkeypatch: pytest.MonkeyPatch,
+    wb_supply_id: str,
+    wb_order_ids: list[int],
+) -> None:
+    async def fetch_actual_order_ids(
+        client: object,
+        *,
+        api_token: str,
+        wb_supply_id: str,
+        expected_order_ids: list[int] | None = None,
+    ) -> list[int]:
+        return list(wb_order_ids) if wb_supply_id == expected_supply_id else []
+
+    expected_supply_id = wb_supply_id
+    monkeypatch.setattr(
+        "app.services.fbs_supply_composition_service.fetch_wb_supply_order_ids",
+        fetch_actual_order_ids,
+    )
 
 
 # TC-NEW-FBS-PACKINT-001
@@ -418,11 +398,13 @@ async def test_fbs_bind_packaging_box_rejects_foreign_tenant_warehouse(
         assert trbx.packaging_box_id is None
 
 
-# TC-NEW-FBS-PACKINT-003
+# TC-NEW-FBS-PACKINT-003 — WB packaging is an optional fact: it neither
+# converts stock nor promotes the supply, and delivery remains independent.
 @pytest.mark.asyncio
-async def test_fbs_supply_packed_after_packaging_complete(
+async def test_fbs_packaging_complete_does_not_convert_or_promote_supply(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
@@ -444,6 +426,10 @@ async def test_fbs_supply_packed_after_packaging_complete(
                 )
             ).scalars()
         )
+        supply_row = await session.get(FbsSupply, uuid.UUID(supply_id))
+        assert supply_row is not None
+        wb_supply_id = supply_row.wb_supply_id
+        wb_order_ids = [int(order.wb_order_id) for order in orders]
         product_ids = {order.product_id for order in orders if order.product_id is not None}
         packed_order_ids = [order.id for order in orders]
         sorting = await get_or_create_sorting_location(
@@ -464,12 +450,9 @@ async def test_fbs_supply_packed_after_packaging_complete(
             order.sticker_status = STICKER_STATUS_READY
             order.sticker_file = f"fbs/orders/{order.id}.png"
         await session.commit()
+        sorting_id = sorting.id
 
-    await _seed_picks_for_supply_orders(
-        tenant_id,
-        uuid.UUID(supply_id),
-        uuid.UUID(warehouse_id),
-    )
+    _mock_actual_composition(monkeypatch, wb_supply_id, wb_order_ids)
 
     status_resp = await async_client.put(
         f"/operations/fbs-supplies/{supply_id}/status",
@@ -505,7 +488,32 @@ async def test_fbs_supply_packed_after_packaging_complete(
         headers=headers,
     )
     assert supply.status_code == 200, supply.text
-    assert supply.json()["status"] == FBS_SUPPLY_STATUS_PACKED
+    assert supply.json()["status"] == FBS_SUPPLY_STATUS_ASSEMBLING
+
+    async with SessionLocal() as session:
+        balances = list(
+            (
+                await session.execute(
+                    select(InventoryBalance).where(
+                        InventoryBalance.tenant_id == tenant_id,
+                        InventoryBalance.product_id.in_(product_ids),
+                        InventoryBalance.storage_location_id == sorting_id,
+                    )
+                )
+            ).scalars()
+        )
+        assert sum(balance.quantity_unpacked for balance in balances) == len(
+            packed_order_ids
+        )
+        assert sum(balance.quantity_packed for balance in balances) == 0
+        packaging_movements = await session.scalar(
+            select(func.count(InventoryMovement.id)).where(
+                InventoryMovement.tenant_id == tenant_id,
+                InventoryMovement.product_id.in_(product_ids),
+                InventoryMovement.movement_type == "packaging_convert",
+            )
+        )
+        assert int(packaging_movements or 0) == 0
 
     # Передача возможна только после раскладки упакованных заказов по физическим
     # коробам — гейт physical_boxes_required (см. fbs_shipment_service).
@@ -519,17 +527,18 @@ async def test_fbs_supply_packed_after_packaging_complete(
         assert order["status"] == FBS_ORDER_STATUS_IN_DELIVERY
 
 
-# TC-NEW-FBS-PACKINT-003b — deliver blocked before packaging
+# TC-NEW-FBS-PACKINT-003b — WB delivery is not gated by packaging.
 @pytest.mark.asyncio
-async def test_fbs_supply_deliver_blocked_before_packaging(
+async def test_fbs_supply_deliver_allowed_without_packaging(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
     token_payload = await async_client.get("/auth/me", headers=headers)
     tenant_id = uuid.UUID(token_payload.json()["tenant_id"])
-    supply_id, _ = await _create_supply_with_orders(
+    supply_id, order_ids = await _create_supply_with_orders(
         async_client,
         headers,
         seller_id,
@@ -537,9 +546,41 @@ async def test_fbs_supply_deliver_blocked_before_packaging(
         tenant_id,
     )
 
-    blocked = await _deliver_with_preflight(async_client, headers, supply_id)
-    assert blocked.status_code == 400
-    assert blocked.json()["detail"]["code"] == "packaging_required"
+    async with SessionLocal() as session:
+        orders = list(
+            (
+                await session.execute(
+                    select(FbsOrder).where(FbsOrder.supply_id == uuid.UUID(supply_id))
+                )
+            ).scalars()
+        )
+        supply_row = await session.get(FbsSupply, uuid.UUID(supply_id))
+        assert supply_row is not None
+        wb_supply_id = supply_row.wb_supply_id
+        wb_order_ids = [int(order.wb_order_id) for order in orders]
+        sorting = await get_or_create_sorting_location(
+            session, tenant_id, uuid.UUID(warehouse_id)
+        )
+        for order in orders:
+            assert order.product_id is not None
+            order.sticker_status = STICKER_STATUS_READY
+            order.sticker_file = f"fbs/orders/{order.id}.png"
+            await inventory_service.record_movement_and_adjust_balance(
+                session,
+                tenant_id=tenant_id,
+                product_id=order.product_id,
+                storage_location_id=sorting.id,
+                quantity_delta=1,
+                movement_type="inbound_intake",
+                actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
+            )
+        await session.commit()
+
+    _mock_actual_composition(monkeypatch, wb_supply_id, wb_order_ids)
+    await _create_and_fill_physical_box(async_client, headers, supply_id, order_ids)
+    delivered = await _deliver_with_preflight(async_client, headers, supply_id)
+    assert delivered.status_code == 200, delivered.text
+    assert delivered.json()["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
 
 
 # TC-NEW-FBS-PACKINT-004
@@ -692,7 +733,7 @@ async def test_fbs_supply_manual_packed_status_rejected(
 
 # TC-NEW-FBS-PACKINT-003 (marking branch) — после SGTIN отгрузка → packed
 @pytest.mark.asyncio
-async def test_fbs_supply_promoted_after_marking_when_honest_sign_required(
+async def test_fbs_marking_update_does_not_promote_wb_supply(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
     monkeypatch: pytest.MonkeyPatch,
@@ -774,12 +815,6 @@ async def test_fbs_supply_promoted_after_marking_when_honest_sign_required(
         )
         await session.commit()
         order_id = order.id
-
-    await _seed_picks_for_supply_orders(
-        tenant_id,
-        uuid.UUID(supply_id),
-        uuid.UUID(warehouse_id),
-    )
 
     status_resp = await async_client.put(
         f"/operations/fbs-supplies/{supply_id}/status",
@@ -868,7 +903,7 @@ async def test_fbs_supply_promoted_after_marking_when_honest_sign_required(
         f"/operations/fbs-supplies/{supply_id}",
         headers=headers,
     )
-    assert supply_done.json()["status"] == FBS_SUPPLY_STATUS_PACKED
+    assert supply_done.json()["status"] == FBS_SUPPLY_STATUS_ASSEMBLING
 
 
 # TC-NEW-FBS-SHIP-STOCK-001 — packaging keeps physical stock and reservation.
@@ -942,12 +977,6 @@ async def test_fbs_packaging_keeps_physical_stock_reserved_until_delivery(
         await session.commit()
         order_id = order.id
 
-    await _seed_picks_for_supply_orders(
-        tenant_id,
-        uuid.UUID(supply_id),
-        uuid.UUID(warehouse_id),
-    )
-
     status_resp = await async_client.put(
         f"/operations/fbs-supplies/{supply_id}/status",
         headers=headers,
@@ -981,7 +1010,7 @@ async def test_fbs_packaging_keeps_physical_stock_reserved_until_delivery(
         headers=headers,
     )
     assert supply.status_code == 200, supply.text
-    assert supply.json()["status"] == FBS_SUPPLY_STATUS_PACKED
+    assert supply.json()["status"] == FBS_SUPPLY_STATUS_ASSEMBLING
 
     async with SessionLocal() as session:
         write_off_qty = await session.scalar(
@@ -992,6 +1021,14 @@ async def test_fbs_packaging_keeps_physical_stock_reserved_until_delivery(
             )
         )
         assert int(write_off_qty) == 0
+        packaging_movement_count = await session.scalar(
+            select(func.count(InventoryMovement.id)).where(
+                InventoryMovement.tenant_id == tenant_id,
+                InventoryMovement.product_id == product_id,
+                InventoryMovement.movement_type == "packaging_convert",
+            )
+        )
+        assert int(packaging_movement_count or 0) == 0
 
         order = await session.get(FbsOrder, order_id)
         assert order is not None
@@ -1006,16 +1043,13 @@ async def test_fbs_packaging_keeps_physical_stock_reserved_until_delivery(
         assert available_before_delivery == 4
 
 
-# Упаковка без остатка в строке задания должна проходить с предупреждением
+# WB packaging records a fact even without a pick or physical stock.
 @pytest.mark.asyncio
 async def test_fbs_packing_without_stock_in_line_location(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
-    """
-    Когда в ячейке строки задания нет остатка товара, упаковка должна пройти
-    с предупреждением, а не упасть с ошибкой insufficient_packaging_stock.
-    """
+    """A WB packaging fact has no pick or inventory prerequisite."""
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
     token_payload = await async_client.get("/auth/me", headers=headers)
@@ -1028,13 +1062,6 @@ async def test_fbs_packing_without_stock_in_line_location(
         seller_id,
         warehouse_id,
         tenant_id,
-    )
-
-    # Создать picks для заказов (эндпоинт упаковки требует, чтобы заказы были "подобраны")
-    await _seed_picks_for_supply_orders(
-        tenant_id,
-        uuid.UUID(supply_id),
-        uuid.UUID(warehouse_id),
     )
 
     # Получить информацию о товарах в заказах
@@ -1083,12 +1110,7 @@ async def test_fbs_packing_without_stock_in_line_location(
 
     pack_result = pack_resp.json()
 
-    # Проверить, что warning есть в ответе
-    assert pack_result.get("warnings") is not None
-    assert len(pack_result["warnings"]) > 0
-    # Warning должен содержать информацию о том, что упаковка продолжена без списания
-    warning_text = " ".join(pack_result["warnings"])
-    assert "Упаковка продолжена" in warning_text or "упаковка продолжена" in warning_text.lower()
+    assert pack_result.get("warnings") is None
 
     # Проверить, что заказ помечен как упакованный в ответе
     assert pack_result["fulfilled_order"] is not None
@@ -1116,8 +1138,7 @@ async def test_fbs_packing_without_stock_in_line_location(
         for balance in balances:
             assert balance.quantity >= 0, f"Остаток в минусе: {balance.quantity}"
 
-        # Проверить, что упаковка не была совершена (нет движений в БД)
-        # поскольку товара нигде нет
+        # The packaging fact exists, but it creates no inventory movement.
         movements = list(
             (
                 await session.execute(
@@ -1129,20 +1150,15 @@ async def test_fbs_packing_without_stock_in_line_location(
                 )
             ).scalars()
         )
-        # Не должно быть никаких движений, потому что товара нет
-        assert len(movements) == 0, "Не должно быть движений, если товара нет"
+        assert movements == []
 
 
 @pytest.mark.asyncio
-async def test_fbs_packing_takes_stock_from_other_warehouse_sorting(
+async def test_fbs_packing_does_not_convert_stock_from_other_warehouse(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
-    """Товар лежит в сортировке другого склада — берём оттуда, а не отказываем.
-
-    Ровно случай 20.08.2026: приёмка положила товар в сортировку склада «FBS WB …»,
-    поставка создалась на складе «основной», и упаковка вставала на нулевом остатке.
-    """
+    """WB packaging never searches for or converts stock in another warehouse."""
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
     token_payload = await async_client.get("/auth/me", headers=headers)
@@ -1155,12 +1171,6 @@ async def test_fbs_packing_takes_stock_from_other_warehouse_sorting(
         warehouse_id,
         tenant_id,
     )
-    await _seed_picks_for_supply_orders(
-        tenant_id,
-        uuid.UUID(supply_id),
-        uuid.UUID(warehouse_id),
-    )
-
     # Второй склад того же клиента, и весь товар лежит в его ячейке сортировки.
     other = await async_client.post(
         "/warehouses",
@@ -1231,11 +1241,7 @@ async def test_fbs_packing_takes_stock_from_other_warehouse_sorting(
     )
     assert pack_resp.status_code == 200, pack_resp.text
     body = pack_resp.json()
-    warnings = body.get("warnings") or []
-    assert warnings, "оператор должен узнать, что списали не из своей ячейки"
-    joined = " ".join(warnings)
-    assert "другой ячейки сортировки" in joined
-    assert "остаток не списан" not in joined
+    assert body.get("warnings") is None
 
     async with SessionLocal() as session:
         after = await session.scalar(
@@ -1245,8 +1251,15 @@ async def test_fbs_packing_takes_stock_from_other_warehouse_sorting(
                 InventoryBalance.storage_location_id == other_sorting_id,
             )
         )
-        # Ровно одна единица переведена в упакованные, и именно в чужой ячейке.
-        assert int(before or 0) - int(after or 0) == 1
+        assert int(after or 0) == int(before or 0)
+        packaging_movements = await session.scalar(
+            select(func.count(InventoryMovement.id)).where(
+                InventoryMovement.tenant_id == tenant_id,
+                InventoryMovement.product_id.in_(set(product_ids)),
+                InventoryMovement.movement_type == "packaging_convert",
+            )
+        )
+        assert int(packaging_movements or 0) == 0
         balances = list(
             (
                 await session.execute(
@@ -1264,15 +1277,11 @@ async def test_fbs_packing_takes_stock_from_other_warehouse_sorting(
 
 
 @pytest.mark.asyncio
-async def test_fbs_supply_completes_even_without_stock_anywhere(
+async def test_fbs_packaging_task_completes_without_stock_or_supply_promotion(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
-    """Путь доходит до конца, даже когда остатка нет нигде.
-
-    Раньше склад вставал дважды: сначала на упаковке, а если её пропустить — на
-    завершении задания, где списание требовало остаток в той же ячейке.
-    """
+    """Completing WB packaging changes only packaging facts and task state."""
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
     token_payload = await async_client.get("/auth/me", headers=headers)
@@ -1285,12 +1294,6 @@ async def test_fbs_supply_completes_even_without_stock_anywhere(
         warehouse_id,
         tenant_id,
     )
-    await _seed_picks_for_supply_orders(
-        tenant_id,
-        uuid.UUID(supply_id),
-        uuid.UUID(warehouse_id),
-    )
-
     status_resp = await async_client.put(
         f"/operations/fbs-supplies/{supply_id}/status",
         headers=headers,
@@ -1323,7 +1326,7 @@ async def test_fbs_supply_completes_even_without_stock_anywhere(
         f"/operations/fbs-supplies/{supply_id}", headers=headers
     )
     assert supply_after.status_code == 200, supply_after.text
-    assert supply_after.json()["status"] == "packed"
+    assert supply_after.json()["status"] == FBS_SUPPLY_STATUS_ASSEMBLING
 
     async with SessionLocal() as session:
         balances = list(

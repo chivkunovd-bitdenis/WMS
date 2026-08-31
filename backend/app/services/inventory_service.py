@@ -1134,12 +1134,14 @@ async def apply_fbs_supply_write_off(
     storage_location_id: uuid.UUID,
     quantity: int,
     actor_user_id: uuid.UUID | None,
+    allow_negative: bool = False,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> InventoryMovement:
-    """Списать подтверждённую FBS-отгрузку, разрешая фактическую недостачу.
+    """Списать подтверждённую FBS-отгрузку из точного места и тары.
 
-    Предварительной проверки остатка здесь нет намеренно. Маркетплейс уже
-    подтвердил доставку — товар физически уехал. Отказать значит подвесить
-    поставку навсегда и оставить в системе остаток, которого на полке нет.
+    Выход в минус требует явного решения вызывающего кода: обычное списание
+    не должно незаметно превращать расхождение в отрицательный остаток.
     """
     if quantity < 1:
         msg = "quantity must be positive"
@@ -1167,7 +1169,9 @@ async def apply_fbs_supply_write_off(
         movement_type=MOVEMENT_TYPE_FBS_SHIPMENT,
         actor_user_id=actor_user_id,
         deduct_prefer="packed",
-        allow_negative=True,
+        allow_negative=allow_negative,
+        container_kind=container_kind,
+        container_id=container_id,
     )
 
 

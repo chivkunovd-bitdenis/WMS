@@ -1242,7 +1242,8 @@ async def complete_task(
     if not is_task_complete(task):
         raise PackagingTaskServiceError("packaging_incomplete")
 
-    await _assert_marking_done_for_task(session, tenant_id, task)
+    if fbs_supply is None or fbs_supply.marketplace != "wb":
+        await _assert_marking_done_for_task(session, tenant_id, task)
 
     task.status = STATUS_DONE
     task.updated_at = datetime.now(UTC)
@@ -1262,12 +1263,13 @@ async def complete_task(
         sync_fbs_supply_on_packaging_done,
     )
 
-    await sync_fbs_supply_on_packaging_done(
-        session,
-        tenant_id,
-        task.id,
-        actor_user_id=acting_user_id,
-    )
+    if fbs_supply is None or fbs_supply.marketplace != "wb":
+        await sync_fbs_supply_on_packaging_done(
+            session,
+            tenant_id,
+            task.id,
+            actor_user_id=acting_user_id,
+        )
     await session.commit()
     loaded = await get_task(session, tenant_id, task_id)
     assert loaded is not None
@@ -1283,11 +1285,10 @@ async def pack_all_and_complete_fbs_task(
 ) -> PackProgressResult:
     """Atomically finish an FBS packaging task from the server-side fresh state.
 
-    The old UI sent one request per line and a final completion request.  A failure
-    in the middle left the supply partly changed.  This path keeps all per-unit
-    fulfillment, stock conversion, task events and supply promotion in one DB
-    transaction. It preserves the existing employee earnings calculation once
-    and does not introduce any seller billing.
+    The old UI sent one request per line and a final completion request. A failure
+    in the middle left the supply partly changed. This path creates every missing
+    packaging fact and completes the informational task projection in one DB
+    transaction. For WB it neither converts stock nor promotes the supply.
     """
     from app.models.fbs_order import FbsOrder
     from app.services.fbs_packaging_integration_service import (
@@ -1339,7 +1340,7 @@ async def pack_all_and_complete_fbs_task(
 
         # Check Honest Sign against the finished quantity before the first stock
         # or fulfillment mutation (the normal assertion only checks current done).
-        if supply.honest_sign_skipped_at is None:
+        if supply.marketplace != "wb" and supply.honest_sign_skipped_at is None:
             await _assert_marking_ready_for_full_completion(session, tenant_id, task)
 
         warnings: list[str] = []
@@ -1347,6 +1348,7 @@ async def pack_all_and_complete_fbs_task(
             remaining = qty_need_pack(line) - int(line.qty_packed_in_task)
             if remaining <= 0:
                 continue
+            before_packed = int(line.qty_packed_in_task)
             try:
                 packed = await record_fbs_pack_progress(
                     session,
@@ -1365,7 +1367,7 @@ async def pack_all_and_complete_fbs_task(
                 )
             except FbsPackagingIntegrationError as exc:
                 raise PackagingTaskServiceError(exc.code, message=exc.message) from exc
-            packed_delta = len(packed.units)
+            packed_delta = int(line.qty_packed_in_task) - before_packed
             if packed_delta:
                 await _add_task_event(
                     session,
@@ -1392,8 +1394,8 @@ async def pack_all_and_complete_fbs_task(
             acting_user_id=acting_user_id,
         )
         if acting_user_id is not None:
-            # This is the pre-existing employee earnings calculation.  It is
-            # deliberately retained once; no seller billing is introduced here.
+            # Non-WB tasks keep their task-level snapshot; WB earnings are
+            # derived from the individual fulfillment facts and their actors.
             await billing_svc.finalize_task_billing(
                 session,
                 task,
@@ -1402,12 +1404,13 @@ async def pack_all_and_complete_fbs_task(
         else:
             task.completed_at = datetime.now(UTC)
             task.completed_by_user_id = None
-        await sync_fbs_supply_on_packaging_done(
-            session,
-            tenant_id,
-            task.id,
-            actor_user_id=acting_user_id,
-        )
+        if supply.marketplace != "wb":
+            await sync_fbs_supply_on_packaging_done(
+                session,
+                tenant_id,
+                task.id,
+                actor_user_id=acting_user_id,
+            )
         await session.commit()
         loaded = await get_task(session, tenant_id, task_id)
         assert loaded is not None
