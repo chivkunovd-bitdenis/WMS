@@ -254,29 +254,6 @@ async def create_pending_deliver_operation(
     return op
 
 
-async def mark_deliver_operation_pending(
-    session: AsyncSession,
-    operation: FbsWbOperation,
-    *,
-    request_hash: str,
-    local_supply_id: uuid.UUID,
-    confirmed_preflight_version: str | None,
-) -> None:
-    """Prepare a previously failed operation for an explicit safe retry."""
-    operation.state = WB_OPERATION_STATE_PENDING
-    operation.request_hash = request_hash
-    operation.request_summary_json = {
-        "supply_id": str(local_supply_id),
-        "confirmed_preflight_version": confirmed_preflight_version,
-    }
-    operation.local_entity_type = "fbs_supply"
-    operation.local_entity_id = local_supply_id
-    operation.error_code = None
-    operation.error_context_json = None
-    operation.failed_at = None
-    await session.flush()
-
-
 async def mark_deliver_operation_confirmed(
     session: AsyncSession,
     operation: FbsWbOperation,

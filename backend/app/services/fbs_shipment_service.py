@@ -68,7 +68,6 @@ from app.services.fbs_supply_reconcile_service import (
     get_active_deliver_operation_for_supply,
     get_deliver_operation_by_idempotency,
     mark_deliver_operation_confirmed,
-    mark_deliver_operation_pending,
     mark_operation_failed,
     mark_operation_pending_confirmation,
     reconcile_supply_delivered,
@@ -1333,6 +1332,7 @@ async def _stage_wb_shipment_sources(
             .all()
         )
     }
+    checkpoint_ledgers: list[FbsShipmentReversalLedger] = []
     for order in active_orders:
         resolution = resolutions.get(order.id)
         if resolution is None:
@@ -1355,26 +1355,17 @@ async def _stage_wb_shipment_sources(
                 written_off_by_user_id=actor_user_id,
             )
             session.add(ledger)
-            continue
-        if ledger.shipment_movement_id is None:
-            # До подтверждения WB это только сохранённый план. Окончательный
-            # отказ разрешает оператору исправить данные и повторить передачу;
-            # новая попытка заменяет ещё не применённый план и привязывает его
-            # к своей операции.
-            ledger.product_id = resolution.product_id
-            ledger.storage_location_id = resolution.storage_location_id
-            ledger.source_warehouse_id = resolution.source_warehouse_id
-            ledger.container_kind = resolution.container_kind
-            ledger.container_id = resolution.container_id
-            ledger.source_mode = resolution.source_mode
-            ledger.quantity = resolution.quantity
-            ledger.shortage_quantity = resolution.shortage_quantity
-            ledger.negative_quantity = resolution.negative_quantity
-            ledger.wb_operation_id = operation.id
-        elif ledger.wb_operation_id is None:
+        elif ledger.shipment_movement_id is not None and ledger.wb_operation_id is None:
             ledger.wb_operation_id = operation.id
         if ledger.written_off_by_user_id is None:
             ledger.written_off_by_user_id = actor_user_id
+        checkpoint_ledgers.append(ledger)
+    await session.flush()
+    summary = dict(operation.request_summary_json or {})
+    summary["checkpoint_ledger_ids"] = sorted(
+        str(ledger.id) for ledger in checkpoint_ledgers
+    )
+    operation.request_summary_json = summary
     await session.flush()
 
 
@@ -1384,12 +1375,28 @@ async def _load_checkpointed_wb_delivery(
     operation: Any,
 ) -> tuple[list[FbsOrder], source_svc.FbsShipmentSourcePlan] | None:
     """Load the durable WB source plan after marketplace confirmation."""
+    summary = operation.request_summary_json or {}
+    raw_ledger_ids = summary.get("checkpoint_ledger_ids")
+    ledger_ids: list[uuid.UUID] = []
+    if isinstance(raw_ledger_ids, list):
+        for raw_id in raw_ledger_ids:
+            try:
+                ledger_ids.append(uuid.UUID(str(raw_id)))
+            except (TypeError, ValueError):
+                raise FbsShipmentError(
+                    "fbs_shipment_checkpoint_incomplete", http_status=409
+                ) from None
+    ledger_filter = (
+        FbsShipmentReversalLedger.id.in_(ledger_ids)
+        if ledger_ids
+        else FbsShipmentReversalLedger.wb_operation_id == operation.id
+    )
     ledgers = list(
         (
             await session.execute(
                 select(FbsShipmentReversalLedger).where(
                     FbsShipmentReversalLedger.tenant_id == supply.tenant_id,
-                    FbsShipmentReversalLedger.wb_operation_id == operation.id,
+                    ledger_filter,
                 )
             )
         )
@@ -1752,6 +1759,13 @@ async def deliver_supply(
     existing_by_key = await get_deliver_operation_by_idempotency(
         session, supply_read.seller_id, idempotency_key
     )
+    if (
+        existing_by_key is not None
+        and existing_by_key.local_entity_type == "fbs_supply"
+        and existing_by_key.local_entity_id is not None
+        and existing_by_key.local_entity_id != supply_id
+    ):
+        raise FbsShipmentError("idempotency_key_reused", http_status=409)
     existing = existing_by_key
     if supply_read.marketplace == "ozon":
         return await _deliver_ozon_supply(
@@ -1779,6 +1793,12 @@ async def deliver_supply(
             and existing.id == existing_by_key.id
             and existing.request_hash
             and existing.request_hash != request_hash
+        ):
+            raise FbsShipmentError("idempotency_key_reused", http_status=409)
+        if (
+            existing_by_key is not None
+            and existing.id == existing_by_key.id
+            and existing.state == WB_OPERATION_STATE_FAILED
         ):
             raise FbsShipmentError("idempotency_key_reused", http_status=409)
         if existing.state == WB_OPERATION_STATE_CONFIRMED:
@@ -1934,26 +1954,16 @@ async def deliver_supply(
         actor_user_id=actor_user_id,
     )
 
-    operation = existing
-    if operation is None:
-        operation = await create_pending_deliver_operation(
-            session,
-            tenant_id=tenant_id,
-            seller_id=supply.seller_id,
-            idempotency_key=idempotency_key,
-            request_hash=request_hash,
-            local_supply_id=supply.id,
-            confirmed_preflight_version=confirmed_preflight_version,
-            created_by_user_id=actor_user_id,
-        )
-    else:
-        await mark_deliver_operation_pending(
-            session,
-            operation,
-            request_hash=request_hash,
-            local_supply_id=supply.id,
-            confirmed_preflight_version=confirmed_preflight_version,
-        )
+    operation = await create_pending_deliver_operation(
+        session,
+        tenant_id=tenant_id,
+        seller_id=supply.seller_id,
+        idempotency_key=idempotency_key,
+        request_hash=request_hash,
+        local_supply_id=supply.id,
+        confirmed_preflight_version=confirmed_preflight_version,
+        created_by_user_id=actor_user_id,
+    )
 
     # Сначала сохраняем операцию и точный план источников, затем выполняем
     # необратимый запрос WB. Если процесс умрёт после WB 2xx, повтор найдёт
@@ -1991,6 +2001,10 @@ async def deliver_supply(
         )
         await session.commit()
         raise FbsShipmentError("supply_bad_status", http_status=409)
+    checkpointed = await _load_checkpointed_wb_delivery(session, supply, operation)
+    if checkpointed is None:
+        raise FbsShipmentError("fbs_shipment_checkpoint_incomplete", http_status=409)
+    orders, source_plan = checkpointed
 
     try:
         await deliver_marketplace_supply(

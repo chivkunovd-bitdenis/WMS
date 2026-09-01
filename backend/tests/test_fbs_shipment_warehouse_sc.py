@@ -829,6 +829,8 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
         supply_name="WB fail",
     )
     idempotency_key = str(uuid.uuid4())
+    active_key = {"value": idempotency_key}
+    deliver_calls = 0
 
     async def fail_deliver(
         client: object,
@@ -837,12 +839,14 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
         supply_id: str,
         marketplace_api_base: str | None = None,
     ) -> None:
+        nonlocal deliver_calls
+        deliver_calls += 1
         # Отдельная сессия видит журнал и план источника до внешнего вызова WB.
         # Flush здесь недостаточен: этот assert проходит только после commit.
         async with SessionLocal() as audit_session:
             operation = await audit_session.scalar(
                 select(FbsWbOperation).where(
-                    FbsWbOperation.idempotency_key == idempotency_key
+                    FbsWbOperation.idempotency_key == active_key["value"]
                 )
             )
             assert operation is not None
@@ -853,8 +857,15 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
                 )
             )
             assert ledger is not None
-            assert ledger.wb_operation_id == operation.id
             assert ledger.shipment_movement_id is None
+            checkpoint_ids = (operation.request_summary_json or {}).get(
+                "checkpoint_ledger_ids"
+            )
+            assert checkpoint_ids == [str(ledger.id)]
+            if deliver_calls == 1:
+                assert ledger.wb_operation_id == operation.id
+            else:
+                assert ledger.wb_operation_id != operation.id
         raise WildberriesClientError("upstream_error", status_code=502)
 
     monkeypatch.setattr(
@@ -887,6 +898,72 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
         )
         assert operation is not None
         assert operation.state == WB_OPERATION_STATE_FAILED
+        ledger = await session.scalar(
+            select(FbsShipmentReversalLedger).where(
+                FbsShipmentReversalLedger.fbs_order_id == order_ids[0]
+            )
+        )
+        assert ledger is not None
+        original_checkpoint = (
+            ledger.id,
+            ledger.wb_operation_id,
+            ledger.product_id,
+            ledger.storage_location_id,
+            ledger.source_warehouse_id,
+            ledger.container_kind,
+            ledger.container_id,
+            ledger.source_mode,
+            ledger.quantity,
+            ledger.shortage_quantity,
+            ledger.negative_quantity,
+        )
+
+    closed_key = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=idempotency_key,
+    )
+    assert closed_key.status_code == 409, closed_key.text
+    assert closed_key.json()["detail"]["code"] == "idempotency_key_reused"
+    assert deliver_calls == 1
+
+    replacement_key = str(uuid.uuid4())
+    active_key["value"] = replacement_key
+    replacement = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=replacement_key,
+    )
+    assert replacement.status_code == 502, replacement.text
+    assert deliver_calls == 2
+
+    async with SessionLocal() as session:
+        ledger = await session.get(FbsShipmentReversalLedger, original_checkpoint[0])
+        assert ledger is not None
+        assert (
+            ledger.id,
+            ledger.wb_operation_id,
+            ledger.product_id,
+            ledger.storage_location_id,
+            ledger.source_warehouse_id,
+            ledger.container_kind,
+            ledger.container_id,
+            ledger.source_mode,
+            ledger.quantity,
+            ledger.shortage_quantity,
+            ledger.negative_quantity,
+        ) == original_checkpoint
+        replacement_operation = await session.scalar(
+            select(FbsWbOperation).where(
+                FbsWbOperation.idempotency_key == replacement_key
+            )
+        )
+        assert replacement_operation is not None
+        assert (replacement_operation.request_summary_json or {}).get(
+            "checkpoint_ledger_ids"
+        ) == [str(ledger.id)]
 
 
 @pytest.mark.asyncio
@@ -1093,8 +1170,6 @@ async def test_pending_delivery_key_cannot_be_rebound_to_another_supply(
     )
     reused_key = str(uuid.uuid4())
 
-    from app.services.fbs_supply_reconcile_service import request_hash_for_deliver
-
     async with SessionLocal() as session:
         supply_a_row = await session.get(FbsSupply, uuid.UUID(supply_a["id"]))
         assert supply_a_row is not None
@@ -1103,10 +1178,9 @@ async def test_pending_delivery_key_cannot_be_rebound_to_another_supply(
             seller_id=supply_a_row.seller_id,
             operation_kind="supply_deliver",
             idempotency_key=reused_key,
-            request_hash=request_hash_for_deliver(
-                supply_id=supply_a_row.id,
-                confirmed_preflight_version=None,
-            ),
+            # Legacy pending rows may predate request hashes.  Immutable local
+            # ownership must still reject using this key for another supply.
+            request_hash=None,
             local_entity_type="fbs_supply",
             local_entity_id=supply_a_row.id,
             state=WB_OPERATION_STATE_PENDING,

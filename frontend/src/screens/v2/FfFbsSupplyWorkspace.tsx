@@ -454,7 +454,7 @@ export function FfFbsSupplyWorkspace({
       onError?.(cause)
       setError(cause instanceof Error ? cause.message : 'Операция не выполнена.')
       if (cause instanceof FbsApiError && cause.retryable) {
-        setRetryAction(() => () => { void run(operation, success) })
+        setRetryAction(() => () => { void run(operation, success, onError) })
       }
       return null
     } finally {
