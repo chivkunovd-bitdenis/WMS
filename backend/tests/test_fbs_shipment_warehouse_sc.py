@@ -984,6 +984,86 @@ async def test_pending_delivery_recovers_after_process_crash_without_second_wb_c
     assert retry.json()["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
 
 
+@pytest.mark.asyncio
+async def test_pending_reconcile_never_overwrites_parallel_definitive_failure(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, _order_ids = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[953061],
+        supply_name="WB reconcile definitive race",
+    )
+    idempotency_key = str(uuid.uuid4())
+
+    import app.services.fbs_shipment_service as shipment_mod
+
+    deliver_calls = 0
+
+    async def accepted_by_wb(*_args: object, **_kwargs: object) -> None:
+        nonlocal deliver_calls
+        deliver_calls += 1
+
+    async def crash_after_wb(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("simulated process crash after WB 2xx")
+
+    monkeypatch.setattr(shipment_mod, "deliver_marketplace_supply", accepted_by_wb)
+    monkeypatch.setattr(shipment_mod, "_persist_confirmed_delivery", crash_after_wb)
+    with pytest.raises(RuntimeError, match="simulated process crash"):
+        await _deliver_with_preflight(
+            async_client,
+            headers,
+            supply["id"],
+            idempotency_key=idempotency_key,
+        )
+
+    async def failed_while_reconcile_was_in_flight(*_args: object, **_kwargs: object) -> str:
+        async with SessionLocal() as parallel_session:
+            operation = await parallel_session.scalar(
+                select(FbsWbOperation).where(
+                    FbsWbOperation.idempotency_key == idempotency_key
+                )
+            )
+            assert operation is not None
+            operation.state = WB_OPERATION_STATE_FAILED
+            operation.error_code = "meta_validation_fail"
+            await parallel_session.commit()
+        return "pending_confirmation"
+
+    monkeypatch.setattr(
+        shipment_mod,
+        "reconcile_supply_delivered",
+        failed_while_reconcile_was_in_flight,
+    )
+    retry = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=str(uuid.uuid4()),
+    )
+    assert retry.status_code == 409, retry.text
+    assert retry.json()["detail"]["code"] == "meta_validation_fail"
+    assert deliver_calls == 1
+
+    async with SessionLocal() as session:
+        operation = await session.scalar(
+            select(FbsWbOperation).where(
+                FbsWbOperation.idempotency_key == idempotency_key
+            )
+        )
+        assert operation is not None
+        assert operation.state == WB_OPERATION_STATE_FAILED
+
+
 # TC-NEW-FBS-SHIPWH-007 — successful WB deliver survives QR failure and retry does not deliver again
 @pytest.mark.asyncio
 async def test_warehouse_sc_deliver_qr_failure_keeps_confirmed_delivery_and_retries_qr_only(

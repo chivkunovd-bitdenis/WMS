@@ -25,6 +25,7 @@ from app.models.fbs_order import (
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_IN_DELIVERY,
+    FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
 from app.models.fbs_trbx import FbsTrbx
@@ -658,9 +659,9 @@ async def test_fbs_packaging_task_skips_unmapped_product(
         assert supply.packaging_task_id == task.id
 
 
-# TC-NEW-FBS-PACKINT-006 — нельзя добавить заказ после assembling
+# Legacy endpoint follows the same WB rule as batch add: packed is only a fact.
 @pytest.mark.asyncio
-async def test_fbs_supply_add_order_rejected_after_assembling(
+async def test_fbs_supply_legacy_add_order_allowed_after_packing(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
@@ -686,9 +687,12 @@ async def test_fbs_supply_add_order_rejected_after_assembling(
     extra_order_id = order_ids[0]
     async with SessionLocal() as session:
         extra = await session.get(FbsOrder, extra_order_id)
+        supply = await session.get(FbsSupply, uuid.UUID(supply_id))
         assert extra is not None
+        assert supply is not None
         extra.supply_id = None
         extra.status = FBS_ORDER_STATUS_NEW
+        supply.status = FBS_SUPPLY_STATUS_PACKED
         await session.commit()
 
     add_resp = await async_client.post(
@@ -696,8 +700,8 @@ async def test_fbs_supply_add_order_rejected_after_assembling(
         headers=headers,
         json={"order_id": str(extra_order_id)},
     )
-    assert add_resp.status_code == 409
-    assert add_resp.json()["detail"] == "supply_not_editable"
+    assert add_resp.status_code == 200, add_resp.text
+    assert any(row["id"] == str(extra_order_id) for row in add_resp.json()["orders"])
 
 
 @pytest.mark.asyncio

@@ -1830,6 +1830,26 @@ async def deliver_supply(
             supply = await _get_supply_for_update(session, tenant_id, supply_id, with_trbxes=True)
             if supply is None:
                 raise FbsShipmentError("supply_not_found")
+            # Reconcile happened before the supply lock.  Another request may
+            # have completed the same durable operation while this request was
+            # waiting.  Refresh under the lock so an old observation can never
+            # overwrite a definitive FAILED/CONFIRMED state.
+            await session.refresh(existing)
+            if existing.state == WB_OPERATION_STATE_FAILED:
+                failed_code = existing.error_code or "wb_delivery_failed"
+                await session.rollback()
+                raise FbsShipmentError(
+                    failed_code,
+                    message=(
+                        "Параллельная попытка уже получила окончательный ответ WB. "
+                        "Повторите передачу отдельной попыткой."
+                    ),
+                    context={"operation_state": "failed"},
+                    retryable=False,
+                    http_status=409,
+                )
+            if existing.state == WB_OPERATION_STATE_CONFIRMED:
+                reconcile_state = WB_OPERATION_STATE_CONFIRMED
             if reconcile_state == WB_OPERATION_STATE_CONFIRMED:
                 checkpointed = await _load_checkpointed_wb_delivery(
                     session, supply, existing

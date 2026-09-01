@@ -296,7 +296,7 @@ export function FfFbsSupplyWorkspace({
   const [boxProductQty, setBoxProductQty] = useState<Record<string, string>>({})
   const [boxMenu, setBoxMenu] = useState<{ boxId: string; anchorEl: HTMLElement } | null>(null)
   const [expandedBoxIds, setExpandedBoxIds] = useState<Set<string>>(() => new Set())
-  const [deliveryKey, setDeliveryKey] = useState(createFbsIdempotencyKey)
+  const deliveryKeyRef = useRef(createFbsIdempotencyKey())
   const [deliverySubmitted, setDeliverySubmitted] = useState(false)
   const [deliverConfirmOpen, setDeliverConfirmOpen] = useState(false)
   const [deliveryPreflight, setDeliveryPreflight] = useState<FbsDeliveryPreflight | null>(null)
@@ -366,7 +366,8 @@ export function FfFbsSupplyWorkspace({
     setNotice(null)
     setWorkspace(initialWorkspace ?? null)
     setStage(initialWorkspace ? visualStage(initialWorkspace.stage) : 'composition')
-    setDeliveryKey(persistentOperationKey(supplyId, 'delivery'))
+    const restoredDeliveryKey = persistentOperationKey(supplyId, 'delivery')
+    deliveryKeyRef.current = restoredDeliveryKey
     setPrintBatch(null)
     setBoxCount('1')
     setBoxesWithoutDistribution(false)
@@ -831,7 +832,10 @@ export function FfFbsSupplyWorkspace({
     const next = await run(
       () =>
         deliverFbsSupply(token, authHeaders, workspace.supply.id, {
-          idempotency_key: deliveryKey,
+          // RetryAction stores this callback.  Read the current ref at click
+          // time so a definitive failure cannot replay the key that the error
+          // handler has already replaced.
+          idempotency_key: deliveryKeyRef.current,
           confirmed_preflight_version: deliveryPreflight?.version,
       }),
       '',
@@ -841,12 +845,14 @@ export function FfFbsSupplyWorkspace({
           && fbsDeliveryErrorKeepsIdempotencyKey(cause)
         ) return
         clearPersistentOperationKey(workspace.supply.id, 'delivery')
-        setDeliveryKey(persistentOperationKey(workspace.supply.id, 'delivery'))
+        const replacementKey = persistentOperationKey(workspace.supply.id, 'delivery')
+        deliveryKeyRef.current = replacementKey
       },
     )
     if (next) {
       clearPersistentOperationKey(workspace.supply.id, 'delivery')
-      setDeliveryKey(createFbsIdempotencyKey())
+      const nextKey = createFbsIdempotencyKey()
+      deliveryKeyRef.current = nextKey
       setDeliverySubmitted(true)
       setStage('boxes')
     }

@@ -1550,7 +1550,15 @@ async def add_order_to_supply(
     supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
     if supply is None:
         raise FbsSupplyError("supply_not_found")
-    if supply.status != FBS_SUPPLY_STATUS_DRAFT:
+    editable_statuses = {FBS_SUPPLY_STATUS_DRAFT}
+    if supply.marketplace == "wb":
+        # Deprecated clients still use this endpoint.  They must obey the same
+        # WB contract as the batch endpoint: the packaging aggregate never
+        # freezes composition.
+        editable_statuses.update(
+            {FBS_SUPPLY_STATUS_ASSEMBLING, FBS_SUPPLY_STATUS_PACKED}
+        )
+    if supply.status not in editable_statuses:
         raise FbsSupplyError("supply_not_editable")
 
     order_stmt = (
