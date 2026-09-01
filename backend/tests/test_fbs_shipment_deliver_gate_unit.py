@@ -25,9 +25,15 @@ from app.services.fbs_shipment_service import (
     FbsShipmentError,
     _build_delivery_checks,
     _checks_allow_delivery,
+    _compute_preflight_version,
+    _meta_validation_message,
     _validate_checks_pass,
 )
 from app.services.fbs_supply_composition_service import SupplyCompositionDiscrepancy
+from app.services.wildberries_errors import (
+    MetaValidationFailItem,
+    WildberriesBusinessError,
+)
 
 
 def _mock_supply(
@@ -312,6 +318,101 @@ def test_wb_supply_with_nothing_prepared_is_still_deliverable() -> None:
 
     warned = {check.code for check in checks if check.severity == "warning"}
     assert {"order_sticker_not_ready", "marking_required", "physical_boxes_required"} <= warned
+
+
+def test_wb_preflight_version_ignores_every_advisory_packaging_fact() -> None:
+    supply = _mock_supply()
+    supply.status = "assembling"
+    order = _mock_order(FBS_ORDER_STATUS_IN_SUPPLY)
+    first = _compute_preflight_version(
+        supply,
+        [order],
+        cargo_qr_ready=False,
+        has_physical_boxes=False,
+        without_distribution=False,
+        unassigned_packed_order_ids=frozenset({order.id}),
+        composition_fingerprint="same-composition",
+    )
+
+    order.status = FBS_ORDER_STATUS_PACKED
+    supply.status = FBS_SUPPLY_STATUS_PACKED
+    order.sticker_status = "applied"
+    order.sticker_file = "another/sticker.png"
+    order.metadata_delivery_allowed = False
+    second = _compute_preflight_version(
+        supply,
+        [order],
+        cargo_qr_ready=True,
+        has_physical_boxes=True,
+        without_distribution=True,
+        unassigned_packed_order_ids=frozenset(),
+        composition_fingerprint="same-composition",
+    )
+
+    assert second == first
+
+
+def test_wb_preflight_version_still_changes_for_terminal_order() -> None:
+    supply = _mock_supply()
+    order = _mock_order(FBS_ORDER_STATUS_IN_SUPPLY)
+    active = _compute_preflight_version(
+        supply,
+        [order],
+        cargo_qr_ready=True,
+        has_physical_boxes=True,
+        without_distribution=False,
+        unassigned_packed_order_ids=frozenset(),
+        composition_fingerprint="same-composition",
+    )
+    order.status = FBS_ORDER_STATUS_CANCELLED
+    terminal = _compute_preflight_version(
+        supply,
+        [order],
+        cargo_qr_ready=True,
+        has_physical_boxes=True,
+        without_distribution=False,
+        unassigned_packed_order_ids=frozenset(),
+        composition_fingerprint="same-composition",
+    )
+    assert terminal != active
+
+
+def test_meta_validation_message_shows_order_and_concrete_wb_reason() -> None:
+    error = WildberriesBusinessError(
+        "meta_validation_fail",
+        message="Marking validation failed",
+        meta_validation=[
+            MetaValidationFailItem(
+                order_id=9001,
+                key="uin",
+                value=None,
+                decision="invalid",
+                reason="uinBadStatus",
+            )
+        ],
+    )
+    message, retryable = _meta_validation_message(error)
+    assert retryable is False
+    assert "Заказ WB 9001" in message
+    assert "статус КИЗ" in message
+
+
+def test_meta_validation_message_keeps_unknown_wb_reason() -> None:
+    error = WildberriesBusinessError(
+        "meta_validation_fail",
+        meta_validation=[
+            MetaValidationFailItem(
+                order_id=9002,
+                key="sgtin",
+                value=None,
+                decision="invalid",
+                reason="brand new WB reason",
+            )
+        ],
+    )
+    message, retryable = _meta_validation_message(error)
+    assert retryable is False
+    assert message == "Заказ WB 9002: Wildberries ответил: brand new WB reason"
 
 
 def test_already_delivered_supply_still_refuses_second_handoff() -> None:

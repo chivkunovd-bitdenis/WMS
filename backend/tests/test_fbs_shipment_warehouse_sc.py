@@ -32,7 +32,12 @@ from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
-from app.models.fbs_wb_operation import WB_OPERATION_STATE_CONFIRMED, FbsWbOperation
+from app.models.fbs_wb_operation import (
+    WB_OPERATION_STATE_CONFIRMED,
+    WB_OPERATION_STATE_FAILED,
+    WB_OPERATION_STATE_PENDING,
+    FbsWbOperation,
+)
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryMovement
 from app.models.product import Product
@@ -823,6 +828,7 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
         wb_order_ids=[953001],
         supply_name="WB fail",
     )
+    idempotency_key = str(uuid.uuid4())
 
     async def fail_deliver(
         client: object,
@@ -831,6 +837,24 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
         supply_id: str,
         marketplace_api_base: str | None = None,
     ) -> None:
+        # Отдельная сессия видит журнал и план источника до внешнего вызова WB.
+        # Flush здесь недостаточен: этот assert проходит только после commit.
+        async with SessionLocal() as audit_session:
+            operation = await audit_session.scalar(
+                select(FbsWbOperation).where(
+                    FbsWbOperation.idempotency_key == idempotency_key
+                )
+            )
+            assert operation is not None
+            assert operation.state == WB_OPERATION_STATE_PENDING
+            ledger = await audit_session.scalar(
+                select(FbsShipmentReversalLedger).where(
+                    FbsShipmentReversalLedger.fbs_order_id == order_ids[0]
+                )
+            )
+            assert ledger is not None
+            assert ledger.wb_operation_id == operation.id
+            assert ledger.shipment_movement_id is None
         raise WildberriesClientError("upstream_error", status_code=502)
 
     monkeypatch.setattr(
@@ -839,7 +863,12 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
     )
 
     await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
-    resp = await _deliver_with_preflight(async_client, headers, supply["id"])
+    resp = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=idempotency_key,
+    )
     assert resp.status_code == 502
     assert resp.json()["detail"]["code"] == "wb_upstream_error_502"
 
@@ -851,6 +880,87 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
         order = await session.get(FbsOrder, order_ids[0])
         assert order is not None
         assert order.status == FBS_ORDER_STATUS_PACKED
+        operation = await session.scalar(
+            select(FbsWbOperation).where(
+                FbsWbOperation.idempotency_key == idempotency_key
+            )
+        )
+        assert operation is not None
+        assert operation.state == WB_OPERATION_STATE_FAILED
+
+
+@pytest.mark.asyncio
+async def test_pending_delivery_recovers_after_process_crash_without_second_wb_call(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, _order_ids = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[953051],
+        supply_name="WB process crash checkpoint",
+    )
+    idempotency_key = str(uuid.uuid4())
+
+    import app.services.fbs_shipment_service as shipment_mod
+
+    real_persist = shipment_mod._persist_confirmed_delivery
+    deliver_calls = 0
+
+    async def accepted_by_wb(*_args: object, **_kwargs: object) -> None:
+        nonlocal deliver_calls
+        deliver_calls += 1
+
+    async def crash_before_local_confirmation(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("simulated process crash after WB 2xx")
+
+    monkeypatch.setattr(shipment_mod, "deliver_marketplace_supply", accepted_by_wb)
+    monkeypatch.setattr(
+        shipment_mod,
+        "_persist_confirmed_delivery",
+        crash_before_local_confirmation,
+    )
+
+    with pytest.raises(RuntimeError, match="simulated process crash"):
+        await _deliver_with_preflight(
+            async_client,
+            headers,
+            supply["id"],
+            idempotency_key=idempotency_key,
+        )
+
+    async with SessionLocal() as session:
+        operation = await session.scalar(
+            select(FbsWbOperation).where(
+                FbsWbOperation.idempotency_key == idempotency_key
+            )
+        )
+        assert operation is not None
+        assert operation.state == WB_OPERATION_STATE_PENDING
+
+    async def confirmed_on_reconcile(*_args: object, **_kwargs: object) -> str:
+        return WB_OPERATION_STATE_CONFIRMED
+
+    monkeypatch.setattr(shipment_mod, "_persist_confirmed_delivery", real_persist)
+    monkeypatch.setattr(shipment_mod, "reconcile_supply_delivered", confirmed_on_reconcile)
+
+    retry = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=idempotency_key,
+    )
+    assert retry.status_code == 200, retry.text
+    assert deliver_calls == 1
+    assert retry.json()["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
 
 
 # TC-NEW-FBS-SHIPWH-007 — successful WB deliver survives QR failure and retry does not deliver again

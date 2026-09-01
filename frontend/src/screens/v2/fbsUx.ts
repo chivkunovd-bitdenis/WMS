@@ -55,18 +55,42 @@ const FBS_OPERATOR_STAGES: FbsOperatorStageKey[] = ['composition', 'picking', 'p
 export function fbsAccessibleStageIndex(input: {
   marketplace: FbsMarketplace
   currentStage: FbsOperatorStageKey
-  packed: number
-  total: number
 }): number {
-  let accessible = FBS_OPERATOR_STAGES.indexOf(input.currentStage)
-  if (input.marketplace !== 'wb' || input.currentStage === 'composition') return accessible
+  const accessible = FBS_OPERATOR_STAGES.indexOf(input.currentStage)
+  if (input.marketplace !== 'wb') return accessible
 
-  // Подбор WB можно пропустить и сразу перейти к упаковке.
-  accessible = Math.max(accessible, FBS_OPERATOR_STAGES.indexOf('packing'))
-  if (input.total > 0 && input.packed === input.total) {
-    accessible = Math.max(accessible, FBS_OPERATOR_STAGES.indexOf('boxes'))
-  }
-  return accessible
+  // Все рабочие поверхности WB открыты одновременно, включая черновик.
+  // «Начать работу» может создать удобное упаковочное задание, но наличие этого
+  // задания не даёт права открыть короба или передать поставку — право уже есть.
+  // Упаковка — только зафиксированный факт, а не право открыть короба или
+  // передать поставку. Не добавляйте сюда progress.packed/pack.status.
+  return FBS_OPERATOR_STAGES.indexOf('boxes')
+}
+
+export function fbsStageAfterWorkspaceRefresh(
+  marketplace: FbsMarketplace,
+  currentStage: FbsOperatorStageKey,
+  serverStage: FbsOperatorStageKey,
+): FbsOperatorStageKey {
+  // Polling and ordinary mutations must not throw a WB operator back from
+  // boxes/packing because some optional fact changed on the server.
+  return marketplace === 'wb' && currentStage !== 'composition'
+    ? currentStage
+    : serverStage
+}
+
+export function fbsDeliveryErrorKeepsIdempotencyKey(error: {
+  code?: string
+  retryable?: boolean
+}): boolean {
+  // Эти ответы означают, что исход WB ещё неизвестен либо WB просит повторить
+  // ту же операцию. Для окончательного отказа следующая попытка обязана получить
+  // новый ключ, иначе исправленный оператором запрос застрянет на старом failed.
+  return error.retryable === true && new Set([
+    'wb_timeout',
+    'wb_pending_confirmation',
+    'operation_in_progress',
+  ]).has(error.code ?? '')
 }
 
 export function fbsOrdersSyncErrorMessage(cause: unknown): string {

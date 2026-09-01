@@ -205,7 +205,7 @@ async def test_warehouse_boxes_get_cargo_places_and_orders_are_exclusive(
 
 
 @pytest.mark.asyncio
-async def test_unpacked_wb_orders_do_not_block_existing_distribution_boxes(
+async def test_wb_box_readiness_never_depends_on_pack_status(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
@@ -237,7 +237,7 @@ async def test_unpacked_wb_orders_do_not_block_existing_distribution_boxes(
 
     assert readiness.has_physical_boxes is True
     assert readiness.without_distribution is False
-    assert readiness.unassigned_packed_order_ids == frozenset()
+    assert readiness.unassigned_packed_order_ids == frozenset(order_ids)
 
 
 @pytest.mark.asyncio
@@ -1099,7 +1099,7 @@ def test_workspace_wb_distribution_does_not_publish_navigation_blockers() -> Non
         progress,
         has_physical_boxes=False,
     )
-    assert stage_without_boxes == "handoff_prep"
+    assert stage_without_boxes == "packing"
     blockers = _compute_workspace_blockers(
         supply,
         [order],
@@ -1150,7 +1150,7 @@ def test_workspace_opens_boxes_without_sticker_navigation_blocker() -> None:
         unassigned_packed_order_ids={order_id},
     )
 
-    assert stage == "handoff_prep"
+    assert stage == "packing"
     assert blockers == []
 
 
@@ -1197,7 +1197,7 @@ def test_workspace_active_wb_starts_with_optional_picking() -> None:
     assert all(item["code"] != "order_not_picked" for item in blockers)
 
 
-def test_workspace_active_wb_does_not_return_to_unfinished_optional_picking() -> None:
+def test_workspace_active_wb_stage_does_not_consult_packaging_progress() -> None:
     order_id = uuid.uuid4()
     supply = SimpleNamespace(
         marketplace="wb",
@@ -1213,18 +1213,19 @@ def test_workspace_active_wb_does_not_return_to_unfinished_optional_picking() ->
         required_meta_json=[],
     )
 
-    packing = _compute_stage(
+    no_pack_facts = _compute_stage(
         supply,
         [order],
         WorkspaceProgress(
             picked=0,
-            packed=1,
+            packed=0,
             metadata_ready=0,
             stickers_ready=0,
             total=2,
         ),
+        has_physical_boxes=False,
     )
-    handoff = _compute_stage(
+    all_pack_facts = _compute_stage(
         supply,
         [order],
         WorkspaceProgress(
@@ -1235,11 +1236,10 @@ def test_workspace_active_wb_does_not_return_to_unfinished_optional_picking() ->
             total=2,
         ),
         has_physical_boxes=False,
-        unassigned_packed_order_ids={order_id},
     )
 
-    assert packing == "packing"
-    assert handoff == "handoff_prep"
+    assert no_pack_facts == "picking"
+    assert all_pack_facts == no_pack_facts
 
 
 def test_workspace_completed_wb_assembling_never_returns_to_picking() -> None:
@@ -1347,7 +1347,7 @@ def test_workspace_without_distribution_skips_assignment_gate() -> None:
         without_distribution=True,
         unassigned_packed_order_ids={order_id},
     )
-    assert stage == "delivery"
+    assert stage == "handoff_prep"
     blockers = _compute_workspace_blockers(
         supply,
         [order],

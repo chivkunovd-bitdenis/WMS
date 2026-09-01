@@ -66,6 +66,7 @@ from app.services.fbs_supply_reconcile_service import (
     create_pending_deliver_operation,
     get_deliver_operation_by_idempotency,
     mark_deliver_operation_confirmed,
+    mark_deliver_operation_pending,
     mark_operation_failed,
     mark_operation_pending_confirmation,
     reconcile_supply_delivered,
@@ -182,15 +183,34 @@ class FbsShipmentError(Exception):
 
 
 def _meta_validation_message(exc: WildberriesBusinessError) -> tuple[str, bool]:
-    if (exc.message or "").strip().lower() == _WB_DISPATCH_PENDING_MESSAGE:
+    raw_messages = [
+        value.strip()
+        for value in [exc.message, *(item.reason for item in exc.meta_validation)]
+        if isinstance(value, str) and value.strip()
+    ]
+    if any(_WB_DISPATCH_PENDING_MESSAGE in value.lower() for value in raw_messages):
         return (
             "Wildberries ещё обрабатывает поставку. Повторите передачу через минуту.",
             True,
         )
-    return (
-        translate_wb_message(exc.message) or "WB отклонил данные маркировки заказов.",
-        False,
-    )
+
+    details: list[str] = []
+    for item in exc.meta_validation:
+        prefix = f"Заказ WB {item.order_id}: " if item.order_id is not None else ""
+        if item.reason:
+            reason = translate_wb_message(item.reason) or f"Wildberries ответил: {item.reason}"
+        else:
+            reason = f"маркировка {item.key} — {item.decision}"
+        rendered = f"{prefix}{reason}"
+        if rendered not in details:
+            details.append(rendered)
+    if details:
+        return "; ".join(details), False
+
+    if exc.message:
+        translated = translate_wb_message(exc.message)
+        return translated or f"Wildberries ответил: {exc.message}", False
+    return "WB отклонил данные маркировки заказов.", False
 
 
 @dataclass(frozen=True)
@@ -445,25 +465,44 @@ def _compute_preflight_version(
     composition_fingerprint: str = "",
     source_plan: source_svc.FbsShipmentSourcePlan | None = None,
 ) -> str:
+    supply_status = (
+        "blocked"
+        if supply.marketplace == "wb" and supply.status in _DELIVER_BLOCKED_SUPPLY_STATUSES
+        else "active"
+        if supply.marketplace == "wb"
+        else supply.status
+    )
     parts = [
         str(supply.id),
-        supply.status,
+        supply_status,
         supply.delivery_type,
-        str(cargo_qr_ready),
-        str(has_physical_boxes),
-        str(without_distribution),
         composition_fingerprint,
-        *(str(order_id) for order_id in sorted(unassigned_packed_order_ids)),
     ]
+    if supply.marketplace != "wb":
+        parts.extend(
+            [
+                str(cargo_qr_ready),
+                str(has_physical_boxes),
+                str(without_distribution),
+                *(str(order_id) for order_id in sorted(unassigned_packed_order_ids)),
+            ]
+        )
     for order in sorted(orders, key=lambda item: item.id):
-        order_parts = [
-            str(order.id),
-            order.status,
-            order.wb_status or "",
-            str(order.metadata_delivery_allowed),
-        ]
         if supply.marketplace == "wb":
-            order_parts.extend([order.sticker_status, order.sticker_file or ""])
+            # Версия WB защищает фактический состав и план списания, но не
+            # advisory-факты. Переходы in_supply/assembling/packed, печать,
+            # маркировка, короба и QR не имеют права породить stale_preflight.
+            order_parts = [
+                str(order.id),
+                "terminal" if order.status in _TERMINAL_ORDER_STATUSES else "active",
+            ]
+        else:
+            order_parts = [
+                str(order.id),
+                order.status,
+                order.wb_status or "",
+                str(order.metadata_delivery_allowed),
+            ]
         parts.extend(order_parts)
     for item in sorted(
         source_plan.resolutions if source_plan is not None else (),
@@ -1315,7 +1354,11 @@ async def _stage_wb_shipment_sources(
             )
             session.add(ledger)
             continue
-        if ledger.shipment_movement_id is None and ledger.source_mode is None:
+        if ledger.shipment_movement_id is None:
+            # До подтверждения WB это только сохранённый план. Окончательный
+            # отказ разрешает оператору исправить данные и повторить передачу;
+            # новая попытка заменяет ещё не применённый план и привязывает его
+            # к своей операции.
             ledger.product_id = resolution.product_id
             ledger.storage_location_id = resolution.storage_location_id
             ledger.source_warehouse_id = resolution.source_warehouse_id
@@ -1325,7 +1368,8 @@ async def _stage_wb_shipment_sources(
             ledger.quantity = resolution.quantity
             ledger.shortage_quantity = resolution.shortage_quantity
             ledger.negative_quantity = resolution.negative_quantity
-        if ledger.wb_operation_id is None:
+            ledger.wb_operation_id = operation.id
+        elif ledger.wb_operation_id is None:
             ledger.wb_operation_id = operation.id
         if ledger.written_off_by_user_id is None:
             ledger.written_off_by_user_id = actor_user_id
@@ -1721,7 +1765,8 @@ async def deliver_supply(
         if (
             existing.request_hash
             and existing.request_hash != request_hash
-            and existing.state != WB_OPERATION_STATE_PENDING_CONFIRMATION
+            and existing.state
+            not in {WB_OPERATION_STATE_PENDING, WB_OPERATION_STATE_PENDING_CONFIRMATION}
         ):
             raise FbsShipmentError("idempotency_key_reused", http_status=409)
         if existing.state == WB_OPERATION_STATE_CONFIRMED:
@@ -1758,14 +1803,10 @@ async def deliver_supply(
                 # request and must never trigger another WB deliver mutation.
                 await _fetch_supply_qr_after_deliver(session, confirmed_supply, http_client, token)
                 return confirmed_supply
-        if existing.state == WB_OPERATION_STATE_PENDING:
-            raise FbsShipmentError(
-                "operation_in_progress",
-                message="Передача в доставку уже выполняется.",
-                retryable=True,
-                http_status=503,
-            )
-        if existing.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
+        if existing.state in {
+            WB_OPERATION_STATE_PENDING,
+            WB_OPERATION_STATE_PENDING_CONFIRMATION,
+        }:
             token = await _require_marketplace_token(session, tenant_id, supply_read.seller_id)
             reconcile_state = await reconcile_supply_delivered(
                 http_client,
@@ -1776,20 +1817,34 @@ async def deliver_supply(
             if supply is None:
                 raise FbsShipmentError("supply_not_found")
             if reconcile_state == WB_OPERATION_STATE_CONFIRMED:
-                orders, _, source_plan = await _actual_wb_orders_and_source_plan(
-                    session,
-                    tenant_id,
-                    supply,
-                    http_client,
-                    token,
-                    actor_user_id=actor_user_id,
+                checkpointed = await _load_checkpointed_wb_delivery(
+                    session, supply, existing
                 )
+                if checkpointed is None:
+                    orders, _, source_plan = await _actual_wb_orders_and_source_plan(
+                        session,
+                        tenant_id,
+                        supply,
+                        http_client,
+                        token,
+                        actor_user_id=actor_user_id,
+                    )
+                else:
+                    orders, source_plan = checkpointed
                 await _persist_confirmed_delivery(
                     session, supply, orders, existing, actor_user_id, source_plan
                 )
                 await _fetch_supply_qr_after_deliver(session, supply, http_client, token)
                 return supply
 
+            await mark_operation_pending_confirmation(
+                session,
+                existing,
+                wb_supply_id=supply_read.wb_supply_id,
+                local_supply_id=supply_id,
+                error_code="wb_pending_confirmation",
+            )
+            await session.commit()
             raise FbsShipmentError(
                 "wb_pending_confirmation",
                 message="WB пока не подтвердил передачу; слепой повтор запрещён.",
@@ -1834,6 +1889,51 @@ async def deliver_supply(
             confirmed_preflight_version=confirmed_preflight_version,
             created_by_user_id=actor_user_id,
         )
+    else:
+        await mark_deliver_operation_pending(
+            session,
+            operation,
+            request_hash=request_hash,
+            local_supply_id=supply.id,
+            confirmed_preflight_version=confirmed_preflight_version,
+        )
+
+    # Сначала сохраняем операцию и точный план источников, затем выполняем
+    # необратимый запрос WB. Если процесс умрёт после WB 2xx, повтор найдёт
+    # pending-операцию, сверится с WB и закончит локальное списание без второго
+    # вызова deliver.
+    await _stage_wb_shipment_sources(
+        session,
+        supply,
+        orders,
+        source_plan,
+        operation,
+        actor_user_id,
+    )
+    await session.commit()
+
+    # Commit выше делает checkpoint долговечным, но снимает row lock. Сразу
+    # берём поставку под блокировку снова и держим её до результата WB, чтобы
+    # параллельная вкладка не выполнила вторую внешнюю передачу.
+    locked_supply = await _get_supply_for_update(
+        session,
+        tenant_id,
+        supply_id,
+        with_trbxes=True,
+    )
+    if locked_supply is None:
+        raise FbsShipmentError("supply_not_found")
+    supply = locked_supply
+    if supply.status in _DELIVER_BLOCKED_SUPPLY_STATUSES:
+        await mark_operation_failed(
+            session,
+            operation,
+            error_code="supply_bad_status",
+            wb_supply_id=supply.wb_supply_id,
+            local_supply_id=supply.id,
+        )
+        await session.commit()
+        raise FbsShipmentError("supply_bad_status", http_status=409)
 
     try:
         await deliver_marketplace_supply(
@@ -1852,6 +1952,7 @@ async def deliver_supply(
             wb_supply_id=supply.wb_supply_id,
             local_supply_id=supply.id,
         )
+        await session.commit()
         raise FbsShipmentError(
             "meta_validation_fail",
             message=message,
@@ -1879,6 +1980,7 @@ async def deliver_supply(
                 local_supply_id=supply.id,
                 error_code="wb_timeout",
             )
+            await session.commit()
             raise FbsShipmentError(
                 "wb_timeout",
                 message="WB не подтвердил передачу — повторите операцию.",
@@ -1904,6 +2006,7 @@ async def deliver_supply(
             wb_supply_id=supply.wb_supply_id,
             local_supply_id=supply.id,
         )
+        await session.commit()
         raise error from exc
 
     await _persist_confirmed_delivery(

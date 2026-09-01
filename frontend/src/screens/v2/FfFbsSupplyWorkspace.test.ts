@@ -4,8 +4,10 @@ import {
   buildFbsSyncTargets,
   fbsAccessibleStageIndex,
   fbsBoxOperationsDisabled,
+  fbsDeliveryErrorKeepsIdempotencyKey,
   fbsDeliveryConfirmDisabled,
   fbsOrdersAvailableForBox,
+  fbsStageAfterWorkspaceRefresh,
   fbsOrdersSyncErrorMessage,
   mixedMarketplaceSelectionMessage,
   normalizeMetadataKind,
@@ -52,15 +54,28 @@ describe('FBS required identifiers', () => {
 
 describe('WB optional picking', () => {
   it('opens packing immediately after work starts without picked units', () => {
-    expect(fbsAccessibleStageIndex({ marketplace: 'wb', currentStage: 'picking', packed: 0, total: 10 })).toBe(2)
+    expect(fbsAccessibleStageIndex({ marketplace: 'wb', currentStage: 'picking' })).toBe(3)
   })
 
   it('keeps the Ozon picking gate unchanged', () => {
-    expect(fbsAccessibleStageIndex({ marketplace: 'ozon', currentStage: 'picking', packed: 0, total: 10 })).toBe(1)
+    expect(fbsAccessibleStageIndex({ marketplace: 'ozon', currentStage: 'picking' })).toBe(1)
   })
 
-  it('opens boxes after every WB order is packed even when picking was skipped', () => {
-    expect(fbsAccessibleStageIndex({ marketplace: 'wb', currentStage: 'picking', packed: 10, total: 10 })).toBe(3)
+  it('opens boxes without consulting WB packaging progress', () => {
+    expect(fbsAccessibleStageIndex({ marketplace: 'wb', currentStage: 'packing' })).toBe(3)
+  })
+
+  it('does not require a packaging task to leave WB composition', () => {
+    expect(fbsAccessibleStageIndex({ marketplace: 'wb', currentStage: 'composition' })).toBe(3)
+  })
+
+  it('does not yank the WB operator back from boxes during refresh', () => {
+    expect(fbsStageAfterWorkspaceRefresh('wb', 'boxes', 'picking')).toBe('boxes')
+    expect(fbsStageAfterWorkspaceRefresh('wb', 'packing', 'picking')).toBe('packing')
+  })
+
+  it('keeps the server-driven Ozon stage', () => {
+    expect(fbsStageAfterWorkspaceRefresh('ozon', 'boxes', 'picking')).toBe('picking')
   })
 
   it('offers unassigned orders in boxes regardless of packaging status', () => {
@@ -73,6 +88,19 @@ describe('WB optional picking', () => {
       orders[0],
       orders[1],
     ])
+  })
+})
+
+describe('WB delivery idempotency retry', () => {
+  it('keeps the key only while the result of the same operation is unresolved', () => {
+    expect(fbsDeliveryErrorKeepsIdempotencyKey({ code: 'wb_timeout', retryable: true })).toBe(true)
+    expect(fbsDeliveryErrorKeepsIdempotencyKey({ code: 'operation_in_progress', retryable: true })).toBe(true)
+  })
+
+  it('rotates the key after a definitive WB rejection', () => {
+    expect(fbsDeliveryErrorKeepsIdempotencyKey({ code: 'meta_validation_fail', retryable: true })).toBe(false)
+    expect(fbsDeliveryErrorKeepsIdempotencyKey({ code: 'meta_validation_fail', retryable: false })).toBe(false)
+    expect(fbsDeliveryErrorKeepsIdempotencyKey({ code: 'wb_upstream_error_502', retryable: false })).toBe(false)
   })
 })
 

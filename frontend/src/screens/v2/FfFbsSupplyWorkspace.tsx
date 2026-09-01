@@ -51,8 +51,10 @@ import {
   buildFbsPickingListPrintHtml,
   fbsAccessibleStageIndex,
   fbsBoxOperationsDisabled,
+  fbsDeliveryErrorKeepsIdempotencyKey,
   fbsDeliveryConfirmDisabled,
   fbsOrdersAvailableForBox,
+  fbsStageAfterWorkspaceRefresh,
   ordersWord,
   summarizeDeliveryChecks,
 } from './fbsUx'
@@ -342,7 +344,13 @@ export function FfFbsSupplyWorkspace({
       try {
         const next = await fetchFbsWorkspace(token, authHeaders, supplyId)
         setWorkspace(next)
-        if (!silent) setStage(visualStage(next.stage))
+        if (!silent) {
+          setStage((current) => fbsStageAfterWorkspaceRefresh(
+            next.supply.marketplace,
+            current,
+            visualStage(next.stage),
+          ))
+        }
       } catch (cause) {
         if (!silent) setError(cause instanceof Error ? cause.message : 'Не удалось загрузить поставку.')
       } finally {
@@ -422,7 +430,11 @@ export function FfFbsSupplyWorkspace({
     }
   }, [open, stage, workspace?.supply.packaging_task_id, workspace?.orders.length, token, authHeaders])
 
-  const run = async (operation: () => Promise<FbsWorkspace>, success: string) => {
+  const run = async (
+    operation: () => Promise<FbsWorkspace>,
+    success: string,
+    onError?: (cause: unknown) => void,
+  ) => {
     setBusy(true)
     setError(null)
     setNotice(null)
@@ -430,10 +442,15 @@ export function FfFbsSupplyWorkspace({
     try {
       const next = await operation()
       setWorkspace(next)
-      setStage(visualStage(next.stage))
+      setStage((current) => fbsStageAfterWorkspaceRefresh(
+        next.supply.marketplace,
+        current,
+        visualStage(next.stage),
+      ))
       if (success) setNotice(success)
       return next
     } catch (cause) {
+      onError?.(cause)
       setError(cause instanceof Error ? cause.message : 'Операция не выполнена.')
       if (cause instanceof FbsApiError && cause.retryable) {
         setRetryAction(() => () => { void run(operation, success) })
@@ -816,8 +833,16 @@ export function FfFbsSupplyWorkspace({
         deliverFbsSupply(token, authHeaders, workspace.supply.id, {
           idempotency_key: deliveryKey,
           confirmed_preflight_version: deliveryPreflight?.version,
-        }),
+      }),
       '',
+      (cause) => {
+        if (
+          cause instanceof FbsApiError
+          && fbsDeliveryErrorKeepsIdempotencyKey(cause)
+        ) return
+        clearPersistentOperationKey(workspace.supply.id, 'delivery')
+        setDeliveryKey(persistentOperationKey(workspace.supply.id, 'delivery'))
+      },
     )
     if (next) {
       clearPersistentOperationKey(workspace.supply.id, 'delivery')
@@ -1017,7 +1042,9 @@ export function FfFbsSupplyWorkspace({
 
   const total = workspace?.progress.total ?? 0
   const ready = workspace
-    ? Math.min(
+    ? workspace.supply.marketplace === 'wb'
+      ? total
+      : Math.min(
         total,
         workspace.progress.picked,
         workspace.progress.packed,
@@ -1145,8 +1172,6 @@ export function FfFbsSupplyWorkspace({
     ? fbsAccessibleStageIndex({
       marketplace: workspace.supply.marketplace,
       currentStage,
-      packed: workspace.progress.packed,
-      total: workspace.progress.total,
     })
     : currentStageIndex
   const stageIsCurrent = stage === currentStage
@@ -1242,6 +1267,7 @@ export function FfFbsSupplyWorkspace({
       return `Подберите ещё ${remaining} шт., чтобы перейти к упаковке.`
     }
     if (fromStage === 'packing') {
+      if (workspace?.supply.marketplace === 'wb') return ''
       const remainingToPack = Math.max(0, total - (workspace?.progress.packed ?? 0))
       const remainingToPrint = Math.max(0, packingOrders.length - printedOrdersCount)
       const parts: string[] = []
