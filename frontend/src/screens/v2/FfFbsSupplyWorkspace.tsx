@@ -47,7 +47,7 @@ import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
-import { buildFbsPickingListPrintHtml, fbsBoxOperationsDisabled, ordersWord } from './fbsUx'
+import { buildFbsPickingListPrintHtml, fbsAccessibleStageIndex, fbsBoxOperationsDisabled, ordersWord } from './fbsUx'
 import {
   confirmFbsPrintApplied,
   addFbsOrdersToSupply,
@@ -1133,6 +1133,14 @@ export function FfFbsSupplyWorkspace({
   }, [workspace, stage])
   const currentStage = workspace ? visualStage(workspace.stage) : 'composition'
   const currentStageIndex = STAGES.findIndex((item) => item.key === currentStage)
+  const accessibleStageIndex = workspace
+    ? fbsAccessibleStageIndex({
+      marketplace: workspace.supply.marketplace,
+      currentStage,
+      packed: workspace.progress.packed,
+      total: workspace.progress.total,
+    })
+    : currentStageIndex
   const stageIsCurrent = stage === currentStage
   const allPicked = Boolean(workspace && workspace.progress.total > 0 && workspace.progress.picked === workspace.progress.total)
   const deliveryConfirmed = deliverySubmitted
@@ -1249,7 +1257,7 @@ export function FfFbsSupplyWorkspace({
     const fromIndex = STAGES.findIndex((item) => item.key === fromStage)
     const next = STAGES[fromIndex + 1]
     if (!next) return null
-    const unlocked = fromIndex + 1 <= currentStageIndex
+    const unlocked = fromIndex + 1 <= accessibleStageIndex
     const reason = stageBlockedExplanation(fromStage)
     const button = (
       <Button
@@ -1414,7 +1422,7 @@ export function FfFbsSupplyWorkspace({
       <Tabs
         value={stage}
         onChange={(_, value) => {
-          if (STAGES.findIndex((item) => item.key === value) <= currentStageIndex) setStage(value)
+          if (STAGES.findIndex((item) => item.key === value) <= accessibleStageIndex) setStage(value)
           setError(null)
           setNotice(null)
         }}
@@ -1423,7 +1431,7 @@ export function FfFbsSupplyWorkspace({
         sx={{ px: 2, borderBottom: 1, borderColor: 'divider', bgcolor: 'rgba(91,33,182,.035)' }}
       >
         {STAGES.map((item, index) => {
-          const locked = index > currentStageIndex
+          const locked = index > accessibleStageIndex
           const tab = (
             <Tab
               key={item.key}

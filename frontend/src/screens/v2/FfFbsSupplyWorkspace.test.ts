@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildFbsPickingListPrintHtml,
   buildFbsSyncTargets,
+  fbsAccessibleStageIndex,
   fbsBoxOperationsDisabled,
   fbsOrdersSyncErrorMessage,
   mixedMarketplaceSelectionMessage,
@@ -43,6 +44,20 @@ describe('FBS required identifiers', () => {
     expect(normalizeMetadataKind('SGTIN')).toBe('sgtin')
     expect(normalizeMetadataKind('UIN')).toBe('uin')
     expect(normalizeMetadataKind(undefined)).toBe('sgtin')
+  })
+})
+
+describe('WB optional picking', () => {
+  it('opens packing immediately after work starts without picked units', () => {
+    expect(fbsAccessibleStageIndex({ marketplace: 'wb', currentStage: 'picking', packed: 0, total: 10 })).toBe(2)
+  })
+
+  it('keeps the Ozon picking gate unchanged', () => {
+    expect(fbsAccessibleStageIndex({ marketplace: 'ozon', currentStage: 'picking', packed: 0, total: 10 })).toBe(1)
+  })
+
+  it('opens boxes after every WB order is packed even when picking was skipped', () => {
+    expect(fbsAccessibleStageIndex({ marketplace: 'wb', currentStage: 'picking', packed: 10, total: 10 })).toBe(3)
   })
 })
 

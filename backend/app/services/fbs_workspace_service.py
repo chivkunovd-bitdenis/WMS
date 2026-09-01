@@ -390,7 +390,12 @@ def _compute_stage(
         return "composition"
     if progress.total == 0:
         return "composition"
-    if progress.picked < progress.total:
+    # Для WB подбор — полезный, но необязательный операторский этап. Открыть
+    # упаковку можно без сканов подбора; как только упаковка началась, не
+    # возвращаем рабочее место назад.
+    if progress.picked < progress.total and not (
+        getattr(supply, "marketplace", None) == "wb" and progress.packed > 0
+    ):
         return "picking"
     if progress.packed < progress.total:
         return "packing"
@@ -440,12 +445,16 @@ def _compute_workspace_blockers(
             }
         )
     for order in orders:
-        if order.pick_status != PICK_STATUS_PICKED and stage in {
+        if (
+            getattr(supply, "marketplace", None) != "wb"
+            and order.pick_status != PICK_STATUS_PICKED
+            and stage in {
             "packing",
             "order_stickers",
             "handoff_prep",
             "delivery",
-        }:
+            }
+        ):
             blockers.append(
                 {
                     "stage": "picking",
