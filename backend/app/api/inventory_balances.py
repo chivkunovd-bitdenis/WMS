@@ -283,22 +283,38 @@ async def get_inventory_balances(
 
     loc = await session.get(StorageLocation, storage_location_id)
     is_sorting = loc is not None and loc.code == SORTING_LOCATION_CODE
-    return [
-        InventoryBalanceRowOut(
-            product_id=str(b.product_id),
-            sku_code=p.sku_code,
-            product_name=p.name,
-            seller_id=str(p.seller_id) if p.seller_id else None,
-            seller_name=p.seller.name if p.seller else None,
-            packaging_instructions=p.packaging_instructions,
-            requires_honest_sign=bool(p.requires_honest_sign),
-            quantity=b.quantity,
-            quantity_unpacked=int(b.quantity_unpacked),
-            quantity_packed=int(b.quantity_packed),
-            quantity_in_sorting=b.quantity if is_sorting else 0,
-            quantity_in_storage=0 if is_sorting else b.quantity,
-            reserved=rsv,
-            available=0 if is_sorting else b.quantity - rsv,
-        )
-        for b, p, rsv in rows
-    ]
+    # This endpoint is the legacy product-by-location view used by inventory,
+    # receiving and packaging screens. Physical containers are deliberately
+    # not part of its response contract, so exposing one indistinguishable row
+    # per box makes consumers pick an arbitrary partial balance. Keep one row
+    # per product here; container-specific screens use their dedicated APIs.
+    grouped: dict[uuid.UUID, InventoryBalanceRowOut] = {}
+    for balance, product, reserved in rows:
+        row = grouped.get(balance.product_id)
+        if row is None:
+            row = InventoryBalanceRowOut(
+                product_id=str(balance.product_id),
+                sku_code=product.sku_code,
+                product_name=product.name,
+                seller_id=str(product.seller_id) if product.seller_id else None,
+                seller_name=product.seller.name if product.seller else None,
+                packaging_instructions=product.packaging_instructions,
+                requires_honest_sign=bool(product.requires_honest_sign),
+                quantity=0,
+                quantity_unpacked=0,
+                quantity_packed=0,
+                quantity_in_sorting=0,
+                quantity_in_storage=0,
+                reserved=reserved,
+                available=0,
+            )
+            grouped[balance.product_id] = row
+        row.quantity += int(balance.quantity)
+        row.quantity_unpacked += int(balance.quantity_unpacked)
+        row.quantity_packed += int(balance.quantity_packed)
+
+    for row in grouped.values():
+        row.quantity_in_sorting = row.quantity if is_sorting else 0
+        row.quantity_in_storage = 0 if is_sorting else row.quantity
+        row.available = 0 if is_sorting else row.quantity - row.reserved
+    return list(grouped.values())
