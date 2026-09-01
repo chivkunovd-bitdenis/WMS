@@ -83,6 +83,26 @@ def test_wb_decision_mapping_covers_safe_sync_states(
     assert fbs_marking_svc.map_wb_decision_to_meta_status(decision) == expected
 
 
+def test_universal_test_kiz_is_opt_in_and_unique_per_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    alias = "010200000000001221UNIVERSALSTAGE01"
+    first = FbsOrder(id=uuid.uuid4(), wb_order_id=530006)
+    second = FbsOrder(id=uuid.uuid4(), wb_order_id=530007)
+
+    monkeypatch.setattr(kiz_svc.settings, "fbs_universal_test_kiz", None)
+    assert kiz_svc._universal_test_kiz_for_order(first, alias) == alias
+
+    monkeypatch.setattr(kiz_svc.settings, "fbs_universal_test_kiz", alias)
+    first_value = kiz_svc._universal_test_kiz_for_order(first, alias)
+    second_value = kiz_svc._universal_test_kiz_for_order(second, alias)
+
+    assert first_value != second_value
+    assert kiz_svc.is_probably_cis(first_value)
+    assert kiz_svc.is_probably_cis(second_value)
+    assert kiz_svc._universal_test_kiz_for_order(first, "010200000000001221OTHER") == (
+        "010200000000001221OTHER"
+    )
+
+
 _GS = "\x1d"
 _CLEAN_CIS = f"010460043993125321AbCxyz{_GS}91K1aZ{_GS}92Crypto~|#<GS>tail"
 
