@@ -64,6 +64,7 @@ from app.services.fbs_ozon_packaging_service import (
 from app.services.fbs_print_asset_service import upsert_supply_qr_asset_from_bytes
 from app.services.fbs_print_asset_storage import FbsPrintAssetStorageError
 from app.services.fbs_supply_reconcile_service import (
+    WB_RECONCILE_NOT_DELIVERED,
     create_pending_deliver_operation,
     get_active_deliver_operation_for_supply,
     get_deliver_operation_by_idempotency,
@@ -1304,7 +1305,7 @@ async def _stage_wb_shipment_sources(
     operation: Any,
     actor_user_id: uuid.UUID | None,
 ) -> None:
-    """Durably bind each WB order to the exact source chosen before write-off."""
+    """Durably snapshot an attempt and prepare the physical write-off ledger."""
     resolutions = {item.fbs_order_id: item for item in source_plan.resolutions}
     active_orders = [
         order
@@ -1313,6 +1314,31 @@ async def _stage_wb_shipment_sources(
     ]
     if not active_orders:
         return
+    checkpoint_source_plan = {
+        "supply_warehouse_id": str(source_plan.supply_warehouse_id),
+        "resolutions": [
+            {
+                "fbs_order_id": str(item.fbs_order_id),
+                "product_id": str(item.product_id),
+                "quantity": item.quantity,
+                "source_warehouse_id": str(item.source_warehouse_id),
+                "storage_location_id": str(item.storage_location_id),
+                "container_kind": item.container_kind,
+                "container_id": str(item.container_id) if item.container_id else None,
+                "source_mode": item.source_mode,
+                "positive_quantity": item.positive_quantity,
+                "shortage_quantity": item.shortage_quantity,
+                "negative_quantity": item.negative_quantity,
+            }
+            for item in sorted(source_plan.resolutions, key=lambda row: str(row.fbs_order_id))
+        ],
+    }
+    summary = dict(operation.request_summary_json or {})
+    previous_checkpoint = summary.get("checkpoint_source_plan")
+    if previous_checkpoint is not None and previous_checkpoint != checkpoint_source_plan:
+        raise FbsShipmentError("stale_preflight", http_status=409)
+    summary["checkpoint_source_plan"] = checkpoint_source_plan
+    operation.request_summary_json = summary
     existing = {
         ledger.fbs_order_id: ledger
         for ledger in (
@@ -1332,7 +1358,6 @@ async def _stage_wb_shipment_sources(
             .all()
         )
     }
-    checkpoint_ledgers: list[FbsShipmentReversalLedger] = []
     for order in active_orders:
         resolution = resolutions.get(order.id)
         if resolution is None:
@@ -1355,17 +1380,25 @@ async def _stage_wb_shipment_sources(
                 written_off_by_user_id=actor_user_id,
             )
             session.add(ledger)
-        elif ledger.shipment_movement_id is not None and ledger.wb_operation_id is None:
+        elif ledger.shipment_movement_id is None:
+            # The immutable audit checkpoint lives in operation.request_summary.
+            # This single per-order ledger is the eventual physical write-off
+            # row, so a new definitive attempt prepares it from its own frozen
+            # snapshot without changing any prior operation's snapshot.
+            ledger.product_id = resolution.product_id
+            ledger.storage_location_id = resolution.storage_location_id
+            ledger.source_warehouse_id = resolution.source_warehouse_id
+            ledger.container_kind = resolution.container_kind
+            ledger.container_id = resolution.container_id
+            ledger.source_mode = resolution.source_mode
+            ledger.quantity = resolution.quantity
+            ledger.shortage_quantity = resolution.shortage_quantity
+            ledger.negative_quantity = resolution.negative_quantity
+            ledger.wb_operation_id = operation.id
+        elif ledger.wb_operation_id is None:
             ledger.wb_operation_id = operation.id
         if ledger.written_off_by_user_id is None:
             ledger.written_off_by_user_id = actor_user_id
-        checkpoint_ledgers.append(ledger)
-    await session.flush()
-    summary = dict(operation.request_summary_json or {})
-    summary["checkpoint_ledger_ids"] = sorted(
-        str(ledger.id) for ledger in checkpoint_ledgers
-    )
-    operation.request_summary_json = summary
     await session.flush()
 
 
@@ -1376,27 +1409,61 @@ async def _load_checkpointed_wb_delivery(
 ) -> tuple[list[FbsOrder], source_svc.FbsShipmentSourcePlan] | None:
     """Load the durable WB source plan after marketplace confirmation."""
     summary = operation.request_summary_json or {}
-    raw_ledger_ids = summary.get("checkpoint_ledger_ids")
-    ledger_ids: list[uuid.UUID] = []
-    if isinstance(raw_ledger_ids, list):
-        for raw_id in raw_ledger_ids:
-            try:
-                ledger_ids.append(uuid.UUID(str(raw_id)))
-            except (TypeError, ValueError):
-                raise FbsShipmentError(
-                    "fbs_shipment_checkpoint_incomplete", http_status=409
-                ) from None
-    ledger_filter = (
-        FbsShipmentReversalLedger.id.in_(ledger_ids)
-        if ledger_ids
-        else FbsShipmentReversalLedger.wb_operation_id == operation.id
-    )
+    checkpoint_source_plan = summary.get("checkpoint_source_plan")
+    if isinstance(checkpoint_source_plan, dict):
+        raw_resolutions = checkpoint_source_plan.get("resolutions")
+        if not isinstance(raw_resolutions, list) or not raw_resolutions:
+            raise FbsShipmentError("fbs_shipment_checkpoint_incomplete", http_status=409)
+        orders = await _load_locked_supply_orders(session, supply.tenant_id, supply.id)
+        orders_by_id = {order.id: order for order in orders}
+        snapshot_orders: list[FbsOrder] = []
+        snapshot_resolutions: list[source_svc.FbsShipmentSourceResolution] = []
+        try:
+            supply_warehouse_id = uuid.UUID(
+                str(checkpoint_source_plan["supply_warehouse_id"])
+            )
+            for raw in raw_resolutions:
+                if not isinstance(raw, dict):
+                    raise ValueError("invalid checkpoint row")
+                order_id = uuid.UUID(str(raw["fbs_order_id"]))
+                order = orders_by_id[order_id]
+                snapshot_orders.append(order)
+                snapshot_resolutions.append(
+                    source_svc.FbsShipmentSourceResolution(
+                        fbs_order_id=order_id,
+                        product_id=uuid.UUID(str(raw["product_id"])),
+                        quantity=int(raw["quantity"]),
+                        source_warehouse_id=uuid.UUID(str(raw["source_warehouse_id"])),
+                        storage_location_id=uuid.UUID(str(raw["storage_location_id"])),
+                        container_kind=cast(ContainerKind | None, raw.get("container_kind")),
+                        container_id=(
+                            uuid.UUID(str(raw["container_id"]))
+                            if raw.get("container_id")
+                            else None
+                        ),
+                        source_mode=cast(source_svc.FbsShipmentSourceMode, raw["source_mode"]),
+                        positive_quantity=int(raw["positive_quantity"]),
+                        shortage_quantity=int(raw["shortage_quantity"]),
+                        negative_quantity=int(raw["negative_quantity"]),
+                    )
+                )
+        except (KeyError, TypeError, ValueError):
+            raise FbsShipmentError(
+                "fbs_shipment_checkpoint_incomplete", http_status=409
+            ) from None
+        return snapshot_orders, source_svc.FbsShipmentSourcePlan(
+            tenant_id=supply.tenant_id,
+            supply_warehouse_id=supply_warehouse_id,
+            resolutions=tuple(snapshot_resolutions),
+        )
+
+    # Backward compatibility for operations created before journal snapshots.
     ledgers = list(
         (
             await session.execute(
                 select(FbsShipmentReversalLedger).where(
                     FbsShipmentReversalLedger.tenant_id == supply.tenant_id,
-                    ledger_filter,
+                    FbsShipmentReversalLedger.wb_operation_id == operation.id,
                 )
             )
         )
@@ -1410,7 +1477,7 @@ async def _load_checkpointed_wb_delivery(
     checkpointed_orders: list[FbsOrder] = []
     resolutions: list[source_svc.FbsShipmentSourceResolution] = []
     for ledger in ledgers:
-        order = orders_by_id.get(ledger.fbs_order_id)
+        ledger_order = orders_by_id.get(ledger.fbs_order_id)
         source_warehouse_id = ledger.source_warehouse_id
         source_mode = ledger.source_mode
         if ledger.shipment_movement_id is not None and source_warehouse_id is None:
@@ -1421,13 +1488,13 @@ async def _load_checkpointed_wb_delivery(
                 )
             )
             source_mode = source_mode or "legacy_ledger"
-        if order is None or source_warehouse_id is None or source_mode is None:
+        if ledger_order is None or source_warehouse_id is None or source_mode is None:
             raise FbsShipmentError(
                 "fbs_shipment_checkpoint_incomplete",
                 context={"order_id": str(ledger.fbs_order_id)},
                 http_status=409,
             )
-        checkpointed_orders.append(order)
+        checkpointed_orders.append(ledger_order)
         quantity = int(ledger.quantity)
         shortage = int(ledger.shortage_quantity)
         resolutions.append(
@@ -1778,6 +1845,7 @@ async def deliver_supply(
             provider=ozon_provider,
             actor_user_id=actor_user_id,
         )
+    resumable_operation: Any | None = None
     if existing is None or existing.state == WB_OPERATION_STATE_FAILED:
         active_for_supply = await get_active_deliver_operation_for_supply(
             session,
@@ -1889,21 +1957,54 @@ async def deliver_supply(
                 await _fetch_supply_qr_after_deliver(session, supply, http_client, token)
                 return supply
 
-            await mark_operation_pending_confirmation(
-                session,
-                existing,
-                wb_supply_id=supply_read.wb_supply_id,
-                local_supply_id=supply_id,
-                error_code="wb_pending_confirmation",
-            )
-            await session.commit()
-            raise FbsShipmentError(
-                "wb_pending_confirmation",
-                message="WB пока не подтвердил передачу; слепой повтор запрещён.",
-                context={"operation_state": "pending_confirmation"},
-                retryable=True,
-                http_status=504,
-            )
+            if reconcile_state == WB_RECONCILE_NOT_DELIVERED:
+                if existing.idempotency_key == idempotency_key:
+                    # WB definitively reports `done=false`; the same durable
+                    # attempt can safely continue from its frozen checkpoint.
+                    resumable_operation = existing
+                else:
+                    # A different client key means an explicit new attempt.
+                    # Close the old prepared attempt, then let the new key take
+                    # its own current preflight/source snapshot.
+                    await mark_operation_failed(
+                        session,
+                        existing,
+                        error_code="wb_not_delivered",
+                        wb_supply_id=supply_read.wb_supply_id,
+                        local_supply_id=supply_id,
+                    )
+                    await session.commit()
+                    if (
+                        existing_by_key is not None
+                        and existing_by_key.state == WB_OPERATION_STATE_FAILED
+                    ):
+                        raise FbsShipmentError("idempotency_key_reused", http_status=409)
+                    return await deliver_supply(
+                        session,
+                        tenant_id,
+                        supply_id,
+                        http_client,
+                        idempotency_key=idempotency_key,
+                        actor_user_id=actor_user_id,
+                        confirmed_preflight_version=confirmed_preflight_version,
+                        ozon_provider=ozon_provider,
+                    )
+            else:
+                await mark_operation_pending_confirmation(
+                    session,
+                    existing,
+                    wb_supply_id=supply_read.wb_supply_id,
+                    local_supply_id=supply_id,
+                    error_code="wb_pending_confirmation",
+                )
+                await session.commit()
+                raise FbsShipmentError(
+                    "wb_pending_confirmation",
+                    message="WB пока не подтвердил передачу; слепой повтор запрещён.",
+                    context={"operation_state": "pending_confirmation"},
+                    retryable=True,
+                    http_status=504,
+                )
 
     supply = await _get_supply_for_update(
         session,
@@ -1954,16 +2055,18 @@ async def deliver_supply(
         actor_user_id=actor_user_id,
     )
 
-    operation = await create_pending_deliver_operation(
-        session,
-        tenant_id=tenant_id,
-        seller_id=supply.seller_id,
-        idempotency_key=idempotency_key,
-        request_hash=request_hash,
-        local_supply_id=supply.id,
-        confirmed_preflight_version=confirmed_preflight_version,
-        created_by_user_id=actor_user_id,
-    )
+    operation = resumable_operation
+    if operation is None:
+        operation = await create_pending_deliver_operation(
+            session,
+            tenant_id=tenant_id,
+            seller_id=supply.seller_id,
+            idempotency_key=idempotency_key,
+            request_hash=request_hash,
+            local_supply_id=supply.id,
+            confirmed_preflight_version=confirmed_preflight_version,
+            created_by_user_id=actor_user_id,
+        )
 
     # Сначала сохраняем операцию и точный план источников, затем выполняем
     # необратимый запрос WB. Если процесс умрёт после WB 2xx, повтор найдёт

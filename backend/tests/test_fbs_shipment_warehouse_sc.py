@@ -858,14 +858,12 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
             )
             assert ledger is not None
             assert ledger.shipment_movement_id is None
-            checkpoint_ids = (operation.request_summary_json or {}).get(
-                "checkpoint_ledger_ids"
+            checkpoint = (operation.request_summary_json or {}).get(
+                "checkpoint_source_plan"
             )
-            assert checkpoint_ids == [str(ledger.id)]
-            if deliver_calls == 1:
-                assert ledger.wb_operation_id == operation.id
-            else:
-                assert ledger.wb_operation_id != operation.id
+            assert isinstance(checkpoint, dict)
+            assert checkpoint["resolutions"][0]["fbs_order_id"] == str(order_ids[0])
+            assert ledger.wb_operation_id == operation.id
         raise WildberriesClientError("upstream_error", status_code=502)
 
     monkeypatch.setattr(
@@ -904,9 +902,8 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
             )
         )
         assert ledger is not None
-        original_checkpoint = (
+        original_physical_source = (
             ledger.id,
-            ledger.wb_operation_id,
             ledger.product_id,
             ledger.storage_location_id,
             ledger.source_warehouse_id,
@@ -917,6 +914,11 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
             ledger.shortage_quantity,
             ledger.negative_quantity,
         )
+        original_operation_id = operation.id
+        original_audit_checkpoint = (operation.request_summary_json or {}).get(
+            "checkpoint_source_plan"
+        )
+        assert isinstance(original_audit_checkpoint, dict)
 
     closed_key = await _deliver_with_preflight(
         async_client,
@@ -940,11 +942,10 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
     assert deliver_calls == 2
 
     async with SessionLocal() as session:
-        ledger = await session.get(FbsShipmentReversalLedger, original_checkpoint[0])
+        ledger = await session.get(FbsShipmentReversalLedger, original_physical_source[0])
         assert ledger is not None
         assert (
             ledger.id,
-            ledger.wb_operation_id,
             ledger.product_id,
             ledger.storage_location_id,
             ledger.source_warehouse_id,
@@ -954,16 +955,22 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
             ledger.quantity,
             ledger.shortage_quantity,
             ledger.negative_quantity,
-        ) == original_checkpoint
+        ) == original_physical_source
+        original_operation = await session.get(FbsWbOperation, original_operation_id)
+        assert original_operation is not None
+        assert (original_operation.request_summary_json or {}).get(
+            "checkpoint_source_plan"
+        ) == original_audit_checkpoint
         replacement_operation = await session.scalar(
             select(FbsWbOperation).where(
                 FbsWbOperation.idempotency_key == replacement_key
             )
         )
         assert replacement_operation is not None
+        assert ledger.wb_operation_id == replacement_operation.id
         assert (replacement_operation.request_summary_json or {}).get(
-            "checkpoint_ledger_ids"
-        ) == [str(ledger.id)]
+            "checkpoint_source_plan"
+        ) == original_audit_checkpoint
 
 
 @pytest.mark.asyncio

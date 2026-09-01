@@ -27,6 +27,7 @@ OPERATION_KIND_SUPPLY_FROM_ORDERS = "supply_from_orders"
 OPERATION_KIND_CARGO_PLACES_CREATE = "cargo_places_create"
 OPERATION_KIND_CARGO_PLACES_DELETE = "cargo_places_delete"
 OPERATION_KIND_SUPPLY_DELIVER = "supply_deliver"
+WB_RECONCILE_NOT_DELIVERED = "not_delivered"
 
 
 def request_hash_for_from_orders(
@@ -474,4 +475,4 @@ async def reconcile_supply_delivered(
         raise
     if details.done:
         return WB_OPERATION_STATE_CONFIRMED
-    return WB_OPERATION_STATE_PENDING_CONFIRMATION
+    return WB_RECONCILE_NOT_DELIVERED
