@@ -187,6 +187,14 @@ class Settings(BaseSettings):
             "unique CIS internally, so the same scanner input can be reused in video flows."
         ),
     )
+    fbs_universal_test_sticker: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FBS_UNIVERSAL_TEST_STICKER"),
+        description=(
+            "Explicit staging/demo-only order sticker alias selecting the next "
+            "writable order without an SGTIN in the current supply."
+        ),
+    )
 
     @field_validator("database_url", mode="before")
     @classmethod

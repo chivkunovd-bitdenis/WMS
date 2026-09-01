@@ -429,6 +429,25 @@ def _find_order_by_sticker(orders: list[FbsOrder], sticker: str) -> FbsOrder | N
     return None
 
 
+def _find_order_by_universal_test_sticker(
+    orders: list[FbsOrder], candidates: list[str]
+) -> FbsOrder | None:
+    configured = settings.fbs_universal_test_sticker
+    if not configured:
+        return None
+    configured_candidates = sticker_scan_candidates(configured)
+    if not set(candidates).intersection(configured_candidates):
+        return None
+    writable = [
+        order
+        for order in orders
+        if order.status in FBS_ORDER_MARKING_WRITE_STATUSES
+        and order.status not in FBS_ORDER_MARKING_FROZEN_STATUSES
+        and _current_sgtin_marking(order) is None
+    ]
+    return min(writable, key=lambda order: (order.wb_order_id, order.id), default=None)
+
+
 def _current_sgtin_marking(order: FbsOrder) -> FbsOrderMarking | None:
     return current_order_marking(list(order.markings), MARKING_KIND_SGTIN)
 
@@ -496,14 +515,16 @@ async def lookup_order_by_sticker(
         .order_by(FbsOrder.created_at, FbsOrder.id)
     )
     orders = list((await session.execute(stmt)).scalars().all())
-    order = next(
-        (
-            found
-            for candidate in candidates
-            if (found := _find_order_by_sticker(orders, candidate)) is not None
-        ),
-        None,
-    )
+    order = _find_order_by_universal_test_sticker(orders, candidates)
+    if order is None:
+        order = next(
+            (
+                found
+                for candidate in candidates
+                if (found := _find_order_by_sticker(orders, candidate)) is not None
+            ),
+            None,
+        )
     if order is None:
         raise FbsKizError("sticker_not_found")
 
