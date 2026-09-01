@@ -33,7 +33,17 @@ jobs:
           HOST="${{ secrets.DEPLOY_SSH_HOST }}"
           PORT="${{ secrets.DEPLOY_HTTP_PORT || '8088' }}"
           for path in "/" "/seller/" "/api/health"; do
-            code=$(curl -fsS -o /dev/null -w "%{http_code}" "http://${HOST}:${PORT}${path}" || echo "000")
+            code="000"
+            for attempt in $(seq 1 10); do
+              code=$(curl -sS -o /dev/null -w "%{http_code}" "http://${HOST}:${PORT}${path}" || true)
+              if [ "${code}" = "200" ]; then
+                break
+              fi
+              echo "${path} -> ${code:-000} (attempt ${attempt}/10)"
+              if [ "${attempt}" -lt 10 ]; then
+                sleep 3
+              fi
+            done
             echo "${path} -> ${code}"
             test "${code}" = "200"
           done
