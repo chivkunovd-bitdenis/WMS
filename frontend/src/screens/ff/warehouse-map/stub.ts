@@ -91,6 +91,7 @@ function product(id: string, kind: keyof typeof KITS, qty: number): ProductNode 
     name: NAMES[kind]!,
     seller_name: kit.seller,
     category: kit.category,
+    seller_article: null,
     barcode: kit.barcode,
     photo_url: kit.photo,
     qty,

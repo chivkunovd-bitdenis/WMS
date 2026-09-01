@@ -35,6 +35,7 @@ function dataWithPallet(): WarehouseMapData {
                 name: 'Куртка',
                 seller_name: 'Denmarcs',
                 category: null,
+                seller_article: 'SELLER-JACKET-42',
                 barcode: '4680000000001',
                 photo_url: null,
                 qty: 67,
@@ -84,4 +85,19 @@ describe('карта склада: признак пустоты', () => {
     const row = palletRow(data, '')
     expect(row?.empty).toBe(true)
   })
+})
+
+describe('карта склада: идентификаторы товара', () => {
+  it.each(['SELLER-JACKET-42', '4680000000001'])(
+    'находит товар по значению %s',
+    (query) => {
+      const rows = buildRows(dataWithPallet(), {
+        expandedKeys: new Set<string>(),
+        filters: { ...EMPTY_FILTERS, query },
+      })
+      const product = rows.find((row) => row.kind === 'product')
+      expect(product?.sellerArticle).toBe('SELLER-JACKET-42')
+      expect(product?.barcode).toBe('4680000000001')
+    },
+  )
 })

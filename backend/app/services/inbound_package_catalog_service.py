@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-from sqlalchemy import and_, exists, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -16,7 +16,10 @@ from app.models.inbound_intake import (
     InboundIntakeCargoPlaceLine,
     InboundIntakeRequest,
 )
+from app.models.inventory_balance import InventoryBalance
 from app.models.product import Product
+from app.models.seller import Seller
+from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 
 PackageKind = Literal["box", "cargo_place"]
@@ -102,11 +105,16 @@ def _box_item(
     request: InboundIntakeRequest,
     *,
     warehouse_name: str | None,
+    current_lines: tuple[InboundPackageCatalogLine, ...] | None = None,
 ) -> InboundPackageCatalogItem:
-    lines = tuple(
-        _box_catalog_line(line, remaining)
-        for line in box.lines
-        if (remaining := _box_line_remaining_qty(line)) > 0
+    lines = (
+        current_lines
+        if current_lines is not None
+        else tuple(
+            _box_catalog_line(line, remaining)
+            for line in box.lines
+            if (remaining := _box_line_remaining_qty(line)) > 0
+        )
     )
     return InboundPackageCatalogItem(
         id=box.id,
@@ -182,27 +190,10 @@ async def _warehouse_names_for_tenant(
 async def _load_tenant_packages(
     session: AsyncSession, tenant_id: uuid.UUID
 ) -> tuple[list[InboundIntakeBox], list[InboundIntakeCargoPlace], dict[uuid.UUID, str]]:
-    has_remaining_line = exists(
-        select(InboundIntakeBoxLine.id).where(
-            InboundIntakeBoxLine.box_id == InboundIntakeBox.id,
-            InboundIntakeBoxLine.quantity > InboundIntakeBoxLine.posted_qty,
-        )
-    )
-    has_any_line = exists(
-        select(InboundIntakeBoxLine.id).where(
-            InboundIntakeBoxLine.box_id == InboundIntakeBox.id,
-        )
-    )
     boxes_result = await session.execute(
         select(InboundIntakeBox)
         .join(InboundIntakeBox.request)
-        .where(
-            InboundIntakeBox.tenant_id == tenant_id,
-            or_(
-                has_remaining_line,
-                and_(~has_any_line, InboundIntakeRequest.status != "done"),
-            ),
-        )
+        .where(InboundIntakeBox.tenant_id == tenant_id)
         .options(
             selectinload(InboundIntakeBox.lines)
             .selectinload(InboundIntakeBoxLine.product)
@@ -232,6 +223,80 @@ async def _load_tenant_packages(
     )
 
 
+async def _current_box_contents(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    box_ids: list[uuid.UUID],
+) -> tuple[
+    dict[uuid.UUID, tuple[InboundPackageCatalogLine, ...]],
+    dict[uuid.UUID, str],
+    set[uuid.UUID],
+]:
+    if not box_ids:
+        return {}, {}, set()
+    rows = list(
+        (
+            await session.execute(
+                select(
+                    InventoryBalance.container_id,
+                    Product,
+                    Seller,
+                    Warehouse.name,
+                    func.sum(InventoryBalance.quantity),
+                )
+                .join(Product, Product.id == InventoryBalance.product_id)
+                .outerjoin(Seller, Seller.id == Product.seller_id)
+                .join(
+                    StorageLocation,
+                    StorageLocation.id == InventoryBalance.storage_location_id,
+                )
+                .join(Warehouse, Warehouse.id == StorageLocation.warehouse_id)
+                .where(
+                    InventoryBalance.tenant_id == tenant_id,
+                    InventoryBalance.container_kind == "box",
+                    InventoryBalance.container_id.in_(box_ids),
+                )
+                .group_by(
+                    InventoryBalance.container_id,
+                    Product.id,
+                    Seller.id,
+                    Warehouse.name,
+                )
+                .order_by(Product.sku_code)
+            )
+        ).all()
+    )
+    lines_by_box: dict[uuid.UUID, list[InboundPackageCatalogLine]] = {}
+    warehouses_by_box: dict[uuid.UUID, set[str]] = {}
+    tracked_box_ids: set[uuid.UUID] = set()
+    for box_id, product, seller, warehouse_name, quantity in rows:
+        if box_id is None:
+            continue
+        tracked_box_ids.add(box_id)
+        if int(quantity) > 0:
+            lines_by_box.setdefault(box_id, []).append(
+                InboundPackageCatalogLine(
+                    product_id=product.id,
+                    remaining_qty=int(quantity),
+                    name=product.name,
+                    sku_code=product.sku_code,
+                    wb_vendor_code=product.wb_vendor_code,
+                    wb_barcode=product.wb_barcode,
+                    wb_size=product.wb_size,
+                    seller_name=seller.name if seller is not None else None,
+                )
+            )
+        warehouses_by_box.setdefault(box_id, set()).add(warehouse_name)
+    current_lines = {
+        box_id: tuple(lines) for box_id, lines in lines_by_box.items()
+    }
+    current_warehouses = {
+        box_id: next(iter(names)) if len(names) == 1 else "Несколько складов"
+        for box_id, names in warehouses_by_box.items()
+    }
+    return current_lines, current_warehouses, tracked_box_ids
+
+
 def _conditional_warehouse_name(
     request: InboundIntakeRequest, warehouse_names: dict[uuid.UUID, str]
 ) -> str | None:
@@ -252,6 +317,9 @@ async def list_current_packages(
 ) -> list[InboundPackageCatalogItem]:
     """Return catalog-visible packages without changing intake state."""
     boxes, cargo_places, warehouse_names = await _load_tenant_packages(session, tenant_id)
+    current_lines_by_box, current_warehouse_by_box, tracked_box_ids = await _current_box_contents(
+        session, tenant_id, [box.id for box in boxes]
+    )
     items: list[InboundPackageCatalogItem] = []
     for box in boxes:
         request = box.request
@@ -260,13 +328,15 @@ async def list_current_packages(
         item = _box_item(
             box,
             request,
-            warehouse_name=_conditional_warehouse_name(request, warehouse_names),
+            warehouse_name=current_warehouse_by_box.get(box.id)
+            or _conditional_warehouse_name(request, warehouse_names),
+            current_lines=(
+                current_lines_by_box.get(box.id, ())
+                if box.id in tracked_box_ids
+                else None
+            ),
         )
-        is_empty_box = not box.lines
-        if (item.remaining_qty is not None and item.remaining_qty > 0) or (
-            is_empty_box and request.status != "done"
-        ):
-            items.append(item)
+        items.append(item)
 
     for place in cargo_places:
         request = place.request
@@ -306,10 +376,21 @@ async def lookup_package_by_barcode(
     )
     box = box_result.scalar_one_or_none()
     if box is not None and box.request is not None:
+        (
+            current_lines_by_box,
+            current_warehouse_by_box,
+            tracked_box_ids,
+        ) = await _current_box_contents(session, tenant_id, [box.id])
         return _box_item(
             box,
             box.request,
-            warehouse_name=_conditional_warehouse_name(box.request, warehouse_names),
+            warehouse_name=current_warehouse_by_box.get(box.id)
+            or _conditional_warehouse_name(box.request, warehouse_names),
+            current_lines=(
+                current_lines_by_box.get(box.id, ())
+                if box.id in tracked_box_ids
+                else None
+            ),
         )
 
     cargo_place_result = await session.execute(

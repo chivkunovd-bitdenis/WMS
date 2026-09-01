@@ -1,6 +1,31 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveFbsFallbackLabelCopies, resolveTapeCounts } from './MarkingPrintDialog'
+import {
+  mapConcurrentlyInOrder,
+  resolveFbsFallbackLabelCopies,
+  resolveTapeCounts,
+} from './MarkingPrintDialog'
+
+describe('mapConcurrentlyInOrder', () => {
+  it('limits concurrency and preserves source order', async () => {
+    let active = 0
+    let maxActive = 0
+    const completed: number[] = []
+
+    const result = await mapConcurrentlyInOrder([40, 5, 25, 10], 2, async (delay) => {
+      active += 1
+      maxActive = Math.max(maxActive, active)
+      await new Promise((resolve) => setTimeout(resolve, delay))
+      completed.push(delay)
+      active -= 1
+      return `ready-${delay}`
+    })
+
+    expect(maxActive).toBe(2)
+    expect(completed).not.toEqual([40, 5, 25, 10])
+    expect(result).toEqual(['ready-40', 'ready-5', 'ready-25', 'ready-10'])
+  })
+})
 
 describe('resolveTapeCounts', () => {
   it('keeps zero ЧЗ and an empty tape when the order QR is printed', () => {

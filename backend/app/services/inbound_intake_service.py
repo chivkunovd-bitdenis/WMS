@@ -21,6 +21,7 @@ from app.models.inbound_intake import (
     InboundIntakeLine,
     InboundIntakeRequest,
 )
+from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import MOVEMENT_TYPE_INBOUND_INTAKE
 from app.models.product import Product
 from app.models.seller import Seller
@@ -45,6 +46,7 @@ from app.services.document_number_service import (
     assign_document_number_if_missing,
 )
 from app.services.inbound_intake_quantity_service import container_total_for_product
+from app.services.inventory_container_service import ContainerKind
 from app.services.operation_fact_service import record_inbound_completion
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
@@ -114,6 +116,100 @@ def _accepted_qty_for_line(line: InboundIntakeLine) -> int:
     return line.actual_qty if line.actual_qty is not None else 0
 
 
+async def _sorting_source_allocations(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    line: InboundIntakeLine,
+    sorting_location_id: uuid.UUID,
+    quantity: int,
+    preferred_container_kind: ContainerKind | None,
+    preferred_container_id: uuid.UUID | None,
+) -> list[tuple[ContainerKind | None, uuid.UUID | None, int]]:
+    """Resolve only this intake line's physical sources, then legacy loose stock."""
+    refs: list[tuple[ContainerKind, uuid.UUID]] = []
+    if preferred_container_kind is not None and preferred_container_id is not None:
+        refs.append((preferred_container_kind, preferred_container_id))
+    else:
+        box_ids = list(
+            (
+                await session.scalars(
+                    select(InboundIntakeBox.id)
+                    .join(InboundIntakeBoxLine)
+                    .where(
+                        InboundIntakeBox.request_id == line.request_id,
+                        InboundIntakeBox.tenant_id == tenant_id,
+                        InboundIntakeBoxLine.product_id == line.product_id,
+                    )
+                    .order_by(InboundIntakeBox.box_number, InboundIntakeBox.id)
+                )
+            ).all()
+        )
+        cargo_ids = list(
+            (
+                await session.scalars(
+                    select(InboundIntakeCargoPlace.id)
+                    .join(InboundIntakeCargoPlaceLine)
+                    .where(
+                        InboundIntakeCargoPlace.request_id == line.request_id,
+                        InboundIntakeCargoPlace.tenant_id == tenant_id,
+                        InboundIntakeCargoPlaceLine.product_id == line.product_id,
+                    )
+                    .order_by(
+                        InboundIntakeCargoPlace.place_number,
+                        InboundIntakeCargoPlace.id,
+                    )
+                )
+            ).all()
+        )
+        refs.extend(("box", container_id) for container_id in box_ids)
+        refs.extend(("cargo_place", container_id) for container_id in cargo_ids)
+
+    remaining = quantity
+    allocations: list[tuple[ContainerKind | None, uuid.UUID | None, int]] = []
+    for kind, container_id in refs:
+        available = int(
+            await session.scalar(
+                select(sa.func.coalesce(sa.func.sum(InventoryBalance.quantity), 0)).where(
+                    InventoryBalance.tenant_id == tenant_id,
+                    InventoryBalance.product_id == line.product_id,
+                    InventoryBalance.storage_location_id == sorting_location_id,
+                    InventoryBalance.container_kind == kind,
+                    InventoryBalance.container_id == container_id,
+                    InventoryBalance.quantity > 0,
+                )
+            )
+            or 0
+        )
+        moved = min(remaining, available)
+        if moved > 0:
+            allocations.append((kind, container_id, moved))
+            remaining -= moved
+        if remaining == 0:
+            return allocations
+
+    loose_available = int(
+        await session.scalar(
+            select(sa.func.coalesce(sa.func.sum(InventoryBalance.quantity), 0)).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == line.product_id,
+                InventoryBalance.storage_location_id == sorting_location_id,
+                InventoryBalance.container_kind.is_(None),
+                InventoryBalance.container_id.is_(None),
+                InventoryBalance.quantity > 0,
+            )
+        )
+        or 0
+    )
+    moved_loose = min(remaining, loose_available)
+    if moved_loose > 0:
+        allocations.append((None, None, moved_loose))
+        remaining -= moved_loose
+    if remaining > 0:
+        raise ValueError("insufficient stock")
+    return allocations
+
+
 async def _apply_line_putaway(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -124,6 +220,10 @@ async def _apply_line_putaway(
     quantity: int,
     keep_good_in_sorting: bool = False,
     actor_user_id: uuid.UUID | None,
+    source_container_kind: ContainerKind | None = None,
+    source_container_id: uuid.UUID | None = None,
+    destination_container_kind: ContainerKind | None = None,
+    destination_container_id: uuid.UUID | None = None,
 ) -> None:
     """Put good units into the chosen cell and defective units into service stock."""
     defective_total = min(max(0, line.defective_qty), _accepted_qty_for_line(line))
@@ -136,28 +236,54 @@ async def _apply_line_putaway(
         elif normal_location_id is None:
             raise InboundIntakeError("lines_missing_storage")
         else:
-            await inv_svc.apply_putaway_from_sorting(
+            allocations = await _sorting_source_allocations(
+                session,
+                tenant_id=tenant_id,
+                line=line,
+                sorting_location_id=sorting_location_id,
+                quantity=good_quantity,
+                preferred_container_kind=source_container_kind,
+                preferred_container_id=source_container_id,
+            )
+            for from_kind, from_id, source_quantity in allocations:
+                await inv_svc.apply_putaway_from_sorting(
+                    session,
+                    tenant_id,
+                    from_storage_location_id=sorting_location_id,
+                    to_storage_location_id=normal_location_id,
+                    product_id=line.product_id,
+                    quantity=source_quantity,
+                    inbound_intake_line_id=line.id,
+                    actor_user_id=actor_user_id,
+                    from_container_kind=from_kind,
+                    from_container_id=from_id,
+                    to_container_kind=destination_container_kind,
+                    to_container_id=destination_container_id,
+                )
+    if defective_quantity:
+        defect_location = await get_or_create_defect_location(session, tenant_id)
+        allocations = await _sorting_source_allocations(
+            session,
+            tenant_id=tenant_id,
+            line=line,
+            sorting_location_id=sorting_location_id,
+            quantity=defective_quantity,
+            preferred_container_kind=source_container_kind,
+            preferred_container_id=source_container_id,
+        )
+        for from_kind, from_id, source_quantity in allocations:
+            await inv_svc.apply_return_defect_putaway(
                 session,
                 tenant_id,
                 from_storage_location_id=sorting_location_id,
-                to_storage_location_id=normal_location_id,
+                to_storage_location_id=defect_location.id,
                 product_id=line.product_id,
-                quantity=good_quantity,
+                quantity=source_quantity,
                 inbound_intake_line_id=line.id,
                 actor_user_id=actor_user_id,
+                from_container_kind=from_kind,
+                from_container_id=from_id,
             )
-    if defective_quantity:
-        defect_location = await get_or_create_defect_location(session, tenant_id)
-        await inv_svc.apply_return_defect_putaway(
-            session,
-            tenant_id,
-            from_storage_location_id=sorting_location_id,
-            to_storage_location_id=defect_location.id,
-            product_id=line.product_id,
-            quantity=defective_quantity,
-            inbound_intake_line_id=line.id,
-            actor_user_id=actor_user_id,
-        )
 
 
 async def sync_request_actuals_from_boxes(
@@ -1071,20 +1197,63 @@ async def complete_receiving(
     sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
         session, tenant_id, req.warehouse_id
     )
+    for box in req.boxes:
+        box.storage_location_id = sorting_loc.id
+    for cargo_place in req.cargo_places:
+        cargo_place.storage_location_id = sorting_loc.id
     for line in req.lines:
         qty = _accepted_qty_for_line(line)
         if qty < 1:
             continue
-        await inv_svc.apply_inbound_receive(
-            session,
-            tenant_id=tenant_id,
-            product_id=line.product_id,
-            storage_location_id=sorting_loc.id,
-            quantity=qty,
-            movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
-            inbound_intake_line_id=line.id,
-            actor_user_id=actor_user_id,
-        )
+        container_qty = 0
+        for box in req.boxes:
+            for box_line in box.lines:
+                if box_line.product_id != line.product_id or box_line.quantity < 1:
+                    continue
+                container_qty += int(box_line.quantity)
+                await inv_svc.apply_inbound_receive(
+                    session,
+                    tenant_id=tenant_id,
+                    product_id=line.product_id,
+                    storage_location_id=sorting_loc.id,
+                    quantity=int(box_line.quantity),
+                    movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
+                    inbound_intake_line_id=line.id,
+                    actor_user_id=actor_user_id,
+                    container_kind="box",
+                    container_id=box.id,
+                )
+        for cargo_place in req.cargo_places:
+            for cargo_line in cargo_place.lines:
+                if cargo_line.product_id != line.product_id or cargo_line.quantity < 1:
+                    continue
+                container_qty += int(cargo_line.quantity)
+                await inv_svc.apply_inbound_receive(
+                    session,
+                    tenant_id=tenant_id,
+                    product_id=line.product_id,
+                    storage_location_id=sorting_loc.id,
+                    quantity=int(cargo_line.quantity),
+                    movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
+                    inbound_intake_line_id=line.id,
+                    actor_user_id=actor_user_id,
+                    container_kind="cargo_place",
+                    container_id=cargo_place.id,
+                )
+        loose_qty = qty - container_qty
+        if loose_qty < 0:
+            raise InboundIntakeError("actual_below_container_total")
+        if loose_qty > 0:
+            await inv_svc.apply_inbound_receive(
+                session,
+                tenant_id=tenant_id,
+                product_id=line.product_id,
+                storage_location_id=sorting_loc.id,
+                quantity=loose_qty,
+                movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
+                inbound_intake_line_id=line.id,
+                actor_user_id=actor_user_id,
+            )
     await session.commit()
     await session.refresh(req)
     return req
@@ -1475,6 +1644,10 @@ async def apply_box_putaway(
                 normal_location_id=storage_location_id,
                 quantity=qty,
                 actor_user_id=performer_id,
+                source_container_kind="box",
+                source_container_id=box_id,
+                destination_container_kind="box" if whole_box else None,
+                destination_container_id=box_id if whole_box else None,
             )
         except ValueError as exc:
             if str(exc) == "insufficient stock":
@@ -1940,6 +2113,8 @@ async def complete_distribution(
                 normal_location_id=r.storage_location_id,
                 quantity=quantity_to_post,
                 actor_user_id=performer_id,
+                source_container_kind="box" if r.box_id is not None else None,
+                source_container_id=r.box_id,
             )
         except ValueError as exc:
             await session.rollback()
@@ -1982,20 +2157,52 @@ async def reopen_receiving(
         qty = _accepted_qty_for_line(line)
         if qty < 1:
             continue
-        try:
-            await inv_svc.reverse_inbound_receive(
-                session,
-                tenant_id=tenant_id,
-                product_id=line.product_id,
-                storage_location_id=sorting_loc.id,
-                quantity=qty,
-                inbound_intake_line_id=line.id,
-                actor_user_id=actor_user_id,
-            )
-        except ValueError as exc:
-            if str(exc) == "insufficient stock":
-                raise InboundIntakeError("sorting_stock_unavailable") from exc
-            raise
+        container_qty = 0
+        sources: list[tuple[ContainerKind | None, uuid.UUID | None, int]] = []
+        for box in req.boxes:
+            for box_line in box.lines:
+                if box_line.product_id == line.product_id and box_line.quantity > 0:
+                    container_qty += int(box_line.quantity)
+                    sources.append(("box", box.id, int(box_line.quantity)))
+        for cargo_place in req.cargo_places:
+            for cargo_line in cargo_place.lines:
+                if cargo_line.product_id == line.product_id and cargo_line.quantity > 0:
+                    container_qty += int(cargo_line.quantity)
+                    sources.append(
+                        ("cargo_place", cargo_place.id, int(cargo_line.quantity))
+                    )
+        loose_qty = qty - container_qty
+        if loose_qty < 0:
+            raise InboundIntakeError("actual_below_container_total")
+        if loose_qty > 0:
+            sources.append((None, None, loose_qty))
+        for preferred_kind, preferred_id, source_qty in sources:
+            try:
+                allocations = await _sorting_source_allocations(
+                    session,
+                    tenant_id=tenant_id,
+                    line=line,
+                    sorting_location_id=sorting_loc.id,
+                    quantity=source_qty,
+                    preferred_container_kind=preferred_kind,
+                    preferred_container_id=preferred_id,
+                )
+                for source_kind, source_id, allocated_qty in allocations:
+                    await inv_svc.reverse_inbound_receive(
+                        session,
+                        tenant_id=tenant_id,
+                        product_id=line.product_id,
+                        storage_location_id=sorting_loc.id,
+                        quantity=allocated_qty,
+                        inbound_intake_line_id=line.id,
+                        actor_user_id=actor_user_id,
+                        container_kind=source_kind,
+                        container_id=source_id,
+                    )
+            except ValueError as exc:
+                if str(exc) == "insufficient stock":
+                    raise InboundIntakeError("sorting_stock_unavailable") from exc
+                raise
 
     await session.execute(
         sa.delete(InboundIntakeDistributionLine).where(
