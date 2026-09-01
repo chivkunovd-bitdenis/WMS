@@ -91,6 +91,7 @@ describe('FBS picking list print document', () => {
     expect(html).toContain('№500001')
     expect(html).toContain('<td class="number">1–2</td>')
     expect(html).toContain('5667260 <strong>6304</strong>')
+    expect(html).toContain('.sticker { width: 116px; font-size: 12px; white-space: nowrap;')
     expect(html).toContain('A-01: 2')
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
     expect(html).not.toContain('javascript:alert(1)')
