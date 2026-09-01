@@ -522,6 +522,7 @@ async def test_sold_release_does_not_resurrect_available_after_fbs_write_off(
             storage_location_id=storage_loc_id,
             quantity=1,
             actor_user_id=None,
+            allow_negative=False,
         )
 
         from app.services.wb_marketplace_orders_service import _release_reservation
@@ -642,6 +643,7 @@ async def test_fbs_available_stock_reserve_release_writeoff_sequence(
             storage_location_id=storage_loc_id,
             quantity=1,
             actor_user_id=actor_user_id,
+            allow_negative=False,
         )
         await _release_reservation(session, sold_order)
         await session.commit()
@@ -666,6 +668,7 @@ async def test_fbs_available_stock_reserve_release_writeoff_sequence(
             storage_location_id=storage_loc_id,
             quantity=99,
             actor_user_id=actor_user_id,
+            allow_negative=False,
         )
         await session.commit()
         assert (

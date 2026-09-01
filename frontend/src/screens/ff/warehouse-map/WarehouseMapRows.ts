@@ -22,6 +22,7 @@ export type MapRow = {
   title: string
   seller: string | null
   category: string | null
+  sellerArticle: string | null
   barcode: string | null
   qty: number
   /**
@@ -93,7 +94,7 @@ export function searchTokens(query: string): string[] {
 
 function haystack(node: MapNode): string[] {
   return node.kind === 'product'
-    ? [node.name, node.seller_name, node.category, node.barcode]
+    ? [node.name, node.seller_name, node.category, node.seller_article, node.barcode]
         .filter(Boolean)
         .map((value) => (value as string).toLowerCase())
     : // Номер приёмки ищем тем же полем, что и код тары (§Б-04): короб из
@@ -184,6 +185,7 @@ function pushNode(
     title: nodeTitle(node),
     seller: node.seller_name,
     category: node.kind === 'product' ? node.category : null,
+    sellerArticle: node.kind === 'product' ? node.seller_article : null,
     barcode: node.barcode,
     qty: node.qty,
     photoUrl: node.kind === 'product' ? node.photo_url : null,
@@ -244,6 +246,7 @@ export function buildRows(
     title: UNASSIGNED_LABEL,
     seller: null,
     category: null,
+    sellerArticle: null,
     barcode: null,
     qty: unassignedQty,
     photoUrl: null,
@@ -270,6 +273,7 @@ export function buildRows(
       title: cell.code,
       seller: null,
       category: null,
+      sellerArticle: null,
       barcode: cell.barcode,
       qty: cell.qty,
       photoUrl: null,

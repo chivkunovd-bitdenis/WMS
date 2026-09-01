@@ -101,6 +101,9 @@ async def reconcile(
                     # Сверочный скрипт запускают из консоли: пользователя системы
                     # здесь нет, и выдумывать автора движению нельзя.
                     actor_user_id=None,
+                    allow_negative=allow_negative,
+                    container_kind=ledger.container_kind,
+                    container_id=ledger.container_id,
                 )
                 await session.flush()
                 ledger.shipment_movement_id = movement.id

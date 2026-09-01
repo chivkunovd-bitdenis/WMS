@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC
 from typing import Any, Literal, cast
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inbound_intake import (
@@ -194,10 +194,20 @@ async def _load_boxes(
             await session.scalars(
                 select(InboundIntakeBox)
                 .join(InboundIntakeRequest)
+                .outerjoin(
+                    StorageLocation,
+                    StorageLocation.id == InboundIntakeBox.storage_location_id,
+                )
                 .where(
                     InboundIntakeBox.tenant_id == tenant_id,
                     InboundIntakeRequest.tenant_id == tenant_id,
-                    InboundIntakeRequest.warehouse_id == warehouse_id,
+                    or_(
+                        StorageLocation.warehouse_id == warehouse_id,
+                        and_(
+                            InboundIntakeBox.storage_location_id.is_(None),
+                            InboundIntakeRequest.warehouse_id == warehouse_id,
+                        ),
+                    ),
                 )
             )
         ).all()
@@ -207,10 +217,21 @@ async def _load_boxes(
             await session.scalars(
                 select(InboundIntakeCargoPlace)
                 .join(InboundIntakeRequest)
+                .outerjoin(
+                    StorageLocation,
+                    StorageLocation.id
+                    == InboundIntakeCargoPlace.storage_location_id,
+                )
                 .where(
                     InboundIntakeCargoPlace.tenant_id == tenant_id,
                     InboundIntakeRequest.tenant_id == tenant_id,
-                    InboundIntakeRequest.warehouse_id == warehouse_id,
+                    or_(
+                        StorageLocation.warehouse_id == warehouse_id,
+                        and_(
+                            InboundIntakeCargoPlace.storage_location_id.is_(None),
+                            InboundIntakeRequest.warehouse_id == warehouse_id,
+                        ),
+                    ),
                 )
             )
         ).all()
@@ -290,13 +311,31 @@ async def _load_map_rows(
             InboundIntakeRequest,
             InboundIntakeRequest.id == InboundIntakeBox.request_id,
         )
+        .outerjoin(
+            StorageLocation,
+            StorageLocation.id == InboundIntakeBox.storage_location_id,
+        )
         .join(Product, Product.id == InboundIntakeBoxLine.product_id)
         .outerjoin(Seller, Seller.id == Product.seller_id)
         .where(
             InboundIntakeBox.tenant_id == tenant_id,
             InboundIntakeRequest.tenant_id == tenant_id,
-            InboundIntakeRequest.warehouse_id == warehouse_id,
+            or_(
+                StorageLocation.warehouse_id == warehouse_id,
+                and_(
+                    InboundIntakeBox.storage_location_id.is_(None),
+                    InboundIntakeRequest.warehouse_id == warehouse_id,
+                ),
+            ),
             InboundIntakeBoxLine.quantity > InboundIntakeBoxLine.posted_qty,
+            ~exists(
+                select(InventoryBalance.id).where(
+                    InventoryBalance.tenant_id == tenant_id,
+                    InventoryBalance.container_kind == "box",
+                    InventoryBalance.container_id == InboundIntakeBox.id,
+                    InventoryBalance.product_id == InboundIntakeBoxLine.product_id,
+                )
+            ),
         )
     )
     pending_contents.extend(
@@ -326,14 +365,33 @@ async def _load_map_rows(
             InboundIntakeRequest,
             InboundIntakeRequest.id == InboundIntakeCargoPlace.request_id,
         )
+        .outerjoin(
+            StorageLocation,
+            StorageLocation.id == InboundIntakeCargoPlace.storage_location_id,
+        )
         .join(Product, Product.id == InboundIntakeCargoPlaceLine.product_id)
         .outerjoin(Seller, Seller.id == Product.seller_id)
         .where(
             InboundIntakeCargoPlace.tenant_id == tenant_id,
             InboundIntakeRequest.tenant_id == tenant_id,
-            InboundIntakeRequest.warehouse_id == warehouse_id,
+            or_(
+                StorageLocation.warehouse_id == warehouse_id,
+                and_(
+                    InboundIntakeCargoPlace.storage_location_id.is_(None),
+                    InboundIntakeRequest.warehouse_id == warehouse_id,
+                ),
+            ),
             InboundIntakeCargoPlaceLine.quantity
             > InboundIntakeCargoPlaceLine.posted_qty,
+            ~exists(
+                select(InventoryBalance.id).where(
+                    InventoryBalance.tenant_id == tenant_id,
+                    InventoryBalance.container_kind == "cargo_place",
+                    InventoryBalance.container_id == InboundIntakeCargoPlace.id,
+                    InventoryBalance.product_id
+                    == InboundIntakeCargoPlaceLine.product_id,
+                )
+            ),
         )
     )
     pending_contents.extend(
@@ -371,7 +429,6 @@ async def _load_map_rows(
             ).where(
                 InboundIntakeRequest.id.in_(request_ids),
                 InboundIntakeRequest.tenant_id == tenant_id,
-                InboundIntakeRequest.warehouse_id == warehouse_id,
             )
         )
         request_numbers = {
@@ -536,6 +593,7 @@ async def get_warehouse_map(
         )
 
     loose_by_location: dict[uuid.UUID, list[dict[str, Any]]] = defaultdict(list)
+    current_container_qty: dict[tuple[str, uuid.UUID, uuid.UUID], int] = defaultdict(int)
     sellers: set[str] = set()
     categories: set[str] = set()
     for balance, location, product, seller in rows:
@@ -558,6 +616,7 @@ async def get_warehouse_map(
             "seller_name": seller_name,
             "category": category,
             "barcode": product.wb_barcode,
+            "seller_article": product.wb_vendor_code,
             "photo_url": photo_url,
             "qty": int(balance.quantity),
         }
@@ -569,12 +628,24 @@ async def get_warehouse_map(
         if container_key in nodes:
             assert container_key is not None
             nodes[container_key]["children"].append(product_node)
+            current_container_qty[
+                (container_key[0], container_key[1], product.id)
+            ] += int(balance.quantity)
         else:
             loose_by_location[location.id].append(product_node)
 
     for pending in pending_contents:
         container_key = (pending.kind, pending.container_id)
         if container_key not in nodes:
+            continue
+        pending_quantity = max(
+            0,
+            pending.quantity
+            - current_container_qty.get(
+                (pending.kind, pending.container_id, pending.product.id), 0
+            ),
+        )
+        if pending_quantity == 0:
             continue
         product = pending.product
         card = (
@@ -597,8 +668,9 @@ async def get_warehouse_map(
                 "seller_name": seller_name,
                 "category": category,
                 "barcode": product.wb_barcode,
+                "seller_article": product.wb_vendor_code,
                 "photo_url": photo_url,
-                "qty": pending.quantity,
+                "qty": pending_quantity,
             }
         )
 
@@ -847,17 +919,16 @@ async def _container_code(
             and warehouse_box.container_kind == "box"
         ):
             return warehouse_box.internal_barcode
-        inbound = await session.scalar(
-            select(InboundIntakeBox)
-            .join(InboundIntakeRequest)
-            .where(
-                InboundIntakeBox.id == container_id,
-                InboundIntakeBox.tenant_id == tenant_id,
-                InboundIntakeRequest.warehouse_id == warehouse_id,
-            )
-        )
-        if inbound is not None:
-            return f"КР-{inbound.box_number:06d}"
+        inbound = await session.get(InboundIntakeBox, container_id)
+        if inbound is not None and inbound.tenant_id == tenant_id:
+            try:
+                await validate_container(
+                    session, tenant_id, warehouse_id, "box", container_id
+                )
+            except ValueError:
+                pass
+            else:
+                return f"КР-{inbound.box_number:06d}"
     else:
         warehouse_cargo_place = await session.get(WarehouseBox, container_id)
         if (
@@ -867,17 +938,16 @@ async def _container_code(
             and warehouse_cargo_place.container_kind == "cargo_place"
         ):
             return warehouse_cargo_place.internal_barcode
-        cargo = await session.scalar(
-            select(InboundIntakeCargoPlace)
-            .join(InboundIntakeRequest)
-            .where(
-                InboundIntakeCargoPlace.id == container_id,
-                InboundIntakeCargoPlace.tenant_id == tenant_id,
-                InboundIntakeRequest.warehouse_id == warehouse_id,
-            )
-        )
-        if cargo is not None:
-            return f"ГМ-{cargo.place_number:06d}"
+        cargo = await session.get(InboundIntakeCargoPlace, container_id)
+        if cargo is not None and cargo.tenant_id == tenant_id:
+            try:
+                await validate_container(
+                    session, tenant_id, warehouse_id, "cargo_place", container_id
+                )
+            except ValueError:
+                pass
+            else:
+                return f"ГМ-{cargo.place_number:06d}"
     raise WarehouseMapError("object_not_found")
 
 
@@ -1011,21 +1081,15 @@ async def _place_container(
                 destination_location_id if to_kind == "cell" else None
             )
             return
-        inbound = await session.scalar(
-            select(InboundIntakeBox)
-            .join(InboundIntakeRequest)
-            .where(
-                InboundIntakeBox.id == container_id,
-                InboundIntakeBox.tenant_id == tenant_id,
-                InboundIntakeRequest.warehouse_id == warehouse_id,
-            )
-        )
-        if inbound is None:
+        inbound = await session.get(InboundIntakeBox, container_id)
+        if inbound is None or inbound.tenant_id != tenant_id:
             raise WarehouseMapError("object_not_found")
+        try:
+            await validate_container(session, tenant_id, warehouse_id, "box", container_id)
+        except ValueError as exc:
+            raise WarehouseMapError("object_not_found") from exc
         inbound.pallet_id = pallet_id
-        inbound.storage_location_id = (
-            destination_location_id if to_kind == "cell" else None
-        )
+        inbound.storage_location_id = destination_location_id
         return
     warehouse_cargo_place = await session.get(WarehouseBox, container_id)
     if (
@@ -1039,21 +1103,17 @@ async def _place_container(
             destination_location_id if to_kind == "cell" else None
         )
         return
-    cargo = await session.scalar(
-        select(InboundIntakeCargoPlace)
-        .join(InboundIntakeRequest)
-        .where(
-            InboundIntakeCargoPlace.id == container_id,
-            InboundIntakeCargoPlace.tenant_id == tenant_id,
-            InboundIntakeRequest.warehouse_id == warehouse_id,
-        )
-    )
-    if cargo is None:
+    cargo = await session.get(InboundIntakeCargoPlace, container_id)
+    if cargo is None or cargo.tenant_id != tenant_id:
         raise WarehouseMapError("object_not_found")
+    try:
+        await validate_container(
+            session, tenant_id, warehouse_id, "cargo_place", container_id
+        )
+    except ValueError as exc:
+        raise WarehouseMapError("object_not_found") from exc
     cargo.pallet_id = pallet_id
-    cargo.storage_location_id = (
-        destination_location_id if to_kind == "cell" else None
-    )
+    cargo.storage_location_id = destination_location_id
 
 
 async def move_object(
@@ -1138,37 +1198,48 @@ async def move_object(
         balances = await _container_balances(
             session, tenant_id, warehouse_id, container_kind, object_id
         )
+        if (
+            balances
+            and source_location_id == destination_location_id
+            and to_kind in {"cell", "sorting", "unassigned"}
+        ):
+            raise WarehouseMapError("nothing_to_move")
         moved_total = sum(int(row.quantity) for row in balances)
-        if not balances:
-            try:
-                pending_moved = (
-                    await inbound_container_putaway_service.putaway_pending_container(
-                        session,
-                        tenant_id=tenant_id,
-                        warehouse_id=warehouse_id,
-                        actor_user_id=actor_user_id,
-                        kind=container_kind,
-                        container_id=object_id,
-                        destination_location_id=destination_location_id,
-                        destination_is_cell=to_kind == "cell",
-                    )
+        pending_moved: int | None = None
+        try:
+            pending_moved = (
+                await inbound_container_putaway_service.putaway_pending_container(
+                    session,
+                    tenant_id=tenant_id,
+                    warehouse_id=warehouse_id,
+                    actor_user_id=actor_user_id,
+                    kind=container_kind,
+                    container_id=object_id,
+                    destination_location_id=destination_location_id,
+                    destination_is_cell=to_kind == "cell",
                 )
-            except inbound_container_putaway_service.InboundContainerPutawayError as exc:
-                raise WarehouseMapError(exc.code) from exc
-            if pending_moved is not None:
-                moved_total = pending_moved
-        for balance in balances:
-            await _transfer_balance(
-                session,
-                tenant_id=tenant_id,
-                balance=balance,
-                quantity=int(balance.quantity),
-                destination_location_id=destination_location_id,
-                destination_container_kind=cast(ContainerKind, balance.container_kind),
-                destination_container_id=balance.container_id,
-                transfer_group_id=transfer_group_id,
-                actor_user_id=actor_user_id,
             )
+        except inbound_container_putaway_service.InboundContainerPutawayError as exc:
+            # A container with current balance can be moved again after its
+            # original intake has already been posted. The canonical intake
+            # bridge is required only while that intake still has pending qty.
+            if not balances or exc.code != "nothing_to_move":
+                raise WarehouseMapError(exc.code) from exc
+        if pending_moved is not None:
+            moved_total = pending_moved
+        else:
+            for balance in balances:
+                await _transfer_balance(
+                    session,
+                    tenant_id=tenant_id,
+                    balance=balance,
+                    quantity=int(balance.quantity),
+                    destination_location_id=destination_location_id,
+                    destination_container_kind=cast(ContainerKind, balance.container_kind),
+                    destination_container_id=balance.container_id,
+                    transfer_group_id=transfer_group_id,
+                    actor_user_id=actor_user_id,
+                )
         await _place_container(
             session,
             tenant_id,

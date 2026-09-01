@@ -327,14 +327,14 @@ async def test_fbs_pick_options_reports_active_pick_for_source_location(
         for location in product["locations"]
         if location["storage_location_id"] == str(location_id)
     )
-    assert source["quantity"] == 1
-    assert source["available"] == 1
+    assert source["quantity"] == 2
+    assert source["available"] == 2
     assert source["picked"] == 1
 
 
 # TC-NEW-FBS-PICK-OPTIONS-003
 @pytest.mark.asyncio
-async def test_fbs_pick_options_keeps_zero_balance_picked_location(
+async def test_fbs_pick_options_keeps_physical_balance_after_pick(
     async_client: AsyncClient,
 ) -> None:
     headers, suffix, tenant_id = await _register_ff_admin(async_client)
@@ -380,13 +380,13 @@ async def test_fbs_pick_options_keeps_zero_balance_picked_location(
         for location in product["locations"]
         if location["storage_location_id"] == str(location_id)
     )
-    assert source["quantity"] == 0
+    assert source["quantity"] == 1
     assert source["reserved"] == 0
-    assert source["available"] == 0
+    assert source["available"] == 1
     assert source["picked"] == 1
     assert source["sources"] == [
         {
-            "quantity": 0,
+            "quantity": 1,
             "picked": 1,
             "is_loose": True,
             "source_label": "Россыпью",

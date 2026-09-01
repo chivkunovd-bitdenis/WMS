@@ -156,6 +156,31 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     }
   }
 
+  async function createContainer(kind: 'pallet' | 'box' | 'cargo_place') {
+    if (!count || count.status !== 'draft') return
+    const warehouseId = count.warehouseId
+    if (!warehouseId) {
+      setError('Не удалось определить склад документа')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(apiUrl(`/warehouses/${warehouseId}/sorting-objects`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+        body: JSON.stringify({ kind }),
+      })
+      if (!res.ok) throw new Error(await readApiErrorMessage(res))
+      await open(count.id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось создать тару')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function create(warehouse: string, fill: CreateFill, comment: string) {
     setCreateOpen(false)
     setLoading(true)
@@ -198,6 +223,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         onSave={() => void save()}
         onPost={() => void post()}
         onCancelDocument={() => void cancelDocument()}
+        onCreateContainer={(kind) => void createContainer(kind)}
         onBack={() => {
           setCount(null)
           setNote(null)

@@ -193,6 +193,7 @@ async def write_off_order(
             storage_location_id=storage_location_id,
             quantity=quantity,
             actor_user_id=actor_user_id,
+            allow_negative=False,
         )
         await session.flush()
         if first_movement_id is None:

@@ -1,0 +1,409 @@
+
+> frontend@0.0.0 test:e2e
+> playwright test
+
+[WebServer] INFO:     Started server process [90529]
+[WebServer] INFO:     Waiting for application startup.
+[WebServer] WMS_AUTO_CREATE_SCHEMA=1: tables created (dev/e2e only).
+[WebServer] INFO:     Application startup complete.
+[WebServer] INFO:     Uvicorn running on http://127.0.0.1:18000 (Press CTRL+C to quit)
+
+Running 239 tests using 1 worker
+
+  ✓    1 [chromium] › tests-e2e/admin-shell-layout.spec.ts:10:1 › admin shell: single app root, nav, dashboard and main sections visible (4.0s)
+  ✓    2 [chromium] › tests-e2e/auth-core.spec.ts:7:1 › registration rejected on duplicate admin email (3.3s)
+  ✓    3 [chromium] › tests-e2e/auth-core.spec.ts:46:1 › login failure shows error and does not enter app (2.3s)
+  ✓    4 [chromium] › tests-e2e/auth-core.spec.ts:83:1 › logout returns to public screen and hides private sections (2.0s)
+  ✓    5 [chromium] › tests-e2e/auth-core.spec.ts:110:1 › profile loading state appears while /me is slow (4.1s)
+  ✓    6 [chromium] › tests-e2e/auth-dual-portal-sessions.spec.ts:110:1 › FF admin and staff opening /seller/products see human access denied (4.1s)
+  ✓    7 [chromium] › tests-e2e/auth-dual-portal-sessions.spec.ts:153:1 › FF and seller sessions stay independent on reload and deep seller routes (8.3s)
+  ✓    8 [chromium] › tests-e2e/auth-portal-mismatch.spec.ts:7:1 › seller login on FF portal shows portal mismatch error (4.6s)
+  ✓    9 [chromium] › tests-e2e/auth.spec.ts:8:1 › register then see dashboard (3.2s)
+  ✓   10 [chromium] › tests-e2e/billing-invoice-v2.spec.ts:61:1 › TC-NEW-205 история счетов показывает документ и открывает его карточку (3.4s)
+  ✓   11 [chromium] › tests-e2e/billing-invoice-v2.spec.ts:105:1 › TC-NEW-206 отменённый счёт остаётся в истории и больше не отменяется (3.6s)
+  ✓   12 [chromium] › tests-e2e/billing-invoice-v2.spec.ts:145:1 › TC-NEW-207 пустая история ведёт оператора на вкладку «Селлеры» (3.1s)
+  ✓   13 [chromium] › tests-e2e/billing-invoice-v2.spec.ts:161:1 › TC-NEW-208 фильтры истории отсекают чужие счета (3.3s)
+  ✓   14 [chromium] › tests-e2e/billing-invoice-v2.spec.ts:197:1 › TC-NEW-209 ручной счёт выставляется с вкладки «Селлеры» и попадает в историю (3.7s)
+  ✓   15 [chromium] › tests-e2e/billing-invoice-v2.spec.ts:244:1 › TC-NEW-210 без «Финансов» кнопка выставления счёта скрыта (3.2s)
+  ✓   16 [chromium] › tests-e2e/billing-invoice-v2.spec.ts:261:1 › TC-NEW-211 ручная форма не пропускает сумму мельче копейки (3.4s)
+  ✓   17 [chromium] › tests-e2e/billing-invoices.spec.ts:54:1 › billing seller report displays kopecks exactly once (1.7s)
+  -   18 [chromium] › tests-e2e/billing-invoices.spec.ts:81:6 › billing invoice seller-profile issue targets the affected seller
+  -   19 [chromium] › tests-e2e/billing-invoices.spec.ts:102:6 › billing invoice FF-profile issue targets FF billing settings
+  -   20 [chromium] › tests-e2e/billing-invoices.spec.ts:122:6 › billing invoice tariff issue targets tariff settings
+  ✓   21 [chromium] › tests-e2e/billing-invoices.spec.ts:141:1 › billing seller report keeps an unpriced operation visible (1.9s)
+  ✓   22 [chromium] › tests-e2e/billing-ledger.spec.ts:25:1 › billing sellers keeps server totals and fixed physical columns (1.6s)
+  ✓   23 [chromium] › tests-e2e/billing-ledger.spec.ts:43:1 › billing sellers show finance-on detail without a legacy performer view (1.8s)
+  ✓   24 [chromium] › tests-e2e/billing-seller-report.spec.ts:23:1 › seller report switches finance shape and renders one storage row (3.4s)
+  ✓   25 [chromium] › tests-e2e/billing-seller-report.spec.ts:71:1 › seller report ignores a held stale summary and detail response (3.0s)
+  ✓   26 [chromium] › tests-e2e/billing-seller-report.spec.ts:99:1 › seller report clears Luna details when the seller or period becomes empty (2.0s)
+  ✓   27 [chromium] › tests-e2e/catalog-box-lookup.spec.ts:71:1 › scan opens the received box and shows its current contents (4.0s)
+  ✓   28 [chromium] › tests-e2e/catalog-box-lookup.spec.ts:170:1 › scanner shows lookup progress and accepts the next box after completion (4.0s)
+  ✓   29 [chromium] › tests-e2e/catalog-journey.spec.ts:9:1 › register then create warehouse and location with barcode print preview (4.2s)
+  ✓   30 [chromium] › tests-e2e/catalog-products-ozon.spec.ts:45:1 › S-16: server marketplace filter and warehouse-only Ozon binding feedback (5.1s)
+  ✓   31 [chromium] › tests-e2e/catalog-products-ozon.spec.ts:98:1 › S-31: seller sees Ozon chip in Name and never receives binding controls (3.1s)
+  ✓   32 [chromium] › tests-e2e/ff-address-storage-mp-ui.spec.ts:8:1 › address storage off hides cell UI on marketplace unload (5.6s)
+  ✓   33 [chromium] › tests-e2e/ff-address-storage-setting.spec.ts:8:1 › admin toggles address storage setting and me reflects change (2.6s)
+  ✓   34 [chromium] › tests-e2e/ff-billing-tariff-matrix.spec.ts:65:1 › S-19 tariff matrix accepts existing deep link (4.6s)
+  ✓   35 [chromium] › tests-e2e/ff-billing-tariff-matrix.spec.ts:170:1 › S-19 keeps normal scroll, protects document product overrides and shows stale save error (1.7s)
+  ✓   36 [chromium] › tests-e2e/ff-billing-tariff-matrix.spec.ts:208:1 › S-19 brand-new per-item default permits a product override (1.8s)
+  ✓   37 [chromium] › tests-e2e/ff-billing-tariff-matrix.spec.ts:228:1 › S-19 confines populated tariff matrix overflow to DataTable containers at 375–1600 (1.7s)
+  ✓   38 [chromium] › tests-e2e/ff-billing-tariff-matrix.spec.ts:404:1 › S-19 keeps product and employee tables loading until the matrix GET resolves (1.7s)
+  ✓   39 [chromium] › tests-e2e/ff-billing-tariff-matrix.spec.ts:445:1 › S-19 tariff panel does not worsen inherited 1280 staff-table width (1.6s)
+[WebServer] [2m3:06:13 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:06:13 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReceived `false` for a non-boolean attribute `indicator`.
+[WebServer] 
+[WebServer] If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+[WebServer] 
+[WebServer] If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+[WebServer] [2m3:06:13 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:06:13 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:06:14 AM[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mMUI: You are providing a disabled `button` child to the Tooltip component.
+[WebServer] A disabled element does not fire events.
+[WebServer] Tooltip needs to listen to the child element's events to display the title.
+[WebServer] 
+[WebServer] Add a simple wrapper element, such as a `span`.
+  ✓   40 [chromium] › tests-e2e/ff-dashboard.spec.ts:8:1 › fulfillment admin sees shipment calendar and supplies-shipments page (6.4s)
+  ✓   41 [chromium] › tests-e2e/ff-fbs-orders.spec.ts:134:1 › fbs orders: list, tabs and empty state (2.7s)
+  ✓   42 [chromium] › tests-e2e/ff-fbs-orders.spec.ts:180:1 › fbs orders: 500 new orders allow selecting any two orders (4.4s)
+  ✓   43 [chromium] › tests-e2e/ff-fbs-orders.spec.ts:205:1 › fbs orders: filter by seller (3.2s)
+[WebServer] [2m3:06:29 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:06:29 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReceived `false` for a non-boolean attribute `indicator`.
+[WebServer] 
+[WebServer] If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+[WebServer] 
+[WebServer] If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+[WebServer] [2m3:06:29 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:06:29 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+  ✓   44 [chromium] › tests-e2e/ff-fbs-orders.spec.ts:250:1 › fbs orders: active supplies table explains external WB supply without local card (2.4s)
+  ✓   45 [chromium] › tests-e2e/ff-fbs-orders.spec.ts:305:1 › fbs orders: reprints supply and cargo-place QR from supply row (2.9s)
+  ✓   46 [chromium] › tests-e2e/ff-fbs-orders.spec.ts:407:1 › fbs orders: one broken QR preview does not block the ready QR (2.6s)
+[WebServer] [2m3:06:37 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:06:37 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReceived `false` for a non-boolean attribute `indicator`.
+[WebServer] 
+[WebServer] If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+[WebServer] 
+[WebServer] If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+[WebServer] [2m3:06:37 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:06:37 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+  ✓   47 [chromium] › tests-e2e/ff-fbs-orders.spec.ts:471:1 › fbs orders: add selected new orders to existing supply (3.2s)
+  ✓   48 [chromium] › tests-e2e/ff-fbs-orders.spec.ts:515:1 › fbs orders: filter new orders by warehouse (5.2s)
+  ✓   49 [chromium] › tests-e2e/ff-fbs-orders.spec.ts:588:1 › fbs orders: search keeps list, selected drawer stays stable and Excel downloads (2.8s)
+  ✓   50 [chromium] › tests-e2e/ff-fbs-stock-sync.spec.ts:26:1 › fbs seller warehouses: row binding, manual sync, status panel (5.8s)
+[WebServer] [2m3:06:53 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:06:53 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReceived `false` for a non-boolean attribute `indicator`.
+[WebServer] 
+[WebServer] If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+[WebServer] 
+[WebServer] If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+[WebServer] [2m3:06:53 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:06:53 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+  ✓   51 [chromium] › tests-e2e/ff-fbs-supply.spec.ts:160:1 › fbs workspace: preflight and deliver (2.4s)
+[WebServer] [2m3:06:56 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:06:56 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReceived `false` for a non-boolean attribute `indicator`.
+[WebServer] 
+[WebServer] If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+[WebServer] 
+[WebServer] If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+[WebServer] [2m3:06:56 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:06:56 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+  ✓   52 [chromium] › tests-e2e/ff-fbs-supply.spec.ts:216:1 › fbs orders: create supply from selected orders (2.7s)
+[WebServer] [2m3:06:58 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:06:58 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReceived `false` for a non-boolean attribute `indicator`.
+[WebServer] 
+[WebServer] If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+[WebServer] 
+[WebServer] If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+[WebServer] [2m3:06:58 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:06:58 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+  ✓   53 [chromium] › tests-e2e/ff-fbs-supply.spec.ts:273:1 › fbs workspace: partial rejection is visible outside composition stage (2.3s)
+[WebServer] [2m3:07:01 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:07:01 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReceived `false` for a non-boolean attribute `indicator`.
+[WebServer] 
+[WebServer] If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+[WebServer] 
+[WebServer] If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+[WebServer] [2m3:07:01 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:07:01 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+  ✓   54 [chromium] › tests-e2e/ff-fbs-supply.spec.ts:316:1 › fbs workspace: scan location then product (2.5s)
+[WebServer] [2m3:07:03 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:07:03 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReceived `false` for a non-boolean attribute `indicator`.
+[WebServer] 
+[WebServer] If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+[WebServer] 
+[WebServer] If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+[WebServer] [2m3:07:03 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:07:03 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+  ✓   55 [chromium] › tests-e2e/ff-fbs-supply.spec.ts:357:1 › fbs workspace: boxes without distribution sends durable mode (2.9s)
+[WebServer] [2m3:07:06 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:07:06 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReceived `false` for a non-boolean attribute `indicator`.
+[WebServer] 
+[WebServer] If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+[WebServer] 
+[WebServer] If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+[WebServer] [2m3:07:06 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:07:06 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+  ✓   56 [chromium] › tests-e2e/ff-fbs-supply.spec.ts:407:1 › fbs workspace: supply QR preview has copies control (2.5s)
+  ✓   57 [chromium] › tests-e2e/ff-honest-sign-import.spec.ts:8:1 › FF honest sign: import dialog uploads CSV into pool (2.5s)
+  ✓   58 [chromium] › tests-e2e/ff-honest-sign-import.spec.ts:114:1 › FF honest sign: reset after aborted preview re-enables import dialog actions (2.4s)
+  ✓   59 [chromium] › tests-e2e/ff-honest-sign-import.spec.ts:195:1 › FF honest sign: import dialog explains when seller has no honest-sign products (2.2s)
+  ✓   60 [chromium] › tests-e2e/ff-honest-sign-import.spec.ts:255:1 › FF honest sign: unlinked available pool is visible and opens product linking (2.3s)
+  ✓   61 [chromium] › tests-e2e/ff-honest-sign-import.spec.ts:311:1 › FF honest sign: re-import same codes reports duplicates (2.3s)
+  ✓   62 [chromium] › tests-e2e/ff-honest-sign-ledger.spec.ts:23:1 › FF honest sign ledger: imported events and document filter (4.6s)
+  ✓   63 [chromium] › tests-e2e/ff-honest-sign-ledger.spec.ts:110:1 › FF honest sign ledger: seller autocomplete on ledger page (2.5s)
+  ✓   64 [chromium] › tests-e2e/ff-honest-sign-ledger.spec.ts:171:1 › FF honest sign ledger: export CSV with current filters (2.4s)
+  ✓   65 [chromium] › tests-e2e/ff-honest-sign-pool.spec.ts:9:1 › FF honest sign pool card: tabs and CSV export (4.5s)
+  ✓   66 [chromium] › tests-e2e/ff-honest-sign-pool.spec.ts:90:1 › FF honest sign: import route redirects to pool list (3.1s)
+  ✓   67 [chromium] › tests-e2e/ff-honest-sign-pools.spec.ts:8:1 › FF honest sign: product list row, link product via API, open pool card (3.0s)
+  ✓   68 [chromium] › tests-e2e/ff-honest-sign.spec.ts:13:1 › FF honest sign product-first: list, product card, shared basket pool (9.3s)
+  ✓   69 [chromium] › tests-e2e/ff-honest-sign.spec.ts:129:1 › FF honest sign multi-pool product: product page threshold persists after reload (6.7s)
+  ✓   70 [chromium] › tests-e2e/ff-inbound-barcode-add.spec.ts:7:1 › ff inbound draft adds line from seller catalog picker (3.8s)
+  ✓   71 [chromium] › tests-e2e/ff-inbound-barcode-add.spec.ts:50:1 › ff inbound draft does not expose manual product creation from intake card (3.8s)
+  -   72 [chromium] › tests-e2e/ff-inbound-box-import.spec.ts:17:3 › FF inbound box import from xlsx › TC-NEW-BOX-001 happy path creates boxes from combain xlsx
+  -   73 [chromium] › tests-e2e/ff-inbound-box-import.spec.ts:59:3 › FF inbound box import from xlsx › TC-NEW-BOX-001-N1 bad xlsx shows format error and does not create boxes
+  ✓   74 [chromium] › tests-e2e/ff-inbound-box-intake.spec.ts:52:3 › FF inbound box piece intake › TC-NEW-C01 manual qty in two boxes then complete verification (5.4s)
+  ✓   75 [chromium] › tests-e2e/ff-inbound-box-intake.spec.ts:89:3 › FF inbound box piece intake › TC-NEW-C01 verify with open box saves qty without closing box (5.1s)
+  ✓   76 [chromium] › tests-e2e/ff-inbound-box-intake.spec.ts:125:3 › FF inbound box piece intake › TC-NEW-C01-N2 set line qty on previously closed box still works (2.4s)
+  ✓   77 [chromium] › tests-e2e/ff-inbound-box-intake.spec.ts:156:3 › FF inbound box piece intake › TC-NEW-C02 manual line actual without opening box completes verification (4.4s)
+  ✓   78 [chromium] › tests-e2e/ff-inbound-box-intake.spec.ts:194:1 › TC-NEW-INTERNAL-LABEL-01 bulk box labels are large, decodable and one print job (6.3s)
+  ✓   79 [chromium] › tests-e2e/ff-inbound-box-intake.spec.ts:300:1 › TC-NEW-INTERNAL-LABEL-02 18-char box codes decode at 58x40 and 203 dpi (21.0s)
+  ✓   80 [chromium] › tests-e2e/ff-inbound-box-intake.spec.ts:371:1 › STAB-IN-FE-03 box add modal product row and target box qty (5.1s)
+  ✓   81 [chromium] › tests-e2e/ff-inbound-boxes.spec.ts:31:3 › US-B-01 seller inbound draft — fields and actions › planned date, planned boxes PATCH, picker, line qty, save draft, submit guard (5.1s)
+  ✓   82 [chromium] › tests-e2e/ff-inbound-boxes.spec.ts:100:3 › US-B-01 FF receiving creates on-demand boxes › submitted inbound shows planned boxes; after receiving setup closed boxes visible (6.4s)
+  ✓   83 [chromium] › tests-e2e/ff-inbound-boxes.spec.ts:130:3 › US-B-02 inbound box barcodes and print actions › INB barcodes, print one and print all call mark-label-printed (6.6s)
+  ✓   84 [chromium] › tests-e2e/ff-inbound-boxes.spec.ts:180:3 › US-B-01/B-02 API contracts (regression) › begin receiving with boxes returns INB barcodes; mark-label-printed sets timestamp (2.5s)
+  ✓   85 [chromium] › tests-e2e/ff-inbound-boxes.spec.ts:208:3 › US-B-01 seller first-time login path › seller account with password can submit inbound with planned boxes (4.0s)
+  -   86 [chromium] › tests-e2e/ff-inbound-cell-hints.spec.ts:8:6 › ff inbound distribution shows cell hints from existing stock
+  ✓   87 [chromium] › tests-e2e/ff-inbound-dimensions.spec.ts:15:1 › FF inbound receiving shows saved product dimensions and volume (4.6s)
+  ✓   88 [chromium] › tests-e2e/ff-inbound-discrepancy-acts.spec.ts:11:1 › REC-07 — FF approves linked discrepancy act from inbound document (4.2s)
+  -   89 [chromium] › tests-e2e/ff-inbound-distribution.spec.ts:8:6 › ff inbound distribution: partial, leftover without cell, complete -> readonly
+  -   90 [chromium] › tests-e2e/ff-inbound-print-waybill.spec.ts:13:6 › FF prints inbound supply waybill from intake document
+  -   91 [chromium] › tests-e2e/ff-inbound-print-waybill.spec.ts:42:6 › FF prints conducted inbound waybill with fact and discrepancy only
+  ✓   92 [chromium] › tests-e2e/ff-inventory-snapshot.spec.ts:9:1 › ff inventory route opens the storage calculation screen (3.2s)
+  ✓   93 [chromium] › tests-e2e/ff-marking-defect.spec.ts:8:1 › FF packaging: defect button creates pending reprint request (10.9s)
+  ✓   94 [chromium] › tests-e2e/ff-marking-packaging.spec.ts:9:1 › FF packaging: print honest sign codes for line quantity (6.0s)
+  ✓   95 [chromium] › tests-e2e/ff-marking-packaging.spec.ts:157:1 › FF packaging: reprint selected marking codes (6.1s)
+  ✓   96 [chromium] › tests-e2e/ff-marking-packaging.spec.ts:325:1 › FF packaging: block complete when honest sign codes missing (5.1s)
+  ✓   97 [chromium] › tests-e2e/ff-marking-print-constructor.spec.ts:9:1 › FF packaging: marking print constructor shortage and pairs preview (5.9s)
+  ✓   98 [chromium] › tests-e2e/ff-mp-box-add-modal.spec.ts:8:1 › FF marketplace unload: box add-products modal respects plan limit (5.4s)
+  ✓   99 [chromium] › tests-e2e/ff-mp-box-add-modal.spec.ts:226:1 › FF marketplace unload: two single-box batch creates both allow add products (5.4s)
+  ✓  100 [chromium] › tests-e2e/ff-mp-box-add-modal.spec.ts:441:1 › FF marketplace unload: box modal manual location and product scan (5.5s)
+  ✓  101 [chromium] › tests-e2e/ff-mp-box-add-modal.spec.ts:621:1 › FF marketplace unload: sorting buffer pick without cell selection (4.9s)
+[WebServer] [2m3:10:28 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:10:28 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReceived `false` for a non-boolean attribute `indicator`.
+[WebServer] 
+[WebServer] If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+[WebServer] 
+[WebServer] If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+[WebServer] [2m3:10:28 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:10:28 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:10:33 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:10:33 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReceived `false` for a non-boolean attribute `indicator`.
+[WebServer] 
+[WebServer] If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+[WebServer] 
+[WebServer] If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+[WebServer] [2m3:10:33 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:10:33 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+  ✓  102 [chromium] › tests-e2e/ff-mp-full-flow.spec.ts:92:1 › MP unload full flow: parallel boxes then packaging then ship (11.6s)
+  ✓  103 [chromium] › tests-e2e/ff-mp-marketplace-chip.spec.ts:6:1 › S-12 keeps warehouse name beside the marketplace chip (3.3s)
+  ✓  104 [chromium] › tests-e2e/ff-mp-packaging-gate.spec.ts:8:1 › FF marketplace unload: box create enabled before packaging done (4.1s)
+[WebServer] [2m3:10:51 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:10:51 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReceived `false` for a non-boolean attribute `indicator`.
+[WebServer] 
+[WebServer] If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+[WebServer] 
+[WebServer] If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+[WebServer] [2m3:10:51 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:10:51 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+  ✓  105 [chromium] › tests-e2e/ff-mp-packaging-print.spec.ts:9:1 › MP packaging: print icon opens qty-only dialog for non-marked product (8.4s)
+  ✓  106 [chromium] › tests-e2e/ff-mp-packaging-print.spec.ts:240:1 › MP packaging: marked product uses separate CZ/WB print when FF setting is enabled (4.1s)
+  ✓  107 [chromium] › tests-e2e/ff-mp-print-waybill.spec.ts:8:1 › FF marketplace unload keeps packaging print controls without final waybill step (4.2s)
+[WebServer] [2m3:11:04 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:11:04 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReceived `false` for a non-boolean attribute `indicator`.
+[WebServer] 
+[WebServer] If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+[WebServer] 
+[WebServer] If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+[WebServer] [2m3:11:04 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:11:04 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+  ✓  108 [chromium] › tests-e2e/ff-mp-ship-pick.spec.ts:8:1 › FF marketplace unload: pick by cell and ship reduces stock (4.5s)
+  ✓  109 [chromium] › tests-e2e/ff-mp-shipment-tz-print.spec.ts:14:1 › FF marketplace unload: packaging table keeps TZ print controls without FBS order QR (4.0s)
+  ✓  110 [chromium] › tests-e2e/ff-mp-tabs.spec.ts:109:1 › FF marketplace unload: tabs switch without losing document context (4.4s)
+[WebServer] [2m3:11:17 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:11:17 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReceived `false` for a non-boolean attribute `indicator`.
+[WebServer] 
+[WebServer] If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+[WebServer] 
+[WebServer] If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+[WebServer] [2m3:11:17 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:11:17 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReact does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+[WebServer] [2m3:11:17 AM[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mMUI: You are providing a disabled `button` child to the Tooltip component.
+[WebServer] A disabled element does not fire events.
+[WebServer] Tooltip needs to listen to the child element's events to display the title.
+[WebServer] 
+[WebServer] Add a simple wrapper element, such as a `span`.
+  ✓  111 [chromium] › tests-e2e/ff-mp-tabs.spec.ts:328:1 › FF marketplace unload: no packaging progress banner on draft (4.1s)
+  ✓  112 [chromium] › tests-e2e/ff-mp-tabs.spec.ts:483:1 › FF marketplace unload: main scan rejects product barcode (5.1s)
+  ✓  113 [chromium] › tests-e2e/ff-mp-tabs.spec.ts:645:1 › TC-NEW-OUT-FE-02: shipment table columns no early red (4.1s)
+  ✓  114 [chromium] › tests-e2e/ff-notifications.spec.ts:7:1 › FF notifications bell shows badge and navigates on click (3.5s)
+  ✓  115 [chromium] › tests-e2e/ff-ozon-returns.spec.ts:16:1 › Ozon return keeps the live reception flow and adds picker, defect and print actions (6.7s)
+  ✓  116 [chromium] › tests-e2e/ff-packaging-page.spec.ts:30:1 › FF packaging page: create from sorting and pack line (6.7s)
+  ✓  117 [chromium] › tests-e2e/ff-packaging-page.spec.ts:252:1 › FF packaging page: create from storage cell (4.9s)
+  ✓  118 [chromium] › tests-e2e/ff-packaging-page.spec.ts:347:1 › FF packaging page: cancel manual task (5.1s)
+  ✓  119 [chromium] › tests-e2e/ff-pending-marking.spec.ts:8:1 › FF pending marking worklist row disappears after print (5.4s)
+  ✘  120 [chromium] › tests-e2e/ff-pending-marking.spec.ts:131:1 › FF pending marking shows no-codes owner handoff and task link (1.7s)
+  ✓  121 [chromium] › tests-e2e/ff-pending-marking.spec.ts:227:1 › FF pending marking bulk print selected rows (7.2s)
+  ✓  122 [chromium] › tests-e2e/ff-product-barcode-print.spec.ts:8:1 › ff sorting opens unified marking print dialog for product line (6.0s)
+  ✓  123 [chromium] › tests-e2e/ff-products.spec.ts:10:1 › ff products: catalog separates product fields and shows compact stock (3.5s)
+  ✓  124 [chromium] › tests-e2e/ff-products.spec.ts:148:1 › ff products: marking icon shows count and opens honest sign product card (3.4s)
+  ✓  125 [chromium] › tests-e2e/ff-products.spec.ts:222:1 › ff products: manual create adds a catalog product (4.2s)
+  ✓  126 [chromium] › tests-e2e/ff-products.spec.ts:273:1 › ff products: filters and marks Ozon-linked catalog items without changing columns (3.6s)
+  ✓  127 [chromium] › tests-e2e/ff-products.spec.ts:353:1 › ff products: import tz xlsx creates catalog products with packaging (5.1s)
+  ✓  128 [chromium] › tests-e2e/ff-reception-sorting.spec.ts:8:1 › ff reception can create inbound draft and open it (4.2s)
+  ✓  129 [chromium] › tests-e2e/ff-reception-sorting.spec.ts:78:1 › ff reception list has filters search sorting and discrepancy marking (6.5s)
+  ✓  130 [chromium] › tests-e2e/ff-reception-sorting.spec.ts:238:1 › ff verify posts to sorting zone; sorting queue and product columns (9.2s)
+  ✓  131 [chromium] › tests-e2e/ff-reports.spec.ts:38:1 › FF staff with cells access but without inventory access cannot open the direct reports route (4.2s)
+  ✓  132 [chromium] › tests-e2e/ff-reports.spec.ts:98:1 › FF report keeps one table slice and distinguishes a table error from empty data (2.8s)
+  ✓  133 [chromium] › tests-e2e/ff-reports.spec.ts:177:1 › FF reports exclude non-operational warehouses from the warehouse filter (3.6s)
+  ✓  134 [chromium] › tests-e2e/ff-reports.spec.ts:220:1 › FF report upper slice updates atomically and keeps table on overview retry (3.9s)
+  ✓  135 [chromium] › tests-e2e/ff-reports.spec.ts:358:1 › FF report current month crosses the December year boundary (2.3s)
+  ✓  136 [chromium] › tests-e2e/ff-reports.spec.ts:380:1 › FF reports: section opens and shows movement summary for a product with intake (5.0s)
+  ✓  137 [chromium] › tests-e2e/ff-separate-marking-print.spec.ts:8:1 › FF settings: separate marking print shows split print sections (7.1s)
+  ✓  138 [chromium] › tests-e2e/ff-shift-lead.spec.ts:7:1 › shift_lead permission shows reprints nav and grants queue API (5.2s)
+  ✓  139 [chromium] › tests-e2e/ff-sorting-product-centric.spec.ts:13:1 › ff sorting: box product rows and loose goods are separate (6.8s)
+[WebServer] [2m3:13:41 AM[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22m[ff-sorting] unrecognized error code from server: distribution load failed
+[WebServer] [2m3:13:41 AM[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22m[ff-sorting] unrecognized error code from server: distribution load failed
+[WebServer] [2m3:13:41 AM[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22m[ff-sorting] unrecognized error code from server: distribution load failed
+[WebServer] [2m3:13:41 AM[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22m[ff-sorting] unrecognized error code from server: distribution load failed
+[WebServer] [2m3:13:41 AM[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22m[ff-sorting] unrecognized error code from server: distribution load failed
+  ✓  140 [chromium] › tests-e2e/ff-sorting-product-centric.spec.ts:197:1 › ff sorting: failed distribution-lines load shows error and blocks apply (8.0s)
+  ✓  141 [chromium] › tests-e2e/ff-sorting-product-centric.spec.ts:326:1 › ff sorting scanner-first: cell barcode then product scans apply distribution (4.0s)
+  ✓  142 [chromium] › tests-e2e/ff-sorting-product-centric.spec.ts:430:1 › ff sorting: whole boxes go to one cell by scan or one explicit row action (5.2s)
+  ✓  143 [chromium] › tests-e2e/ff-sorting-product-centric.spec.ts:619:1 › ff sorting: unsaved manual correction asks before close (4.6s)
+  ✓  144 [chromium] › tests-e2e/ff-sorting-product-centric.spec.ts:692:1 › ff cells: rename and safe-delete location with balance (4.4s)
+  ✓  145 [chromium] › tests-e2e/ff-staff-packaging-billing.spec.ts:9:1 › admin sets staff packaging rate and sees billing columns (2.7s)
+  ✓  146 [chromium] › tests-e2e/ff-staff-users.spec.ts:90:1 › ff staff rights: four compact work blocks pass UI and direct-route gates (54.8s)
+  ✓  147 [chromium] › tests-e2e/full-wms-journey.spec.ts:20:3 › Full WMS user journey › inbound: assign cell after submit, then post all remaining (4.8s)
+  ✓  148 [chromium] › tests-e2e/full-wms-journey.spec.ts:132:3 › Full WMS user journey › inbound: cell on line create, partial receive, then post remainder (4.9s)
+  ✓  149 [chromium] › tests-e2e/inbound-intake.spec.ts:13:1 › create inbound request, add line, submit — UI and API (4.6s)
+  ✓  150 [chromium] › tests-e2e/inbound-receiving-v2.spec.ts:45:1 › inbound receiving v2 — scan, manual edit, finish with discrepancy (6.4s)
+  ✓  151 [chromium] › tests-e2e/inbound-receiving-v2.spec.ts:157:1 › inbound receiving v2 — ordinary receiving hides return autoprint switch (4.0s)
+  ✓  152 [chromium] › tests-e2e/inbound-receiving-v2.spec.ts:173:1 › inbound receiving v2 — mobile receiving table keeps max identifiers inside internal overflow (4.2s)
+  ✓  153 [chromium] › tests-e2e/inbound-receiving-v2.spec.ts:286:1 › inbound receiving v2 — multiple boxes stay independent (5.5s)
+  ✓  154 [chromium] › tests-e2e/inbound-receiving-v2.spec.ts:342:1 › inbound receiving v2 — foreign barcode shows toast error (4.8s)
+  ✓  155 [chromium] › tests-e2e/inbound-receiving-v2.spec.ts:376:1 › inbound receiving v2 — return accepts seller catalog discrepancy and dimensions (7.8s)
+  ✓  156 [chromium] › tests-e2e/inbound-receiving-v2.spec.ts:531:1 › inbound receiving v2 — return autoprint fails closed when scanned line has no WB barcode (5.6s)
+  ✓  157 [chromium] › tests-e2e/inbound-receiving-v2.spec.ts:630:1 › inbound receiving v2 — seller sees conducted factual card after FF shortage and added product (6.2s)
+  ✓  158 [chromium] › tests-e2e/inbound-receiving-v2.spec.ts:764:1 › inbound receiving v2 — seller factual card uses human warehouse fallback when warehouse lookup is empty (3.5s)
+  ✓  159 [chromium] › tests-e2e/inbound-receiving-v2.spec.ts:803:1 › inbound receiving v2 — active receiving offers only seller catalog add (4.1s)
+  ✓  160 [chromium] › tests-e2e/inbound-receiving-v2.spec.ts:832:1 › inbound receiving v2 — manual edit with box saves loose not total (5.7s)
+  -  161 [chromium] › tests-e2e/live-fbs-stand.spec.ts:24:1 › TC-NEW-FBS-LIVE-001: упаковка, короб и QR грузоместа на живом кабинете
+  ✓  162 [chromium] › tests-e2e/login-journey.spec.ts:7:1 › logout then login reaches catalog UI and loads catalog via API (3.7s)
+  ✓  163 [chromium] › tests-e2e/outbound-delete-line.spec.ts:13:1 › удаление строки отгрузки в draft снимает резерв (7.8s)
+  ✓  164 [chromium] › tests-e2e/outbound-print-waybill.spec.ts:8:1 › FF prints operational outbound waybill from ops screen (3.9s)
+  ✓  165 [chromium] › tests-e2e/outbound-reservation.spec.ts:14:1 › резерв под отгрузку: перемещение блокируется, после проведения отгрузки — снова можно (10.5s)
+  ✓  166 [chromium] › tests-e2e/outbound-submit-storage.spec.ts:11:1 › outbound submit without cell reserves warehouse; post needs cell (3.9s)
+  ✓  167 [chromium] › tests-e2e/seller-available-stock.spec.ts:11:1 › seller products table and next MP picker show current stock after MP plan (6.8s)
+  ✓  168 [chromium] › tests-e2e/seller-cabinet.spec.ts:38:1 › admin creates seller user; seller sees filtered catalog and inbound (4.1s)
+
+  ✓  169 [chromium] › tests-e2e/seller-cabinet.spec.ts:166:1 › seller shop manager switches allowed seller without seeing forbidden products (3.2s)
+  ✓  170 [chromium] › tests-e2e/seller-delete-draft-confirm.spec.ts:7:1 › seller draft delete asks for confirmation before removing the document (3.8s)
+  ✓  171 [chromium] › tests-e2e/seller-honest-sign-dashboard.spec.ts:7:1 › seller honest sign dashboard shows product card and upload opens import (2.8s)
+  ✓  172 [chromium] › tests-e2e/seller-honest-sign-pool-import-context.spec.ts:7:1 › seller product card upload opens import and accepts pool GTIN file (2.9s)
+  ✓  173 [chromium] › tests-e2e/seller-inbound-fact-card-geometry.spec.ts:151:1 › seller inbound document keeps the same form after a discrepancy at 1280px (3.9s)
+  ✓  174 [chromium] › tests-e2e/seller-inbound-fact-card-geometry.spec.ts:204:1 › seller inbound document shows clean acceptance in the same form (3.7s)
+  ✓  175 [chromium] › tests-e2e/seller-inbound-operation-type.spec.ts:16:1 › seller chooses supply or return before inbound draft creation (8.7s)
+  ✓  176 [chromium] › tests-e2e/seller-marking-credentials.spec.ts:7:1 › seller can save marking credentials settings from settings page (3.5s)
+  ✓  177 [chromium] › tests-e2e/seller-mp-unload.spec.ts:12:1 › seller creates MP unload draft, plans with stock table (7.0s)
+  ✓  178 [chromium] › tests-e2e/seller-mp-unload.spec.ts:255:1 › seller MP dialog keeps request B after delayed request A resolves (4.6s)
+  ✓  179 [chromium] › tests-e2e/seller-outbound-filter.spec.ts:11:1 › seller A outbound list excludes seller B shipments only (#11) (6.0s)
+  ✓  180 [chromium] › tests-e2e/seller-reports.spec.ts:17:1 › seller staff without products access cannot open the direct reports route (4.8s)
+  ✓  181 [chromium] › tests-e2e/seller-reports.spec.ts:73:1 › seller reports exclude non-operational warehouses and other seller data (4.3s)
+  ✓  182 [chromium] › tests-e2e/seller-settings.spec.ts:35:1 › seller settings: save WB content api key (3.3s)
+  ✓  183 [chromium] › tests-e2e/seller-settings.spec.ts:89:1 › seller settings: Ozon card connects inline and exposes only safe states (3.0s)
+  ✓  184 [chromium] › tests-e2e/seller-settings.spec.ts:105:1 › seller settings: Ozon blocks blank fields and disconnect confirmation is inline (3.5s)
+  ✓  185 [chromium] › tests-e2e/seller-settings.spec.ts:139:1 › seller settings: Ozon introduces no route, tab, modal, dashboard, or account selector (3.0s)
+  ✓  186 [chromium] › tests-e2e/seller-staff-and-delete-drafts.spec.ts:8:1 › seller owner manages staff permissions and deletes draft documents only (5.5s)
+  ✓  187 [chromium] › tests-e2e/seller-stock-directions.spec.ts:11:1 › seller sees warehouse-managed stock directions in the reserves drawer (3.3s)
+  ✓  188 [chromium] › tests-e2e/seller-stock-directions.spec.ts:147:1 › ff manages stock directions and the product FBS limit from the catalog (7.1s)
+  ✓  189 [chromium] › tests-e2e/sellers-and-background-job.spec.ts:11:1 › create seller, product with seller, run movements digest job (3.9s)
+  ✓  190 [chromium] › tests-e2e/sellers-create-ui.spec.ts:8:1 › admin creates seller with email; seller sets password on first login (3.2s)
+  ✓  191 [chromium] › tests-e2e/smoke.spec.ts:4:1 › app loads and root is visible (1.3s)
+  ✓  192 [chromium] › tests-e2e/stab-cz-ui-print.spec.ts:8:1 › stab cz ui print — product row, pool card, marking constructor, no reprints nav (4.9s)
+  ✓  193 [chromium] › tests-e2e/stab-inbound-sort-outbound.spec.ts:21:1 › stab inbound sort outbound — receive, see sorting, ship from buffer without distribution (9.9s)
+  ✓  194 [chromium] › tests-e2e/storage.spec.ts:80:1 › S-11-TC-001 administrator opens the previous-month storage screen (1.6s)
+  ✓  195 [chromium] › tests-e2e/storage.spec.ts:90:1 › S-11-TC-022 staff sees why future storage months are unavailable (1.6s)
+  ✓  196 [chromium] › tests-e2e/storage.spec.ts:101:1 › S-11-TC-001 calculates December of the previous year after Moscow January (6ms)
+  ✓  197 [chromium] › tests-e2e/storage.spec.ts:105:1 › S-11-TC-002 blocks a rate that rounds to zero before saving (1.8s)
+  ✓  198 [chromium] › tests-e2e/storage.spec.ts:125:1 › S-11-TC-002 keeps one tariff action when any warehouse is still uncovered (1.7s)
+  ✓  199 [chromium] › tests-e2e/storage.spec.ts:134:1 › S-11-TC-021 blocks Moscow-past start dates with a visible explanation (1.9s)
+  ✓  200 [chromium] › tests-e2e/storage.spec.ts:157:1 › S-11-TC-002 keeps a previous month without a tariff after saving a later rate (2.2s)
+  ✓  201 [chromium] › tests-e2e/storage.spec.ts:198:1 › S-11-TC-002 administrator saves a future warehouse rate and seller exception in one request (5.4s)
+  ✓  202 [chromium] › tests-e2e/storage.spec.ts:382:1 › S-11-TC-017 tariff repricing failure keeps the last successful summary (1.8s)
+  ✓  203 [chromium] › tests-e2e/storage.spec.ts:402:1 › S-11-TC-017 keeps the saved tariff dialog open until statement reading recovers (2.2s)
+  ✓  204 [chromium] › tests-e2e/storage.spec.ts:435:1 › S-11-TC-003 forms only the selected month through the storage API (2.5s)
+  ✓  205 [chromium] › tests-e2e/storage.spec.ts:473:1 › S-11-TC-004 expands exactly one seller into SKU rows (1.7s)
+  ✓  206 [chromium] › tests-e2e/storage.spec.ts:479:1 › S-11-TC-004 keeps the full long SKU available without page overflow (1.8s)
+  ✓  207 [chromium] › tests-e2e/storage.spec.ts:502:1 › S-11-TC-005 saves a manual measurement through the product API (1.9s)
+  ✓  208 [chromium] › tests-e2e/storage.spec.ts:510:1 › S-11-TC-006 requires a basis for a container-volume measurement (1.8s)
+  ✓  209 [chromium] › tests-e2e/storage.spec.ts:517:1 › S-11-TC-007 keeps history columns visible with a long author name (1.8s)
+  ✓  210 [chromium] › tests-e2e/storage.spec.ts:551:1 › S-11-TC-008 fixes a clean statement and opens the A4 preview (1.8s)
+  ✓  211 [chromium] › tests-e2e/storage.spec.ts:560:1 › S-11-TC-009 opens a repeat print preview for a fixed document (1.7s)
+  ✓  212 [chromium] › tests-e2e/storage.spec.ts:567:1 › S-11-TC-009 keeps rate and amount visible beside a long seller article in print preview (1.7s)
+  ✓  213 [chromium] › tests-e2e/storage.spec.ts:602:1 › S-11-TC-010 keeps a zero month as a fixed row instead of an empty state (1.7s)
+  ✓  214 [chromium] › tests-e2e/storage.spec.ts:608:1 › S-11-TC-011 searches only the visible summary rows (1.6s)
+  ✓  215 [chromium] › tests-e2e/storage.spec.ts:615:1 › S-11-TC-012 staff without a tariff sees guidance and no tariff controls (1.5s)
+  ✓  216 [chromium] › tests-e2e/storage.spec.ts:622:1 › S-11-TC-012 staff with a tariff can inspect rows but cannot change or fix billing (1.6s)
+  ✓  217 [chromium] › tests-e2e/storage.spec.ts:630:1 › S-11-TC-012 cells permission alone does not grant access to storage (1.4s)
+  ✓  218 [chromium] › tests-e2e/storage.spec.ts:638:1 › S-11-TC-013 disables a repeated calculation while one is running (1.6s)
+  ✓  219 [chromium] › tests-e2e/storage.spec.ts:644:1 › S-11-TC-014 rejects invalid dimensions before sending a request (1.8s)
+  ✓  220 [chromium] › tests-e2e/storage.spec.ts:651:1 › S-11-TC-015 closing a measurement dialog does not save it (2.2s)
+  ✓  221 [chromium] › tests-e2e/storage.spec.ts:658:1 › S-11-TC-017 retains the last summary when a rebuild fails (1.7s)
+  ✓  222 [chromium] › tests-e2e/storage.spec.ts:666:1 › S-11-TC-020 does not show service warehouses in the selector (1.5s)
+  ✓  223 [chromium] › tests-e2e/transfer-and-outbound.spec.ts:13:1 › stock transfer and outbound shipment — UI (10.9s)
+  ✓  224 [chromium] › tests-e2e/ui-invariants.spec.ts:23:1 › ui invariants permit only a reachable DataTable horizontal scroll inside its card (65ms)
+  ✓  225 [chromium] › tests-e2e/ui-invariants.spec.ts:35:1 › ui invariants keep R-08 for hidden or non-overflowing DataTable content (58ms)
+  ✓  226 [chromium] › tests-e2e/ui-invariants.spec.ts:52:1 › ui invariants keep R-08 when the scrollport is outside the current card (43ms)
+  ✓  227 [chromium] › tests-e2e/ui-invariants.spec.ts:65:1 › ui invariants permit a DataTable endpoint still visible through a wide intermediate clip (44ms)
+  ✓  228 [chromium] › tests-e2e/ui-invariants.spec.ts:78:1 › ui invariants keep R-08 when an intermediate clip crops every DataTable endpoint (44ms)
+  ✓  229 [chromium] › tests-e2e/ui-invariants.spec.ts:93:1 › ui invariants retain R-01 and R-09 for page overflow and overlapping table columns (54ms)
+  ✓  230 [chromium] › tests-e2e/ui-kit-form-primitives.spec.ts:16:1 › TC-NEW-101 CheckboxInput действительно переключается по клику на подпись (726ms)
+  ✓  231 [chromium] › tests-e2e/ui-kit-form-primitives.spec.ts:32:1 › TC-NEW-102 недоступный CheckboxInput не переключается и объясняет причину (555ms)
+  ✓  232 [chromium] › tests-e2e/ui-kit-form-primitives.spec.ts:51:1 › TC-NEW-108 CheckboxInput без видимой подписи сохраняет доступное имя (638ms)
+  ✓  233 [chromium] › tests-e2e/ui-kit-form-primitives.spec.ts:70:1 › TC-NEW-109 скрытая подсказка не занимает места и не расширяет страницу (518ms)
+  ✓  234 [chromium] › tests-e2e/ui-kit-form-primitives.spec.ts:110:1 › TC-NEW-103 MoneyInput сохраняет точную десятичную строку без приведения к числу (621ms)
+  ✓  235 [chromium] › tests-e2e/ui-kit-form-primitives.spec.ts:126:1 › TC-NEW-104 MoneyInput помечает недопустимую сумму и объясняет ошибку (669ms)
+  ✓  236 [chromium] › tests-e2e/ui-kit-form-primitives.spec.ts:146:1 › TC-NEW-105 AppDialog связывает заголовок и удерживает фокус внутри (832ms)
+  ✓  237 [chromium] › tests-e2e/ui-kit-form-primitives.spec.ts:180:1 › TC-NEW-107 общие примитивы не роняют пропсы на DOM мимо MUI (1.2s)
+  ✓  238 [chromium] › tests-e2e/ui-kit-form-primitives.spec.ts:201:1 › TC-NEW-106 AppDialog закрывается по Escape и возвращает фокус триггеру (1.2s)
+  ✓  239 [chromium] › tests-e2e/wildberries-admin-ui.spec.ts:7:1 › admin saves WB tokens, syncs cards and supplies, links SKU (5.7s)
+
+
+  1) [chromium] › tests-e2e/ff-pending-marking.spec.ts:131:1 › FF pending marking shows no-codes owner handoff and task link 
+
+    Error: apiRequestContext.post: read ECONNRESET
+    Call log:
+    [2m  - → POST http://127.0.0.1:18000/sellers[22m
+    [2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.7727.15 Safari/537.36[22m
+    [2m    - accept: */*[22m
+    [2m    - accept-encoding: gzip,deflate,br[22m
+    [2m    - Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjMTE5ZWU4MC1iMGQwLTQ1NWYtOGY0My1lZWUzNzQzNjE4ZTIiLCJ0ZW5hbnRfaWQiOiIwNWU0NDQwNy1hMGIwLTRiZDAtYjJiZi01ZThjY2FlNjI5ODEiLCJyb2xlIjoiZnVsZmlsbG1lbnRfYWRtaW4iLCJleHAiOjE3ODgwNDg3MjAsImlhdCI6MTc4Nzk2MjMyMH0.X4VhJ-Gds1pRsnQvQzAjAz0kTUd4-C1igNMFc3bvKwc[22m
+    [2m    - Content-Type: application/json[22m
+    [2m    - content-length: 71[22m
+
+
+      149 |   const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+      150 |
+    > 151 |   const sellerRes = await page.request.post(`${e2eApi}/sellers`, {
+          |                                        ^
+      152 |     headers: auth,
+      153 |     data: JSON.stringify({ name: 'E2E No Codes Seller', email: `zero-${Date.now()}@example.com` }),
+      154 |   })
+        at /Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/frontend/tests-e2e/ff-pending-marking.spec.ts:151:40
+
+    Error Context: test-results/ff-pending-marking-FF-pend-9d380-owner-handoff-and-task-link-chromium/error-context.md
+
+  1 failed
+    [chromium] › tests-e2e/ff-pending-marking.spec.ts:131:1 › FF pending marking shows no-codes owner handoff and task link 
+  10 skipped
+  228 passed (15.9m)

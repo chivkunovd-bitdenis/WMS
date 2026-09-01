@@ -155,9 +155,6 @@ const PackageAccordion = memo(function PackageAccordion({
       }),
     [item.lines, productsById],
   )
-  const completed = item.intake_status === 'done'
-  const fullyDistributed = item.kind === 'box' && item.fully_distributed
-
   return (
     <Accordion
       id={`ff-catalog-inbound-package-${item.id}`}
@@ -222,13 +219,10 @@ const PackageAccordion = memo(function PackageAccordion({
       <AccordionDetails id={`ff-catalog-inbound-package-content-${item.id}`} sx={{ px: 2, pb: 2, pt: 0 }}>
         {item.kind === 'cargo_place' ? (
           <EmptyPanel
-            title={completed ? 'Приёмка завершена' : 'Состав по грузоместу не ведётся'}
-            hint={completed ? 'Состав по грузоместу не ведётся' : undefined}
+            title="Состав по грузоместу не ведётся"
           />
-        ) : fullyDistributed || completed ? (
-          <EmptyPanel title="Товар из короба уже разложен" hint="Исторический состав здесь не показывается." />
         ) : compositionRows.length === 0 ? (
-          <EmptyPanel title="В коробе пока нет товаров" hint="Наполните короб в разделе «Приёмка»." />
+          <EmptyPanel title="Короб пуст" hint="В текущем складском остатке товаров в нём нет." />
         ) : (
           <TableContainer
             sx={{ maxWidth: '100%', overflowX: 'auto' }}

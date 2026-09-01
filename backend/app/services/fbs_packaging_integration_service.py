@@ -502,18 +502,17 @@ async def _resolve_order_for_pack_unit(
             )
         if order.product_id != product_id:
             raise FbsPackagingIntegrationError("order_product_mismatch")
-        if order.pick_status != PICK_STATUS_PICKED:
-            raise FbsPackagingIntegrationError("order_not_picked")
-        if not await _order_has_active_pick(session, order.id):
-            raise FbsPackagingIntegrationError("order_not_picked")
         if await _order_has_active_fulfillment(session, order.id):
             raise FbsPackagingIntegrationError("order_already_packed")
         return order
 
-    eligible = await _eligible_orders_for_product(session, supply, product_id)
+    eligible = await _eligible_orders_for_product(
+        session,
+        supply,
+        product_id,
+        require_pick=False,
+    )
     if not eligible:
-        if _unpicked_orders_for_product(supply, product_id):
-            raise FbsPackagingIntegrationError("order_not_picked")
         raise FbsPackagingIntegrationError("no_eligible_order")
     return eligible[0]
 
@@ -531,7 +530,7 @@ async def record_fbs_pack_progress(
     fail_on_insufficient_stock: bool = False,
     allow_alternative_sorting_fallback: bool = True,
 ) -> FbsPackProgressResult:
-    """Link each packed unit to one picked FBS order and convert sorting stock."""
+    """Record one packaging fact per FBS unit; only Ozon converts sorting stock."""
     if qty < 1:
         raise FbsPackagingIntegrationError("invalid_qty")
 
@@ -608,6 +607,22 @@ async def record_fbs_pack_progress(
                 line.product_id,
                 explicit_order_id=order_id if index == 0 else None,
             )
+            now = datetime.now(UTC)
+            fulfillment = FbsPackagingFulfillment(
+                tenant_id=tenant_id,
+                fbs_order_id=target_order.id,
+                packaging_task_id=task.id,
+                packaging_task_line_id=line.id,
+                fulfilled_by_user_id=acting_user_id,
+                fulfilled_at=now,
+                pack_idempotency_key=unit_key,
+            )
+            session.add(fulfillment)
+            target_order.pack_status = PACK_STATUS_PACKED
+            target_order.packed_at = now
+            line.qty_packed_in_task = int(line.qty_packed_in_task) + 1
+            units.append(FbsPackUnitResult(fulfillment, target_order))
+            continue
 
         try:
             await inv_svc.apply_packaging_convert(
@@ -667,32 +682,18 @@ async def record_fbs_pack_progress(
                 raise
 
         now = datetime.now(UTC)
-        if supply.marketplace == "ozon":
-            fulfillment = _record_ozon_pack_unit(
-                tenant_id=tenant_id,
-                target_order=target_order,
-                fulfillment=ozon_fulfillment,
-                task=task,
-                line=line,
-                acting_user_id=acting_user_id,
-                unit_key=unit_key,
-                packed_at=now,
-            )
-            if ozon_fulfillment is None:
-                session.add(fulfillment)
-        else:
-            fulfillment = FbsPackagingFulfillment(
-                tenant_id=tenant_id,
-                fbs_order_id=target_order.id,
-                packaging_task_id=task.id,
-                packaging_task_line_id=line.id,
-                fulfilled_by_user_id=acting_user_id,
-                fulfilled_at=now,
-                pack_idempotency_key=unit_key,
-            )
+        fulfillment = _record_ozon_pack_unit(
+            tenant_id=tenant_id,
+            target_order=target_order,
+            fulfillment=ozon_fulfillment,
+            task=task,
+            line=line,
+            acting_user_id=acting_user_id,
+            unit_key=unit_key,
+            packed_at=now,
+        )
+        if ozon_fulfillment is None:
             session.add(fulfillment)
-            target_order.pack_status = PACK_STATUS_PACKED
-            target_order.packed_at = now
         line.qty_packed_in_task = int(line.qty_packed_in_task) + 1
         units.append(FbsPackUnitResult(fulfillment, target_order))
 
@@ -735,6 +736,10 @@ async def try_promote_fbs_supply_if_ready(
         for_update=True,
     )
     if supply is None or supply.status != FBS_SUPPLY_STATUS_ASSEMBLING:
+        return supply
+    if supply.marketplace == "wb":
+        # WB packaging is an optional per-order fact.  A marking update or one
+        # packed unit must never fabricate packing facts for the whole supply.
         return supply
 
     task = None

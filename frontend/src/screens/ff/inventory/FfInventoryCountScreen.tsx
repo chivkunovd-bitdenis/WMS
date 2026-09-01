@@ -1,7 +1,8 @@
 import { Box, Paper, Stack, Typography } from '@mui/material'
 import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
+  ActionGroup,
   CheckboxInput,
   DangerAction,
   ErrorNotice,
@@ -30,7 +31,7 @@ import {
   type InvFilters,
   type InvRow,
 } from './InventoryRows'
-import type { CountStatus, InventoryCount } from './InventoryTypes'
+import type { CountStatus, InventoryCount, InventoryNode } from './InventoryTypes'
 
 const STATUS_LABEL: Record<CountStatus, string> = {
   draft: 'Черновик',
@@ -55,6 +56,26 @@ function plural(n: number, one: string, few: string, many: string): string {
   return `${n} ${many}`
 }
 
+/** Ключи строки тары и всех её родителей, которые надо раскрыть перед прокруткой. */
+function containerPathKeys(count: InventoryCount, containerId: string): string[] {
+  function find(nodes: InventoryNode[]): string[] | null {
+    for (const node of nodes) {
+      if (node.kind === 'product') continue
+      const key = `${node.kind}:${node.id}`
+      if (node.id === containerId) return [key]
+      const nested = find(node.children)
+      if (nested) return [key, ...nested]
+    }
+    return null
+  }
+
+  for (const cell of count.cells) {
+    const nested = find(cell.children)
+    if (nested) return [`cell:${cell.id}`, ...nested]
+  }
+  return []
+}
+
 type Props = {
   count: InventoryCount
   loading: boolean
@@ -65,6 +86,7 @@ type Props = {
   onSave: () => void
   onPost: () => void
   onCancelDocument: () => void
+  onCreateContainer?: (kind: 'pallet' | 'box' | 'cargo_place') => void
   onBack: () => void
 }
 
@@ -77,6 +99,7 @@ export function FfInventoryCountScreen({
   onSave,
   onPost,
   onCancelDocument,
+  onCreateContainer,
   onBack,
 }: Props) {
   const [filters, setFilters] = useState<InvFilters>(EMPTY_FILTERS)
@@ -85,16 +108,47 @@ export function FfInventoryCountScreen({
   // Память сканера на одну вещь: какую тару открыли. Пока открыта, пики идут в неё.
   const [openContainerId, setOpenContainerId] = useState<string | null>(null)
   const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
+  const [scanFocus, setScanFocus] = useState<{ key: string; request: number } | null>(null)
+
+  useEffect(() => {
+    if (!scanFocus) return
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>(`[data-row-key="${scanFocus.key}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [scanFocus])
 
   function handleScan(code: string) {
     setScanValue('')
     const result = applyScan(count, code, openContainerId)
     setOpenContainerId(result.activeContainerId)
     setScanNote({ text: result.message, tone: result.tone })
+    if (result.focusContainerKey && result.activeContainerId) {
+      const openKeys = containerPathKeys(count, result.activeContainerId)
+      setFilters(EMPTY_FILTERS)
+      setCollapsed((current) => {
+        const next = new Set(current)
+        for (const key of openKeys) next.delete(key)
+        return next
+      })
+      setScanFocus((current) => ({
+        key: result.focusContainerKey as string,
+        request: (current?.request ?? 0) + 1,
+      }))
+    }
     if (result.count !== count) onChange(result.count)
   }
 
   const readOnly = count.status !== 'draft'
+  const createContainerDisabledReason = readOnly
+    ? 'Документ уже проведён'
+    : loading
+      ? 'Создание тары выполняется'
+      : onCreateContainer
+        ? undefined
+        : 'Создание тары недоступно'
   const rows = useMemo(() => buildRows(count, filters, collapsed), [count, filters, collapsed])
   const t = useMemo(() => totals(count), [count])
   const { sellers, categories } = useMemo(() => facets(count), [count])
@@ -159,6 +213,32 @@ export function FfInventoryCountScreen({
           Создал {count.createdBy}, {count.createdAt}
         </Typography>
       </Stack>
+
+      <Box sx={{ mb: 2 }}>
+        <ActionGroup>
+          <SecondaryAction
+            onClick={() => onCreateContainer?.('box')}
+            disabledReason={createContainerDisabledReason}
+            data-testid="inv-create-box"
+          >
+            Создать короб
+          </SecondaryAction>
+          <SecondaryAction
+            onClick={() => onCreateContainer?.('pallet')}
+            disabledReason={createContainerDisabledReason}
+            data-testid="inv-create-pallet"
+          >
+            Создать палету
+          </SecondaryAction>
+          <SecondaryAction
+            onClick={() => onCreateContainer?.('cargo_place')}
+            disabledReason={createContainerDisabledReason}
+            data-testid="inv-create-cargo-place"
+          >
+            Создать грузоместо
+          </SecondaryAction>
+        </ActionGroup>
+      </Box>
 
       {/* Свободная строка про причину: «пересорт», «после потопа», «считали вдвоём».
           Пишется при пересчёте и остаётся видной, когда документ откроют потом —
@@ -255,6 +335,7 @@ export function FfInventoryCountScreen({
         rows={rows}
         loading={loading}
         readOnly={readOnly}
+        highlightedKey={scanFocus?.key}
         empty={{
           title: 'В документе нет строк',
           hint: 'Либо отбор ничего не нашёл, либо документ наполнен пустым местом.',

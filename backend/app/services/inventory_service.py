@@ -7,11 +7,13 @@ from typing import Literal, cast
 from sqlalchemy import and_, case, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.fbs_order import FbsOrderReservation
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import (
+    MOVEMENT_TYPE_CONTAINER_REATTACH,
     MOVEMENT_TYPE_FBS_SHIPMENT,
     MOVEMENT_TYPE_INBOUND_INTAKE,
     MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
@@ -520,6 +522,7 @@ async def record_movement_and_adjust_balance(
     deduct_prefer: DeductPrefer = "unpacked",
     container_kind: ContainerKind | None = None,
     container_id: uuid.UUID | None = None,
+    _exact_source: bool = False,
 ) -> InventoryMovement:
     """Запись в журнал и изменение остатка (delta может быть отрицательным)."""
     if quantity_delta == 0:
@@ -547,6 +550,114 @@ async def record_movement_and_adjust_balance(
             container_id,
         )
 
+    # Legacy document flows identify only a location, while current stock at
+    # that location can be split between loose units and several physical
+    # containers. Consume those sources deterministically instead of requiring
+    # a phantom loose row. Explicit picker sources still take the exact path.
+    if quantity_delta < 0 and container_kind is None and not _exact_source:
+        quantity_to_deduct = -quantity_delta
+        source_rows = list(
+            (
+                await session.scalars(
+                    select(InventoryBalance)
+                    .where(
+                        InventoryBalance.tenant_id == tenant_id,
+                        InventoryBalance.product_id == product_id,
+                        InventoryBalance.storage_location_id == storage_location_id,
+                        InventoryBalance.quantity > 0,
+                    )
+                    .with_for_update()
+                )
+            ).all()
+        )
+        source_rows.sort(
+            key=lambda row: (
+                row.container_id is not None,
+                row.container_kind or "",
+                str(row.container_id or ""),
+            )
+        )
+        total_available = sum(max(0, int(row.quantity)) for row in source_rows)
+        if total_available < quantity_to_deduct and not allow_negative:
+            raise ValueError("insufficient stock")
+
+        allocations: list[tuple[InventoryBalance, int]] = []
+        remaining = quantity_to_deduct
+        single_source = next(
+            (
+                source
+                for source in source_rows
+                if int(source.quantity) >= quantity_to_deduct
+            ),
+            None,
+        )
+        if single_source is not None and movement_type != MOVEMENT_TYPE_FBS_SHIPMENT:
+            allocations.append((single_source, quantity_to_deduct))
+            remaining = 0
+        else:
+            for source in source_rows:
+                allocated = min(remaining, max(0, int(source.quantity)))
+                if allocated > 0:
+                    allocations.append((source, allocated))
+                    remaining -= allocated
+                if remaining == 0:
+                    break
+        movement_count = len(allocations) + (1 if remaining > 0 else 0)
+        group_id = (
+            transfer_group_id
+            if transfer_group_id is not None or movement_count < 2
+            else uuid.uuid4()
+        )
+        movements: list[InventoryMovement] = []
+        for source, allocated in allocations:
+            raw_kind = source.container_kind
+            if raw_kind not in {None, "pallet", "box", "cargo_place"}:
+                raise ValueError("invalid container reference")
+            movements.append(
+                await record_movement_and_adjust_balance(
+                    session,
+                    tenant_id=tenant_id,
+                    product_id=product_id,
+                    storage_location_id=storage_location_id,
+                    quantity_delta=-allocated,
+                    movement_type=movement_type,
+                    inbound_intake_line_id=inbound_intake_line_id,
+                    outbound_shipment_line_id=outbound_shipment_line_id,
+                    inventory_count_line_id=inventory_count_line_id,
+                    transfer_group_id=group_id,
+                    marketplace_unload_request_id=marketplace_unload_request_id,
+                    allow_negative=False,
+                    actor_user_id=actor_user_id,
+                    deduct_prefer=deduct_prefer,
+                    container_kind=cast(ContainerKind | None, raw_kind),
+                    container_id=source.container_id,
+                    _exact_source=True,
+                )
+            )
+        if remaining > 0:
+            movements.append(
+                await record_movement_and_adjust_balance(
+                    session,
+                    tenant_id=tenant_id,
+                    product_id=product_id,
+                    storage_location_id=storage_location_id,
+                    quantity_delta=-remaining,
+                    movement_type=movement_type,
+                    inbound_intake_line_id=inbound_intake_line_id,
+                    outbound_shipment_line_id=outbound_shipment_line_id,
+                    inventory_count_line_id=inventory_count_line_id,
+                    transfer_group_id=group_id,
+                    marketplace_unload_request_id=marketplace_unload_request_id,
+                    allow_negative=True,
+                    actor_user_id=actor_user_id,
+                    deduct_prefer=deduct_prefer,
+                    _exact_source=True,
+                )
+            )
+        if not movements:
+            raise ValueError("insufficient stock")
+        return movements[0]
+
     movement_values: dict[str, object] = dict(
         tenant_id=tenant_id,
         product_id=product_id,
@@ -560,6 +671,8 @@ async def record_movement_and_adjust_balance(
         inventory_count_line_id=inventory_count_line_id,
         transfer_group_id=transfer_group_id,
         marketplace_unload_request_id=marketplace_unload_request_id,
+        container_kind=container_kind,
+        container_id=container_id,
         actor_user_id=actor_user_id,
     )
     # Поле приходит отдельной волной inventory_movement_actor. Пока ветки не
@@ -651,6 +764,143 @@ async def record_movement_and_adjust_balance(
         )
         await session.flush()
     return movement
+
+
+async def reclassify_balance_container(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+    quantity: int,
+    from_container_kind: ContainerKind | None,
+    from_container_id: uuid.UUID | None,
+    to_container_kind: ContainerKind | None,
+    to_container_id: uuid.UUID | None,
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    """Move real stock between loose/container identities without changing totals.
+
+    This is a bookkeeping reclassification at one physical place, not a stock
+    transfer. Both quantity dimensions are preserved, and the paired movement
+    rows retain the old and new container identities for investigation.
+    """
+    if quantity < 1:
+        raise ValueError("quantity must be positive")
+    if (from_container_kind is None) != (from_container_id is None):
+        raise ValueError("container kind and id must be set together")
+    if (to_container_kind is None) != (to_container_id is None):
+        raise ValueError("container kind and id must be set together")
+    if (from_container_kind, from_container_id) == (
+        to_container_kind,
+        to_container_id,
+    ):
+        raise ValueError("source and destination container must differ")
+
+    location = await session.get(StorageLocation, storage_location_id)
+    if location is None or location.tenant_id != tenant_id:
+        raise ValueError("storage location not found")
+    product = await session.get(Product, product_id)
+    if product is None or product.tenant_id != tenant_id:
+        raise ValueError("product not found")
+    if from_container_kind is not None and from_container_id is not None:
+        await validate_container(
+            session,
+            tenant_id,
+            location.warehouse_id,
+            from_container_kind,
+            from_container_id,
+        )
+    if to_container_kind is not None and to_container_id is not None:
+        await validate_container(
+            session,
+            tenant_id,
+            location.warehouse_id,
+            to_container_kind,
+            to_container_id,
+        )
+
+    def container_predicates(
+        kind: ContainerKind | None,
+        container_id: uuid.UUID | None,
+    ) -> tuple[ColumnElement[bool], ColumnElement[bool]]:
+        if kind is None:
+            return (
+                InventoryBalance.container_kind.is_(None),
+                InventoryBalance.container_id.is_(None),
+            )
+        return (
+            InventoryBalance.container_kind == kind,
+            InventoryBalance.container_id == container_id,
+        )
+
+    common = (
+        InventoryBalance.tenant_id == tenant_id,
+        InventoryBalance.product_id == product_id,
+        InventoryBalance.storage_location_id == storage_location_id,
+    )
+    source = await session.scalar(
+        select(InventoryBalance)
+        .where(*common, *container_predicates(from_container_kind, from_container_id))
+        .with_for_update()
+    )
+    if source is None or int(source.quantity) < quantity:
+        raise ValueError("insufficient stock")
+    target = await session.scalar(
+        select(InventoryBalance)
+        .where(*common, *container_predicates(to_container_kind, to_container_id))
+        .with_for_update()
+    )
+
+    moved_unpacked = min(quantity, max(0, int(source.quantity_unpacked)))
+    moved_packed = quantity - moved_unpacked
+    if moved_packed > max(0, int(source.quantity_packed)):
+        raise ValueError("inconsistent stock dimensions")
+    now = datetime.now(UTC)
+    source.quantity -= quantity
+    source.quantity_unpacked -= moved_unpacked
+    source.quantity_packed -= moved_packed
+    source.updated_at = now
+    if target is None:
+        target = InventoryBalance(
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=storage_location_id,
+            container_kind=to_container_kind,
+            container_id=to_container_id,
+            quantity=quantity,
+            quantity_unpacked=moved_unpacked,
+            quantity_packed=moved_packed,
+            updated_at=now,
+        )
+        session.add(target)
+    else:
+        target.quantity += quantity
+        target.quantity_unpacked += moved_unpacked
+        target.quantity_packed += moved_packed
+        target.updated_at = now
+
+    transfer_group_id = uuid.uuid4()
+    for delta, kind, container_id in (
+        (-quantity, from_container_kind, from_container_id),
+        (quantity, to_container_kind, to_container_id),
+    ):
+        session.add(
+            InventoryMovement(
+                tenant_id=tenant_id,
+                product_id=product_id,
+                seller_id=product.seller_id,
+                storage_location_id=storage_location_id,
+                warehouse_id=location.warehouse_id,
+                quantity_delta=delta,
+                movement_type=MOVEMENT_TYPE_CONTAINER_REATTACH,
+                transfer_group_id=transfer_group_id,
+                container_kind=kind,
+                container_id=container_id,
+                actor_user_id=actor_user_id,
+            )
+        )
+    await session.flush()
 
 
 async def apply_packaging_convert(
@@ -789,6 +1039,8 @@ async def apply_inbound_receive(
     movement_type: str,
     inbound_intake_line_id: uuid.UUID,
     actor_user_id: uuid.UUID | None,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> None:
     """Приход по строке приёмки (положительный delta)."""
     if quantity <= 0:
@@ -803,6 +1055,8 @@ async def apply_inbound_receive(
         movement_type=movement_type or MOVEMENT_TYPE_INBOUND_INTAKE,
         inbound_intake_line_id=inbound_intake_line_id,
         actor_user_id=actor_user_id,
+        container_kind=container_kind,
+        container_id=container_id,
     )
 
 
@@ -815,6 +1069,8 @@ async def reverse_inbound_receive(
     quantity: int,
     inbound_intake_line_id: uuid.UUID,
     actor_user_id: uuid.UUID | None,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> None:
     """Сторно прихода по строке приёмки (отрицательный delta в зоне сортировки)."""
     if quantity <= 0:
@@ -829,6 +1085,8 @@ async def reverse_inbound_receive(
         movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
         inbound_intake_line_id=inbound_intake_line_id,
         actor_user_id=actor_user_id,
+        container_kind=container_kind,
+        container_id=container_id,
     )
 
 
@@ -842,6 +1100,10 @@ async def apply_putaway_from_sorting(
     quantity: int,
     inbound_intake_line_id: uuid.UUID,
     actor_user_id: uuid.UUID | None,
+    from_container_kind: ContainerKind | None = None,
+    from_container_id: uuid.UUID | None = None,
+    to_container_kind: ContainerKind | None = None,
+    to_container_id: uuid.UUID | None = None,
 ) -> None:
     """Перемещение из зоны сортировки в ячейку хранения (привязка к строке приёмки)."""
     if quantity < 1:
@@ -883,6 +1145,8 @@ async def apply_putaway_from_sorting(
         transfer_group_id=group_id,
         inbound_intake_line_id=inbound_intake_line_id,
         actor_user_id=actor_user_id,
+        container_kind=from_container_kind,
+        container_id=from_container_id,
     )
     await record_movement_and_adjust_balance(
         session,
@@ -894,6 +1158,8 @@ async def apply_putaway_from_sorting(
         transfer_group_id=group_id,
         inbound_intake_line_id=inbound_intake_line_id,
         actor_user_id=actor_user_id,
+        container_kind=to_container_kind,
+        container_id=to_container_id,
     )
 
 
@@ -907,6 +1173,8 @@ async def apply_return_defect_putaway(
     quantity: int,
     inbound_intake_line_id: uuid.UUID,
     actor_user_id: uuid.UUID | None,
+    from_container_kind: ContainerKind | None = None,
+    from_container_id: uuid.UUID | None = None,
 ) -> None:
     """Move inspected defective return stock into the tenant's service warehouse."""
     if quantity < 1:
@@ -938,6 +1206,8 @@ async def apply_return_defect_putaway(
         transfer_group_id=group_id,
         inbound_intake_line_id=inbound_intake_line_id,
         actor_user_id=actor_user_id,
+        container_kind=from_container_kind,
+        container_id=from_container_id,
     )
     await record_movement_and_adjust_balance(
         session,
@@ -1134,12 +1404,14 @@ async def apply_fbs_supply_write_off(
     storage_location_id: uuid.UUID,
     quantity: int,
     actor_user_id: uuid.UUID | None,
+    allow_negative: bool = False,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> InventoryMovement:
-    """Списать подтверждённую FBS-отгрузку, разрешая фактическую недостачу.
+    """Списать подтверждённую FBS-отгрузку из точного места и тары.
 
-    Предварительной проверки остатка здесь нет намеренно. Маркетплейс уже
-    подтвердил доставку — товар физически уехал. Отказать значит подвесить
-    поставку навсегда и оставить в системе остаток, которого на полке нет.
+    Выход в минус требует явного решения вызывающего кода: обычное списание
+    не должно незаметно превращать расхождение в отрицательный остаток.
     """
     if quantity < 1:
         msg = "quantity must be positive"
@@ -1167,7 +1439,9 @@ async def apply_fbs_supply_write_off(
         movement_type=MOVEMENT_TYPE_FBS_SHIPMENT,
         actor_user_id=actor_user_id,
         deduct_prefer="packed",
-        allow_negative=True,
+        allow_negative=allow_negative,
+        container_kind=container_kind,
+        container_id=container_id,
     )
 
 

@@ -280,8 +280,10 @@ async def test_catalog_list_and_lookup_are_tenant_scoped_read_only(
     assert [row["internal_barcode"] for row in rows] == [
         "INB-CURRENT-RESIDUAL",
         "INB-CURRENT-EMPTY",
+        "INB-CURRENT-DISTRIBUTED",
         "ICG-CURRENT",
         "INB-OLD-RESIDUAL",
+        "INB-DONE-DISTRIBUTED",
     ]
     residual = rows[0]
     assert residual["kind"] == "box"
@@ -308,11 +310,14 @@ async def test_catalog_list_and_lookup_are_tenant_scoped_read_only(
     assert residual["warehouse_name"] == "Основной"
     assert rows[1]["remaining_qty"] == 0
     assert rows[1]["fully_distributed"] is False
-    assert rows[2]["kind"] == "cargo_place"
-    assert rows[2]["composition_tracked"] is True
-    assert rows[2]["fully_distributed"] is False
+    assert rows[2]["kind"] == "box"
+    assert rows[2]["fully_distributed"] is True
     assert rows[2]["remaining_qty"] == 0
-    assert rows[3]["warehouse_name"] == "Резерв"
+    assert rows[3]["kind"] == "cargo_place"
+    assert rows[3]["composition_tracked"] is True
+    assert rows[3]["fully_distributed"] is False
+    assert rows[3]["remaining_qty"] == 0
+    assert rows[4]["warehouse_name"] == "Резерв"
 
     done_box = await async_client.get(
         "/operations/inbound-packages/lookup?barcode=inb-done-distributed",
@@ -333,7 +338,7 @@ async def test_catalog_list_and_lookup_are_tenant_scoped_read_only(
     assert distributed_box.json()["remaining_qty"] == 0
     assert distributed_box.json()["lines"] == []
     assert distributed_box.json()["fully_distributed"] is True
-    assert "INB-CURRENT-DISTRIBUTED" not in [row["internal_barcode"] for row in rows]
+    assert "INB-CURRENT-DISTRIBUTED" in [row["internal_barcode"] for row in rows]
 
     done_cargo = await async_client.get(
         "/operations/inbound-packages/lookup?barcode=ICG-DONE", headers=admin_headers
@@ -378,10 +383,10 @@ async def test_catalog_list_and_lookup_are_tenant_scoped_read_only(
 
 
 @pytest.mark.asyncio
-async def test_catalog_list_loads_only_current_package_rows(
+async def test_catalog_list_keeps_original_package_numbers_after_distribution(
     async_client: AsyncClient,
 ) -> None:
-    """TC-S16-003: list SQL excludes historical package rows before eager loading."""
+    """Distributed/empty boxes remain scannable under their original numbers."""
     suffix = uuid.uuid4().hex[:12]
     admin_headers = await _register_admin(async_client, suffix)
     tenant_id = await _tenant_id(async_client, admin_headers)
@@ -409,8 +414,10 @@ async def test_catalog_list_loads_only_current_package_rows(
     assert [row["internal_barcode"] for row in response.json()] == [
         "INB-CURRENT-RESIDUAL",
         "INB-CURRENT-EMPTY",
+        "INB-CURRENT-DISTRIBUTED",
         "ICG-CURRENT",
         "INB-OLD-RESIDUAL",
+        "INB-DONE-DISTRIBUTED",
     ]
 
     box_statement = next(
@@ -418,11 +425,7 @@ async def test_catalog_list_loads_only_current_package_rows(
         for statement, _parameters in statements
         if "FROM inbound_intake_boxes" in statement
     )
-    assert "EXISTS" in box_statement
-    assert (
-        "inbound_intake_box_lines.quantity > inbound_intake_box_lines.posted_qty"
-        in box_statement
-    )
+    assert "EXISTS" not in box_statement
 
     cargo_statement = next(
         statement
@@ -431,13 +434,13 @@ async def test_catalog_list_loads_only_current_package_rows(
     )
     assert "inbound_intake_requests.status != ?" in cargo_statement
 
-    line_parameters = next(
+    line_parameters = [
         parameters
         for statement, parameters in statements
         if "FROM inbound_intake_box_lines" in statement
-    )
-    assert str(ids["distributed_box_id"]) not in str(line_parameters)
-    assert str(ids["done_box_id"]) not in str(line_parameters)
+    ]
+    assert ids["distributed_box_id"].hex in str(line_parameters)
+    assert ids["done_box_id"].hex in str(line_parameters)
 
 
 @pytest.mark.asyncio
@@ -472,7 +475,7 @@ async def test_catalog_box_lookup_has_bounded_read_only_query_path(
 
     assert item is not None
     assert item.internal_barcode == "INB-CURRENT-RESIDUAL"
-    assert len(statements) <= 6
+    assert len(statements) <= 7
     assert all(statement.startswith("SELECT") for statement in statements)
     sql = "\n".join(statements)
     assert "SELLER_WILDBERRIES_IMPORTED_CARDS" not in sql

@@ -4,9 +4,78 @@
     {
       "name": "wms-ui-kit",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "--port", "5178", "--strictPort"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5178",
+        "--strictPort"
+      ],
       "cwd": "frontend",
       "port": 5178
+    },
+    {
+      "name": "wms-maket",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5179",
+        "--strictPort"
+      ],
+      "cwd": ".worktrees/warehouse-map-20260827/frontend",
+      "port": 5179
+    },
+    {
+      "name": "wms-integration",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5180",
+        "--strictPort"
+      ],
+      "cwd": ".worktrees/integration-20260828/frontend",
+      "port": 5180
+    },
+    {
+      "name": "wms-integration-stage",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "VITE_API_PROXY=https://web-production-9e7c1.up.railway.app/api npm run dev -- --port 5181 --strictPort"
+      ],
+      "cwd": ".worktrees/integration-20260828/frontend",
+      "port": 5181
+    },
+    {
+      "name": "wms-fbs-sklady",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5182",
+        "--strictPort"
+      ],
+      "cwd": ".worktrees/fbs-sklady-20260831/frontend",
+      "port": 5182
+    },
+    {
+      "name": "wms-audit-fbs",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "VITE_API_PROXY=http://127.0.0.1:18081 npm run dev -- --port 5183 --strictPort"
+      ],
+      "cwd": ".worktrees/prod-fbs-pack-hotfix-20260831/frontend",
+      "port": 5183
     }
   ]
 }

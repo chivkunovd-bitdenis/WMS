@@ -1,0 +1,11 @@
+
+> frontend@0.0.0 test:e2e
+> playwright test
+
+[WebServer] INFO:     Started server process [86472]
+[WebServer] INFO:     Waiting for application startup.
+[WebServer] WMS_AUTO_CREATE_SCHEMA=1: tables created (dev/e2e only).
+[WebServer] INFO:     Application startup complete.
+[WebServer] INFO:     Uvicorn running on http://127.0.0.1:18000 (Press CTRL+C to quit)
+Error: Cannot find package '@zxing/library' imported from /Users/deniscivkunov/Projects/WMS/.worktrees/integration-20260828/frontend/tests-e2e/ff-inbound-box-intake.spec.ts
+

@@ -189,10 +189,11 @@ export async function fetchLabelArtifactPdfBlob(
 export async function fetchLabelArtifactDataUrl(
   codeId: string,
   authToken: string,
+  signal?: AbortSignal,
 ): Promise<string> {
   const res = await fetch(
     apiUrl(`/operations/marking-codes/codes/${codeId}/label-artifact?format=png`),
-    { headers: { Authorization: `Bearer ${authToken}` } },
+    { headers: { Authorization: `Bearer ${authToken}` }, signal },
   )
   if (!res.ok) {
     throw new Error('Не удалось загрузить этикетку ЧЗ из файла селлера.')
@@ -263,6 +264,7 @@ export type MarkingTapeUnitInput = {
 export type PrintMarkingTapeOptions = {
   authToken?: string | null
   labelSize?: LabelSize
+  signal?: AbortSignal
 }
 
 export type PrintMarkingCodeLabelsOptions = {
@@ -357,7 +359,9 @@ export async function buildMarkingTapeSections(
   const matrixByCis = new Map<string, string>()
   await Promise.all(
     uniqueCis.map(async (cis) => {
+      if (options?.signal?.aborted) throw new DOMException('Сборка отменена.', 'AbortError')
       matrixByCis.set(cis, await renderDataMatrixDataUrl(cis))
+      if (options?.signal?.aborted) throw new DOMException('Сборка отменена.', 'AbortError')
     }),
   )
 
@@ -373,7 +377,10 @@ export async function buildMarkingTapeSections(
     ]
     await Promise.all(
       artifactCodeIds.map(async (codeId) => {
-        artifactByCodeId.set(codeId, await fetchLabelArtifactDataUrl(codeId, authToken))
+        artifactByCodeId.set(
+          codeId,
+          await fetchLabelArtifactDataUrl(codeId, authToken, options?.signal),
+        )
       }),
     )
   }

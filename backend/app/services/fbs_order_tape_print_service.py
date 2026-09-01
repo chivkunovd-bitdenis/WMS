@@ -336,12 +336,13 @@ async def print_fbs_order_tape(
         )
 
     await session.flush()
-    await pack_int_svc.try_promote_fbs_supply_if_ready(
-        session,
-        tenant_id,
-        supply_id,
-        actor_user_id=actor_user_id,
-    )
+    if getattr(supply, "marketplace", "wb") != "wb":
+        await pack_int_svc.try_promote_fbs_supply_if_ready(
+            session,
+            tenant_id,
+            supply_id,
+            actor_user_id=actor_user_id,
+        )
     return FbsOrderTapePrintResult(
         orders=result_orders,
         print_batch=batch,

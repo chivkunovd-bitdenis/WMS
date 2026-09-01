@@ -1,0 +1,810 @@
+........................................................................ [  5%]
+..........ssss..............F......................................F.... [ 10%]
+...s.................................................................... [ 15%]
+.....................................................................s.. [ 20%]
+........s..ss........................................................... [ 26%]
+........................................................................ [ 31%]
+........................................................................ [ 36%]
+....................................................s................s.. [ 41%]
+........................................................................ [ 47%]
+........................................................................ [ 52%]
+................FF.F.................................................... [ 57%]
+........................................................................ [ 62%]
+........................................................................ [ 67%]
+.............F.......................................................... [ 73%]
+.................F...................................................... [ 78%]
+........................................................................ [ 83%]
+........................................................................ [ 88%]
+........................................................................ [ 94%]
+........................................................................ [ 99%]
+.........                                                                [100%]
+=================================== FAILURES ===================================
+__________ test_legacy_box_barcodes_attach_through_real_database_path __________
+
+async_client = <httpx.AsyncClient object at 0x118996750>
+
+    @pytest.mark.asyncio
+    async def test_legacy_box_barcodes_attach_through_real_database_path(
+        async_client: AsyncClient,
+    ) -> None:
+        """TC-NEW-B02-WB-BOX-02: old WHB/INB labels still scan into an MP shipment."""
+        assert async_client.base_url == "http://test"
+    
+        async with SessionLocal() as session:
+            tenant = Tenant(name="Legacy box tenant", slug=f"legacy-box-{uuid.uuid4().hex}")
+            session.add(tenant)
+            await session.flush()
+    
+            warehouse = Warehouse(
+                tenant_id=tenant.id,
+                name="Legacy box warehouse",
+                code=f"LEG-{uuid.uuid4().hex[:8]}",
+            )
+            seller = Seller(tenant_id=tenant.id, name="Legacy box seller")
+            session.add_all([warehouse, seller])
+            await session.flush()
+    
+            product = Product(
+                tenant_id=tenant.id,
+                seller_id=seller.id,
+                name="Legacy box product",
+                sku_code=f"LEGACY-{uuid.uuid4().hex[:8]}",
+            )
+            location = StorageLocation(
+                tenant_id=tenant.id,
+                warehouse_id=warehouse.id,
+                code="LEGACY-LOC",
+                barcode=f"LOC-{uuid.uuid4().hex[:12]}",
+            )
+            inbound_request = InboundIntakeRequest(
+                tenant_id=tenant.id,
+                warehouse_id=warehouse.id,
+                seller_id=seller.id,
+                status="done",
+            )
+            unload_request = MarketplaceUnloadRequest(
+                tenant_id=tenant.id,
+                warehouse_id=warehouse.id,
+                seller_id=seller.id,
+                status="confirmed",
+            )
+            session.add_all([product, location, inbound_request, unload_request])
+            await session.flush()
+    
+            legacy_warehouse_box = WarehouseBox(
+                tenant_id=tenant.id,
+                warehouse_id=warehouse.id,
+                internal_barcode="WHB-ABCDEF123456",
+            )
+            legacy_inbound_box = InboundIntakeBox(
+                tenant_id=tenant.id,
+                request_id=inbound_request.id,
+                box_number=1,
+                internal_barcode="INB-ABCDEF123456",
+            )
+            session.add_all([legacy_warehouse_box, legacy_inbound_box])
+            await session.flush()
+    
+            session.add_all(
+                [
+                    InventoryBalance(
+                        tenant_id=tenant.id,
+                        storage_location_id=location.id,
+                        product_id=product.id,
+                        quantity=1,
+                        quantity_unpacked=1,
+                        quantity_packed=0,
+                    ),
+                    InboundIntakeDistributionLine(
+                        request_id=inbound_request.id,
+                        product_id=product.id,
+                        storage_location_id=location.id,
+                        quantity=1,
+                        box_id=legacy_inbound_box.id,
+                    ),
+                    MarketplaceUnloadLine(
+                        request_id=unload_request.id,
+                        product_id=product.id,
+                        quantity=1,
+                    ),
+                ]
+            )
+            await session.commit()
+    
+>           attached_whb = await attach_existing_box_by_barcode(
+                session,
+                tenant.id,
+                unload_request.id,
+                barcode="WHB-ABCDEF123456",
+            )
+E           TypeError: attach_existing_box_by_barcode() missing 1 required keyword-only argument: 'actor_user_id'
+
+tests/test_box_barcode_service.py:174: TypeError
+_______________ test_fbs_and_marketplace_unload_status_sequences _______________
+
+async_client = <httpx.AsyncClient object at 0x11a5bfdd0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11aa9ea50>
+
+    @pytest.mark.asyncio
+    async def test_fbs_and_marketplace_unload_status_sequences(
+        async_client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        headers, token_payload = await _register_admin(async_client)
+        data = await _seed_document_data(async_client, headers)
+        tenant_id = uuid.UUID(str(token_payload["tenant_id"]))
+        actor_id = uuid.UUID(str(token_payload["sub"]))
+        seller_id = uuid.UUID(data["seller_id"])
+        warehouse_id = uuid.UUID(data["warehouse_id"])
+        product_id = uuid.UUID(data["product_id"])
+    
+        async with SessionLocal() as session:
+            supply = FbsSupply(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                warehouse_id=warehouse_id,
+                wb_supply_id="journal-supply",
+                name="Journal supply",
+                delivery_type="warehouse_sc",
+            )
+            session.add(supply)
+            await session.flush()
+            order = FbsOrder(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                warehouse_id=warehouse_id,
+                product_id=product_id,
+                wb_order_id=987654321,
+                supply_id=supply.id,
+                created_at_wb=datetime.now(UTC),
+                deadline_at=datetime.now(UTC) + timedelta(days=1),
+                mapping_status="mapped",
+                reserve_status="reserved",
+            )
+            session.add(order)
+            await session.commit()
+    
+            async def fulfillment_ready(*_args: object, **_kwargs: object) -> bool:
+                return True
+    
+            monkeypatch.setattr(fbs_packaging_svc, "_all_active_orders_fulfilled", fulfillment_ready)
+            with document_event_actor(actor_id):
+                supply = await fbs_packaging_svc.update_supply_status(
+                    session,
+                    tenant_id,
+                    supply.id,
+                    FBS_SUPPLY_STATUS_ASSEMBLING,
+                )
+                await session.commit()
+                supply.packaging_task_id = None
+                await session.flush()
+                promoted = await fbs_packaging_svc.try_promote_fbs_supply_if_ready(
+                    session, tenant_id, supply.id, actor_user_id=actor_id
+                )
+                assert promoted is not None
+                assert promoted.status == FBS_SUPPLY_STATUS_PACKED
+                await session.commit()
+                await session.refresh(supply, attribute_names=["orders"])
+>               await fbs_shipment_svc._apply_local_delivered(session, supply, list(supply.orders))
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               TypeError: _apply_local_delivered() missing 1 required positional argument: 'actor_user_id'
+
+tests/test_document_events.py:463: TypeError
+_____________ test_ozon_packaging_write_off_records_operator_actor _____________
+
+async_client = <httpx.AsyncClient object at 0x11c152c90>
+
+    @pytest.mark.asyncio
+    async def test_ozon_packaging_write_off_records_operator_actor(
+        async_client: AsyncClient,
+    ) -> None:
+        """Ozon packaging completion must not fall through to an anonymous write-off."""
+        headers, suffix, tenant_id = await _register_ff_admin(async_client)
+        actor_id = await _actor_id(async_client, headers)
+        seller_id, warehouse_id, source_location_id = await _setup_seller_with_token(
+            async_client, headers, suffix
+        )
+        product_id = await _create_fbs_product(
+            async_client, headers, seller_id, sku=f"actor-ozon-{suffix}"
+        )
+    
+        async with SessionLocal() as session:
+            supply = FbsSupply(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                warehouse_id=warehouse_id,
+                marketplace="ozon",
+                external_supply_id=f"ozon-actor-{suffix}",
+                wb_supply_id=f"PENDING-{suffix}",
+                name="Ozon actor packaging",
+                status=FBS_SUPPLY_STATUS_DRAFT,
+                delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+            )
+            session.add(supply)
+            await session.flush()
+            now = datetime.now(UTC)
+            order = FbsOrder(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                warehouse_id=warehouse_id,
+                product_id=product_id,
+                supply_id=supply.id,
+                marketplace="ozon",
+                external_order_id=f"ozon-actor-posting-{suffix}",
+                wb_order_id=980001,
+                created_at_wb=now - timedelta(hours=1),
+                deadline_at=now + timedelta(hours=24),
+                mapping_status=MAPPING_STATUS_MAPPED,
+                reserve_status=RESERVE_STATUS_RESERVED,
+                status=FBS_ORDER_STATUS_IN_SUPPLY,
+            )
+            session.add(order)
+            await session.flush()
+            session.add(
+                FbsOrderProduct(
+                    order_id=order.id,
+                    product_id=product_id,
+                    ozon_sku=80801,
+                    offer_id="actor-offer",
+                    name="Actor Ozon product",
+                    quantity=1,
+                    reserved_quantity=1,
+                    position_index=0,
+                )
+            )
+            await inventory_service.record_movement_and_adjust_balance(
+                session,
+                tenant_id=tenant_id,
+                product_id=product_id,
+                storage_location_id=source_location_id,
+                quantity_delta=1,
+                movement_type="system_seed",
+                actor_user_id=None,
+            )
+            await session.commit()
+            supply_id = supply.id
+            order_id = order.id
+    
+        assembling = await async_client.put(
+            f"/operations/fbs-supplies/{supply_id}/status",
+            headers=headers,
+            json={"status": "assembling"},
+        )
+        assert assembling.status_code == 200, assembling.text
+        task_id = assembling.json()["packaging_task_id"]
+        picked = await async_client.post(
+            f"/operations/fbs-supplies/{supply_id}/pick/manual",
+            headers=headers,
+            json={
+                "location_id": str(source_location_id),
+                "product_id": str(product_id),
+                "order_id": str(order_id),
+                "idempotency_key": f"ozon-actor-pick-{suffix}",
+            },
+        )
+        assert picked.status_code == 200, picked.text
+        task = await async_client.get(
+            f"/operations/packaging-tasks/{task_id}", headers=headers
+        )
+        assert task.status_code == 200, task.text
+        packed = await async_client.post(
+            f"/operations/packaging-tasks/{task_id}/lines/{task.json()['lines'][0]['id']}/pack",
+            headers=headers,
+            json={"quantity": 1, "idempotency_key": f"ozon-actor-pack-{suffix}"},
+        )
+        assert packed.status_code == 200, packed.text
+        completed = await async_client.post(
+            f"/operations/packaging-tasks/{task_id}/complete",
+            headers=headers,
+            json={"acknowledge_all_packed": False},
+        )
+        assert completed.status_code == 200, completed.text
+    
+        async with SessionLocal() as session:
+            supply = await session.get(FbsSupply, supply_id)
+            order = await session.get(FbsOrder, order_id)
+            assert supply is not None and supply.marketplace == "ozon"
+            assert order is not None and order.marketplace == "ozon"
+            movement = (
+                await session.execute(
+                    select(InventoryMovement).where(
+                        InventoryMovement.product_id == product_id,
+                        InventoryMovement.movement_type == "fbs_shipment",
+                        InventoryMovement.quantity_delta < 0,
+                    )
+                )
+>           ).scalar_one()
+              ^^^^^^^^^^^^
+
+tests/test_inventory_movement_actor_flows.py:339: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/result.py:1518: in scalar_one
+    return self._only_one_row(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <sqlalchemy.engine.result.ChunkedIteratorResult object at 0x11bb20890>
+raise_for_second_row = True, raise_for_none = True, scalar = True
+
+    def _only_one_row(
+        self,
+        raise_for_second_row: bool,
+        raise_for_none: bool,
+        scalar: bool,
+    ) -> Optional[_R]:
+        onerow = self._fetchone_impl
+    
+        row: Optional[_InterimRowType[Any]] = onerow(hard_close=True)
+        if row is None:
+            if raise_for_none:
+>               raise exc.NoResultFound(
+                    "No row was found when one was required"
+                )
+E               sqlalchemy.exc.NoResultFound: No row was found when one was required
+
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/result.py:799: NoResultFound
+_________ test_fbs_cancellation_reversal_records_cancelling_user_actor _________
+
+async_client = <httpx.AsyncClient object at 0x121d60d10>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x120c48520>
+
+    @pytest.mark.asyncio
+    async def test_fbs_cancellation_reversal_records_cancelling_user_actor(
+        async_client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A user cancellation must author the positive reversal movement."""
+        headers, suffix, tenant_id = await _register_ff_admin(async_client)
+        actor_id = await _actor_id(async_client, headers)
+        seller_id, warehouse_id, source_location_id = await _setup_seller_with_token(
+            async_client, headers, suffix
+        )
+        product_id = await _create_fbs_product(
+            async_client, headers, seller_id, sku=f"actor-cancel-{suffix}"
+        )
+    
+        async with SessionLocal() as session:
+            now = datetime.now(UTC)
+            order = FbsOrder(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                warehouse_id=warehouse_id,
+                product_id=product_id,
+                marketplace="wb",
+                external_order_id=f"wb-cancel-{suffix}",
+                wb_order_id=980002,
+                created_at_wb=now - timedelta(hours=1),
+                deadline_at=now + timedelta(hours=24),
+                mapping_status=MAPPING_STATUS_MAPPED,
+                reserve_status=RESERVE_STATUS_RESERVED,
+                status=FBS_ORDER_STATUS_PACKED,
+            )
+            session.add(order)
+            await session.flush()
+            await inventory_service.record_movement_and_adjust_balance(
+                session,
+                tenant_id=tenant_id,
+                product_id=product_id,
+                storage_location_id=source_location_id,
+                quantity_delta=1,
+                movement_type="system_seed",
+                actor_user_id=None,
+            )
+            await inventory_service.apply_fbs_supply_write_off(
+                session,
+                tenant_id=tenant_id,
+                product_id=product_id,
+                storage_location_id=source_location_id,
+                quantity=1,
+                actor_user_id=None,
+            )
+            ledger = FbsShipmentReversalLedger(
+                tenant_id=tenant_id,
+                fbs_order_id=order.id,
+                product_id=product_id,
+                storage_location_id=source_location_id,
+                quantity=1,
+            )
+            session.add(ledger)
+            await session.commit()
+            order_id = order.id
+    
+        async def fake_cancel(
+            client: object,
+            *,
+            api_token: str,
+            order_id: int,
+            marketplace_api_base: str | None = None,
+        ) -> None:
+            return None
+    
+        monkeypatch.setattr(
+            "app.services.fbs_cancellation_service.cancel_marketplace_order", fake_cancel
+        )
+        cancelled = await async_client.patch(
+            f"/operations/fbs-orders/{order_id}/cancel",
+            headers=headers,
+            json={"actor_user_id": str(uuid.uuid4())},
+        )
+        assert cancelled.status_code == 200, cancelled.text
+    
+        async with SessionLocal() as session:
+            movements = list(
+                (
+                    await session.execute(
+                        select(InventoryMovement).where(
+                            InventoryMovement.product_id == product_id,
+                            InventoryMovement.movement_type == "fbs_shipment",
+                        )
+                    )
+                ).scalars()
+            )
+>           assert sorted(row.quantity_delta for row in movements) == [-1, 1]
+E           assert [-1] == [-1, 1]
+E             
+E             Right contains one more item: 1
+E             Use -v to get more diff
+
+tests/test_inventory_movement_actor_flows.py:436: AssertionError
+__________ test_explicit_system_reversal_is_the_only_null_actor_path ___________
+
+async_client = <httpx.AsyncClient object at 0x11b9a8c50>
+
+    @pytest.mark.asyncio
+    async def test_explicit_system_reversal_is_the_only_null_actor_path(
+        async_client: AsyncClient,
+    ) -> None:
+        """Background reconciliation may pass None explicitly; user flows may not."""
+        headers, suffix, tenant_id = await _register_ff_admin(async_client)
+        seller_id, warehouse_id, source_location_id = await _setup_seller_with_token(
+            async_client, headers, suffix
+        )
+        product_id = await _create_fbs_product(
+            async_client, headers, seller_id, sku=f"actor-system-{suffix}"
+        )
+        async with SessionLocal() as session:
+            now = datetime.now(UTC)
+            order = FbsOrder(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                warehouse_id=warehouse_id,
+                product_id=product_id,
+                marketplace="wb",
+                external_order_id=f"wb-system-{suffix}",
+                wb_order_id=980003,
+                created_at_wb=now,
+                deadline_at=now + timedelta(hours=24),
+                mapping_status=MAPPING_STATUS_MAPPED,
+                reserve_status=RESERVE_STATUS_RESERVED,
+                status=FBS_ORDER_STATUS_PACKED,
+            )
+            session.add(order)
+            await session.flush()
+            await inventory_service.record_movement_and_adjust_balance(
+                session,
+                tenant_id=tenant_id,
+                product_id=product_id,
+                storage_location_id=source_location_id,
+                quantity_delta=1,
+                movement_type="system_seed",
+                actor_user_id=None,
+            )
+            await inventory_service.apply_fbs_supply_write_off(
+                session,
+                tenant_id=tenant_id,
+                product_id=product_id,
+                storage_location_id=source_location_id,
+                quantity=1,
+                actor_user_id=None,
+            )
+            session.add(
+                FbsShipmentReversalLedger(
+                    tenant_id=tenant_id,
+                    fbs_order_id=order.id,
+                    product_id=product_id,
+                    storage_location_id=source_location_id,
+                    quantity=1,
+                )
+            )
+            await session.flush()
+            reversed_now = await reverse_fbs_shipment_if_needed(
+                session, order, actor_user_id=None
+            )
+>           assert reversed_now is True
+E           assert False is True
+
+tests/test_inventory_movement_actor_flows.py:631: AssertionError
+_________________ test_delete_draft_line_releases_reservation __________________
+
+async_client = <httpx.AsyncClient object at 0x120f24710>
+
+    @pytest.mark.asyncio
+    async def test_delete_draft_line_releases_reservation(async_client: AsyncClient) -> None:
+        suffix = str(int(time.time() * 1000))
+        reg = await async_client.post(
+            "/auth/register",
+            json={
+                "organization_name": "Del Co",
+                "slug": f"del-{suffix}",
+                "admin_email": f"del-{suffix}@example.com",
+                "password": "password123",
+            },
+        )
+        h = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    
+        wh = await async_client.post(
+            "/warehouses", headers=h, json={"name": "W", "code": f"w-{suffix}"}
+        )
+        wid = wh.json()["id"]
+        loc = await async_client.post(
+            f"/warehouses/{wid}/locations", headers=h, json={"code": "A1"}
+        )
+        lid = loc.json()["id"]
+        pr = await async_client.post(
+            "/products",
+            headers=h,
+            json={
+                "name": "P",
+                "sku_code": f"S-{suffix}",
+                "length_mm": 1,
+                "width_mm": 1,
+                "height_mm": 1,
+            },
+        )
+        pid = pr.json()["id"]
+        sku = pr.json()["sku_code"]
+    
+        ir = await async_client.post(
+            "/operations/inbound-intake-requests",
+            headers=h,
+            json={"warehouse_id": wid},
+        )
+        rid = ir.json()["id"]
+        await async_client.post(
+            f"/operations/inbound-intake-requests/{rid}/lines",
+            headers=h,
+            json={
+                "product_id": pid,
+                "expected_qty": 10,
+                "storage_location_id": lid,
+            },
+        )
+        await async_client.post(
+            f"/operations/inbound-intake-requests/{rid}/submit", headers=h
+        )
+        await post_primary_accept(async_client, "/operations/inbound-intake-requests", rid, h)
+        lines = await async_client.get(
+            f"/operations/inbound-intake-requests/{rid}",
+            headers=h,
+        )
+        line_id = lines.json()["lines"][0]["id"]
+        await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 10)
+        await async_client.post(
+            f"/operations/inbound-intake-requests/{rid}/verify", headers=h
+        )
+        await async_client.post(
+            f"/operations/inbound-intake-requests/{rid}/post", headers=h
+        )
+    
+        base = "/operations/outbound-shipment-requests"
+        oid = (await async_client.post(base, headers=h, json={"warehouse_id": wid})).json()[
+            "id"
+        ]
+        ln = await async_client.post(
+            f"{base}/{oid}/lines",
+            headers=h,
+            json={"product_id": pid, "quantity": 8, "storage_location_id": lid},
+        )
+        assert ln.status_code == 201, ln.text
+        line_id = ln.json()["id"]
+    
+        bal1 = await async_client.get(
+            "/operations/inventory-balances",
+            headers=h,
+            params={"storage_location_id": lid},
+        )
+        assert bal1.json()[0]["reserved"] == 8
+        assert bal1.json()[0]["available"] == 2
+    
+        o2 = await async_client.post(base, headers=h, json={"warehouse_id": wid})
+        oid2 = o2.json()["id"]
+        bad = await async_client.post(
+            f"{base}/{oid2}/lines",
+            headers=h,
+            json={"product_id": pid, "quantity": 5, "storage_location_id": lid},
+        )
+        assert bad.status_code == 422
+    
+>       rm = await async_client.delete(f"{base}/{oid}/lines/{line_id}", headers=h)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_outbound_delete_line.py:107: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../backend/.venv/lib/python3.14/site-packages/httpx/_client.py:1966: in delete
+    return await self.request(
+../../../backend/.venv/lib/python3.14/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+../../../backend/.venv/lib/python3.14/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+../../../backend/.venv/lib/python3.14/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/httpx/_transports/asgi.py:170: in handle_async_request
+    await self.app(scope, receive, send)
+../../../backend/.venv/lib/python3.14/site-packages/fastapi/applications.py:1163: in __call__
+    await super().__call__(scope, receive, send)
+../../../backend/.venv/lib/python3.14/site-packages/starlette/applications.py:90: in __call__
+    await self.middleware_stack(scope, receive, send)
+../../../backend/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+../../../backend/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+../../../backend/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py:88: in __call__
+    await self.app(scope, receive, send)
+app/services/document_event_service.py:114: in __call__
+    await self.app(scope, receive, send)
+../../../backend/.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+../../../backend/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+../../../backend/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+../../../backend/.venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+../../../backend/.venv/lib/python3.14/site-packages/starlette/routing.py:660: in __call__
+    await self.middleware_stack(scope, receive, send)
+../../../backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:2734: in app
+    await route.handle(scope, receive, send)
+../../../backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:1780: in handle
+    await self.original_router.handle(scope, receive, send)
+../../../backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:2789: in handle
+    await included_router._handle_selected(scope, receive, send)
+../../../backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:1800: in _handle_selected
+    await original_route.handle(scope, receive, send)
+../../../backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:1279: in handle
+    await app(scope, receive, send)
+../../../backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:158: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+../../../backend/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+../../../backend/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+../../../backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:144: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:706: in app
+    raw_response = await run_endpoint_function(
+../../../backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:352: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/api/outbound_shipment.py:439: in delete_outbound_line
+    reveal = await tenant_settings_svc.is_address_storage_enabled(session, user.tenant_id)
+                                                                           ^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/attributes.py:569: in __get__
+    return self.impl.get(state, dict_)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/attributes.py:1096: in get
+    value = self._fire_loader_callables(state, key, passive)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/attributes.py:1126: in _fire_loader_callables
+    return state._load_expired(state, passive)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/state.py:828: in _load_expired
+    self.manager.expired_attribute_loader(self, toload, passive)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/loading.py:1674: in load_scalar_attributes
+    result = load_on_ident(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/loading.py:510: in load_on_ident
+    return load_on_pk_identity(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/loading.py:695: in load_on_pk_identity
+    session.execute(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/session.py:2373: in execute
+    return self._execute_internal(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/session.py:2271: in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/context.py:306: in orm_execute_statement
+    result = conn.execute(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1421: in execute
+    return meth(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/sql/elements.py:526: in _execute_on_connection
+    return connection._execute_clauseelement(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1643: in _execute_clauseelement
+    ret = self._execute_context(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1848: in _execute_context
+    return self._exec_single_context(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1988: in _exec_single_context
+    self._handle_dbapi_exception(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:2368: in _handle_dbapi_exception
+    raise exc_info[1].with_traceback(exc_info[2])
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1969: in _exec_single_context
+    self.dialect.do_execute(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/sqlite/aiosqlite.py:183: in execute
+    self._adapt_connection._handle_exception(error)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/sqlite/aiosqlite.py:343: in _handle_exception
+    raise error
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/sqlite/aiosqlite.py:160: in execute
+    _cursor: AsyncIODBAPICursor = self.await_(self._connection.cursor())  # type: ignore[arg-type] # noqa: E501
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+awaitable = <aiosqlite.context.Result object at 0x11bbd18d0>
+
+    def await_only(awaitable: Awaitable[_T]) -> _T:
+        """Awaits an async function in a sync method.
+    
+        The sync method must be inside a :func:`greenlet_spawn` context.
+        :func:`await_only` calls cannot be nested.
+    
+        :param awaitable: The coroutine to call.
+    
+        """
+        # this is called in the context greenlet while running fn
+        current = getcurrent()
+        if not getattr(current, "__sqlalchemy_greenlet_provider__", False):
+            _safe_cancel_awaitable(awaitable)
+    
+>           raise exc.MissingGreenlet(
+                "greenlet_spawn has not been called; can't call await_only() "
+                "here. Was IO attempted in an unexpected place?"
+            )
+E           sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:123: MissingGreenlet
+________ test_product_category_migration_is_additive_and_the_only_head _________
+
+    def test_product_category_migration_is_additive_and_the_only_head() -> None:
+        """TC-NEW-A2-004: historical products must remain untouched by a branched migration."""
+        backend_dir = Path(__file__).resolve().parents[1]
+        config = Config(str(backend_dir / "alembic.ini"))
+        config.set_main_option("script_location", str(backend_dir / "alembic"))
+        script = ScriptDirectory.from_config(config)
+>       assert script.get_heads() == ["20260828_0221"]
+E       AssertionError: assert ['20260829_0230'] == ['20260828_0221']
+E         
+E         At index 0 diff: '20260829_0230' != '20260828_0221'
+E         Use -v to get more diff
+
+tests/test_product_categories.py:370: AssertionError
+=============================== warnings summary ===============================
+../../../backend/.venv/lib/python3.14/site-packages/fastapi/testclient.py:1
+  /Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+tests/test_billing_financial_core_migration.py::test_billing_financial_core_is_in_the_single_alembic_lineage
+tests/test_billing_financial_core_migration.py::test_billing_financial_core_migration_creates_only_shared_billing_tables
+tests/test_billing_financial_core_migration.py::test_billing_invoice_number_is_unique_inside_tenant_only
+tests/test_product_categories.py::test_product_category_migration_is_additive_and_the_only_head
+  /Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/alembic/config.py:604: DeprecationWarning: No path_separator found in configuration; falling back to legacy splitting on spaces, commas, and colons for prepend_sys_path.  Consider adding path_separator=os to Alembic config.
+    util.warn_deprecated(
+
+tests/test_tenant_settings.py::test_tenant_settings_patch_no_fields_returns_422
+  /Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:352: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_box_barcode_service.py::test_legacy_box_barcodes_attach_through_real_database_path
+FAILED tests/test_document_events.py::test_fbs_and_marketplace_unload_status_sequences
+FAILED tests/test_inventory_movement_actor_flows.py::test_ozon_packaging_write_off_records_operator_actor
+FAILED tests/test_inventory_movement_actor_flows.py::test_fbs_cancellation_reversal_records_cancelling_user_actor
+FAILED tests/test_inventory_movement_actor_flows.py::test_explicit_system_reversal_is_the_only_null_actor_path
+FAILED tests/test_outbound_delete_line.py::test_delete_draft_line_releases_reservation
+FAILED tests/test_product_categories.py::test_product_category_migration_is_additive_and_the_only_head
+7 failed, 1359 passed, 11 skipped, 11 warnings in 1106.26s (0:18:26)

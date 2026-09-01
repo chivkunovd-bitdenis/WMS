@@ -4,7 +4,16 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Uuid, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -19,6 +28,7 @@ MOVEMENT_TYPE_MARKETPLACE_UNLOAD = "marketplace_unload"
 MOVEMENT_TYPE_PRODUCT_TZ_IMPORT = "product_tz_import"
 MOVEMENT_TYPE_DISCREPANCY_ACT = "discrepancy_act"
 MOVEMENT_TYPE_INVENTORY_COUNT = "inventory_count"
+MOVEMENT_TYPE_CONTAINER_REATTACH = "container_reattach"
 
 if TYPE_CHECKING:
     from app.models.inbound_intake import InboundIntakeLine
@@ -34,6 +44,18 @@ class InventoryMovement(Base):
     """Журнал движений. delta > 0 — приход в ячейку; delta < 0 — расход."""
 
     __tablename__ = "inventory_movements"
+    __table_args__ = (
+        CheckConstraint(
+            "(container_kind IS NULL AND container_id IS NULL) OR "
+            "(container_kind IS NOT NULL AND container_id IS NOT NULL)",
+            name="ck_inventory_movements_container_pair",
+        ),
+        CheckConstraint(
+            "container_kind IS NULL OR "
+            "container_kind IN ('pallet', 'box', 'cargo_place')",
+            name="ck_inventory_movements_container_kind",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -87,6 +109,12 @@ class InventoryMovement(Base):
         index=True,
     )
     transfer_group_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True, index=True
+    )
+    container_kind: Mapped[str | None] = mapped_column(
+        String(32), nullable=True, index=True
+    )
+    container_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), nullable=True, index=True
     )
     marketplace_unload_request_id: Mapped[uuid.UUID | None] = mapped_column(

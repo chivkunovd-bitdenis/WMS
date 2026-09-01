@@ -24,6 +24,7 @@ from tests.test_fbs_shipment_warehouse_sc import (
     _create_and_fill_physical_box,
     _create_supply,
     _deliver_with_preflight,
+    _mock_actual_composition_from_local_links,
     _prepare_supply_with_orders,
     _register_ff_admin,
     _setup_seller_with_token,
@@ -33,6 +34,7 @@ from tests.test_fbs_shipment_warehouse_sc import (
 @pytest.fixture
 def enable_wb_marketplace_supplies_mock(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+    _mock_actual_composition_from_local_links(monkeypatch)
 
 
 async def _prepare_pvz_supply(

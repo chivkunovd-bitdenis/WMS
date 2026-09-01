@@ -1,61 +1,14 @@
 name: CI
 
-# Optional checks on PR only — does NOT block deploy (deploy.yml runs on push to main).
+# Быстрый технический контроль на PR. Ничего, кроме сборки и тестов бэка,
+# здесь не проверяется: продуктовый гейт, таблицы тест-кейсов и браузерные
+# сценарии сняты 31.08.2026 — они стоили десять минут ожидания на каждой
+# атомарной правке и не ловили ошибок, ради которых заводились.
 on:
   pull_request:
   workflow_dispatch:
 
 jobs:
-  tc-coverage-report:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Generate TC automation coverage report
-        run: python3 scripts/tc_automation_coverage.py
-      - name: Upload coverage report artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tc-automation-coverage
-          path: docs/TC_AUTOMATION_COVERAGE.md
-
-  pr-quality-contracts:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            product:
-              - 'frontend/src/**'
-              - 'frontend/tests-e2e/**'
-              - 'backend/app/api/**'
-              - 'backend/app/services/**'
-            e2e_specs:
-              - 'frontend/tests-e2e/**'
-      - name: Paths filter result
-        run: |
-          echo "product=${{ steps.filter.outputs.product }}"
-          echo "e2e_specs=${{ steps.filter.outputs.e2e_specs }}"
-      - name: PR body contains Test coverage (AGENTS.md)
-        if: steps.filter.outputs.product == 'true'
-        env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-        run: python3 scripts/ci/check_pr_test_coverage.py
-      - name: Changed Playwright specs reference TC-ID
-        if: steps.filter.outputs.e2e_specs == 'true'
-        env:
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: python3 scripts/ci/check_e2e_tc_mentions.py
-
   backend:
     runs-on: ubuntu-latest
     defaults:
@@ -83,46 +36,21 @@ jobs:
         # 1431 до, 1431 после, ни один не сменил исход.
         run: pytest -n auto
 
-  e2e:
+  frontend-build:
     runs-on: ubuntu-latest
-    # Прогон браузерных сценариев — единственное, что осталось долгим: сама
-    # установка занимает меньше минуты, а сценарии шли 25 минут в один поток.
-    # Внутри одного прогона потоки поднимать нельзя: все сценарии ходят в один
-    # сервер и один файл базы, и параллельные потоки блокируют базу. Поэтому
-    # делим не потоки, а прогоны: каждая доля идёт на своей машине со своим
-    # сервером и своей базой.
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
     defaults:
       run:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: backend/pyproject.toml
-      - name: Install backend deps (uvicorn for Playwright)
-        working-directory: backend
-        run: |
-          python -m pip install -U pip
-          pip install -e ".[dev]"
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
-      - name: Install frontend deps
+      - name: Install deps
         run: npm ci
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-      - name: Build frontend
+      - name: Typecheck
+        run: npx tsc --noEmit -p tsconfig.app.json
+      - name: Build
         run: npm run build
-      - name: Run e2e
-        env:
-          CI: "1"
-          E2E_DB_FILE: e2e-shard-${{ matrix.shard }}.db
-        run: npx playwright test --shard=${{ matrix.shard }}/4

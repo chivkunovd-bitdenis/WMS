@@ -1,0 +1,3479 @@
+Reading additional input from stdin...
+2026-08-29T14:13:52.014568Z ERROR codex_models_manager::manager: failed to load models cache: missing field `supports_parallel_tool_calls` at line 97 column 5
+OpenAI Codex v0.147.0
+--------
+workdir: /Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/deniscivkunov/Projects/WMS/.git]
+reasoning effort: high
+reasoning summaries: none
+session id: 01a04dde-a7e2-7611-a085-95a335bc8f92
+--------
+user
+## Разрешения для этой сессии (читать первым)
+
+1. Ты в git worktree внутри `~/Projects/WMS/.worktrees/` — это РАЗРЕШЕНО правилами
+   проекта (CLAUDE.md, пункт про `git worktree` внутри `.worktrees/`). Проверку `pwd`
+   не устраивай.
+2. НЕ гоняй полный `pytest`. Только адресные файлы.
+3. Продуктовый гейт отменён владельцем 25.08.2026.
+4. Фронт не трогай. Только `backend/`.
+5. Комментарии и коммиты — по-русски.
+
+---
+
+# Задача: миграция 0130 уронит боевую выкатку
+
+## Факт с боевой базы
+
+В `inventory_balances` на проде **115 строк с отрицательным количеством**
+(`quantity < 0` или `quantity_unpacked < 0`), суммарно минус 244 штуки, худшая
+строка −10. Это не мусор: боевой код штатно уводит остаток в минус при
+подтверждённой доставке FBS, и миграция `20260828_0210_inventory_balance_allow_negative`
+это узаконивает.
+
+## Что ломается
+
+`backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py`, функция
+`upgrade()` — три `op.create_check_constraint`:
+`ck_inventory_balance_quantity_nonnegative` («quantity >= 0»),
+`..._unpacked_nonnegative`, `..._packed_nonnegative`.
+
+`ALTER TABLE ... ADD CONSTRAINT CHECK` проверяет существующие строки и упадёт с
+«check constraint is violated by some row». Скрипт выкатки работает под
+`set -euo pipefail`, поэтому оборвётся посередине: часть миграций уже применится,
+приложение останется на старом коде поверх наполовину новой схемы.
+
+Отдельно важно: миграция `20260828_0210`, которая эти же три ограничения **снимает**,
+идёт в цепочке ПОЗЖЕ — до неё выполнение не дойдёт.
+
+## Что сделать
+
+Убрать эти три `create_check_constraint` из `upgrade()` миграции `0130` и
+соответствующие им `drop_constraint` из её `downgrade()`. Они бессмысленны:
+ставятся и через две ревизии снимаются.
+
+Проверь, что `20260828_0210` после этого остаётся корректной — она снимает
+ограничения через `DROP CONSTRAINT IF EXISTS`, так что отсутствие их не помешает.
+Если там жёсткий `drop_constraint` без `IF EXISTS` — сделай его безопасным.
+
+Оставь в файле короткий комментарий по-русски: почему проверки убраны (минус в
+остатке — законный след подтверждённой доставки FBS, на бою таких строк 115).
+
+## Проверка
+
+```
+cd backend && ruff check . && mypy .
+python -m pytest tests/test_warehouse_structure_wave1.py tests/test_inventory_service.py -q
+```
+
+Отдельно убедись, что цепочка ревизий не порвана:
+`python -m alembic heads` должен вернуть ровно одну голову.
+
+Итог — в `tasks/_zhurnal/codex-briefs/ITOG-migr-check.md`.
+warning: Under-development features enabled: chronicle. Under-development features are incomplete and may behave unpredictably. To suppress this warning, set `suppress_unstable_features_warning = true` in /Users/deniscivkunov/.codex/config.toml.
+codex
+Проверю фактическую цепочку миграций и текущий diff, затем внесу минимальную backend-правку, прогоню только указанные проверки и сохраню результат отдельным коммитом. Полный `pytest`, фронт и продуктовый гейт не запускаю.
+  → Проверить текущую ветку, diff и миграции 0130/0210
+  • Исправить миграции и добавить адресную регрессионную проверку при необходимости
+  • Запустить ruff, mypy, два pytest-файла и alembic heads
+  • Записать итог в журнал, проверить diff и создать отдельный коммит
+exec
+/bin/zsh -lc "rg -n \"0130|0210|inventory_balance|migration\" /Users/deniscivkunov/.codex/memories/MEMORY.md | head -n 40
+git status --short --branch
+git log -1 --oneline
+sed -n '1,260p' backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+sed -n '1,220p' backend/alembic/versions/20260828_0210_inventory_balance_allow_negative.py" in /Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr
+ succeeded in 0ms:
+101:applies_to: cwd=/Users/deniscivkunov/Downloads/insurance-benchmark; reuse_rule=ledger invariants, test/documentation workflow, and fail-closed backfill rules are reusable; branches, PRs, migration/deploy state, counts, costs, and production authorization must be rechecked
+117:- rollout_summaries/2026-08-28T09-23-24-E2rl-paid_call_backfill_with_staging_gate.md (cwd=/Users/deniscivkunov/Downloads/insurance-benchmark, rollout_path=/Users/deniscivkunov/.codex/sessions/2026/08/28/rollout-2026-08-28T12-23-27-01a047ae-5ea8-7820-b949-54cad85982b7.jsonl, updated_at=2026-08-28T15:34:22+00:00, thread_id=01a047ae-5ea8-7820-b949-54cad85982b7, migration-first staging verified; no production write)
+153:- Symptom: staging dry-run connects to a local socket or cannot find the script. Cause: assumed `DATABASE_PUBLIC_URL` and running through `crm-api`, whose image intentionally lacks `scripts/backfill_paid_calls.py`. Fix: inspect variable names without values, use a purpose-built migration/admin path, and do not copy diagnostics into live containers. [Task 2]
+154:- Symptom: staging health is mistaken for full dry-run parity. Cause: only schema/migration/service checks ran. Fix: state that the full staging dry-run still needs execution from an image that contains the script. [Task 2]
+311:- The observed audit distinguished barcode existence from usable scanner UI: packing and FBS picking reportedly had backend scan support but no scanner UI; receiving used a legacy custom scanner; Cyrillic-layout protection was reported only in that old receiving path, not shared `ScannerField`. A safe completion plan is shared backend recognition plus shared Cyrillic handling, then scanner UI in packing/FBS picking, and only then a risk-managed receiving migration. This plan was not source-verified. [Task 1] [skysight memory]
+409:applies_to: cwd=/Users/deniscivkunov/Downloads/insurance-benchmark; reuse_rule=accounting semantics and acceptance boundaries are reusable; branch, SHA, migration, tests, PR state, local console, and production data must be rechecked
+415:- extensions/skysight/resources/2026-08-27T23-20-00-yOBk-10min-memory-summary.md (cwd=/Users/deniscivkunov/Downloads/insurance-benchmark, rollout_path=extensions/skysight/resources/2026-08-27T23-20-00-yOBk-10min-memory-summary.md, updated_at=2026-08-27T23:20:00+00:00, thread_id=None, observed scoped/migration/full pytest gates; local diff remained) [skysight memory]
+709:- PR #135 merged `4ebaa8e3...` as `ce8f65abc...` into `etalon`; production workflow `33034721763` completed with migrations, restart, `/`, `/seller/`, and `/api/health` all HTTP 200, plus a read-only login-page browser check. [Task 3]
+716:- Symptom: production is called done when a workflow merely starts. Fix: require success workflow, exact deployed SHA, migrations, HTTP smoke, and separate read-only browser confirmation. [Task 3]
+747:- rollout_summaries/2026-08-26T06-44-17-BQMz-wms_fbs_writeoff_production_deploy_and_transfer_scope_correc.md (cwd=/Users/deniscivkunov/Projects/WMS, rollout_path=/Users/deniscivkunov/.codex/sessions/2026/08/26/rollout-2026-08-26T09-44-17-01a03ccf-f7fc-7911-9535-48825d03e4fb.jsonl, updated_at=2026-08-26T11:33:10+00:00, thread_id=01a03ccf-f7fc-7911-9535-48825d03e4fb, deployed SHA/migration and 42-order repair verified)
+762:- Deployment evidence for this change was complete: targeted affected suite `41 passed`; SHA `21a90876ee4fbd98dc5f86b6585aed3270fe88fd`, migration `20260826_0103`, workflow `32963524295`, and `/api/health` were verified. Read-only preflight found exactly 42 `ИП Агишева` orders/units; apply verified 42 linked movements, delta `-42`, zero reservations, and a repeat check of zero. [Task 3]
+766:- Symptom: a deployment is called green from a push or broad quality gates. Cause: baseline lint/type failures and absent guard scripts are conflated with the changed path. Fix: report baseline separately, discover renamed tests with `rg`, use safer SQL quoting for postconditions, and require workflow + deployed SHA + migration + health + data counts. [Task 3]
+827:- when assigning underwriting, the user specified “три OSINT lanes параллельно внутри одной underwriting ProcessingRun task”, one retry per failed lane, 3/2/1 adjudication, and “при 0 результатов report строится существующим no-OSINT путём” -> do not broaden the slice into admission, migrations, document pipeline, preparation, chat, or public callbacks. [Task 5]
+833:- Foundation, structured, and underwriting slices were observed completed/pushed, with a reported full gate `1534 passed, 8 skipped`; integration remained unfinished because structured fix `1d17030` depends on base commit `9413759` and the chain was being rebuilt. The visible foundation uses additive migration `013`, durable deadline/outbox/recovery and provider-operation ledger; structured DAG covers parse/chunks/embeddings/extraction/judge and embedding validation rejects duplicate/missing response indices. Recheck the repeated-underwriting public-API contract before merge. [Task 3] [skysight memory]
+838:- Resume handoff: `/Users/deniscivkunov/Downloads/insurance-benchmark-latency-integration`, branch `codex/submission-latency-integration`, base `b1a8eda4b14768ad75d5d9c3000f032ec6bee186`, merging Geo tip `635ea84d65c6c2dc93911a10c1070e8c719d5315`. Migrations `018_merge_geo_latency_heads` and `019_geo_durable_execution` add shared tenant admission, durable lease/raw response, at-most-once submit, `outcome_unknown` quarantine, callback recovery, and queue-suppressed waiting. Rerun full keyless pytest and independent rereview before Wiki guard → PR/CI → migration-first canonical staging `insurance-crm-sandbox`; provider workflow still needs fresh explicit approval. [Task 3] [ad-hoc note]
+844:- Symptom: OSINT targeted runs report migration setup errors or a test path runs nothing. Cause: shared DB is at incompatible Alembic revision (`Can't locate revision identified by '013_pipeline_foundation'`) or names drifted. Fix: create a dedicated DB with `CRM_V1_TEST_DATABASE_URL`; discover tests via `rg --files tests | rg 'osint.*(adjud|insight)'`; never repair the shared DB. [Task 5]
+848:applies_to: cwd=/Users/deniscivkunov/Projects/WMS; reuse_rule=process and data-model decisions are reusable; task-file state, APIs, UI, migrations, and deployment must be rechecked
+957:- `FBS-PROCESS.md` §5a, `RETURNS-PROCESS.md` §7.2, `products[]`, `af864558`, `fcd1ab34`, `e957b2d6`, `20260825_0109`, `check_migrations.py`, S-03, S-12, S-16, S-31
+986:- Authoritative implementation requirements are `tasks/ozon-integration-20260825/FBS-PROCESS.md` §5a and `RETURNS-PROCESS.md` §7.2. Final stage SHA was `e957b2d6c508cb2e2ac080ed9421e99d40bbe9df`; backend `1144 passed, 6 skipped`, Playwright `205 passed, 7 skipped`, frontend unit `191 passed`, and checks including Ruff/mypy/build/guards/migration/diff passed. Stage health and browser navigation loaded S-03/S-12/S-16/S-31 without errors. [Task 4]
+987:- Parallel migrations had duplicate `20260825_0107` IDs; final serialized head was `20260825_0109`. Run `alembic heads` and `python3 scripts/ci/check_migrations.py` whenever parallel branches add migrations. Replace time-fixed cutoff fixtures with relative dates and assert actual visible S-31 columns instead of obsolete nmID literals. [Task 4]
+993:- Symptom: screenshot filename says PNG or migrations seem green on one branch. Cause: format or migration lineage was inferred. Fix: verify image MIME/dimensions and run heads/lineage gates. Stage/test-provider proof does not establish a real Ozon Seller API exchange; no production Ozon credentials were used. [Task 4]
+1457:- The observed dependency plan was: reporting provides minimal shared UI-kit table components; billing exposes one canonical finance `backend-core`; storage reuses both and adds only its S-11 screen and calculations. Do not duplicate storage tables, finance models, or migrations. [Task 1] [skysight memory]
+1460:- Candidate `e7a1cbd4` was reported published after storage `30/30` and a combined browser gate `55/55`, with a clean worktree and one migration head. This is local candidate evidence, not staging proof: the next visible step was merge into `etalon`, deploy to `staging`, confirm the deployed SHA, and open all three sections. [Task 1] [skysight memory]
+1751:- Require a first real, dependency-aware vertical slice before expanding a broad wave. For `BLG-D07`, research/Product/task-cut/architecture artifacts describe safe status reconciliation, but no code, migration, worker run, or emulator execution was delivered; artifact existence is not controller acceptance or live WB proof. [Task 1]
+1891:- A historical `crm-migration` failure on Alembic revision `013_merge_geo_osint_trace` did not block this code-only release, but is a prerequisite before future migration releases. [Task 1]
+1921:applies_to: cwd=/Users/deniscivkunov/Downloads/insurance-benchmark; reuse_rule=branch, migrations, run IDs, Railway health, provider artifacts, and deployed SHA are time-specific; no paid retry, conflict cleanup, secret access, or code mutation when the user asked only for diagnosis/review
+1960:- Do not equate `origin/main`, a recent PR, healthy Railway, or isolated helper tests with production acceptance. First establish a clean authoritative SHA, migrations, CI, API/worker schema parity, full paid-path behavior, and runtime evidence. [Task 2]
+1964:scope: Use for an external CRM-style underwriting acceptance run, Railway staging migration readiness, or the two-way Geo result contract; distinguish API-only evidence, live observed evidence, and unverified implementation state.
+1967:## Task 1: Diagnose staging migration and CRM underwriting input, outcome partial
+1971:- rollout_summaries/2026-08-19T18-04-01-3RhZ-staging_osint_run_blocked_by_migration_and_invalid_structure.md (cwd=/Users/deniscivkunov/Downloads/insurance-benchmark, rollout_path=/Users/deniscivkunov/.codex/sessions/2026/08/19/rollout-2026-08-19T21-04-01-01a01b31-c3b2-78b2-85c5-5423b3b9b5d7.jsonl, updated_at=2026-08-19T19:52:46+00:00, thread_id=01a01b31-c3b2-78b2-85c5-5423b3b9b5d7, blocked before successful deploy/run)
+2039:- The deployment order is `crm-migration` then API/processing/system/beat; private Railway DB work needs `railway ssh --service crm-api`, not laptop resolution of `postgres.railway.internal`. Reconcile migration history first when staging says `Can't locate revision identified by '011_geo_extraction'`. [Task 1]
+2880:- when the user asks for a full OSINT review and says “я попросил тебя сделать полное ревью, а не какие то коммиты” -> cover `main..HEAD`, staged/unstaged/untracked, runtime, API, DB, migrations, tests, and contracts; deliver the review before edits or commits, and stop at the stated limit [Task 2]
+2889:- Extend the existing append-only `InsightFeedback`, not `InsightComment`: optional request `comment` becomes nullable `comment_text VARCHAR(4000)` via migration 009; trim outer whitespace, map blank to NULL, reject NUL/wrong type/overlength with 422, preserve line breaks, and do not inherit an old comment on a new POST. Omit absent comments from legacy JSON, keep useful-rate verdict-only, tenant isolation, and immutability. [Task 3]
+2890:- Migration verification must include an actual `008 -> 009` schema upgrade with legacy rows. Do not run migration tests in parallel with the full suite against one PostgreSQL database: the first run saw `AdminShutdown`/`UndefinedTable`; isolated validation was `1335 passed, 8 skipped, 8 warnings`. [Task 3]
+3025:applies_to: cwd=/Users/deniscivkunov/Downloads/insurance-benchmark; reuse_rule=reuse audit gates and API-flow checks for related OSINT releases, but treat commit SHA, Railway deployment, migration state, runs, and paid-provider results as time-specific
+3115:- OSINT, Railway, `CRM_V1_UNDERWRITING_OSINT_ENABLED`, `831bff5`, OpenAPI snapshot, `tests/contracts/test_openapi_snapshot.py::test_canonical_openapi_matches_checked_in_yaml`, Celery, `crm_v1.processing`, migration `008_provider_response_artifact`, `app/services/osint/search.py:353`
+3133:- when asking what remains before production OSINT enablement -> answer plainly “not only the feature toggle”; inspect deployed SHA, runtime health, CI, migrations, and environment state before proposing a flag change or deployment [Task 9]
+3143:- A real web-search claim requires `tool_choice="required"` / current `web_search`, actual `web_search_call` count, and candidate-source linkage to `web_search_call.action.sources`/citations. `source_credibility_score` is model-estimated, not independent verification. At the prior audit Railway health was `200`, but old SHA `e8766a8a...`, missing live OpenAPI fields, and unproven migration `006_osint_store` meant `NOT READY` for production. [Task 3]
+3150:- A normal full paid sequence is 3 initial searches + 3 retries + 1 adjudication + 1 cockpit = 8; the recorded budget was `$5` default / `$10` validation ceiling. Production remains blocked by one clean SHA, DB/Celery fault proof, migrations 006/007 and RLS, CRM E2E, an OSINT-only deadline, Railway sandbox, 50/5 burst, and 200/day capacity evidence. [Task 6]
+3162:- Green mocks and a commit do not prove real recovery, deployed SHA/schema, runtime OpenAPI, actual score/recommendation impact, or correct `basis=EXTERNAL`. Persist an atomic checkpoint after every completed lane before the next provider call; test crash/kill between lanes and actual lease takeover, then require staging migration, canary, end-to-end run, and paid T10 before declaring production ready. [Task 3]
+## codex/fix-migr-check-20260829
+?? ZADANIE.md
+c16489bd merge: хотфикс прода про выкуп и ложный возврат + автор движения
+"""Warehouse structure wave 1: pallets, containers, cargo-place contents.
+
+Revision ID: 20260828_0130
+Revises: 20260828_0116
+Create Date: 2026-08-28
+
+The upgrade does not remove tables or columns.  The former two-column balance
+uniqueness constraint is replaced only because it cannot represent the same
+product in two physical containers at one location.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+
+from alembic import op
+
+revision: str = "20260828_0130"
+down_revision: str | Sequence[str] | None = "20260828_0116"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+_NIL_UUID = "00000000-0000-0000-0000-000000000000"
+
+
+def upgrade() -> None:
+    op.create_table(
+        "pallets",
+        sa.Column("id", sa.Uuid(as_uuid=True), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(as_uuid=True), nullable=False),
+        sa.Column("warehouse_id", sa.Uuid(as_uuid=True), nullable=False),
+        sa.Column("code", sa.String(length=32), nullable=False),
+        sa.Column("barcode", sa.String(length=64), nullable=False),
+        sa.Column("free_text", sa.Text(), nullable=True),
+        sa.Column("storage_location_id", sa.Uuid(as_uuid=True), nullable=True),
+        sa.Column("disbanded_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["storage_location_id"],
+            ["storage_locations.id"],
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["warehouse_id"], ["warehouses.id"], ondelete="CASCADE"
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("tenant_id", "code", name="uq_pallets_tenant_code"),
+        sa.UniqueConstraint(
+            "tenant_id", "barcode", name="uq_pallets_tenant_barcode"
+        ),
+    )
+    op.create_index("ix_pallets_tenant_id", "pallets", ["tenant_id"])
+    op.create_index("ix_pallets_warehouse_id", "pallets", ["warehouse_id"])
+    op.create_index(
+        "ix_pallets_storage_location_id", "pallets", ["storage_location_id"]
+    )
+
+    op.add_column("inbound_intake_requests", sa.Column("comment", sa.Text(), nullable=True))
+    op.add_column("inbound_intake_boxes", sa.Column("free_text", sa.Text(), nullable=True))
+    op.add_column(
+        "inbound_intake_boxes",
+        sa.Column("pallet_id", sa.Uuid(as_uuid=True), nullable=True),
+    )
+    op.create_foreign_key(
+        "fk_inbound_intake_boxes_pallet_id",
+        "inbound_intake_boxes",
+        "pallets",
+        ["pallet_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
+    op.create_index(
+        "ix_inbound_intake_boxes_pallet_id",
+        "inbound_intake_boxes",
+        ["pallet_id"],
+    )
+
+    op.add_column(
+        "inbound_intake_cargo_places", sa.Column("free_text", sa.Text(), nullable=True)
+    )
+    op.add_column(
+        "inbound_intake_cargo_places",
+        sa.Column("pallet_id", sa.Uuid(as_uuid=True), nullable=True),
+    )
+    op.create_foreign_key(
+        "fk_inbound_intake_cargo_places_pallet_id",
+        "inbound_intake_cargo_places",
+        "pallets",
+        ["pallet_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
+    op.create_index(
+        "ix_inbound_intake_cargo_places_pallet_id",
+        "inbound_intake_cargo_places",
+        ["pallet_id"],
+    )
+
+    op.add_column(
+        "warehouse_boxes", sa.Column("pallet_id", sa.Uuid(as_uuid=True), nullable=True)
+    )
+    op.create_foreign_key(
+        "fk_warehouse_boxes_pallet_id",
+        "warehouse_boxes",
+        "pallets",
+        ["pallet_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
+    op.create_index("ix_warehouse_boxes_pallet_id", "warehouse_boxes", ["pallet_id"])
+
+    op.create_table(
+        "inbound_intake_cargo_place_lines",
+        sa.Column("id", sa.Uuid(as_uuid=True), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(as_uuid=True), nullable=False),
+        sa.Column("cargo_place_id", sa.Uuid(as_uuid=True), nullable=False),
+        sa.Column("product_id", sa.Uuid(as_uuid=True), nullable=False),
+        sa.Column("quantity", sa.Integer(), nullable=False),
+        sa.Column("posted_qty", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "quantity >= 0", name="ck_inbound_cargo_place_line_quantity_nonnegative"
+        ),
+        sa.CheckConstraint(
+            "posted_qty >= 0", name="ck_inbound_cargo_place_line_posted_nonnegative"
+        ),
+        sa.ForeignKeyConstraint(
+            ["cargo_place_id"],
+            ["inbound_intake_cargo_places.id"],
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["product_id"], ["products.id"], ondelete="CASCADE"
+        ),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint(
+            "cargo_place_id",
+            "product_id",
+            name="uq_inbound_intake_cargo_place_line_place_product",
+        ),
+    )
+    op.create_index(
+        "ix_inbound_intake_cargo_place_lines_tenant_id",
+        "inbound_intake_cargo_place_lines",
+        ["tenant_id"],
+    )
+    op.create_index(
+        "ix_inbound_intake_cargo_place_lines_cargo_place_id",
+        "inbound_intake_cargo_place_lines",
+        ["cargo_place_id"],
+    )
+    op.create_index(
+        "ix_inbound_intake_cargo_place_lines_product_id",
+        "inbound_intake_cargo_place_lines",
+        ["product_id"],
+    )
+
+    op.add_column(
+        "inventory_balances", sa.Column("container_kind", sa.String(length=32), nullable=True)
+    )
+    op.add_column(
+        "inventory_balances", sa.Column("container_id", sa.Uuid(as_uuid=True), nullable=True)
+    )
+    op.create_index(
+        "ix_inventory_balances_container_kind",
+        "inventory_balances",
+        ["container_kind"],
+    )
+    op.create_index(
+        "ix_inventory_balances_container_id",
+        "inventory_balances",
+        ["container_id"],
+    )
+    op.create_check_constraint(
+        "ck_inventory_balance_container_pair",
+        "inventory_balances",
+        "(container_kind IS NULL AND container_id IS NULL) OR "
+        "(container_kind IS NOT NULL AND container_id IS NOT NULL)",
+    )
+    op.create_check_constraint(
+        "ck_inventory_balance_container_kind",
+        "inventory_balances",
+        "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+    )
+    op.create_check_constraint(
+        "ck_inventory_balance_quantity_nonnegative",
+        "inventory_balances",
+        "quantity >= 0",
+    )
+    op.create_check_constraint(
+        "ck_inventory_balance_quantity_unpacked_nonnegative",
+        "inventory_balances",
+        "quantity_unpacked >= 0",
+    )
+    op.create_check_constraint(
+        "ck_inventory_balance_quantity_packed_nonnegative",
+        "inventory_balances",
+        "quantity_packed >= 0",
+    )
+    op.create_index(
+        "uq_inventory_balance_loc_product_container",
+        "inventory_balances",
+        [
+            "storage_location_id",
+            "product_id",
+            sa.text(f"coalesce(container_id, '{_NIL_UUID}')"),
+        ],
+        unique=True,
+    )
+    op.drop_constraint(
+        "uq_inventory_balance_loc_product",
+        "inventory_balances",
+        type_="unique",
+    )
+
+
+def downgrade() -> None:
+    op.create_unique_constraint(
+        "uq_inventory_balance_loc_product",
+        "inventory_balances",
+        ["storage_location_id", "product_id"],
+    )
+    op.drop_index(
+        "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+    )
+    op.drop_constraint(
+        "ck_inventory_balance_quantity_packed_nonnegative",
+        "inventory_balances",
+        type_="check",
+    )
+    op.drop_constraint(
+        "ck_inventory_balance_quantity_unpacked_nonnegative",
+        "inventory_balances",
+        type_="check",
+    )
+    op.drop_constraint(
+        "ck_inventory_balance_quantity_nonnegative",
+        "inventory_balances",
+        type_="check",
+    )
+    op.drop_constraint(
+        "ck_inventory_balance_container_kind",
+        "inventory_balances",
+        type_="check",
+    )
+    op.drop_constraint(
+"""Снять запрет отрицательного остатка: минус нужен подтверждённой доставке FBS.
+
+Решение владельца от 28.08.2026, третий из трёх обсуждавшихся путей.
+
+Столкнулись два замысла. Волна складской структуры запретила отрицательный
+остаток на уровне базы — минус на полке бессмыслен. А эталон, который на бою,
+наоборот требует минуса при подтверждённой доставке FBS: маркетплейс сказал, что
+товар уехал, значит на складе его нет независимо от того, что думает учёт.
+Отказать там значит подвесить поставку навсегда и оставить призрачный остаток,
+а минус — это честная запись расхождения, которую потом разбирают инвентаризацией.
+
+Проверка в базе не умеет спрашивать, кто её вызвал, поэтому защита переехала на
+уровень сервиса: `record_movement_and_adjust_balance` по умолчанию в минус не
+пускает, и делает это условием внутри самого запроса — то есть остаётся
+устойчивой к одновременным списаниям. Явный обход есть ровно у одного вызова.
+
+Это удаляющая миграция, и она здесь по прямому решению владельца, а не по
+инициативе исполнителя.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+from alembic import op
+
+revision = "20260828_0210"
+down_revision: str | Sequence[str] | None = "20260828_0190"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+_CONSTRAINTS = (
+    "ck_inventory_balance_quantity_nonnegative",
+    "ck_inventory_balance_quantity_unpacked_nonnegative",
+    "ck_inventory_balance_quantity_packed_nonnegative",
+)
+
+
+def upgrade() -> None:
+    for name in _CONSTRAINTS:
+        # Ограничения могло не быть: базы разных контуров получили разный набор
+        # ревизий. Отсутствие — не повод валить накатку.
+        op.execute(f"ALTER TABLE inventory_balances DROP CONSTRAINT IF EXISTS {name}")
+
+
+def downgrade() -> None:
+    op.create_check_constraint(
+        "ck_inventory_balance_quantity_nonnegative", "inventory_balances", "quantity >= 0"
+    )
+    op.create_check_constraint(
+        "ck_inventory_balance_quantity_unpacked_nonnegative",
+        "inventory_balances",
+        "quantity_unpacked >= 0",
+    )
+    op.create_check_constraint(
+        "ck_inventory_balance_quantity_packed_nonnegative",
+        "inventory_balances",
+        "quantity_packed >= 0",
+    )
+
+codex
+Фактическая картина совпала с описанием: `0130` действительно ставит три запрета, а `0210` уже снимает их безопасным `DROP CONSTRAINT IF EXISTS`. В рабочем дереве есть чужой неотслеживаемый `ZADANIE.md`; его не трогаю и в коммит не включу. Сейчас проверяю адресные тесты, чтобы зафиксировать именно этот контракт и не оставить будущую регрессию.
+exec
+/bin/zsh -lc "sed -n '220,520p' backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+rg -n \"quantity_nonnegative|quantity_unpacked_nonnegative|quantity_packed_nonnegative|warehouse_structure_wave1|20260828_0130|20260828_0210\" backend/tests backend -g '*.py'
+rg -n \"def test_|alembic|migration|constraint\" backend/tests/test_warehouse_structure_wave1.py | head -n 120
+sed -n '1,280p' backend/tests/test_warehouse_structure_wave1.py
+ls -la tasks/_zhurnal/codex-briefs 2>/dev/null | tail -n 20
+git branch --show-current
+git diff -- backend" in /Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr
+ succeeded in 0ms:
+            sa.text(f"coalesce(container_id, '{_NIL_UUID}')"),
+        ],
+        unique=True,
+    )
+    op.drop_constraint(
+        "uq_inventory_balance_loc_product",
+        "inventory_balances",
+        type_="unique",
+    )
+
+
+def downgrade() -> None:
+    op.create_unique_constraint(
+        "uq_inventory_balance_loc_product",
+        "inventory_balances",
+        ["storage_location_id", "product_id"],
+    )
+    op.drop_index(
+        "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+    )
+    op.drop_constraint(
+        "ck_inventory_balance_quantity_packed_nonnegative",
+        "inventory_balances",
+        type_="check",
+    )
+    op.drop_constraint(
+        "ck_inventory_balance_quantity_unpacked_nonnegative",
+        "inventory_balances",
+        type_="check",
+    )
+    op.drop_constraint(
+        "ck_inventory_balance_quantity_nonnegative",
+        "inventory_balances",
+        type_="check",
+    )
+    op.drop_constraint(
+        "ck_inventory_balance_container_kind",
+        "inventory_balances",
+        type_="check",
+    )
+    op.drop_constraint(
+        "ck_inventory_balance_container_pair",
+        "inventory_balances",
+        type_="check",
+    )
+    op.drop_index("ix_inventory_balances_container_id", table_name="inventory_balances")
+    op.drop_index("ix_inventory_balances_container_kind", table_name="inventory_balances")
+    op.drop_column("inventory_balances", "container_id")
+    op.drop_column("inventory_balances", "container_kind")
+
+    op.drop_index(
+        "ix_inbound_intake_cargo_place_lines_product_id",
+        table_name="inbound_intake_cargo_place_lines",
+    )
+    op.drop_index(
+        "ix_inbound_intake_cargo_place_lines_cargo_place_id",
+        table_name="inbound_intake_cargo_place_lines",
+    )
+    op.drop_index(
+        "ix_inbound_intake_cargo_place_lines_tenant_id",
+        table_name="inbound_intake_cargo_place_lines",
+    )
+    op.drop_table("inbound_intake_cargo_place_lines")
+
+    op.drop_index("ix_warehouse_boxes_pallet_id", table_name="warehouse_boxes")
+    op.drop_constraint(
+        "fk_warehouse_boxes_pallet_id", "warehouse_boxes", type_="foreignkey"
+    )
+    op.drop_column("warehouse_boxes", "pallet_id")
+
+    op.drop_index(
+        "ix_inbound_intake_cargo_places_pallet_id",
+        table_name="inbound_intake_cargo_places",
+    )
+    op.drop_constraint(
+        "fk_inbound_intake_cargo_places_pallet_id",
+        "inbound_intake_cargo_places",
+        type_="foreignkey",
+    )
+    op.drop_column("inbound_intake_cargo_places", "pallet_id")
+    op.drop_column("inbound_intake_cargo_places", "free_text")
+
+    op.drop_index(
+        "ix_inbound_intake_boxes_pallet_id", table_name="inbound_intake_boxes"
+    )
+    op.drop_constraint(
+        "fk_inbound_intake_boxes_pallet_id",
+        "inbound_intake_boxes",
+        type_="foreignkey",
+    )
+    op.drop_column("inbound_intake_boxes", "pallet_id")
+    op.drop_column("inbound_intake_boxes", "free_text")
+    op.drop_column("inbound_intake_requests", "comment")
+
+    op.drop_index("ix_pallets_storage_location_id", table_name="pallets")
+    op.drop_index("ix_pallets_warehouse_id", table_name="pallets")
+    op.drop_index("ix_pallets_tenant_id", table_name="pallets")
+    op.drop_table("pallets")
+backend/alembic/versions/20260828_0210_inventory_balance_allow_negative.py:27:revision = "20260828_0210"
+backend/alembic/versions/20260828_0210_inventory_balance_allow_negative.py:33:    "ck_inventory_balance_quantity_nonnegative",
+backend/alembic/versions/20260828_0210_inventory_balance_allow_negative.py:34:    "ck_inventory_balance_quantity_unpacked_nonnegative",
+backend/alembic/versions/20260828_0210_inventory_balance_allow_negative.py:35:    "ck_inventory_balance_quantity_packed_nonnegative",
+backend/alembic/versions/20260828_0210_inventory_balance_allow_negative.py:48:        "ck_inventory_balance_quantity_nonnegative", "inventory_balances", "quantity >= 0"
+backend/alembic/versions/20260828_0210_inventory_balance_allow_negative.py:51:        "ck_inventory_balance_quantity_unpacked_nonnegative",
+backend/alembic/versions/20260828_0210_inventory_balance_allow_negative.py:56:        "ck_inventory_balance_quantity_packed_nonnegative",
+backend/alembic/versions/20260828_0220_inventory_movement_actor.py:4:Revises: 20260828_0210
+backend/alembic/versions/20260828_0220_inventory_movement_actor.py:16:down_revision: str | Sequence[str] | None = "20260828_0210"
+backend/alembic/versions/20260828_0170_warehouse_map_events.py:4:Revises: 20260828_0130
+backend/alembic/versions/20260828_0170_warehouse_map_events.py:14:down_revision = "20260828_0130"
+backend/alembic/versions/20260826_0110_operation_facts.py:58:            "item_quantity >= 0", name="ck_operation_facts_item_quantity_nonnegative"
+backend/alembic/versions/20260826_0110_operation_facts.py:106:            "item_quantity >= 0", name="ck_operation_fact_lines_item_quantity_nonnegative"
+backend/alembic/versions/20260812_0077_stock_directions_snapshots.py:29:        sa.CheckConstraint("quantity >= 0", name="ck_stock_directions_quantity_nonnegative"),
+backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py:3:Revision ID: 20260828_0130
+backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py:20:revision: str = "20260828_0130"
+backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py:135:            "quantity >= 0", name="ck_inbound_cargo_place_line_quantity_nonnegative"
+backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py:200:        "ck_inventory_balance_quantity_nonnegative",
+backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py:205:        "ck_inventory_balance_quantity_unpacked_nonnegative",
+backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py:210:        "ck_inventory_balance_quantity_packed_nonnegative",
+backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py:241:        "ck_inventory_balance_quantity_packed_nonnegative",
+backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py:246:        "ck_inventory_balance_quantity_unpacked_nonnegative",
+backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py:251:        "ck_inventory_balance_quantity_nonnegative",
+backend/alembic/versions/20260828_0190_merge_all_waves.py:6:и каждый честно взял свободный номер: складская структура — ``20260828_0130``,
+backend/app/models/stock_direction.py:35:        CheckConstraint("quantity >= 0", name="ck_stock_directions_quantity_nonnegative"),
+backend/app/models/operation_fact.py:80:        CheckConstraint("item_quantity >= 0", name="ck_operation_facts_item_quantity_nonnegative"),
+backend/app/models/operation_fact.py:135:            "item_quantity >= 0", name="ck_operation_fact_lines_item_quantity_nonnegative"
+backend/app/models/inbound_intake.py:193:            name="ck_inbound_cargo_place_line_quantity_nonnegative",
+112:async def test_tenant_b_cannot_add_product_to_tenant_a_pallet_or_list_it(
+160:async def test_parallel_pallet_creation_reserves_distinct_codes(
+201:async def test_pallet_counter_continues_after_existing_legacy_code(
+231:async def test_same_product_same_cell_in_two_boxes_keeps_both_balance_rows(
+294:async def test_duplicate_loose_product_balance_in_one_cell_is_rejected(
+342:async def test_container_reference_requires_kind_and_id_together(
+367:async def test_service_refuses_to_take_stock_below_zero(async_client: AsyncClient) -> None:
+401:async def test_confirmed_fbs_delivery_is_allowed_to_go_negative(
+435:async def test_two_concurrent_deductions_of_30_from_40_write_off_only_30(
+503:async def test_combine_and_disband_pallet_moves_contents_to_sorting_without_loss(
+588:async def test_warehouse_cargo_place_is_not_accepted_as_warehouse_box(
+641:async def test_cargo_place_accepts_products_and_returns_its_composition(
+693:async def test_inbound_document_and_container_free_text_are_persisted(
+from __future__ import annotations
+
+import asyncio
+import uuid
+
+import pytest
+from httpx import AsyncClient
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.session import SessionLocal
+from app.models.inbound_intake import (
+    InboundIntakeBox,
+    InboundIntakeCargoPlace,
+    InboundIntakeLine,
+    InboundIntakeRequest,
+)
+from app.models.inventory_balance import InventoryBalance
+from app.models.inventory_movement import (
+    MOVEMENT_TYPE_INBOUND_INTAKE,
+    MOVEMENT_TYPE_OUTBOUND_SHIPMENT,
+)
+from app.models.pallet import Pallet
+from app.models.product import Product
+from app.models.storage_location import StorageLocation
+from app.models.tenant import Tenant
+from app.models.warehouse import Warehouse
+from app.models.warehouse_box import WarehouseBox
+from app.services import (
+    inbound_cargo_place_service,
+    inbound_intake_box_service,
+    inbound_intake_note_service,
+    inventory_service,
+    pallet_service,
+)
+from app.services.pallet_service import PalletServiceError
+from app.services.sorting_location_service import SORTING_LOCATION_CODE
+
+
+async def _seed_tenant(
+    session: AsyncSession,
+    label: str,
+) -> tuple[Tenant, Warehouse, StorageLocation, Product]:
+    suffix = uuid.uuid4().hex[:10]
+    tenant = Tenant(name=f"Арендатор {label}", slug=f"wave1-{label}-{suffix}")
+    session.add(tenant)
+    await session.flush()
+    warehouse = Warehouse(
+        tenant_id=tenant.id,
+        name=f"Склад {label}",
+        code=f"wh-{label}-{suffix}",
+        barcode=f"WH-WAVE1-{label}-{suffix}",
+    )
+    session.add(warehouse)
+    await session.flush()
+    location = StorageLocation(
+        tenant_id=tenant.id,
+        warehouse_id=warehouse.id,
+        code="A 1.1",
+        barcode=f"LOC-WAVE1-{label}-{suffix}",
+    )
+    product = Product(
+        tenant_id=tenant.id,
+        name=f"Товар {label}",
+        sku_code=f"SKU-{label}-{suffix}",
+    )
+    session.add_all([location, product])
+    await session.flush()
+    return tenant, warehouse, location, product
+
+
+async def _seed_inbound_containers(
+    session: AsyncSession,
+    tenant: Tenant,
+    warehouse: Warehouse,
+    product: Product,
+    label: str,
+) -> tuple[InboundIntakeRequest, InboundIntakeBox, InboundIntakeCargoPlace]:
+    request = InboundIntakeRequest(
+        tenant_id=tenant.id,
+        warehouse_id=warehouse.id,
+        status="receiving",
+    )
+    session.add(request)
+    await session.flush()
+    session.add(
+        InboundIntakeLine(
+            request_id=request.id,
+            product_id=product.id,
+            expected_qty=100,
+        )
+    )
+    box = InboundIntakeBox(
+        tenant_id=tenant.id,
+        request_id=request.id,
+        box_number=1,
+        internal_barcode=f"INB-WAVE1-{label}-{uuid.uuid4().hex[:8]}",
+    )
+    cargo_place = InboundIntakeCargoPlace(
+        tenant_id=tenant.id,
+        request_id=request.id,
+        place_number=1,
+        internal_barcode=f"ICG-WAVE1-{label}-{uuid.uuid4().hex[:8]}",
+    )
+    session.add_all([box, cargo_place])
+    await session.flush()
+    return request, box, cargo_place
+
+
+@pytest.mark.asyncio
+async def test_tenant_b_cannot_add_product_to_tenant_a_pallet_or_list_it(
+    async_client: AsyncClient,
+) -> None:
+    del async_client
+    async with SessionLocal() as session:
+        tenant_a, warehouse_a, location_a, _product_a = await _seed_tenant(
+            session, "a"
+        )
+        tenant_b, warehouse_b, _location_b, product_b = await _seed_tenant(
+            session, "b"
+        )
+        _request_b, box_b, _cargo_b = await _seed_inbound_containers(
+            session, tenant_b, warehouse_b, product_b, "b"
+        )
+        await session.commit()
+        pallet_a = await pallet_service.create_pallet(
+            session,
+            tenant_a.id,
+            warehouse_id=warehouse_a.id,
+            storage_location_id=location_a.id,
+        )
+        tenant_b_id = tenant_b.id
+
+        with pytest.raises(ValueError, match="container not found"):
+            await inventory_service.record_movement_and_adjust_balance(
+                session,
+                tenant_id=tenant_b.id,
+                product_id=product_b.id,
+                storage_location_id=_location_b.id,
+                quantity_delta=1,
+                movement_type=MOVEMENT_TYPE_OUTBOUND_SHIPMENT,
+                container_kind="pallet",
+                container_id=pallet_a.id,
+                actor_user_id=None,
+            )
+
+        with pytest.raises(PalletServiceError, match="pallet_not_found"):
+            await pallet_service.combine_into_pallet(
+                session,
+                tenant_b.id,
+                pallet_a.id,
+                inbound_box_ids=[box_b.id],
+            )
+        await session.rollback()
+        assert await pallet_service.list_pallets(session, tenant_b_id) == []
+
+
+@pytest.mark.asyncio
+async def test_parallel_pallet_creation_reserves_distinct_codes(
+    async_client: AsyncClient,
+) -> None:
+    # TC-NEW-PALLET-CONCURRENT-CODE-001
+    # Дано один склад. Когда две транзакции одновременно создают палеты, тогда
+    # обе операции успешны, коды различаются и обе строки остаются в базе.
+    del async_client
+    async with SessionLocal() as seed_session:
+        tenant, warehouse, _location, _product = await _seed_tenant(
+            seed_session, "parallel-pallet"
+        )
+        await seed_session.commit()
+        tenant_id = tenant.id
+        warehouse_id = warehouse.id
+
+    async def create_one() -> tuple[uuid.UUID, str]:
+        async with SessionLocal() as session:
+            pallet = await pallet_service.create_pallet(
+                session,
+                tenant_id,
+                warehouse_id=warehouse_id,
+            )
+            return pallet.id, pallet.code
+
+    created = await asyncio.gather(create_one(), create_one())
+
+    ids = {pallet_id for pallet_id, _code in created}
+    codes = {code for _pallet_id, code in created}
+    assert len(ids) == 2
+    assert len(codes) == 2
+    async with SessionLocal() as verify_session:
+        persisted = await pallet_service.list_pallets(
+            verify_session,
+            tenant_id,
+            warehouse_id=warehouse_id,
+        )
+    assert {pallet.id for pallet in persisted} == ids
+    assert {pallet.code for pallet in persisted} == codes
+
+
+@pytest.mark.asyncio
+async def test_pallet_counter_continues_after_existing_legacy_code(
+    async_client: AsyncClient,
+) -> None:
+    # TC-NEW-PALLET-CONCURRENT-CODE-002
+    # Ограничение: включение атомарного счётчика не переиспользует старые номера.
+    del async_client
+    async with SessionLocal() as session:
+        tenant, warehouse, _location, _product = await _seed_tenant(
+            session, "legacy-pallet"
+        )
+        session.add(
+            Pallet(
+                tenant_id=tenant.id,
+                warehouse_id=warehouse.id,
+                code="П-000005",
+                barcode=f"PLT-LEGACY-{uuid.uuid4().hex[:8]}",
+            )
+        )
+        await session.commit()
+
+        created = await pallet_service.create_pallet(
+            session,
+            tenant.id,
+            warehouse_id=warehouse.id,
+        )
+
+    assert created.code == "П-000006"
+
+
+@pytest.mark.asyncio
+async def test_same_product_same_cell_in_two_boxes_keeps_both_balance_rows(
+    async_client: AsyncClient,
+) -> None:
+    del async_client
+    async with SessionLocal() as session:
+        tenant, warehouse, location, product = await _seed_tenant(session, "boxes")
+        _request, box_one, cargo = await _seed_inbound_containers(
+            session, tenant, warehouse, product, "boxes"
+        )
+        box_two = InboundIntakeBox(
+            tenant_id=tenant.id,
+            request_id=box_one.request_id,
+            box_number=2,
+            internal_barcode=f"INB-WAVE1-BOX2-{uuid.uuid4().hex[:8]}",
+        )
+        session.add(box_two)
+        await session.flush()
+        session.add_all(
+            [
+                InventoryBalance(
+                    tenant_id=tenant.id,
+                    storage_location_id=location.id,
+                    product_id=product.id,
+                    container_kind="box",
+                    container_id=box_one.id,
+                    quantity=5,
+                    quantity_unpacked=5,
+                    quantity_packed=0,
+                ),
+                InventoryBalance(
+                    tenant_id=tenant.id,
+                    storage_location_id=location.id,
+                    product_id=product.id,
+                    container_kind="box",
+                    container_id=box_two.id,
+                    quantity=7,
+                    quantity_unpacked=3,
+                    quantity_packed=4,
+                ),
+            ]
+        )
+        await session.commit()
+        del cargo
+
+        rows = list(
+            (
+                await session.execute(
+                    select(InventoryBalance).where(
+                        InventoryBalance.tenant_id == tenant.id,
+                        InventoryBalance.product_id == product.id,
+total 32
+drwxr-xr-x@ 5 deniscivkunov  staff   160 Aug 29 17:13 .
+drwxr-xr-x@ 4 deniscivkunov  staff   128 Aug 29 17:13 ..
+-rw-r--r--@ 1 deniscivkunov  staff  4336 Aug 29 17:13 ITOG-ozon-dvoynoe-spisanie.md
+-rw-r--r--@ 1 deniscivkunov  staff  2384 Aug 29 17:13 ITOG-p2-revyu.md
+-rw-r--r--@ 1 deniscivkunov  staff  3988 Aug 29 17:13 ITOG-raskladka-yacheyki.md
+codex/fix-migr-check-20260829
+
+2026-08-29T14:14:20.159233Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+apply patch
+patch: completed
+/Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+
+2026-08-29T14:14:36.935501Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+Миграция 0130 исправлена минимально; 0210 уже использует DROP CONSTRAINT IF EXISTS и менять её не требуется.
+  ✓ Проверить текущую ветку, diff и миграции 0130/0210
+  ✓ Исправить миграции и добавить адресную регрессионную проверку при необходимости
+  → Запустить ruff, mypy, два pytest-файла и alembic heads
+  • Записать итог в журнал, проверить diff и создать отдельный коммит
+exec
+/bin/zsh -lc 'ruff check . && mypy .' in /Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr/backend
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+
+2026-08-29T14:14:46.209247Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+
+2026-08-29T14:14:53.934270Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+ succeeded in 12737ms:
+Success: no issues found in 390 source files
+
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+
+2026-08-29T14:14:57.938161Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+codex
+Правка получилась ровно в одном месте: из `upgrade()` удалены три опасных `CHECK`, из `downgrade()` — только их парные удаления. `ruff` и `mypy` уже зелёные; запускаю два согласованных тестовых файла и отдельно проверку единственной головы Alembic.
+exec
+/bin/zsh -lc 'python -m pytest tests/test_warehouse_structure_wave1.py tests/test_inventory_service.py -q' in /Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr/backend
+ exited 127 in 0ms:
+zsh:1: command not found: python
+
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+
+2026-08-29T14:15:02.816240Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+codex
+В окружении нет команды `python` — оболочка вернула `command not found` до запуска тестов. Это не падение кода; повторяю те же адресные команды через доступный `python3` и зафиксирую этот нюанс в итоговом журнале.
+exec
+/bin/zsh -lc 'command -v python3
+python3 --version
+python3 -m pytest tests/test_warehouse_structure_wave1.py tests/test_inventory_service.py -q' in /Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr/backend
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+
+2026-08-29T14:15:12.175977Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+ exited 4 in 4180ms:
+ERROR: file or directory not found: tests/test_inventory_service.py
+
+
+no tests ran in 0.00s
+
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+
+2026-08-29T14:15:17.715472Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+exec
+/bin/zsh -lc "rg --files tests | rg 'inventory.*service|warehouse_structure_wave1'
+rg -n \"record_movement_and_adjust_balance|confirmed_fbs_delivery|go_negative|below_zero\" tests -g '*.py' | head -n 120" in /Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr/backend
+ succeeded in 0ms:
+tests/test_inventory_service_reporting_dimensions.py
+tests/test_warehouse_structure_wave1.py
+tests/test_fbs_picking.py:135:            await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_picking.py:622:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_supply_from_orders.py:137:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_stock_availability.py:98:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_stock_availability.py:107:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_stock_availability.py:202:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_stock_availability.py:211:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_stock_availability.py:284:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_stock_availability.py:345:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_stock_availability.py:415:            await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_stock_availability.py:469:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_stock_publish_on_movement.py:31:    Бьём в `record_movement_and_adjust_balance` напрямую: это единственная точка,
+tests/test_fbs_stock_publish_on_movement.py:90:            await inventory_service.record_movement_and_adjust_balance(
+tests/test_stock_directions.py:79:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_stock_directions.py:357:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_stock_directions.py:395:        await inventory_service.record_movement_and_adjust_balance(
+tests/fbs_operator_emulator_seed.py:197:                await inventory_service.record_movement_and_adjust_balance(
+tests/test_marketplace_unload_availability.py:108:            await inventory_service.record_movement_and_adjust_balance(
+tests/test_marketplace_unload_availability.py:330:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_writeoff_sold_and_reversal_guard.py:194:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_writeoff_sold_and_reversal_guard.py:362:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_worklist_query_count.py:124:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_worklist_query_count.py:432:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_ownership_transfer_service.py:81:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_ownership_transfer_service.py:307:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_ozon_lane.py:644:    await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_review_fixes.py:183:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_review_fixes.py:426:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_review_fixes.py:608:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_review_fixes.py:951:            await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_orders_intake.py:471:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_orders_intake.py:1013:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_orders_intake.py:1320:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_orders_intake.py:2023:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_orders_intake.py:2084:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_orders_intake.py:2165:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_orders_intake.py:2256:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_storage_movement_scope.py:104:        movement = await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_stock_emulator_integration.py:408:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_shipment_warehouse_sc.py:480:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_inventory_atomic_increment.py:78:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_inventory_atomic_increment.py:168:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_inventory_atomic_increment.py:188:            await inventory_service.record_movement_and_adjust_balance(
+tests/test_inventory_atomic_increment.py:246:            await inventory_service.record_movement_and_adjust_balance(
+tests/test_inventory_atomic_increment.py:324:            await inventory_service.record_movement_and_adjust_balance(
+tests/test_inventory_atomic_increment.py:339:            await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_cancellations.py:153:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_pick_options.py:60:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_packaging_integration.py:446:            await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_packaging_integration.py:755:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_packaging_integration.py:922:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_packaging_integration.py:1181:            await inventory_service.record_movement_and_adjust_balance(
+tests/test_inventory_service_reporting_dimensions.py:73:        movement = await inventory_service.record_movement_and_adjust_balance(
+tests/test_products_fbs_stock_from_balance.py:128:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_products_fbs_stock_from_balance.py:177:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_products_fbs_stock_from_balance.py:253:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_products_fbs_stock_from_balance.py:336:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_products_fbs_stock_from_balance.py:345:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_products_fbs_stock_from_balance.py:433:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_products_fbs_stock_from_balance.py:483:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_products_fbs_stock_from_balance.py:492:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_warehouse_structure_wave1.py:136:            await inventory_service.record_movement_and_adjust_balance(
+tests/test_warehouse_structure_wave1.py:367:async def test_service_refuses_to_take_stock_below_zero(async_client: AsyncClient) -> None:
+tests/test_warehouse_structure_wave1.py:378:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_warehouse_structure_wave1.py:389:            await inventory_service.record_movement_and_adjust_balance(
+tests/test_warehouse_structure_wave1.py:401:async def test_confirmed_fbs_delivery_is_allowed_to_go_negative(
+tests/test_warehouse_structure_wave1.py:471:                await inventory_service.record_movement_and_adjust_balance(
+tests/test_inventory_movement_actor_flows.py:288:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_inventory_movement_actor_flows.py:388:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_inventory_movement_actor_flows.py:617:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_packaging_fulfillment.py:225:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_packaging_fulfillment.py:364:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_packaging_fulfillment.py:425:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_packaging_fulfillment.py:565:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_packaging_fulfillment.py:686:        await inventory_service.record_movement_and_adjust_balance(
+tests/test_fbs_packaging_fulfillment.py:855:            await inventory_service.record_movement_and_adjust_balance(
+
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+
+2026-08-29T14:15:22.561354Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+codex
+Второе указанное имя теста в этой ветке отсутствует: `tests/test_inventory_service.py` не найден, поэтому pytest завершился до сбора тестов. Проверяю историю переименования и запускаю существующий адресный файл, который фактически содержит проверки обычного запрета минуса и разрешённого минуса для подтверждённой FBS-доставки.
+exec
+/bin/zsh -lc 'git log --all --name-status --oneline -- backend/tests/test_inventory_service.py backend/tests/test_inventory_service_reporting_dimensions.py | head -n 120
+python3 -m pytest tests/test_warehouse_structure_wave1.py -q' in /Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr/backend
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+
+2026-08-29T14:15:31.142736Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+
+2026-08-29T14:15:41.115089Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+ succeeded in 17746ms:
+..............                                                           [100%]
+14 passed in 13.26s
+
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+
+2026-08-29T14:15:47.888230Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+exec
+/bin/zsh -lc 'python3 -m pytest tests/test_inventory_service_reporting_dimensions.py -q' in /Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr/backend
+exec
+/bin/zsh -lc 'python3 -m alembic heads' in /Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr/backend
+ succeeded in 383ms:
+20260829_0241 (head)
+
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+
+2026-08-29T14:15:57.716423Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+ succeeded in 4972ms:
+.                                                                        [100%]
+1 passed in 1.46s
+
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+
+2026-08-29T14:16:01.678478Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+codex
+Адресная проверка поведения прошла: `test_warehouse_structure_wave1.py` — 14 тестов, включая оба сценария с минусом. Ближайший существующий файл `test_inventory_service_reporting_dimensions.py` — ещё 1 тест; указанного `test_inventory_service.py` нет ни в рабочем дереве, ни в доступной истории путей. Alembic показывает ровно одну голову: `20260829_0241`. Теперь оформляю итоговый файл с честным разделением выполненных и невозможной буквально команды.
+exec
+/bin/zsh -lc "sed -n '1,240p' tasks/_zhurnal/codex-briefs/ITOG-raskladka-yacheyki.md
+sed -n '185,265p' backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+sed -n '25,65p' backend/alembic/versions/20260828_0210_inventory_balance_allow_negative.py
+git diff --check
+git diff --stat
+git diff -- backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py" in /Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr
+ succeeded in 0ms:
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+
+2026-08-29T14:16:13.757664Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+apply patch
+patch: completed
+/Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+diff --git a/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..196d067a86f05fdfce3080228f9004821d6f3117
+--- /dev/null
++++ b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+@@ -0,0 +1,41 @@
++# Итог: миграция 0130 не запрещает законный минус FBS
++
++В миграции `20260828_0130_warehouse_structure_wave1.py` удалены три операции
++создания ограничений, запрещавших отрицательные значения `quantity`,
++`quantity_unpacked` и `quantity_packed` в `inventory_balances`. Из
++`downgrade()` удалены соответствующие операции снятия этих ограничений.
++
++Рядом с оставшимися ограничениями структуры контейнера добавлен комментарий:
++минус в остатке является законным следом подтверждённой доставки FBS, а на
++боевой базе уже есть 115 таких строк. Поэтому обновление базы больше не должно
++останавливаться на существующих отрицательных остатках при прохождении ревизии
++`20260828_0130`.
++
++Миграция `20260828_0210_inventory_balance_allow_negative.py` проверена отдельно.
++Изменять её не потребовалось: в `upgrade()` все три ограничения снимаются через
++`ALTER TABLE inventory_balances DROP CONSTRAINT IF EXISTS`, поэтому их отсутствие
++после исправленной `0130` безопасно.
++
++Проверки на текущем worktree:
++
++- `ruff check .` — прошёл;
++- `mypy .` — прошёл, проверено 390 исходных файлов;
++- `python3 -m pytest tests/test_warehouse_structure_wave1.py -q` — прошёл:
++  14 тестов, включая запрет обычного списания ниже нуля и разрешённый минус при
++  подтверждённой доставке FBS;
++- `python3 -m pytest tests/test_inventory_service_reporting_dimensions.py -q`
++  — прошёл: 1 тест;
++- `python3 -m alembic heads` — вернул ровно одну голову:
++  `20260829_0241 (head)`;
++- `git diff --check` — прошёл.
++
++Буквально указанную команду выполнить нельзя по двум проверенным причинам:
++команды `python` в окружении нет, а файла `tests/test_inventory_service.py` нет
++ни в рабочем дереве, ни в доступной истории этого пути. Поэтому те же проверки
++запущены через `python3`; основной адресный файл
++`test_warehouse_structure_wave1.py` выполнен полностью, а дополнительно запущен
++существующий тестовый файл сервиса остатков
++`test_inventory_service_reporting_dimensions.py`.
++
++Полный `pytest` и проверки фронтенда не запускались по прямому ограничению
++владельца.
+
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+diff --git a/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..196d067a86f05fdfce3080228f9004821d6f3117
+--- /dev/null
++++ b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+@@ -0,0 +1,41 @@
++# Итог: миграция 0130 не запрещает законный минус FBS
++
++В миграции `20260828_0130_warehouse_structure_wave1.py` удалены три операции
++создания ограничений, запрещавших отрицательные значения `quantity`,
++`quantity_unpacked` и `quantity_packed` в `inventory_balances`. Из
++`downgrade()` удалены соответствующие операции снятия этих ограничений.
++
++Рядом с оставшимися ограничениями структуры контейнера добавлен комментарий:
++минус в остатке является законным следом подтверждённой доставки FBS, а на
++боевой базе уже есть 115 таких строк. Поэтому обновление базы больше не должно
++останавливаться на существующих отрицательных остатках при прохождении ревизии
++`20260828_0130`.
++
++Миграция `20260828_0210_inventory_balance_allow_negative.py` проверена отдельно.
++Изменять её не потребовалось: в `upgrade()` все три ограничения снимаются через
++`ALTER TABLE inventory_balances DROP CONSTRAINT IF EXISTS`, поэтому их отсутствие
++после исправленной `0130` безопасно.
++
++Проверки на текущем worktree:
++
++- `ruff check .` — прошёл;
++- `mypy .` — прошёл, проверено 390 исходных файлов;
++- `python3 -m pytest tests/test_warehouse_structure_wave1.py -q` — прошёл:
++  14 тестов, включая запрет обычного списания ниже нуля и разрешённый минус при
++  подтверждённой доставке FBS;
++- `python3 -m pytest tests/test_inventory_service_reporting_dimensions.py -q`
++  — прошёл: 1 тест;
++- `python3 -m alembic heads` — вернул ровно одну голову:
++  `20260829_0241 (head)`;
++- `git diff --check` — прошёл.
++
++Буквально указанную команду выполнить нельзя по двум проверенным причинам:
++команды `python` в окружении нет, а файла `tests/test_inventory_service.py` нет
++ни в рабочем дереве, ни в доступной истории этого пути. Поэтому те же проверки
++запущены через `python3`; основной адресный файл
++`test_warehouse_structure_wave1.py` выполнен полностью, а дополнительно запущен
++существующий тестовый файл сервиса остатков
++`test_inventory_service_reporting_dimensions.py`.
++
++Полный `pytest` и проверки фронтенда не запускались по прямому ограничению
++владельца.
+
+2026-08-29T14:16:34.412292Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+exec
+/bin/zsh -lc 'git diff --check
+git status --short
+git diff --stat
+git diff -- backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py tasks/_zhurnal/codex-briefs/ITOG-migr-check.md' in /Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr
+ succeeded in 19ms:
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683..975c73c6 100644
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@ def upgrade() -> None:
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -237,21 +224,6 @@ def downgrade() -> None:
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+     )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+         "inventory_balances",
+
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+diff --git a/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..196d067a86f05fdfce3080228f9004821d6f3117
+--- /dev/null
++++ b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+@@ -0,0 +1,41 @@
++# Итог: миграция 0130 не запрещает законный минус FBS
++
++В миграции `20260828_0130_warehouse_structure_wave1.py` удалены три операции
++создания ограничений, запрещавших отрицательные значения `quantity`,
++`quantity_unpacked` и `quantity_packed` в `inventory_balances`. Из
++`downgrade()` удалены соответствующие операции снятия этих ограничений.
++
++Рядом с оставшимися ограничениями структуры контейнера добавлен комментарий:
++минус в остатке является законным следом подтверждённой доставки FBS, а на
++боевой базе уже есть 115 таких строк. Поэтому обновление базы больше не должно
++останавливаться на существующих отрицательных остатках при прохождении ревизии
++`20260828_0130`.
++
++Миграция `20260828_0210_inventory_balance_allow_negative.py` проверена отдельно.
++Изменять её не потребовалось: в `upgrade()` все три ограничения снимаются через
++`ALTER TABLE inventory_balances DROP CONSTRAINT IF EXISTS`, поэтому их отсутствие
++после исправленной `0130` безопасно.
++
++Проверки на текущем worktree:
++
++- `ruff check .` — прошёл;
++- `mypy .` — прошёл, проверено 390 исходных файлов;
++- `python3 -m pytest tests/test_warehouse_structure_wave1.py -q` — прошёл:
++  14 тестов, включая запрет обычного списания ниже нуля и разрешённый минус при
++  подтверждённой доставке FBS;
++- `python3 -m pytest tests/test_inventory_service_reporting_dimensions.py -q`
++  — прошёл: 1 тест;
++- `python3 -m alembic heads` — вернул ровно одну голову:
++  `20260829_0241 (head)`;
++- `git diff --check` — прошёл.
++
++Буквально указанную команду выполнить нельзя по двум проверенным причинам:
++команды `python` в окружении нет, а файла `tests/test_inventory_service.py` нет
++ни в рабочем дереве, ни в доступной истории этого пути. Поэтому те же проверки
++запущены через `python3`; основной адресный файл
++`test_warehouse_structure_wave1.py` выполнен полностью, а дополнительно запущен
++существующий тестовый файл сервиса остатков
++`test_inventory_service_reporting_dimensions.py`.
++
++Полный `pytest` и проверки фронтенда не запускались по прямому ограничению
++владельца.
+
+2026-08-29T14:16:50.606286Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+exec
+/bin/zsh -lc 'git add backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+git diff --cached --check
+git diff --cached --stat
+git status --short
+git commit -m "Исправить накатку миграции с отрицательными остатками"' in /Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr
+ succeeded in 3ms:
+[codex/fix-migr-check-20260829 85a3483c] Исправить накатку миграции с отрицательными остатками
+ 2 files changed, 43 insertions(+), 30 deletions(-)
+ create mode 100644 tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+diff --git a/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..196d067a86f05fdfce3080228f9004821d6f3117
+--- /dev/null
++++ b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+@@ -0,0 +1,41 @@
++# Итог: миграция 0130 не запрещает законный минус FBS
++
++В миграции `20260828_0130_warehouse_structure_wave1.py` удалены три операции
++создания ограничений, запрещавших отрицательные значения `quantity`,
++`quantity_unpacked` и `quantity_packed` в `inventory_balances`. Из
++`downgrade()` удалены соответствующие операции снятия этих ограничений.
++
++Рядом с оставшимися ограничениями структуры контейнера добавлен комментарий:
++минус в остатке является законным следом подтверждённой доставки FBS, а на
++боевой базе уже есть 115 таких строк. Поэтому обновление базы больше не должно
++останавливаться на существующих отрицательных остатках при прохождении ревизии
++`20260828_0130`.
++
++Миграция `20260828_0210_inventory_balance_allow_negative.py` проверена отдельно.
++Изменять её не потребовалось: в `upgrade()` все три ограничения снимаются через
++`ALTER TABLE inventory_balances DROP CONSTRAINT IF EXISTS`, поэтому их отсутствие
++после исправленной `0130` безопасно.
++
++Проверки на текущем worktree:
++
++- `ruff check .` — прошёл;
++- `mypy .` — прошёл, проверено 390 исходных файлов;
++- `python3 -m pytest tests/test_warehouse_structure_wave1.py -q` — прошёл:
++  14 тестов, включая запрет обычного списания ниже нуля и разрешённый минус при
++  подтверждённой доставке FBS;
++- `python3 -m pytest tests/test_inventory_service_reporting_dimensions.py -q`
++  — прошёл: 1 тест;
++- `python3 -m alembic heads` — вернул ровно одну голову:
++  `20260829_0241 (head)`;
++- `git diff --check` — прошёл.
++
++Буквально указанную команду выполнить нельзя по двум проверенным причинам:
++команды `python` в окружении нет, а файла `tests/test_inventory_service.py` нет
++ни в рабочем дереве, ни в доступной истории этого пути. Поэтому те же проверки
++запущены через `python3`; основной адресный файл
++`test_warehouse_structure_wave1.py` выполнен полностью, а дополнительно запущен
++существующий тестовый файл сервиса остатков
++`test_inventory_service_reporting_dimensions.py`.
++
++Полный `pytest` и проверки фронтенда не запускались по прямому ограничению
++владельца.
+
+codex
+Изменения и итоговый журнал сохранены отдельным русскоязычным коммитом; чужой `ZADANIE.md` остался вне индекса. Осталось проверить SHA/чистоту относящегося к задаче diff и опубликовать именованную ветку, чтобы результат был восстановим не только из локального worktree.
+exec
+/bin/zsh -lc 'git show --stat --oneline --decorate HEAD
+git status --short --branch
+git remote -v' in /Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr
+ succeeded in 0ms:
+85a3483c (HEAD -> codex/fix-migr-check-20260829) Исправить накатку миграции с отрицательными остатками
+ .../20260828_0130_warehouse_structure_wave1.py     | 32 ++---------------
+ tasks/_zhurnal/codex-briefs/ITOG-migr-check.md     | 41 ++++++++++++++++++++++
+ 2 files changed, 43 insertions(+), 30 deletions(-)
+## codex/fix-migr-check-20260829
+?? ZADANIE.md
+origin	https://github.com/chivkunovd-bitdenis/WMS.git (fetch)
+origin	https://github.com/chivkunovd-bitdenis/WMS.git (push)
+
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+diff --git a/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..196d067a86f05fdfce3080228f9004821d6f3117
+--- /dev/null
++++ b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+@@ -0,0 +1,41 @@
++# Итог: миграция 0130 не запрещает законный минус FBS
++
++В миграции `20260828_0130_warehouse_structure_wave1.py` удалены три операции
++создания ограничений, запрещавших отрицательные значения `quantity`,
++`quantity_unpacked` и `quantity_packed` в `inventory_balances`. Из
++`downgrade()` удалены соответствующие операции снятия этих ограничений.
++
++Рядом с оставшимися ограничениями структуры контейнера добавлен комментарий:
++минус в остатке является законным следом подтверждённой доставки FBS, а на
++боевой базе уже есть 115 таких строк. Поэтому обновление базы больше не должно
++останавливаться на существующих отрицательных остатках при прохождении ревизии
++`20260828_0130`.
++
++Миграция `20260828_0210_inventory_balance_allow_negative.py` проверена отдельно.
++Изменять её не потребовалось: в `upgrade()` все три ограничения снимаются через
++`ALTER TABLE inventory_balances DROP CONSTRAINT IF EXISTS`, поэтому их отсутствие
++после исправленной `0130` безопасно.
++
++Проверки на текущем worktree:
++
++- `ruff check .` — прошёл;
++- `mypy .` — прошёл, проверено 390 исходных файлов;
++- `python3 -m pytest tests/test_warehouse_structure_wave1.py -q` — прошёл:
++  14 тестов, включая запрет обычного списания ниже нуля и разрешённый минус при
++  подтверждённой доставке FBS;
++- `python3 -m pytest tests/test_inventory_service_reporting_dimensions.py -q`
++  — прошёл: 1 тест;
++- `python3 -m alembic heads` — вернул ровно одну голову:
++  `20260829_0241 (head)`;
++- `git diff --check` — прошёл.
++
++Буквально указанную команду выполнить нельзя по двум проверенным причинам:
++команды `python` в окружении нет, а файла `tests/test_inventory_service.py` нет
++ни в рабочем дереве, ни в доступной истории этого пути. Поэтому те же проверки
++запущены через `python3`; основной адресный файл
++`test_warehouse_structure_wave1.py` выполнен полностью, а дополнительно запущен
++существующий тестовый файл сервиса остатков
++`test_inventory_service_reporting_dimensions.py`.
++
++Полный `pytest` и проверки фронтенда не запускались по прямому ограничению
++владельца.
+
+exec
+/bin/zsh -lc 'git push -u origin codex/fix-migr-check-20260829' in /Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr
+ exited 128 in 0ms:
+fatal: unable to access 'https://github.com/chivkunovd-bitdenis/WMS.git/': Could not resolve host: github.com
+
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+diff --git a/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..196d067a86f05fdfce3080228f9004821d6f3117
+--- /dev/null
++++ b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+@@ -0,0 +1,41 @@
++# Итог: миграция 0130 не запрещает законный минус FBS
++
++В миграции `20260828_0130_warehouse_structure_wave1.py` удалены три операции
++создания ограничений, запрещавших отрицательные значения `quantity`,
++`quantity_unpacked` и `quantity_packed` в `inventory_balances`. Из
++`downgrade()` удалены соответствующие операции снятия этих ограничений.
++
++Рядом с оставшимися ограничениями структуры контейнера добавлен комментарий:
++минус в остатке является законным следом подтверждённой доставки FBS, а на
++боевой базе уже есть 115 таких строк. Поэтому обновление базы больше не должно
++останавливаться на существующих отрицательных остатках при прохождении ревизии
++`20260828_0130`.
++
++Миграция `20260828_0210_inventory_balance_allow_negative.py` проверена отдельно.
++Изменять её не потребовалось: в `upgrade()` все три ограничения снимаются через
++`ALTER TABLE inventory_balances DROP CONSTRAINT IF EXISTS`, поэтому их отсутствие
++после исправленной `0130` безопасно.
++
++Проверки на текущем worktree:
++
++- `ruff check .` — прошёл;
++- `mypy .` — прошёл, проверено 390 исходных файлов;
++- `python3 -m pytest tests/test_warehouse_structure_wave1.py -q` — прошёл:
++  14 тестов, включая запрет обычного списания ниже нуля и разрешённый минус при
++  подтверждённой доставке FBS;
++- `python3 -m pytest tests/test_inventory_service_reporting_dimensions.py -q`
++  — прошёл: 1 тест;
++- `python3 -m alembic heads` — вернул ровно одну голову:
++  `20260829_0241 (head)`;
++- `git diff --check` — прошёл.
++
++Буквально указанную команду выполнить нельзя по двум проверенным причинам:
++команды `python` в окружении нет, а файла `tests/test_inventory_service.py` нет
++ни в рабочем дереве, ни в доступной истории этого пути. Поэтому те же проверки
++запущены через `python3`; основной адресный файл
++`test_warehouse_structure_wave1.py` выполнен полностью, а дополнительно запущен
++существующий тестовый файл сервиса остатков
++`test_inventory_service_reporting_dimensions.py`.
++
++Полный `pytest` и проверки фронтенда не запускались по прямому ограничению
++владельца.
+
+codex
+Локальный коммит создан, но публикация ветки сейчас невозможна: окружение не разрешает DNS-доступ к `github.com` (`Could not resolve host`). Зафиксирую этот факт в итоговом файле и обновлю тот же коммит; статус будет честно «локально реализовано и закоммичено, но не опубликовано», а не «готово».
+apply patch
+patch: completed
+/Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+diff --git a/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..66b50a8f623e03c2ec68c3c91f52c4a8f7d328c3
+--- /dev/null
++++ b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+@@ -0,0 +1,46 @@
++# Итог: миграция 0130 не запрещает законный минус FBS
++
++В миграции `20260828_0130_warehouse_structure_wave1.py` удалены три операции
++создания ограничений, запрещавших отрицательные значения `quantity`,
++`quantity_unpacked` и `quantity_packed` в `inventory_balances`. Из
++`downgrade()` удалены соответствующие операции снятия этих ограничений.
++
++Рядом с оставшимися ограничениями структуры контейнера добавлен комментарий:
++минус в остатке является законным следом подтверждённой доставки FBS, а на
++боевой базе уже есть 115 таких строк. Поэтому обновление базы больше не должно
++останавливаться на существующих отрицательных остатках при прохождении ревизии
++`20260828_0130`.
++
++Миграция `20260828_0210_inventory_balance_allow_negative.py` проверена отдельно.
++Изменять её не потребовалось: в `upgrade()` все три ограничения снимаются через
++`ALTER TABLE inventory_balances DROP CONSTRAINT IF EXISTS`, поэтому их отсутствие
++после исправленной `0130` безопасно.
++
++Проверки на текущем worktree:
++
++- `ruff check .` — прошёл;
++- `mypy .` — прошёл, проверено 390 исходных файлов;
++- `python3 -m pytest tests/test_warehouse_structure_wave1.py -q` — прошёл:
++  14 тестов, включая запрет обычного списания ниже нуля и разрешённый минус при
++  подтверждённой доставке FBS;
++- `python3 -m pytest tests/test_inventory_service_reporting_dimensions.py -q`
++  — прошёл: 1 тест;
++- `python3 -m alembic heads` — вернул ровно одну голову:
++  `20260829_0241 (head)`;
++- `git diff --check` — прошёл.
++
++Буквально указанную команду выполнить нельзя по двум проверенным причинам:
++команды `python` в окружении нет, а файла `tests/test_inventory_service.py` нет
++ни в рабочем дереве, ни в доступной истории этого пути. Поэтому те же проверки
++запущены через `python3`; основной адресный файл
++`test_warehouse_structure_wave1.py` выполнен полностью, а дополнительно запущен
++существующий тестовый файл сервиса остатков
++`test_inventory_service_reporting_dimensions.py`.
++
++Полный `pytest` и проверки фронтенда не запускались по прямому ограничению
++владельца.
++
++Изменения сохранены в локальной ветке `codex/fix-migr-check-20260829` отдельным
++коммитом. Публикация ветки в `origin` не состоялась: окружение вернуло
++`Could not resolve host: github.com`, поэтому результат пока не доступен в
++удалённом репозитории.
+
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+diff --git a/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..66b50a8f623e03c2ec68c3c91f52c4a8f7d328c3
+--- /dev/null
++++ b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+@@ -0,0 +1,46 @@
++# Итог: миграция 0130 не запрещает законный минус FBS
++
++В миграции `20260828_0130_warehouse_structure_wave1.py` удалены три операции
++создания ограничений, запрещавших отрицательные значения `quantity`,
++`quantity_unpacked` и `quantity_packed` в `inventory_balances`. Из
++`downgrade()` удалены соответствующие операции снятия этих ограничений.
++
++Рядом с оставшимися ограничениями структуры контейнера добавлен комментарий:
++минус в остатке является законным следом подтверждённой доставки FBS, а на
++боевой базе уже есть 115 таких строк. Поэтому обновление базы больше не должно
++останавливаться на существующих отрицательных остатках при прохождении ревизии
++`20260828_0130`.
++
++Миграция `20260828_0210_inventory_balance_allow_negative.py` проверена отдельно.
++Изменять её не потребовалось: в `upgrade()` все три ограничения снимаются через
++`ALTER TABLE inventory_balances DROP CONSTRAINT IF EXISTS`, поэтому их отсутствие
++после исправленной `0130` безопасно.
++
++Проверки на текущем worktree:
++
++- `ruff check .` — прошёл;
++- `mypy .` — прошёл, проверено 390 исходных файлов;
++- `python3 -m pytest tests/test_warehouse_structure_wave1.py -q` — прошёл:
++  14 тестов, включая запрет обычного списания ниже нуля и разрешённый минус при
++  подтверждённой доставке FBS;
++- `python3 -m pytest tests/test_inventory_service_reporting_dimensions.py -q`
++  — прошёл: 1 тест;
++- `python3 -m alembic heads` — вернул ровно одну голову:
++  `20260829_0241 (head)`;
++- `git diff --check` — прошёл.
++
++Буквально указанную команду выполнить нельзя по двум проверенным причинам:
++команды `python` в окружении нет, а файла `tests/test_inventory_service.py` нет
++ни в рабочем дереве, ни в доступной истории этого пути. Поэтому те же проверки
++запущены через `python3`; основной адресный файл
++`test_warehouse_structure_wave1.py` выполнен полностью, а дополнительно запущен
++существующий тестовый файл сервиса остатков
++`test_inventory_service_reporting_dimensions.py`.
++
++Полный `pytest` и проверки фронтенда не запускались по прямому ограничению
++владельца.
++
++Изменения сохранены в локальной ветке `codex/fix-migr-check-20260829` отдельным
++коммитом. Публикация ветки в `origin` не состоялась: окружение вернуло
++`Could not resolve host: github.com`, поэтому результат пока не доступен в
++удалённом репозитории.
+
+2026-08-29T14:17:26.008110Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+exec
+/bin/zsh -lc 'git add tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+git diff --cached --check
+git commit --amend --no-edit
+git rev-parse HEAD
+git show --check --stat --oneline HEAD
+git status --short --branch' in /Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr
+ succeeded in 14ms:
+## codex/fix-migr-check-20260829
+?? ZADANIE.md
+
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+diff --git a/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..66b50a8f623e03c2ec68c3c91f52c4a8f7d328c3
+--- /dev/null
++++ b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+@@ -0,0 +1,46 @@
++# Итог: миграция 0130 не запрещает законный минус FBS
++
++В миграции `20260828_0130_warehouse_structure_wave1.py` удалены три операции
++создания ограничений, запрещавших отрицательные значения `quantity`,
++`quantity_unpacked` и `quantity_packed` в `inventory_balances`. Из
++`downgrade()` удалены соответствующие операции снятия этих ограничений.
++
++Рядом с оставшимися ограничениями структуры контейнера добавлен комментарий:
++минус в остатке является законным следом подтверждённой доставки FBS, а на
++боевой базе уже есть 115 таких строк. Поэтому обновление базы больше не должно
++останавливаться на существующих отрицательных остатках при прохождении ревизии
++`20260828_0130`.
++
++Миграция `20260828_0210_inventory_balance_allow_negative.py` проверена отдельно.
++Изменять её не потребовалось: в `upgrade()` все три ограничения снимаются через
++`ALTER TABLE inventory_balances DROP CONSTRAINT IF EXISTS`, поэтому их отсутствие
++после исправленной `0130` безопасно.
++
++Проверки на текущем worktree:
++
++- `ruff check .` — прошёл;
++- `mypy .` — прошёл, проверено 390 исходных файлов;
++- `python3 -m pytest tests/test_warehouse_structure_wave1.py -q` — прошёл:
++  14 тестов, включая запрет обычного списания ниже нуля и разрешённый минус при
++  подтверждённой доставке FBS;
++- `python3 -m pytest tests/test_inventory_service_reporting_dimensions.py -q`
++  — прошёл: 1 тест;
++- `python3 -m alembic heads` — вернул ровно одну голову:
++  `20260829_0241 (head)`;
++- `git diff --check` — прошёл.
++
++Буквально указанную команду выполнить нельзя по двум проверенным причинам:
++команды `python` в окружении нет, а файла `tests/test_inventory_service.py` нет
++ни в рабочем дереве, ни в доступной истории этого пути. Поэтому те же проверки
++запущены через `python3`; основной адресный файл
++`test_warehouse_structure_wave1.py` выполнен полностью, а дополнительно запущен
++существующий тестовый файл сервиса остатков
++`test_inventory_service_reporting_dimensions.py`.
++
++Полный `pytest` и проверки фронтенда не запускались по прямому ограничению
++владельца.
++
++Изменения сохранены в локальной ветке `codex/fix-migr-check-20260829` отдельным
++коммитом. Публикация ветки в `origin` не состоялась: окружение вернуло
++`Could not resolve host: github.com`, поэтому результат пока не доступен в
++удалённом репозитории.
+
+2026-08-29T14:17:31.265797Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+exec
+/bin/zsh -lc "nl -ba backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py | sed -n '190,245p'
+nl -ba backend/alembic/versions/20260828_0210_inventory_balance_allow_negative.py | sed -n '28,46p'
+nl -ba tasks/_zhurnal/codex-briefs/ITOG-migr-check.md | sed -n '1,90p'
+nl -ba /Users/deniscivkunov/.codex/memories/MEMORY.md | sed -n '970,992p'" in /Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr
+ succeeded in 0ms:
+   190	        "inventory_balances",
+   191	        "(container_kind IS NULL AND container_id IS NULL) OR "
+   192	        "(container_kind IS NOT NULL AND container_id IS NOT NULL)",
+   193	    )
+   194	    op.create_check_constraint(
+   195	        "ck_inventory_balance_container_kind",
+   196	        "inventory_balances",
+   197	        "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+   198	    )
+   199	    # Эти проверки намеренно не создаём: минус в остатке — законный след
+   200	    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+   201	    op.create_index(
+   202	        "uq_inventory_balance_loc_product_container",
+   203	        "inventory_balances",
+   204	        [
+   205	            "storage_location_id",
+   206	            "product_id",
+   207	            sa.text(f"coalesce(container_id, '{_NIL_UUID}')"),
+   208	        ],
+   209	        unique=True,
+   210	    )
+   211	    op.drop_constraint(
+   212	        "uq_inventory_balance_loc_product",
+   213	        "inventory_balances",
+   214	        type_="unique",
+   215	    )
+   216	
+   217	
+   218	def downgrade() -> None:
+   219	    op.create_unique_constraint(
+   220	        "uq_inventory_balance_loc_product",
+   221	        "inventory_balances",
+   222	        ["storage_location_id", "product_id"],
+   223	    )
+   224	    op.drop_index(
+   225	        "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+   226	    )
+   227	    op.drop_constraint(
+   228	        "ck_inventory_balance_container_kind",
+   229	        "inventory_balances",
+   230	        type_="check",
+   231	    )
+   232	    op.drop_constraint(
+   233	        "ck_inventory_balance_container_pair",
+   234	        "inventory_balances",
+   235	        type_="check",
+   236	    )
+   237	    op.drop_index("ix_inventory_balances_container_id", table_name="inventory_balances")
+   238	    op.drop_index("ix_inventory_balances_container_kind", table_name="inventory_balances")
+   239	    op.drop_column("inventory_balances", "container_id")
+   240	    op.drop_column("inventory_balances", "container_kind")
+   241	
+   242	    op.drop_index(
+   243	        "ix_inbound_intake_cargo_place_lines_product_id",
+   244	        table_name="inbound_intake_cargo_place_lines",
+   245	    )
+    28	down_revision: str | Sequence[str] | None = "20260828_0190"
+    29	branch_labels: str | Sequence[str] | None = None
+    30	depends_on: str | Sequence[str] | None = None
+    31	
+    32	_CONSTRAINTS = (
+    33	    "ck_inventory_balance_quantity_nonnegative",
+    34	    "ck_inventory_balance_quantity_unpacked_nonnegative",
+    35	    "ck_inventory_balance_quantity_packed_nonnegative",
+    36	)
+    37	
+    38	
+    39	def upgrade() -> None:
+    40	    for name in _CONSTRAINTS:
+    41	        # Ограничения могло не быть: базы разных контуров получили разный набор
+    42	        # ревизий. Отсутствие — не повод валить накатку.
+    43	        op.execute(f"ALTER TABLE inventory_balances DROP CONSTRAINT IF EXISTS {name}")
+    44	
+    45	
+    46	def downgrade() -> None:
+     1	# Итог: миграция 0130 не запрещает законный минус FBS
+     2	
+     3	В миграции `20260828_0130_warehouse_structure_wave1.py` удалены три операции
+     4	создания ограничений, запрещавших отрицательные значения `quantity`,
+     5	`quantity_unpacked` и `quantity_packed` в `inventory_balances`. Из
+     6	`downgrade()` удалены соответствующие операции снятия этих ограничений.
+     7	
+     8	Рядом с оставшимися ограничениями структуры контейнера добавлен комментарий:
+     9	минус в остатке является законным следом подтверждённой доставки FBS, а на
+    10	боевой базе уже есть 115 таких строк. Поэтому обновление базы больше не должно
+    11	останавливаться на существующих отрицательных остатках при прохождении ревизии
+    12	`20260828_0130`.
+    13	
+    14	Миграция `20260828_0210_inventory_balance_allow_negative.py` проверена отдельно.
+    15	Изменять её не потребовалось: в `upgrade()` все три ограничения снимаются через
+    16	`ALTER TABLE inventory_balances DROP CONSTRAINT IF EXISTS`, поэтому их отсутствие
+    17	после исправленной `0130` безопасно.
+    18	
+    19	Проверки на текущем worktree:
+    20	
+    21	- `ruff check .` — прошёл;
+    22	- `mypy .` — прошёл, проверено 390 исходных файлов;
+    23	- `python3 -m pytest tests/test_warehouse_structure_wave1.py -q` — прошёл:
+    24	  14 тестов, включая запрет обычного списания ниже нуля и разрешённый минус при
+    25	  подтверждённой доставке FBS;
+    26	- `python3 -m pytest tests/test_inventory_service_reporting_dimensions.py -q`
+    27	  — прошёл: 1 тест;
+    28	- `python3 -m alembic heads` — вернул ровно одну голову:
+    29	  `20260829_0241 (head)`;
+    30	- `git diff --check` — прошёл.
+    31	
+    32	Буквально указанную команду выполнить нельзя по двум проверенным причинам:
+    33	команды `python` в окружении нет, а файла `tests/test_inventory_service.py` нет
+    34	ни в рабочем дереве, ни в доступной истории этого пути. Поэтому те же проверки
+    35	запущены через `python3`; основной адресный файл
+    36	`test_warehouse_structure_wave1.py` выполнен полностью, а дополнительно запущен
+    37	существующий тестовый файл сервиса остатков
+    38	`test_inventory_service_reporting_dimensions.py`.
+    39	
+    40	Полный `pytest` и проверки фронтенда не запускались по прямому ограничению
+    41	владельца.
+    42	
+    43	Изменения сохранены в локальной ветке `codex/fix-migr-check-20260829` отдельным
+    44	коммитом. Публикация ветки в `origin` не состоялась: окружение вернуло
+    45	`Could not resolve host: github.com`, поэтому результат пока не доступен в
+    46	удалённом репозитории.
+   970	## User preferences
+   971	
+   972	- when Ozon work drifted into a manual seller-binding form, the user clarified that goods are imported after cabinet connection and should only be displayed/filtered -> follow the actual marketplace workflow; do not invent manual binding UI. [Task 1] [skysight memory]
+   973	- when marketplace chips were added, the user required that existing content remain visible -> add the chip beside the existing label; never replace `warehouse_name`/`extraLabel` or add columns without an explicit need. [Task 1] [skysight memory]
+   974	- when agents redesigned Ozon, the user said it must be “встроить ... в текущие существующие процессы” and “минимум менять визуал” -> reuse current routes/stages/tables/actions; add a new surface only when the operator action cannot fit. [Task 3]
+   975	- when a lead was called before tests existed, the user required ordinary and negative test cases before development -> require an independent tester contract and executable negative coverage for every vertical slice. [Task 3]
+   976	- when implementing Ozon FBS, the user required full `products[]` positions/quantities through existing S-03, assembly, and partial assembly while WB stays single-position -> make marketplace deltas additive; use no new screens/buttons and only the authorized Ozon-return picker modal. Red regressions must be fixed or explicitly explained, never dismissed as “inherited”. [Task 4]
+   977	
+   978	## Reusable knowledge
+   979	
+   980	- Navigation, not a similarly named file, determines whether a screen is a live implementation target. `/app/catalog/products` had no navigation entry and was treated as dead; live catalog targets were S-16 `/app/ff/products` in `FfProductsCatalogScreen` and S-31 `/seller/products` in `SellerProductsStockScreen.tsx`. Revert Ozon changes from the dead `ProductsScreen.tsx` rather than extending it. [Task 1] [skysight memory]
+   981	- S-31's intended Ozon delta is a small marketplace chip in the existing `Название` cell when a binding exists, with no new columns or seller-side save form. S-16 still needs server-side marketplace filtering and binding-save success plus specific duplicate-SKU feedback. [Task 1] [skysight memory]
+   982	- The account/auth slice was locally validated as `3a95a426e9ed64bc36797a73ac4b207100485bfe` (`ruff`, `mypy`, Playwright 4/4, backend 50) and split into catalog, FBS, and stock/sync worktrees. This is local-slice proof only; browser acceptance and stage proof remain separate. [Task 1] [skysight memory]
+   983	- For marketplace-unload rows, preserve `extraLabel = warehouse_name` and render the marketplace chip alongside it. The regression-only lane should record defects in `docs/qa/regress/FINDINGS.md`, not fix them; use unique `E2E_API_PORT`/`E2E_WEB_PORT`, Playwright, uvicorn, and SQLite rather than Docker for parallel local lanes. [Task 1] [skysight memory]
+   984	- The old 74-call Ozon attempt created readiness/classifier artifacts but no product SHA/stage proof. The recovery baseline is commit `3a95a426e9ed64bc36797a73ac4b207100485bfe`: one inline Ozon account card in existing `/seller/settings`, generic account storage, read-only validation, strict request input, 50 backend tests, 4 seller-settings Playwright tests on dedicated ports, frontend build/Ruff/mypy. It is not full Ozon or stage proof. [Task 3]
+   985	- Once the shared account contract is stable, time-box it and use isolated worktrees for independent catalog, FBS, and stock slices; serialize shared-file/same-slice changes. Keep dispatcher inputs in the active worktree and verify artifact paths before launch. [Task 3]
+   986	- Authoritative implementation requirements are `tasks/ozon-integration-20260825/FBS-PROCESS.md` §5a and `RETURNS-PROCESS.md` §7.2. Final stage SHA was `e957b2d6c508cb2e2ac080ed9421e99d40bbe9df`; backend `1144 passed, 6 skipped`, Playwright `205 passed, 7 skipped`, frontend unit `191 passed`, and checks including Ruff/mypy/build/guards/migration/diff passed. Stage health and browser navigation loaded S-03/S-12/S-16/S-31 without errors. [Task 4]
+   987	- Parallel migrations had duplicate `20260825_0107` IDs; final serialized head was `20260825_0109`. Run `alembic heads` and `python3 scripts/ci/check_migrations.py` whenever parallel branches add migrations. Replace time-fixed cutoff fixtures with relative dates and assert actual visible S-31 columns instead of obsolete nmID literals. [Task 4]
+   988	
+   989	## Failures and how to do differently
+   990	
+   991	- Symptom: an apparently reasonable Ozon feature appears on an unused route or replaces a working data cell. Cause: implementation followed file names or an abstract integration idea rather than real navigation and a minimal-delta comparison. Fix: identify the navigable screen first, preserve each existing cell value, and test the requested addition in that surface. [Task 1] [skysight memory]
+   992	- Symptom: Ozon work accumulates calls and green claims without a stage result. Cause: full screen/classifier audits and finish-only tester gates let development start without test inputs. Fix: freeze accepted screen verdicts, reject developer dispatch without a completed tester attempt, and report code/commit/local browser/stage/review as separate evidence. [Task 3]
+
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+diff --git a/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..66b50a8f623e03c2ec68c3c91f52c4a8f7d328c3
+--- /dev/null
++++ b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+@@ -0,0 +1,46 @@
++# Итог: миграция 0130 не запрещает законный минус FBS
++
++В миграции `20260828_0130_warehouse_structure_wave1.py` удалены три операции
++создания ограничений, запрещавших отрицательные значения `quantity`,
++`quantity_unpacked` и `quantity_packed` в `inventory_balances`. Из
++`downgrade()` удалены соответствующие операции снятия этих ограничений.
++
++Рядом с оставшимися ограничениями структуры контейнера добавлен комментарий:
++минус в остатке является законным следом подтверждённой доставки FBS, а на
++боевой базе уже есть 115 таких строк. Поэтому обновление базы больше не должно
++останавливаться на существующих отрицательных остатках при прохождении ревизии
++`20260828_0130`.
++
++Миграция `20260828_0210_inventory_balance_allow_negative.py` проверена отдельно.
++Изменять её не потребовалось: в `upgrade()` все три ограничения снимаются через
++`ALTER TABLE inventory_balances DROP CONSTRAINT IF EXISTS`, поэтому их отсутствие
++после исправленной `0130` безопасно.
++
++Проверки на текущем worktree:
++
++- `ruff check .` — прошёл;
++- `mypy .` — прошёл, проверено 390 исходных файлов;
++- `python3 -m pytest tests/test_warehouse_structure_wave1.py -q` — прошёл:
++  14 тестов, включая запрет обычного списания ниже нуля и разрешённый минус при
++  подтверждённой доставке FBS;
++- `python3 -m pytest tests/test_inventory_service_reporting_dimensions.py -q`
++  — прошёл: 1 тест;
++- `python3 -m alembic heads` — вернул ровно одну голову:
++  `20260829_0241 (head)`;
++- `git diff --check` — прошёл.
++
++Буквально указанную команду выполнить нельзя по двум проверенным причинам:
++команды `python` в окружении нет, а файла `tests/test_inventory_service.py` нет
++ни в рабочем дереве, ни в доступной истории этого пути. Поэтому те же проверки
++запущены через `python3`; основной адресный файл
++`test_warehouse_structure_wave1.py` выполнен полностью, а дополнительно запущен
++существующий тестовый файл сервиса остатков
++`test_inventory_service_reporting_dimensions.py`.
++
++Полный `pytest` и проверки фронтенда не запускались по прямому ограничению
++владельца.
++
++Изменения сохранены в локальной ветке `codex/fix-migr-check-20260829` отдельным
++коммитом. Публикация ветки в `origin` не состоялась: окружение вернуло
++`Could not resolve host: github.com`, поэтому результат пока не доступен в
++удалённом репозитории.
+
+2026-08-29T14:17:39.782812Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+exec
+/bin/zsh -lc "nl -ba /Users/deniscivkunov/.codex/memories/MEMORY.md | sed -n '940,970p'" in /Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr
+ succeeded in 0ms:
+   940	### rollout_summary_files
+   941	
+   942	- extensions/skysight/resources/2026-08-25T13-10-00-hkzf-10min-memory-summary.md (cwd=/Users/deniscivkunov/Projects/WMS, rollout_path=extensions/skysight/resources/2026-08-25T13-10-00-hkzf-10min-memory-summary.md, updated_at=2026-08-25T13:10:00+00:00, thread_id=None, observed Ozon FBS process correction)
+   943	- extensions/skysight/resources/2026-08-25T09-30-00-JtQY-10min-memory-summary.md (cwd=/Users/deniscivkunov/Projects/WMS and /Users/deniscivkunov/Downloads/insurance-benchmark, rollout_path=extensions/skysight/resources/2026-08-25T09-30-00-JtQY-10min-memory-summary.md, updated_at=2026-08-25T09:30:00+00:00, thread_id=None, observed pipeline-overhead critique and no-call cost estimate)
+   944	
+   945	### keywords
+   946	
+   947	- `FBS-PROCESS.md`, `without distribution`, scan codes, boxes, Ozon supply, Wildberries behavior, `codex/fix-inbound-empty-product-picker`
+   948	
+   949	## Task 4: Implement and stage-verify additive Ozon FBS multi-product flow, outcome success on stage/test provider; real Seller API not exercised
+   950	
+   951	### rollout_summary_files
+   952	
+   953	- rollout_summaries/2026-08-25T10-28-13-l6QT-ozon_fbs_multiproduct_stage_verification.md (cwd=/Users/deniscivkunov/Projects/WMS, rollout_path=/Users/deniscivkunov/.codex/sessions/2026/08/25/rollout-2026-08-25T19-13-12-01a03876-a11e-73e0-82dc-0e852a93483f_01a039b2-7663-7292-9551-3a44f56f95c5.jsonl, updated_at=2026-08-26T05:58:40+00:00, thread_id=01a03876-a11e-73e0-82dc-0e852a93483f, final stage verification)
+   954	
+   955	### keywords
+   956	
+   957	- `FBS-PROCESS.md` §5a, `RETURNS-PROCESS.md` §7.2, `products[]`, `af864558`, `fcd1ab34`, `e957b2d6`, `20260825_0109`, `check_migrations.py`, S-03, S-12, S-16, S-31
+   958	
+   959	## Task 3: Re-orchestrate Ozon into existing processes, outcome verified account slice only; catalog/FBS/stock/stage remain incomplete
+   960	
+   961	### rollout_summary_files
+   962	
+   963	- rollout_summaries/2026-08-25T07-49-24-TMjc-ozon_reintegration_moderation_and_chat_transcript_export.md (cwd=/Users/deniscivkunov/Projects/WMS, rollout_path=/Users/deniscivkunov/.codex/sessions/2026/08/25/rollout-2026-08-25T10-49-24-01a037e5-3965-7802-9a5f-4a93571acece.jsonl, updated_at=2026-08-25T09:23:07+00:00, thread_id=01a037e5-3965-7802-9a5f-4a93571acece, verified local account slice; full integration not completed)
+   964	- rollout_summaries/2026-08-24T15-43-00-B8JV-ozon_stage_meta_loop_and_missing_tester_gate.md (cwd=/Users/deniscivkunov/Projects/WMS, rollout_path=/Users/deniscivkunov/.codex/sessions/2026/08/25/rollout-2026-08-25T00-28-33-01a03470-7584-7151-b5fb-3081d84ef867_01a035ac-d3c7-7792-845e-d4904cfc8a61.jsonl, updated_at=2026-08-25T09:11:57+00:00, thread_id=01a03470-7584-7151-b5fb-3081d84ef867, failed prior meta-audit loop)
+   965	
+   966	### keywords
+   967	
+   968	- `SOL_LED_PIPELINE_RU.md`, `sol_pipeline.py`, tester-before-developer, `3a95a426`, Seller Settings, `/seller/settings`, `E2E_API_PORT=18178`, `E2E_WEB_PORT=5278`, 50 passed, 4 passed, stage
+   969	
+   970	## User preferences
+
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+diff --git a/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..66b50a8f623e03c2ec68c3c91f52c4a8f7d328c3
+--- /dev/null
++++ b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+@@ -0,0 +1,46 @@
++# Итог: миграция 0130 не запрещает законный минус FBS
++
++В миграции `20260828_0130_warehouse_structure_wave1.py` удалены три операции
++создания ограничений, запрещавших отрицательные значения `quantity`,
++`quantity_unpacked` и `quantity_packed` в `inventory_balances`. Из
++`downgrade()` удалены соответствующие операции снятия этих ограничений.
++
++Рядом с оставшимися ограничениями структуры контейнера добавлен комментарий:
++минус в остатке является законным следом подтверждённой доставки FBS, а на
++боевой базе уже есть 115 таких строк. Поэтому обновление базы больше не должно
++останавливаться на существующих отрицательных остатках при прохождении ревизии
++`20260828_0130`.
++
++Миграция `20260828_0210_inventory_balance_allow_negative.py` проверена отдельно.
++Изменять её не потребовалось: в `upgrade()` все три ограничения снимаются через
++`ALTER TABLE inventory_balances DROP CONSTRAINT IF EXISTS`, поэтому их отсутствие
++после исправленной `0130` безопасно.
++
++Проверки на текущем worktree:
++
++- `ruff check .` — прошёл;
++- `mypy .` — прошёл, проверено 390 исходных файлов;
++- `python3 -m pytest tests/test_warehouse_structure_wave1.py -q` — прошёл:
++  14 тестов, включая запрет обычного списания ниже нуля и разрешённый минус при
++  подтверждённой доставке FBS;
++- `python3 -m pytest tests/test_inventory_service_reporting_dimensions.py -q`
++  — прошёл: 1 тест;
++- `python3 -m alembic heads` — вернул ровно одну голову:
++  `20260829_0241 (head)`;
++- `git diff --check` — прошёл.
++
++Буквально указанную команду выполнить нельзя по двум проверенным причинам:
++команды `python` в окружении нет, а файла `tests/test_inventory_service.py` нет
++ни в рабочем дереве, ни в доступной истории этого пути. Поэтому те же проверки
++запущены через `python3`; основной адресный файл
++`test_warehouse_structure_wave1.py` выполнен полностью, а дополнительно запущен
++существующий тестовый файл сервиса остатков
++`test_inventory_service_reporting_dimensions.py`.
++
++Полный `pytest` и проверки фронтенда не запускались по прямому ограничению
++владельца.
++
++Изменения сохранены в локальной ветке `codex/fix-migr-check-20260829` отдельным
++коммитом. Публикация ветки в `origin` не состоялась: окружение вернуло
++`Could not resolve host: github.com`, поэтому результат пока не доступен в
++удалённом репозитории.
+
+2026-08-29T14:17:43.628387Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+Код и итоговый журнал закоммичены. Все доступные адресные проверки прошли; публикация ветки не выполнена из-за недоступности github.com из окружения.
+  ✓ Проверить текущую ветку, diff и миграции 0130/0210
+  ✓ Исправить миграции и добавить адресную регрессионную проверку при необходимости
+  ✓ Запустить ruff, mypy, два pytest-файла и alembic heads
+  ✓ Записать итог в журнал, проверить diff и создать отдельный коммит
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+diff --git a/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..66b50a8f623e03c2ec68c3c91f52c4a8f7d328c3
+--- /dev/null
++++ b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+@@ -0,0 +1,46 @@
++# Итог: миграция 0130 не запрещает законный минус FBS
++
++В миграции `20260828_0130_warehouse_structure_wave1.py` удалены три операции
++создания ограничений, запрещавших отрицательные значения `quantity`,
++`quantity_unpacked` и `quantity_packed` в `inventory_balances`. Из
++`downgrade()` удалены соответствующие операции снятия этих ограничений.
++
++Рядом с оставшимися ограничениями структуры контейнера добавлен комментарий:
++минус в остатке является законным следом подтверждённой доставки FBS, а на
++боевой базе уже есть 115 таких строк. Поэтому обновление базы больше не должно
++останавливаться на существующих отрицательных остатках при прохождении ревизии
++`20260828_0130`.
++
++Миграция `20260828_0210_inventory_balance_allow_negative.py` проверена отдельно.
++Изменять её не потребовалось: в `upgrade()` все три ограничения снимаются через
++`ALTER TABLE inventory_balances DROP CONSTRAINT IF EXISTS`, поэтому их отсутствие
++после исправленной `0130` безопасно.
++
++Проверки на текущем worktree:
++
++- `ruff check .` — прошёл;
++- `mypy .` — прошёл, проверено 390 исходных файлов;
++- `python3 -m pytest tests/test_warehouse_structure_wave1.py -q` — прошёл:
++  14 тестов, включая запрет обычного списания ниже нуля и разрешённый минус при
++  подтверждённой доставке FBS;
++- `python3 -m pytest tests/test_inventory_service_reporting_dimensions.py -q`
++  — прошёл: 1 тест;
++- `python3 -m alembic heads` — вернул ровно одну голову:
++  `20260829_0241 (head)`;
++- `git diff --check` — прошёл.
++
++Буквально указанную команду выполнить нельзя по двум проверенным причинам:
++команды `python` в окружении нет, а файла `tests/test_inventory_service.py` нет
++ни в рабочем дереве, ни в доступной истории этого пути. Поэтому те же проверки
++запущены через `python3`; основной адресный файл
++`test_warehouse_structure_wave1.py` выполнен полностью, а дополнительно запущен
++существующий тестовый файл сервиса остатков
++`test_inventory_service_reporting_dimensions.py`.
++
++Полный `pytest` и проверки фронтенда не запускались по прямому ограничению
++владельца.
++
++Изменения сохранены в локальной ветке `codex/fix-migr-check-20260829` отдельным
++коммитом. Публикация ветки в `origin` не состоялась: окружение вернуло
++`Could not resolve host: github.com`, поэтому результат пока не доступен в
++удалённом репозитории.
+
+2026-08-29T14:17:55.144749Z ERROR codex_models_manager::manager: failed to renew cache TTL: missing field `supports_parallel_tool_calls` at line 97 column 5
+codex
+Локально реализовано и закоммичено, но не опубликовано.
+
+В [миграции 0130](/Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py:194) удалены три опасных `CHECK` из `upgrade()` и соответствующие удаления из `downgrade()`. Добавлен русский комментарий про 115 законных отрицательных остатков FBS.
+
+[Миграция 0210](/Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr/backend/alembic/versions/20260828_0210_inventory_balance_allow_negative.py:39) уже использует `DROP CONSTRAINT IF EXISTS`, поэтому изменений не потребовала.
+
+Проверки:
+
+- `ruff check .` — успешно;
+- `mypy .` — успешно, 390 файлов;
+- `test_warehouse_structure_wave1.py` — 14 тестов;
+- существующий `test_inventory_service_reporting_dimensions.py` — 1 тест;
+- Alembic — ровно одна голова: `20260829_0241`;
+- `git diff --check` — успешно.
+
+Указанного `tests/test_inventory_service.py` в репозитории и истории пути нет, а команда `python` отсутствует; проверки выполнены через `python3`. Это отражено в [ITOG-migr-check.md](/Users/deniscivkunkunov/Projects/WMS/.worktrees/fix-migr/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md:1).
+
+Коммит: `a24917352a9c6926b2613922f9e89729744ee757`  
+Ветка: `codex/fix-migr-check-20260829`
+
+Push не состоялся: окружение не смогло разрешить `github.com`. Чужой `ZADANIE.md` не изменён и не включён в коммит.
+
+
+diff --git a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+index d79a1683fdd2584ced42dc7962a4f2289921eb5b..975c73c6e64704e6d39bc5283a30d4afad1d9b30
+--- a/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
++++ b/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py
+@@ -196,21 +196,8 @@
+         "inventory_balances",
+         "container_kind IS NULL OR container_kind IN ('pallet', 'box', 'cargo_place')",
+     )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        "quantity >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        "quantity_unpacked >= 0",
+-    )
+-    op.create_check_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        "quantity_packed >= 0",
+-    )
++    # Эти проверки намеренно не создаём: минус в остатке — законный след
++    # подтверждённой доставки FBS, и на бою уже есть 115 таких строк.
+     op.create_index(
+         "uq_inventory_balance_loc_product_container",
+         "inventory_balances",
+@@ -236,21 +223,6 @@
+     )
+     op.drop_index(
+         "uq_inventory_balance_loc_product_container", table_name="inventory_balances"
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_packed_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_unpacked_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+-    )
+-    op.drop_constraint(
+-        "ck_inventory_balance_quantity_nonnegative",
+-        "inventory_balances",
+-        type_="check",
+     )
+     op.drop_constraint(
+         "ck_inventory_balance_container_kind",
+diff --git a/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..66b50a8f623e03c2ec68c3c91f52c4a8f7d328c3
+--- /dev/null
++++ b/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md
+@@ -0,0 +1,46 @@
++# Итог: миграция 0130 не запрещает законный минус FBS
++
++В миграции `20260828_0130_warehouse_structure_wave1.py` удалены три операции
++создания ограничений, запрещавших отрицательные значения `quantity`,
++`quantity_unpacked` и `quantity_packed` в `inventory_balances`. Из
++`downgrade()` удалены соответствующие операции снятия этих ограничений.
++
++Рядом с оставшимися ограничениями структуры контейнера добавлен комментарий:
++минус в остатке является законным следом подтверждённой доставки FBS, а на
++боевой базе уже есть 115 таких строк. Поэтому обновление базы больше не должно
++останавливаться на существующих отрицательных остатках при прохождении ревизии
++`20260828_0130`.
++
++Миграция `20260828_0210_inventory_balance_allow_negative.py` проверена отдельно.
++Изменять её не потребовалось: в `upgrade()` все три ограничения снимаются через
++`ALTER TABLE inventory_balances DROP CONSTRAINT IF EXISTS`, поэтому их отсутствие
++после исправленной `0130` безопасно.
++
++Проверки на текущем worktree:
++
++- `ruff check .` — прошёл;
++- `mypy .` — прошёл, проверено 390 исходных файлов;
++- `python3 -m pytest tests/test_warehouse_structure_wave1.py -q` — прошёл:
++  14 тестов, включая запрет обычного списания ниже нуля и разрешённый минус при
++  подтверждённой доставке FBS;
++- `python3 -m pytest tests/test_inventory_service_reporting_dimensions.py -q`
++  — прошёл: 1 тест;
++- `python3 -m alembic heads` — вернул ровно одну голову:
++  `20260829_0241 (head)`;
++- `git diff --check` — прошёл.
++
++Буквально указанную команду выполнить нельзя по двум проверенным причинам:
++команды `python` в окружении нет, а файла `tests/test_inventory_service.py` нет
++ни в рабочем дереве, ни в доступной истории этого пути. Поэтому те же проверки
++запущены через `python3`; основной адресный файл
++`test_warehouse_structure_wave1.py` выполнен полностью, а дополнительно запущен
++существующий тестовый файл сервиса остатков
++`test_inventory_service_reporting_dimensions.py`.
++
++Полный `pytest` и проверки фронтенда не запускались по прямому ограничению
++владельца.
++
++Изменения сохранены в локальной ветке `codex/fix-migr-check-20260829` отдельным
++коммитом. Публикация ветки в `origin` не состоялась: окружение вернуло
++`Could not resolve host: github.com`, поэтому результат пока не доступен в
++удалённом репозитории.
+
+tokens used
+73 152
+Локально реализовано и закоммичено, но не опубликовано.
+
+В [миграции 0130](/Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr/backend/alembic/versions/20260828_0130_warehouse_structure_wave1.py:194) удалены три опасных `CHECK` из `upgrade()` и соответствующие удаления из `downgrade()`. Добавлен русский комментарий про 115 законных отрицательных остатков FBS.
+
+[Миграция 0210](/Users/deniscivkunov/Projects/WMS/.worktrees/fix-migr/backend/alembic/versions/20260828_0210_inventory_balance_allow_negative.py:39) уже использует `DROP CONSTRAINT IF EXISTS`, поэтому изменений не потребовала.
+
+Проверки:
+
+- `ruff check .` — успешно;
+- `mypy .` — успешно, 390 файлов;
+- `test_warehouse_structure_wave1.py` — 14 тестов;
+- существующий `test_inventory_service_reporting_dimensions.py` — 1 тест;
+- Alembic — ровно одна голова: `20260829_0241`;
+- `git diff --check` — успешно.
+
+Указанного `tests/test_inventory_service.py` в репозитории и истории пути нет, а команда `python` отсутствует; проверки выполнены через `python3`. Это отражено в [ITOG-migr-check.md](/Users/deniscivkunkunov/Projects/WMS/.worktrees/fix-migr/tasks/_zhurnal/codex-briefs/ITOG-migr-check.md:1).
+
+Коммит: `a24917352a9c6926b2613922f9e89729744ee757`  
+Ветка: `codex/fix-migr-check-20260829`
+
+Push не состоялся: окружение не смогло разрешить `github.com`. Чужой `ZADANIE.md` не изменён и не включён в коммит.
+
+

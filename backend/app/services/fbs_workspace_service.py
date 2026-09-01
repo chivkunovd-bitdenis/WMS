@@ -390,6 +390,13 @@ def _compute_stage(
         return "composition"
     if progress.total == 0:
         return "composition"
+    if getattr(supply, "marketplace", None) == "wb" and (
+        progress.picked < progress.total
+        or progress.packed < progress.total
+        or progress.metadata_ready < progress.total
+        or supply.status == FBS_SUPPLY_STATUS_ASSEMBLING
+    ):
+        return "handoff_prep"
     if progress.picked < progress.total:
         return "picking"
     if progress.packed < progress.total:

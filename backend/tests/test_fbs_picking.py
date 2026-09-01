@@ -309,9 +309,10 @@ async def test_fbs_pick_scan_location_product_earliest_deadline(
     assert wrong_prod.json()["detail"]["code"] == "wrong_product"
 
 
-# TC-08
+# TC-08 — two concurrent requests may target the same earliest order, but only
+# one active allocation may be stored for that order.
 @pytest.mark.asyncio
-async def test_fbs_pick_concurrent_scan_stock_one_one_success(
+async def test_fbs_pick_concurrent_same_order_allocation_one_success(
     async_client: AsyncClient,
 ) -> None:
     headers, suffix, tenant_id = await _register_ff_admin(async_client)
@@ -498,8 +499,8 @@ async def test_fbs_pick_sorting_last_unit_is_atomic(
     assert int(sorting_quantity or 0) == 1
 
 
-# TC-NEW-FBS-PICK-STOCK-003 — a unit transferred into sorting for one supply
-# cannot be picked from sorting for another supply.
+# TC-NEW-FBS-PICK-STOCK-003 — allocating a source unit for one supply must not
+# synthesize stock in sorting for another supply.
 @pytest.mark.asyncio
 async def test_fbs_pick_sorting_excludes_unit_assigned_to_other_supply(
     async_client: AsyncClient,
@@ -600,9 +601,9 @@ async def test_fbs_pick_refresh_keeps_progress(async_client: AsyncClient) -> Non
     assert after["picked"] == 1
 
 
-# TC-09
+# TC-09 — WB pick and undo are allocation facts, not inventory movements.
 @pytest.mark.asyncio
-async def test_fbs_pick_undo_before_pack_returns_to_source(async_client: AsyncClient) -> None:
+async def test_fbs_pick_and_undo_do_not_move_stock(async_client: AsyncClient) -> None:
     headers, suffix, tenant_id = await _register_ff_admin(async_client)
     seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
         async_client, headers, suffix
@@ -636,6 +637,13 @@ async def test_fbs_pick_undo_before_pack_returns_to_source(async_client: AsyncCl
 
     async with SessionLocal() as session:
         sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+        source_bal = await session.scalar(
+            select(InventoryBalance.quantity_unpacked).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+                InventoryBalance.storage_location_id == location_id,
+            )
+        )
         sorting_bal = await session.scalar(
             select(InventoryBalance.quantity_unpacked).where(
                 InventoryBalance.tenant_id == tenant_id,
@@ -643,7 +651,14 @@ async def test_fbs_pick_undo_before_pack_returns_to_source(async_client: AsyncCl
                 InventoryBalance.storage_location_id == sorting.id,
             )
         )
-        assert int(sorting_bal or 0) == 1
+        stored_pick = await session.scalar(
+            select(FbsOrderPick).where(FbsOrderPick.fbs_order_id == order_ids[0])
+        )
+        assert stored_pick is not None
+        assert stored_pick.source_storage_location_id == location_id
+        assert stored_pick.inventory_movement_id is None
+        assert int(source_bal or 0) == 1
+        assert int(sorting_bal or 0) == 0
 
     undo = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/pick/{order_ids[0]}/undo",
@@ -670,6 +685,11 @@ async def test_fbs_pick_undo_before_pack_returns_to_source(async_client: AsyncCl
                 InventoryBalance.storage_location_id == sorting.id,
             )
         )
+        stored_pick = await session.scalar(
+            select(FbsOrderPick).where(FbsOrderPick.fbs_order_id == order_ids[0])
+        )
+        assert stored_pick is not None
+        assert stored_pick.undone_at is not None
         assert int(source_bal or 0) == 1
         assert int(sorting_bal or 0) == 0
 
@@ -752,7 +772,7 @@ async def test_ozon_multi_product_quantity_partial_pick_manual_finish_and_idempo
 
 
 @pytest.mark.asyncio
-async def test_fbs_pick_undo_blocked_after_pack(async_client: AsyncClient) -> None:
+async def test_fbs_pick_undo_allowed_after_pack(async_client: AsyncClient) -> None:
     headers, suffix, tenant_id = await _register_ff_admin(async_client)
     seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
         async_client, headers, suffix
@@ -788,13 +808,26 @@ async def test_fbs_pick_undo_blocked_after_pack(async_client: AsyncClient) -> No
         order.pack_status = PACK_STATUS_PACKED
         await session.commit()
 
-    blocked = await async_client.post(
+    undo = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/pick/{order_ids[0]}/undo",
         headers=headers,
         json={"idempotency_key": str(uuid.uuid4())},
     )
-    assert blocked.status_code == 409
-    assert blocked.json()["detail"]["code"] == "pick_undo_not_allowed"
+    assert undo.status_code == 200, undo.text
+    assert undo.json()["progress"]["picked"] == 0
+    order_row = next(o for o in undo.json()["orders"] if o["id"] == str(order_ids[0]))
+    assert order_row["pick"]["status"] == "pending"
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_ids[0])
+        pick = await session.scalar(
+            select(FbsOrderPick).where(FbsOrderPick.fbs_order_id == order_ids[0])
+        )
+        assert order is not None
+        assert order.pack_status == PACK_STATUS_PACKED
+        assert pick is not None
+        assert pick.undone_at is not None
+        assert pick.inventory_movement_id is None
 
 
 # TC-01 / cross-seller stock isolation

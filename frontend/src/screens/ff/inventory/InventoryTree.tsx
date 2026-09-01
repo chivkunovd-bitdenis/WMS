@@ -3,15 +3,20 @@ import ExpandMore from '@mui/icons-material/ExpandMore'
 import GridViewOutlined from '@mui/icons-material/GridViewOutlined'
 import Inventory2Outlined from '@mui/icons-material/Inventory2Outlined'
 import LayersOutlined from '@mui/icons-material/LayersOutlined'
+import PrintOutlined from '@mui/icons-material/PrintOutlined'
 import WidgetsOutlined from '@mui/icons-material/WidgetsOutlined'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { DataTable, IconAction, NumberInput, QtyCell, StatusChip, TextCell } from '../../../ui-kit'
 import type { Column } from '../../../ui-kit'
 import { ProductPhotoThumb } from '../../../components/ProductPhotoThumb'
+import { BoxLabelPrintDialog } from '../../../components/BoxLabelPrintDialog'
+import { printBarcodeLabel } from '../../../utils/printBarcodeLabel'
+import { renderBarcodeDataUrl } from '../../../utils/renderBarcodeDataUrl'
 import type { InvRow } from './InventoryRows'
 
 const INDENT_STEP = 24
 const ROW_HEIGHT = 28
+const TABLE_MIN_WIDTH = 1600
 
 const KIND_ICON: Record<InvRow['kind'], ReactNode> = {
   cell: <GridViewOutlined fontSize="small" color="primary" />,
@@ -29,6 +34,13 @@ function titleWeight(kind: InvRow['kind']) {
 
 function titleVariant(kind: InvRow['kind']) {
   return kind === 'cell' ? ('subtitle1' as const) : ('body2' as const)
+}
+
+function printableTitle(row: InvRow): string {
+  if (row.kind === 'cell') return `Печать ШК ячейки ${row.title}`
+  if (row.kind === 'pallet') return `Печать ШК палеты ${row.title}`
+  if (row.kind === 'box') return `Печать ШК короба ${row.title}`
+  return `Печать ШК грузоместа ${row.title}`
 }
 
 /** Строка требует внимания: посчитали и не сошлось.
@@ -103,12 +115,22 @@ type Props = {
   rows: InvRow[]
   loading: boolean
   readOnly: boolean
+  highlightedKey?: string | null
   empty?: { title: string; hint?: string; action?: ReactNode }
   onToggle: (row: InvRow) => void
   onActual: (row: InvRow, value: number | null) => void
 }
 
-export function InventoryTree({ rows, loading, readOnly, empty, onToggle, onActual }: Props) {
+export function InventoryTree({
+  rows,
+  loading,
+  readOnly,
+  highlightedKey,
+  empty,
+  onToggle,
+  onActual,
+}: Props) {
+  const [printRow, setPrintRow] = useState<InvRow | null>(null)
   const columns: Column<InvRow>[] = [
     {
       key: 'content',
@@ -143,6 +165,15 @@ export function InventoryTree({ rows, loading, readOnly, empty, onToggle, onActu
               KIND_ICON[row.kind]
             )}
           </Box>
+          {row.kind !== 'product' && row.barcode ? (
+            <IconAction
+              title={printableTitle(row)}
+              onClick={() => setPrintRow(row)}
+              testId={`inv-print-${row.key}`}
+            >
+              <PrintOutlined fontSize="small" />
+            </IconAction>
+          ) : null}
           <Typography
             variant={titleVariant(row.kind)}
             sx={{
@@ -171,6 +202,45 @@ export function InventoryTree({ rows, loading, readOnly, empty, onToggle, onActu
       header: 'Селлер',
       width: 170,
       render: (row) => (row.seller ? <TextCell value={row.seller} width={158} /> : null),
+    },
+    {
+      key: 'wb-vendor-code',
+      header: 'Артикул продавца',
+      width: 220,
+      render: (row) =>
+        row.kind === 'product' && row.wbVendorCode ? (
+          <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+            {row.wbVendorCode}
+          </Typography>
+        ) : null,
+    },
+    {
+      key: 'wb-barcode',
+      header: 'ШК',
+      width: 200,
+      render: (row) =>
+        row.kind === 'product' && row.wbBarcode ? (
+          <Typography
+            variant="body2"
+            sx={{
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {row.wbBarcode}
+          </Typography>
+        ) : null,
+    },
+    {
+      key: 'wb-size',
+      header: 'Размер',
+      width: 100,
+      render: (row) =>
+        row.kind === 'product' && row.wbSize ? (
+          <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+            {row.wbSize}
+          </Typography>
+        ) : null,
     },
     {
       key: 'progress',
@@ -231,16 +301,43 @@ export function InventoryTree({ rows, loading, readOnly, empty, onToggle, onActu
   ]
 
   return (
-    <DataTable
-      testId="inventory-tree"
-      columns={columns}
-      rows={rows}
-      getRowKey={(row) => row.key}
-      loading={loading}
-      empty={empty}
-      fixedLayout
-      hasDiscrepancy={hasDiscrepancy}
-      isComplete={isComplete}
-    />
+    <>
+      <Box sx={{ width: '100%', maxWidth: '100%', overflowX: 'auto' }}>
+        <Box sx={{ minWidth: TABLE_MIN_WIDTH }}>
+          <DataTable
+            testId="inventory-tree"
+            columns={columns}
+            rows={rows}
+            getRowKey={(row) => row.key}
+            loading={loading}
+            empty={empty}
+            fixedLayout
+            highlightedKey={highlightedKey}
+            hasDiscrepancy={hasDiscrepancy}
+            isComplete={isComplete}
+          />
+        </Box>
+      </Box>
+      <BoxLabelPrintDialog
+        open={printRow !== null}
+        title={printRow ? printableTitle(printRow) : ''}
+        description="Выберите размер этикетки. Напечатанное не отменить."
+        scope="label"
+        onClose={() => setPrintRow(null)}
+        onConfirm={(size) => {
+          const row = printRow
+          setPrintRow(null)
+          if (!row?.barcode) return
+          printBarcodeLabel({
+            title: row.title,
+            barcode: row.barcode,
+            barcodeDataUrl: renderBarcodeDataUrl(row.barcode, { variant: 'storageCell' }),
+            labelSize: size,
+            layout: 'storageCell',
+          })
+        }}
+        testId="inventory-object-print-dialog"
+      />
+    </>
   )
 }

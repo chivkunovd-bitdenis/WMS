@@ -19,7 +19,10 @@ from app.models.product import Product
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import WildberriesClientError
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
-from tests.test_fbs_shipment_warehouse_sc import _deliver_with_preflight
+from tests.test_fbs_shipment_warehouse_sc import (
+    _deliver_with_preflight,
+    _mock_actual_composition_from_local_links,
+)
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
@@ -145,6 +148,7 @@ async def _create_supply(
 @pytest.fixture
 def enable_wb_marketplace_supplies_mock(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+    _mock_actual_composition_from_local_links(monkeypatch)
 
 
 # TC-NEW-FBS-SUPPLY-001 — create supply draft + wb_supply_id; WB error → no orphan row
@@ -235,7 +239,7 @@ async def test_fbs_supply_add_order_ok(
 
 
 @pytest.mark.asyncio
-async def test_fbs_supply_deliver_blocked_from_in_supply(
+async def test_fbs_supply_deliver_in_supply_still_requires_boxes(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
@@ -254,6 +258,21 @@ async def test_fbs_supply_deliver_blocked_from_in_supply(
     order_id = await _create_order(
         tenant_id, seller_uuid, warehouse_uuid, order_id=810003
     )
+    async with SessionLocal() as session:
+        product = Product(
+            tenant_id=tenant_id,
+            seller_id=seller_uuid,
+            name="Optional pack product",
+            sku_code=f"OPTIONAL-{suffix[-8:]}",
+        )
+        session.add(product)
+        await session.flush()
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        order.product_id = product.id
+        order.sticker_status = "ready"
+        order.sticker_file = f"fbs/orders/{order.id}.png"
+        await session.commit()
     supply = await _create_supply(async_client, headers, seller_id, warehouse_id)
 
     add = await async_client.post(
@@ -265,7 +284,7 @@ async def test_fbs_supply_deliver_blocked_from_in_supply(
 
     deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
     assert deliver.status_code == 400
-    assert deliver.json()["detail"]["code"] == "packaging_required"
+    assert deliver.json()["detail"]["code"] == "physical_boxes_required"
 
 
 @pytest.mark.asyncio

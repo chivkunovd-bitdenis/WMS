@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Box,
@@ -10,6 +10,7 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  LinearProgress,
   Paper,
   Stack,
   TextField,
@@ -117,14 +118,55 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
   })
 }
 
-async function fetchAuthorizedImageDataUrl(token: string, url: string): Promise<string> {
+async function fetchAuthorizedImageDataUrl(
+  token: string,
+  url: string,
+  signal?: AbortSignal,
+): Promise<string> {
   const res = await fetch(/^https?:\/\//i.test(url) ? url : apiUrl(url), {
     headers: { Authorization: `Bearer ${token}` },
+    signal,
   })
   if (!res.ok) {
     throw new Error('QR заказа WB не загружен.')
   }
   return blobToDataUrl(await res.blob())
+}
+
+const FBS_TAPE_BUILD_CONCURRENCY = 6
+
+/** Параллельная обработка с ограничением нагрузки и сохранением исходного порядка. */
+export async function mapConcurrentlyInOrder<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  task: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) return []
+  const results = new Array<R>(items.length)
+  let cursor = 0
+  const worker = async () => {
+    while (true) {
+      const index = cursor
+      cursor += 1
+      if (index >= items.length) return
+      results[index] = await task(items[index] as T, index)
+    }
+  }
+  await Promise.all(
+    Array.from(
+      { length: Math.min(Math.max(1, Math.floor(concurrency)), items.length) },
+      worker,
+    ),
+  )
+  return results
+}
+
+function throwIfAborted(signal: AbortSignal): void {
+  if (signal.aborted) throw new DOMException('Сборка отменена.', 'AbortError')
+}
+
+function isAbortError(cause: unknown): boolean {
+  return cause instanceof Error && cause.name === 'AbortError'
 }
 
 function labelCopiesFromLayout(layout: PrintLayout): number {
@@ -246,6 +288,11 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [sepCzQty, setSepCzQty] = useState(2)
   const [sepWbQty, setSepWbQty] = useState(1)
   const [sepCzDone, setSepCzDone] = useState(false)
+  const [fbsTapeBuildProgress, setFbsTapeBuildProgress] = useState<{
+    completed: number
+    total: number
+  } | null>(null)
+  const fbsTapeBuildAbortRef = useRef<AbortController | null>(null)
 
   const requiresHonestSign = ctx?.requiresHonestSign ?? true
   const fbsTapeMode = Boolean(ctx?.fbsTape)
@@ -326,6 +373,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   }, [open, ctx])
 
   useEffect(() => {
+    if (open) return
+    fbsTapeBuildAbortRef.current?.abort()
+    fbsTapeBuildAbortRef.current = null
+    setFbsTapeBuildProgress(null)
+  }, [open])
+
+  useEffect(() => {
     if (!open || !ctx?.token || !requiresHonestSign || effectiveReprint || fbsTapeMode) {
       setSeparateEnabledFromProfile(null)
       setSeparateSettingLoading(false)
@@ -371,6 +425,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       return
     }
     setError(null)
+    setFbsTapeBuildProgress(null)
     setAllowPartial(false)
     setSeparateModeChoice(null)
     // Этикетка ШК ВБ клеится на единицу товара: разумное первое значение — сколько
@@ -701,72 +756,138 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       return false
     }
     const orderById = new Map(ctx.fbsTape.orders.map((order) => [order.orderId, order]))
-    const sections: string[] = []
-    const qrAssetsToConfirm: FbsTapeAsset[] = []
     const fallbackLabelCopies = resolveFbsFallbackLabelCopies(
       fbsHonestSignOrders.length > 0,
       printLayout,
       fbsLabelCopiesPerOrder,
       printLayout.units.length === 0 && ctx.fbsTape.includeOrderQr,
     )
-    for (const [orderIndex, printedOrder] of result.orders.entries()) {
-      const order = orderById.get(printedOrder.order_id)
-      if (!order) continue
-      if (ctx.fbsTape.includeOrderQr) {
-        const asset = printedOrder.qr_asset
-        if (!asset?.preview_url) {
-          setError(`QR заказа WB №${printedOrder.wb_order_id} не получен.`)
-          return false
-        }
-        const qrDataUrl = await fetchAuthorizedImageDataUrl(ctx.token, asset.preview_url)
-        sections.push(buildWbOrderQrLabelHtml(qrDataUrl, orderIndex + 1))
-        if (!asset.applied_at) {
-          qrAssetsToConfirm.push(asset)
-        }
-      }
-      if (printedOrder.requires_honest_sign) {
-        if (printedOrder.printed_codes.length < 1) {
-          continue
-        }
-        const units: MarkingTapeUnitInput[] = printedOrder.printed_codes.map((code) => ({
-          cis: code.cis_code,
-          codeId: code.id,
-          hasLabelArtifact: code.has_label_artifact,
-          productLabel: order.productLabel,
-        }))
-        sections.push(
-          ...(await buildMarkingTapeSections(units, printLayout, order.productLabel, {
-            authToken: ctx.token,
-            labelSize: size,
-          })),
-        )
-      } else if (fallbackLabelCopies > 0) {
-        sections.push(...buildProductLabelSections(order.productLabel, fallbackLabelCopies, size))
-      }
+    const controller = new AbortController()
+    fbsTapeBuildAbortRef.current?.abort()
+    fbsTapeBuildAbortRef.current = controller
+    setFbsTapeBuildProgress({ completed: 0, total: result.orders.length })
+
+    type BuiltOrder = {
+      sections: string[]
+      qrAssetToConfirm: FbsTapeAsset | null
+      error: { wbOrderId: number; message: string } | null
     }
-    if (sections.length < 1) {
-      setError('Нет этикеток для печати.')
-      return false
-    }
-    await printTapeSections(sections, size)
-    for (const asset of qrAssetsToConfirm) {
-      await ctx.fbsTape.confirmQrApplied(asset)
-    }
-    ctx.onPrinted()
-    // L8 (21.08.2026): заказы, по которым сервер не смог собрать стикер, раньше молча
-    // выпадали из ленты — сообщение показывалось только когда не напечаталось вообще
-    // ничего. Оператор получал ленту короче листа подбора и не знал об этом. Теперь
-    // окно остаётся открытым и прямо называет, каких заказов в ленте нет.
-    if (result.order_errors.length > 0) {
-      const missing = result.order_errors
-      const numbers = missing.slice(0, 12).map((item) => item.wb_order_id).join(', ')
-      const tail = missing.length > 12 ? ` и ещё ${missing.length - 12}` : ''
-      setError(
-        `Напечатано заказов: ${result.orders.length} из ${result.orders.length + missing.length}. ` +
-        `Не попали в ленту: ${numbers}${tail}. Причина по первому: ${missing[0].message}. ` +
-        'Повторите печать по этим заказам.',
+    let builtOrders: BuiltOrder[]
+    try {
+      builtOrders = await mapConcurrentlyInOrder(
+        result.orders,
+        FBS_TAPE_BUILD_CONCURRENCY,
+        async (printedOrder, orderIndex): Promise<BuiltOrder> => {
+          try {
+            throwIfAborted(controller.signal)
+            const order = orderById.get(printedOrder.order_id)
+            if (!order) {
+              throw new Error('Заказ отсутствует в исходном списке печати.')
+            }
+            const orderSections: string[] = []
+            let qrAssetToConfirm: FbsTapeAsset | null = null
+            if (ctx.fbsTape?.includeOrderQr) {
+              const asset = printedOrder.qr_asset
+              if (!asset?.preview_url) {
+                throw new Error('QR заказа WB не получен.')
+              }
+              const qrDataUrl = await fetchAuthorizedImageDataUrl(
+                ctx.token,
+                asset.preview_url,
+                controller.signal,
+              )
+              orderSections.push(buildWbOrderQrLabelHtml(qrDataUrl, orderIndex + 1))
+              if (!asset.applied_at) {
+                qrAssetToConfirm = asset
+              }
+            }
+            if (printedOrder.requires_honest_sign) {
+              if (printedOrder.printed_codes.length > 0) {
+                const units: MarkingTapeUnitInput[] = printedOrder.printed_codes.map((code) => ({
+                  cis: code.cis_code,
+                  codeId: code.id,
+                  hasLabelArtifact: code.has_label_artifact,
+                  productLabel: order.productLabel,
+                }))
+                orderSections.push(
+                  ...(await buildMarkingTapeSections(units, printLayout, order.productLabel, {
+                    authToken: ctx.token,
+                    labelSize: size,
+                    signal: controller.signal,
+                  })),
+                )
+              }
+            } else if (fallbackLabelCopies > 0) {
+              orderSections.push(
+                ...buildProductLabelSections(order.productLabel, fallbackLabelCopies, size),
+              )
+            }
+            if (orderSections.length === 0) {
+              throw new Error('Для заказа не собрано ни одной этикетки.')
+            }
+            throwIfAborted(controller.signal)
+            return { sections: orderSections, qrAssetToConfirm, error: null }
+          } catch (cause) {
+            if (isAbortError(cause)) throw cause
+            return {
+              sections: [],
+              qrAssetToConfirm: null,
+              error: {
+                wbOrderId: printedOrder.wb_order_id,
+                message: cause instanceof Error ? cause.message : 'Не удалось собрать этикетки.',
+              },
+            }
+          } finally {
+            if (!controller.signal.aborted) {
+              setFbsTapeBuildProgress((current) =>
+                current ? { ...current, completed: current.completed + 1 } : current,
+              )
+            }
+          }
+        },
       )
-      return false
+
+      throwIfAborted(controller.signal)
+      const sections = builtOrders.flatMap((order) => order.sections)
+      const clientErrors = builtOrders.flatMap((order) => (order.error ? [order.error] : []))
+      if (sections.length < 1) {
+        setError(clientErrors[0]?.message ?? 'Нет этикеток для печати.')
+        return false
+      }
+      if (fbsTapeBuildAbortRef.current === controller) {
+        fbsTapeBuildAbortRef.current = null
+        setFbsTapeBuildProgress(null)
+      }
+      await printTapeSections(sections, size)
+      for (const asset of builtOrders.flatMap((order) =>
+        order.qrAssetToConfirm ? [order.qrAssetToConfirm] : [],
+      )) {
+        await ctx.fbsTape.confirmQrApplied(asset)
+      }
+      ctx.onPrinted()
+
+      const allErrors = [
+        ...result.order_errors.map((item) => ({
+          wbOrderId: item.wb_order_id,
+          message: item.message,
+        })),
+        ...clientErrors,
+      ]
+      if (allErrors.length > 0) {
+        const numbers = allErrors.slice(0, 12).map((item) => item.wbOrderId).join(', ')
+        const tail = allErrors.length > 12 ? ` и ещё ${allErrors.length - 12}` : ''
+        setError(
+          `Напечатано заказов: ${result.orders.length - clientErrors.length} из ${result.orders.length + result.order_errors.length}. ` +
+          `Не попали в ленту: ${numbers}${tail}. Причина по первому: ${allErrors[0].message}. ` +
+          'Повторите печать по этим заказам.',
+        )
+        return false
+      }
+    } finally {
+      if (fbsTapeBuildAbortRef.current === controller) {
+        fbsTapeBuildAbortRef.current = null
+        setFbsTapeBuildProgress(null)
+      }
     }
     if (closeAfter) {
       onClose()
@@ -970,7 +1091,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       }
     } catch (e) {
       setError(
-        e instanceof Error
+        isAbortError(e)
+          ? 'Сборка ленты отменена.'
+          : e instanceof Error
           ? e.message
           : requiresHonestSign
             ? 'Не удалось напечатать ЧЗ.'
@@ -1695,6 +1818,22 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 {error}
               </Alert>
             ) : null}
+
+            {fbsTapeBuildProgress ? (
+              <Box data-testid="marking-print-build-progress">
+                <Typography variant="body2" sx={{ mb: 0.75 }}>
+                  Собрано {fbsTapeBuildProgress.completed} из {fbsTapeBuildProgress.total}
+                </Typography>
+                <LinearProgress
+                  variant="determinate"
+                  value={
+                    fbsTapeBuildProgress.total > 0
+                      ? (fbsTapeBuildProgress.completed / fbsTapeBuildProgress.total) * 100
+                      : 0
+                  }
+                />
+              </Box>
+            ) : null}
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -1708,8 +1847,20 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             </Button>
           ) : (
             <>
-              <Button onClick={onClose} disabled={busy}>
-                Отмена
+              <Button
+                onClick={() => {
+                  if (fbsTapeBuildProgress) {
+                    fbsTapeBuildAbortRef.current?.abort()
+                    return
+                  }
+                  onClose()
+                }}
+                disabled={busy && !fbsTapeBuildProgress}
+                data-testid={
+                  fbsTapeBuildProgress ? 'marking-print-cancel-build' : undefined
+                }
+              >
+                {fbsTapeBuildProgress ? 'Отменить сборку' : 'Отмена'}
               </Button>
               <Button
                 variant="contained"

@@ -10,7 +10,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from sqlalchemy import Select, select
@@ -21,6 +21,8 @@ from app.core.settings import settings
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_CANCELLED,
+    FBS_ORDER_STATUS_DEFECT,
+    FBS_ORDER_STATUS_DONE,
     FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_PACKED,
@@ -31,8 +33,6 @@ from app.models.fbs_order import (
     FbsOrder,
     current_order_marking,
 )
-from app.models.fbs_order_pick import FbsOrderPick
-from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_PVZ,
@@ -47,10 +47,12 @@ from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_PENDING,
     WB_OPERATION_STATE_PENDING_CONFIRMATION,
 )
-from app.models.packaging_task import PackagingTaskLine
+from app.models.storage_location import StorageLocation
 from app.services import fbs_marking_service as marking_svc
 from app.services import fbs_packing_box_service as packing_box_svc
 from app.services import fbs_shipment_pvz_service as pvz_svc
+from app.services import fbs_shipment_source_service as source_svc
+from app.services import fbs_supply_composition_service as composition_svc
 from app.services import inventory_service as inventory_svc
 from app.services.fbs_ozon_packaging_service import (
     OzonPackagingError,
@@ -69,6 +71,7 @@ from app.services.fbs_supply_reconcile_service import (
     reconcile_supply_delivered,
     request_hash_for_deliver,
 )
+from app.services.inventory_container_service import ContainerKind
 from app.services.marketplace_account_service import (
     MarketplaceAccountError,
     MarketplaceAccountService,
@@ -106,13 +109,17 @@ from app.services.wildberries_errors import (
 )
 from app.services.wildberries_fbs_client import split_marketplace_order_id_batches
 
-_DELIVER_READY_ORDER_STATUSES = frozenset({FBS_ORDER_STATUS_PACKED})
 _DELIVER_READY_STICKER_STATUSES = frozenset(
     {STICKER_STATUS_READY, STICKER_STATUS_PRINT_OPENED, STICKER_STATUS_APPLIED}
 )
+_TERMINAL_ORDER_STATUSES = frozenset(
+    {FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DONE, FBS_ORDER_STATUS_DEFECT}
+)
+_DELIVER_READY_ORDER_STATUSES = frozenset({FBS_ORDER_STATUS_PACKED})
 _PACKAGING_PENDING_ORDER_STATUSES = frozenset(
     {FBS_ORDER_STATUS_IN_SUPPLY, FBS_ORDER_STATUS_ASSEMBLING}
 )
+_ADVISORY_CHECK_CODES = frozenset({"negative_stock"})
 _DELIVER_ALLOWED_DELIVERY_TYPES = frozenset({FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_DELIVERY_TYPE_PVZ})
 _DELIVER_BLOCKED_SUPPLY_STATUSES = frozenset(
     {
@@ -403,6 +410,8 @@ def _compute_preflight_version(
     has_physical_boxes: bool,
     without_distribution: bool,
     unassigned_packed_order_ids: frozenset[uuid.UUID],
+    composition_fingerprint: str = "",
+    source_plan: source_svc.FbsShipmentSourcePlan | None = None,
 ) -> str:
     parts = [
         str(supply.id),
@@ -411,6 +420,7 @@ def _compute_preflight_version(
         str(cargo_qr_ready),
         str(has_physical_boxes),
         str(without_distribution),
+        composition_fingerprint,
         *(str(order_id) for order_id in sorted(unassigned_packed_order_ids)),
     ]
     for order in sorted(orders, key=lambda item: item.id):
@@ -423,6 +433,25 @@ def _compute_preflight_version(
         if supply.marketplace == "wb":
             order_parts.extend([order.sticker_status, order.sticker_file or ""])
         parts.extend(order_parts)
+    for item in sorted(
+        source_plan.resolutions if source_plan is not None else (),
+        key=lambda row: (str(row.fbs_order_id), str(row.product_id)),
+    ):
+        parts.extend(
+            [
+                str(item.fbs_order_id),
+                str(item.product_id),
+                str(item.quantity),
+                str(item.source_warehouse_id),
+                str(item.storage_location_id),
+                item.container_kind or "",
+                str(item.container_id or ""),
+                item.source_mode,
+                str(item.positive_quantity),
+                str(item.shortage_quantity),
+                str(item.negative_quantity),
+            ]
+        )
     raw = "|".join(parts).encode()
     return hashlib.sha256(raw).hexdigest()
 
@@ -436,6 +465,8 @@ def _build_delivery_checks(
     has_physical_boxes: bool = True,
     without_distribution: bool = False,
     unassigned_packed_order_ids: frozenset[uuid.UUID] = frozenset(),
+    discrepancies: tuple[composition_svc.SupplyCompositionDiscrepancy, ...] = (),
+    source_plan: source_svc.FbsShipmentSourcePlan | None = None,
 ) -> list[DeliveryCheck]:
     # «Сдать без Честного знака» снимает НАШЕ требование маркировки по поставке.
     # Требование самого Wildberries, записанное в required_meta_json заказа, этим
@@ -451,20 +482,12 @@ def _build_delivery_checks(
                 ok=False,
             )
         )
-    elif supply.status != FBS_SUPPLY_STATUS_PACKED:
+    elif supply.marketplace == "ozon" and supply.status != FBS_SUPPLY_STATUS_PACKED:
         checks.append(
             DeliveryCheck(
                 code="packaging_required",
                 message="Упаковка поставки не завершена.",
                 ok=False,
-            )
-        )
-    else:
-        checks.append(
-            DeliveryCheck(
-                code="supply_packed",
-                message="Поставка упакована.",
-                ok=True,
             )
         )
 
@@ -477,17 +500,31 @@ def _build_delivery_checks(
             )
         )
 
-    for order in orders:
-        if order.status == FBS_ORDER_STATUS_CANCELLED:
-            checks.append(
-                DeliveryCheck(
-                    code="order_cancelled",
-                    message="Заказ отменён на WB.",
-                    ok=False,
-                    order_id=order.id,
-                )
+    for discrepancy in discrepancies:
+        ignored = discrepancy.code == "local_order_not_in_wb"
+        checks.append(
+            DeliveryCheck(
+                code=(
+                    "local_order_not_in_wb_ignored"
+                    if ignored
+                    else "wb_supply_composition_discrepancy"
+                ),
+                message=(
+                    f"Заказ WB {discrepancy.wb_order_id} отсутствует в фактическом составе "
+                    "и не будет списан."
+                    if ignored
+                    else f"Заказ WB {discrepancy.wb_order_id}: {discrepancy.code}."
+                ),
+                ok=ignored,
+                order_id=discrepancy.local_order_id,
             )
-        elif order.status in _PACKAGING_PENDING_ORDER_STATUSES:
+        )
+
+    for order in orders:
+        if supply.marketplace == "ozon" and (
+            order.status in _PACKAGING_PENDING_ORDER_STATUSES
+            or order.status not in _DELIVER_READY_ORDER_STATUSES
+        ):
             checks.append(
                 DeliveryCheck(
                     code="packaging_required",
@@ -496,21 +533,12 @@ def _build_delivery_checks(
                     order_id=order.id,
                 )
             )
-        elif order.status not in _DELIVER_READY_ORDER_STATUSES:
+        if order.status in _TERMINAL_ORDER_STATUSES:
             checks.append(
                 DeliveryCheck(
-                    code="orders_not_ready",
-                    message="Заказ не готов к передаче.",
+                    code="order_terminal",
+                    message="Заказ из фактического состава уже отменён или закрыт.",
                     ok=False,
-                    order_id=order.id,
-                )
-            )
-        else:
-            checks.append(
-                DeliveryCheck(
-                    code="order_packed",
-                    message="Заказ упакован.",
-                    ok=True,
                     order_id=order.id,
                 )
             )
@@ -625,6 +653,23 @@ def _build_delivery_checks(
                 )
             )
 
+    if source_plan is not None:
+        wb_ids = {order.id: int(order.wb_order_id) for order in orders}
+        for resolution in source_plan.resolutions:
+            if resolution.shortage_quantity:
+                checks.append(
+                    DeliveryCheck(
+                        code="negative_stock",
+                        message=(
+                            f"Заказ WB {wb_ids.get(resolution.fbs_order_id, '—')}: "
+                            f"не хватает {resolution.shortage_quantity} шт.; после "
+                            "подтверждения остаток будет списан в минус."
+                        ),
+                        ok=False,
+                        order_id=resolution.fbs_order_id,
+                    )
+                )
+
     return checks
 
 
@@ -642,8 +687,93 @@ def _checks_to_payload(checks: list[DeliveryCheck]) -> list[dict[str, Any]]:
 
 def _validate_checks_pass(checks: list[DeliveryCheck]) -> None:
     for check in checks:
-        if not check.ok:
+        if not check.ok and check.code not in _ADVISORY_CHECK_CODES:
+            if check.code in {
+                "wb_supply_composition_discrepancy",
+                "order_terminal",
+                "fbs_shipment_source_missing",
+            }:
+                raise FbsShipmentError(
+                    check.code,
+                    context={"order_id": str(check.order_id) if check.order_id else None},
+                    http_status=409,
+                )
             raise FbsShipmentError(check.code)
+
+
+def _checks_allow_delivery(checks: list[DeliveryCheck]) -> bool:
+    return all(check.ok or check.code in _ADVISORY_CHECK_CODES for check in checks)
+
+
+async def _actual_wb_orders_and_source_plan(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    http_client: httpx.AsyncClient,
+    token: str,
+    *,
+    actor_user_id: uuid.UUID | None,
+) -> tuple[
+    list[FbsOrder],
+    composition_svc.SupplyCompositionResult,
+    source_svc.FbsShipmentSourcePlan,
+]:
+    try:
+        composition = await composition_svc.reconcile_actual_wb_supply_composition(
+            session,
+            tenant_id,
+            supply.id,
+            http_client=http_client,
+            api_token=token,
+        )
+    except WildberriesClientError as exc:
+        raise _shipment_error_from_wb(
+            exc,
+            tenant_id=tenant_id,
+            seller_id=supply.seller_id,
+            local_entity_id=supply.id,
+            wb_supply_id=supply.wb_supply_id,
+            event="fbs shipment WB composition read failed",
+            retryable=True,
+            http_status=502,
+        ) from exc
+    except composition_svc.FbsSupplyCompositionError as exc:
+        raise FbsShipmentError(exc.code, http_status=409) from exc
+    await _sync_supply_orders_from_wb(
+        session,
+        tenant_id,
+        supply,
+        http_client,
+        token,
+        actor_user_id=actor_user_id,
+    )
+    orders = [
+        order
+        for order in composition.active_orders
+        if order.status not in _TERMINAL_ORDER_STATUSES
+    ]
+    missing_product = next((order for order in orders if order.product_id is None), None)
+    if missing_product is not None:
+        raise FbsShipmentError(
+            "fbs_shipment_product_missing",
+            context={"order_id": str(missing_product.id)},
+            http_status=409,
+        )
+    plan = await source_svc.plan_fbs_shipment_sources(
+        session,
+        tenant_id=tenant_id,
+        supply_warehouse_id=supply.warehouse_id,
+        requests=[
+            source_svc.FbsShipmentSourceRequest(
+                fbs_order_id=order.id,
+                product_id=order.product_id,
+                quantity=1,
+            )
+            for order in orders
+            if order.product_id is not None
+        ],
+    )
+    return orders, composition, plan
 
 
 async def _sync_and_validate_deliver(
@@ -655,14 +785,9 @@ async def _sync_and_validate_deliver(
     *,
     confirmed_preflight_version: str | None = None,
     actor_user_id: uuid.UUID | None,
-) -> tuple[list[FbsOrder], bool]:
-    orders = await _sync_supply_orders_from_wb(
-        session,
-        tenant_id,
-        supply,
-        http_client,
-        token,
-        actor_user_id=actor_user_id,
+) -> tuple[list[FbsOrder], bool, source_svc.FbsShipmentSourcePlan]:
+    orders, composition, source_plan = await _actual_wb_orders_and_source_plan(
+        session, tenant_id, supply, http_client, token, actor_user_id=actor_user_id
     )
     cargo_qr_ready = True
     if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ:
@@ -678,6 +803,8 @@ async def _sync_and_validate_deliver(
             has_physical_boxes=box_readiness.has_physical_boxes,
             without_distribution=box_readiness.without_distribution,
             unassigned_packed_order_ids=box_readiness.unassigned_packed_order_ids,
+            composition_fingerprint=composition.wb_order_fingerprint,
+            source_plan=source_plan,
         )
         if current_version != confirmed_preflight_version:
             raise FbsShipmentError(
@@ -696,9 +823,28 @@ async def _sync_and_validate_deliver(
         has_physical_boxes=box_readiness.has_physical_boxes,
         without_distribution=box_readiness.without_distribution,
         unassigned_packed_order_ids=box_readiness.unassigned_packed_order_ids,
+        discrepancies=composition.discrepancies,
+        source_plan=source_plan,
     )
     _validate_checks_pass(checks)
-    return orders, cargo_qr_ready
+    current_version = _compute_preflight_version(
+        supply,
+        orders,
+        cargo_qr_ready=cargo_qr_ready,
+        has_physical_boxes=box_readiness.has_physical_boxes,
+        without_distribution=box_readiness.without_distribution,
+        unassigned_packed_order_ids=box_readiness.unassigned_packed_order_ids,
+        composition_fingerprint=composition.wb_order_fingerprint,
+        source_plan=source_plan,
+    )
+    if source_plan.has_shortage and confirmed_preflight_version != current_version:
+        raise FbsShipmentError(
+            "negative_stock_confirmation_required",
+            message="Подтвердите актуальный план списания в минус.",
+            context={"current_version": current_version},
+            http_status=409,
+        )
+    return orders, cargo_qr_ready, source_plan
 
 
 def _meta_validation_context(exc: WildberriesBusinessError) -> list[dict[str, Any]]:
@@ -754,13 +900,8 @@ async def preflight_delivery(
         )
 
     token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
-    orders = await _sync_supply_orders_from_wb(
-        session,
-        tenant_id,
-        supply,
-        http_client,
-        token,
-        actor_user_id=actor_user_id,
+    orders, composition, source_plan = await _actual_wb_orders_and_source_plan(
+        session, tenant_id, supply, http_client, token, actor_user_id=actor_user_id
     )
     cargo_qr_ready = True
     if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ:
@@ -776,6 +917,8 @@ async def preflight_delivery(
         has_physical_boxes=box_readiness.has_physical_boxes,
         without_distribution=box_readiness.without_distribution,
         unassigned_packed_order_ids=box_readiness.unassigned_packed_order_ids,
+        discrepancies=composition.discrepancies,
+        source_plan=source_plan,
     )
     checked_at = datetime.now(UTC)
     version = _compute_preflight_version(
@@ -785,8 +928,10 @@ async def preflight_delivery(
         has_physical_boxes=box_readiness.has_physical_boxes,
         without_distribution=box_readiness.without_distribution,
         unassigned_packed_order_ids=box_readiness.unassigned_packed_order_ids,
+        composition_fingerprint=composition.wb_order_fingerprint,
+        source_plan=source_plan,
     )
-    can_deliver = all(check.ok for check in checks)
+    can_deliver = _checks_allow_delivery(checks)
     return DeliveryPreflightResult(
         can_deliver=can_deliver,
         version=version,
@@ -809,67 +954,24 @@ async def _apply_local_delivered(
     supply: FbsSupply,
     orders: list[FbsOrder],
     actor_user_id: uuid.UUID | None,
+    source_plan: source_svc.FbsShipmentSourcePlan | None,
+    operation: Any,
 ) -> None:
-    await _write_off_delivered_orders_once(session, supply, orders, actor_user_id)
+    await _write_off_delivered_orders_once(
+        session,
+        supply,
+        orders,
+        actor_user_id,
+        source_plan=source_plan,
+        operation=operation,
+    )
     now = datetime.now(UTC)
     supply.status = FBS_SUPPLY_STATUS_IN_DELIVERY
     supply.delivered_at = now
     for order in orders:
-        if order.status == FBS_ORDER_STATUS_PACKED:
+        if order.status not in _TERMINAL_ORDER_STATUSES:
             order.status = FBS_ORDER_STATUS_IN_DELIVERY
     await session.flush()
-
-
-async def _shipment_locations_by_order(
-    session: AsyncSession,
-    order_ids: list[uuid.UUID],
-) -> dict[uuid.UUID, tuple[uuid.UUID, uuid.UUID]]:
-    """Return order -> (product, physical shipment location), preferring packing."""
-    if not order_ids:
-        return {}
-    fulfillment_rows = (
-        await session.execute(
-            select(
-                FbsPackagingFulfillment.fbs_order_id,
-                PackagingTaskLine.product_id,
-                PackagingTaskLine.storage_location_id,
-            )
-            .join(
-                PackagingTaskLine,
-                PackagingTaskLine.id == FbsPackagingFulfillment.packaging_task_line_id,
-            )
-            .where(
-                FbsPackagingFulfillment.fbs_order_id.in_(order_ids),
-                FbsPackagingFulfillment.undone_at.is_(None),
-            )
-        )
-    ).all()
-    result = {
-        order_id: (product_id, storage_location_id)
-        for order_id, product_id, storage_location_id in fulfillment_rows
-    }
-    missing_ids = [order_id for order_id in order_ids if order_id not in result]
-    if not missing_ids:
-        return result
-    pick_rows = (
-        await session.execute(
-            select(
-                FbsOrderPick.fbs_order_id,
-                FbsOrderPick.product_id,
-                FbsOrderPick.sorting_storage_location_id,
-            ).where(
-                FbsOrderPick.fbs_order_id.in_(missing_ids),
-                FbsOrderPick.undone_at.is_(None),
-            )
-        )
-    ).all()
-    result.update(
-        {
-            order_id: (product_id, storage_location_id)
-            for order_id, product_id, storage_location_id in pick_rows
-        }
-    )
-    return result
 
 
 async def _write_off_delivered_orders_once(
@@ -877,6 +979,9 @@ async def _write_off_delivered_orders_once(
     supply: FbsSupply,
     orders: list[FbsOrder],
     actor_user_id: uuid.UUID | None,
+    *,
+    source_plan: source_svc.FbsShipmentSourcePlan | None,
+    operation: Any,
 ) -> None:
     """Create exactly one physical write-off recipe per confirmed FBS order."""
     active_orders = [
@@ -903,8 +1008,10 @@ async def _write_off_delivered_orders_once(
             .all()
         )
     }
-    locations = await _shipment_locations_by_order(session, order_ids)
-    fallback_location_id: uuid.UUID | None = None
+    resolutions = {
+        item.fbs_order_id: item
+        for item in (source_plan.resolutions if source_plan is not None else ())
+    }
 
     for order in active_orders:
         ledger = existing_ledgers.get(order.id)
@@ -922,46 +1029,260 @@ async def _write_off_delivered_orders_once(
         if ledger is None:
             if order.product_id is None:
                 raise FbsShipmentError("fbs_shipment_product_missing", http_status=409)
-            shipment_location = locations.get(order.id)
-            if shipment_location is not None:
-                fulfilled_product_id, storage_location_id = shipment_location
-                if fulfilled_product_id != order.product_id:
-                    raise FbsShipmentError("fbs_shipment_product_mismatch", http_status=409)
+            resolution = resolutions.get(order.id)
+            if resolution is None and order.marketplace == "ozon":
+                sorting = await get_or_create_sorting_location(
+                    session,
+                    supply.tenant_id,
+                    supply.warehouse_id,
+                )
+                ledger = FbsShipmentReversalLedger(
+                    tenant_id=supply.tenant_id,
+                    fbs_order_id=order.id,
+                    product_id=order.product_id,
+                    storage_location_id=sorting.id,
+                    source_warehouse_id=supply.warehouse_id,
+                    source_mode="legacy_sorting",
+                    quantity=1,
+                    wb_operation_id=operation.id,
+                    written_off_by_user_id=actor_user_id,
+                )
+                session.add(ledger)
+                await session.flush()
+                existing_ledgers[order.id] = ledger
+            elif resolution is None:
+                raise FbsShipmentError("fbs_shipment_source_missing", http_status=409)
             else:
-                if fallback_location_id is None:
-                    fallback_location = await get_or_create_sorting_location(
-                        session,
-                        supply.tenant_id,
-                        supply.warehouse_id,
-                    )
-                    fallback_location_id = fallback_location.id
-                storage_location_id = fallback_location_id
-            ledger = FbsShipmentReversalLedger(
-                tenant_id=supply.tenant_id,
-                fbs_order_id=order.id,
-                product_id=order.product_id,
-                storage_location_id=storage_location_id,
-                quantity=1,
-            )
-            session.add(ledger)
-            await session.flush()
-            existing_ledgers[order.id] = ledger
+                ledger = FbsShipmentReversalLedger(
+                    tenant_id=supply.tenant_id,
+                    fbs_order_id=order.id,
+                    product_id=order.product_id,
+                    storage_location_id=resolution.storage_location_id,
+                    source_warehouse_id=resolution.source_warehouse_id,
+                    container_kind=resolution.container_kind,
+                    container_id=resolution.container_id,
+                    source_mode=resolution.source_mode,
+                    quantity=1,
+                    shortage_quantity=resolution.shortage_quantity,
+                    negative_quantity=resolution.negative_quantity,
+                    wb_operation_id=operation.id,
+                    written_off_by_user_id=actor_user_id,
+                )
+                session.add(ledger)
+                await session.flush()
+                existing_ledgers[order.id] = ledger
 
         if ledger.reversed_at is not None:
             raise FbsShipmentError("fbs_shipment_already_reversed", http_status=409)
+        resolution = resolutions.get(order.id)
+        if ledger.shipment_movement_id is not None and ledger.source_mode is None:
+            # A pre-migration ledger already points at the place actually written
+            # off.  Do not decorate it with a newly recalculated container/source.
+            ledger.source_mode = "legacy_ledger"
+        if ledger.wb_operation_id is None:
+            ledger.wb_operation_id = operation.id
+        if ledger.written_off_by_user_id is None:
+            ledger.written_off_by_user_id = actor_user_id
+        if ledger.written_off_at is None and ledger.shipment_movement_id is not None:
+            ledger.written_off_at = datetime.now(UTC)
         if ledger.shipment_movement_id is None:
-            movement = await inventory_svc.apply_fbs_supply_write_off(
-                session,
-                tenant_id=supply.tenant_id,
-                product_id=ledger.product_id,
-                storage_location_id=ledger.storage_location_id,
-                quantity=int(ledger.quantity),
-                actor_user_id=actor_user_id,
+            staged_source = (
+                ledger.source_mode is not None
+                and ledger.source_warehouse_id is not None
             )
+            if not staged_source and resolution is None:
+                raise FbsShipmentError("fbs_shipment_source_missing", http_status=409)
+            if not staged_source:
+                assert resolution is not None
+                ledger.product_id = resolution.product_id
+                ledger.storage_location_id = resolution.storage_location_id
+                ledger.source_warehouse_id = resolution.source_warehouse_id
+                ledger.container_kind = resolution.container_kind
+                ledger.container_id = resolution.container_id
+                ledger.source_mode = resolution.source_mode
+                ledger.shortage_quantity = resolution.shortage_quantity
+                ledger.negative_quantity = resolution.negative_quantity
+            allow_negative = int(ledger.negative_quantity) > 0
+            container_kind = cast(ContainerKind | None, ledger.container_kind)
+            try:
+                async with session.begin_nested():
+                    movement = await inventory_svc.apply_fbs_supply_write_off(
+                        session,
+                        tenant_id=supply.tenant_id,
+                        product_id=ledger.product_id,
+                        storage_location_id=ledger.storage_location_id,
+                        quantity=int(ledger.quantity),
+                        actor_user_id=actor_user_id,
+                        allow_negative=allow_negative,
+                        container_kind=container_kind,
+                        container_id=ledger.container_id,
+                    )
+            except ValueError as exc:
+                if allow_negative or str(exc) != "insufficient stock":
+                    raise
+                movement = await inventory_svc.apply_fbs_supply_write_off(
+                    session,
+                    tenant_id=supply.tenant_id,
+                    product_id=ledger.product_id,
+                    storage_location_id=ledger.storage_location_id,
+                    quantity=int(ledger.quantity),
+                    actor_user_id=actor_user_id,
+                    allow_negative=True,
+                    container_kind=container_kind,
+                    container_id=ledger.container_id,
+                )
+                ledger.shortage_quantity = int(ledger.quantity)
+                ledger.negative_quantity = int(ledger.quantity)
             await session.flush()
             ledger.shipment_movement_id = movement.id
+            ledger.wb_operation_id = operation.id
+            ledger.written_off_by_user_id = actor_user_id
+            ledger.written_off_at = datetime.now(UTC)
         await _release_reservation(session, order)
     await session.flush()
+
+
+async def _stage_wb_shipment_sources(
+    session: AsyncSession,
+    supply: FbsSupply,
+    orders: list[FbsOrder],
+    source_plan: source_svc.FbsShipmentSourcePlan,
+    operation: Any,
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    """Durably bind each WB order to the exact source chosen before write-off."""
+    resolutions = {item.fbs_order_id: item for item in source_plan.resolutions}
+    active_orders = [
+        order
+        for order in orders
+        if order.status not in _TERMINAL_ORDER_STATUSES and order.product_id is not None
+    ]
+    if not active_orders:
+        return
+    existing = {
+        ledger.fbs_order_id: ledger
+        for ledger in (
+            (
+                await session.execute(
+                    select(FbsShipmentReversalLedger)
+                    .where(
+                        FbsShipmentReversalLedger.tenant_id == supply.tenant_id,
+                        FbsShipmentReversalLedger.fbs_order_id.in_(
+                            [order.id for order in active_orders]
+                        ),
+                    )
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
+        )
+    }
+    for order in active_orders:
+        resolution = resolutions.get(order.id)
+        if resolution is None:
+            raise FbsShipmentError("fbs_shipment_source_missing", http_status=409)
+        ledger = existing.get(order.id)
+        if ledger is None:
+            ledger = FbsShipmentReversalLedger(
+                tenant_id=supply.tenant_id,
+                fbs_order_id=order.id,
+                product_id=resolution.product_id,
+                storage_location_id=resolution.storage_location_id,
+                source_warehouse_id=resolution.source_warehouse_id,
+                container_kind=resolution.container_kind,
+                container_id=resolution.container_id,
+                source_mode=resolution.source_mode,
+                quantity=resolution.quantity,
+                shortage_quantity=resolution.shortage_quantity,
+                negative_quantity=resolution.negative_quantity,
+                wb_operation_id=operation.id,
+                written_off_by_user_id=actor_user_id,
+            )
+            session.add(ledger)
+            continue
+        if ledger.shipment_movement_id is None and ledger.source_mode is None:
+            ledger.product_id = resolution.product_id
+            ledger.storage_location_id = resolution.storage_location_id
+            ledger.source_warehouse_id = resolution.source_warehouse_id
+            ledger.container_kind = resolution.container_kind
+            ledger.container_id = resolution.container_id
+            ledger.source_mode = resolution.source_mode
+            ledger.quantity = resolution.quantity
+            ledger.shortage_quantity = resolution.shortage_quantity
+            ledger.negative_quantity = resolution.negative_quantity
+        if ledger.wb_operation_id is None:
+            ledger.wb_operation_id = operation.id
+        if ledger.written_off_by_user_id is None:
+            ledger.written_off_by_user_id = actor_user_id
+    await session.flush()
+
+
+async def _load_checkpointed_wb_delivery(
+    session: AsyncSession,
+    supply: FbsSupply,
+    operation: Any,
+) -> tuple[list[FbsOrder], source_svc.FbsShipmentSourcePlan] | None:
+    """Load the durable WB source plan after marketplace confirmation."""
+    ledgers = list(
+        (
+            await session.execute(
+                select(FbsShipmentReversalLedger).where(
+                    FbsShipmentReversalLedger.tenant_id == supply.tenant_id,
+                    FbsShipmentReversalLedger.wb_operation_id == operation.id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not ledgers:
+        return None
+    orders = await _load_locked_supply_orders(session, supply.tenant_id, supply.id)
+    orders_by_id = {order.id: order for order in orders}
+    checkpointed_orders: list[FbsOrder] = []
+    resolutions: list[source_svc.FbsShipmentSourceResolution] = []
+    for ledger in ledgers:
+        order = orders_by_id.get(ledger.fbs_order_id)
+        source_warehouse_id = ledger.source_warehouse_id
+        source_mode = ledger.source_mode
+        if ledger.shipment_movement_id is not None and source_warehouse_id is None:
+            source_warehouse_id = await session.scalar(
+                select(StorageLocation.warehouse_id).where(
+                    StorageLocation.id == ledger.storage_location_id,
+                    StorageLocation.tenant_id == supply.tenant_id,
+                )
+            )
+            source_mode = source_mode or "legacy_ledger"
+        if order is None or source_warehouse_id is None or source_mode is None:
+            raise FbsShipmentError(
+                "fbs_shipment_checkpoint_incomplete",
+                context={"order_id": str(ledger.fbs_order_id)},
+                http_status=409,
+            )
+        checkpointed_orders.append(order)
+        quantity = int(ledger.quantity)
+        shortage = int(ledger.shortage_quantity)
+        resolutions.append(
+            source_svc.FbsShipmentSourceResolution(
+                fbs_order_id=ledger.fbs_order_id,
+                product_id=ledger.product_id,
+                quantity=quantity,
+                source_warehouse_id=source_warehouse_id,
+                storage_location_id=ledger.storage_location_id,
+                container_kind=cast(ContainerKind | None, ledger.container_kind),
+                container_id=ledger.container_id,
+                source_mode=cast(source_svc.FbsShipmentSourceMode, source_mode),
+                positive_quantity=max(0, quantity - shortage),
+                shortage_quantity=shortage,
+                negative_quantity=int(ledger.negative_quantity),
+            )
+        )
+    return checkpointed_orders, source_svc.FbsShipmentSourcePlan(
+        tenant_id=supply.tenant_id,
+        supply_warehouse_id=supply.warehouse_id,
+        resolutions=tuple(resolutions),
+    )
 
 
 async def _fetch_supply_qr_after_deliver(
@@ -1009,17 +1330,47 @@ async def _persist_confirmed_delivery(
     orders: list[FbsOrder],
     operation: Any,
     actor_user_id: uuid.UUID | None,
+    source_plan: source_svc.FbsShipmentSourcePlan | None = None,
 ) -> None:
-    """Durably checkpoint marketplace delivery before fetching its optional QR asset."""
-    await _apply_local_delivered(session, supply, orders, actor_user_id)
+    """Persist marketplace confirmation and the matching local stock result."""
+    if source_plan is None:
+        # Ozon still uses its packaging write-off ledger.  Keep the established
+        # atomic order here: its idempotent retry path returns an already
+        # confirmed operation and does not replay unfinished local stock work.
+        await _apply_local_delivered(
+            session, supply, orders, actor_user_id, source_plan, operation
+        )
+        await mark_deliver_operation_confirmed(
+            session,
+            operation,
+            wb_supply_id=supply.wb_supply_id,
+            local_supply_id=supply.id,
+        )
+        await session.commit()
+        return
+
+    # WB delivery cannot be rolled back.  Persist that fact first so any later
+    # inventory/container failure is recoverable by retrying the same
+    # idempotency key without ever sending a second deliver mutation to WB.
+    await _stage_wb_shipment_sources(
+        session,
+        supply,
+        orders,
+        source_plan,
+        operation,
+        actor_user_id,
+    )
     await mark_deliver_operation_confirmed(
         session,
         operation,
         wb_supply_id=supply.wb_supply_id,
         local_supply_id=supply.id,
     )
-    # The route only commits selected errors.  A barcode download failure must
-    # therefore not roll back the already confirmed WB delivery.
+    await session.commit()
+    await _apply_local_delivered(
+        session, supply, orders, actor_user_id, source_plan, operation
+    )
+    # The optional QR fetch happens after this second checkpoint as well.
     await session.commit()
 
 
@@ -1267,6 +1618,28 @@ async def deliver_supply(
                 token = await _require_marketplace_token(
                     session, tenant_id, confirmed_supply.seller_id
                 )
+                checkpointed = await _load_checkpointed_wb_delivery(
+                    session, confirmed_supply, existing
+                )
+                if checkpointed is None:
+                    orders, _, source_plan = await _actual_wb_orders_and_source_plan(
+                        session,
+                        tenant_id,
+                        confirmed_supply,
+                        http_client,
+                        token,
+                        actor_user_id=actor_user_id,
+                    )
+                else:
+                    orders, source_plan = checkpointed
+                await _persist_confirmed_delivery(
+                    session,
+                    confirmed_supply,
+                    orders,
+                    existing,
+                    actor_user_id,
+                    source_plan,
+                )
                 # A prior QR failure is recoverable through the same idempotent
                 # request and must never trigger another WB deliver mutation.
                 await _fetch_supply_qr_after_deliver(session, confirmed_supply, http_client, token)
@@ -1288,96 +1661,28 @@ async def deliver_supply(
             supply = await _get_supply_for_update(session, tenant_id, supply_id, with_trbxes=True)
             if supply is None:
                 raise FbsShipmentError("supply_not_found")
-            await _sync_and_validate_deliver(
-                session,
-                tenant_id,
-                supply,
-                http_client,
-                token,
-                confirmed_preflight_version=confirmed_preflight_version,
-                actor_user_id=actor_user_id,
-            )
             if reconcile_state == WB_OPERATION_STATE_CONFIRMED:
-                orders = await _load_locked_supply_orders(session, tenant_id, supply.id)
-                await _persist_confirmed_delivery(session, supply, orders, existing, actor_user_id)
+                orders, _, source_plan = await _actual_wb_orders_and_source_plan(
+                    session,
+                    tenant_id,
+                    supply,
+                    http_client,
+                    token,
+                    actor_user_id=actor_user_id,
+                )
+                await _persist_confirmed_delivery(
+                    session, supply, orders, existing, actor_user_id, source_plan
+                )
                 await _fetch_supply_qr_after_deliver(session, supply, http_client, token)
                 return supply
 
-            try:
-                await deliver_marketplace_supply(
-                    http_client,
-                    api_token=token,
-                    supply_id=supply.wb_supply_id,
-                )
-            except WildberriesBusinessError as exc:
-                meta_context = _meta_validation_context(exc)
-                message, retryable = _meta_validation_message(exc)
-                await mark_operation_failed(
-                    session,
-                    existing,
-                    error_code="meta_validation_fail",
-                    error_context={"meta_validation": meta_context},
-                    wb_supply_id=supply.wb_supply_id,
-                    local_supply_id=supply.id,
-                )
-                raise FbsShipmentError(
-                    "meta_validation_fail",
-                    message=message,
-                    context={"meta_validation": meta_context},
-                    retryable=retryable,
-                    http_status=409,
-                ) from exc
-            except WildberriesClientError as exc:
-                if exc.code == "transport_error":
-                    ref = wb_error_ref()
-                    log_wb_client_error(
-                        logger,
-                        "fbs shipment WB deliver timeout",
-                        exc,
-                        tenant_id=tenant_id,
-                        seller_id=supply.seller_id,
-                        local_entity_id=supply.id,
-                        wb_object_id=supply.wb_supply_id,
-                        ref=ref,
-                    )
-                    await mark_operation_pending_confirmation(
-                        session,
-                        existing,
-                        wb_supply_id=supply.wb_supply_id,
-                        local_supply_id=supply.id,
-                        error_code="wb_timeout",
-                    )
-                    raise FbsShipmentError(
-                        "wb_timeout",
-                        message="WB не подтвердил передачу — повторите операцию.",
-                        context={"operation_state": "pending_confirmation"},
-                        retryable=True,
-                        http_status=504,
-                    ) from exc
-                error = _shipment_error_from_wb(
-                    exc,
-                    tenant_id=tenant_id,
-                    seller_id=supply.seller_id,
-                    local_entity_id=supply.id,
-                    wb_supply_id=supply.wb_supply_id,
-                    event="fbs shipment WB deliver failed",
-                    retryable=False,
-                    http_status=502,
-                )
-                await mark_operation_failed(
-                    session,
-                    existing,
-                    error_code=error.code,
-                    error_context=error.context,
-                    wb_supply_id=supply.wb_supply_id,
-                    local_supply_id=supply.id,
-                )
-                raise error from exc
-
-            orders = await _load_locked_supply_orders(session, tenant_id, supply.id)
-            await _persist_confirmed_delivery(session, supply, orders, existing, actor_user_id)
-            await _fetch_supply_qr_after_deliver(session, supply, http_client, token)
-            return supply
+            raise FbsShipmentError(
+                "wb_pending_confirmation",
+                message="WB пока не подтвердил передачу; слепой повтор запрещён.",
+                context={"operation_state": "pending_confirmation"},
+                retryable=True,
+                http_status=504,
+            )
 
     supply = await _get_supply_for_update(
         session,
@@ -1393,7 +1698,7 @@ async def deliver_supply(
         raise FbsShipmentError("supply_bad_status", http_status=409)
 
     token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
-    await _sync_and_validate_deliver(
+    orders, _, source_plan = await _sync_and_validate_deliver(
         session,
         tenant_id,
         supply,
@@ -1487,18 +1792,9 @@ async def deliver_supply(
         )
         raise error from exc
 
-    orders = await _load_locked_supply_orders(session, tenant_id, supply.id)
-    cargo_qr_ready = True
-    if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ:
-        cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(session, tenant_id, supply)
-    _validate_checks_pass(
-        _build_delivery_checks(
-            supply,
-            orders,
-            cargo_qr_ready=cargo_qr_ready,
-        )
+    await _persist_confirmed_delivery(
+        session, supply, orders, operation, actor_user_id, source_plan
     )
-    await _persist_confirmed_delivery(session, supply, orders, operation, actor_user_id)
     await _fetch_supply_qr_after_deliver(session, supply, http_client, token)
     return supply
 

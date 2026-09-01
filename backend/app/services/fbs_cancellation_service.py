@@ -22,6 +22,7 @@ from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_supply import FbsSupply
 from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT
 from app.services import inventory_service as inv_svc
+from app.services.fbs_shipment_source_service import reversal_source_from_ledger
 from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
     _release_reservation,
@@ -147,17 +148,25 @@ async def reverse_fbs_shipment_if_needed(
 
     positions = list(ledger.ozon_positions_json or [])
     if not positions:
+        source = reversal_source_from_ledger(ledger)
         positions = [
             {
-                "product_id": str(ledger.product_id),
-                "storage_location_id": str(ledger.storage_location_id),
-                "quantity": int(ledger.quantity),
+                "product_id": str(source.product_id),
+                "storage_location_id": str(source.storage_location_id),
+                "container_kind": source.container_kind,
+                "container_id": (
+                    str(source.container_id) if source.container_id is not None else None
+                ),
+                "quantity": source.quantity,
             }
         ]
     reversal_movement = None
     for position in positions:
         product_id = uuid.UUID(str(position["product_id"]))
         storage_location_id = uuid.UUID(str(position["storage_location_id"]))
+        container_kind = position.get("container_kind")
+        container_id_raw = position.get("container_id")
+        container_id = uuid.UUID(str(container_id_raw)) if container_id_raw else None
         quantity = int(str(position["quantity"]))
         movement = await inv_svc.record_movement_and_adjust_balance(
             session,
@@ -167,6 +176,8 @@ async def reverse_fbs_shipment_if_needed(
             quantity_delta=quantity,
             movement_type=MOVEMENT_TYPE_FBS_SHIPMENT,
             actor_user_id=actor_user_id,
+            container_kind=container_kind,  # type: ignore[arg-type]
+            container_id=container_id,
         )
         if reversal_movement is None:
             reversal_movement = movement

@@ -270,7 +270,9 @@ async def test_collect_requires_location_when_address_storage_on(
         if location["location_code"] == "Без ячеек"
     )
     assert sorting["quantity"] == 10
-    assert sorting["sources"][0]["source_label"] == "Россыпью"
+    # Receiving-box identity now survives verification: the same original
+    # box is the physical source offered to picking in sorting.
+    assert sorting["sources"][0]["source_label"] == "Короб КР-000001"
 
     blocked = await async_client.post(
         f"{BASE}/{mid}/boxes/{box_id}/manual-line",
