@@ -55,6 +55,7 @@ import {
   mixedMarketplaceSelectionMessage,
   orderStatusForChip,
   ordersWord,
+  supplyQrExpectedForStatus,
 } from './fbsUx'
 import { plural } from '../../utils/plural'
 import {
@@ -956,7 +957,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     setError(null)
   }, [])
 
-  const openSupplyQrPrint = useCallback(async (supplyId: string) => {
+  const openSupplyQrPrint = useCallback(async (supply: FbsSupplyWorklistItem) => {
+    const supplyId = supply.id
     setPrintingSupplyId(supplyId)
     setError(null)
     setNotice(null)
@@ -965,17 +967,22 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     let supplyAsset: FbsPrintAsset | null = null
     let cargoAssets: FbsPrintAsset[] = []
     let cargoPlacesCount = 0
+    let currentSupplyStatus = supply.status
 
     try {
-      await syncFbsSupplyTracking(token, authHeaders, supplyId)
+      const refreshed = await syncFbsSupplyTracking(token, authHeaders, supplyId)
+      currentSupplyStatus = refreshed.supply.status
     } catch (cause) {
       failures.push(cause instanceof Error ? cause.message : 'Статус поставки не обновлён.')
     }
-    try {
-      const refreshed = await retryFbsSupplyQr(token, authHeaders, supplyId)
-      supplyAsset = refreshed.supply.barcode_asset
-    } catch (cause) {
-      failures.push(cause instanceof Error ? cause.message : 'QR поставки не получен.')
+    const expectsSupplyQr = supplyQrExpectedForStatus(currentSupplyStatus)
+    if (expectsSupplyQr) {
+      try {
+        const refreshed = await retryFbsSupplyQr(token, authHeaders, supplyId)
+        supplyAsset = refreshed.supply.barcode_asset
+      } catch (cause) {
+        failures.push(cause instanceof Error ? cause.message : 'QR поставки не получен.')
+      }
     }
     try {
       const cargoPlaces = await fetchFbsCargoPlaces(token, authHeaders, supplyId)
@@ -994,7 +1001,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     ).values()]
     const ready = assets.filter((asset) => asset.status === 'ready' && asset.preview_url).length
     const failed = assets.filter((asset) => asset.status === 'error').length
-    const requested = 1 + cargoPlacesCount
+    const requested = cargoPlacesCount + (expectsSupplyQr ? 1 : 0)
     setSupplyQrBatch({
       requested,
       ready,
@@ -1386,7 +1393,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                         ? <CircularProgress size={14} />
                         : <PrintOutlinedIcon />}
                       disabled={Boolean(printingSupplyId)}
-                      onClick={() => void openSupplyQrPrint(supply.id)}
+                      onClick={() => void openSupplyQrPrint(supply)}
                       data-testid={`fbs-supply-qr-print-${supply.id}`}
                     >
                       QR
