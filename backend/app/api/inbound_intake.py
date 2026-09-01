@@ -322,6 +322,7 @@ def _box_out(b: InboundIntakeBox) -> InboundIntakeBoxOut:
     lines_out: list[InboundIntakeBoxLineOut] = []
     if "lines" not in sa_inspect(b).unloaded:
         lines_out = [_box_line_out(ln) for ln in b.lines]
+    pallet = b.pallet if "pallet" not in sa_inspect(b).unloaded else None
     return InboundIntakeBoxOut(
         id=str(b.id),
         box_number=int(b.box_number),
@@ -332,11 +333,7 @@ def _box_out(b: InboundIntakeBox) -> InboundIntakeBoxOut:
         is_open=is_open,
         remaining_qty=svc.box_remaining_qty(b),
         pallet_id=str(b.pallet_id) if b.pallet_id is not None else None,
-        pallet_code=(
-            b.pallet.code
-            if b.pallet_id is not None and "pallet" not in sa_inspect(b).unloaded
-            else None
-        ),
+        pallet_code=pallet.code if pallet is not None else None,
         lines=lines_out,
     )
 
