@@ -119,7 +119,7 @@ _DELIVER_READY_ORDER_STATUSES = frozenset({FBS_ORDER_STATUS_PACKED})
 _PACKAGING_PENDING_ORDER_STATUSES = frozenset(
     {FBS_ORDER_STATUS_IN_SUPPLY, FBS_ORDER_STATUS_ASSEMBLING}
 )
-_ADVISORY_CHECK_CODES = frozenset({"negative_stock"})
+_ADVISORY_CHECK_CODES = frozenset({"negative_stock", "wb_terminal_order_ignored"})
 _DELIVER_ALLOWED_DELIVERY_TYPES = frozenset({FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_DELIVERY_TYPE_PVZ})
 _DELIVER_BLOCKED_SUPPLY_STATUSES = frozenset(
     {
@@ -501,21 +501,39 @@ def _build_delivery_checks(
         )
 
     for discrepancy in discrepancies:
-        ignored = discrepancy.code == "local_order_not_in_wb"
+        missing_from_wb = discrepancy.code == "local_order_not_in_wb"
+        terminal_wb_order = supply.marketplace == "wb" and discrepancy.code in {
+            "terminal_order",
+            "terminal_local_order",
+        }
+        ignored = missing_from_wb or terminal_wb_order
         checks.append(
             DeliveryCheck(
                 code=(
                     "local_order_not_in_wb_ignored"
-                    if ignored
-                    else "wb_supply_composition_discrepancy"
+                    if missing_from_wb
+                    else (
+                        "wb_terminal_order_ignored"
+                        if terminal_wb_order
+                        else "wb_supply_composition_discrepancy"
+                    )
                 ),
                 message=(
                     f"Заказ WB {discrepancy.wb_order_id} отсутствует в фактическом составе "
                     "и не будет списан."
-                    if ignored
-                    else f"Заказ WB {discrepancy.wb_order_id}: {discrepancy.code}."
+                    if missing_from_wb
+                    else (
+                        f"Заказ WB {discrepancy.wb_order_id} уже отменён или закрыт; "
+                        "он исключён из списания и не блокирует передачу поставки."
+                        if terminal_wb_order
+                        else f"Заказ WB {discrepancy.wb_order_id}: {discrepancy.code}."
+                    )
                 ),
-                ok=ignored,
+                # Keep a visible warning for a terminal WB order, but never make
+                # the operator repair marketplace history before dispatching the
+                # remaining active orders. Reconciliation already excludes this
+                # order from source planning, write-off and local delivery state.
+                ok=ignored and not terminal_wb_order,
                 order_id=discrepancy.local_order_id,
             )
         )
