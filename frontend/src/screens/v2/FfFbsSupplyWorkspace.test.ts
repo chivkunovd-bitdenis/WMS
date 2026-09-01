@@ -3,6 +3,7 @@ import {
   buildFbsPickingListPrintHtml,
   buildFbsSyncTargets,
   fbsAccessibleStageIndex,
+  fbsBoxEditingDisabled,
   fbsBoxOperationsDisabled,
   fbsOrdersSyncErrorMessage,
   mixedMarketplaceSelectionMessage,
@@ -58,6 +59,12 @@ describe('WB optional picking', () => {
 
   it('opens boxes after every WB order is packed even when picking was skipped', () => {
     expect(fbsAccessibleStageIndex({ marketplace: 'wb', currentStage: 'picking', packed: 10, total: 10 })).toBe(3)
+    expect(fbsBoxEditingDisabled('wb', false)).toBe(false)
+  })
+
+  it('stops editing boxes only after WB handoff, not because the server still reports an earlier stage', () => {
+    expect(fbsBoxEditingDisabled('wb', false)).toBe(false)
+    expect(fbsBoxEditingDisabled('wb', true)).toBe(true)
   })
 })
 
