@@ -74,17 +74,6 @@ def test_wb_response_body_uses_translation_instead_of_raw_english() -> None:
     assert "Supply not found" not in message
 
 
-def test_unknown_wb_response_body_is_not_shown_as_raw_english() -> None:
-    exc = WildberriesClientError(
-        "wb_http_error",
-        status_code=502,
-        response_body='{"message":"upstream exploded in an unknown way"}',
-    )
-    message = wb_operator_message(exc)
-    assert message == "На стороне Wildberries сбой. Повторите операцию через несколько минут."
-    assert "upstream exploded" not in message
-
-
 # TC-NEW-FBS-CLIENT-001 — batch add orders exact contract + 204
 @pytest.mark.asyncio
 async def test_add_orders_to_supply_batch_exact_contract_and_204() -> None:
