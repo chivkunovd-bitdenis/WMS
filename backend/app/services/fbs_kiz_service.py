@@ -697,7 +697,6 @@ async def _validate_kiz_pair(
     resolved_value = _universal_test_kiz_for_order(order, value)
     if resolved_value != value:
         value = resolved_value
-        hints.append("universal_test_kiz")
     await _ensure_kiz_not_bound_to_other_order(session, tenant_id, order.id, value)
     if check_marking_code_occupancy:
         await _ensure_kiz_not_occupied_in_pool(session, tenant_id, order, value)

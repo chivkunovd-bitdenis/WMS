@@ -841,7 +841,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     )
   }, [activeSupplies, selectedOrders])
   const selectionBlockers = useMemo(
-    () => selectedOrders.flatMap((order) => order.selection_blockers.map((blocker) => ({ order, blocker }))),
+    () => selectedOrders.flatMap((order) =>
+      blockingSelectionBlockers(order.selection_blockers).map((blocker) => ({ order, blocker })),
+    ),
     [selectedOrders],
   )
   const selectableIds = useMemo(
