@@ -31,6 +31,7 @@ export function fbsOrdersAvailableForBox<T extends { id: string }>(
 }
 
 export function fbsDeliveryConfirmDisabled(
+  marketplace: FbsMarketplace,
   loading: boolean,
   preflight: { can_deliver: boolean } | null,
 ): boolean {
@@ -38,7 +39,9 @@ export function fbsDeliveryConfirmDisabled(
   // оператор вправе повторить проверку или попробовать передачу: сам deliver
   // заново синхронизирует WB и вернёт честный ответ. Серой кнопка остаётся
   // только пока запрос выполняется или сервер вернул реальный blocker.
-  return loading || Boolean(preflight && !preflight.can_deliver)
+  if (loading) return true
+  if (marketplace !== 'wb' && preflight === null) return true
+  return Boolean(preflight && !preflight.can_deliver)
 }
 
 export function supplyQrExpectedForStatus(status: string): boolean {

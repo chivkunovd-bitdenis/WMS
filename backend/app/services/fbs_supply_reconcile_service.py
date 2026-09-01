@@ -188,6 +188,41 @@ async def get_deliver_operation_by_idempotency(
     )
 
 
+async def get_active_deliver_operation_for_supply(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    local_supply_id: uuid.UUID,
+) -> FbsWbOperation | None:
+    """Find a delivery already in flight or confirmed for this WB supply.
+
+    The browser may rotate its idempotency key after a local failure.  The
+    external mutation is nevertheless unique per supply, so recovery must be
+    anchored to the supply as well as to the client-provided key.
+    """
+    stmt = (
+        select(FbsWbOperation)
+        .where(
+            FbsWbOperation.tenant_id == tenant_id,
+            FbsWbOperation.seller_id == seller_id,
+            FbsWbOperation.operation_kind == OPERATION_KIND_SUPPLY_DELIVER,
+            FbsWbOperation.local_entity_type == "fbs_supply",
+            FbsWbOperation.local_entity_id == local_supply_id,
+            FbsWbOperation.state.in_(
+                {
+                    WB_OPERATION_STATE_PENDING,
+                    WB_OPERATION_STATE_PENDING_CONFIRMATION,
+                    WB_OPERATION_STATE_CONFIRMED,
+                }
+            ),
+        )
+        .order_by(FbsWbOperation.created_at.desc(), FbsWbOperation.id.desc())
+        .limit(1)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
 async def create_pending_deliver_operation(
     session: AsyncSession,
     *,

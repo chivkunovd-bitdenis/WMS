@@ -64,6 +64,7 @@ from app.services.fbs_print_asset_service import upsert_supply_qr_asset_from_byt
 from app.services.fbs_print_asset_storage import FbsPrintAssetStorageError
 from app.services.fbs_supply_reconcile_service import (
     create_pending_deliver_operation,
+    get_active_deliver_operation_for_supply,
     get_deliver_operation_by_idempotency,
     mark_deliver_operation_confirmed,
     mark_deliver_operation_pending,
@@ -1747,9 +1748,10 @@ async def deliver_supply(
         supply_id=supply_id,
         confirmed_preflight_version=confirmed_preflight_version,
     )
-    existing = await get_deliver_operation_by_idempotency(
+    existing_by_key = await get_deliver_operation_by_idempotency(
         session, supply_read.seller_id, idempotency_key
     )
+    existing = existing_by_key
     if supply_read.marketplace == "ozon":
         return await _deliver_ozon_supply(
             session,
@@ -1761,9 +1763,17 @@ async def deliver_supply(
             provider=ozon_provider,
             actor_user_id=actor_user_id,
         )
+    if existing is None:
+        existing = await get_active_deliver_operation_for_supply(
+            session,
+            tenant_id=tenant_id,
+            seller_id=supply_read.seller_id,
+            local_supply_id=supply_id,
+        )
     if existing is not None:
         if (
-            existing.request_hash
+            existing_by_key is not None
+            and existing.request_hash
             and existing.request_hash != request_hash
             and existing.state
             not in {WB_OPERATION_STATE_PENDING, WB_OPERATION_STATE_PENDING_CONFIRMATION}
@@ -1861,6 +1871,30 @@ async def deliver_supply(
     )
     if supply is None:
         raise FbsShipmentError("supply_not_found")
+
+    # Two tabs can arrive with different client keys before either one creates
+    # its journal row.  The supply row serializes that race; re-check under the
+    # lock and hand recovery to the already durable operation instead of ever
+    # issuing a second WB deliver mutation.
+    if existing is None:
+        raced_operation = await get_active_deliver_operation_for_supply(
+            session,
+            tenant_id=tenant_id,
+            seller_id=supply.seller_id,
+            local_supply_id=supply.id,
+        )
+        if raced_operation is not None:
+            await session.rollback()
+            return await deliver_supply(
+                session,
+                tenant_id,
+                supply_id,
+                http_client,
+                idempotency_key=idempotency_key,
+                actor_user_id=actor_user_id,
+                confirmed_preflight_version=confirmed_preflight_version,
+                ozon_provider=ozon_provider,
+            )
     if supply.delivery_type not in _DELIVER_ALLOWED_DELIVERY_TYPES:
         raise FbsShipmentError("wrong_delivery_type")
     if supply.status in _DELIVER_BLOCKED_SUPPLY_STATUSES:

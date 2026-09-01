@@ -1276,7 +1276,15 @@ async def list_supply_worklist(
                     else None
                 ),
                 "can_add_orders": supply.status
-                in {FBS_SUPPLY_STATUS_DRAFT, FBS_SUPPLY_STATUS_ASSEMBLING},
+                in (
+                    {
+                        FBS_SUPPLY_STATUS_DRAFT,
+                        FBS_SUPPLY_STATUS_ASSEMBLING,
+                        FBS_SUPPLY_STATUS_PACKED,
+                    }
+                    if supply.marketplace == "wb"
+                    else {FBS_SUPPLY_STATUS_DRAFT, FBS_SUPPLY_STATUS_ASSEMBLING}
+                ),
             }
         )
     return {"items": items, "server_now": datetime.now(tz=UTC).isoformat()}
@@ -1667,7 +1675,13 @@ async def add_orders_to_existing_supply(
     supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
     if supply is None:
         raise FbsSupplyError("supply_not_found")
-    if supply.status not in {FBS_SUPPLY_STATUS_DRAFT, FBS_SUPPLY_STATUS_ASSEMBLING}:
+    editable_statuses = {FBS_SUPPLY_STATUS_DRAFT, FBS_SUPPLY_STATUS_ASSEMBLING}
+    if supply.marketplace == "wb":
+        # `packed` is a legacy aggregate of packaging checkboxes.  For WB it
+        # never freezes composition; adding an order may move the aggregate
+        # fact back to assembling, but the checkbox has no authority itself.
+        editable_statuses.add(FBS_SUPPLY_STATUS_PACKED)
+    if supply.status not in editable_statuses:
         raise FbsSupplyError(
             "supply_not_editable",
             message="В эту поставку уже нельзя добавлять заказы.",

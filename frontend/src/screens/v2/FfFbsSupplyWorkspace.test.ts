@@ -106,13 +106,19 @@ describe('WB delivery idempotency retry', () => {
 
 describe('WB delivery confirmation', () => {
   it('does not freeze the action after a failed preflight request', () => {
-    expect(fbsDeliveryConfirmDisabled(false, null)).toBe(false)
+    expect(fbsDeliveryConfirmDisabled('wb', false, null)).toBe(false)
   })
 
   it('stays disabled while loading or after a real server blocker', () => {
-    expect(fbsDeliveryConfirmDisabled(true, null)).toBe(true)
-    expect(fbsDeliveryConfirmDisabled(false, { can_deliver: false })).toBe(true)
-    expect(fbsDeliveryConfirmDisabled(false, { can_deliver: true })).toBe(false)
+    expect(fbsDeliveryConfirmDisabled('wb', true, null)).toBe(true)
+    expect(fbsDeliveryConfirmDisabled('wb', false, { can_deliver: false })).toBe(true)
+    expect(fbsDeliveryConfirmDisabled('wb', false, { can_deliver: true })).toBe(false)
+  })
+
+  it('keeps Ozon disabled until a successful preflight exists', () => {
+    expect(fbsDeliveryConfirmDisabled('ozon', false, null)).toBe(true)
+    expect(fbsDeliveryConfirmDisabled('ozon', false, { can_deliver: false })).toBe(true)
+    expect(fbsDeliveryConfirmDisabled('ozon', false, { can_deliver: true })).toBe(false)
   })
 })
 

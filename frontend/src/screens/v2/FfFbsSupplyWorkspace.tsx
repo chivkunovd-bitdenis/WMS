@@ -1519,7 +1519,7 @@ export function FfFbsSupplyWorkspace({
                     <Button
                       variant="outlined"
                       onClick={() => void openAddOrders()}
-                      disabled={!['draft', 'assembling'].includes(workspace.supply.status)}
+                      disabled={!['draft', 'assembling', ...(!isOzonSupply ? ['packed'] : [])].includes(workspace.supply.status)}
                       data-testid="fbs-05-workspace-add-orders"
                     >
                       Добавить заказы
@@ -2318,7 +2318,11 @@ export function FfFbsSupplyWorkspace({
           <Button onClick={() => setDeliverConfirmOpen(false)}>Не передавать</Button>
           <Button
             variant="contained"
-            disabled={fbsDeliveryConfirmDisabled(deliveryPreflightLoading, deliveryPreflight)}
+            disabled={fbsDeliveryConfirmDisabled(
+              workspace?.supply.marketplace ?? 'wb',
+              deliveryPreflightLoading,
+              deliveryPreflight,
+            )}
             onClick={() => {
               setDeliverConfirmOpen(false)
               void deliver()

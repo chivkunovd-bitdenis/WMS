@@ -956,7 +956,10 @@ async def test_pending_delivery_recovers_after_process_crash_without_second_wb_c
         async_client,
         headers,
         supply["id"],
-        idempotency_key=idempotency_key,
+        # A browser reload/error handler may rotate the client key.  Recovery
+        # is supply-scoped as well, so this must still reconcile the durable
+        # operation instead of calling WB a second time.
+        idempotency_key=str(uuid.uuid4()),
     )
     assert retry.status_code == 200, retry.text
     assert deliver_calls == 1
