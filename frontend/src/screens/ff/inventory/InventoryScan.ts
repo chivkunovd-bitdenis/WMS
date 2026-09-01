@@ -36,6 +36,36 @@ function normalize(code: string): string {
   return code.trim()
 }
 
+// Сканер — обычная клавиатура. Если в системе выбрана русская раскладка, он
+// печатает кириллицу: вместо Chin-56005 приезжает Сршт-56005, и поиск ничего
+// не находит. Оператор при этом видит «код не числится» и думает, что товара
+// в документе нет. Переводим раскладку и ищем по обоим вариантам.
+const RU_TO_LAT: Record<string, string> = {
+  й: 'q', ц: 'w', у: 'e', к: 'r', е: 't', н: 'y', г: 'u', ш: 'i', щ: 'o', з: 'p',
+  х: '[', ъ: ']', ф: 'a', ы: 's', в: 'd', а: 'f', п: 'g', р: 'h', о: 'j', л: 'k',
+  д: 'l', ж: ';', э: "'", я: 'z', ч: 'x', с: 'c', м: 'v', и: 'b', т: 'n', ь: 'm',
+  б: ',', ю: '.', ё: '`',
+}
+
+function hasCyrillic(value: string): boolean {
+  return /[\u0400-\u04FF]/.test(value)
+}
+
+/** Коды-кандидаты: как пришло и как было бы в латинской раскладке. */
+export function scanCandidates(rawCode: string): string[] {
+  const code = normalize(rawCode)
+  if (!code || !hasCyrillic(code)) return code ? [code] : []
+  const converted = Array.from(code)
+    .map((ch) => {
+      const lower = ch.toLowerCase()
+      const mapped = RU_TO_LAT[lower]
+      if (mapped === undefined) return ch
+      return ch === lower ? mapped : mapped.toUpperCase()
+    })
+    .join('')
+  return converted && converted !== code ? [code, converted] : [code]
+}
+
 type Located = { product: ProductNode; containerId: string | null }
 
 /** Все товары документа с указанием тары, в которой каждый лежит. */
@@ -53,12 +83,12 @@ function locateProducts(count: InventoryCount): Located[] {
 
 type FoundContainer = { id: string; kind: 'pallet' | 'box' | 'cargo_place'; code: string }
 
-function findContainer(count: InventoryCount, code: string): FoundContainer | null {
+function findContainer(count: InventoryCount, codes: string[]): FoundContainer | null {
   let found: FoundContainer | null = null
   function walk(nodes: InventoryNode[]) {
     for (const node of nodes) {
       if (node.kind === 'product') continue
-      if (node.barcode && node.barcode === code) {
+      if (node.barcode && codes.includes(node.barcode)) {
         found = { id: node.id, kind: node.kind, code: node.code }
         return
       }
@@ -83,12 +113,13 @@ export function applyScan(
   rawCode: string,
   activeContainerId: string | null,
 ): ScanResult {
-  const code = normalize(rawCode)
+  const codes = scanCandidates(rawCode)
+  const code = codes[0] ?? ''
   if (!code) {
     return { count, activeContainerId, message: '', tone: 'ok' }
   }
 
-  const container = findContainer(count, code)
+  const container = findContainer(count, codes)
   if (container) {
     return {
       count,
@@ -100,7 +131,9 @@ export function applyScan(
   }
 
   const located = locateProducts(count)
-  const byBarcode = located.filter((item) => item.product.barcode === code)
+  const byBarcode = located.filter(
+    (item) => item.product.barcode != null && codes.includes(item.product.barcode),
+  )
 
   if (byBarcode.length === 0) {
     return {

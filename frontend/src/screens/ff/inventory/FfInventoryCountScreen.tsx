@@ -90,6 +90,43 @@ type Props = {
   onBack: () => void
 }
 
+
+/**
+ * Поле сканера со своим состоянием.
+ *
+ * Раньше значение поля жило в экране пересчёта — том же, что рисует дерево.
+ * Сканер печатает штрихкод посимвольно, и каждый символ перерисовывал всё
+ * дерево целиком: тринадцать полных перерисовок на один пик. На большом
+ * документе это и был «медленный скан». Своё состояние держит набор внутри.
+ */
+function InventoryScanBox({
+  expects,
+  error,
+  notice,
+  onScan,
+}: {
+  expects: string
+  error?: string | null
+  notice?: string | null
+  onScan: (code: string) => void
+}) {
+  const [value, setValue] = useState('')
+  return (
+    <ScannerField
+      value={value}
+      onChange={setValue}
+      onScan={(code) => {
+        setValue('')
+        onScan(code)
+      }}
+      expects={expects}
+      error={error ?? null}
+      notice={notice ?? null}
+      testId="inv-scan"
+    />
+  )
+}
+
 export function FfInventoryCountScreen({
   count,
   loading,
@@ -104,7 +141,6 @@ export function FfInventoryCountScreen({
 }: Props) {
   const [filters, setFilters] = useState<InvFilters>(EMPTY_FILTERS)
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
-  const [scanValue, setScanValue] = useState('')
   // Память сканера на одну вещь: какую тару открыли. Пока открыта, пики идут в неё.
   const [openContainerId, setOpenContainerId] = useState<string | null>(null)
   const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
@@ -121,7 +157,6 @@ export function FfInventoryCountScreen({
   }, [scanFocus])
 
   function handleScan(code: string) {
-    setScanValue('')
     const result = applyScan(count, code, openContainerId)
     setOpenContainerId(result.activeContainerId)
     setScanNote({ text: result.message, tone: result.tone })
@@ -271,9 +306,7 @@ export function FfInventoryCountScreen({
           штуку. Тара не открыта — считаем то, что лежит в ячейке россыпью. */}
       {!readOnly ? (
         <Box sx={{ maxWidth: 640, mb: 2 }}>
-          <ScannerField
-            value={scanValue}
-            onChange={setScanValue}
+          <InventoryScanBox
             onScan={handleScan}
             expects={
               openContainerId
@@ -282,7 +315,6 @@ export function FfInventoryCountScreen({
             }
             error={scanNote?.tone === 'error' ? scanNote.text : null}
             notice={scanNote && scanNote.tone !== 'error' ? scanNote.text : null}
-            testId="inv-scan"
           />
         </Box>
       ) : null}
