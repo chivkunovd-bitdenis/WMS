@@ -18,6 +18,8 @@ export type ScanResult = {
   count: InventoryCount
   /** Идентификатор открытой тары. null — считаем россыпь. */
   activeContainerId: string | null
+  /** Есть только при скане самой тары: экран должен найти и показать её строку. */
+  focusContainerKey?: string
   message: string
   tone: ScanTone
 }
@@ -91,6 +93,7 @@ export function applyScan(
     return {
       count,
       activeContainerId: container.id,
+      focusContainerKey: `${container.kind}:${container.id}`,
       message: `${KIND_TITLE[container.kind]} ${container.code} ${OPENED[container.kind]}. Пикайте товар — каждый пик добавит штуку.`,
       tone: 'ok',
     }

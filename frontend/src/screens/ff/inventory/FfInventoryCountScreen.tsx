@@ -1,6 +1,6 @@
 import { Box, Paper, Stack, Typography } from '@mui/material'
 import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ActionGroup,
   CheckboxInput,
@@ -31,7 +31,7 @@ import {
   type InvFilters,
   type InvRow,
 } from './InventoryRows'
-import type { CountStatus, InventoryCount } from './InventoryTypes'
+import type { CountStatus, InventoryCount, InventoryNode } from './InventoryTypes'
 
 const STATUS_LABEL: Record<CountStatus, string> = {
   draft: 'Черновик',
@@ -54,6 +54,26 @@ function plural(n: number, one: string, few: string, many: string): string {
   if (mod10 === 1) return `${n} ${one}`
   if (mod10 >= 2 && mod10 <= 4) return `${n} ${few}`
   return `${n} ${many}`
+}
+
+/** Ключи строки тары и всех её родителей, которые надо раскрыть перед прокруткой. */
+function containerPathKeys(count: InventoryCount, containerId: string): string[] {
+  function find(nodes: InventoryNode[]): string[] | null {
+    for (const node of nodes) {
+      if (node.kind === 'product') continue
+      const key = `${node.kind}:${node.id}`
+      if (node.id === containerId) return [key]
+      const nested = find(node.children)
+      if (nested) return [key, ...nested]
+    }
+    return null
+  }
+
+  for (const cell of count.cells) {
+    const nested = find(cell.children)
+    if (nested) return [`cell:${cell.id}`, ...nested]
+  }
+  return []
 }
 
 type Props = {
@@ -88,12 +108,36 @@ export function FfInventoryCountScreen({
   // Память сканера на одну вещь: какую тару открыли. Пока открыта, пики идут в неё.
   const [openContainerId, setOpenContainerId] = useState<string | null>(null)
   const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
+  const [scanFocus, setScanFocus] = useState<{ key: string; request: number } | null>(null)
+
+  useEffect(() => {
+    if (!scanFocus) return
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>(`[data-row-key="${scanFocus.key}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [scanFocus])
 
   function handleScan(code: string) {
     setScanValue('')
     const result = applyScan(count, code, openContainerId)
     setOpenContainerId(result.activeContainerId)
     setScanNote({ text: result.message, tone: result.tone })
+    if (result.focusContainerKey && result.activeContainerId) {
+      const openKeys = containerPathKeys(count, result.activeContainerId)
+      setFilters(EMPTY_FILTERS)
+      setCollapsed((current) => {
+        const next = new Set(current)
+        for (const key of openKeys) next.delete(key)
+        return next
+      })
+      setScanFocus((current) => ({
+        key: result.focusContainerKey as string,
+        request: (current?.request ?? 0) + 1,
+      }))
+    }
     if (result.count !== count) onChange(result.count)
   }
 
@@ -291,6 +335,7 @@ export function FfInventoryCountScreen({
         rows={rows}
         loading={loading}
         readOnly={readOnly}
+        highlightedKey={scanFocus?.key}
         empty={{
           title: 'В документе нет строк',
           hint: 'Либо отбор ничего не нашёл, либо документ наполнен пустым местом.',
