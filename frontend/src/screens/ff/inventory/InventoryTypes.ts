@@ -22,6 +22,10 @@ export type ProductNode = {
   seller: string
   category: string
   barcode: string
+  /** Поля карточки продавца показываются отдельными прямыми колонками. */
+  wbVendorCode?: string | null
+  wbBarcode?: string | null
+  wbSize?: string | null
   photoUrl: string | null
   /** Что числится в системе на момент наполнения документа. */
   expected: number
@@ -48,6 +52,8 @@ export type CellNode = {
   id: string
   /** «А 1.1». Виртуальная зона «Без ячеек» приходит с этим же типом. */
   label: string
+  /** У виртуальной зоны «Без ячеек» штрихкода нет. */
+  barcode?: string | null
   children: InventoryNode[]
 }
 
@@ -62,6 +68,7 @@ export type InventoryCount = {
   id: string
   number: string
   status: CountStatus
+  warehouseId?: string | null
   warehouseName: string
   fill: CountFill
   createdAt: string

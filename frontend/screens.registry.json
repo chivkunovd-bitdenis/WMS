@@ -800,9 +800,20 @@
     {
       "portal": "ff",
       "route": "/app/ff/inventory",
-      "component": "FfPlaceholderPage",
+      "component": "FfInventoryPage",
       "files": [
-        "src/screens/ff/FfPlaceholderPage.tsx"
+        "src/screens/ff/inventory/CommentField.tsx",
+        "src/screens/ff/inventory/FfInventoryCountScreen.tsx",
+        "src/screens/ff/inventory/FfInventoryListScreen.tsx",
+        "src/screens/ff/inventory/FfInventoryPage.tsx",
+        "src/screens/ff/inventory/InventoryCountDialog.tsx",
+        "src/screens/ff/inventory/InventoryCreateDialog.tsx",
+        "src/screens/ff/inventory/InventoryRows.ts",
+        "src/screens/ff/inventory/InventoryScan.ts",
+        "src/screens/ff/inventory/InventoryTree.tsx",
+        "src/screens/ff/inventory/InventoryTypes.ts",
+        "src/screens/ff/inventory/fromWarehouseMap.ts",
+        "src/screens/ff/inventory/inventoryCountApi.ts"
       ],
       "zones": [
         "шапка",
