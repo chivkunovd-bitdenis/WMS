@@ -19,7 +19,12 @@ import {
 } from '../../../ui-kit'
 import type { ReportMetricItem, StatusTone } from '../../../ui-kit'
 import { CommentField } from './CommentField'
-import { applyScan, containerName, type ScanTone } from './InventoryScan'
+import {
+  applyScan,
+  containerName,
+  inventoryRowPathKeys,
+  type ScanTone,
+} from './InventoryScan'
 import { InventoryTree } from './InventoryTree'
 import {
   EMPTY_FILTERS,
@@ -31,7 +36,7 @@ import {
   type InvFilters,
   type InvRow,
 } from './InventoryRows'
-import type { CountStatus, InventoryCount, InventoryNode } from './InventoryTypes'
+import type { CountStatus, InventoryCount } from './InventoryTypes'
 
 const STATUS_LABEL: Record<CountStatus, string> = {
   draft: 'Черновик',
@@ -54,26 +59,6 @@ function plural(n: number, one: string, few: string, many: string): string {
   if (mod10 === 1) return `${n} ${one}`
   if (mod10 >= 2 && mod10 <= 4) return `${n} ${few}`
   return `${n} ${many}`
-}
-
-/** Ключи строки тары и всех её родителей, которые надо раскрыть перед прокруткой. */
-function containerPathKeys(count: InventoryCount, containerId: string): string[] {
-  function find(nodes: InventoryNode[]): string[] | null {
-    for (const node of nodes) {
-      if (node.kind === 'product') continue
-      const key = `${node.kind}:${node.id}`
-      if (node.id === containerId) return [key]
-      const nested = find(node.children)
-      if (nested) return [key, ...nested]
-    }
-    return null
-  }
-
-  for (const cell of count.cells) {
-    const nested = find(cell.children)
-    if (nested) return [`cell:${cell.id}`, ...nested]
-  }
-  return []
 }
 
 type Props = {
@@ -160,8 +145,8 @@ export function FfInventoryCountScreen({
     const result = applyScan(count, code, openContainerId)
     setOpenContainerId(result.activeContainerId)
     setScanNote({ text: result.message, tone: result.tone })
-    if (result.focusContainerKey && result.activeContainerId) {
-      const openKeys = containerPathKeys(count, result.activeContainerId)
+    if (result.focusRowKey) {
+      const openKeys = inventoryRowPathKeys(count, result.focusRowKey)
       setFilters(EMPTY_FILTERS)
       setCollapsed((current) => {
         const next = new Set(current)
@@ -169,7 +154,7 @@ export function FfInventoryCountScreen({
         return next
       })
       setScanFocus((current) => ({
-        key: result.focusContainerKey as string,
+        key: result.focusRowKey as string,
         request: (current?.request ?? 0) + 1,
       }))
     }

@@ -18,8 +18,8 @@ export type ScanResult = {
   count: InventoryCount
   /** Идентификатор открытой тары. null — считаем россыпь. */
   activeContainerId: string | null
-  /** Есть только при скане самой тары: экран должен найти и показать её строку. */
-  focusContainerKey?: string
+  /** Строка тары или товара, которую экран должен раскрыть, показать и подсветить. */
+  focusRowKey?: string
   message: string
   tone: ScanTone
 }
@@ -68,6 +68,34 @@ export function scanCandidates(rawCode: string): string[] {
 
 type Located = { product: ProductNode; containerId: string | null }
 
+/**
+ * Полный путь к строке в дереве: ячейка, родительская тара и сама строка.
+ *
+ * Перед подсветкой путь раскрывается целиком. Иначе факт уже увеличился, но
+ * строка товара остаётся внутри свёрнутого короба и оператор видит тот же
+ * эффект, что при неработающем скане.
+ */
+export function inventoryRowPathKeys(count: InventoryCount, targetKey: string): string[] {
+  function find(nodes: InventoryNode[]): string[] | null {
+    for (const node of nodes) {
+      const key = `${node.kind}:${node.id}`
+      if (key === targetKey) return [key]
+      if (node.kind === 'product') continue
+      const nested = find(node.children)
+      if (nested) return [key, ...nested]
+    }
+    return null
+  }
+
+  for (const cell of count.cells) {
+    const cellKey = `cell:${cell.id}`
+    if (cellKey === targetKey) return [cellKey]
+    const nested = find(cell.children)
+    if (nested) return [cellKey, ...nested]
+  }
+  return []
+}
+
 /** Все товары документа с указанием тары, в которой каждый лежит. */
 function locateProducts(count: InventoryCount): Located[] {
   const out: Located[] = []
@@ -108,6 +136,15 @@ function bump(count: InventoryCount, product: ProductNode): InventoryCount {
   return setActual(count, product.id, (product.actual ?? 0) + 1)
 }
 
+/** ШК WB — основной код, SKU — код на внутренней этикетке при отсутствии ШК WB. */
+function productMatches(product: ProductNode, codes: string[]): boolean {
+  const normalizedCodes = new Set(codes.map((code) => code.toLowerCase()))
+  return [product.barcode, product.wbBarcode, product.sku].some((identifier) => {
+    const normalized = identifier?.trim().toLowerCase()
+    return Boolean(normalized && normalizedCodes.has(normalized))
+  })
+}
+
 export function applyScan(
   count: InventoryCount,
   rawCode: string,
@@ -124,16 +161,14 @@ export function applyScan(
     return {
       count,
       activeContainerId: container.id,
-      focusContainerKey: `${container.kind}:${container.id}`,
+      focusRowKey: `${container.kind}:${container.id}`,
       message: `${KIND_TITLE[container.kind]} ${container.code} ${OPENED[container.kind]}. Пикайте товар — каждый пик добавит штуку.`,
       tone: 'ok',
     }
   }
 
   const located = locateProducts(count)
-  const byBarcode = located.filter(
-    (item) => item.product.barcode != null && codes.includes(item.product.barcode),
-  )
+  const byBarcode = located.filter((item) => productMatches(item.product, codes))
 
   if (byBarcode.length === 0) {
     return {
@@ -162,6 +197,7 @@ export function applyScan(
     return {
       count: next,
       activeContainerId,
+      focusRowKey: `product:${inside.product.id}`,
       message: scannedMessage(inside.product),
       tone: 'ok',
     }
@@ -180,6 +216,7 @@ export function applyScan(
   return {
     count: bump(count, loose.product),
     activeContainerId,
+    focusRowKey: `product:${loose.product.id}`,
     message: scannedMessage(loose.product),
     tone: 'ok',
   }

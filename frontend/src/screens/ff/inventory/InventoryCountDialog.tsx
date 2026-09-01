@@ -1,5 +1,5 @@
 import { Box, Stack, Typography } from '@mui/material'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AppDialog,
   PrimaryAction,
@@ -8,7 +8,12 @@ import {
   WarningNotice,
 } from '../../../ui-kit'
 import { CommentField } from './CommentField'
-import { applyScan, containerName, type ScanTone } from './InventoryScan'
+import {
+  applyScan,
+  containerName,
+  inventoryRowPathKeys,
+  type ScanTone,
+} from './InventoryScan'
 import { InventoryTree } from './InventoryTree'
 import {
   EMPTY_FILTERS,
@@ -70,6 +75,8 @@ export function InventoryCountDialog({
   // Память сканера на одну вещь: какую тару открыли. Пока открыта, пики идут в неё.
   const [openContainerId, setOpenContainerId] = useState<string | null>(null)
   const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
+  const [scanFocus, setScanFocus] = useState<{ key: string; request: number } | null>(null)
+  const treeRef = useRef<HTMLDivElement>(null)
 
   // Открыли другой объект — начинаем с чистого документа, а не дописываем чужой.
   useEffect(() => {
@@ -77,8 +84,19 @@ export function InventoryCountDialog({
     setCollapsed(new Set())
     setOpenContainerId(null)
     setScanNote(null)
+    setScanFocus(null)
     setScanValue('')
   }, [initialCount])
+
+  useEffect(() => {
+    if (!scanFocus) return
+    const frame = window.requestAnimationFrame(() => {
+      treeRef.current
+        ?.querySelector<HTMLElement>(`[data-row-key="${scanFocus.key}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [scanFocus])
 
   function handleScan(code: string) {
     setScanValue('')
@@ -87,6 +105,18 @@ export function InventoryCountDialog({
       const result = applyScan(current, code, openContainerId)
       setOpenContainerId(result.activeContainerId)
       setScanNote({ text: result.message, tone: result.tone })
+      if (result.focusRowKey) {
+        const openKeys = inventoryRowPathKeys(current, result.focusRowKey)
+        setCollapsed((collapsedKeys) => {
+          const next = new Set(collapsedKeys)
+          for (const key of openKeys) next.delete(key)
+          return next
+        })
+        setScanFocus((focus) => ({
+          key: result.focusRowKey as string,
+          request: (focus?.request ?? 0) + 1,
+        }))
+      }
       return result.count
     })
   }
@@ -212,11 +242,12 @@ export function InventoryCountDialog({
 
         {/* Высоту держим: у короба три строки, у ячейки может быть сорок, и диалог
             не должен прыгать от одного нажатия к другому. */}
-        <Box sx={{ maxHeight: 460, overflowY: 'auto' }}>
+        <Box ref={treeRef} sx={{ maxHeight: 460, overflowY: 'auto' }}>
           <InventoryTree
             rows={rows}
             loading={false}
             readOnly={false}
+            highlightedKey={scanFocus?.key}
             empty={{
               title: 'Здесь пусто',
               hint: 'Внутри этого места сейчас нет товара — пересчитывать нечего.',
