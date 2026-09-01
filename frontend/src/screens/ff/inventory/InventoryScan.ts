@@ -18,8 +18,10 @@ export type ScanResult = {
   count: InventoryCount
   /** Идентификатор открытой тары. null — считаем россыпь. */
   activeContainerId: string | null
-  /** Есть только при скане самой тары: экран должен найти и показать её строку. */
-  focusContainerKey?: string
+  /** Строка тары или товара, которую экран должен раскрыть, показать и подсветить. */
+  focusRowKey?: string
+  /** Уже найденный при скане путь: повторно обходить всё дерево экрану не нужно. */
+  focusPathKeys?: string[]
   message: string
   tone: ScanTone
 }
@@ -66,46 +68,84 @@ export function scanCandidates(rawCode: string): string[] {
   return converted && converted !== code ? [code, converted] : [code]
 }
 
-type Located = { product: ProductNode; containerId: string | null }
+type Located = { product: ProductNode; containerId: string | null; pathKeys: string[] }
 
-/** Все товары документа с указанием тары, в которой каждый лежит. */
-function locateProducts(count: InventoryCount): Located[] {
-  const out: Located[] = []
-  function walk(nodes: InventoryNode[], containerId: string | null) {
+/**
+ * Полный путь к строке в дереве: ячейка, родительская тара и сама строка.
+ *
+ * Перед подсветкой путь раскрывается целиком. Иначе факт уже увеличился, но
+ * строка товара остаётся внутри свёрнутого короба и оператор видит тот же
+ * эффект, что при неработающем скане.
+ */
+export function inventoryRowPathKeys(count: InventoryCount, targetKey: string): string[] {
+  function find(nodes: InventoryNode[]): string[] | null {
     for (const node of nodes) {
-      if (node.kind === 'product') out.push({ product: node, containerId })
-      else walk(node.children, node.id)
+      const key = `${node.kind}:${node.id}`
+      if (key === targetKey) return [key]
+      if (node.kind === 'product') continue
+      const nested = find(node.children)
+      if (nested) return [key, ...nested]
     }
+    return null
   }
-  for (const cell of count.cells) walk(cell.children, null)
-  return out
+
+  for (const cell of count.cells) {
+    const cellKey = `cell:${cell.id}`
+    if (cellKey === targetKey) return [cellKey]
+    const nested = find(cell.children)
+    if (nested) return [cellKey, ...nested]
+  }
+  return []
 }
 
-type FoundContainer = { id: string; kind: 'pallet' | 'box' | 'cargo_place'; code: string }
+/** Найденная тара и её уже вычисленный путь в дереве. */
+type FoundContainer = {
+  id: string
+  kind: 'pallet' | 'box' | 'cargo_place'
+  code: string
+  pathKeys: string[]
+}
 
-function findContainer(count: InventoryCount, codes: string[]): FoundContainer | null {
-  let found: FoundContainer | null = null
-  function walk(nodes: InventoryNode[]) {
+/** Тара и товары ищутся одним обходом; на 1000 строках второго прохода нет. */
+function findScanTargets(
+  count: InventoryCount,
+  normalizedCodes: Set<string>,
+): { container: FoundContainer | null; products: Located[] } {
+  let container: FoundContainer | null = null
+  const products: Located[] = []
+  function walk(nodes: InventoryNode[], containerId: string | null, pathKeys: string[]) {
     for (const node of nodes) {
-      if (node.kind === 'product') continue
-      if (node.barcode && codes.includes(node.barcode)) {
-        found = { id: node.id, kind: node.kind, code: node.code }
-        return
+      const key = `${node.kind}:${node.id}`
+      const nextPath = [...pathKeys, key]
+      if (node.kind === 'product') {
+        if (productMatches(node, normalizedCodes)) {
+          products.push({ product: node, containerId, pathKeys: nextPath })
+        }
+        continue
       }
-      walk(node.children)
-      if (found) return
+      if (!container && node.barcode && normalizedCodes.has(node.barcode.trim().toLowerCase())) {
+        container = { id: node.id, kind: node.kind, code: node.code, pathKeys: nextPath }
+      }
+      walk(node.children, node.id, nextPath)
     }
   }
   for (const cell of count.cells) {
-    walk(cell.children)
-    if (found) break
+    walk(cell.children, null, [`cell:${cell.id}`])
   }
-  return found
+  return { container, products }
 }
 
 /** Пик увеличивает факт на единицу: человек считает штуками, а не вводит итог. */
 function bump(count: InventoryCount, product: ProductNode): InventoryCount {
   return setActual(count, product.id, (product.actual ?? 0) + 1)
+}
+
+/** ШК WB — основной код, SKU — код на внутренней этикетке при отсутствии ШК WB. */
+function productMatches(product: ProductNode, normalizedCodes: Set<string>): boolean {
+  return [product.barcode, product.wbBarcode, product.sku].some((identifier) => {
+    const normalized = identifier?.trim().toLowerCase()
+    return Boolean(normalized && normalizedCodes.has(normalized))
+  })
 }
 
 export function applyScan(
@@ -119,21 +159,21 @@ export function applyScan(
     return { count, activeContainerId, message: '', tone: 'ok' }
   }
 
-  const container = findContainer(count, codes)
+  const normalizedCodes = new Set(codes.map((candidate) => candidate.toLowerCase()))
+  const targets = findScanTargets(count, normalizedCodes)
+  const container = targets.container
   if (container) {
     return {
       count,
       activeContainerId: container.id,
-      focusContainerKey: `${container.kind}:${container.id}`,
+      focusRowKey: `${container.kind}:${container.id}`,
+      focusPathKeys: container.pathKeys,
       message: `${KIND_TITLE[container.kind]} ${container.code} ${OPENED[container.kind]}. Пикайте товар — каждый пик добавит штуку.`,
       tone: 'ok',
     }
   }
 
-  const located = locateProducts(count)
-  const byBarcode = located.filter(
-    (item) => item.product.barcode != null && codes.includes(item.product.barcode),
-  )
+  const byBarcode = targets.products
 
   if (byBarcode.length === 0) {
     return {
@@ -162,6 +202,8 @@ export function applyScan(
     return {
       count: next,
       activeContainerId,
+      focusRowKey: `product:${inside.product.id}`,
+      focusPathKeys: inside.pathKeys,
       message: scannedMessage(inside.product),
       tone: 'ok',
     }
@@ -180,6 +222,8 @@ export function applyScan(
   return {
     count: bump(count, loose.product),
     activeContainerId,
+    focusRowKey: `product:${loose.product.id}`,
+    focusPathKeys: loose.pathKeys,
     message: scannedMessage(loose.product),
     tone: 'ok',
   }

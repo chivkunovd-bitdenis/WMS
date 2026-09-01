@@ -10,7 +10,6 @@ import {
   IconAction,
   PrimaryAction,
   ReportMetricStrip,
-  ScannerField,
   ScreenHeader,
   SecondaryAction,
   SelectInput,
@@ -19,7 +18,12 @@ import {
 } from '../../../ui-kit'
 import type { ReportMetricItem, StatusTone } from '../../../ui-kit'
 import { CommentField } from './CommentField'
-import { applyScan, containerName, type ScanTone } from './InventoryScan'
+import {
+  applyScan,
+  containerName,
+  type ScanTone,
+} from './InventoryScan'
+import { InventoryScanField } from './InventoryScanField'
 import { InventoryTree } from './InventoryTree'
 import {
   EMPTY_FILTERS,
@@ -31,7 +35,7 @@ import {
   type InvFilters,
   type InvRow,
 } from './InventoryRows'
-import type { CountStatus, InventoryCount, InventoryNode } from './InventoryTypes'
+import type { CountStatus, InventoryCount } from './InventoryTypes'
 
 const STATUS_LABEL: Record<CountStatus, string> = {
   draft: 'Черновик',
@@ -56,26 +60,6 @@ function plural(n: number, one: string, few: string, many: string): string {
   return `${n} ${many}`
 }
 
-/** Ключи строки тары и всех её родителей, которые надо раскрыть перед прокруткой. */
-function containerPathKeys(count: InventoryCount, containerId: string): string[] {
-  function find(nodes: InventoryNode[]): string[] | null {
-    for (const node of nodes) {
-      if (node.kind === 'product') continue
-      const key = `${node.kind}:${node.id}`
-      if (node.id === containerId) return [key]
-      const nested = find(node.children)
-      if (nested) return [key, ...nested]
-    }
-    return null
-  }
-
-  for (const cell of count.cells) {
-    const nested = find(cell.children)
-    if (nested) return [`cell:${cell.id}`, ...nested]
-  }
-  return []
-}
-
 type Props = {
   count: InventoryCount
   loading: boolean
@@ -90,42 +74,6 @@ type Props = {
   onBack: () => void
 }
 
-
-/**
- * Поле сканера со своим состоянием.
- *
- * Раньше значение поля жило в экране пересчёта — том же, что рисует дерево.
- * Сканер печатает штрихкод посимвольно, и каждый символ перерисовывал всё
- * дерево целиком: тринадцать полных перерисовок на один пик. На большом
- * документе это и был «медленный скан». Своё состояние держит набор внутри.
- */
-function InventoryScanBox({
-  expects,
-  error,
-  notice,
-  onScan,
-}: {
-  expects: string
-  error?: string | null
-  notice?: string | null
-  onScan: (code: string) => void
-}) {
-  const [value, setValue] = useState('')
-  return (
-    <ScannerField
-      value={value}
-      onChange={setValue}
-      onScan={(code) => {
-        setValue('')
-        onScan(code)
-      }}
-      expects={expects}
-      error={error ?? null}
-      notice={notice ?? null}
-      testId="inv-scan"
-    />
-  )
-}
 
 export function FfInventoryCountScreen({
   count,
@@ -151,7 +99,7 @@ export function FfInventoryCountScreen({
     const frame = window.requestAnimationFrame(() => {
       document
         .querySelector<HTMLElement>(`[data-row-key="${scanFocus.key}"]`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        ?.scrollIntoView({ behavior: 'auto', block: 'center' })
     })
     return () => window.cancelAnimationFrame(frame)
   }, [scanFocus])
@@ -160,16 +108,18 @@ export function FfInventoryCountScreen({
     const result = applyScan(count, code, openContainerId)
     setOpenContainerId(result.activeContainerId)
     setScanNote({ text: result.message, tone: result.tone })
-    if (result.focusContainerKey && result.activeContainerId) {
-      const openKeys = containerPathKeys(count, result.activeContainerId)
-      setFilters(EMPTY_FILTERS)
+    if (result.focusRowKey) {
+      const openKeys = result.focusPathKeys ?? []
+      setFilters((current) => current === EMPTY_FILTERS ? current : EMPTY_FILTERS)
       setCollapsed((current) => {
         const next = new Set(current)
-        for (const key of openKeys) next.delete(key)
-        return next
+        let changed = false
+        for (const key of openKeys) changed = next.delete(key) || changed
+        return changed ? next : current
       })
-      setScanFocus((current) => ({
-        key: result.focusContainerKey as string,
+      const focusKey = result.focusRowKey
+      setScanFocus((current) => current?.key === focusKey ? current : ({
+        key: focusKey,
         request: (current?.request ?? 0) + 1,
       }))
     }
@@ -306,7 +256,7 @@ export function FfInventoryCountScreen({
           штуку. Тара не открыта — считаем то, что лежит в ячейке россыпью. */}
       {!readOnly ? (
         <Box sx={{ maxWidth: 640, mb: 2 }}>
-          <InventoryScanBox
+          <InventoryScanField
             onScan={handleScan}
             expects={
               openContainerId
@@ -315,6 +265,7 @@ export function FfInventoryCountScreen({
             }
             error={scanNote?.tone === 'error' ? scanNote.text : null}
             notice={scanNote && scanNote.tone !== 'error' ? scanNote.text : null}
+            testId="inv-scan"
           />
         </Box>
       ) : null}

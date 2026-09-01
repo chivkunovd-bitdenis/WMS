@@ -387,14 +387,28 @@ export function setActual(
   actual: number | null,
 ): InventoryCount {
   function mapNodes(nodes: InventoryNode[]): InventoryNode[] {
-    return nodes.map((node) => {
+    let changed = false
+    const next = nodes.map((node) => {
       if (node.kind === 'product') {
-        return node.id === productId ? { ...node, actual } : node
+        if (node.id !== productId || node.actual === actual) return node
+        changed = true
+        return { ...node, actual }
       }
-      return { ...node, children: mapNodes(node.children) }
+      const children = mapNodes(node.children)
+      if (children === node.children) return node
+      changed = true
+      return { ...node, children }
     })
+    return changed ? next : nodes
   }
-  return { ...count, cells: count.cells.map((c) => ({ ...c, children: mapNodes(c.children) })) }
+  let changed = false
+  const cells = count.cells.map((cell) => {
+    const children = mapNodes(cell.children)
+    if (children === cell.children) return cell
+    changed = true
+    return { ...cell, children }
+  })
+  return changed ? { ...count, cells } : count
 }
 
 export function collapseAllKeys(count: InventoryCount): Set<string> {

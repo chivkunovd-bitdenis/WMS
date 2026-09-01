@@ -1157,7 +1157,7 @@ def test_workspace_opens_boxes_while_order_sticker_is_not_ready() -> None:
     assert any(item["code"] == "stickers_not_ready" for item in blockers)
 
 
-def test_workspace_active_wb_unlocks_handoff_before_pick_and_pack() -> None:
+def test_workspace_active_wb_starts_with_picking() -> None:
     order_id = uuid.uuid4()
     supply = SimpleNamespace(
         marketplace="wb",
@@ -1188,7 +1188,7 @@ def test_workspace_active_wb_unlocks_handoff_before_pick_and_pack() -> None:
         unassigned_packed_order_ids={order_id},
     )
 
-    assert stage == "handoff_prep"
+    assert stage == "picking"
 
 
 def test_workspace_without_distribution_skips_assignment_gate() -> None:
