@@ -18,8 +18,10 @@ from app.models.fbs_supply import FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_SUPPLY_STA
 from app.services.fbs_shipment_service import (
     FbsShipmentError,
     _build_delivery_checks,
+    _checks_allow_delivery,
     _validate_checks_pass,
 )
+from app.services.fbs_supply_composition_service import SupplyCompositionDiscrepancy
 
 
 def _mock_supply(
@@ -122,6 +124,31 @@ def test_terminal_order_check_not_ok() -> None:
     terminal = [check for check in checks if check.code == "order_terminal"]
     assert len(terminal) == 1
     assert terminal[0].ok is False
+
+
+def test_terminal_wb_composition_order_is_visible_but_does_not_block() -> None:
+    order_id = uuid.uuid4()
+    checks = _build_delivery_checks(
+        _mock_supply(),
+        [_mock_order(FBS_ORDER_STATUS_PACKED)],
+        cargo_qr_ready=True,
+        discrepancies=(
+            SupplyCompositionDiscrepancy(
+                code="terminal_order",
+                wb_order_id=5635876649,
+                local_order_id=order_id,
+                detail=FBS_ORDER_STATUS_CANCELLED,
+            ),
+        ),
+    )
+
+    advisory = [check for check in checks if check.code == "wb_terminal_order_ignored"]
+    assert len(advisory) == 1
+    assert advisory[0].ok is False
+    assert advisory[0].order_id == order_id
+    assert "исключён из списания" in advisory[0].message
+    assert _checks_allow_delivery(checks) is True
+    _validate_checks_pass(checks)
 
 
 def test_warehouse_route_has_no_cargo_checks() -> None:
