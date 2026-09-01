@@ -1157,7 +1157,7 @@ def test_workspace_opens_boxes_while_order_sticker_is_not_ready() -> None:
     assert any(item["code"] == "stickers_not_ready" for item in blockers)
 
 
-def test_workspace_does_not_block_unpicked_wb_order() -> None:
+def test_workspace_active_wb_starts_with_optional_picking() -> None:
     order_id = uuid.uuid4()
     supply = SimpleNamespace(
         marketplace="wb",
@@ -1198,6 +1198,49 @@ def test_workspace_does_not_block_unpicked_wb_order() -> None:
         unassigned_packed_order_ids={order_id},
     )
     assert all(item["code"] != "order_not_picked" for item in blockers)
+def test_workspace_active_wb_does_not_return_to_unfinished_optional_picking() -> None:
+    order_id = uuid.uuid4()
+    supply = SimpleNamespace(
+        marketplace="wb",
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+        trbxes=[],
+    )
+    order = SimpleNamespace(
+        id=order_id,
+        wb_order_id=775,
+        pick_status="pending",
+        metadata_delivery_allowed=True,
+        required_meta_json=[],
+    )
+
+    packing = _compute_stage(
+        supply,
+        [order],
+        WorkspaceProgress(
+            picked=0,
+            packed=1,
+            metadata_ready=0,
+            stickers_ready=0,
+            total=2,
+        ),
+    )
+    handoff = _compute_stage(
+        supply,
+        [order],
+        WorkspaceProgress(
+            picked=0,
+            packed=2,
+            metadata_ready=2,
+            stickers_ready=0,
+            total=2,
+        ),
+        has_physical_boxes=False,
+        unassigned_packed_order_ids={order_id},
+    )
+
+    assert packing == "packing"
+    assert handoff == "handoff_prep"
 
 
 def test_workspace_without_distribution_skips_assignment_gate() -> None:

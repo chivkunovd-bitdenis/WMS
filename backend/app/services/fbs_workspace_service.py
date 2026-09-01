@@ -390,7 +390,12 @@ def _compute_stage(
         return "composition"
     if progress.total == 0:
         return "composition"
-    if progress.picked < progress.total:
+    # Для WB подбор — полезный, но необязательный операторский этап. Открыть
+    # упаковку можно без сканов подбора; как только упаковка началась, не
+    # возвращаем рабочее место назад.
+    if progress.picked < progress.total and not (
+        getattr(supply, "marketplace", None) == "wb" and progress.packed > 0
+    ):
         return "picking"
     if progress.packed < progress.total:
         return "packing"

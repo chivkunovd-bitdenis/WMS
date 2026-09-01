@@ -47,7 +47,7 @@ import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
-import { buildFbsPickingListPrintHtml, fbsBoxOperationsDisabled, ordersWord } from './fbsUx'
+import { buildFbsPickingListPrintHtml, fbsAccessibleStageIndex, fbsBoxOperationsDisabled, ordersWord } from './fbsUx'
 import {
   confirmFbsPrintApplied,
   addFbsOrdersToSupply,
@@ -1133,12 +1133,14 @@ export function FfFbsSupplyWorkspace({
   }, [workspace, stage])
   const currentStage = workspace ? visualStage(workspace.stage) : 'composition'
   const currentStageIndex = STAGES.findIndex((item) => item.key === currentStage)
-  // Короба — самостоятельный физический этап. Если товар уже упакован, открыть
-  // его можно независимо от подбора, печати стикеров и заполнения маркировки:
-  // эти действия не должны запирать оператора на предыдущей вкладке.
-  const boxesStageIndex = STAGES.findIndex((item) => item.key === 'boxes')
-  const allPacked = Boolean(workspace && workspace.progress.total > 0 && workspace.progress.packed === workspace.progress.total)
-  const accessibleStageIndex = allPacked ? Math.max(currentStageIndex, boxesStageIndex) : currentStageIndex
+  const accessibleStageIndex = workspace
+    ? fbsAccessibleStageIndex({
+      marketplace: workspace.supply.marketplace,
+      currentStage,
+      packed: workspace.progress.packed,
+      total: workspace.progress.total,
+    })
+    : currentStageIndex
   const stageIsCurrent = stage === currentStage
   const allPicked = Boolean(workspace && workspace.progress.total > 0 && workspace.progress.picked === workspace.progress.total)
   const deliveryConfirmed = deliverySubmitted
