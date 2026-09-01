@@ -115,12 +115,21 @@ type Props = {
   rows: InvRow[]
   loading: boolean
   readOnly: boolean
+  highlightedKey?: string | null
   empty?: { title: string; hint?: string; action?: ReactNode }
   onToggle: (row: InvRow) => void
   onActual: (row: InvRow, value: number | null) => void
 }
 
-export function InventoryTree({ rows, loading, readOnly, empty, onToggle, onActual }: Props) {
+export function InventoryTree({
+  rows,
+  loading,
+  readOnly,
+  highlightedKey,
+  empty,
+  onToggle,
+  onActual,
+}: Props) {
   const [printRow, setPrintRow] = useState<InvRow | null>(null)
   const columns: Column<InvRow>[] = [
     {
@@ -303,6 +312,7 @@ export function InventoryTree({ rows, loading, readOnly, empty, onToggle, onActu
             loading={loading}
             empty={empty}
             fixedLayout
+            highlightedKey={highlightedKey}
             hasDiscrepancy={hasDiscrepancy}
             isComplete={isComplete}
           />
