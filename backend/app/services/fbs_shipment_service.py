@@ -1779,8 +1779,6 @@ async def deliver_supply(
             and existing.id == existing_by_key.id
             and existing.request_hash
             and existing.request_hash != request_hash
-            and existing.state
-            not in {WB_OPERATION_STATE_PENDING, WB_OPERATION_STATE_PENDING_CONFIRMATION}
         ):
             raise FbsShipmentError("idempotency_key_reused", http_status=409)
         if existing.state == WB_OPERATION_STATE_CONFIRMED:

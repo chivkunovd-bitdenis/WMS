@@ -1064,6 +1064,73 @@ async def test_pending_reconcile_never_overwrites_parallel_definitive_failure(
         assert operation.state == WB_OPERATION_STATE_FAILED
 
 
+@pytest.mark.asyncio
+async def test_pending_delivery_key_cannot_be_rebound_to_another_supply(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply_a, _ = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[953071],
+        supply_name="WB operation owner A",
+    )
+    supply_b, _ = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[953072],
+        supply_name="WB operation owner B",
+    )
+    reused_key = str(uuid.uuid4())
+
+    from app.services.fbs_supply_reconcile_service import request_hash_for_deliver
+
+    async with SessionLocal() as session:
+        supply_a_row = await session.get(FbsSupply, uuid.UUID(supply_a["id"]))
+        assert supply_a_row is not None
+        operation = FbsWbOperation(
+            tenant_id=tenant_id,
+            seller_id=supply_a_row.seller_id,
+            operation_kind="supply_deliver",
+            idempotency_key=reused_key,
+            request_hash=request_hash_for_deliver(
+                supply_id=supply_a_row.id,
+                confirmed_preflight_version=None,
+            ),
+            local_entity_type="fbs_supply",
+            local_entity_id=supply_a_row.id,
+            state=WB_OPERATION_STATE_PENDING,
+        )
+        session.add(operation)
+        await session.commit()
+        operation_id = operation.id
+
+    response = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply_b["id"],
+        idempotency_key=reused_key,
+    )
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["code"] == "idempotency_key_reused"
+
+    async with SessionLocal() as session:
+        operation = await session.get(FbsWbOperation, operation_id)
+        assert operation is not None
+        assert operation.local_entity_id == uuid.UUID(supply_a["id"])
+        assert operation.state == WB_OPERATION_STATE_PENDING
+
+
 # TC-NEW-FBS-SHIPWH-007 — successful WB deliver survives QR failure and retry does not deliver again
 @pytest.mark.asyncio
 async def test_warehouse_sc_deliver_qr_failure_keeps_confirmed_delivery_and_retries_qr_only(
