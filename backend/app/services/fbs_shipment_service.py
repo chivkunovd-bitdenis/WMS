@@ -7,7 +7,7 @@ import logging
 import uuid
 from base64 import b64decode
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -119,7 +119,32 @@ _DELIVER_READY_ORDER_STATUSES = frozenset({FBS_ORDER_STATUS_PACKED})
 _PACKAGING_PENDING_ORDER_STATUSES = frozenset(
     {FBS_ORDER_STATUS_IN_SUPPLY, FBS_ORDER_STATUS_ASSEMBLING}
 )
-_ADVISORY_CHECK_CODES = frozenset({"negative_stock", "wb_terminal_order_ignored"})
+# ⛔⛔⛔ РЕШЕНИЕ ВЛАДЕЛЬЦА ОТ 01.09.2026 — НЕ ОТМЕНЯТЬ БЕЗ ЕГО СЛОВ ⛔⛔⛔
+#
+# Уровень проверки перед передачей поставки. Смысл строго такой:
+#   blocker — передача невозможна физически или уже состоялась;
+#   warning — оператор должен это знать, но останавливать его нельзя;
+#   info    — просто факт, зелёная галочка.
+#
+# У Wildberries `blocker` разрешён РОВНО двум проверкам, они перечислены в
+# WB_ALLOWED_BLOCKER_CODES. Всё остальное — стикеры, Честный знак, физические
+# короба, распределение заказов по коробам, QR коробов и грузомест, расхождения
+# состава — оператора НЕ останавливает. Владелец: «напечатали, галочку
+# поставили — хватит; ничто не должно мешать положить в короб и отгрузить».
+# Если Wildberries чего-то действительно не хватает, он откажет сам, и это будет
+# честный отказ маркетплейса, а не наша выдумка.
+#
+# Эти пять внутренних блокировок с 04.08.2026 держали склад: оператор доходил
+# до финальной кнопки и упирался в серую кнопку без выхода. Восстанавливать их
+# нельзя ни напрямую, ни под новым именем. Набор заморожен тестом
+# test_wb_delivery_blocker_codes_are_frozen, а _apply_wb_blocker_policy ниже
+# понижает до предупреждения любую новую проверку, которую кто-то попробует
+# сделать блокирующей для WB в обход этого списка.
+CHECK_BLOCKER = "blocker"
+CHECK_WARNING = "warning"
+CHECK_INFO = "info"
+
+WB_ALLOWED_BLOCKER_CODES = frozenset({"supply_bad_status", "supply_empty"})
 _DELIVER_ALLOWED_DELIVERY_TYPES = frozenset({FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_DELIVERY_TYPE_PVZ})
 _DELIVER_BLOCKED_SUPPLY_STATUSES = frozenset(
     {
@@ -169,6 +194,9 @@ class DeliveryCheck:
     code: str
     message: str
     ok: bool
+    # Уровень задаётся явно и намеренно не имеет значения по умолчанию: тот, кто
+    # добавляет новую проверку, обязан решить, останавливает она склад или нет.
+    severity: str
     order_id: uuid.UUID | None = None
 
 
@@ -472,6 +500,11 @@ def _build_delivery_checks(
     # Требование самого Wildberries, записанное в required_meta_json заказа, этим
     # флагом не отменяется: такой заказ по-прежнему не уедет, и это правильно.
     honest_sign_skipped = supply.honest_sign_skipped_at is not None
+    # Уровень «мягких» проверок: у Wildberries это предупреждение (решение
+    # владельца 01.09.2026), у остальных маркетплейсов поведение не меняется —
+    # у Ozon свой контракт и отдельно подтверждённых требований владельца по
+    # нему нет.
+    soft = CHECK_WARNING if supply.marketplace == "wb" else CHECK_BLOCKER
     checks: list[DeliveryCheck] = []
 
     if supply.status in _DELIVER_BLOCKED_SUPPLY_STATUSES:
@@ -480,6 +513,7 @@ def _build_delivery_checks(
                 code="supply_bad_status",
                 message="Поставка уже передана или закрыта.",
                 ok=False,
+                severity=CHECK_BLOCKER,
             )
         )
     elif supply.marketplace == "ozon" and supply.status != FBS_SUPPLY_STATUS_PACKED:
@@ -488,6 +522,7 @@ def _build_delivery_checks(
                 code="packaging_required",
                 message="Упаковка поставки не завершена.",
                 ok=False,
+                severity=CHECK_BLOCKER,
             )
         )
 
@@ -497,6 +532,7 @@ def _build_delivery_checks(
                 code="supply_empty",
                 message="Поставка пуста — нет заказов.",
                 ok=False,
+                severity=CHECK_BLOCKER,
             )
         )
 
@@ -534,6 +570,13 @@ def _build_delivery_checks(
                 # remaining active orders. Reconciliation already excludes this
                 # order from source planning, write-off and local delivery state.
                 ok=ignored and not terminal_wb_order,
+                severity=(
+                    CHECK_INFO
+                    if (ignored and not terminal_wb_order)
+                    else CHECK_WARNING
+                    if terminal_wb_order
+                    else CHECK_BLOCKER
+                ),
                 order_id=discrepancy.local_order_id,
             )
         )
@@ -548,6 +591,7 @@ def _build_delivery_checks(
                     code="packaging_required",
                     message="Заказ ещё не упакован.",
                     ok=False,
+                    severity=CHECK_BLOCKER,
                     order_id=order.id,
                 )
             )
@@ -557,6 +601,7 @@ def _build_delivery_checks(
                     code="order_terminal",
                     message="Заказ из фактического состава уже отменён или закрыт.",
                     ok=False,
+                    severity=CHECK_BLOCKER,
                     order_id=order.id,
                 )
             )
@@ -569,8 +614,12 @@ def _build_delivery_checks(
                 checks.append(
                     DeliveryCheck(
                         code="order_sticker_not_ready",
-                        message="Стикер заказа WB не готов. Получите его повторно перед передачей.",
+                        message=(
+                            "Стикер заказа WB не напечатан. "
+                            "Передаче не мешает, напечатать можно и после неё."
+                        ),
                         ok=False,
+                        severity=CHECK_WARNING,
                         order_id=order.id,
                     )
                 )
@@ -580,6 +629,7 @@ def _build_delivery_checks(
                         code="order_sticker_ready",
                         message="Стикер заказа WB готов.",
                         ok=True,
+                        severity=CHECK_INFO,
                         order_id=order.id,
                     )
                 )
@@ -594,8 +644,12 @@ def _build_delivery_checks(
             checks.append(
                 DeliveryCheck(
                     code="marking_required",
-                    message="Требуется маркировка Честный знак.",
+                    message=(
+                        "Честный знак не нанесён. "
+                        "Передаче не мешает, нанести можно и после неё."
+                    ),
                     ok=False,
+                    severity=soft,
                     order_id=order.id,
                 )
             )
@@ -605,6 +659,7 @@ def _build_delivery_checks(
                     code="marking_not_allowed",
                     message=marking_svc.delivery_marking_message(order, list(order.markings)),
                     ok=False,
+                    severity=soft,
                     order_id=order.id,
                 )
             )
@@ -614,6 +669,7 @@ def _build_delivery_checks(
                     code="marking_allowed",
                     message=marking_svc.delivery_marking_message(order, list(order.markings)),
                     ok=True,
+                    severity=CHECK_INFO,
                     order_id=order.id,
                 )
             )
@@ -623,16 +679,24 @@ def _build_delivery_checks(
             checks.append(
                 DeliveryCheck(
                     code="box_qr_not_ready",
-                    message="QR коробов ПВЗ ещё не готовы.",
+                    message=(
+                        "QR коробов ПВЗ ещё не созданы. "
+                        "Передаче не мешает, напечатать можно и после неё."
+                    ),
                     ok=False,
+                    severity=soft,
                 )
             )
         elif not cargo_qr_ready:
             checks.append(
                 DeliveryCheck(
                     code="cargo_place_qr_not_ready",
-                    message="QR грузомест не готовы к печати.",
+                    message=(
+                        "QR грузомест не напечатаны. "
+                        "Передаче не мешает, напечатать можно и после неё."
+                    ),
                     ok=False,
+                    severity=soft,
                 )
             )
         else:
@@ -641,6 +705,7 @@ def _build_delivery_checks(
                     code="cargo_places_ready",
                     message="Грузоместа и QR готовы.",
                     ok=True,
+                    severity=CHECK_INFO,
                 )
             )
 
@@ -648,8 +713,9 @@ def _build_delivery_checks(
         checks.append(
             DeliveryCheck(
                 code="physical_boxes_required",
-                message="Создайте физические короба для передачи поставки.",
+                message="Физические короба не созданы. Передаче не мешает.",
                 ok=False,
+                severity=soft,
             )
         )
     if boxes_required and without_distribution and has_physical_boxes:
@@ -658,6 +724,7 @@ def _build_delivery_checks(
                 code="boxes_without_distribution",
                 message="Короба созданы без распределения товаров.",
                 ok=True,
+                severity=CHECK_INFO,
             )
         )
     else:
@@ -665,8 +732,11 @@ def _build_delivery_checks(
             checks.append(
                 DeliveryCheck(
                     code="packed_order_unassigned",
-                    message="Упакованный заказ не назначен в физический короб.",
+                    message=(
+                        "Заказ не разложен по физическим коробам. Передаче не мешает."
+                    ),
                     ok=False,
+                    severity=soft,
                     order_id=order_id,
                 )
             )
@@ -684,11 +754,32 @@ def _build_delivery_checks(
                             "подтверждения остаток будет списан в минус."
                         ),
                         ok=False,
+                        severity=CHECK_WARNING,
                         order_id=resolution.fbs_order_id,
                     )
                 )
 
-    return checks
+    return _apply_wb_blocker_policy(checks, supply.marketplace)
+
+
+def _apply_wb_blocker_policy(
+    checks: list[DeliveryCheck], marketplace: str | None
+) -> list[DeliveryCheck]:
+    """Страховка от повторного появления внутренних блокировок WB.
+
+    Даже если кто-то заведёт новую проверку и по привычке пометит её блокером,
+    для Wildberries она станет предупреждением — кроме кодов из
+    WB_ALLOWED_BLOCKER_CODES. Чтобы сделать проверку WB блокирующей, придётся
+    осознанно дописать её в этот список, а список заморожен тестом.
+    """
+    if marketplace != "wb":
+        return checks
+    return [
+        check
+        if check.severity != CHECK_BLOCKER or check.code in WB_ALLOWED_BLOCKER_CODES
+        else replace(check, severity=CHECK_WARNING)
+        for check in checks
+    ]
 
 
 def _checks_to_payload(checks: list[DeliveryCheck]) -> list[dict[str, Any]]:
@@ -697,6 +788,7 @@ def _checks_to_payload(checks: list[DeliveryCheck]) -> list[dict[str, Any]]:
             "code": check.code,
             "message": check.message,
             "ok": check.ok,
+            "severity": check.severity,
             "order_id": str(check.order_id) if check.order_id is not None else None,
         }
         for check in checks
@@ -705,7 +797,7 @@ def _checks_to_payload(checks: list[DeliveryCheck]) -> list[dict[str, Any]]:
 
 def _validate_checks_pass(checks: list[DeliveryCheck]) -> None:
     for check in checks:
-        if not check.ok and check.code not in _ADVISORY_CHECK_CODES:
+        if check.severity == CHECK_BLOCKER:
             if check.code in {
                 "wb_supply_composition_discrepancy",
                 "order_terminal",
@@ -720,7 +812,7 @@ def _validate_checks_pass(checks: list[DeliveryCheck]) -> None:
 
 
 def _checks_allow_delivery(checks: list[DeliveryCheck]) -> bool:
-    return all(check.ok or check.code in _ADVISORY_CHECK_CODES for check in checks)
+    return not any(check.severity == CHECK_BLOCKER for check in checks)
 
 
 async def _actual_wb_orders_and_source_plan(
@@ -911,7 +1003,7 @@ async def preflight_delivery(
             unassigned_packed_order_ids=frozenset(),
         )
         return DeliveryPreflightResult(
-            can_deliver=all(check.ok for check in checks),
+            can_deliver=_checks_allow_delivery(checks),
             version=version,
             checked_at=checked_at,
             checks=tuple(checks),

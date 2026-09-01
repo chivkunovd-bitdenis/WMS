@@ -408,9 +408,17 @@ async def test_fbs_shipment_deliver_ok_and_orders_not_ready(
         supply_name="Deliver bad status",
     )
 
+    # Отсутствие физических коробов больше не запрет, а предупреждение:
+    # решение владельца от 01.09.2026 — склад из-за коробов не стоит.
+    preflight = await _delivery_preflight(async_client, headers, supply_bad["id"])
+    assert preflight["can_deliver"] is True
+    boxes_check = next(
+        check for check in preflight["checks"] if check["code"] == "physical_boxes_required"
+    )
+    assert boxes_check["severity"] == "warning"
+
     bad = await _deliver_with_preflight(async_client, headers, supply_bad["id"])
-    assert bad.status_code == 400
-    assert bad.json()["detail"]["code"] == "physical_boxes_required"
+    assert bad.status_code == 200, bad.text
 
 
 # TC-NEW-FBS-SHIP-STOCK-002, TC-NEW-FBS-SHIP-STOCK-003
@@ -767,9 +775,13 @@ async def test_fbs_shipment_marking_required_and_ok(
         supply_name="Marking required",
     )
 
-    missing = await _deliver_with_preflight(async_client, headers, supply["id"])
-    assert missing.status_code == 400
-    assert missing.json()["detail"]["code"] == "marking_required"
+    # Ненанесённый Честный знак виден оператору, но передачу не запрещает.
+    preflight = await _delivery_preflight(async_client, headers, supply["id"])
+    assert preflight["can_deliver"] is True
+    marking_check = next(
+        check for check in preflight["checks"] if check["code"] == "marking_required"
+    )
+    assert marking_check["severity"] == "warning"
 
     async with SessionLocal() as session:
         session.add(
@@ -1071,9 +1083,9 @@ async def test_retry_supply_qr_succeeds_for_pvz_delivery_type(
     assert retry_qr.json()["supply"]["barcode_asset"]["status"] == "ready"
 
 
-# TC-NEW-FBS-SHIPWH-005 — PVZ deliver requires physical boxes before WB transfer
+# TC-NEW-FBS-SHIPWH-005 — ПВЗ уезжает и без физических коробов (решение владельца 01.09.2026)
 @pytest.mark.asyncio
-async def test_fbs_shipment_deliver_pvz_requires_trbx(
+async def test_fbs_shipment_deliver_pvz_without_boxes_still_goes(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
@@ -1093,9 +1105,16 @@ async def test_fbs_shipment_deliver_pvz_requires_trbx(
         delivery_type="pvz",
     )
 
+    preflight = await _delivery_preflight(async_client, headers, supply["id"])
+    assert preflight["can_deliver"] is True
+    assert {
+        check["code"]
+        for check in preflight["checks"]
+        if check["severity"] == "blocker"
+    } == set()
+
     resp = await _deliver_with_preflight(async_client, headers, supply["id"])
-    assert resp.status_code == 400
-    assert resp.json()["detail"]["code"] == "physical_boxes_required"
+    assert resp.status_code == 200, resp.text
 
 
 # TC-NEW-FBS-SHIPWH-006 — cancelled WB order is skipped without blocking deliver

@@ -23,6 +23,7 @@ from app.services.wildberries_client import WildberriesClientError
 from tests.test_fbs_shipment_warehouse_sc import (
     _create_and_fill_physical_box,
     _create_supply,
+    _delivery_preflight,
     _deliver_with_preflight,
     _mock_actual_composition_from_local_links,
     _prepare_supply_with_orders,
@@ -826,7 +827,7 @@ async def test_fbs_pvz_trbx_sticker_single_response_without_trbx_id(
 
 
 @pytest.mark.asyncio
-async def test_fbs_pvz_deliver_requires_physical_boxes(
+async def test_fbs_pvz_deliver_warns_about_boxes_but_does_not_stop(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
@@ -845,9 +846,13 @@ async def test_fbs_pvz_deliver_requires_physical_boxes(
         supply_name="PVZ deliver",
     )
 
-    missing = await _deliver_with_preflight(async_client, headers, supply["id"])
-    assert missing.status_code == 400
-    assert missing.json()["detail"]["code"] == "physical_boxes_required"
+    # Коробов ещё нет: оператор видит предупреждение, но кнопка живая.
+    preflight = await _delivery_preflight(async_client, headers, supply["id"])
+    assert preflight["can_deliver"] is True
+    assert any(
+        check["code"] == "physical_boxes_required" and check["severity"] == "warning"
+        for check in preflight["checks"]
+    )
 
     await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
 
