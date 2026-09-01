@@ -8,12 +8,14 @@ import type { CountListItem, InventoryCount } from './InventoryTypes'
 import {
   INVENTORY_BASE as BASE,
   actualPayload,
+  ensureScannedProductLine,
   inventoryAuthHeaders as authHeaders,
   postResultNote,
   toCount,
   toListItem,
   type ApiDetail,
   type ApiSummary,
+  type EnsureScannedProductRequest,
 } from './inventoryCountApi'
 
 // Экран инвентаризации, подключённый к серверу.
@@ -224,6 +226,10 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         onPost={() => void post()}
         onCancelDocument={() => void cancelDocument()}
         onCreateContainer={(kind) => void createContainer(kind)}
+        onEnsureScannedProduct={(
+          current: InventoryCount,
+          request: EnsureScannedProductRequest,
+        ) => ensureScannedProductLine(token, current, request)}
         onBack={() => {
           setCount(null)
           setNote(null)

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { applyScan, inventoryRowPathKeys } from './InventoryScan'
+import { applyScan, confirmedProductScan, inventoryRowPathKeys } from './InventoryScan'
 import { buildRows, EMPTY_FILTERS } from './InventoryRows'
 import type { InventoryCount, ProductNode } from './InventoryTypes'
 
 function product(overrides: Partial<ProductNode> = {}): ProductNode {
   return {
     kind: 'product',
+    productId: 'product-1',
     id: 'line-1',
     name: 'Куртка',
     sku: 'SKU-JACKET-1',
@@ -96,6 +97,56 @@ describe('inventory product scan', () => {
 
     expect(actualOf(second.count)).toBe(2)
     expect(second.message).toContain('2 из 3')
+  })
+
+  it('requests a new line when the product is found in another container', () => {
+    const firstBox = countWithBox(product())
+    const secondProduct = product({
+      id: 'line-2',
+      productId: 'product-2',
+      name: 'Ремень',
+      sku: 'SKU-BELT-1',
+      barcode: '4600000000002',
+      wbBarcode: '4600000000002',
+    })
+    firstBox.cells[0].children.push({
+      kind: 'box',
+      id: 'box-2',
+      code: 'BOX-2',
+      barcode: 'BOX-BARCODE-2',
+      children: [secondProduct],
+    })
+
+    const scanned = applyScan(firstBox, '4600000000002', 'box-1')
+
+    expect(scanned.count).toBe(firstBox)
+    expect(scanned.ensureProductLine).toEqual({
+      containerKind: 'box',
+      containerId: 'box-1',
+      barcodeCandidates: ['4600000000002'],
+      productId: 'product-2',
+    })
+  })
+
+  it('requests a new line for a catalog product absent from the document', () => {
+    const count = countWithBox(product())
+    const scanned = applyScan(count, 'NEW-BARCODE', 'box-1')
+
+    expect(scanned.ensureProductLine).toEqual({
+      containerKind: 'box',
+      containerId: 'box-1',
+      barcodeCandidates: ['NEW-BARCODE'],
+    })
+    expect(scanned.tone).toBe('ok')
+  })
+
+  it('focuses a server-created line without counting it twice', () => {
+    const count = countWithBox(product({ actual: 1, expected: 0 }))
+    const confirmed = confirmedProductScan(count, 'line-1', 'box-1')
+
+    expect(actualOf(confirmed.count)).toBe(1)
+    expect(confirmed.focusRowKey).toBe('product:line-1')
+    expect(confirmed.message).toContain('1 из 0')
   })
 
   it('processes repeated scans with 1000 product rows still expanded', () => {

@@ -17,6 +17,7 @@ function toInventoryNode(node: MapNode): InventoryNode {
     return {
       kind: 'product',
       id: node.id,
+      productId: node.product_id,
       name: node.name,
       sku: node.product_id,
       seller: node.seller_name ?? '—',

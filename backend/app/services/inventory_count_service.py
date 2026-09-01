@@ -24,7 +24,7 @@ from app.models.seller_wildberries_imported_card import SellerWildberriesImporte
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
-from app.services import inventory_service, tenant_settings_service
+from app.services import inventory_service, tenant_settings_service, warehouse_map_service
 from app.services.inventory_container_service import ContainerKind
 from app.services.sorting_location_service import SORTING_LOCATION_CODE
 from app.services.wb_card_enrichment import subject_name_from_card
@@ -72,6 +72,12 @@ class PostResult:
     posted_lines: int
     unchanged_lines: int
     changed_balances: list[ChangedBalance]
+
+
+@dataclass(frozen=True)
+class ProductScanResult:
+    count: InventoryCount
+    line_id: uuid.UUID
 
 
 def _product_category_column() -> Any | None:
@@ -475,6 +481,144 @@ async def save_actuals(
     loaded = await get_count(session, tenant_id, count.id)
     assert loaded is not None
     return loaded
+
+
+async def scan_product_into_container(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    count_id: uuid.UUID,
+    *,
+    container_kind: ContainerKind,
+    container_id: uuid.UUID,
+    barcode_candidates: list[str],
+    product_id_hint: uuid.UUID | None,
+    actual_values: list[tuple[uuid.UUID, int | None]],
+) -> ProductScanResult:
+    """Add one counted unit to a container, creating the draft line if needed.
+
+    The browser normally counts an existing line locally for scanner speed. This
+    path is used only for a physical find: the product has no line in the opened
+    container. Existing unsaved facts arrive with the request and are persisted
+    under the same document lock, so adding the new line cannot erase the work
+    already visible to the operator.
+    """
+
+    count = await session.scalar(
+        select(InventoryCount)
+        .where(
+            InventoryCount.id == count_id,
+            InventoryCount.tenant_id == tenant_id,
+        )
+        .with_for_update()
+    )
+    if count is None:
+        raise InventoryCountError("not_found")
+    if count.status != STATUS_DRAFT:
+        raise InventoryCountError("not_editable")
+    if count.warehouse_id is None:
+        raise InventoryCountError("warehouse_required")
+
+    line_ids = [line_id for line_id, _ in actual_values]
+    if len(line_ids) != len(set(line_ids)):
+        raise InventoryCountError("duplicate_line")
+    existing_lines_result = await session.execute(
+        select(InventoryCountLine)
+        .where(
+            InventoryCountLine.count_id == count.id,
+            InventoryCountLine.id.in_(line_ids),
+        )
+        .with_for_update()
+    )
+    existing_lines = {line.id: line for line in existing_lines_result.scalars()}
+    if len(existing_lines) != len(line_ids):
+        raise InventoryCountError("line_not_found")
+    for line_id, actual_quantity in actual_values:
+        if actual_quantity is not None and actual_quantity < 0:
+            raise InventoryCountError("invalid_actual_quantity")
+        existing_lines[line_id].actual_quantity = actual_quantity
+
+    normalized_codes = {
+        candidate.strip().lower() for candidate in barcode_candidates if candidate.strip()
+    }
+    if not normalized_codes:
+        raise InventoryCountError("barcode_empty")
+
+    product: Product | None = None
+    if product_id_hint is not None:
+        hinted = await session.get(Product, product_id_hint)
+        if hinted is None or hinted.tenant_id != tenant_id:
+            raise InventoryCountError("product_not_found")
+        identifiers = {
+            identifier.strip().lower()
+            for identifier in (hinted.wb_barcode, hinted.sku_code)
+            if identifier and identifier.strip()
+        }
+        if identifiers.isdisjoint(normalized_codes):
+            raise InventoryCountError("product_not_found")
+        product = hinted
+    else:
+        products = list(
+            (
+                await session.scalars(
+                    select(Product).where(
+                        Product.tenant_id == tenant_id,
+                        or_(
+                            func.lower(Product.wb_barcode).in_(normalized_codes),
+                            func.lower(Product.sku_code).in_(normalized_codes),
+                        ),
+                    )
+                )
+            ).all()
+        )
+        if not products:
+            raise InventoryCountError("product_not_found")
+        if len(products) > 1:
+            raise InventoryCountError("product_ambiguous")
+        product = products[0]
+
+    try:
+        storage_location_id = await warehouse_map_service.resolve_container_location(
+            session,
+            tenant_id,
+            count.warehouse_id,
+            container_kind,
+            container_id,
+        )
+    except ValueError as exc:
+        raise InventoryCountError("container_not_found") from exc
+
+    line = await session.scalar(
+        select(InventoryCountLine)
+        .where(
+            InventoryCountLine.count_id == count.id,
+            InventoryCountLine.product_id == product.id,
+            InventoryCountLine.storage_location_id == storage_location_id,
+            InventoryCountLine.container_kind == container_kind,
+            InventoryCountLine.container_id == container_id,
+        )
+        .with_for_update()
+    )
+    if line is None:
+        line = InventoryCountLine(
+            count_id=count.id,
+            product_id=product.id,
+            storage_location_id=storage_location_id,
+            container_kind=container_kind,
+            container_id=container_id,
+            expected_quantity=0,
+            actual_quantity=1,
+            posted_delta=None,
+        )
+        session.add(line)
+        await session.flush()
+    else:
+        line.actual_quantity = int(line.actual_quantity or 0) + 1
+
+    line_id = line.id
+    await session.commit()
+    loaded = await get_count(session, tenant_id, count.id)
+    assert loaded is not None
+    return ProductScanResult(count=loaded, line_id=line_id)
 
 
 async def _current_quantity(

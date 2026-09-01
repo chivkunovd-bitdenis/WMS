@@ -46,6 +46,7 @@ export function inventoryAuthHeaders(token: string): Record<string, string> {
 export type ApiProduct = {
   kind: 'product'
   id: string
+  product_id: string
   name: string
   sku: string
   seller: string
@@ -122,6 +123,7 @@ function toProduct(node: ApiProduct): ProductNode {
   return {
     kind: 'product',
     id: node.id,
+    productId: node.product_id,
     name: node.name,
     sku: node.sku,
     seller: node.seller,
@@ -213,6 +215,44 @@ export function actualPayload(count: InventoryCount) {
     collect(cell.children)
   }
   return { lines }
+}
+
+export type EnsureScannedProductRequest = {
+  containerKind: 'pallet' | 'box' | 'cargo_place'
+  containerId: string
+  barcodeCandidates: string[]
+  productId?: string
+}
+
+export type EnsureScannedProductResult = {
+  count: InventoryCount
+  lineId: string
+}
+
+/**
+ * Записать физическую находку: создать отсутствующую строку в открытой таре
+ * и сразу посчитать первый пик. Уже набранные факты отправляются вместе с ней,
+ * поэтому серверный ответ не откатывает локальную работу оператора.
+ */
+export async function ensureScannedProductLine(
+  token: string,
+  count: InventoryCount,
+  request: EnsureScannedProductRequest,
+): Promise<EnsureScannedProductResult> {
+  const res = await fetch(apiUrl(`${INVENTORY_BASE}/${count.id}/scan-container-product`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
+    body: JSON.stringify({
+      container_kind: request.containerKind,
+      container_id: request.containerId,
+      barcode_candidates: request.barcodeCandidates,
+      product_id: request.productId ?? null,
+      ...actualPayload(count),
+    }),
+  })
+  if (!res.ok) throw new Error(await readApiErrorMessage(res))
+  const body = (await res.json()) as { count: ApiDetail; line_id: string }
+  return { count: toCount(body.count), lineId: body.line_id }
 }
 
 /** Виды объектов, по которым сервер умеет заводить документ. */

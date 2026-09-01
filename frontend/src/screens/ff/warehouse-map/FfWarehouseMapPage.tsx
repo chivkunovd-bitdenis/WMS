@@ -11,10 +11,12 @@ import { InventoryCountDialog } from '../inventory/InventoryCountDialog'
 import { placeOf, targetTitle, type MapInventoryTarget } from '../inventory/fromWarehouseMap'
 import {
   createObjectCount,
+  ensureScannedProductLine,
   postCount,
   postResultNote,
   saveCountActuals,
   type CountObjectType,
+  type EnsureScannedProductRequest,
 } from '../inventory/inventoryCountApi'
 import type { InventoryCount } from '../inventory/InventoryTypes'
 import type { MoveIntent } from './WarehouseMapMoveDialog'
@@ -389,6 +391,10 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
         }}
         onSave={(edited: InventoryCount) => void saveCount(edited)}
         onPost={(edited: InventoryCount) => void postAndClose(edited)}
+        onEnsureScannedProduct={(
+          current: InventoryCount,
+          request: EnsureScannedProductRequest,
+        ) => ensureScannedProductLine(token, current, request)}
       />
     </Box>
   )

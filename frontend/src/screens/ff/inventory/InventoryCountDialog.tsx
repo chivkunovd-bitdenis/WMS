@@ -9,7 +9,9 @@ import {
 import { CommentField } from './CommentField'
 import {
   applyScan,
+  confirmedProductScan,
   containerName,
+  type ScanResult,
   type ScanTone,
 } from './InventoryScan'
 import { InventoryScanField } from './InventoryScanField'
@@ -22,6 +24,10 @@ import {
   type InvRow,
 } from './InventoryRows'
 import type { InventoryCount, InventoryNode } from './InventoryTypes'
+import type {
+  EnsureScannedProductRequest,
+  EnsureScannedProductResult,
+} from './inventoryCountApi'
 
 // Пересчёт прямо с карты склада.
 //
@@ -57,6 +63,10 @@ type Props = {
   onClose: () => void
   onSave: (count: InventoryCount) => void
   onPost: (count: InventoryCount) => void
+  onEnsureScannedProduct?: (
+    count: InventoryCount,
+    request: EnsureScannedProductRequest,
+  ) => Promise<EnsureScannedProductResult>
 }
 
 /**
@@ -89,6 +99,7 @@ function InventoryCountDialogState({
   onClose,
   onSave,
   onPost,
+  onEnsureScannedProduct,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const [count, setCount] = useState<InventoryCount | null>(initialCount)
@@ -96,6 +107,7 @@ function InventoryCountDialogState({
   const [openContainerId, setOpenContainerId] = useState<string | null>(null)
   const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
   const [scanFocus, setScanFocus] = useState<{ key: string; request: number } | null>(null)
+  const [scanBusy, setScanBusy] = useState(false)
   const treeRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -108,28 +120,54 @@ function InventoryCountDialogState({
     return () => window.cancelAnimationFrame(frame)
   }, [scanFocus])
 
-  function handleScan(code: string) {
-    setCount((current) => {
-      if (!current) return current
-      const result = applyScan(current, code, openContainerId)
-      setOpenContainerId(result.activeContainerId)
-      setScanNote({ text: result.message, tone: result.tone })
-      if (result.focusRowKey) {
-        const openKeys = result.focusPathKeys ?? []
-        setCollapsed((collapsedKeys) => {
-          const next = new Set(collapsedKeys)
-          let changed = false
-          for (const key of openKeys) changed = next.delete(key) || changed
-          return changed ? next : collapsedKeys
-        })
-        const focusKey = result.focusRowKey
-        setScanFocus((focus) => focus?.key === focusKey ? focus : ({
-          key: focusKey,
-          request: (focus?.request ?? 0) + 1,
-        }))
-      }
-      return result.count
+  function showScanResult(result: ScanResult) {
+    setOpenContainerId(result.activeContainerId)
+    setScanNote({ text: result.message, tone: result.tone })
+    if (!result.focusRowKey) return
+    const openKeys = result.focusPathKeys ?? []
+    setCollapsed((collapsedKeys) => {
+      const next = new Set(collapsedKeys)
+      let changed = false
+      for (const key of openKeys) changed = next.delete(key) || changed
+      return changed ? next : collapsedKeys
     })
+    const focusKey = result.focusRowKey
+    setScanFocus((focus) => focus?.key === focusKey ? focus : ({
+      key: focusKey,
+      request: (focus?.request ?? 0) + 1,
+    }))
+  }
+
+  function handleScan(code: string) {
+    if (!count || scanBusy) return
+    const result = applyScan(count, code, openContainerId)
+    showScanResult(result)
+    if (result.ensureProductLine) {
+      if (!onEnsureScannedProduct || !result.activeContainerId) {
+        setScanNote({ text: 'Добавление найденного товара сейчас недоступно.', tone: 'error' })
+        return
+      }
+      setScanBusy(true)
+      void onEnsureScannedProduct(count, result.ensureProductLine)
+        .then((saved) => {
+          const confirmed = confirmedProductScan(
+            saved.count,
+            saved.lineId,
+            result.activeContainerId as string,
+          )
+          setCount(saved.count)
+          showScanResult(confirmed)
+        })
+        .catch((err: unknown) => {
+          setScanNote({
+            text: err instanceof Error ? err.message : 'Не удалось добавить найденный товар.',
+            tone: 'error',
+          })
+        })
+        .finally(() => setScanBusy(false))
+      return
+    }
+    setCount(result.count)
   }
 
   const rows = useMemo(
@@ -196,6 +234,7 @@ function InventoryCountDialogState({
           }
           error={scanNote?.tone === 'error' ? scanNote.text : null}
           notice={scanNote && scanNote.tone !== 'error' ? scanNote.text : null}
+          busy={scanBusy}
           testId="inv-dialog-scan"
         />
 

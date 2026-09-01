@@ -67,6 +67,14 @@ class InventoryCountActualBatchIn(BaseModel):
     lines: list[InventoryCountActualIn]
 
 
+class InventoryCountContainerProductScanIn(BaseModel):
+    container_kind: Literal["pallet", "box", "cargo_place"]
+    container_id: uuid.UUID
+    barcode_candidates: list[str] = Field(min_length=1, max_length=2)
+    product_id: uuid.UUID | None = None
+    lines: list[InventoryCountActualIn] = Field(default_factory=list)
+
+
 class CountFillOut(BaseModel):
     mode: Literal["object", "all", "filters"]
     seller_id: str | None = None
@@ -169,6 +177,11 @@ class InventoryCountDetailOut(BaseModel):
     address_storage: bool
     lines: list[InventoryCountLineOut]
     cells: list[CountCellOut]
+
+
+class InventoryCountContainerProductScanOut(BaseModel):
+    line_id: str
+    count: InventoryCountDetailOut
 
 
 class ChangedBalanceOut(BaseModel):
@@ -469,6 +482,8 @@ def _http_error(exc: service.InventoryCountError) -> HTTPException:
         "seller_not_found",
         "warehouse_not_found",
         "object_not_found",
+        "container_not_found",
+        "product_not_found",
     }:
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
     if exc.code in {
@@ -478,6 +493,7 @@ def _http_error(exc: service.InventoryCountError) -> HTTPException:
         "empty_count",
         "container_has_no_stock",
         "balance_changed_during_post",
+        "product_ambiguous",
     }:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.code)
@@ -578,6 +594,37 @@ async def save_inventory_count_lines(
     except service.InventoryCountError as exc:
         raise _http_error(exc) from None
     return await _detail_out(session, count)
+
+
+@router.post(
+    "/{count_id}/scan-container-product",
+    response_model=InventoryCountContainerProductScanOut,
+)
+async def scan_inventory_count_container_product(
+    count_id: uuid.UUID,
+    body: InventoryCountContainerProductScanIn,
+    user: Annotated[User, Depends(require_inventory_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryCountContainerProductScanOut:
+    try:
+        result = await service.scan_product_into_container(
+            session,
+            user.tenant_id,
+            count_id,
+            container_kind=body.container_kind,
+            container_id=body.container_id,
+            barcode_candidates=body.barcode_candidates,
+            product_id_hint=body.product_id,
+            actual_values=[
+                (line.line_id, line.actual_quantity) for line in body.lines
+            ],
+        )
+    except service.InventoryCountError as exc:
+        raise _http_error(exc) from None
+    return InventoryCountContainerProductScanOut(
+        line_id=str(result.line_id),
+        count=await _detail_out(session, result.count),
+    )
 
 
 @router.post("/{count_id}/post", response_model=InventoryCountPostOut)

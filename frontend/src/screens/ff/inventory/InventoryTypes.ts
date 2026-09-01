@@ -16,6 +16,8 @@ export const KIND_TITLE: Record<NodeKind, string> = {
 
 export type ProductNode = {
   kind: 'product'
+  /** Идентификатор карточки товара; id самой строки относится к документу пересчёта. */
+  productId: string
   id: string
   name: string
   sku: string

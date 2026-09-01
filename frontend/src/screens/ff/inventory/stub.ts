@@ -27,6 +27,7 @@ function product(
   return {
     kind: 'product',
     id: nextId(),
+    productId: `product-${sku}`,
     name,
     sku,
     seller,

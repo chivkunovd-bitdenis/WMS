@@ -22,6 +22,13 @@ export type ScanResult = {
   focusRowKey?: string
   /** Уже найденный при скане путь: повторно обходить всё дерево экрану не нужно. */
   focusPathKeys?: string[]
+  /** Сервер должен создать отсутствующую строку в уже открытой таре. */
+  ensureProductLine?: {
+    containerKind: 'pallet' | 'box' | 'cargo_place'
+    containerId: string
+    barcodeCandidates: string[]
+    productId?: string
+  }
   message: string
   tone: ScanTone
 }
@@ -135,6 +142,45 @@ function findScanTargets(
   return { container, products }
 }
 
+function findContainerById(
+  count: InventoryCount,
+  containerId: string,
+): { kind: 'pallet' | 'box' | 'cargo_place'; id: string } | null {
+  let found: { kind: 'pallet' | 'box' | 'cargo_place'; id: string } | null = null
+  function walk(nodes: InventoryNode[]) {
+    for (const node of nodes) {
+      if (node.kind === 'product') continue
+      if (node.id === containerId) {
+        found = { kind: node.kind, id: node.id }
+        return
+      }
+      walk(node.children)
+      if (found) return
+    }
+  }
+  for (const cell of count.cells) {
+    walk(cell.children)
+    if (found) break
+  }
+  return found
+}
+
+function ensureLineRequest(
+  count: InventoryCount,
+  activeContainerId: string,
+  barcodeCandidates: string[],
+  productId?: string,
+): ScanResult['ensureProductLine'] | undefined {
+  const container = findContainerById(count, activeContainerId)
+  if (!container) return undefined
+  return {
+    containerKind: container.kind,
+    containerId: container.id,
+    barcodeCandidates,
+    ...(productId ? { productId } : {}),
+  }
+}
+
 /** Пик увеличивает факт на единицу: человек считает штуками, а не вводит итог. */
 function bump(count: InventoryCount, product: ProductNode): InventoryCount {
   return setActual(count, product.id, (product.actual ?? 0) + 1)
@@ -176,11 +222,17 @@ export function applyScan(
   const byBarcode = targets.products
 
   if (byBarcode.length === 0) {
+    const ensureProductLine = activeContainerId
+      ? ensureLineRequest(count, activeContainerId, codes)
+      : undefined
     return {
       count,
       activeContainerId,
-      message: `Код ${code} в этом документе не числится. Если товар лежит здесь — это находка, её вносим отдельно.`,
-      tone: 'error',
+      ...(ensureProductLine ? { ensureProductLine } : {}),
+      message: ensureProductLine
+        ? `Добавляем найденный товар в ${containerName(count, activeContainerId as string)}.`
+        : `Код ${code} в этом документе не числится. Сначала отсканируйте тару, в которой нашли товар.`,
+      tone: ensureProductLine ? 'ok' : 'error',
     }
   }
 
@@ -189,13 +241,20 @@ export function applyScan(
     if (!inside) {
       const where = byBarcode[0]
       const openName = containerName(count, activeContainerId)
+      const ensureProductLine = ensureLineRequest(
+        count,
+        activeContainerId,
+        codes,
+        where.product.productId,
+      )
       return {
         count,
         activeContainerId,
-        message: where.containerId
-          ? `${where.product.name} — числится не здесь, а в другой таре. В ${openName} его нет.`
-          : `${where.product.name} — числится россыпью, а не в ${openName}. Закройте тару, чтобы считать россыпь.`,
-        tone: 'warn',
+        ...(ensureProductLine ? { ensureProductLine } : {}),
+        message: ensureProductLine
+          ? `${where.product.name} найден в ${openName} — добавляем отдельную строку.`
+          : `Не удалось определить открытую тару для ${where.product.name}. Отсканируйте тару ещё раз.`,
+        tone: ensureProductLine ? 'ok' : 'error',
       }
     }
     const next = bump(count, inside.product)
@@ -229,8 +288,50 @@ export function applyScan(
   }
 }
 
+/** Результат уже записанного сервером первого пика новой строки. */
+export function confirmedProductScan(
+  count: InventoryCount,
+  lineId: string,
+  activeContainerId: string,
+): ScanResult {
+  let located: Located | null = null
+  function walk(nodes: InventoryNode[], containerId: string | null, pathKeys: string[]) {
+    for (const node of nodes) {
+      const key = `${node.kind}:${node.id}`
+      const nextPath = [...pathKeys, key]
+      if (node.kind === 'product') {
+        if (node.id === lineId) located = { product: node, containerId, pathKeys: nextPath }
+        continue
+      }
+      walk(node.children, node.id, nextPath)
+    }
+  }
+  for (const cell of count.cells) walk(cell.children, null, [`cell:${cell.id}`])
+  if (!located) {
+    return {
+      count,
+      activeContainerId,
+      message: 'Товар добавлен, но строка не вернулась с сервера. Обновите документ.',
+      tone: 'error',
+    }
+  }
+  const item = located as Located
+  return {
+    count,
+    activeContainerId,
+    focusRowKey: `product:${item.product.id}`,
+    focusPathKeys: item.pathKeys,
+    message: scannedMessageAt(item.product, item.product.actual ?? 0),
+    tone: 'ok',
+  }
+}
+
 function scannedMessage(product: ProductNode): string {
   const now = (product.actual ?? 0) + 1
+  return scannedMessageAt(product, now)
+}
+
+function scannedMessageAt(product: ProductNode, now: number): string {
   const expected = expectedNow(product)
   const tail =
     now === expected

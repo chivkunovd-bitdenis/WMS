@@ -14,12 +14,14 @@ export function InventoryScanField({
   notice,
   onScan,
   testId,
+  busy = false,
 }: {
   expects: string
   error?: string | null
   notice?: string | null
   onScan: (code: string) => void
   testId: string
+  busy?: boolean
 }) {
   const [value, setValue] = useState('')
   return (
@@ -30,6 +32,7 @@ export function InventoryScanField({
         setValue('')
         onScan(code)
       }}
+      busy={busy}
       expects={expects}
       error={error ?? null}
       notice={notice ?? null}

@@ -20,7 +20,9 @@ import type { ReportMetricItem, StatusTone } from '../../../ui-kit'
 import { CommentField } from './CommentField'
 import {
   applyScan,
+  confirmedProductScan,
   containerName,
+  type ScanResult,
   type ScanTone,
 } from './InventoryScan'
 import { InventoryScanField } from './InventoryScanField'
@@ -36,6 +38,10 @@ import {
   type InvRow,
 } from './InventoryRows'
 import type { CountStatus, InventoryCount } from './InventoryTypes'
+import type {
+  EnsureScannedProductRequest,
+  EnsureScannedProductResult,
+} from './inventoryCountApi'
 
 const STATUS_LABEL: Record<CountStatus, string> = {
   draft: 'Черновик',
@@ -71,6 +77,10 @@ type Props = {
   onPost: () => void
   onCancelDocument: () => void
   onCreateContainer?: (kind: 'pallet' | 'box' | 'cargo_place') => void
+  onEnsureScannedProduct?: (
+    count: InventoryCount,
+    request: EnsureScannedProductRequest,
+  ) => Promise<EnsureScannedProductResult>
   onBack: () => void
 }
 
@@ -85,6 +95,7 @@ export function FfInventoryCountScreen({
   onPost,
   onCancelDocument,
   onCreateContainer,
+  onEnsureScannedProduct,
   onBack,
 }: Props) {
   const [filters, setFilters] = useState<InvFilters>(EMPTY_FILTERS)
@@ -93,6 +104,7 @@ export function FfInventoryCountScreen({
   const [openContainerId, setOpenContainerId] = useState<string | null>(null)
   const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
   const [scanFocus, setScanFocus] = useState<{ key: string; request: number } | null>(null)
+  const [scanBusy, setScanBusy] = useState(false)
 
   useEffect(() => {
     if (!scanFocus) return
@@ -104,8 +116,7 @@ export function FfInventoryCountScreen({
     return () => window.cancelAnimationFrame(frame)
   }, [scanFocus])
 
-  function handleScan(code: string) {
-    const result = applyScan(count, code, openContainerId)
+  function showScanResult(result: ScanResult) {
     setOpenContainerId(result.activeContainerId)
     setScanNote({ text: result.message, tone: result.tone })
     if (result.focusRowKey) {
@@ -122,6 +133,37 @@ export function FfInventoryCountScreen({
         key: focusKey,
         request: (current?.request ?? 0) + 1,
       }))
+    }
+  }
+
+  function handleScan(code: string) {
+    if (scanBusy) return
+    const result = applyScan(count, code, openContainerId)
+    showScanResult(result)
+    if (result.ensureProductLine) {
+      if (!onEnsureScannedProduct || !result.activeContainerId) {
+        setScanNote({ text: 'Добавление найденного товара сейчас недоступно.', tone: 'error' })
+        return
+      }
+      setScanBusy(true)
+      void onEnsureScannedProduct(count, result.ensureProductLine)
+        .then((saved) => {
+          const confirmed = confirmedProductScan(
+            saved.count,
+            saved.lineId,
+            result.activeContainerId as string,
+          )
+          onChange(saved.count)
+          showScanResult(confirmed)
+        })
+        .catch((err: unknown) => {
+          setScanNote({
+            text: err instanceof Error ? err.message : 'Не удалось добавить найденный товар.',
+            tone: 'error',
+          })
+        })
+        .finally(() => setScanBusy(false))
+      return
     }
     if (result.count !== count) onChange(result.count)
   }
@@ -265,6 +307,7 @@ export function FfInventoryCountScreen({
             }
             error={scanNote?.tone === 'error' ? scanNote.text : null}
             notice={scanNote && scanNote.tone !== 'error' ? scanNote.text : null}
+            busy={scanBusy}
             testId="inv-scan"
           />
         </Box>

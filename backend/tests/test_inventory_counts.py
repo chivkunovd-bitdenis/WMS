@@ -80,6 +80,7 @@ async def _product(
     *,
     name: str,
     seller_id: uuid.UUID | None = None,
+    wb_barcode: str | None = None,
 ) -> uuid.UUID:
     response = await async_client.post(
         "/products",
@@ -88,6 +89,7 @@ async def _product(
             "name": name,
             "sku_code": f"SKU-{uuid.uuid4().hex[:12]}",
             "seller_id": str(seller_id) if seller_id is not None else None,
+            "wb_barcode": wb_barcode,
             "length_mm": 1,
             "width_mm": 1,
             "height_mm": 1,
@@ -355,6 +357,75 @@ async def test_inventory_count_by_box_uses_exact_box_balances(
         str(first_product): (18, "box", str(box_id)),
         str(second_product): (7, "box", str(box_id)),
     }
+
+
+@pytest.mark.asyncio
+async def test_inventory_scan_adds_catalog_product_missing_from_open_box(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "UnexpectedBoxProduct")
+    listed_product = await _product(async_client, setup, name="Товар в коробе")
+    found_barcode = f"FOUND-{uuid.uuid4().hex}"
+    found_product = await _product(
+        async_client,
+        setup,
+        name="Найденный товар",
+        wb_barcode=found_barcode,
+    )
+    _pallet_id, box_id, _cargo_place_id, _empty_box_id = await _containers(setup)
+    await _balance(
+        setup,
+        listed_product,
+        2,
+        container_kind="box",
+        container_id=box_id,
+    )
+    count = await _create_all(async_client, setup)
+    listed_line = next(
+        line for line in count["lines"] if line["product_id"] == str(listed_product)
+    )
+
+    scanned = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/scan-container-product",
+        headers=setup.headers,
+        json={
+            "container_kind": "box",
+            "container_id": str(box_id),
+            "barcode_candidates": [found_barcode],
+            "lines": [
+                {"line_id": listed_line["id"], "actual_quantity": 2},
+            ],
+        },
+    )
+
+    assert scanned.status_code == 200, scanned.text
+    body = scanned.json()
+    lines = {line["product_id"]: line for line in body["count"]["lines"]}
+    assert lines[str(listed_product)]["actual_quantity"] == 2
+    found_line = lines[str(found_product)]
+    assert found_line["id"] == body["line_id"]
+    assert found_line["container_kind"] == "box"
+    assert found_line["container_id"] == str(box_id)
+    assert found_line["storage_location_id"] == str(setup.location_id)
+    assert found_line["expected_quantity"] == 0
+    assert found_line["actual_quantity"] == 1
+
+    posted = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/post",
+        headers=setup.headers,
+    )
+    assert posted.status_code == 200, posted.text
+    async with SessionLocal() as session:
+        found_balance = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.tenant_id == setup.tenant_id,
+                InventoryBalance.product_id == found_product,
+                InventoryBalance.container_kind == "box",
+                InventoryBalance.container_id == box_id,
+            )
+        )
+    assert found_balance is not None
+    assert found_balance.quantity == 1
 
 
 @pytest.mark.asyncio
