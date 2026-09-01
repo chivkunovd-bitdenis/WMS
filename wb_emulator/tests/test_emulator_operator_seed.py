@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -21,6 +22,12 @@ from wb_emulator.services.orders_store import (
 from wb_emulator.settings import get_settings
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+REAL_WB_ORDER_STICKER_SHA256 = {
+    "32cfd1ece4d68b6f38b54ac413399f03109d85c9e8ebeb87227577c3786ca570",
+    "a88d8e626b108aaf3c2584289160c921672c328a28d5be99781c0fe63780c6d8",
+    "58cd63d736dfe0d180db7172890870b5670c1e079a159e4c5cb8d5c4248b10fc",
+    "547571cf406f7fff90783b364943d0a15b73163b5ee7b01a2272530a9fd6d8dc",
+}
 ADMIN = {"X-Admin-Token": "admin-secret"}
 SEED_DIR = Path(__file__).resolve().parents[1] / "seed"
 TOKENS = {
@@ -124,10 +131,10 @@ def test_kiz_required_meta_roundtrip(seeded_client: tuple[TestClient, Path]) -> 
 
 
 def test_every_sticker_and_qr_png_decodes(seeded_client: tuple[TestClient, Path]) -> None:
-    """TC-23: order sticker + supply QR + trbx QR are real PNG with dimensions."""
+    """TC-23: order sticker is exact WB PNG; supply/trbx QR stay valid PNG."""
     client, _ = seeded_client
     new = client.get("/api/v3/orders/new", headers=AUTH["token-a"]).json()["orders"]
-    order_ids = [row["id"] for row in new[:2]]
+    order_ids = [row["id"] for row in new[:4]]
     assert order_ids
 
     stickers = client.post(
@@ -137,11 +144,23 @@ def test_every_sticker_and_qr_png_decodes(seeded_client: tuple[TestClient, Path]
     )
     assert stickers.status_code == 200
     for row in stickers.json()["stickers"]:
-        _assert_png(row["file"])
+        raw = base64.b64decode(row["file"], validate=True)
+        assert hashlib.sha256(raw).hexdigest() in REAL_WB_ORDER_STICKER_SHA256
+        image = Image.open(io.BytesIO(raw)).convert("RGB")
+        assert image.size == (580, 400)
+        assert row["barcode"].startswith("*DU")
+        # The magenta WB mark is part of the original cabinet layout. A plain
+        # black Code128 strip cannot satisfy this assertion.
+        colors = image.getcolors(maxcolors=image.width * image.height)
+        assert colors is not None
+        assert any(r > 200 and b > 80 and g < 150 for _, (r, g, b) in colors)
 
     supply = client.post("/api/v3/supplies", headers=AUTH["token-a"], json={"name": "seed supply"})
     assert supply.status_code == 200
     supply_id = supply.json()["id"]
+
+    delivered = client.patch(f"/api/v3/supplies/{supply_id}/deliver", headers=AUTH["token-a"])
+    assert delivered.status_code == 204
 
     barcode = client.get(
         f"/api/v3/supplies/{supply_id}/barcode?type=png",

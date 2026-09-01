@@ -4,45 +4,53 @@ from __future__ import annotations
 
 import base64
 import io
+import json
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 import qrcode
-from barcode import Code128
-from barcode.writer import ImageWriter
 from PIL import Image
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+_ORDER_STICKER_FIXTURES_PATH = (
+    Path(__file__).resolve().parent.parent / "seed" / "wb_order_sticker_fixtures.json"
+)
 
 
 def _png_to_base64(png_bytes: bytes) -> str:
     return base64.b64encode(png_bytes).decode("ascii")
 
 
-def generate_code128_png_base64(text: str, *, width_mm: int = 58, height_mm: int = 40) -> str:
-    """Render Code128 barcode as PNG base64 (order stickers)."""
-    buffer = io.BytesIO()
-    writer = ImageWriter()
-    barcode = Code128(text, writer=writer)
-    barcode.write(
-        buffer,
-        options={
-            "module_width": 0.25,
-            "module_height": max(height_mm * 0.6, 8.0),
-            "quiet_zone": 2.0,
-            "write_text": False,
-        },
-    )
-    buffer.seek(0)
-    image = Image.open(buffer).convert("RGB")
-    target_w = max(int(width_mm * 3.78), 1)
-    target_h = max(int(height_mm * 3.78), 1)
-    resized = image.resize((target_w, target_h), Image.Resampling.LANCZOS)
-    out = io.BytesIO()
-    resized.save(out, format="PNG")
-    png_bytes = out.getvalue()
-    if not png_bytes.startswith(PNG_MAGIC):
-        raise ValueError("generated sticker is not a PNG")
-    return _png_to_base64(png_bytes)
+@lru_cache
+def _real_order_sticker_fixtures() -> tuple[dict[str, Any], ...]:
+    """Load exact 580x400 order stickers archived from the real WB API.
+
+    An order sticker is not a standalone Code128 image. WB returns the complete
+    58x40 layout with a central QR, four duplicate corner QRs, two linear
+    barcodes, the WB mark and the visible partA/partB number. Keeping the
+    original PNG is the only honest emulator response; reconstructing a QR from
+    the fake order id produces a label that WB never issued.
+    """
+    raw = json.loads(_ORDER_STICKER_FIXTURES_PATH.read_text(encoding="utf-8"))
+    fixtures = raw.get("fixtures")
+    if not isinstance(fixtures, list) or not fixtures:
+        raise ValueError("WB order sticker fixtures are missing")
+    validated: list[dict[str, Any]] = []
+    for fixture in fixtures:
+        if not isinstance(fixture, dict):
+            raise ValueError("invalid WB order sticker fixture")
+        png_bytes = base64.b64decode(str(fixture.get("file", "")), validate=True)
+        if not png_bytes.startswith(PNG_MAGIC):
+            raise ValueError("WB order sticker fixture is not PNG")
+        with Image.open(io.BytesIO(png_bytes)) as image:
+            if image.size != (580, 400):
+                raise ValueError("WB order sticker fixture must be 580x400")
+        barcode = fixture.get("barcode")
+        if not isinstance(barcode, str) or not barcode.startswith("*"):
+            raise ValueError("WB order sticker scanner barcode is missing")
+        validated.append(fixture)
+    return tuple(validated)
 
 
 def generate_qr_png_base64(data: str) -> str:
@@ -71,21 +79,19 @@ def build_order_stickers(
     width_mm: int = 58,
     height_mm: int = 40,
 ) -> list[dict[str, Any]]:
-    """Build WB-shaped order sticker rows with real Code128 PNG."""
+    """Return complete real-WB 58x40 sticker PNGs for emulator orders."""
+    _ = width_mm, height_mm
+    fixtures = _real_order_sticker_fixtures()
     stickers: list[dict[str, Any]] = []
     for order_id in order_ids:
-        barcode_text = f"WB{order_id:010d}"
+        fixture = fixtures[order_id % len(fixtures)]
         stickers.append(
             {
                 "orderId": order_id,
-                "partA": order_id,
-                "partB": order_id + 1,
-                "barcode": barcode_text,
-                "file": generate_code128_png_base64(
-                    barcode_text,
-                    width_mm=width_mm,
-                    height_mm=height_mm,
-                ),
+                "partA": fixture["partA"],
+                "partB": fixture["partB"],
+                "barcode": fixture["barcode"],
+                "file": fixture["file"],
             }
         )
     return stickers
