@@ -387,14 +387,53 @@ export function setActual(
   actual: number | null,
 ): InventoryCount {
   function mapNodes(nodes: InventoryNode[]): InventoryNode[] {
-    return nodes.map((node) => {
+    let changed = false
+    const next = nodes.map((node) => {
       if (node.kind === 'product') {
-        return node.id === productId ? { ...node, actual } : node
+        if (node.id !== productId || node.actual === actual) return node
+        changed = true
+        return { ...node, actual }
       }
-      return { ...node, children: mapNodes(node.children) }
+      const children = mapNodes(node.children)
+      if (children === node.children) return node
+      changed = true
+      return { ...node, children }
     })
+    return changed ? next : nodes
   }
-  return { ...count, cells: count.cells.map((c) => ({ ...c, children: mapNodes(c.children) })) }
+  let changed = false
+  const cells = count.cells.map((cell) => {
+    const children = mapNodes(cell.children)
+    if (children === cell.children) return cell
+    changed = true
+    return { ...cell, children }
+  })
+  return changed ? { ...count, cells } : count
+}
+
+/**
+ * На большом документе не рисуем все товарные строки до первого действия.
+ * Скан тары сам раскрывает ровно её путь, поэтому складской сценарий остаётся
+ * одним пиком, а DOM не содержит тысячу тяжёлых строк одновременно.
+ */
+export function initialCollapsedKeys(count: InventoryCount, maxVisibleProducts = 250): Set<string> {
+  let products = 0
+  function walk(nodes: InventoryNode[]) {
+    for (const node of nodes) {
+      if (node.kind === 'product') {
+        products += 1
+        if (products > maxVisibleProducts) return
+      } else {
+        walk(node.children)
+        if (products > maxVisibleProducts) return
+      }
+    }
+  }
+  for (const cell of count.cells) {
+    walk(cell.children)
+    if (products > maxVisibleProducts) return collapseAllKeys(count)
+  }
+  return new Set()
 }
 
 export function collapseAllKeys(count: InventoryCount): Set<string> {

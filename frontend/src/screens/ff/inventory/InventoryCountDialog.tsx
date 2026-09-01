@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AppDialog,
   PrimaryAction,
-  ScannerField,
   SecondaryAction,
   WarningNotice,
 } from '../../../ui-kit'
@@ -11,9 +10,9 @@ import { CommentField } from './CommentField'
 import {
   applyScan,
   containerName,
-  inventoryRowPathKeys,
   type ScanTone,
 } from './InventoryScan'
+import { InventoryScanField } from './InventoryScanField'
 import { InventoryTree } from './InventoryTree'
 import {
   EMPTY_FILTERS,
@@ -22,7 +21,7 @@ import {
   totals,
   type InvRow,
 } from './InventoryRows'
-import type { InventoryCount } from './InventoryTypes'
+import type { InventoryCount, InventoryNode } from './InventoryTypes'
 
 // Пересчёт прямо с карты склада.
 //
@@ -60,7 +59,29 @@ type Props = {
   onPost: (count: InventoryCount) => void
 }
 
-export function InventoryCountDialog({
+/**
+ * Серверная версия документа меняется только при открытии/сохранении. Ключ
+ * пересоздаёт локальное состояние тогда, а не через каскад setState в effect.
+ * Посимвольный ввод сканера родителя вообще не касается.
+ */
+function countRevisionKey(count: InventoryCount | null): string {
+  if (!count) return 'empty'
+  const actuals: string[] = []
+  function walk(nodes: InventoryNode[]) {
+    for (const node of nodes) {
+      if (node.kind === 'product') actuals.push(`${node.id}:${node.actual ?? ''}`)
+      else walk(node.children)
+    }
+  }
+  for (const cell of count.cells) walk(cell.children)
+  return `${count.id}:${actuals.join('|')}`
+}
+
+export function InventoryCountDialog(props: Props) {
+  return <InventoryCountDialogState key={countRevisionKey(props.initialCount)} {...props} />
+}
+
+function InventoryCountDialogState({
   open,
   title,
   place,
@@ -71,49 +92,39 @@ export function InventoryCountDialog({
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const [count, setCount] = useState<InventoryCount | null>(initialCount)
-  const [scanValue, setScanValue] = useState('')
   // Память сканера на одну вещь: какую тару открыли. Пока открыта, пики идут в неё.
   const [openContainerId, setOpenContainerId] = useState<string | null>(null)
   const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
   const [scanFocus, setScanFocus] = useState<{ key: string; request: number } | null>(null)
   const treeRef = useRef<HTMLDivElement>(null)
 
-  // Открыли другой объект — начинаем с чистого документа, а не дописываем чужой.
-  useEffect(() => {
-    setCount(initialCount)
-    setCollapsed(new Set())
-    setOpenContainerId(null)
-    setScanNote(null)
-    setScanFocus(null)
-    setScanValue('')
-  }, [initialCount])
-
   useEffect(() => {
     if (!scanFocus) return
     const frame = window.requestAnimationFrame(() => {
       treeRef.current
         ?.querySelector<HTMLElement>(`[data-row-key="${scanFocus.key}"]`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        ?.scrollIntoView({ behavior: 'auto', block: 'center' })
     })
     return () => window.cancelAnimationFrame(frame)
   }, [scanFocus])
 
   function handleScan(code: string) {
-    setScanValue('')
     setCount((current) => {
       if (!current) return current
       const result = applyScan(current, code, openContainerId)
       setOpenContainerId(result.activeContainerId)
       setScanNote({ text: result.message, tone: result.tone })
       if (result.focusRowKey) {
-        const openKeys = inventoryRowPathKeys(current, result.focusRowKey)
+        const openKeys = result.focusPathKeys ?? []
         setCollapsed((collapsedKeys) => {
           const next = new Set(collapsedKeys)
-          for (const key of openKeys) next.delete(key)
-          return next
+          let changed = false
+          for (const key of openKeys) changed = next.delete(key) || changed
+          return changed ? next : collapsedKeys
         })
-        setScanFocus((focus) => ({
-          key: result.focusRowKey as string,
+        const focusKey = result.focusRowKey
+        setScanFocus((focus) => focus?.key === focusKey ? focus : ({
+          key: focusKey,
           request: (focus?.request ?? 0) + 1,
         }))
       }
@@ -176,9 +187,7 @@ export function InventoryCountDialog({
       }
     >
       <Stack spacing={1.5}>
-        <ScannerField
-          value={scanValue}
-          onChange={setScanValue}
+        <InventoryScanField
           onScan={handleScan}
           expects={
             openContainerId && count

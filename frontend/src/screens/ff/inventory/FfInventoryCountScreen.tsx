@@ -10,7 +10,6 @@ import {
   IconAction,
   PrimaryAction,
   ReportMetricStrip,
-  ScannerField,
   ScreenHeader,
   SecondaryAction,
   SelectInput,
@@ -22,15 +21,16 @@ import { CommentField } from './CommentField'
 import {
   applyScan,
   containerName,
-  inventoryRowPathKeys,
   type ScanTone,
 } from './InventoryScan'
+import { InventoryScanField } from './InventoryScanField'
 import { InventoryTree } from './InventoryTree'
 import {
   EMPTY_FILTERS,
   buildRows,
   collapseAllKeys,
   facets,
+  initialCollapsedKeys,
   setActual,
   totals,
   type InvFilters,
@@ -76,42 +76,6 @@ type Props = {
 }
 
 
-/**
- * Поле сканера со своим состоянием.
- *
- * Раньше значение поля жило в экране пересчёта — том же, что рисует дерево.
- * Сканер печатает штрихкод посимвольно, и каждый символ перерисовывал всё
- * дерево целиком: тринадцать полных перерисовок на один пик. На большом
- * документе это и был «медленный скан». Своё состояние держит набор внутри.
- */
-function InventoryScanBox({
-  expects,
-  error,
-  notice,
-  onScan,
-}: {
-  expects: string
-  error?: string | null
-  notice?: string | null
-  onScan: (code: string) => void
-}) {
-  const [value, setValue] = useState('')
-  return (
-    <ScannerField
-      value={value}
-      onChange={setValue}
-      onScan={(code) => {
-        setValue('')
-        onScan(code)
-      }}
-      expects={expects}
-      error={error ?? null}
-      notice={notice ?? null}
-      testId="inv-scan"
-    />
-  )
-}
-
 export function FfInventoryCountScreen({
   count,
   loading,
@@ -125,7 +89,7 @@ export function FfInventoryCountScreen({
   onBack,
 }: Props) {
   const [filters, setFilters] = useState<InvFilters>(EMPTY_FILTERS)
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => initialCollapsedKeys(count))
   // Память сканера на одну вещь: какую тару открыли. Пока открыта, пики идут в неё.
   const [openContainerId, setOpenContainerId] = useState<string | null>(null)
   const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
@@ -136,7 +100,7 @@ export function FfInventoryCountScreen({
     const frame = window.requestAnimationFrame(() => {
       document
         .querySelector<HTMLElement>(`[data-row-key="${scanFocus.key}"]`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        ?.scrollIntoView({ behavior: 'auto', block: 'center' })
     })
     return () => window.cancelAnimationFrame(frame)
   }, [scanFocus])
@@ -146,15 +110,17 @@ export function FfInventoryCountScreen({
     setOpenContainerId(result.activeContainerId)
     setScanNote({ text: result.message, tone: result.tone })
     if (result.focusRowKey) {
-      const openKeys = inventoryRowPathKeys(count, result.focusRowKey)
-      setFilters(EMPTY_FILTERS)
+      const openKeys = result.focusPathKeys ?? []
+      setFilters((current) => current === EMPTY_FILTERS ? current : EMPTY_FILTERS)
       setCollapsed((current) => {
         const next = new Set(current)
-        for (const key of openKeys) next.delete(key)
-        return next
+        let changed = false
+        for (const key of openKeys) changed = next.delete(key) || changed
+        return changed ? next : current
       })
-      setScanFocus((current) => ({
-        key: result.focusRowKey as string,
+      const focusKey = result.focusRowKey
+      setScanFocus((current) => current?.key === focusKey ? current : ({
+        key: focusKey,
         request: (current?.request ?? 0) + 1,
       }))
     }
@@ -291,7 +257,7 @@ export function FfInventoryCountScreen({
           штуку. Тара не открыта — считаем то, что лежит в ячейке россыпью. */}
       {!readOnly ? (
         <Box sx={{ maxWidth: 640, mb: 2 }}>
-          <InventoryScanBox
+          <InventoryScanField
             onScan={handleScan}
             expects={
               openContainerId
@@ -300,6 +266,7 @@ export function FfInventoryCountScreen({
             }
             error={scanNote?.tone === 'error' ? scanNote.text : null}
             notice={scanNote && scanNote.tone !== 'error' ? scanNote.text : null}
+            testId="inv-scan"
           />
         </Box>
       ) : null}
