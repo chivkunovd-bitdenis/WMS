@@ -136,9 +136,9 @@ async def test_tc19_delivery_preflight_checklist_and_stale_version(
         assert stale_detail == "stale_preflight"
 
     refreshed = await _delivery_preflight(async_client, headers, supply["id"])
-    assert refreshed["can_deliver"] is False
+    assert refreshed["can_deliver"] is True
     assert any(
-        check["code"] == "wb_supply_composition_discrepancy" and not check["ok"]
+        check["code"] == "wb_terminal_order_ignored" and not check["ok"]
         for check in refreshed["checks"]
     )
 

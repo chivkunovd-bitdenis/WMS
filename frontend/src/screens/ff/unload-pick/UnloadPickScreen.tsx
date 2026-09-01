@@ -7,7 +7,6 @@ import {
   DataTable,
   IconAction,
   PrimaryAction,
-  ProductCell,
   QtyCell,
   ScannerField,
   ScreenHeader,
@@ -423,31 +422,53 @@ export function UnloadPickScreen({
     {
       key: 'product',
       header: 'Товар',
+      width: 300,
       render: (row) => (
-        <ProductCell
-          photo={<ProductPhotoThumb src={row.product.photo} alt={row.product.name} size={32} />}
-          sku={row.product.sku}
-        />
+        <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', minWidth: 260 }}>
+          <ProductPhotoThumb
+            src={row.product.photo}
+            alt={row.product.name}
+            size={48}
+            previewSize={320}
+            testId={`pick-product-photo-${row.product.id}`}
+          />
+          <Typography variant="body2" sx={{ fontWeight: 700, minWidth: 200 }}>
+            {row.product.name}
+          </Typography>
+        </Stack>
       ),
     },
     {
-      key: 'name',
-      header: 'Наименование',
+      key: 'sellerArticle',
+      header: 'Артикул продавца',
+      width: 180,
       render: (row) => (
-        <Stack sx={{ minWidth: 0 }}>
-          <TextCell value={row.product.name} />
-          {/* Штрихкод товара подписью, а не колонкой: своей колонкой он на 1280
-              выдавливал «Осталось» за край экрана. */}
-          <Typography
-            variant="caption"
-            sx={{
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-              color: 'text.secondary',
-            }}
-          >
-            {row.product.barcode}
-          </Typography>
-        </Stack>
+        <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+          {row.product.sellerArticle || '—'}
+        </Typography>
+      ),
+    },
+    {
+      key: 'sku',
+      header: 'SKU',
+      width: 170,
+      render: (row) => (
+        <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+          {row.product.sku}
+        </Typography>
+      ),
+    },
+    {
+      key: 'barcode',
+      header: 'ШК',
+      width: 150,
+      render: (row) => (
+        <Typography
+          variant="body2"
+          sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}
+        >
+          {row.product.barcode || '—'}
+        </Typography>
       ),
     },
     {
@@ -464,6 +485,7 @@ export function UnloadPickScreen({
     {
       key: 'places',
       header: 'Где лежит',
+      width: 120,
       render: (row) => <TextCell value={placesCountLabel(row.places.length)} />,
     },
     {
@@ -491,6 +513,7 @@ export function UnloadPickScreen({
       key: 'actions',
       header: '',
       align: 'right',
+      width: 48,
       render: (row) =>
         row.picked > 0 && history.some((operation) => operation.productId === row.product.id) ? (
           <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
