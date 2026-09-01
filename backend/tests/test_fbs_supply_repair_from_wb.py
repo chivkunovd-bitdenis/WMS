@@ -19,11 +19,16 @@ from sqlalchemy import select
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
+    FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_IN_SUPPLY,
     FbsOrder,
 )
-from app.models.fbs_supply import FBS_SUPPLY_STATUS_DONE, FbsSupply
+from app.models.fbs_supply import (
+    FBS_SUPPLY_STATUS_DONE,
+    FBS_SUPPLY_STATUS_PACKED,
+    FbsSupply,
+)
 from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_CONFIRMED,
     WB_OPERATION_STATE_PENDING_CONFIRMATION,
@@ -274,7 +279,9 @@ async def test_repair_endpoint_restores_composition(
             select(FbsSupply).where(FbsSupply.wb_supply_id == WB_SUPPLY_ID)
         )
         assert supply is not None
+        supply.status = FBS_SUPPLY_STATUS_PACKED
         supply_id = supply.id
+        await session.commit()
 
     _patch_wb_composition(monkeypatch, [871003])
     repaired = await async_client.post(
@@ -287,7 +294,7 @@ async def test_repair_endpoint_restores_composition(
         order = await session.get(FbsOrder, order_id)
         assert order is not None
         assert order.supply_id == supply_id
-        assert order.status == FBS_ORDER_STATUS_IN_SUPPLY
+        assert order.status == FBS_ORDER_STATUS_ASSEMBLING
         # Номер поставки WB теперь есть и у заказа — штатная привязка его тоже видит.
         assert order.wb_supply_id == WB_SUPPLY_ID
         operation = await session.scalar(

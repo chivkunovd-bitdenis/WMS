@@ -1308,7 +1308,11 @@ async def update_planned_shipment_date(
 
 
 REPAIRABLE_SUPPLY_STATUSES = frozenset(
-    {FBS_SUPPLY_STATUS_DRAFT, FBS_SUPPLY_STATUS_ASSEMBLING}
+    {
+        FBS_SUPPLY_STATUS_DRAFT,
+        FBS_SUPPLY_STATUS_ASSEMBLING,
+        FBS_SUPPLY_STATUS_PACKED,
+    }
 )
 # За один цикл автоопроса чиним не больше этого числа поставок на селлера.
 PENDING_SUPPLY_REPAIR_BATCH = 10

@@ -44,6 +44,7 @@ from app.models.fbs_supply import (
 )
 from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_CONFIRMED,
+    WB_OPERATION_STATE_FAILED,
     WB_OPERATION_STATE_PENDING,
     WB_OPERATION_STATE_PENDING_CONFIRMATION,
 )
@@ -1763,16 +1764,19 @@ async def deliver_supply(
             provider=ozon_provider,
             actor_user_id=actor_user_id,
         )
-    if existing is None:
-        existing = await get_active_deliver_operation_for_supply(
+    if existing is None or existing.state == WB_OPERATION_STATE_FAILED:
+        active_for_supply = await get_active_deliver_operation_for_supply(
             session,
             tenant_id=tenant_id,
             seller_id=supply_read.seller_id,
             local_supply_id=supply_id,
         )
+        if active_for_supply is not None:
+            existing = active_for_supply
     if existing is not None:
         if (
             existing_by_key is not None
+            and existing.id == existing_by_key.id
             and existing.request_hash
             and existing.request_hash != request_hash
             and existing.state
@@ -1876,25 +1880,26 @@ async def deliver_supply(
     # its journal row.  The supply row serializes that race; re-check under the
     # lock and hand recovery to the already durable operation instead of ever
     # issuing a second WB deliver mutation.
-    if existing is None:
-        raced_operation = await get_active_deliver_operation_for_supply(
+    raced_operation = await get_active_deliver_operation_for_supply(
+        session,
+        tenant_id=tenant_id,
+        seller_id=supply.seller_id,
+        local_supply_id=supply.id,
+    )
+    if raced_operation is not None and (
+        existing is None or raced_operation.id != existing.id
+    ):
+        await session.rollback()
+        return await deliver_supply(
             session,
-            tenant_id=tenant_id,
-            seller_id=supply.seller_id,
-            local_supply_id=supply.id,
+            tenant_id,
+            supply_id,
+            http_client,
+            idempotency_key=idempotency_key,
+            actor_user_id=actor_user_id,
+            confirmed_preflight_version=confirmed_preflight_version,
+            ozon_provider=ozon_provider,
         )
-        if raced_operation is not None:
-            await session.rollback()
-            return await deliver_supply(
-                session,
-                tenant_id,
-                supply_id,
-                http_client,
-                idempotency_key=idempotency_key,
-                actor_user_id=actor_user_id,
-                confirmed_preflight_version=confirmed_preflight_version,
-                ozon_provider=ozon_provider,
-            )
     if supply.delivery_type not in _DELIVER_ALLOWED_DELIVERY_TYPES:
         raise FbsShipmentError("wrong_delivery_type")
     if supply.status in _DELIVER_BLOCKED_SUPPLY_STATUSES:

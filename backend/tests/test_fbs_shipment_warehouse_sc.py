@@ -909,6 +909,24 @@ async def test_pending_delivery_recovers_after_process_crash_without_second_wb_c
         supply_name="WB process crash checkpoint",
     )
     idempotency_key = str(uuid.uuid4())
+    stale_failed_key = str(uuid.uuid4())
+
+    async with SessionLocal() as session:
+        supply_row = await session.get(FbsSupply, uuid.UUID(supply["id"]))
+        assert supply_row is not None
+        session.add(
+            FbsWbOperation(
+                tenant_id=tenant_id,
+                seller_id=supply_row.seller_id,
+                operation_kind="supply_deliver",
+                idempotency_key=stale_failed_key,
+                local_entity_type="fbs_supply",
+                local_entity_id=supply_row.id,
+                state=WB_OPERATION_STATE_FAILED,
+                error_code="meta_validation_fail",
+            )
+        )
+        await session.commit()
 
     import app.services.fbs_shipment_service as shipment_mod
 
@@ -956,10 +974,10 @@ async def test_pending_delivery_recovers_after_process_crash_without_second_wb_c
         async_client,
         headers,
         supply["id"],
-        # A browser reload/error handler may rotate the client key.  Recovery
-        # is supply-scoped as well, so this must still reconcile the durable
-        # operation instead of calling WB a second time.
-        idempotency_key=str(uuid.uuid4()),
+        # Another tab may still hold an older definitively failed key.  The
+        # active supply-scoped checkpoint wins over that stale key and must be
+        # reconciled instead of sending WB a second time.
+        idempotency_key=stale_failed_key,
     )
     assert retry.status_code == 200, retry.text
     assert deliver_calls == 1
