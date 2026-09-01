@@ -23,8 +23,8 @@ from app.services.wildberries_client import WildberriesClientError
 from tests.test_fbs_shipment_warehouse_sc import (
     _create_and_fill_physical_box,
     _create_supply,
-    _delivery_preflight,
     _deliver_with_preflight,
+    _delivery_preflight,
     _mock_actual_composition_from_local_links,
     _prepare_supply_with_orders,
     _register_ff_admin,

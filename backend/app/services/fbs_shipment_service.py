@@ -103,6 +103,7 @@ from app.services.wildberries_errors import (
     WildberriesBusinessError,
     WildberriesClientError,
     log_wb_client_error,
+    translate_wb_message,
     wb_error_context,
     wb_error_ref,
     wb_operator_message,
@@ -134,7 +135,7 @@ _PACKAGING_PENDING_ORDER_STATUSES = frozenset(
 # Если Wildberries чего-то действительно не хватает, он откажет сам, и это будет
 # честный отказ маркетплейса, а не наша выдумка.
 #
-# Эти пять внутренних блокировок с 04.08.2026 держали склад: оператор доходил
+# Эти семь внутренних блокировок с 04.08.2026 держали склад: оператор доходил
 # до финальной кнопки и упирался в серую кнопку без выхода. Восстанавливать их
 # нельзя ни напрямую, ни под новым именем. Набор заморожен тестом
 # test_wb_delivery_blocker_codes_are_frozen, а _apply_wb_blocker_policy ниже
@@ -186,7 +187,10 @@ def _meta_validation_message(exc: WildberriesBusinessError) -> tuple[str, bool]:
             "Wildberries ещё обрабатывает поставку. Повторите передачу через минуту.",
             True,
         )
-    return (exc.message or "WB отклонил метаданные заказов.", False)
+    return (
+        translate_wb_message(exc.message) or "WB отклонил данные маркировки заказов.",
+        False,
+    )
 
 
 @dataclass(frozen=True)

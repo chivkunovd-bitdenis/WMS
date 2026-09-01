@@ -414,8 +414,6 @@ class FbsWorkspaceSupplyOut(BaseModel):
     id: str
     marketplace: str = "wb"
     wb_supply_id: str | None
-    # «wms» — поставку собрали мы, «wb» — её собрал продавец в своём кабинете.
-    source: str = "wms"
     name: str
     status: str
     delivery_type: str

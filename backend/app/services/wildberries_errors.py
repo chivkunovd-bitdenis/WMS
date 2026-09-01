@@ -25,6 +25,21 @@ _WB_MESSAGE_TRANSLATIONS: tuple[tuple[str, str], ...] = (
         "Wildberries ещё обрабатывает поставку. Повторите передачу через минуту.",
     ),
     (
+        "metavalidationfail",
+        "Wildberries отклонил данные маркировки. Проверьте Честный знак у указанных "
+        "заказов и повторите передачу.",
+    ),
+    (
+        "uinbadstatus",
+        "Wildberries отклонил код маркировки: статус КИЗ не позволяет передать заказ. "
+        "Проверьте или замените КИЗ.",
+    ),
+    (
+        "mandatory mark",
+        "Wildberries требует обязательную маркировку. Проверьте Честный знак у "
+        "указанных заказов.",
+    ),
+    (
         "supply is already delivered",
         "Wildberries считает эту поставку уже сданной. Повторно передавать её не нужно.",
     ),
@@ -167,7 +182,18 @@ def wb_operator_message(exc: WildberriesClientError) -> str:
         translated = translate_wb_message(body_message)
         if translated:
             return translated
-        return f"Wildberries ответил: {body_message}"
+        if exc.status_code == 401:
+            return "Wildberries не принял ключ продавца. Проверьте API-ключ в карточке селлера."
+        if exc.status_code == 403:
+            return (
+                "У ключа продавца нет прав на эту операцию. "
+                "Нужен ключ с доступом к «Маркетплейсу»."
+            )
+        if exc.status_code == 429:
+            return "Wildberries временно ограничил частоту запросов. Повторите через минуту."
+        if exc.status_code is not None and exc.status_code >= 500:
+            return "На стороне Wildberries сбой. Повторите операцию через несколько минут."
+        return "Wildberries отклонил операцию. Подробности ответа сохранены в журнале."
     if exc.status_code == 401:
         return "Wildberries не принял ключ продавца. Проверьте API-ключ в карточке селлера."
     if exc.status_code == 403:

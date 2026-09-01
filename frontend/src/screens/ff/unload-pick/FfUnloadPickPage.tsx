@@ -570,7 +570,6 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
         key={`${requestId}-${version}`}
         onNote={() => undefined}
         hideHeader={hideHeader}
-        hideFooterActions={source === 'fbs'}
         document={screenData.document}
         seller={screenData.seller}
         products={screenData.products}

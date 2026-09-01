@@ -4,6 +4,8 @@ import {
   buildFbsSyncTargets,
   fbsAccessibleStageIndex,
   fbsBoxOperationsDisabled,
+  fbsDeliveryConfirmDisabled,
+  fbsOrdersAvailableForBox,
   fbsOrdersSyncErrorMessage,
   mixedMarketplaceSelectionMessage,
   normalizeMetadataKind,
@@ -59,6 +61,30 @@ describe('WB optional picking', () => {
 
   it('opens boxes after every WB order is packed even when picking was skipped', () => {
     expect(fbsAccessibleStageIndex({ marketplace: 'wb', currentStage: 'picking', packed: 10, total: 10 })).toBe(3)
+  })
+
+  it('offers unassigned orders in boxes regardless of packaging status', () => {
+    const orders = [
+      { id: 'pending', pack: { status: 'pending' } },
+      { id: 'packed', pack: { status: 'packed' } },
+      { id: 'assigned', pack: { status: 'pending' } },
+    ]
+    expect(fbsOrdersAvailableForBox(orders, new Set(['assigned']))).toEqual([
+      orders[0],
+      orders[1],
+    ])
+  })
+})
+
+describe('WB delivery confirmation', () => {
+  it('does not freeze the action after a failed preflight request', () => {
+    expect(fbsDeliveryConfirmDisabled(false, null)).toBe(false)
+  })
+
+  it('stays disabled while loading or after a real server blocker', () => {
+    expect(fbsDeliveryConfirmDisabled(true, null)).toBe(true)
+    expect(fbsDeliveryConfirmDisabled(false, { can_deliver: false })).toBe(true)
+    expect(fbsDeliveryConfirmDisabled(false, { can_deliver: true })).toBe(false)
   })
 })
 

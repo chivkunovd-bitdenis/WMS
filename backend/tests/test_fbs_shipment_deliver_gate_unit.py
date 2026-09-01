@@ -282,7 +282,7 @@ def test_preflight_exposes_real_wb_marking_status() -> None:
 
 def test_wb_delivery_blocker_codes_are_frozen() -> None:
     """У Wildberries останавливать передачу вправе ровно две проверки."""
-    assert WB_ALLOWED_BLOCKER_CODES == frozenset({"supply_bad_status", "supply_empty"})
+    assert frozenset({"supply_bad_status", "supply_empty"}) == WB_ALLOWED_BLOCKER_CODES
 
 
 def test_wb_supply_with_nothing_prepared_is_still_deliverable() -> None:

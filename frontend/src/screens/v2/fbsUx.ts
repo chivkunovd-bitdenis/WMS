@@ -21,6 +21,26 @@ export function fbsBoxOperationsDisabled(marketplace: FbsMarketplace): boolean {
   return marketplace === 'ozon'
 }
 
+export function fbsOrdersAvailableForBox<T extends { id: string }>(
+  orders: T[],
+  assignedOrderIds: Set<string>,
+): T[] {
+  // Для WB упаковка — отметка, а не ворота. Backend уже разрешает положить в
+  // короб неупакованный заказ, поэтому frontend не должен прятать его из списка.
+  return orders.filter((order) => !assignedOrderIds.has(order.id))
+}
+
+export function fbsDeliveryConfirmDisabled(
+  loading: boolean,
+  preflight: { can_deliver: boolean } | null,
+): boolean {
+  // Ошибка получения preflight оставляет `preflight=null`. В этом состоянии
+  // оператор вправе повторить проверку или попробовать передачу: сам deliver
+  // заново синхронизирует WB и вернёт честный ответ. Серой кнопка остаётся
+  // только пока запрос выполняется или сервер вернул реальный blocker.
+  return loading || Boolean(preflight && !preflight.can_deliver)
+}
+
 export function supplyQrExpectedForStatus(status: string): boolean {
   // WB issues the supply QR only after handoff. Cargo-place QR codes are
   // available earlier and must stay printable without counting the future

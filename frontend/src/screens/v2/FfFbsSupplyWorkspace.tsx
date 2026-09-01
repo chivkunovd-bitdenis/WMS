@@ -47,7 +47,15 @@ import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
-import { buildFbsPickingListPrintHtml, fbsAccessibleStageIndex, fbsBoxOperationsDisabled, ordersWord, summarizeDeliveryChecks } from './fbsUx'
+import {
+  buildFbsPickingListPrintHtml,
+  fbsAccessibleStageIndex,
+  fbsBoxOperationsDisabled,
+  fbsDeliveryConfirmDisabled,
+  fbsOrdersAvailableForBox,
+  ordersWord,
+  summarizeDeliveryChecks,
+} from './fbsUx'
 import {
   confirmFbsPrintApplied,
   addFbsOrdersToSupply,
@@ -1156,9 +1164,7 @@ export function FfFbsSupplyWorkspace({
   // настоящая причина запрета — поставка уже уехала в WB.
   const boxEditingDisabled = boxOperationsDisabled || deliveryConfirmed
   const assignedBoxOrderIds = new Set(workspace?.boxes.flatMap((box) => box.assigned_order_ids) ?? [])
-  const availableForBox = (workspace?.orders ?? []).filter(
-    (order) => order.pack.status === 'packed' && !assignedBoxOrderIds.has(order.id),
-  )
+  const availableForBox = fbsOrdersAvailableForBox(workspace?.orders ?? [], assignedBoxOrderIds)
   const boxAssignName = workspace?.boxes.find((box) => box.id === boxAssignTarget)?.box_number
   const reprintOrder = workspace?.orders.find((order) => order.id === reprintMenu?.orderId) ?? null
   const reprintLine = reprintOrder?.product.id ? packLineByProduct.get(reprintOrder.product.id) : undefined
@@ -1328,12 +1334,6 @@ export function FfFbsSupplyWorkspace({
       slotProps={{ paper: { sx: { width: 'min(1500px, 98vw)', height: '94vh', m: 1 } } }}
       data-testid="fbs-workspace"
     >
-      {workspace?.supply.source === 'wb' ? (
-        <Alert severity="error" variant="filled" sx={{ borderRadius: 0, fontWeight: 700 }} data-testid="fbs-supply-from-seller-cabinet">
-          Поставка собрана в кабинете продавца. Работать с ней можно как с обычной,
-          но её состав меняет продавец, а не мы — перед передачей сверьте заказы.
-        </Alert>
-      ) : null}
       <Box sx={{ px: 2.5, py: 2, borderBottom: 1, borderColor: 'divider', bgcolor: '#fff' }}>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-start' }}>
           <LocalShippingOutlinedIcon color="primary" sx={{ mt: 0.4 }} />
@@ -2292,7 +2292,7 @@ export function FfFbsSupplyWorkspace({
           <Button onClick={() => setDeliverConfirmOpen(false)}>Не передавать</Button>
           <Button
             variant="contained"
-            disabled={deliveryPreflightLoading || !deliveryPreflight?.can_deliver}
+            disabled={fbsDeliveryConfirmDisabled(deliveryPreflightLoading, deliveryPreflight)}
             onClick={() => {
               setDeliverConfirmOpen(false)
               void deliver()

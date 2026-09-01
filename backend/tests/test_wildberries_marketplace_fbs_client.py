@@ -23,6 +23,8 @@ from app.services.wildberries_errors import (
     MetaValidationFailItem,
     WildberriesBusinessError,
     WildberriesClientError,
+    translate_wb_message,
+    wb_operator_message,
 )
 from app.services.wildberries_fbs_client import (
     MAX_MARKETPLACE_FBS_BATCH,
@@ -42,6 +44,45 @@ from app.services.wildberries_fbs_client import (
 
 def test_openapi_reference_date_is_set() -> None:
     assert WB_FBS_OPENAPI_VERIFIED_DATE == "2026-08-03"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_fragment"),
+    [
+        ("Supply not found", "не нашёл эту поставку"),
+        ("fix them to dispatch items", "ещё обрабатывает поставку"),
+        ("MetaValidationFail: uinBadStatus", "отклонил данные маркировки"),
+        ("mandatory mark is required", "требует обязательную маркировку"),
+    ],
+)
+def test_known_wb_operator_messages_are_translated(
+    raw: str, expected_fragment: str
+) -> None:
+    translated = translate_wb_message(raw)
+    assert translated is not None
+    assert expected_fragment in translated
+
+
+def test_wb_response_body_uses_translation_instead_of_raw_english() -> None:
+    exc = WildberriesClientError(
+        "wb_http_error",
+        status_code=502,
+        response_body='{"message":"Supply not found"}',
+    )
+    message = wb_operator_message(exc)
+    assert "не нашёл эту поставку" in message
+    assert "Supply not found" not in message
+
+
+def test_unknown_wb_response_body_is_not_shown_as_raw_english() -> None:
+    exc = WildberriesClientError(
+        "wb_http_error",
+        status_code=502,
+        response_body='{"message":"upstream exploded in an unknown way"}',
+    )
+    message = wb_operator_message(exc)
+    assert message == "На стороне Wildberries сбой. Повторите операцию через несколько минут."
+    assert "upstream exploded" not in message
 
 
 # TC-NEW-FBS-CLIENT-001 — batch add orders exact contract + 204
