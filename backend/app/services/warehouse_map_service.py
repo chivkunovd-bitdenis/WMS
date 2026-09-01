@@ -1198,37 +1198,48 @@ async def move_object(
         balances = await _container_balances(
             session, tenant_id, warehouse_id, container_kind, object_id
         )
+        if (
+            balances
+            and source_location_id == destination_location_id
+            and to_kind in {"cell", "sorting", "unassigned"}
+        ):
+            raise WarehouseMapError("nothing_to_move")
         moved_total = sum(int(row.quantity) for row in balances)
-        if not balances:
-            try:
-                pending_moved = (
-                    await inbound_container_putaway_service.putaway_pending_container(
-                        session,
-                        tenant_id=tenant_id,
-                        warehouse_id=warehouse_id,
-                        actor_user_id=actor_user_id,
-                        kind=container_kind,
-                        container_id=object_id,
-                        destination_location_id=destination_location_id,
-                        destination_is_cell=to_kind == "cell",
-                    )
+        pending_moved: int | None = None
+        try:
+            pending_moved = (
+                await inbound_container_putaway_service.putaway_pending_container(
+                    session,
+                    tenant_id=tenant_id,
+                    warehouse_id=warehouse_id,
+                    actor_user_id=actor_user_id,
+                    kind=container_kind,
+                    container_id=object_id,
+                    destination_location_id=destination_location_id,
+                    destination_is_cell=to_kind == "cell",
                 )
-            except inbound_container_putaway_service.InboundContainerPutawayError as exc:
-                raise WarehouseMapError(exc.code) from exc
-            if pending_moved is not None:
-                moved_total = pending_moved
-        for balance in balances:
-            await _transfer_balance(
-                session,
-                tenant_id=tenant_id,
-                balance=balance,
-                quantity=int(balance.quantity),
-                destination_location_id=destination_location_id,
-                destination_container_kind=cast(ContainerKind, balance.container_kind),
-                destination_container_id=balance.container_id,
-                transfer_group_id=transfer_group_id,
-                actor_user_id=actor_user_id,
             )
+        except inbound_container_putaway_service.InboundContainerPutawayError as exc:
+            # A container with current balance can be moved again after its
+            # original intake has already been posted. The canonical intake
+            # bridge is required only while that intake still has pending qty.
+            if not balances or exc.code != "nothing_to_move":
+                raise WarehouseMapError(exc.code) from exc
+        if pending_moved is not None:
+            moved_total = pending_moved
+        else:
+            for balance in balances:
+                await _transfer_balance(
+                    session,
+                    tenant_id=tenant_id,
+                    balance=balance,
+                    quantity=int(balance.quantity),
+                    destination_location_id=destination_location_id,
+                    destination_container_kind=cast(ContainerKind, balance.container_kind),
+                    destination_container_id=balance.container_id,
+                    transfer_group_id=transfer_group_id,
+                    actor_user_id=actor_user_id,
+                )
         await _place_container(
             session,
             tenant_id,

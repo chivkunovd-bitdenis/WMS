@@ -522,6 +522,7 @@ async def record_movement_and_adjust_balance(
     deduct_prefer: DeductPrefer = "unpacked",
     container_kind: ContainerKind | None = None,
     container_id: uuid.UUID | None = None,
+    _exact_source: bool = False,
 ) -> InventoryMovement:
     """Запись в журнал и изменение остатка (delta может быть отрицательным)."""
     if quantity_delta == 0:
@@ -548,6 +549,114 @@ async def record_movement_and_adjust_balance(
             container_kind,
             container_id,
         )
+
+    # Legacy document flows identify only a location, while current stock at
+    # that location can be split between loose units and several physical
+    # containers. Consume those sources deterministically instead of requiring
+    # a phantom loose row. Explicit picker sources still take the exact path.
+    if quantity_delta < 0 and container_kind is None and not _exact_source:
+        quantity_to_deduct = -quantity_delta
+        source_rows = list(
+            (
+                await session.scalars(
+                    select(InventoryBalance)
+                    .where(
+                        InventoryBalance.tenant_id == tenant_id,
+                        InventoryBalance.product_id == product_id,
+                        InventoryBalance.storage_location_id == storage_location_id,
+                        InventoryBalance.quantity > 0,
+                    )
+                    .with_for_update()
+                )
+            ).all()
+        )
+        source_rows.sort(
+            key=lambda row: (
+                row.container_id is not None,
+                row.container_kind or "",
+                str(row.container_id or ""),
+            )
+        )
+        total_available = sum(max(0, int(row.quantity)) for row in source_rows)
+        if total_available < quantity_to_deduct and not allow_negative:
+            raise ValueError("insufficient stock")
+
+        allocations: list[tuple[InventoryBalance, int]] = []
+        remaining = quantity_to_deduct
+        single_source = next(
+            (
+                source
+                for source in source_rows
+                if int(source.quantity) >= quantity_to_deduct
+            ),
+            None,
+        )
+        if single_source is not None and movement_type != MOVEMENT_TYPE_FBS_SHIPMENT:
+            allocations.append((single_source, quantity_to_deduct))
+            remaining = 0
+        else:
+            for source in source_rows:
+                allocated = min(remaining, max(0, int(source.quantity)))
+                if allocated > 0:
+                    allocations.append((source, allocated))
+                    remaining -= allocated
+                if remaining == 0:
+                    break
+        movement_count = len(allocations) + (1 if remaining > 0 else 0)
+        group_id = (
+            transfer_group_id
+            if transfer_group_id is not None or movement_count < 2
+            else uuid.uuid4()
+        )
+        movements: list[InventoryMovement] = []
+        for source, allocated in allocations:
+            raw_kind = source.container_kind
+            if raw_kind not in {None, "pallet", "box", "cargo_place"}:
+                raise ValueError("invalid container reference")
+            movements.append(
+                await record_movement_and_adjust_balance(
+                    session,
+                    tenant_id=tenant_id,
+                    product_id=product_id,
+                    storage_location_id=storage_location_id,
+                    quantity_delta=-allocated,
+                    movement_type=movement_type,
+                    inbound_intake_line_id=inbound_intake_line_id,
+                    outbound_shipment_line_id=outbound_shipment_line_id,
+                    inventory_count_line_id=inventory_count_line_id,
+                    transfer_group_id=group_id,
+                    marketplace_unload_request_id=marketplace_unload_request_id,
+                    allow_negative=False,
+                    actor_user_id=actor_user_id,
+                    deduct_prefer=deduct_prefer,
+                    container_kind=cast(ContainerKind | None, raw_kind),
+                    container_id=source.container_id,
+                    _exact_source=True,
+                )
+            )
+        if remaining > 0:
+            movements.append(
+                await record_movement_and_adjust_balance(
+                    session,
+                    tenant_id=tenant_id,
+                    product_id=product_id,
+                    storage_location_id=storage_location_id,
+                    quantity_delta=-remaining,
+                    movement_type=movement_type,
+                    inbound_intake_line_id=inbound_intake_line_id,
+                    outbound_shipment_line_id=outbound_shipment_line_id,
+                    inventory_count_line_id=inventory_count_line_id,
+                    transfer_group_id=group_id,
+                    marketplace_unload_request_id=marketplace_unload_request_id,
+                    allow_negative=True,
+                    actor_user_id=actor_user_id,
+                    deduct_prefer=deduct_prefer,
+                    _exact_source=True,
+                )
+            )
+        if not movements:
+            raise ValueError("insufficient stock")
+        return movements[0]
 
     movement_values: dict[str, object] = dict(
         tenant_id=tenant_id,

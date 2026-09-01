@@ -152,16 +152,14 @@ async def _get_balance_split(
     storage_location_id: uuid.UUID,
 ) -> tuple[int, int]:
     stmt = select(
-        InventoryBalance.quantity_unpacked,
-        InventoryBalance.quantity_packed,
+        func.coalesce(func.sum(InventoryBalance.quantity_unpacked), 0),
+        func.coalesce(func.sum(InventoryBalance.quantity_packed), 0),
     ).where(
         InventoryBalance.tenant_id == tenant_id,
         InventoryBalance.product_id == product_id,
         InventoryBalance.storage_location_id == storage_location_id,
     )
-    row = (await session.execute(stmt)).one_or_none()
-    if row is None:
-        return 0, 0
+    row = (await session.execute(stmt)).one()
     return int(row[0] or 0), int(row[1] or 0)
 
 
