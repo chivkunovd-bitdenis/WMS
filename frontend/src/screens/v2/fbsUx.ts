@@ -21,6 +21,27 @@ export function fbsBoxOperationsDisabled(marketplace: FbsMarketplace): boolean {
   return marketplace === 'ozon'
 }
 
+export type FbsOperatorStageKey = 'composition' | 'picking' | 'packing' | 'boxes'
+
+const FBS_OPERATOR_STAGES: FbsOperatorStageKey[] = ['composition', 'picking', 'packing', 'boxes']
+
+export function fbsAccessibleStageIndex(input: {
+  marketplace: FbsMarketplace
+  currentStage: FbsOperatorStageKey
+  packed: number
+  total: number
+}): number {
+  let accessible = FBS_OPERATOR_STAGES.indexOf(input.currentStage)
+  if (input.marketplace !== 'wb' || input.currentStage === 'composition') return accessible
+
+  // Подбор WB можно пропустить и сразу перейти к упаковке.
+  accessible = Math.max(accessible, FBS_OPERATOR_STAGES.indexOf('packing'))
+  if (input.total > 0 && input.packed === input.total) {
+    accessible = Math.max(accessible, FBS_OPERATOR_STAGES.indexOf('boxes'))
+  }
+  return accessible
+}
+
 export function fbsOrdersSyncErrorMessage(cause: unknown): string {
   if (cause instanceof Error && cause.message === 'missing_marketplace_token') {
     return 'У селлера не подключён ключ Wildberries. Добавьте ключ WB в карточке селлера.'
