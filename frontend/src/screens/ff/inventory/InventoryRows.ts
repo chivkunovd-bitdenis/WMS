@@ -411,31 +411,6 @@ export function setActual(
   return changed ? { ...count, cells } : count
 }
 
-/**
- * На большом документе не рисуем все товарные строки до первого действия.
- * Скан тары сам раскрывает ровно её путь, поэтому складской сценарий остаётся
- * одним пиком, а DOM не содержит тысячу тяжёлых строк одновременно.
- */
-export function initialCollapsedKeys(count: InventoryCount, maxVisibleProducts = 250): Set<string> {
-  let products = 0
-  function walk(nodes: InventoryNode[]) {
-    for (const node of nodes) {
-      if (node.kind === 'product') {
-        products += 1
-        if (products > maxVisibleProducts) return
-      } else {
-        walk(node.children)
-        if (products > maxVisibleProducts) return
-      }
-    }
-  }
-  for (const cell of count.cells) {
-    walk(cell.children)
-    if (products > maxVisibleProducts) return collapseAllKeys(count)
-  }
-  return new Set()
-}
-
 export function collapseAllKeys(count: InventoryCount): Set<string> {
   const keys = new Set<string>()
   function walkNodes(nodes: InventoryNode[]) {

@@ -30,7 +30,6 @@ import {
   buildRows,
   collapseAllKeys,
   facets,
-  initialCollapsedKeys,
   setActual,
   totals,
   type InvFilters,
@@ -89,7 +88,7 @@ export function FfInventoryCountScreen({
   onBack,
 }: Props) {
   const [filters, setFilters] = useState<InvFilters>(EMPTY_FILTERS)
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => initialCollapsedKeys(count))
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   // Память сканера на одну вещь: какую тару открыли. Пока открыта, пики идут в неё.
   const [openContainerId, setOpenContainerId] = useState<string | null>(null)
   const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)

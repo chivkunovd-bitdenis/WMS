@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applyScan, inventoryRowPathKeys } from './InventoryScan'
-import { buildRows, EMPTY_FILTERS, initialCollapsedKeys } from './InventoryRows'
+import { buildRows, EMPTY_FILTERS } from './InventoryRows'
 import type { InventoryCount, ProductNode } from './InventoryTypes'
 
 function product(overrides: Partial<ProductNode> = {}): ProductNode {
@@ -98,7 +98,7 @@ describe('inventory product scan', () => {
     expect(second.message).toContain('2 из 3')
   })
 
-  it('keeps a thousand-line document collapsed until its scanned branch is needed', () => {
+  it('processes repeated scans with 1000 product rows still expanded', () => {
     const boxes = Array.from({ length: 100 }, (_, boxIndex) => ({
       kind: 'box' as const,
       id: `box-${boxIndex}`,
@@ -115,17 +115,13 @@ describe('inventory product scan', () => {
       ...countWithBox(product()),
       cells: [{ id: 'cell-1', label: 'A-01', children: boxes }],
     }
-    const collapsed = initialCollapsedKeys(count)
-
-    expect(buildRows(count, EMPTY_FILTERS, collapsed)).toHaveLength(1)
+    expect(buildRows(count, EMPTY_FILTERS, new Set())).toHaveLength(1101)
 
     const opened = applyScan(count, 'BOX-BARCODE-42', null)
     const scanned = applyScan(opened.count, 'BARCODE-42-7', opened.activeContainerId)
-    const openedKeys = new Set(collapsed)
-    for (const key of scanned.focusPathKeys ?? []) openedKeys.delete(key)
 
     expect(scanned.focusRowKey).toBe('product:line-42-7')
-    expect(buildRows(scanned.count, EMPTY_FILTERS, openedKeys).length).toBeLessThan(120)
+    expect(buildRows(scanned.count, EMPTY_FILTERS, new Set())).toHaveLength(1101)
 
     let rapidCount = opened.count
     const startedAt = performance.now()
