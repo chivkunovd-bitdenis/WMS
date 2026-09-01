@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from collections import defaultdict
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, model_validator
@@ -14,7 +14,7 @@ from app.db.session import get_db
 from app.models.inventory_count import InventoryCount, InventoryCountLine
 from app.models.user import User
 from app.services import inventory_count_service as service
-from app.services import tenant_settings_service
+from app.services import tenant_settings_service, warehouse_map_service
 from app.services.sorting_location_service import SORTING_LOCATION_CODE, UNASSIGNED_LABEL
 from app.services.staff_permissions_service import PERM_INVENTORY
 
@@ -84,16 +84,28 @@ class CountProductNodeOut(BaseModel):
     seller_id: str | None = None
     category: str | None = None
     barcode: str | None = None
+    wb_vendor_code: str | None = None
+    wb_barcode: str | None = None
+    wb_size: str | None = None
     photo_url: str | None = None
     expected: int
     actual: int | None
     expected_now: int | None = None
 
 
+class CountContainerNodeOut(BaseModel):
+    kind: Literal["pallet", "box", "cargo_place"]
+    id: str
+    code: str
+    barcode: str | None = None
+    children: list[CountProductNodeOut | CountContainerNodeOut]
+
+
 class CountCellOut(BaseModel):
     id: str
     label: str
-    children: list[CountProductNodeOut]
+    barcode: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    children: list[CountProductNodeOut | CountContainerNodeOut]
 
 
 class InventoryCountLineOut(BaseModel):
@@ -109,6 +121,9 @@ class InventoryCountLineOut(BaseModel):
     seller_name: str | None
     category: str | None
     barcode: str | None
+    wb_vendor_code: str | None
+    wb_barcode: str | None
+    wb_size: str | None
     expected_quantity: int
     current_quantity: int
     actual_quantity: int | None
@@ -262,10 +277,34 @@ def _product_node(
         seller_id=str(product.seller_id) if product.seller_id is not None else None,
         category=category,
         barcode=product.wb_barcode,
+        wb_vendor_code=product.wb_vendor_code,
+        wb_barcode=product.wb_barcode,
+        wb_size=product.wb_size,
         expected=int(line.expected_quantity),
         actual=int(line.actual_quantity) if line.actual_quantity is not None else None,
         expected_now=expected_now,
     )
+
+
+def _container_tree(
+    rows: list[dict[str, Any]],
+    containers: dict[tuple[str, str], CountContainerNodeOut],
+) -> list[CountProductNodeOut | CountContainerNodeOut]:
+    result: list[CountProductNodeOut | CountContainerNodeOut] = []
+    for row in rows:
+        kind = row.get("kind")
+        if kind not in {"pallet", "box", "cargo_place"}:
+            continue
+        node = CountContainerNodeOut(
+            kind=kind,
+            id=str(row["id"]),
+            code=str(row["code"]),
+            barcode=str(row["barcode"]) if row.get("barcode") is not None else None,
+            children=_container_tree(row.get("children", []), containers),
+        )
+        containers[(kind, node.id)] = node
+        result.append(node)
+    return result
 
 
 async def _detail_out(
@@ -278,8 +317,37 @@ async def _detail_out(
     current = await service.current_quantities(session, count)
     categories = await _categories(session, count)
     line_rows: list[InventoryCountLineOut] = []
-    nodes_by_cell: dict[tuple[str, str], list[CountProductNodeOut]] = defaultdict(list)
-    no_address_nodes: list[CountProductNodeOut] = []
+    nodes_by_cell: dict[
+        tuple[str, str], list[CountProductNodeOut | CountContainerNodeOut]
+    ] = defaultdict(list)
+    no_address_nodes: list[CountProductNodeOut | CountContainerNodeOut] = []
+    containers: dict[tuple[str, str], CountContainerNodeOut] = {}
+    cells_by_id: dict[str, CountCellOut] = {}
+    unassigned: CountCellOut | None = None
+    if count.warehouse_id is not None:
+        warehouse_map = await warehouse_map_service.get_warehouse_map(
+            session,
+            count.tenant_id,
+            count.warehouse_id,
+        )
+        unassigned = CountCellOut(
+            id="unassigned",
+            label=UNASSIGNED_LABEL if address_storage else "",
+            barcode=None,
+            children=_container_tree(warehouse_map["unassigned"], containers),
+        )
+        for map_cell in warehouse_map["cells"]:
+            cell = CountCellOut(
+                id=str(map_cell["id"]),
+                label=str(map_cell["code"]),
+                barcode=(
+                    str(map_cell["barcode"])
+                    if map_cell.get("barcode") is not None
+                    else None
+                ),
+                children=_container_tree(map_cell["children"], containers),
+            )
+            cells_by_id[cell.id] = cell
     for line in count.lines:
         product = line.product
         location = line.storage_location
@@ -289,15 +357,30 @@ async def _detail_out(
             category=category,
             current_quantity=current[line.id],
         )
-        if address_storage and location is not None:
+        container = (
+            containers.get((line.container_kind, str(line.container_id)))
+            if line.container_kind is not None and line.container_id is not None
+            else None
+        )
+        if container is not None:
+            container.children.append(node)
+        elif address_storage and location is not None:
             label = (
                 UNASSIGNED_LABEL
                 if location.code == SORTING_LOCATION_CODE
                 else location.code
             )
-            nodes_by_cell[(str(location.id), label)].append(node)
+            if location.code == SORTING_LOCATION_CODE and unassigned is not None:
+                unassigned.children.append(node)
+            elif str(location.id) in cells_by_id:
+                cells_by_id[str(location.id)].children.append(node)
+            else:
+                nodes_by_cell[(str(location.id), label)].append(node)
         else:
-            no_address_nodes.append(node)
+            if unassigned is not None:
+                unassigned.children.append(node)
+            else:
+                no_address_nodes.append(node)
         line_rows.append(
             InventoryCountLineOut(
                 id=str(line.id),
@@ -318,6 +401,9 @@ async def _detail_out(
                 seller_name=product.seller.name if product.seller is not None else None,
                 category=category,
                 barcode=product.wb_barcode,
+                wb_vendor_code=product.wb_vendor_code,
+                wb_barcode=product.wb_barcode,
+                wb_size=product.wb_size,
                 expected_quantity=int(line.expected_quantity),
                 current_quantity=current[line.id],
                 actual_quantity=(
@@ -328,16 +414,32 @@ async def _detail_out(
             )
         )
     if address_storage:
-        cells = [
-            CountCellOut(id=cell_id, label=label, children=children)
+        fallback_cells = [
+            CountCellOut(id=cell_id, label=label, barcode=None, children=children)
             for (cell_id, label), children in sorted(
                 nodes_by_cell.items(), key=lambda item: item[0][1]
             )
         ]
+        cells = [
+            *([unassigned] if unassigned is not None and unassigned.children else []),
+            *[
+                cell
+                for cell in cells_by_id.values()
+                if cell.children
+            ],
+            *fallback_cells,
+        ]
     else:
         # Frontend flattens children when addressStorage=false and never renders
         # this technical wrapper as a cell.
-        cells = [CountCellOut(id="inventory", label="", children=no_address_nodes)]
+        cells = [
+            CountCellOut(
+                id="inventory",
+                label="",
+                barcode=None,
+            children=(unassigned.children if unassigned is not None else no_address_nodes),
+            )
+        ]
     fill, _ = _fill(count)
     return InventoryCountDetailOut(
         id=str(count.id),

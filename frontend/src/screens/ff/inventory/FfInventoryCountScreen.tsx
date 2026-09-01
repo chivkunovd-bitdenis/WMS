@@ -2,6 +2,7 @@ import { Box, Paper, Stack, Typography } from '@mui/material'
 import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined'
 import { useMemo, useState } from 'react'
 import {
+  ActionGroup,
   CheckboxInput,
   DangerAction,
   ErrorNotice,
@@ -65,6 +66,7 @@ type Props = {
   onSave: () => void
   onPost: () => void
   onCancelDocument: () => void
+  onCreateContainer?: (kind: 'pallet' | 'box' | 'cargo_place') => void
   onBack: () => void
 }
 
@@ -77,6 +79,7 @@ export function FfInventoryCountScreen({
   onSave,
   onPost,
   onCancelDocument,
+  onCreateContainer,
   onBack,
 }: Props) {
   const [filters, setFilters] = useState<InvFilters>(EMPTY_FILTERS)
@@ -95,6 +98,13 @@ export function FfInventoryCountScreen({
   }
 
   const readOnly = count.status !== 'draft'
+  const createContainerDisabledReason = readOnly
+    ? 'Документ уже проведён'
+    : loading
+      ? 'Создание тары выполняется'
+      : onCreateContainer
+        ? undefined
+        : 'Создание тары недоступно'
   const rows = useMemo(() => buildRows(count, filters, collapsed), [count, filters, collapsed])
   const t = useMemo(() => totals(count), [count])
   const { sellers, categories } = useMemo(() => facets(count), [count])
@@ -159,6 +169,32 @@ export function FfInventoryCountScreen({
           Создал {count.createdBy}, {count.createdAt}
         </Typography>
       </Stack>
+
+      <Box sx={{ mb: 2 }}>
+        <ActionGroup>
+          <SecondaryAction
+            onClick={() => onCreateContainer?.('box')}
+            disabledReason={createContainerDisabledReason}
+            data-testid="inv-create-box"
+          >
+            Создать короб
+          </SecondaryAction>
+          <SecondaryAction
+            onClick={() => onCreateContainer?.('pallet')}
+            disabledReason={createContainerDisabledReason}
+            data-testid="inv-create-pallet"
+          >
+            Создать палету
+          </SecondaryAction>
+          <SecondaryAction
+            onClick={() => onCreateContainer?.('cargo_place')}
+            disabledReason={createContainerDisabledReason}
+            data-testid="inv-create-cargo-place"
+          >
+            Создать грузоместо
+          </SecondaryAction>
+        </ActionGroup>
+      </Box>
 
       {/* Свободная строка про причину: «пересорт», «после потопа», «считали вдвоём».
           Пишется при пересчёте и остаётся видной, когда документ откроют потом —

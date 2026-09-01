@@ -22,6 +22,9 @@ export type InvRow = {
   seller: string | null
   category: string | null
   barcode: string | null
+  wbVendorCode: string | null
+  wbBarcode: string | null
+  wbSize: string | null
   photoUrl: string | null
   /** Числится: у листа своё, у тары — сумма по её листам. */
   expected: number
@@ -127,7 +130,15 @@ function matchesFilters(product: ProductNode, filters: InvFilters): boolean {
   if (!needle) return true
   // Пачка кодов, вставленная столбцом: достаточно совпадения по любому.
   const parts = needle.split(/\s+/)
-  const haystack = `${product.name} ${product.sku} ${product.barcode}`.toLowerCase()
+  const haystack = [
+    product.name,
+    product.sku,
+    product.barcode,
+    product.wbVendorCode ?? '',
+    product.wbBarcode ?? '',
+  ]
+    .join(' ')
+    .toLowerCase()
   return parts.some((part) => haystack.includes(part))
 }
 
@@ -205,6 +216,9 @@ function pushContainer(
     seller: null,
     category: null,
     barcode: node.barcode,
+    wbVendorCode: null,
+    wbBarcode: null,
+    wbSize: null,
     photoUrl: null,
     expected: agg.expected,
     actual: agg.actual,
@@ -241,6 +255,9 @@ function walk(nodes: InventoryNode[], ctx: BuildCtx, depth: number, parentKey: s
         seller: node.seller,
         category: node.category,
         barcode: node.barcode,
+        wbVendorCode: node.wbVendorCode ?? null,
+        wbBarcode: node.wbBarcode ?? null,
+        wbSize: node.wbSize ?? null,
         photoUrl: node.photoUrl,
         expected: expectedNow(node),
         actual: node.actual,
@@ -278,7 +295,14 @@ export function buildRows(
   }
   for (const cell of count.cells) {
     const kept = collectProducts(cell.children).filter((p) => matchesFilters(p, filters))
-    if (kept.length === 0) continue
+    const hasEmptyContainer = cell.children.some(
+      (node) => node.kind !== 'product' && isEmptyContainer(node),
+    )
+    const filtersActive = Boolean(
+      filters.query.trim() || filters.seller || filters.category || filters.onlyPending,
+    )
+    const printableEmptyCell = !filtersActive && Boolean(cell.barcode)
+    if (kept.length === 0 && !hasEmptyContainer && !printableEmptyCell) continue
     const key = `cell:${cell.id}`
     const agg = aggregate(kept)
     const expanded = !collapsed.has(key)
@@ -290,7 +314,10 @@ export function buildRows(
       title: cell.label,
       seller: null,
       category: null,
-      barcode: null,
+      barcode: cell.barcode ?? null,
+      wbVendorCode: null,
+      wbBarcode: null,
+      wbSize: null,
       photoUrl: null,
       expected: agg.expected,
       actual: agg.actual,

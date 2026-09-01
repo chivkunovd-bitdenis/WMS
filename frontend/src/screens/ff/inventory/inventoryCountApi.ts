@@ -1,6 +1,13 @@
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
-import type { CountListItem, CountStatus, InventoryCount, ProductNode } from './InventoryTypes'
+import type {
+  ContainerNode,
+  CountListItem,
+  CountStatus,
+  InventoryCount,
+  InventoryNode,
+  ProductNode,
+} from './InventoryTypes'
 
 // Серверная обвязка инвентаризации, общая для двух входов в неё.
 //
@@ -37,24 +44,44 @@ export function inventoryAuthHeaders(token: string): Record<string, string> {
 }
 
 export type ApiProduct = {
+  kind: 'product'
   id: string
   name: string
   sku: string
   seller: string
   category: string | null
   barcode: string | null
+  wb_vendor_code: string | null
+  wb_barcode: string | null
+  wb_size: string | null
   photo_url: string | null
   expected: number
   actual: number | null
   expected_now: number | null
 }
 
-export type ApiCell = { id: string; label: string; children: ApiProduct[] }
+export type ApiContainer = {
+  kind: 'pallet' | 'box' | 'cargo_place'
+  id: string
+  code: string
+  barcode: string | null
+  children: ApiNode[]
+}
+
+export type ApiNode = ApiProduct | ApiContainer
+
+export type ApiCell = {
+  id: string
+  label: string
+  barcode: string | null
+  children: ApiNode[]
+}
 
 export type ApiDetail = {
   id: string
   number: string
   status: string
+  warehouse_id: string | null
   warehouse_name: string
   fill: {
     mode: 'object' | 'all' | 'filters'
@@ -100,6 +127,9 @@ function toProduct(node: ApiProduct): ProductNode {
     seller: node.seller,
     category: node.category ?? '—',
     barcode: node.barcode ?? '',
+    wbVendorCode: node.wb_vendor_code,
+    wbBarcode: node.wb_barcode,
+    wbSize: node.wb_size,
     photoUrl: node.photo_url,
     expected: node.expected,
     actual: node.actual,
@@ -110,11 +140,24 @@ function toProduct(node: ApiProduct): ProductNode {
   }
 }
 
+function toNode(node: ApiNode): InventoryNode {
+  if (node.kind === 'product') return toProduct(node)
+  const container: ContainerNode = {
+    kind: node.kind,
+    id: node.id,
+    code: node.code,
+    barcode: node.barcode,
+    children: node.children.map(toNode),
+  }
+  return container
+}
+
 export function toCount(detail: ApiDetail): InventoryCount {
   return {
     id: detail.id,
     number: detail.number,
     status: detail.status as CountStatus,
+    warehouseId: detail.warehouse_id,
     warehouseName: detail.warehouse_name,
     fill:
       detail.fill.mode === 'object'
@@ -131,7 +174,8 @@ export function toCount(detail: ApiDetail): InventoryCount {
     cells: detail.cells.map((cell) => ({
       id: cell.id,
       label: cell.label,
-      children: cell.children.map(toProduct),
+      barcode: cell.barcode,
+      children: cell.children.map(toNode),
     })),
   }
 }
@@ -156,11 +200,17 @@ export function toListItem(row: ApiSummary): CountListItem {
 /** Введённые факты для отправки: сервер ждёт строку и число. */
 export function actualPayload(count: InventoryCount) {
   const lines: Array<{ line_id: string; actual_quantity: number | null }> = []
-  for (const cell of count.cells) {
-    for (const node of cell.children) {
-      if (node.kind !== 'product') continue
-      lines.push({ line_id: node.id, actual_quantity: node.actual })
+  function collect(nodes: InventoryNode[]) {
+    for (const node of nodes) {
+      if (node.kind === 'product') {
+        lines.push({ line_id: node.id, actual_quantity: node.actual })
+      } else {
+        collect(node.children)
+      }
     }
+  }
+  for (const cell of count.cells) {
+    collect(cell.children)
   }
   return { lines }
 }
