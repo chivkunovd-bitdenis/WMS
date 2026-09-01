@@ -390,12 +390,27 @@ def _compute_stage(
         return "composition"
     if progress.total == 0:
         return "composition"
-    # Для WB подбор — полезный, но необязательный операторский этап. Открыть
-    # упаковку можно без сканов подбора; как только упаковка началась, не
-    # возвращаем рабочее место назад.
-    if progress.picked < progress.total and not (
-        getattr(supply, "marketplace", None) == "wb" and progress.packed > 0
-    ):
+
+    # WB: ЭТАПЫ НЕ ЯВЛЯЮТСЯ ГЕЙТАМИ. Подбор и упаковка — операторские рабочие
+    # поверхности, а не разрешения на следующую вкладку. После начала более
+    # позднего этапа сервер никогда не возвращает рабочее место назад. В
+    # частности, запрещено восстанавливать старый fallback
+    # `assembling -> picking`: он возвращал полностью готовую поставку на
+    # «Подбор» при 0 оставшихся единиц.
+    if getattr(supply, "marketplace", None) == "wb":
+        if progress.packed > 0:
+            if progress.packed < progress.total:
+                return "packing"
+            if supply.status == FBS_SUPPLY_STATUS_PACKED and (
+                has_physical_boxes or without_distribution
+            ):
+                return "delivery"
+            return "handoff_prep"
+        if progress.picked < progress.total:
+            return "picking"
+        return "packing"
+
+    if progress.picked < progress.total:
         return "picking"
     if progress.packed < progress.total:
         return "packing"
@@ -434,6 +449,12 @@ def _compute_workspace_blockers(
     unassigned_packed_order_ids: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
 ) -> list[dict[str, Any]]:
     blockers: list[dict[str, Any]] = []
+    # WB: рабочее место не публикует навигационные блокеры. Факты подбора,
+    # упаковки, метаданных, стикеров и коробов остаются в progress/orders и
+    # проверяются в конкретной операции передачи, но не запирают вкладки и не
+    # отправляют оператора на уже пройденный этап.
+    if getattr(supply, "marketplace", None) == "wb":
+        return blockers
     if not orders:
         blockers.append(
             {
