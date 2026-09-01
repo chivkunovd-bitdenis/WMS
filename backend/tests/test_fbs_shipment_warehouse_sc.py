@@ -1098,7 +1098,7 @@ async def test_fbs_shipment_deliver_pvz_requires_trbx(
     assert resp.json()["detail"]["code"] == "physical_boxes_required"
 
 
-# TC-NEW-FBS-SHIPWH-006 — cancelled order blocks deliver
+# TC-NEW-FBS-SHIPWH-006 — cancelled WB order is skipped without blocking deliver
 @pytest.mark.asyncio
 async def test_fbs_shipment_deliver_cancelled_order_in_supply(
     async_client: AsyncClient,
@@ -1126,16 +1126,23 @@ async def test_fbs_shipment_deliver_cancelled_order_in_supply(
         order.status = FBS_ORDER_STATUS_CANCELLED
         await session.commit()
 
+    await _create_and_fill_physical_box(
+        async_client,
+        headers,
+        supply["id"],
+        [order_ids[1]],
+    )
+
     resp = await _deliver_with_preflight(async_client, headers, supply["id"])
-    assert resp.status_code == 409
-    assert resp.json()["detail"]["code"] == "wb_supply_composition_discrepancy"
+    assert resp.status_code == 200, resp.text
 
     async with SessionLocal() as session:
         supply_row = await session.get(FbsSupply, uuid.UUID(supply["id"]))
         assert supply_row is not None
-        assert supply_row.status == FBS_SUPPLY_STATUS_PACKED
-        assert supply_row.delivered_at is None
-        for local_order_id in order_ids:
-            order = await session.get(FbsOrder, local_order_id)
-            assert order is not None
-            assert order.status != FBS_ORDER_STATUS_IN_DELIVERY
+        assert supply_row.status == FBS_SUPPLY_STATUS_IN_DELIVERY
+        assert supply_row.delivered_at is not None
+        cancelled_order = await session.get(FbsOrder, order_ids[0])
+        active_order = await session.get(FbsOrder, order_ids[1])
+        assert cancelled_order is not None and active_order is not None
+        assert cancelled_order.status == FBS_ORDER_STATUS_CANCELLED
+        assert active_order.status == FBS_ORDER_STATUS_IN_DELIVERY
