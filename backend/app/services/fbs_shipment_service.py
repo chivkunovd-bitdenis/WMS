@@ -2044,19 +2044,18 @@ async def deliver_supply(
     if supply.status in _DELIVER_BLOCKED_SUPPLY_STATUSES:
         raise FbsShipmentError("supply_bad_status", http_status=409)
 
-    token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
-    orders, _, source_plan = await _sync_and_validate_deliver(
-        session,
-        tenant_id,
-        supply,
-        http_client,
-        token,
-        confirmed_preflight_version=confirmed_preflight_version,
-        actor_user_id=actor_user_id,
-    )
-
     operation = resumable_operation
     if operation is None:
+        token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
+        orders, _, source_plan = await _sync_and_validate_deliver(
+            session,
+            tenant_id,
+            supply,
+            http_client,
+            token,
+            confirmed_preflight_version=confirmed_preflight_version,
+            actor_user_id=actor_user_id,
+        )
         operation = await create_pending_deliver_operation(
             session,
             tenant_id=tenant_id,
@@ -2067,6 +2066,16 @@ async def deliver_supply(
             confirmed_preflight_version=confirmed_preflight_version,
             created_by_user_id=actor_user_id,
         )
+    else:
+        token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
+        checkpointed = await _load_checkpointed_wb_delivery(
+            session, supply, operation
+        )
+        if checkpointed is None:
+            raise FbsShipmentError(
+                "fbs_shipment_checkpoint_incomplete", http_status=409
+            )
+        orders, source_plan = checkpointed
 
     # Сначала сохраняем операцию и точный план источников, затем выполняем
     # необратимый запрос WB. Если процесс умрёт после WB 2xx, повтор найдёт
@@ -2094,6 +2103,43 @@ async def deliver_supply(
     if locked_supply is None:
         raise FbsShipmentError("supply_not_found")
     supply = locked_supply
+    # Another request may have completed this operation between our durable
+    # checkpoint commit and reacquiring the supply lock.  The supply lock
+    # serializes the external mutation; refresh the journal under that lock so
+    # a stale in-memory PENDING object can never issue or overwrite a second
+    # WB call.
+    await session.refresh(operation)
+    if operation.state == WB_OPERATION_STATE_CONFIRMED:
+        checkpointed = await _load_checkpointed_wb_delivery(session, supply, operation)
+        if checkpointed is None:
+            raise FbsShipmentError(
+                "fbs_shipment_checkpoint_incomplete", http_status=409
+            )
+        orders, source_plan = checkpointed
+        await _persist_confirmed_delivery(
+            session, supply, orders, operation, actor_user_id, source_plan
+        )
+        await _fetch_supply_qr_after_deliver(session, supply, http_client, token)
+        return supply
+    if operation.state == WB_OPERATION_STATE_FAILED:
+        failed_code = operation.error_code or "wb_delivery_failed"
+        await session.rollback()
+        raise FbsShipmentError(
+            failed_code,
+            message="Параллельная попытка уже получила окончательный отказ WB.",
+            context={"operation_state": "failed"},
+            retryable=False,
+            http_status=409,
+        )
+    if operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
+        await session.rollback()
+        raise FbsShipmentError(
+            "wb_pending_confirmation",
+            message="WB пока не подтвердил передачу; слепой повтор запрещён.",
+            context={"operation_state": "pending_confirmation"},
+            retryable=True,
+            http_status=504,
+        )
     if supply.status in _DELIVER_BLOCKED_SUPPLY_STATUSES:
         await mark_operation_failed(
             session,

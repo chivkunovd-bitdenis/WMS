@@ -1149,6 +1149,150 @@ async def test_pending_reconcile_never_overwrites_parallel_definitive_failure(
 
 
 @pytest.mark.asyncio
+async def test_pending_retry_uses_frozen_plan_without_recomputing_sources(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, _ = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[953071],
+        supply_name="WB frozen retry plan",
+    )
+    idempotency_key = str(uuid.uuid4())
+
+    import app.services.fbs_shipment_service as shipment_mod
+
+    async def crash_before_wb(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("simulated crash before WB request")
+
+    monkeypatch.setattr(shipment_mod, "deliver_marketplace_supply", crash_before_wb)
+    with pytest.raises(RuntimeError, match="simulated crash before WB request"):
+        await _deliver_with_preflight(
+            async_client,
+            headers,
+            supply["id"],
+            idempotency_key=idempotency_key,
+        )
+
+    async def not_delivered(*_args: object, **_kwargs: object) -> str:
+        return shipment_mod.WB_RECONCILE_NOT_DELIVERED
+
+    async def forbid_source_recompute(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("resumable attempt must use its frozen source plan")
+
+    wb_calls = 0
+
+    async def accepted_by_wb(*_args: object, **_kwargs: object) -> None:
+        nonlocal wb_calls
+        wb_calls += 1
+
+    monkeypatch.setattr(shipment_mod, "reconcile_supply_delivered", not_delivered)
+    monkeypatch.setattr(shipment_mod, "_sync_and_validate_deliver", forbid_source_recompute)
+    monkeypatch.setattr(shipment_mod, "deliver_marketplace_supply", accepted_by_wb)
+
+    retry = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=idempotency_key,
+    )
+    assert retry.status_code == 200, retry.text
+    assert wb_calls == 1
+    assert retry.json()["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
+
+
+@pytest.mark.asyncio
+async def test_relock_refresh_prevents_parallel_second_wb_call(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, _ = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[953081],
+        supply_name="WB relock confirmed race",
+    )
+
+    import app.services.fbs_shipment_service as shipment_mod
+
+    real_get_supply_for_update = shipment_mod._get_supply_for_update
+    injected_confirmation = False
+
+    async def confirm_between_checkpoint_and_relock(
+        session: object,
+        current_tenant_id: uuid.UUID,
+        current_supply_id: uuid.UUID,
+        *,
+        with_trbxes: bool = False,
+    ) -> FbsSupply | None:
+        nonlocal injected_confirmation
+        if not injected_confirmation:
+            async with SessionLocal() as parallel_session:
+                operation = await parallel_session.scalar(
+                    select(FbsWbOperation).where(
+                        FbsWbOperation.local_entity_id == current_supply_id,
+                        FbsWbOperation.state == WB_OPERATION_STATE_PENDING,
+                    )
+                )
+                checkpoint = (
+                    (operation.request_summary_json or {}).get("checkpoint_source_plan")
+                    if operation is not None
+                    else None
+                )
+                if operation is not None and checkpoint is not None:
+                    operation.state = WB_OPERATION_STATE_CONFIRMED
+                    await parallel_session.commit()
+                    injected_confirmation = True
+        return await real_get_supply_for_update(
+            session,
+            current_tenant_id,
+            current_supply_id,
+            with_trbxes=with_trbxes,
+        )
+
+    wb_calls = 0
+
+    async def must_not_call_wb(*_args: object, **_kwargs: object) -> None:
+        nonlocal wb_calls
+        wb_calls += 1
+
+    monkeypatch.setattr(
+        shipment_mod,
+        "_get_supply_for_update",
+        confirm_between_checkpoint_and_relock,
+    )
+    monkeypatch.setattr(shipment_mod, "deliver_marketplace_supply", must_not_call_wb)
+
+    response = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=str(uuid.uuid4()),
+    )
+    assert response.status_code == 200, response.text
+    assert injected_confirmation is True
+    assert wb_calls == 0
+    assert response.json()["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
+
+
+@pytest.mark.asyncio
 async def test_pending_delivery_key_cannot_be_rebound_to_another_supply(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
