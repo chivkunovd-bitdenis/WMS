@@ -166,11 +166,34 @@ export function WarehouseMapTree({
         row.seller ? <TextCell value={row.seller} width={158} /> : null,
     },
     {
-      key: 'barcode',
-      header: 'ШК',
+      key: 'sellerArticle',
+      header: 'Артикул продавца',
+      width: 170,
+      render: (row) =>
+        row.kind === 'product' && row.sellerArticle ? (
+          <TextCell value={row.sellerArticle} width={158} />
+        ) : null,
+    },
+    {
+      key: 'containerBarcode',
+      header: 'ШК тары',
       width: 160,
       render: (row) =>
-        row.barcode ? (
+        row.kind !== 'product' && row.barcode ? (
+          <Typography
+            variant="body2"
+            sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12.5 }}
+          >
+            {row.barcode}
+          </Typography>
+        ) : null,
+    },
+    {
+      key: 'productBarcode',
+      header: 'ШК товара',
+      width: 160,
+      render: (row) =>
+        row.kind === 'product' && row.barcode ? (
           <Typography
             variant="body2"
             sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12.5 }}

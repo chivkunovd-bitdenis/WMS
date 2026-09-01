@@ -13,6 +13,8 @@ export type ProductNode = {
   seller_name: string | null
   /** Предмет с карточки маркетплейса: «Футболки», «Кроссовки». */
   category: string | null
+  /** Артикул продавца из карточки WB, не внутренний SKU склада. */
+  seller_article: string | null
   barcode: string | null
   photo_url: string | null
   qty: number

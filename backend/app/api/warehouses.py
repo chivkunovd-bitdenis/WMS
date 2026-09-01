@@ -113,6 +113,7 @@ class WarehouseMapProductOut(BaseModel):
     seller_name: str | None
     category: str | None
     barcode: str | None
+    seller_article: str | None
     photo_url: str | None
     qty: int
 

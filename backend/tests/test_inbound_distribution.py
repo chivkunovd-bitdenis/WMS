@@ -12,9 +12,11 @@ from inbound_box_intake_helpers import (
     post_primary_accept,
     set_planned_boxes,
 )
+from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.models.inbound_intake import InboundIntakeRequest
+from app.models.inventory_balance import InventoryBalance
 
 
 @pytest.mark.asyncio
@@ -98,6 +100,15 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
     assert got.status_code == 200, got.text
     assert got.json()["sorting_remaining_qty"] == 5
     box_id = got.json()["boxes"][0]["id"]
+    async with SessionLocal() as session:
+        received_in_original_box = await session.scalar(
+            select(InventoryBalance.quantity).where(
+                InventoryBalance.product_id == uuid.UUID(pid),
+                InventoryBalance.container_kind == "box",
+                InventoryBalance.container_id == uuid.UUID(box_id),
+            )
+        )
+        assert received_in_original_box == 5
 
     after_verify_bal = await async_client.get(
         "/operations/inventory-balances/summary",
@@ -167,6 +178,25 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
     assert balance_row["quantity"] == 5
     assert balance_row["quantity_in_sorting"] == 0
     assert balance_row["quantity_in_storage"] == 5
+    async with SessionLocal() as session:
+        stored_rows = list(
+            (
+                await session.scalars(
+                    select(InventoryBalance).where(
+                        InventoryBalance.product_id == uuid.UUID(pid),
+                        InventoryBalance.storage_location_id == uuid.UUID(lid),
+                        InventoryBalance.quantity > 0,
+                    )
+                )
+            ).all()
+        )
+        assert {
+            (row.container_kind, row.container_id, int(row.quantity))
+            for row in stored_rows
+        } == {
+            (None, None, 2),
+            ("box", uuid.UUID(box_id), 3),
+        }
 
     ff_catalog = await async_client.get("/products/ff-catalog", headers=ah)
     assert ff_catalog.status_code == 200, ff_catalog.text
@@ -287,6 +317,17 @@ async def test_whole_box_putaway_moves_every_product_to_one_location(
         (row["product_id"], row["storage_location_id"], row["quantity"])
         for row in rows.json()
     } == {(product_id, lid, qty) for product_id, qty in products}
+    async with SessionLocal() as session:
+        for product_id, qty in products:
+            boxed_qty = await session.scalar(
+                select(InventoryBalance.quantity).where(
+                    InventoryBalance.product_id == uuid.UUID(product_id),
+                    InventoryBalance.storage_location_id == uuid.UUID(lid),
+                    InventoryBalance.container_kind == "box",
+                    InventoryBalance.container_id == uuid.UUID(box_id),
+                )
+            )
+            assert boxed_qty == qty
 
 
 @pytest.mark.asyncio

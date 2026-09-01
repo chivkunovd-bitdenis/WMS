@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Literal
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inbound_intake import (
@@ -15,6 +15,7 @@ from app.models.inbound_intake import (
     InboundIntakeRequest,
 )
 from app.models.pallet import Pallet
+from app.models.storage_location import StorageLocation
 from app.models.warehouse_box import WarehouseBox
 
 ContainerKind = Literal["pallet", "box", "cargo_place"]
@@ -74,10 +75,20 @@ async def resolve_container_scan(
     inbound_boxes = await session.scalars(
         select(InboundIntakeBox)
         .join(InboundIntakeRequest)
+        .outerjoin(
+            StorageLocation,
+            StorageLocation.id == InboundIntakeBox.storage_location_id,
+        )
         .where(
             InboundIntakeBox.tenant_id == tenant_id,
             InboundIntakeRequest.tenant_id == tenant_id,
-            InboundIntakeRequest.warehouse_id == warehouse_id,
+            or_(
+                StorageLocation.warehouse_id == warehouse_id,
+                and_(
+                    InboundIntakeBox.storage_location_id.is_(None),
+                    InboundIntakeRequest.warehouse_id == warehouse_id,
+                ),
+            ),
             InboundIntakeBox.internal_barcode == raw,
         )
     )
@@ -88,10 +99,20 @@ async def resolve_container_scan(
     inbound_cargo = await session.scalars(
         select(InboundIntakeCargoPlace)
         .join(InboundIntakeRequest)
+        .outerjoin(
+            StorageLocation,
+            StorageLocation.id == InboundIntakeCargoPlace.storage_location_id,
+        )
         .where(
             InboundIntakeCargoPlace.tenant_id == tenant_id,
             InboundIntakeRequest.tenant_id == tenant_id,
-            InboundIntakeRequest.warehouse_id == warehouse_id,
+            or_(
+                StorageLocation.warehouse_id == warehouse_id,
+                and_(
+                    InboundIntakeCargoPlace.storage_location_id.is_(None),
+                    InboundIntakeRequest.warehouse_id == warehouse_id,
+                ),
+            ),
             InboundIntakeCargoPlace.internal_barcode == raw,
         )
     )
@@ -143,11 +164,22 @@ async def validate_container(
                     InboundIntakeRequest,
                     InboundIntakeRequest.id == InboundIntakeCargoPlace.request_id,
                 )
+                .outerjoin(
+                    StorageLocation,
+                    StorageLocation.id
+                    == InboundIntakeCargoPlace.storage_location_id,
+                )
                 .where(
                     InboundIntakeCargoPlace.id == container_id,
                     InboundIntakeCargoPlace.tenant_id == tenant_id,
                     InboundIntakeRequest.tenant_id == tenant_id,
-                    InboundIntakeRequest.warehouse_id == warehouse_id,
+                    or_(
+                        StorageLocation.warehouse_id == warehouse_id,
+                        and_(
+                            InboundIntakeCargoPlace.storage_location_id.is_(None),
+                            InboundIntakeRequest.warehouse_id == warehouse_id,
+                        ),
+                    ),
                 )
             )
     else:
@@ -166,11 +198,21 @@ async def validate_container(
                     InboundIntakeRequest,
                     InboundIntakeRequest.id == InboundIntakeBox.request_id,
                 )
+                .outerjoin(
+                    StorageLocation,
+                    StorageLocation.id == InboundIntakeBox.storage_location_id,
+                )
                 .where(
                     InboundIntakeBox.id == container_id,
                     InboundIntakeBox.tenant_id == tenant_id,
                     InboundIntakeRequest.tenant_id == tenant_id,
-                    InboundIntakeRequest.warehouse_id == warehouse_id,
+                    or_(
+                        StorageLocation.warehouse_id == warehouse_id,
+                        and_(
+                            InboundIntakeBox.storage_location_id.is_(None),
+                            InboundIntakeRequest.warehouse_id == warehouse_id,
+                        ),
+                    ),
                 )
             )
     if found_id is None:
