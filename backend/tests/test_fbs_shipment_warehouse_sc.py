@@ -36,6 +36,7 @@ from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_CONFIRMED,
     WB_OPERATION_STATE_FAILED,
     WB_OPERATION_STATE_PENDING,
+    WB_OPERATION_STATE_PENDING_CONFIRMATION,
     FbsWbOperation,
 )
 from app.models.inventory_balance import InventoryBalance
@@ -1146,6 +1147,89 @@ async def test_pending_reconcile_never_overwrites_parallel_definitive_failure(
         )
         assert operation is not None
         assert operation.state == WB_OPERATION_STATE_FAILED
+
+
+@pytest.mark.asyncio
+async def test_stale_not_delivered_never_overwrites_parallel_ambiguity(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, _ = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[953066],
+        supply_name="WB reconcile ambiguity race",
+    )
+    idempotency_key = str(uuid.uuid4())
+
+    import app.services.fbs_shipment_service as shipment_mod
+
+    deliver_calls = 0
+
+    async def accepted_by_wb(*_args: object, **_kwargs: object) -> None:
+        nonlocal deliver_calls
+        deliver_calls += 1
+
+    async def crash_after_wb(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("simulated process crash after WB 2xx")
+
+    monkeypatch.setattr(shipment_mod, "deliver_marketplace_supply", accepted_by_wb)
+    monkeypatch.setattr(shipment_mod, "_persist_confirmed_delivery", crash_after_wb)
+    with pytest.raises(RuntimeError, match="simulated process crash"):
+        await _deliver_with_preflight(
+            async_client,
+            headers,
+            supply["id"],
+            idempotency_key=idempotency_key,
+        )
+
+    async def ambiguity_while_readback_was_in_flight(
+        *_args: object, **_kwargs: object
+    ) -> str:
+        async with SessionLocal() as parallel_session:
+            operation = await parallel_session.scalar(
+                select(FbsWbOperation).where(
+                    FbsWbOperation.idempotency_key == idempotency_key
+                )
+            )
+            assert operation is not None
+            operation.state = WB_OPERATION_STATE_PENDING_CONFIRMATION
+            operation.error_code = "wb_timeout"
+            await parallel_session.commit()
+        return shipment_mod.WB_RECONCILE_NOT_DELIVERED
+
+    monkeypatch.setattr(
+        shipment_mod,
+        "reconcile_supply_delivered",
+        ambiguity_while_readback_was_in_flight,
+    )
+    retry = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=str(uuid.uuid4()),
+    )
+    assert retry.status_code == 504, retry.text
+    assert retry.json()["detail"]["code"] == "wb_pending_confirmation"
+    assert deliver_calls == 1
+
+    async with SessionLocal() as session:
+        operation = await session.scalar(
+            select(FbsWbOperation).where(
+                FbsWbOperation.idempotency_key == idempotency_key
+            )
+        )
+        assert operation is not None
+        assert operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION
+        assert operation.error_code == "wb_timeout"
 
 
 @pytest.mark.asyncio

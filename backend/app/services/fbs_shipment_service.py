@@ -1907,6 +1907,7 @@ async def deliver_supply(
             WB_OPERATION_STATE_PENDING,
             WB_OPERATION_STATE_PENDING_CONFIRMATION,
         }:
+            observed_operation_state = existing.state
             token = await _require_marketplace_token(session, tenant_id, supply_read.seller_id)
             reconcile_state = await reconcile_supply_delivered(
                 http_client,
@@ -1936,6 +1937,22 @@ async def deliver_supply(
                 )
             if existing.state == WB_OPERATION_STATE_CONFIRMED:
                 reconcile_state = WB_OPERATION_STATE_CONFIRMED
+            if (
+                existing.state == WB_OPERATION_STATE_PENDING_CONFIRMATION
+                and observed_operation_state != WB_OPERATION_STATE_PENDING_CONFIRMATION
+                and reconcile_state != WB_OPERATION_STATE_CONFIRMED
+            ):
+                # The readback was made before another request recorded an
+                # ambiguous WB mutation.  Its earlier done=false observation
+                # is stale and cannot authorize a second external call.
+                await session.rollback()
+                raise FbsShipmentError(
+                    "wb_pending_confirmation",
+                    message="WB пока не подтвердил передачу; слепой повтор запрещён.",
+                    context={"operation_state": "pending_confirmation"},
+                    retryable=True,
+                    http_status=504,
+                )
             if reconcile_state == WB_OPERATION_STATE_CONFIRMED:
                 checkpointed = await _load_checkpointed_wb_delivery(
                     session, supply, existing
