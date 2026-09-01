@@ -19,7 +19,10 @@ from app.models.seller import Seller
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.models.warehouse import Warehouse
 from app.services.fbs_stock_availability_service import fbs_available_qty_by_product
-from app.services.fbs_worklist_service import compute_selection_blockers
+from app.services.fbs_worklist_service import (
+    NON_BLOCKING_SELECTION_CODES,
+    compute_selection_blockers,
+)
 
 
 class FbsSupplyValidationError(Exception):
@@ -249,6 +252,8 @@ def _per_order_issues(
             server_now=server_now,
         ):
             code_raw = blocker["code"]
+            if code_raw in NON_BLOCKING_SELECTION_CODES:
+                continue
             mapped = _BLOCKER_TO_ISSUE.get(code_raw)
             if mapped is None:
                 code, message = "order_incompatible", blocker["message"]

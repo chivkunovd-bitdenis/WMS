@@ -698,6 +698,13 @@ def _as_utc(dt: datetime) -> datetime:
     return dt.astimezone(UTC)
 
 
+# Коды, которые показываем оператору как предупреждение, но выбор заказа не
+# запрещаем. «Не опубликован» сюда попал 01.09.2026: заказ уже приехал, срок
+# сборки идёт, и запрет собрать его не защищает ничего — публикация остатка на
+# WB к сборке отношения не имеет.
+NON_BLOCKING_SELECTION_CODES = frozenset({"not_published"})
+
+
 def compute_selection_blockers(
     order: FbsOrder,
     *,

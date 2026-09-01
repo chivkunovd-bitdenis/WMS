@@ -233,6 +233,15 @@ function LazyProductPhotoThumb({
   )
 }
 
+/** Коды, которые показываем как предупреждение, но выбор заказа не запрещают.
+ *  «Не опубликован» снят с блокировки 01.09.2026: заказ уже приехал, срок сборки
+ *  идёт, публикация остатка на WB к сборке отношения не имеет. */
+const NON_BLOCKING_SELECTION_CODES = new Set(['not_published'])
+
+function blockingSelectionBlockers(blockers: Array<{ code: string; message: string }>) {
+  return blockers.filter((blocker) => !NON_BLOCKING_SELECTION_CODES.has(blocker.code))
+}
+
 type NewOrderRowProps = {
   order: FbsWorklistOrder
   selected: boolean
@@ -256,7 +265,7 @@ const NewOrderRow = memo(function NewOrderRow({
   onOpenWorkspace,
   onGoToCatalog,
 }: NewOrderRowProps) {
-  const blocked = order.selection_blockers.length > 0
+  const blocked = blockingSelectionBlockers(order.selection_blockers).length > 0
   return (
     <TableRow
       ref={(node) => registerRow(order.id, node)}
@@ -836,7 +845,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     [selectedOrders],
   )
   const selectableIds = useMemo(
-    () => orders.filter((order) => order.selection_blockers.length === 0).map((order) => order.id),
+    () => orders.filter((order) => blockingSelectionBlockers(order.selection_blockers).length === 0).map((order) => order.id),
     [orders],
   )
   const searchTerm = normalizeSearch(activeSearch)
