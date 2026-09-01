@@ -227,3 +227,51 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
   </body>
 </html>`
 }
+
+export type FbsDeliveryCheckRow = {
+  code: string
+  message: string
+  ok: boolean
+  severity: 'blocker' | 'warning' | 'info'
+  order_id: string | null
+}
+
+export type FbsDeliveryCheckSummary = {
+  blockers: string[]
+  warnings: string[]
+}
+
+/**
+ * Готовит текст предполётной проверки для оператора.
+ *
+ * Сервер отдаёт по одной строке на заказ, поэтому «Честный знак не нанесён»
+ * приходило три раза подряд без единого номера заказа — понять, какие именно
+ * заказы виноваты, было нельзя. Здесь одинаковые причины схлопываются в одну
+ * строку, а номера заказов WB собираются в её конце.
+ *
+ * Запреты и предупреждения разводятся по уровню, а не по полю `ok`: уход
+ * остатка в минус и отменённый заказ WB приходят с `ok = false`, но передачу
+ * не запрещают, и красить их как отказ — врать оператору.
+ */
+export function summarizeDeliveryChecks(
+  checks: FbsDeliveryCheckRow[],
+  wbOrderIdByOrderId: Map<string, number>,
+): FbsDeliveryCheckSummary {
+  const collect = (severity: 'blocker' | 'warning') => {
+    const byMessage = new Map<string, number[]>()
+    for (const check of checks) {
+      if (check.severity !== severity) continue
+      const orders = byMessage.get(check.message) ?? []
+      const wbOrderId = check.order_id ? wbOrderIdByOrderId.get(check.order_id) : undefined
+      if (wbOrderId !== undefined && !orders.includes(wbOrderId)) orders.push(wbOrderId)
+      byMessage.set(check.message, orders)
+    }
+    return [...byMessage.entries()].map(([message, orders]) => {
+      if (orders.length === 0) return message
+      const sorted = [...orders].sort((a, b) => a - b)
+      const label = sorted.length === 1 ? 'заказ' : 'заказы'
+      return `${message} (${label} ${sorted.join(', ')})`
+    })
+  }
+  return { blockers: collect('blocker'), warnings: collect('warning') }
+}

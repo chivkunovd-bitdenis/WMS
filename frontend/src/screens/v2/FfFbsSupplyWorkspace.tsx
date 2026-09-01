@@ -47,7 +47,7 @@ import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
-import { buildFbsPickingListPrintHtml, fbsAccessibleStageIndex, fbsBoxOperationsDisabled, ordersWord } from './fbsUx'
+import { buildFbsPickingListPrintHtml, fbsAccessibleStageIndex, fbsBoxOperationsDisabled, ordersWord, summarizeDeliveryChecks } from './fbsUx'
 import {
   confirmFbsPrintApplied,
   addFbsOrdersToSupply,
@@ -1146,15 +1146,15 @@ export function FfFbsSupplyWorkspace({
   const deliveryConfirmed = deliverySubmitted
     || workspace?.stage === 'tracking'
     || ['in_delivery', 'done'].includes(workspace?.supply.status ?? '')
-  const failedDeliveryChecks = deliveryPreflight?.checks.filter((check) => !check.ok) ?? []
-  const deliveryPreflightMessage = deliveryPreflightLoading
-    ? `Проверяем готовность поставки в ${providerName}…`
-    : deliveryPreflightError
-      ?? (failedDeliveryChecks.length > 0
-        ? failedDeliveryChecks.map((check) => check.message).join('\n')
-        : deliveryPreflight?.checks.find((check) => check.code === 'marking_allowed')?.message
-          ?? (deliveryPreflight ? 'Все проверки пройдены. Поставку можно передать.' : ''))
+  const wbOrderIdByOrderId = new Map((workspace?.orders ?? []).map((order) => [order.id, order.wb_order_id]))
+  const deliveryChecks = summarizeDeliveryChecks(deliveryPreflight?.checks ?? [], wbOrderIdByOrderId)
   const packagingEditable = !deliveryConfirmed
+  // Короба — физический этап, а не следующая ступень лестницы. Вкладка коробов
+  // может быть открыта раньше, чем серверный `currentStage` доедет до неё, и
+  // запрещать действия внутри уже открытой вкладки по `stageIsCurrent` нельзя:
+  // именно так 01.09.2026 оператор получал вкладку, где всё серое. Единственная
+  // настоящая причина запрета — поставка уже уехала в WB.
+  const boxEditingDisabled = boxOperationsDisabled || deliveryConfirmed
   const assignedBoxOrderIds = new Set(workspace?.boxes.flatMap((box) => box.assigned_order_ids) ?? [])
   const availableForBox = (workspace?.orders ?? []).filter(
     (order) => order.pack.status === 'packed' && !assignedBoxOrderIds.has(order.id),
@@ -1843,7 +1843,7 @@ export function FfFbsSupplyWorkspace({
                           <Checkbox
                             checked={boxesWithoutDistribution}
                             onChange={(event) => setBoxesWithoutDistribution(event.target.checked)}
-                            disabled={boxOperationsDisabled || !stageIsCurrent || !packagingEditable || workspace.boxes.length > 0}
+                            disabled={boxEditingDisabled || assignedBoxOrderIds.size > 0}
                             data-testid="fbs-boxes-without-distribution"
                             data-task-id="FBS-12"
                           />
@@ -1851,8 +1851,8 @@ export function FfFbsSupplyWorkspace({
                         label="Без распределения"
                         data-task-id="FBS-12"
                       />
-                      <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={boxOperationsDisabled || !stageIsCurrent || !packagingEditable} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} data-task-id="FBS-12" />
-                      <Button variant="contained" disabled={boxOperationsDisabled || !stageIsCurrent || !packagingEditable || !Number(boxCount)} onClick={() => void createBoxes()} data-task-id="FBS-12">Добавить короба</Button>
+                      <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={boxEditingDisabled} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} data-task-id="FBS-12" />
+                      <Button variant="contained" disabled={boxEditingDisabled || !Number(boxCount)} onClick={() => void createBoxes()} data-task-id="FBS-12">Добавить короба</Button>
                     </Stack>
                   </Stack>
                 </Box>
@@ -1919,7 +1919,7 @@ export function FfFbsSupplyWorkspace({
                             </Button>
                             <Button
                               size="small"
-                              disabled={boxOperationsDisabled || !stageIsCurrent || !packagingEditable || busy || box.without_distribution}
+                              disabled={boxEditingDisabled || busy || box.without_distribution}
                               onClick={() => {
                                 setBoxAssignTarget(box.id)
                                 setBoxProductSearch('')
@@ -1931,7 +1931,7 @@ export function FfFbsSupplyWorkspace({
                             </Button>
                             <IconButton
                               size="small"
-                              disabled={boxOperationsDisabled || !packagingEditable || busy}
+                              disabled={boxEditingDisabled || busy}
                               onClick={(event: MouseEvent<HTMLElement>) => setBoxMenu({ boxId: box.id, anchorEl: event.currentTarget })}
                               aria-label={`Действия короба ${box.box_number}`}
                             >
@@ -1951,7 +1951,7 @@ export function FfFbsSupplyWorkspace({
                                   <Typography variant="body2" color="text.secondary">{row.orderIds.length} шт</Typography>
                                   <IconButton
                                     size="small"
-                                    disabled={boxOperationsDisabled || !stageIsCurrent || !packagingEditable || busy}
+                                    disabled={boxEditingDisabled || busy}
                                     onClick={() => void removeBoxOrders(box.id, row.orderIds)}
                                     aria-label={`Убрать ${row.name} из короба ${box.box_number}`}
                                   >
@@ -2230,20 +2230,57 @@ export function FfFbsSupplyWorkspace({
         <DialogContent><Typography>{addressStorageEnabled ? 'Товар будет возвращён в исходную ячейку.' : 'Товар будет возвращён в остаток.'} Отменяйте только если в подборе действительно ошибка.</Typography></DialogContent>
         <DialogActions><Button onClick={() => setUndoOrderId(null)}>Не отменять</Button><Button color="error" variant="contained" onClick={() => { const orderId = undoOrderId; setUndoOrderId(null); if (orderId && workspace) void run(() => undoFbsPick(token, authHeaders, workspace.supply.id, orderId, createFbsIdempotencyKey()), addressStorageEnabled ? 'Подбор отменён, остаток возвращён в исходную ячейку.' : 'Подбор отменён, товар возвращён в остаток.') }}>{addressStorageEnabled ? 'Вернуть в ячейку' : 'Вернуть в остаток'}</Button></DialogActions>
       </Dialog>
-      <Dialog open={deliverConfirmOpen} onClose={() => setDeliverConfirmOpen(false)} maxWidth="xs" fullWidth>
+      <Dialog open={deliverConfirmOpen} onClose={() => setDeliverConfirmOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Передать поставку в {providerName}?</DialogTitle>
         <DialogContent>
           <Typography variant="body2">
-            После передачи поставку нельзя будет отменить или вернуть в работу. Убедитесь, что все короба готовы к отгрузке.
+            После передачи поставку нельзя будет отменить или вернуть в работу.
           </Typography>
-          <Typography
-            variant="body2"
-            color={deliveryPreflightError || failedDeliveryChecks.length > 0 ? 'error.main' : 'text.secondary'}
-            sx={{ mt: 1.5, whiteSpace: 'pre-line' }}
-            data-testid="fbs-delivery-marking-status"
-          >
-            {deliveryPreflightMessage}
-          </Typography>
+          <Stack spacing={1.5} sx={{ mt: 1.5 }} data-testid="fbs-delivery-marking-status">
+            {deliveryPreflightLoading ? (
+              <Typography variant="body2" color="text.secondary">
+                {`Проверяем готовность поставки в ${providerName}…`}
+              </Typography>
+            ) : null}
+            {deliveryPreflightError ? (
+              <Alert
+                severity="error"
+                action={(
+                  <Button size="small" onClick={() => void openDeliveryConfirmation()} data-testid="fbs-preflight-retry">
+                    Проверить ещё раз
+                  </Button>
+                )}
+              >
+                {deliveryPreflightError}
+              </Alert>
+            ) : null}
+            {deliveryChecks.blockers.length > 0 ? (
+              <Alert severity="error">
+                <Typography variant="subtitle2">Мешает передаче</Typography>
+                {deliveryChecks.blockers.map((line) => (
+                  <Typography key={line} variant="body2">{line}</Typography>
+                ))}
+              </Alert>
+            ) : null}
+            {deliveryChecks.warnings.length > 0 ? (
+              <Alert severity="warning">
+                <Typography variant="subtitle2">Передаче не мешает, но проверьте</Typography>
+                {deliveryChecks.warnings.map((line) => (
+                  <Typography key={line} variant="body2">{line}</Typography>
+                ))}
+                <Typography variant="caption" color="text.secondary">
+                  Стикеры, Честный знак и QR можно напечатать и после передачи.
+                </Typography>
+              </Alert>
+            ) : null}
+            {!deliveryPreflightLoading
+              && !deliveryPreflightError
+              && deliveryChecks.blockers.length === 0
+              && deliveryChecks.warnings.length === 0
+              && deliveryPreflight ? (
+                <Alert severity="success">Все проверки пройдены. Поставку можно передать.</Alert>
+              ) : null}
+          </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeliverConfirmOpen(false)}>Не передавать</Button>

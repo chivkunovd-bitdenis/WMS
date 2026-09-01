@@ -7,6 +7,7 @@ import {
   fbsOrdersSyncErrorMessage,
   mixedMarketplaceSelectionMessage,
   normalizeMetadataKind,
+  summarizeDeliveryChecks,
 } from './fbsUx'
 
 describe('Ozon FBS UI boundaries', () => {
@@ -125,5 +126,42 @@ describe('FBS picking list print document', () => {
 
     const noSize = buildFbsPickingListPrintHtml({ ...base, rows: [{ ...row, size: null }] })
     expect(noSize).toContain('<td class="size">—</td>')
+  })
+})
+
+describe('summarizeDeliveryChecks', () => {
+  const check = (
+    code: string,
+    message: string,
+    severity: 'blocker' | 'warning' | 'info',
+    orderId: string | null = null,
+  ) => ({ code, message, ok: severity === 'info', severity, order_id: orderId })
+
+  it('схлопывает одинаковые причины и подписывает номера заказов WB', () => {
+    const summary = summarizeDeliveryChecks(
+      [
+        check('marking_required', 'Честный знак не нанесён.', 'warning', 'a'),
+        check('marking_required', 'Честный знак не нанесён.', 'warning', 'b'),
+        check('marking_required', 'Честный знак не нанесён.', 'warning', 'c'),
+      ],
+      new Map([['a', 530009], ['b', 530011], ['c', 530015]]),
+    )
+    expect(summary.blockers).toEqual([])
+    expect(summary.warnings).toEqual([
+      'Честный знак не нанесён. (заказы 530009, 530011, 530015)',
+    ])
+  })
+
+  it('разводит запреты и предупреждения по уровню, а не по признаку ok', () => {
+    const summary = summarizeDeliveryChecks(
+      [
+        check('supply_bad_status', 'Поставка уже передана или закрыта.', 'blocker'),
+        check('negative_stock', 'Остаток уйдёт в минус.', 'warning', 'a'),
+        check('order_sticker_ready', 'Стикер готов.', 'info', 'a'),
+      ],
+      new Map([['a', 777]]),
+    )
+    expect(summary.blockers).toEqual(['Поставка уже передана или закрыта.'])
+    expect(summary.warnings).toEqual(['Остаток уйдёт в минус. (заказ 777)'])
   })
 })

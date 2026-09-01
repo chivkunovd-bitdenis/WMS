@@ -439,7 +439,14 @@ export type FbsDeliveryPreflight = {
   can_deliver: boolean
   version: string
   checked_at: string
-  checks: Array<{ code: string; message: string; ok: boolean; order_id: string | null }>
+  checks: Array<{
+    code: string
+    message: string
+    ok: boolean
+    /** blocker — передача запрещена; warning — предупреждение; info — факт. */
+    severity: 'blocker' | 'warning' | 'info'
+    order_id: string | null
+  }>
 }
 
 export type FbsTrackingOrder = {
