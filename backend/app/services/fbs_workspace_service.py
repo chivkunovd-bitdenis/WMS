@@ -440,21 +440,6 @@ def _compute_workspace_blockers(
             }
         )
     for order in orders:
-        if order.pick_status != PICK_STATUS_PICKED and stage in {
-            "packing",
-            "order_stickers",
-            "handoff_prep",
-            "delivery",
-        }:
-            blockers.append(
-                {
-                    "stage": "picking",
-                    "code": "order_not_picked",
-                    "message": f"Заказ №{order.wb_order_id} не подобран.",
-                    "order_id": str(order.id),
-                    "retryable": True,
-                }
-            )
         if not _metadata_ready(order) and stage in {
             "order_stickers",
             "handoff_prep",

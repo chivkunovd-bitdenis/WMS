@@ -179,6 +179,14 @@ class Settings(BaseSettings):
             "even when no movement event fired (seconds)."
         ),
     )
+    fbs_universal_test_kiz: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FBS_UNIVERSAL_TEST_KIZ"),
+        description=(
+            "Explicit staging/demo-only KIZ alias. Each order receives a deterministic "
+            "unique CIS internally, so the same scanner input can be reused in video flows."
+        ),
+    )
 
     @field_validator("database_url", mode="before")
     @classmethod

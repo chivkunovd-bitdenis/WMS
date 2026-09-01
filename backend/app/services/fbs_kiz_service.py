@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -13,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.settings import settings
 from app.models.fbs_order import (
     CHECK_STATUS_NEW,
     FBS_ORDER_MARKING_FROZEN_STATUSES,
@@ -372,6 +374,23 @@ def normalize_scanned_cis(raw: str) -> tuple[str, list[str]]:
     return value, hints
 
 
+def _universal_test_kiz_for_order(order: FbsOrder, value: str) -> str:
+    """Resolve one explicitly configured demo scan to a unique CIS per order.
+
+    The alias is disabled by default.  A configured staging stand can therefore
+    reuse one scanner value throughout a video without weakening production KIZ
+    uniqueness or changing how ordinary codes are validated.
+    """
+    configured = settings.fbs_universal_test_kiz
+    if not configured:
+        return value
+    normalized_configured, _ = normalize_scanned_cis(configured)
+    if value != normalized_configured:
+        return value
+    serial = "U" + hashlib.sha256(f"{value}:{order.id}".encode()).hexdigest()[:19].upper()
+    return f"{value[:18]}{serial}"
+
+
 def _debug_visible(value: str) -> str:
     return value.replace(_GS, "<GS>")
 
@@ -654,6 +673,10 @@ async def _validate_kiz_pair(
         order_id,
         for_update=for_update,
     )
+    resolved_value = _universal_test_kiz_for_order(order, value)
+    if resolved_value != value:
+        value = resolved_value
+        hints.append("universal_test_kiz")
     await _ensure_kiz_not_bound_to_other_order(session, tenant_id, order.id, value)
     if check_marking_code_occupancy:
         await _ensure_kiz_not_occupied_in_pool(session, tenant_id, order, value)
