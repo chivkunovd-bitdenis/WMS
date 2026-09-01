@@ -21,6 +21,13 @@ export function fbsBoxOperationsDisabled(marketplace: FbsMarketplace): boolean {
   return marketplace === 'ozon'
 }
 
+export function fbsBoxEditingDisabled(
+  marketplace: FbsMarketplace,
+  deliveryConfirmed: boolean,
+): boolean {
+  return fbsBoxOperationsDisabled(marketplace) || deliveryConfirmed
+}
+
 export function supplyQrExpectedForStatus(status: string): boolean {
   // WB issues the supply QR only after handoff. Cargo-place QR codes are
   // available earlier and must stay printable without counting the future

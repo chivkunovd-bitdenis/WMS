@@ -47,7 +47,7 @@ import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
-import { buildFbsPickingListPrintHtml, fbsAccessibleStageIndex, fbsBoxOperationsDisabled, ordersWord } from './fbsUx'
+import { buildFbsPickingListPrintHtml, fbsAccessibleStageIndex, fbsBoxEditingDisabled, fbsBoxOperationsDisabled, ordersWord } from './fbsUx'
 import {
   confirmFbsPrintApplied,
   addFbsOrdersToSupply,
@@ -1155,6 +1155,14 @@ export function FfFbsSupplyWorkspace({
         : deliveryPreflight?.checks.find((check) => check.code === 'marking_allowed')?.message
           ?? (deliveryPreflight ? 'Все проверки пройдены. Поставку можно передать.' : ''))
   const packagingEditable = !deliveryConfirmed
+  // Вкладка коробов может быть доступна раньше серверного `currentStage`:
+  // для WB этапы — рабочие поверхности, а не последовательные разрешения.
+  // Поэтому `stageIsCurrent` нельзя использовать как запрет на операции внутри
+  // уже открытой вкладки. Редактирование прекращается только после передачи.
+  const boxEditingDisabled = fbsBoxEditingDisabled(
+    workspace?.supply.marketplace ?? 'wb',
+    deliveryConfirmed,
+  )
   const assignedBoxOrderIds = new Set(workspace?.boxes.flatMap((box) => box.assigned_order_ids) ?? [])
   const availableForBox = (workspace?.orders ?? []).filter(
     (order) => order.pack.status === 'packed' && !assignedBoxOrderIds.has(order.id),
@@ -1839,7 +1847,7 @@ export function FfFbsSupplyWorkspace({
                           <Checkbox
                             checked={boxesWithoutDistribution}
                             onChange={(event) => setBoxesWithoutDistribution(event.target.checked)}
-                            disabled={boxOperationsDisabled || !stageIsCurrent || !packagingEditable || workspace.boxes.length > 0}
+                            disabled={boxEditingDisabled || workspace.boxes.length > 0}
                             data-testid="fbs-boxes-without-distribution"
                             data-task-id="FBS-12"
                           />
@@ -1847,8 +1855,8 @@ export function FfFbsSupplyWorkspace({
                         label="Без распределения"
                         data-task-id="FBS-12"
                       />
-                      <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={boxOperationsDisabled || !stageIsCurrent || !packagingEditable} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} data-task-id="FBS-12" />
-                      <Button variant="contained" disabled={boxOperationsDisabled || !stageIsCurrent || !packagingEditable || !Number(boxCount)} onClick={() => void createBoxes()} data-task-id="FBS-12">Добавить короба</Button>
+                      <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={boxEditingDisabled} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} data-task-id="FBS-12" />
+                      <Button variant="contained" disabled={boxEditingDisabled || !Number(boxCount)} onClick={() => void createBoxes()} data-task-id="FBS-12">Добавить короба</Button>
                     </Stack>
                   </Stack>
                 </Box>
@@ -1915,7 +1923,7 @@ export function FfFbsSupplyWorkspace({
                             </Button>
                             <Button
                               size="small"
-                              disabled={boxOperationsDisabled || !stageIsCurrent || !packagingEditable || busy || box.without_distribution}
+                              disabled={boxEditingDisabled || busy || box.without_distribution}
                               onClick={() => {
                                 setBoxAssignTarget(box.id)
                                 setBoxProductSearch('')
@@ -1947,7 +1955,7 @@ export function FfFbsSupplyWorkspace({
                                   <Typography variant="body2" color="text.secondary">{row.orderIds.length} шт</Typography>
                                   <IconButton
                                     size="small"
-                                    disabled={boxOperationsDisabled || !stageIsCurrent || !packagingEditable || busy}
+                                    disabled={boxEditingDisabled || busy}
                                     onClick={() => void removeBoxOrders(box.id, row.orderIds)}
                                     aria-label={`Убрать ${row.name} из короба ${box.box_number}`}
                                   >
