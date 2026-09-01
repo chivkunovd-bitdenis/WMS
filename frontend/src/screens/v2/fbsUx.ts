@@ -21,6 +21,13 @@ export function fbsBoxOperationsDisabled(marketplace: FbsMarketplace): boolean {
   return marketplace === 'ozon'
 }
 
+export function supplyQrExpectedForStatus(status: string): boolean {
+  // WB issues the supply QR only after handoff. Cargo-place QR codes are
+  // available earlier and must stay printable without counting the future
+  // supply QR as a missing label.
+  return status === 'in_delivery' || status === 'done'
+}
+
 export type FbsOperatorStageKey = 'composition' | 'picking' | 'packing' | 'boxes'
 
 const FBS_OPERATOR_STAGES: FbsOperatorStageKey[] = ['composition', 'picking', 'packing', 'boxes']
