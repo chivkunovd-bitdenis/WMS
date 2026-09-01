@@ -474,6 +474,8 @@ export type FbsWorkspace = {
     id: string
     marketplace: 'wb' | 'ozon'
     wb_supply_id: string
+    /** 'wms' — поставку собрали мы, 'wb' — её собрал продавец в своём кабинете. */
+    source: 'wms' | 'wb'
     name: string
     status: string
     delivery_type: 'warehouse_sc' | 'pvz'

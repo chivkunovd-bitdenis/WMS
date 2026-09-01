@@ -10,6 +10,69 @@ from typing import Any
 
 WB_RESPONSE_BODY_LOG_LIMIT = 500
 
+# Wildberries отвечает по-английски и без кодов ошибок, пригодных для показа.
+# До 01.09.2026 его ответ уходил оператору как есть: в диалоге передачи склад
+# видел «Wildberries ответил: Supply not found» и не понимал ни что случилось,
+# ни что делать. Ключ — приведённый к нижнему регистру фрагмент ответа WB.
+_WB_MESSAGE_TRANSLATIONS: tuple[tuple[str, str], ...] = (
+    (
+        "supply not found",
+        "Wildberries не нашёл эту поставку у себя. Скорее всего её удалили или "
+        "закрыли в кабинете продавца — обновите страницу и проверьте состав.",
+    ),
+    (
+        "fix them to dispatch items",
+        "Wildberries ещё обрабатывает поставку. Повторите передачу через минуту.",
+    ),
+    (
+        "supply is already delivered",
+        "Wildberries считает эту поставку уже сданной. Повторно передавать её не нужно.",
+    ),
+    (
+        "supply has no orders",
+        "В поставке на стороне Wildberries нет заказов — добавьте заказы и повторите.",
+    ),
+    (
+        "order not found",
+        "Wildberries не нашёл заказ из состава поставки. Обновите состав и повторите.",
+    ),
+    (
+        "unauthorized",
+        "Wildberries не принял ключ продавца. Проверьте API-ключ в карточке селлера.",
+    ),
+    (
+        "forbidden",
+        "У ключа продавца нет прав на эту операцию. Нужен ключ с доступом к «Маркетплейсу».",
+    ),
+    (
+        "too many requests",
+        "Wildberries временно ограничил частоту запросов. Повторите через минуту.",
+    ),
+    (
+        "internal server error",
+        "На стороне Wildberries сбой. Повторите операцию через несколько минут.",
+    ),
+    (
+        "trbx",
+        "Wildberries отклонил работу с грузоместами. Проверьте короба поставки и повторите.",
+    ),
+)
+
+
+def translate_wb_message(raw: str | None) -> str | None:
+    """Переводит ответ Wildberries на человеческий русский.
+
+    Возвращает None, если знакомого фрагмента не нашлось — тогда вызывающий код
+    показывает исходный текст, но уже с явной пометкой, что это слова WB.
+    """
+    if not raw:
+        return None
+    lowered = raw.lower()
+    for needle, translated in _WB_MESSAGE_TRANSLATIONS:
+        if needle in lowered:
+            return translated
+    return None
+
 
 class WildberriesClientError(Exception):
     def __init__(
@@ -97,10 +160,22 @@ def _message_from_response_body(body: str | None) -> str | None:
 
 def wb_operator_message(exc: WildberriesClientError) -> str:
     if isinstance(exc.message, str) and exc.message.strip() and exc.message != exc.code:
-        return exc.message.strip()
+        own = exc.message.strip()
+        return translate_wb_message(own) or own
     body_message = _message_from_response_body(exc.response_body)
     if body_message:
+        translated = translate_wb_message(body_message)
+        if translated:
+            return translated
         return f"Wildberries ответил: {body_message}"
+    if exc.status_code == 401:
+        return "Wildberries не принял ключ продавца. Проверьте API-ключ в карточке селлера."
+    if exc.status_code == 403:
+        return "У ключа продавца нет прав на эту операцию. Нужен ключ с доступом к «Маркетплейсу»."
+    if exc.status_code == 429:
+        return "Wildberries временно ограничил частоту запросов. Повторите через минуту."
+    if exc.status_code is not None and exc.status_code >= 500:
+        return "На стороне Wildberries сбой. Повторите операцию через несколько минут."
     if exc.code == "token_read_only":
         return "Ключ Wildberries создан в режиме только для чтения; нужен ключ с правом записи."
     if exc.code == "transport_error":

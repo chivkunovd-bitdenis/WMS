@@ -1328,6 +1328,12 @@ export function FfFbsSupplyWorkspace({
       slotProps={{ paper: { sx: { width: 'min(1500px, 98vw)', height: '94vh', m: 1 } } }}
       data-testid="fbs-workspace"
     >
+      {workspace?.supply.source === 'wb' ? (
+        <Alert severity="error" variant="filled" sx={{ borderRadius: 0, fontWeight: 700 }} data-testid="fbs-supply-from-seller-cabinet">
+          Поставка собрана в кабинете продавца. Работать с ней можно как с обычной,
+          но её состав меняет продавец, а не мы — перед передачей сверьте заказы.
+        </Alert>
+      ) : null}
       <Box sx={{ px: 2.5, py: 2, borderBottom: 1, borderColor: 'divider', bgcolor: '#fff' }}>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-start' }}>
           <LocalShippingOutlinedIcon color="primary" sx={{ mt: 0.4 }} />
