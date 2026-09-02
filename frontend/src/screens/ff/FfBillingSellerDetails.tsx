@@ -44,7 +44,7 @@ export type StorageReportRow = {
   date_from: string
   date_to: string
   liter_days: number
-  status: 'calculated' | 'missing_dimensions'
+  status: 'calculated' | 'missing_dimensions' | 'negative_stock'
   amount_kopecks?: number
   calculation_token: string
 }
@@ -123,6 +123,15 @@ export function selectionReason(entry: SellerReportEntry): string | undefined {
   if (entry.result === 'unpriced') return 'Нет ставки — задайте тариф в настройках'
   if (entry.result === 'not_billable') return 'Документ не тарифицируется'
   if (entry.result === 'reversed') return 'Сторно попадёт в счёт вместе со своим начислением'
+  return undefined
+}
+
+/** Почему хранение нельзя выбрать в счёт. */
+function storageReason(status: StorageReportRow['status']): string | undefined {
+  if (status === 'missing_dimensions') return 'Нет габаритов у товара — хранение в счёт не включить'
+  if (status === 'negative_stock') {
+    return 'Остаток по движениям уходит в минус — хранение по этому селлеру не считается, пока движения не выправят'
+  }
   return undefined
 }
 
@@ -232,11 +241,7 @@ export function FfBillingSellerDetails({
                     hideLabel
                     checked={storageSelected}
                     onChange={onToggleStorage}
-                    disabledReason={
-                      row.storage.status === 'missing_dimensions'
-                        ? 'Нет габаритов у товара — хранение в счёт не включить'
-                        : undefined
-                    }
+                    disabledReason={storageReason(row.storage.status)}
                     testId="billing-pick-storage"
                   />
                 ) : (
@@ -403,11 +408,7 @@ export function FfBillingSellerDetails({
                     hideLabel
                     checked={storageSelected}
                     onChange={onToggleStorage}
-                    disabledReason={
-                      row.storage.status === 'missing_dimensions'
-                        ? 'Нет габаритов у товара — хранение в счёт не включить'
-                        : undefined
-                    }
+                    disabledReason={storageReason(row.storage.status)}
                     testId="billing-pick-section-storage"
                   />
                 )

@@ -37,7 +37,11 @@ from app.models.product_dimension_event import ProductDimensionEvent
 from app.models.seller import Seller
 from app.models.warehouse import Warehouse
 from app.services.billing_ledger_service import _resolve_v2_tariff
-from app.services.storage_measurement_service import MOSCOW, interval_liter_days
+from app.services.storage_measurement_service import (
+    MOSCOW,
+    StorageMeasurementError,
+    interval_liter_days,
+)
 
 
 class SellerReportError(ValueError):
@@ -544,17 +548,26 @@ async def _storage_row(
     liter_days = Decimal(0)
     missing = False
     fingerprint_sources: list[dict[str, Any]] = []
+    # Восстановленный по движениям остаток может уйти в минус — например, если
+    # списание пришло раньше прихода. Раньше это роняло весь экран селлера
+    # пятисоткой: оператор не видел ни документов, ни причины. Хранение в таком
+    # случае действительно посчитать нельзя, но всё остальное показать можно.
+    broken = False
     for product_id, product_movements in grouped.items():
         product = products.get(product_id)
         if product is None:
             continue
-        calculated, product_missing = interval_liter_days(product_movements, events_by_product[product_id], legacy_volume_liters=product.volume_liters, start=start, end=end)
+        try:
+            calculated, product_missing = interval_liter_days(product_movements, events_by_product[product_id], legacy_volume_liters=product.volume_liters, start=start, end=end)
+        except StorageMeasurementError:
+            broken = True
+            break
         liter_days += calculated
         missing = missing or product_missing
         fingerprint_sources.append({"product": str(product_id), "moves": [(str(m.id), _as_moscow(m.created_at).isoformat(), m.quantity_delta) for m in product_movements], "dimensions": [(str(e.id), _as_moscow(e.observed_at).isoformat(), str(e.volume_liters)) for e in events_by_product[product_id]]})
     tariff_rows = await _storage_matrix_rates(session, tenant_id=tenant_id, seller_id=seller_id)
     amount = 0
-    if not missing:
+    if not missing and not broken:
         for offset in range((date_to - date_from).days + 1):
             day = date_from + timedelta(days=offset)
             daily_liters = Decimal(0)
@@ -563,7 +576,11 @@ async def _storage_row(
             for product_id, product_movements in grouped.items():
                 product = products.get(product_id)
                 if product:
-                    value, absent = interval_liter_days(product_movements, events_by_product[product_id], legacy_volume_liters=product.volume_liters, start=max(start, day_start), end=min(end, day_end))
+                    try:
+                        value, absent = interval_liter_days(product_movements, events_by_product[product_id], legacy_volume_liters=product.volume_liters, start=max(start, day_start), end=min(end, day_end))
+                    except StorageMeasurementError:
+                        broken = True
+                        break
                     if absent:
                         missing = True
                     daily_liters += value
@@ -571,8 +588,8 @@ async def _storage_row(
             if rate is not None:
                 amount += int((daily_liters * Decimal(rate)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
     payload = {"tenant_id": str(tenant_id), "seller_id": str(seller_id), "date_from": date_from.isoformat(), "date_to": date_to.isoformat(), "liter_days": str(liter_days), "amount_kopecks": None if missing else amount, "sources": fingerprint_sources, "tariffs": [(str(t.id), _as_moscow(t.valid_from_at).isoformat(), _as_moscow(t.valid_to_at).isoformat() if t.valid_to_at else None, t.rate, str(t.seller_id) if t.seller_id else None) for t in tariff_rows]}
-    row: dict[str, Any] = {"kind": "storage", "date_from": date_from.isoformat(), "date_to": date_to.isoformat(), "liter_days": float(liter_days), "status": "missing_dimensions" if missing else "calculated", "calculation_token": _token(payload)}
-    if include_finance and not missing:
+    row: dict[str, Any] = {"kind": "storage", "date_from": date_from.isoformat(), "date_to": date_to.isoformat(), "liter_days": float(liter_days), "status": "negative_stock" if broken else ("missing_dimensions" if missing else "calculated"), "calculation_token": _token(payload)}
+    if include_finance and not missing and not broken:
         row["amount_kopecks"] = amount
     return row
 
