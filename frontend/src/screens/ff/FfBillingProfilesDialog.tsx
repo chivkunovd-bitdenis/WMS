@@ -56,13 +56,20 @@ const LOOKUP_ERRORS: Record<string, string> = {
 
 export function FfBillingProfilesDialog({
   token,
-  sellers,
+  sellers = [],
+  sellerId,
+  sellerName,
+  onSaved,
 }: {
   token: string
-  sellers: Seller[]
+  sellers?: Seller[]
+  /** Реквизиты одного селлера: выбор «чьи» тогда не нужен. */
+  sellerId?: string
+  sellerName?: string
+  onSaved?: () => void
 }) {
   const [open, setOpen] = useState(false)
-  const [scope, setScope] = useState('ff')
+  const [scope, setScope] = useState(sellerId ?? 'ff')
   const [form, setForm] = useState<ProfileForm>(EMPTY)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -149,6 +156,7 @@ export function FfBillingProfilesDialog({
         return
       }
       setNotice('Реквизиты сохранены')
+      onSaved?.()
     } catch {
       setError('Реквизиты не сохранены')
     } finally {
@@ -163,7 +171,7 @@ export function FfBillingProfilesDialog({
       </SecondaryAction>
       <AppDialog
         open={open}
-        title="Реквизиты для счетов"
+        title={sellerName ? `Реквизиты · ${sellerName}` : 'Реквизиты для счетов'}
         onClose={() => setOpen(false)}
         maxWidth="md"
         testId="billing-profiles"
@@ -187,16 +195,18 @@ export function FfBillingProfilesDialog({
         }
       >
         <Stack spacing={2}>
-          <SelectInput
-            label="Чьи реквизиты"
-            value={scope}
-            onChange={setScope}
-            options={[
-              { value: 'ff', label: 'Наши — фулфилмент' },
-              ...sellers.map((seller) => ({ value: seller.id, label: `Селлер · ${seller.name}` })),
-            ]}
-            testId="billing-profiles-scope"
-          />
+          {sellerId ? null : (
+            <SelectInput
+              label="Чьи реквизиты"
+              value={scope}
+              onChange={setScope}
+              options={[
+                { value: 'ff', label: 'Наши — фулфилмент' },
+                ...sellers.map((seller) => ({ value: seller.id, label: `Селлер · ${seller.name}` })),
+              ]}
+              testId="billing-profiles-scope"
+            />
+          )}
           <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-end' }}>
             <Box sx={{ width: 220, flexShrink: 0 }}>
               <TextInput
