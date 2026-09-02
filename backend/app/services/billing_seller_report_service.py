@@ -71,6 +71,10 @@ def _source_target(source_type: str, source_id: uuid.UUID) -> dict[str, str] | N
         return {"kind": "inbound", "source_id": str(source_id)}
     if source_type == "marketplace_unload":
         return {"kind": "route", "to": f"/app/ff/mp-shipments?open_mp={source_id}"}
+    # Документ заказа FBS — это его история: кто подобрал, упаковал, печатал и
+    # передавал. Открывается тем же кликом по номеру, что и остальные документы.
+    if source_type == "fbs_order":
+        return {"kind": "fbs_order", "source_id": str(source_id)}
     return None
 
 
@@ -373,7 +377,7 @@ async def _fbs_handed_entries(
                 "document_number": f"Заказ {order.wb_order_id}",
                 "product_name": None,
                 "sku": None,
-                "source_target": None,
+                "source_target": {"kind": "fbs_order", "source_id": str(order.id)},
                 "result": "not_billable",
                 "fbs_status_label": FBS_STATUS_HANDED_LABEL,
             }

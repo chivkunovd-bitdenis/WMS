@@ -23,7 +23,11 @@ export type SellerReportEntry = {
   item_quantity: number | null
   source_type: string
   source_id: string
-  source_target: { kind: 'inbound'; source_id: string } | { kind: 'route'; to: string } | null
+  source_target:
+    | { kind: 'inbound'; source_id: string }
+    | { kind: 'route'; to: string }
+    | { kind: 'fbs_order'; source_id: string }
+    | null
   document_number: string | null
   product_name: string | null
   sku: string | null
@@ -206,6 +210,7 @@ export function FfBillingSellerDetails({
   onToggleStorage,
   onLoadMore,
   onOpenInbound,
+  onOpenFbsOrder,
 }: {
   details: SellerReportDetails | null
   loading: boolean
@@ -217,6 +222,7 @@ export function FfBillingSellerDetails({
   onToggleStorage: (checked: boolean) => void
   onLoadMore: (cursor: string) => void
   onOpenInbound: (id: string) => void
+  onOpenFbsOrder: (id: string) => void
 }) {
   const [openSections, setOpenSections] = useState<string[]>([])
   const sections = buildSections(details)
@@ -315,6 +321,18 @@ export function FfBillingSellerDetails({
                 type="button"
                 sx={{ textAlign: 'left' }}
                 onClick={() => onOpenInbound(target.source_id)}
+              >
+                {title}
+              </Link>,
+            )
+          }
+          if (target?.kind === 'fbs_order') {
+            return withStatus(
+              <Link
+                component="button"
+                type="button"
+                sx={{ textAlign: 'left' }}
+                onClick={() => onOpenFbsOrder(target.source_id)}
               >
                 {title}
               </Link>,
