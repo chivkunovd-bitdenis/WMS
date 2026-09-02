@@ -303,7 +303,8 @@ export type FbsSupplyAddOrdersRequest = {
 export type FbsSupplyWorklistItem = {
   id: string
   marketplace: 'wb' | 'ozon'
-  wb_supply_id: string
+  /** Номер в WB появляется не сразу — до подтверждения маркетплейсом его нет. */
+  wb_supply_id: string | null
   name: string
   status: string
   seller: { id: string; name: string }

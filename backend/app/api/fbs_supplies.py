@@ -139,7 +139,11 @@ class FbsSupplyOut(BaseModel):
 class FbsSupplyWorklistItemOut(BaseModel):
     id: str
     marketplace: str = "wb"
-    wb_supply_id: str
+    # Номер поставки в WB появляется не сразу: до подтверждения маркетплейсом
+    # его нет, и в базе колонка nullable. Модель требовала строку, поэтому одна
+    # такая поставка роняла весь список пятисоткой — оператор терял вкладку
+    # целиком из-за одной строки.
+    wb_supply_id: str | None
     name: str
     status: str
     seller: dict[str, str]
