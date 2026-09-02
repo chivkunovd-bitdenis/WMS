@@ -149,6 +149,14 @@ CHECK_WARNING = "warning"
 CHECK_INFO = "info"
 
 WB_ALLOWED_BLOCKER_CODES = frozenset({"supply_bad_status", "supply_empty"})
+
+# Правило одно, значит и текст один. Раньше оно жило в двух местах с разными
+# формулировками, и вторая говорила «обновите preflight» — слово, которое
+# кладовщику не значит ничего.
+_STALE_PREFLIGHT_MESSAGE = (
+    "Пока было открыто окно передачи, поставка изменилась. Закройте окно и "
+    "откройте заново — проверки пересчитаются."
+)
 _DELIVER_ALLOWED_DELIVERY_TYPES = frozenset({FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_DELIVERY_TYPE_PVZ})
 _DELIVER_BLOCKED_SUPPLY_STATUSES = frozenset(
     {
@@ -995,10 +1003,7 @@ async def _sync_and_validate_deliver(
         if current_version != confirmed_preflight_version:
             raise FbsShipmentError(
                 "stale_preflight",
-                message=(
-                    "Состав поставки изменился, пока было открыто окно передачи. "
-                    "Закройте его и откройте заново — проверки пересчитаются."
-                ),
+                message=_STALE_PREFLIGHT_MESSAGE,
                 context={
                     "current_version": current_version,
                     "confirmed_preflight_version": confirmed_preflight_version,
@@ -1030,9 +1035,9 @@ async def _sync_and_validate_deliver(
         raise FbsShipmentError(
             "negative_stock_confirmation_required",
             message=(
-                "Товара на складе стало меньше, чем было при открытии окна. "
-                "Закройте окно и откройте заново — система покажет, "
-                "какой заказ уйдёт в минус."
+                "Проверки не подтверждены, а остатка не хватает. Закройте окно "
+                "передачи и откройте заново — система покажет, какой заказ "
+                "уйдёт в минус, и спросит подтверждение."
             ),
             context={"current_version": current_version},
             http_status=409,
@@ -1357,8 +1362,14 @@ async def _stage_wb_shipment_sources(
         for order in orders
         if order.status not in _TERMINAL_ORDER_STATUSES and order.product_id is not None
     ]
-    if not active_orders:
-        return
+    # ⛔ Раньше здесь стоял ранний выход: нет заказов со сопоставленным товаром —
+    # чек-пойнт не пишем. А дальше передача этот чек-пойнт читает, не находит и
+    # падает с «не удалось восстановить план списания». Поставка из одного
+    # заказа с незнакомым артикулом — обычное дело, когда состав собрал сам
+    # продавец, — упиралась в мёртвую кнопку навсегда.
+    #
+    # Пустой план списания — законное состояние: списывать нечего, но передать
+    # надо. Пишем чек-пойнт с пустым списком и уходим.
     checkpoint_source_plan = {
         "supply_warehouse_id": str(source_plan.supply_warehouse_id),
         "resolutions": [
@@ -1381,7 +1392,11 @@ async def _stage_wb_shipment_sources(
     summary = dict(operation.request_summary_json or {})
     previous_checkpoint = summary.get("checkpoint_source_plan")
     if previous_checkpoint is not None and previous_checkpoint != checkpoint_source_plan:
-        raise FbsShipmentError("stale_preflight", http_status=409)
+        raise FbsShipmentError(
+            "stale_preflight",
+            message=_STALE_PREFLIGHT_MESSAGE,
+            http_status=409,
+        )
     summary["checkpoint_source_plan"] = checkpoint_source_plan
     operation.request_summary_json = summary
     existing = {
@@ -1457,7 +1472,10 @@ async def _load_checkpointed_wb_delivery(
     checkpoint_source_plan = summary.get("checkpoint_source_plan")
     if isinstance(checkpoint_source_plan, dict):
         raw_resolutions = checkpoint_source_plan.get("resolutions")
-        if not isinstance(raw_resolutions, list) or not raw_resolutions:
+        # Пустой список — это «списывать нечего», а не битый чек-пойнт. Так
+        # выглядит поставка, в которой ни один заказ не сопоставлен с карточкой
+        # товара: уехать она обязана, движений по складу не создаст.
+        if not isinstance(raw_resolutions, list):
             raise FbsShipmentError("fbs_shipment_checkpoint_incomplete", http_status=409)
         orders = await _load_locked_supply_orders(session, supply.tenant_id, supply.id)
         orders_by_id = {order.id: order for order in orders}
@@ -1471,8 +1489,10 @@ async def _load_checkpointed_wb_delivery(
                 if not isinstance(raw, dict):
                     raise ValueError("invalid checkpoint row")
                 order_id = uuid.UUID(str(raw["fbs_order_id"]))
-                order = orders_by_id[order_id]
-                snapshot_orders.append(order)
+                # Заказ должен быть в поставке, но само его присутствие тут
+                # больше не решает, какие заказы считать уехавшими: список «что
+                # уехало» и список «что списываем» — разные вещи.
+                orders_by_id[order_id]
                 snapshot_resolutions.append(
                     source_svc.FbsShipmentSourceResolution(
                         fbs_order_id=order_id,
@@ -1496,6 +1516,16 @@ async def _load_checkpointed_wb_delivery(
             raise FbsShipmentError(
                 "fbs_shipment_checkpoint_incomplete", http_status=409
             ) from None
+        # Уехало всё, что лежало в поставке и не отменено, — включая заказы без
+        # сопоставленного товара, по которым списывать нечего. Раньше сюда
+        # попадали только строки плана списания, и несопоставленный заказ
+        # оставался «упакован» внутри уже переданной поставки: оператор не мог
+        # понять, уехал он или нет. Хуже того, при повторном подтверждении план
+        # пересчитывался заново и тот же заказ статус получал — одно и то же
+        # вело себя по-разному в зависимости от пути.
+        snapshot_orders = [
+            order for order in orders if order.status not in _TERMINAL_ORDER_STATUSES
+        ]
         return snapshot_orders, source_svc.FbsShipmentSourcePlan(
             tenant_id=supply.tenant_id,
             supply_warehouse_id=supply_warehouse_id,
