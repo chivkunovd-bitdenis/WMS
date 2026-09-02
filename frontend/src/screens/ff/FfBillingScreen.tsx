@@ -170,7 +170,8 @@ const serviceLabels: Record<string, string> = {
   marketplace_outbound: 'Отгрузка',
   storage_liter_day: 'Хранение',
 }
-const unitLabels: Record<string, string> = { document: 'За документ', item: 'За штуку', liter_day: 'За литр-день' }
+/** В счёте колонка «Ед.» узкая: длинные подписи рвутся на три строки. */
+const printUnitLabels: Record<string, string> = { document: 'док.', item: 'шт.', liter_day: 'л·дн' }
 
 export function buildInvoicePrintHtml(invoice: Invoice): string {
   // Вёрстка счёта одна на все окна и живёт в `invoicePrint.ts`. Здесь только
@@ -188,7 +189,7 @@ export function buildInvoicePrintHtml(invoice: Invoice): string {
     lines: (invoice.lines ?? []).map((line) => ({
       description: serviceLabels[line.service_code] ?? line.service_code,
       quantity: parseApiDecimal(line.quantity).toLocaleString('ru-RU'),
-      unit: unitLabels[line.unit] ?? '',
+      unit: printUnitLabels[line.unit] ?? '',
       price: formatMoney(line.rate),
       amount: formatMoney(line.amount),
     })),

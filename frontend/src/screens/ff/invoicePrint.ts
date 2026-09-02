@@ -152,7 +152,7 @@ const STYLES = `
   .items th { background: #f2f2f2; text-align: left; font-weight: 700; }
   .items col.num { width: 6%; }
   .items col.qty { width: 9%; }
-  .items col.unit { width: 8%; }
+  .items col.unit { width: 10%; }
   .items col.price { width: 13%; }
   .items col.sum { width: 15%; }
   .items td.right, .items th.right { text-align: right; white-space: nowrap; }
