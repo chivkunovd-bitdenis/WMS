@@ -91,8 +91,8 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
     cellId: string | null
     toId: string | null
     qty: number
-  }) {
-    if (!warehouseId) return
+  }): Promise<string | null> {
+    if (!warehouseId) return null
     setError(null)
     try {
       const res = await fetch(apiUrl(`/warehouses/${warehouseId}/sorting-objects/place`), {
@@ -107,12 +107,18 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
         }),
       })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
+      // Настоящий идентификатор строки остатка в месте назначения. Экран
+      // подставит его вместо временного, и следующий перенос той же строки
+      // уйдёт на сервер правильным.
+      const body = (await res.json()) as { balance_id?: string | null }
+      return body.balance_id ?? null
     } catch (err) {
       // Экран уже переставил строку у себя. Показываем отказ и перечитываем
       // склад: иначе на экране будет одно, а в системе другое, и оператор
       // узнает об этом на инвентаризации.
       setError(err instanceof Error ? err.message : 'Не удалось поставить объект')
       await load()
+      return null
     }
   }
 
@@ -214,7 +220,7 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
           initialLines={data.lines}
           products={data.products}
           initialCells={data.cells}
-          onPlace={(payload) => void place(payload)}
+          onPlace={(payload) => place(payload)}
           purpose={
             embedded
               ? 'Собираем объект и ставим готовый объект на полку.'

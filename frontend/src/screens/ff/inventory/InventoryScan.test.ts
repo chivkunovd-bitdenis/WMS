@@ -362,3 +362,46 @@ describe('пустая по документу тара выброшена из 
     expect(scanned.focusPathKeys).toBeDefined()
   })
 })
+
+describe('видимый номер тары бывает не один', () => {
+  // Номер короба уникален внутри приёмки, а не склада. На бою есть восемь пар
+  // коробов с одинаковым номером в одном складе, у номера «1» — одиннадцать
+  // носителей. Открыть «первый попавшийся» нельзя: находка ляжет в чужую тару,
+  // и на бумаге товар окажется не там, где он лежит.
+  function twoBoxesWithSameCode(): InventoryCount {
+    const base = countWithBox(product())
+    const cell = base.cells[0]
+    return {
+      ...base,
+      cells: [
+        {
+          ...cell,
+          children: [
+            ...cell.children,
+            { kind: 'box', id: 'box-2', code: 'BOX-1', barcode: 'BOX-BARCODE-2', children: [] },
+          ],
+        },
+      ],
+    }
+  }
+
+  it('по номеру не открывает ничего и просит штрихкод', () => {
+    const scanned = applyScan(twoBoxesWithSameCode(), 'BOX-1', NOTHING_OPEN)
+    expect(scanned.open).toEqual(NOTHING_OPEN)
+    expect(scanned.tone).toBe('error')
+    expect(scanned.message).toContain('Отсканируйте штрихкод')
+    expect(scanned.found).toBeUndefined()
+  })
+
+  it('штрихкод остаётся точным адресом и открывает нужный короб', () => {
+    const first = applyScan(twoBoxesWithSameCode(), 'BOX-BARCODE-1', NOTHING_OPEN)
+    expect(first.open.containerId).toBe('box-1')
+    const second = applyScan(twoBoxesWithSameCode(), 'BOX-BARCODE-2', NOTHING_OPEN)
+    expect(second.open.containerId).toBe('box-2')
+  })
+
+  it('когда номер один — он по-прежнему открывает тару', () => {
+    const scanned = applyScan(countWithBox(product()), 'BOX-1', NOTHING_OPEN)
+    expect(scanned.open.containerId).toBe('box-1')
+  })
+})

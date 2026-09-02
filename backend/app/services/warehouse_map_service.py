@@ -1139,6 +1139,7 @@ async def move_object(
         session, tenant_id, warehouse_id, to_kind, to_id
     )
     transfer_group_id = uuid.uuid4()
+    destination_balance_id: uuid.UUID | None = None
 
     if kind == "product":
         balance = await session.scalar(
@@ -1180,6 +1181,22 @@ async def move_object(
             destination_container_id=destination_id,
             transfer_group_id=transfer_group_id,
             actor_user_id=actor_user_id,
+        )
+        # Идентификатор строки остатка в месте назначения.
+        #
+        # Экран показывает перенос сразу, не дожидаясь ответа, и до этой правки
+        # придумывал новой строке временный идентификатор. Второй перенос из
+        # той же тары уходил с выдуманным id, сервер искал по нему настоящий
+        # InventoryBalance и отвечал 404: двухшаговая упаковка (положил в короб,
+        # потом переставил короб) не работала вовсе.
+        destination_balance_id = await session.scalar(
+            select(InventoryBalance.id).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == balance.product_id,
+                InventoryBalance.storage_location_id == destination_location_id,
+                InventoryBalance.container_kind.is_not_distinct_from(destination_kind),
+                InventoryBalance.container_id.is_not_distinct_from(destination_id),
+            )
         )
         subject = product.name
         moved_quantity: int | None = quantity
@@ -1265,7 +1282,11 @@ async def move_object(
     )
     session.add(event)
     await session.commit()
-    return {"id": str(event.id), "moved_qty": moved_quantity}
+    return {
+        "id": str(event.id),
+        "moved_qty": moved_quantity,
+        "balance_id": str(destination_balance_id) if destination_balance_id else None,
+    }
 
 
 async def create_sorting_object(

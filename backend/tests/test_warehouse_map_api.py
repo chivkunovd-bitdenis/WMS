@@ -298,6 +298,27 @@ async def test_map_totals_moves_sorting_disband_and_tenant_scope(
         },
     )
     assert placed.status_code == 200, placed.text
+    # Настоящий идентификатор строки остатка в месте назначения. Экран
+    # показывает перенос сразу и до ответа держит строку под временным id;
+    # без этого поля второй перенос той же строки уходил с выдуманным
+    # идентификатором и получал 404 «объект не найден» — двухшаговая
+    # раскладка (положил в короб, потом переставил короб) не работала.
+    placed_balance_id = placed.json()["balance_id"]
+    assert placed_balance_id
+    assert placed_balance_id != sorting_line["id"]
+    # Этим идентификатором строку можно двигать дальше, не перечитывая карту.
+    moved_again = await async_client.post(
+        f"/warehouses/{warehouse.id}/sorting-objects/place",
+        headers=headers,
+        json={
+            "kind": "product",
+            "id": placed_balance_id,
+            "cell_id": None,
+            "qty": 1,
+        },
+    )
+    assert moved_again.status_code == 200, moved_again.text
+    assert moved_again.json()["moved_qty"] == 1
 
     moved_pallet = await async_client.post(
         f"/warehouses/{warehouse.id}/map/move",

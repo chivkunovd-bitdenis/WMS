@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -388,6 +388,7 @@ def _restore_missing_gs_by_structure(value: str) -> tuple[str, bool, bool]:
         return value, False, False
 
     tail = value[_CIS_PREFIX_LENGTH:]
+
     # Раньше выход был по первому же найденному разделителю. Но сканер теряет
     # их по одному: код, у которого уцелел разделитель перед 91 и пропал перед
     # 92, не чинился и не браковался — молча уходил в WB на верную ошибку
@@ -427,6 +428,80 @@ def _restore_missing_gs_by_structure(value: str) -> tuple[str, bool, bool]:
     serial, verification, signature = candidates[0]
     restored = f"{value[:_CIS_PREFIX_LENGTH]}{serial}{_GS}91{verification}{_GS}92{signature}"
     return restored, restored != value, False
+
+
+def _tail_parses_with_own_separators(tail: str) -> bool:
+    """Хвост уже разложен по полям GS1 своими разделителями.
+
+    Канон обувного и одёжного КИЗа: серийник, затем блок 91 из четырёх
+    символов, затем блок 92 с подписью известной длины. Если всё это уже
+    отделено разделителями и сходится по длинам — структура опознана, и
+    достраивать нечего.
+    """
+
+    parts = tail.split(_GS)
+    if len(parts) < 2:
+        return False
+    serial, *blocks = parts
+    if not 1 <= len(serial) <= _CIS_SERIAL_MAX_LENGTH:
+        return False
+    seen: set[str] = set()
+    for block in blocks:
+        tag = block[:2]
+        if tag in seen:
+            return False
+        seen.add(tag)
+        if tag == "91":
+            if len(block) != 2 + _GS1_AI91_VALUE_LENGTH:
+                return False
+        elif tag == "92":
+            if len(block) - 2 not in _CIS_SIGNATURE_LENGTHS:
+                return False
+        elif tag == "93":
+            # Криптохвост под тегом 93: его длина зависит от категории товара
+            # и нам не известна. Раз поле отделено разделителем — структуру
+            # опознали до нас, и достраивать здесь нечего.
+            if len(block) <= 2:
+                return False
+        else:
+            return False
+    # Криптохвост обязателен: без него это короткий КИЗ, его разбирает
+    # отдельная ветка выше.
+    return bool(seen & {"92", "93"})
+
+
+def alternative_cis_reading(raw: str) -> str | None:
+    """Второе законное прочтение кода, если достраивание было неоднозначным.
+
+    ⛔ Развести два случая чистой функцией НЕЛЬЗЯ, и это доказуемо:
+
+        21aXq7Tz9Km91K7pQ<GS>92<44>   ← сканер потерял разделитель, чинить надо
+        21AB91ZZQQ<GS>92<44>          ← серийник сам кончается на 91+4, чинить нельзя
+
+    Обе строки устроены одинаково: серийник, оканчивающийся на «91» плюс
+    четыре символа, затем разделитель и блок 92. Никакого признака, по
+    которому одну можно отличить от другой, в самом коде нет.
+
+    Поэтому разбор оставляем как есть — он чинит частый случай, — а спор
+    решаем данными: наш пул знает, какие коды мы выпускали. Функция отдаёт
+    прочтение «оставить как пришло», чтобы вызывающий мог сверить оба
+    варианта с пулом и выбрать существующий.
+
+    Отдаёт None, когда спорить не о чем: достраивание ничего не поменяло или
+    исходный код своими разделителями не разбирался.
+    """
+
+    value = raw.rstrip(" \t\r\n\v\f")
+    value, _ = _strip_aim_prefix(value)
+    value, _ = _restore_gs_substitutes(value)
+    if not _cis_prefix_ok(value):
+        return None
+    if not _tail_parses_with_own_separators(value[_CIS_PREFIX_LENGTH:]):
+        return None
+    restored, changed, _ = _restore_missing_gs_by_structure(value)
+    if not changed or restored == value:
+        return None
+    return value
 
 
 def _has_keyboard_layout_noise(value: str) -> bool:
@@ -678,6 +753,26 @@ async def _get_order_for_kiz(
     return order
 
 
+def _plain(value: str) -> str:
+    """Код без разделителей — то, чем один физический КИЗ равен другому.
+
+    Разделители GS — это разметка, а не данные: один и тот же код склад мог
+    сохранить и с ними, и без. До этой правки сверка шла по сырой строке, и
+    представления не находили друг друга. На бою это живое: из 42 привязанных
+    к заказам кодов 16 при пересканировании давали другую строку, в пуле —
+    51 из 2886. Пикнув такой код в другой заказ, оператор не получал отказа
+    «уже привязан», и один физический КИЗ уезжал в WB дважды.
+    """
+
+    return value.replace(_GS, "")
+
+
+def _same_cis(column: Any, value: str) -> Any:
+    """Условие «это тот же физический код», независимо от разделителей."""
+
+    return func.replace(column, _GS, "") == _plain(value)
+
+
 async def _ensure_kiz_not_bound_to_other_order(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -690,7 +785,7 @@ async def _ensure_kiz_not_bound_to_other_order(
         .where(
             FbsOrderMarking.tenant_id == tenant_id,
             FbsOrderMarking.kind == MARKING_KIND_SGTIN,
-            FbsOrderMarking.value == value,
+            _same_cis(FbsOrderMarking.value, value),
             FbsOrderMarking.meta_status != META_STATUS_REJECTED,
             FbsOrderMarking.order_id != order_id,
         )
@@ -718,9 +813,12 @@ async def _get_marking_code_by_cis(
     *,
     for_update: bool = False,
 ) -> MarkingCode | None:
+    # Внутри арендатора двух представлений одного кода нет: уникальный индекс
+    # стоит на (tenant_id, cis_code), и проверка боевой базы дублей по
+    # каноническому виду внутри арендатора не нашла ни одного.
     stmt = select(MarkingCode).where(
         MarkingCode.tenant_id == tenant_id,
-        MarkingCode.cis_code == value,
+        _same_cis(MarkingCode.cis_code, value),
     )
     if for_update:
         stmt = stmt.with_for_update()
@@ -781,6 +879,20 @@ async def _validate_kiz_pair(
             context={"debug": scan_debug(raw_value)},
             message="not_a_kiz",
         )
+
+    # Спор двух законных прочтений решаем нашим же пулом: если код с
+    # достроенными разделителями нам неизвестен, а «как пришёл» — известен,
+    # значит достраивание распилило чужой серийник, и брать надо исходный.
+    # Без этого в WB уходил бы другой ЛОГИЧЕСКИЙ код при тех же байтах, и
+    # оператор не увидел бы ничего: подмена границ полей молчалива.
+    alternative = alternative_cis_reading(raw_value)
+    if (
+        alternative is not None
+        and alternative != value
+        and await _get_marking_code_by_cis(session, tenant_id, value) is None
+        and await _get_marking_code_by_cis(session, tenant_id, alternative) is not None
+    ):
+        value = alternative
 
     order = await _get_order_for_kiz(
         session,

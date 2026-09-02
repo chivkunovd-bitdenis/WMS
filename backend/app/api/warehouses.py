@@ -176,6 +176,11 @@ class WarehouseMapMoveIn(BaseModel):
 class WarehouseMapMoveOut(BaseModel):
     id: str
     moved_qty: int | None
+    # Строка остатка в месте назначения. Экран показывает перенос сразу и до
+    # ответа держит новую строку под временным идентификатором; получив этот,
+    # он подставляет настоящий — иначе следующий перенос той же строки уходит
+    # с выдуманным id и ловит 404.
+    balance_id: str | None = None
 
 
 class WarehouseMapDisbandIn(BaseModel):

@@ -158,8 +158,20 @@ type FoundCell = { id: string; label: string; pathKeys: string[] }
 function findScanTargets(
   count: InventoryCount,
   normalizedCodes: Set<string>,
-): { container: FoundContainer | null; cell: FoundCell | null; products: Located[] } {
+): {
+  container: FoundContainer | null
+  /** Тара, найденная только по видимому номеру, когда таких нашлось несколько. */
+  ambiguousContainers: FoundContainer[]
+  cell: FoundCell | null
+  products: Located[]
+} {
   let container: FoundContainer | null = null
+  // Штрихкод уникален, видимый номер — нет. Номер короба уникален внутри
+  // приёмки, а не склада: на бою есть восемь пар коробов с одним номером в
+  // одном складе, у номера «1» — одиннадцать носителей. Открыть «первый
+  // попавшийся» нельзя: находка ляжет в чужую тару, и на бумаге товар окажется
+  // не там, где он лежит. Поэтому совпадения по номеру собираем все.
+  const byVisibleCode: FoundContainer[] = []
   let cell: FoundCell | null = null
   const products: Located[] = []
   function walk(nodes: InventoryNode[], cellId: string, containerId: string | null, pathKeys: string[]) {
@@ -172,8 +184,12 @@ function findScanTargets(
         }
         continue
       }
-      if (!container && matchesPlace(normalizedCodes, node.barcode, node.code)) {
-        container = { id: node.id, kind: node.kind, code: node.code, cellId, pathKeys: nextPath }
+      const found = { id: node.id, kind: node.kind, code: node.code, cellId, pathKeys: nextPath }
+      if (!container && matchesPlace(normalizedCodes, node.barcode)) {
+        // Штрихкод — точный адрес, он всегда важнее номера на ярлыке.
+        container = found
+      } else if (matchesPlace(normalizedCodes, node.code)) {
+        byVisibleCode.push(found)
       }
       walk(node.children, cellId, node.id, nextPath)
     }
@@ -189,20 +205,21 @@ function findScanTargets(
     // Тара, пустая по документу, в дерево не попадает — иначе пересчёт по
     // складу превращается в стену строк «0 из 0». Но пикнуть её оператор
     // должен: он подошёл к коробу, а в нём лежит то, чего по учёту тут нет.
-    const empty = count.scannableContainers.find(
-      (item) => matchesPlace(normalizedCodes, item.barcode, item.code),
-    )
-    if (empty) {
-      const cellKey = `cell:${empty.cellId ?? UNASSIGNED_CELL_ID}`
-      container = {
-        id: empty.id,
-        kind: empty.kind,
-        code: empty.code,
-        cellId: empty.cellId ?? UNASSIGNED_CELL_ID,
+    for (const item of count.scannableContainers) {
+      const found = {
+        id: item.id,
+        kind: item.kind,
+        code: item.code,
+        cellId: item.cellId ?? UNASSIGNED_CELL_ID,
         // Строки в дереве у такой тары нет, подсвечивать нечего.
-        pathKeys: [cellKey],
+        pathKeys: [`cell:${item.cellId ?? UNASSIGNED_CELL_ID}`],
       }
+      if (!container && matchesPlace(normalizedCodes, item.barcode)) container = found
+      else if (matchesPlace(normalizedCodes, item.code)) byVisibleCode.push(found)
     }
+  }
+  if (!container && byVisibleCode.length === 1) {
+    container = byVisibleCode[0]
   }
   if (!cell) {
     // Ячейки, пустые по учёту, в дерево не попадают, но сканер обязан их знать:
@@ -212,7 +229,12 @@ function findScanTargets(
     )
     if (empty) cell = { id: empty.id, label: empty.label, pathKeys: [`cell:${empty.id}`] }
   }
-  return { container, cell, products }
+  return {
+    container,
+    ambiguousContainers: container ? [] : byVisibleCode,
+    cell,
+    products,
+  }
 }
 
 /**
@@ -315,6 +337,25 @@ export function applyScan(
 
   const normalizedCodes = new Set(codes.map((candidate) => candidate.toLowerCase()))
   const targets = findScanTargets(count, normalizedCodes)
+
+  // Номер на ярлыке оказался не адресом, а совпадением: под ним в этом
+  // документе стоит несколько коробов. Открыть наугад — значит записать
+  // находку в чужую тару, и товар на бумаге окажется не там, где лежит.
+  // Честнее остановиться и попросить штрихкод: он один на всю систему.
+  if (targets.ambiguousContainers.length > 1) {
+    const codes = targets.ambiguousContainers
+      .map((item) => KIND_TITLE[item.kind])
+      .filter((title, index, all) => all.indexOf(title) === index)
+      .join(' и ')
+    return {
+      count,
+      open,
+      message:
+        `Номер ${code} носит ${targets.ambiguousContainers.length} шт. тары (${codes}) — `
+        + 'какую именно открыть, по номеру не понять. Отсканируйте штрихкод с ярлыка.',
+      tone: 'error',
+    }
+  }
 
   const container = targets.container
   if (container) {
