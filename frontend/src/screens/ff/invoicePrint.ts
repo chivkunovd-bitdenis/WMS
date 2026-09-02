@@ -36,16 +36,6 @@ export type PrintInvoice = {
   totalKopecks: number
 }
 
-const PROFILE_LABELS: Record<string, string> = {
-  legal_name: 'Юридическое наименование',
-  inn: 'ИНН',
-  kpp: 'КПП',
-  bank_name: 'Банк',
-  bik: 'БИК',
-  settlement_account: 'Расчётный счёт',
-  correspondent_account: 'Корреспондентский счёт',
-}
-
 const ONES = [
   '', 'один', 'два', 'три', 'четыре', 'пять', 'шесть', 'семь', 'восемь', 'девять',
   'десять', 'одиннадцать', 'двенадцать', 'тринадцать', 'четырнадцать', 'пятнадцать',
@@ -125,14 +115,16 @@ function profileValue(profile: PrintProfile, key: string): string {
   return value ? String(value) : ''
 }
 
-/** Реквизиты, кроме банковских: их место в шапке. */
+/** Сторона счёта: наименование, под ним ИНН и КПП. Банковское — в шапке. */
 function profileLines(profile: PrintProfile, fallbackName: string): string {
-  const rows = Object.entries(profile)
-    .filter(([key, value]) => Boolean(PROFILE_LABELS[key] && value))
-    .filter(([key]) => !['bank_name', 'bik', 'settlement_account', 'correspondent_account'].includes(key))
-    .map(([key, value]) => `${escapeHtml(PROFILE_LABELS[key])}: ${escapeHtml(String(value))}`)
-  if (!rows.length) return escapeHtml(fallbackName)
-  return rows.join('<br>')
+  const name = profileValue(profile, 'legal_name') || fallbackName
+  const tax = [
+    profileValue(profile, 'inn') ? `ИНН ${profileValue(profile, 'inn')}` : '',
+    profileValue(profile, 'kpp') ? `КПП ${profileValue(profile, 'kpp')}` : '',
+  ]
+    .filter(Boolean)
+    .join(', ')
+  return [escapeHtml(name), tax ? escapeHtml(tax) : ''].filter(Boolean).join('<br>')
 }
 
 const STYLES = `
@@ -143,10 +135,13 @@ const STYLES = `
   .bank td { border: 1px solid #111; padding: 4px 6px; vertical-align: top; }
   .bank .label { width: 26%; color: #333; }
   .bank .narrow { width: 14%; }
-  h1 { font-size: 18px; margin: 18px 0 4px; }
-  .rule { border-bottom: 2px solid #111; margin-bottom: 12px; }
-  .party { margin: 6px 0; }
-  .party .role { display: inline-block; min-width: 96px; color: #333; vertical-align: top; }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  .rule { border-bottom: 2px solid #111; margin-bottom: 14px; }
+  .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #555; margin-bottom: 4px; }
+  .parties { display: flex; gap: 24px; margin: 14px 0 6px; }
+  .parties .party { flex: 1; }
+  .party .role { font-weight: 700; margin-bottom: 2px; }
+  .period { margin: 8px 0 0; color: #333; }
   .items { margin-top: 14px; }
   .items th, .items td { border: 1px solid #111; padding: 5px 6px; }
   .items th { background: #f2f2f2; text-align: left; font-weight: 700; }
@@ -182,31 +177,39 @@ export function buildInvoicePrintHtml(invoice: PrintInvoice): string {
   const bank = `
     <table class="bank">
       <tr>
+        <td class="label">Получатель</td>
+        <td colspan="3">${escapeHtml(profileValue(invoice.supplier, 'legal_name') || invoice.supplierName)}</td>
+      </tr>
+      <tr>
+        <td class="label">ИНН / КПП</td>
+        <td>${escapeHtml([profileValue(invoice.supplier, 'inn'), profileValue(invoice.supplier, 'kpp')].filter(Boolean).join(' / '))}</td>
+        <td class="label narrow">Сч. №</td>
+        <td>${escapeHtml(profileValue(invoice.supplier, 'settlement_account'))}</td>
+      </tr>
+      <tr>
         <td class="label">Банк получателя</td>
-        <td colspan="2">${escapeHtml(profileValue(invoice.supplier, 'bank_name'))}</td>
+        <td>${escapeHtml(profileValue(invoice.supplier, 'bank_name'))}</td>
         <td class="label narrow">БИК</td>
         <td>${escapeHtml(profileValue(invoice.supplier, 'bik'))}</td>
       </tr>
       <tr>
         <td class="label">Корр. счёт</td>
-        <td colspan="2">${escapeHtml(profileValue(invoice.supplier, 'correspondent_account'))}</td>
-        <td class="label narrow">ИНН</td>
-        <td>${escapeHtml(profileValue(invoice.supplier, 'inn'))}</td>
-      </tr>
-      <tr>
-        <td class="label">Получатель</td>
-        <td colspan="2">${escapeHtml(profileValue(invoice.supplier, 'legal_name') || invoice.supplierName)}</td>
-        <td class="label narrow">Счёт №</td>
-        <td>${escapeHtml(profileValue(invoice.supplier, 'settlement_account'))}</td>
+        <td colspan="3">${escapeHtml(profileValue(invoice.supplier, 'correspondent_account'))}</td>
       </tr>
     </table>`
+  // Заголовок идёт первым, банковские реквизиты — под ним. В типовой форме 1С
+  // блок с БИК стоит выше слова «Счёт», но владелец читает документ сверху вниз
+  // и хочет сначала понять, что перед ним за бумага.
   return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Счёт ${escapeHtml(invoice.number)}</title><style>${STYLES}</style></head><body><div class="doc">
-    ${bank}
     <h1>Счёт на оплату № ${escapeHtml(invoice.number)} ${escapeHtml(invoice.dateLabel)}</h1>
     <div class="rule"></div>
-    <div class="party"><span class="role">Исполнитель:</span>${profileLines(invoice.supplier, invoice.supplierName)}</div>
-    <div class="party"><span class="role">Плательщик:</span>${profileLines(invoice.payer, invoice.payerName)}</div>
-    <div class="party"><span class="role">Период:</span>${escapeHtml(invoice.periodLabel)}</div>
+    <div class="section-title">Реквизиты для оплаты</div>
+    ${bank}
+    <div class="parties">
+      <div class="party"><div class="role">Исполнитель</div>${profileLines(invoice.supplier, invoice.supplierName)}</div>
+      <div class="party"><div class="role">Плательщик</div>${profileLines(invoice.payer, invoice.payerName)}</div>
+    </div>
+    <div class="period">Период оказания услуг: ${escapeHtml(invoice.periodLabel)}</div>
     <table class="items">${head}<tbody>${body}</tbody></table>
     <div class="totals">
       <div>Итого: ${escapeHtml(invoice.total)}</div>
