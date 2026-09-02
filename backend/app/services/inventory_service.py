@@ -439,7 +439,23 @@ async def sync_outbound_line_reservation(
         return
 
     wh_id = request.warehouse_id
-    on_hand_wh = await storage_on_hand_in_warehouse(session, tenant_id, wh_id, line.product_id)
+    # ⛔ Считать здесь только ячейки хранения нельзя.
+    #
+    # Зона сортировки — это не «черновик остатка», а нормальное место, откуда
+    # работают. Во-первых, у арендатора может быть выключено адресное хранение —
+    # тогда ячеек нет вообще и весь товар всегда лежит в сортировке, а значит
+    # резерв под отгрузку не встал бы никогда. Во-вторых, приехавшую палету
+    # часто нужно отгрузить сразу, не раскладывая: она уже упакована, у продавца
+    # горят сроки, и гонять её через раскладку — потерянные деньги.
+    #
+    # Подбор ФБС это правило уже учитывает (fbs_picking_service: «зона
+    # сортировки — такое же место хранения»), отгрузка на маркетплейс тоже
+    # считает обе части. Обычная отгрузка оставалась единственной, кто
+    # сортировку не видел, и упиралась в «недостаточно остатка» на товаре,
+    # который физически стоит на складе.
+    on_hand_wh = await storage_on_hand_in_warehouse(
+        session, tenant_id, wh_id, line.product_id
+    ) + await sorting_on_hand_in_warehouse(session, tenant_id, wh_id, line.product_id)
     rsv_map = await reserved_totals_by_product(
         session,
         tenant_id,
