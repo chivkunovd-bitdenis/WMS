@@ -393,7 +393,8 @@ def test_meta_validation_message_shows_order_and_concrete_wb_reason() -> None:
         ],
     )
     message, retryable = _meta_validation_message(error)
-    assert retryable is False
+    # Повтор доступен: оператор чинит названное и жмёт кнопку тут же.
+    assert retryable is True
     assert "Заказ WB 9001" in message
     assert "статус КИЗ" in message
 
@@ -412,7 +413,8 @@ def test_meta_validation_message_keeps_unknown_wb_reason() -> None:
         ],
     )
     message, retryable = _meta_validation_message(error)
-    assert retryable is False
+    # Повтор доступен: оператор чинит названное и жмёт кнопку тут же.
+    assert retryable is True
     assert message == "Заказ WB 9002: Wildberries ответил: brand new WB reason"
 
 
@@ -539,7 +541,8 @@ def test_wb_dispatch_refusal_shows_order_reasons_instead_of_advice_to_wait() -> 
     assert "530009" in message
     assert "uinBadStatus" in message or "маркировк" in message.lower()
     assert "через минуту" not in message
-    assert retryable is False
+    # Повтор доступен: оператор чинит названное и жмёт кнопку тут же.
+    assert retryable is True
 
 
 def test_wb_dispatch_refusal_without_details_still_suggests_a_retry() -> None:
@@ -600,4 +603,4 @@ def test_real_wb_refusal_from_2026_09_02_reads_as_an_instruction() -> None:
     assert "5644318926" in message
     assert "Честного знака выведен из оборота" in message
     assert "sgtinRetired" not in message
-    assert retryable is False
+    assert retryable is True
