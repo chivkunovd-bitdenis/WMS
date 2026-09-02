@@ -15,6 +15,7 @@ import {
   SelectInput,
   ActionGroup,
 } from '../../ui-kit'
+import { buildInvoicePrintHtml as buildPrintDocument, type PrintProfile } from './invoicePrint'
 import { FfBillingInvoiceCreate } from './FfBillingInvoiceCreate'
 import { FfBillingSellerDetails, type SellerReportDetails } from './FfBillingSellerDetails'
 import { FfBillingInvoicesPanel } from './FfBillingInvoicesPanel'
@@ -164,40 +165,36 @@ function formatPeriod(period: string): string {
   return new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(new Date(year, month - 1, 1))
 }
 
-function escapeHtml(value: unknown): string {
-  const entities: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
-  return String(value ?? '').replace(/[&<>"']/g, (character) => entities[character] ?? character)
-}
-
 const serviceLabels: Record<string, string> = {
   inbound: 'Приёмка',
   marketplace_outbound: 'Отгрузка',
   storage_liter_day: 'Хранение',
 }
 const unitLabels: Record<string, string> = { document: 'За документ', item: 'За штуку', liter_day: 'За литр-день' }
-const profileFieldLabels: Record<string, string> = {
-  legal_name: 'Юридическое наименование',
-  inn: 'ИНН',
-  kpp: 'КПП',
-  bank_name: 'Название банка',
-  bik: 'БИК',
-  settlement_account: 'Расчётный счёт',
-  correspondent_account: 'Корреспондентский счёт',
-}
-
-function profileRows(profile: BillingProfileSnapshot | undefined, fallback: string): [string, string][] {
-  const rows = Object.entries(profile ?? {})
-    .filter(([key, value]) => Boolean(profileFieldLabels[key] && value))
-    .map(([key, value]) => [profileFieldLabels[key], String(value)] as [string, string])
-  return rows.length ? rows : [['Наименование', fallback]]
-}
 
 export function buildInvoicePrintHtml(invoice: Invoice): string {
-  const profileHtml = (profile: BillingProfileSnapshot | undefined, fallback: string) => profileRows(profile, fallback)
-    .map(([label, value]) => `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</div>`)
-    .join('')
-  const lineHtml = (invoice.lines ?? []).map((line) => `<tr><td>${escapeHtml(serviceLabels[line.service_code] ?? '—')}</td><td>${escapeHtml(unitLabels[line.unit] ?? '—')}</td><td>${escapeHtml(parseApiDecimal(line.quantity).toLocaleString('ru-RU'))}</td><td>${escapeHtml(formatMoney(line.rate))}</td><td>${escapeHtml(formatMoney(line.amount))}</td></tr>`).join('')
-  return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Счёт ${escapeHtml(invoice.number)}</title></head><body><h1>Счёт ${escapeHtml(invoice.number)}</h1><p>${escapeHtml(formatPeriod(invoice.period))} · выставлен ${escapeHtml(formatMoscowDate(invoice.issued_at))}</p><h3>Получатель</h3>${profileHtml(invoice.ff_profile, 'Реквизиты ФФ')}<h3>Плательщик</h3>${profileHtml(invoice.seller_profile, invoice.seller_name)}<table><thead><tr><th>Услуга</th><th>Расчёт</th><th>Количество</th><th>Ставка</th><th>Сумма</th></tr></thead><tbody>${lineHtml}</tbody></table><h2>Итого: ${escapeHtml(formatMoney(invoice.total_amount))}</h2></body></html>`
+  // Вёрстка счёта одна на все окна и живёт в `invoicePrint.ts`. Здесь только
+  // перевод старого счёта в её язык: у него есть количество и ставка, поэтому
+  // в документе появляются колонки «Кол-во», «Ед.» и «Цена».
+  const totalKopecks = Math.round(parseApiDecimal(invoice.total_amount))
+  return buildPrintDocument({
+    number: invoice.number,
+    dateLabel: invoice.issued_at ? `от ${formatMoscowDate(invoice.issued_at)}` : '',
+    periodLabel: formatPeriod(invoice.period),
+    supplierName: 'Фулфилмент',
+    payerName: invoice.seller_name,
+    supplier: (invoice.ff_profile ?? {}) as PrintProfile,
+    payer: (invoice.seller_profile ?? {}) as PrintProfile,
+    lines: (invoice.lines ?? []).map((line) => ({
+      description: serviceLabels[line.service_code] ?? line.service_code,
+      quantity: parseApiDecimal(line.quantity).toLocaleString('ru-RU'),
+      unit: unitLabels[line.unit] ?? '',
+      price: formatMoney(line.rate),
+      amount: formatMoney(line.amount),
+    })),
+    total: formatMoney(invoice.total_amount),
+    totalKopecks,
+  })
 }
 
 export function InvoiceDocumentDetails({ line, period }: { line: InvoiceLine; period: string }) {
@@ -310,19 +307,19 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
 
 
   const sellerColumns = [
-    { key: 'seller', header: 'Селлер', width: 250, render: (row: SellerReportRow) => <TextCell value={row.seller_name} width={230} /> },
-    { key: 'operations', header: 'Документов', width: 130, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.operation_count} /> },
+    { key: 'seller', header: 'Селлер', width: 220, render: (row: SellerReportRow) => <TextCell value={row.seller_name} width={200} /> },
+    { key: 'operations', header: 'Документов', width: 110, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.operation_count} /> },
     { key: 'items', header: 'Штук', width: 100, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.item_quantity} /> },
     // Деньги стоят раньше счётчиков проблем намеренно: на 1280 таблица не
     // помещается в карточку целиком, и вправо должно уезжать то, что смотрят
     // реже, а не сумма, ради которой экран и открывают.
-    ...(includeFinance ? [{ key: 'accrued', header: 'Стоимость услуг', width: 170, align: 'right' as const, render: (row: SellerReportRow) => <MoneyCell minor={row.net_total_kopecks ?? null} /> }] : []),
-    { key: 'notBillable', header: 'Не тарифицируется', width: 160, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.not_billable_count} /> },
-    ...(includeFinance ? [{ key: 'unpriced', header: 'Нет ставки', width: 120, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.unpriced_count ?? 0} /> }] : []),
+    ...(includeFinance ? [{ key: 'accrued', header: 'Стоимость услуг', width: 150, align: 'right' as const, render: (row: SellerReportRow) => <MoneyCell minor={row.net_total_kopecks ?? null} /> }] : []),
+    { key: 'notBillable', header: 'Не тарифицируется', width: 140, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.not_billable_count} /> },
+    ...(includeFinance ? [{ key: 'unpriced', header: 'Нет ставки', width: 105, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.unpriced_count ?? 0} /> }] : []),
   ]
   const toggleRoot = (rootId: string, checked: boolean) => setSelectedRootIds((ids) => checked ? [...new Set([...ids, rootId])] : ids.filter((id) => id !== rootId))
 
-  return <Box data-testid="ff-billing-screen" sx={{ width: 'calc(100vw - 308px)', minWidth: 0 }}>
+  return <Box data-testid="ff-billing-screen" sx={{ width: '100%', maxWidth: '100%', minWidth: 0, overflowX: 'hidden' }}>
     <ScreenHeader title="Расчёты" purpose="Начисления за работу склада и счета селлерам за выбранный период." />
     <Tabs value={tab} onChange={(_, value: BillingTab) => setTab(value)} aria-label="Расчёты">
       <Tab label="Селлеры" value="charges" data-testid="billing-tab-sellers" /><Tab label="Выставленные счета" value="invoices" data-testid="billing-tab-invoices" />

@@ -212,12 +212,23 @@ export function BillingScreenPreview() {
         // открывает пустую форму ручного счёта, и по макету не видно главного —
         // что счёт собирается из выбранных начислений.
         window.setTimeout(() => {
-          const box = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find(
-            (input) =>
-              input.closest('[data-testid]')?.getAttribute('data-testid') ===
-              'billing-pick-section-inbound',
-          )
-          box?.click()
+          // Если разделы не приехали (запрос успел уйти раньше, чем экран был
+          // готов), складываем и раскрываем ещё раз — в макете это заметнее
+          // всего, а пустая раскрывашка вводит в заблуждение.
+          if (!document.body.innerText.includes('Услуга')) {
+            toggle.click()
+            window.setTimeout(() => toggle.click(), 200)
+          }
+          window.setTimeout(() => {
+            const box = [
+              ...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+            ].find(
+              (input) =>
+                input.closest('[data-testid]')?.getAttribute('data-testid') ===
+                'billing-pick-section-inbound',
+            )
+            box?.click()
+          }, 700)
         }, 500)
         return
       }

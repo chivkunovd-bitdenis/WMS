@@ -257,7 +257,7 @@ export function FfBillingInvoiceCreate({
         open={manualOpen}
         title="Ручной счёт"
         onClose={() => setManualOpen(false)}
-        maxWidth="md"
+        maxWidth="lg"
         testId="billing-invoice-manual"
         actions={
           <ActionGroup>
@@ -332,7 +332,7 @@ export function FfBillingInvoiceCreate({
         open={Boolean(shown)}
         title={issued ? `Счёт ${issued.number} выставлен` : 'Предпросмотр счёта'}
         onClose={closePreview}
-        maxWidth="md"
+        maxWidth="lg"
         testId="billing-invoice-preview"
         actions={
           <ActionGroup>

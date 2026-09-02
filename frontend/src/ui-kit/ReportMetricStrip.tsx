@@ -45,76 +45,96 @@ function formatDelta(delta: NonNullable<ReportMetricItem['delta']>, unit: string
 }
 
 export function ReportMetricStrip({ items, loading = false, testId }: ReportMetricStripProps) {
-  // Больше четырёх показателей раскладываем в две строки по три: раньше лишние
-  // молча обрезались, и экран показывал не то, что ему передали.
-  const columns = items.length > 4 && items.length <= 6 ? 3 : 4
+  // Плашки — отдельные карточки в резиновом ряду, а не жёсткая сетка из четырёх
+  // колонок. Жёсткая молча обрезала лишние показатели и растягивала каждый на
+  // четверть экрана: подпись жалась влево, число убегало вправо, между ними
+  // зияла пустота. Карточка занимает столько, сколько нужно её числу.
   return (
-    <Paper
-      variant="outlined"
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-        overflow: 'hidden',
-        mb: 2,
-      }}
+    <Box
+      sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mb: 2 }}
       data-testid={testId}
       aria-label="Показатели отчёта"
     >
-      {items.map((item, index) => {
+      {items.map((item) => {
         const unit = item.unit ?? 'шт.'
-        const value = item.moneyMinor !== undefined
-          ? formatMoney(item.moneyMinor)
-          : formatValue(item.value, unit)
+        const isMoney = item.moneyMinor !== undefined
+        const value = isMoney ? formatMoney(item.moneyMinor) : formatValue(item.value, '')
         return (
-          <Box
+          <Paper
             key={item.key}
+            variant="outlined"
             sx={{
-              minWidth: 0,
-              p: 2,
-              borderRight: (index + 1) % columns === 0 ? 0 : 1,
-              borderBottom: index < items.length - columns ? 1 : 0,
+              // Карточка не тянется на всю ширину: показателю из четырёх цифр
+              // четверть экрана не нужна, а лишняя ширина выдавливает соседей
+              // за край.
+              flex: '1 1 170px',
+              minWidth: 165,
+              maxWidth: 215,
+              px: 2,
+              py: 1.5,
+              borderRadius: 2,
               borderColor: 'divider',
             }}
             data-testid={testId ? `${testId}-${item.key}` : undefined}
           >
-            <Typography variant="body2" color="text.secondary" sx={{ minHeight: 20 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                display: 'block',
+                color: 'text.secondary',
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                fontWeight: 600,
+                fontSize: 12,
+              }}
+            >
               {item.label}
             </Typography>
             {loading ? (
               <Skeleton
                 variant="rounded"
-                height={34}
-                sx={{ mt: 0.75, ml: 'auto', maxWidth: 150 }}
+                height={32}
+                sx={{ mt: 0.75 }}
                 data-testid={testId ? `${testId}-${item.key}-skeleton` : undefined}
               />
             ) : (
-              <Stack sx={{ alignItems: 'flex-end', mt: 0.5 }}>
+              <Stack direction="row" spacing={0.75} sx={{ alignItems: 'baseline', mt: 0.5 }}>
                 <Typography
-                  variant="h6"
-                  sx={{ fontVariantNumeric: 'tabular-nums', textAlign: 'right', fontWeight: 700 }}
+                  sx={{
+                    fontSize: 24,
+                    fontWeight: 700,
+                    lineHeight: 1.15,
+                    fontVariantNumeric: 'tabular-nums',
+                    color: isMoney ? 'primary.main' : 'text.primary',
+                  }}
                 >
                   {value}
                 </Typography>
-                {item.delta ? (
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    aria-label={item.delta.a11yLabel}
-                    sx={{ fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}
-                  >
-                    {formatDelta(item.delta, unit)}
-                  </Typography>
-                ) : null}
-                {item.moneyMinor === undefined && item.value === null && !item.delta ? (
-                  <Typography variant="caption" color="text.secondary">
-                    {item.nullValueLabel ?? 'Недоступно для сравнения'}
+                {!isMoney && item.value != null ? (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    {unit}
                   </Typography>
                 ) : null}
               </Stack>
             )}
-          </Box>
+            {item.delta && !loading ? (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                aria-label={item.delta.a11yLabel}
+                sx={{ fontVariantNumeric: 'tabular-nums' }}
+              >
+                {formatDelta(item.delta, unit)}
+              </Typography>
+            ) : null}
+            {!loading && !isMoney && item.value == null && !item.delta ? (
+              <Typography variant="caption" color="text.secondary">
+                {item.nullValueLabel ?? 'Недоступно для сравнения'}
+              </Typography>
+            ) : null}
+          </Paper>
         )
       })}
-    </Paper>
+    </Box>
   )
 }

@@ -330,7 +330,7 @@ export function FfBillingSellerDetails({
       },
       {
         key: 'quantity',
-        header: 'Количество',
+        header: 'Штук',
         width: 130,
         align: 'right' as const,
         render: (row: DocumentRow) =>
@@ -448,7 +448,7 @@ export function FfBillingSellerDetails({
     },
     {
       key: 'items',
-      header: 'Товаров',
+      header: 'Штук',
       width: 130,
       align: 'right' as const,
       render: (row: SectionRow) =>
