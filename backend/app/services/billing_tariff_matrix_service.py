@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from typing import Literal, TypedDict, cast
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -18,6 +19,8 @@ from app.models.product import Product
 from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.user import User
+
+MOSCOW = ZoneInfo("Europe/Moscow")
 
 # Хранение живёт в общей матрице вместе с остальными услугами: держать его
 # на отдельном экране означало единственную услугу с другим местом настройки.
@@ -366,6 +369,15 @@ async def save_tariff_matrix(
         if states[service_code].enabled != enabled:
             states[service_code].enabled = enabled
             changed = True
+    # Начисления не создаются, пока у арендатора не проставлена дата начала
+    # биллинга. Раньше её ставил только старый путь создания тарифа, а через
+    # матрицу — единственный экран, которым пользуются, — она оставалась пустой,
+    # и работа склада не стоила ничего: ставки заданы, а денег ноль.
+    if normalized_versions and tenant.billing_enabled_from is None:
+        tenant.billing_enabled_from = min(
+            draft["valid_from_at"].astimezone(MOSCOW).date() for draft in normalized_versions
+        )
+        changed = True
     if changed:
         config.revision += 1
     await session.flush()

@@ -6,6 +6,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 from alembic.config import Config
@@ -28,6 +29,7 @@ from app.models.product import Product
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.services.billing_tariff_matrix_service import (
+    MATRIX_SERVICE_CODES,
     BillingTariffMatrixError,
     ensure_disabled_tariff_matrix,
     get_tariff_matrix,
@@ -156,6 +158,57 @@ async def test_matrix_service_rejects_rate_overflow_before_writing(async_client)
         persisted = await get_tariff_matrix(session, tenant_id=tenant_id)
         assert persisted.revision == 0
         assert await list_tariff_matrix_versions(session, tenant_id=tenant_id) == []
+        await session.delete(tenant)
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_saving_a_matrix_rate_enables_billing_for_the_tenant(async_client) -> None:
+    """Ставка, заданная через матрицу, включает начисления.
+
+    До этого дату начала биллинга проставлял только старый путь создания
+    тарифа. Через матрицу — единственный экран, которым пользуются, — она
+    оставалась пустой, и `record_operational_charge` молча не создавал ни одного
+    начисления: ставки на экране есть, а суммы всюду нули.
+    """
+    from app.db.session import SessionLocal
+
+    tenant_id = uuid.uuid4()
+    started = datetime(2026, 8, 1, 9, 0, tzinfo=UTC)
+    services = dict.fromkeys(MATRIX_SERVICE_CODES, False)
+    services["inbound"] = True
+    version = {
+        "seller_id": None,
+        "product_id": None,
+        "employee_user_id": None,
+        "service_code": "inbound",
+        "unit": "item",
+        "enabled": True,
+        "rate": 5000,
+        "valid_from_at": started,
+        "valid_to_at": None,
+    }
+    async with SessionLocal() as session:
+        tenant = Tenant(id=tenant_id, name="Matrix billing", slug=f"matrix-billing-{tenant_id.hex}")
+        session.add(tenant)
+        await session.flush()
+        await ensure_disabled_tariff_matrix(session, tenant=tenant)
+        await session.commit()
+        assert tenant.billing_enabled_from is None
+
+        await save_tariff_matrix(
+            session,
+            tenant_id=tenant_id,
+            revision=0,
+            services=services,
+            versions=[version],
+        )
+        await session.commit()
+
+        enabled_from = await session.scalar(
+            select(Tenant.billing_enabled_from).where(Tenant.id == tenant_id)
+        )
+        assert enabled_from == started.astimezone(ZoneInfo("Europe/Moscow")).date()
         await session.delete(tenant)
         await session.commit()
 
