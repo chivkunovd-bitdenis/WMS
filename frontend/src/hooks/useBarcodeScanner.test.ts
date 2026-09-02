@@ -151,14 +151,63 @@ describe('createScannerListener — быстрый burst', () => {
   })
 })
 
-describe('createScannerListener — медленный ввод', () => {
-  it('интервалы 200мс + Enter → onScan НЕ вызван, Enter не prevented', () => {
+/** Настоящий штрихкод с прода — на нём ловили все обрезки. */
+const EAN = '4630452635503'
+const asChars = (code: string) =>
+  code.split('').map((k) => ({ key: k, code: `Digit${k}` }))
+
+describe('createScannerListener — медленный ввод в текстовом поле', () => {
+  it('интервалы 200мс в поле + Enter → onScan НЕ вызван, Enter не prevented', () => {
     const onScan = vi.fn()
-    const { listener, tick } = makeListener(onScan)
+    // Курсор в текстовом поле: там человек и правда печатает руками, и отбирать
+    // у него ввод нельзя. Темп — единственное, чем он отличается от сканера.
+    const { listener, tick } = makeListener(onScan, {
+      activeElement: { tagName: 'INPUT', value: 'HELLO' },
+    })
 
     // Каждый символ отдельным burst'ом (пауза > maxIntervalMs=50)
     const chars = 'HELLO'.split('').map(k => ({ key: k, code: `Key${k}` }))
     sendChars(listener, chars, tick, 200)
+    const enter = sendEnter(listener)
+
+    expect(onScan).not.toHaveBeenCalled()
+    expect(enter.preventDefault).not.toHaveBeenCalled()
+  })
+})
+
+describe('createScannerListener — медленный сканер вне текстового поля', () => {
+  // Ровно тот случай, из-за которого встала инвентаризация 02.09.2026: фокус
+  // ушёл из поля, сканер настроен с большой задержкой между символами — и код
+  // улетал в никуда. Печатать вне поля некуда, значит темп тут ничего не решает.
+  it('медленная пачка при пустом фокусе + Enter → это скан', () => {
+    const onScan = vi.fn()
+    const { listener, tick } = makeListener(onScan, { activeElement: null })
+
+    sendChars(listener, asChars(EAN), tick, 250)
+    const enter = sendEnter(listener)
+
+    expect(onScan).toHaveBeenCalledTimes(1)
+    expect(onScan).toHaveBeenCalledWith(EAN)
+    expect(enter.preventDefault).toHaveBeenCalled()
+  })
+
+  it('фокус на кнопке — тоже не текстовое поле, медленный код проходит', () => {
+    const onScan = vi.fn()
+    const { listener, tick } = makeListener(onScan, {
+      activeElement: { tagName: 'BUTTON', value: '' },
+    })
+
+    sendChars(listener, asChars(EAN), tick, 250)
+    sendEnter(listener)
+
+    expect(onScan).toHaveBeenCalledWith(EAN)
+  })
+
+  it('короткая пачка вне поля всё равно не скан', () => {
+    const onScan = vi.fn()
+    const { listener, tick } = makeListener(onScan, { activeElement: null })
+
+    sendChars(listener, asChars('123'), tick, 250)
     const enter = sendEnter(listener)
 
     expect(onScan).not.toHaveBeenCalled()
@@ -223,9 +272,6 @@ describe('createScannerListener — GS-разделитель', () => {
 describe('createScannerListener — заминка сканера внутри пачки', () => {
   // Реальный инцидент 23.08.2026: сканер задумался на 70 мс в середине кода,
   // буфер обнулялся, и вместо `4630452635503` на сервер уходил `0452635503`.
-  const EAN = '4630452635503'
-  const asChars = (code: string) =>
-    code.split('').map((k) => ({ key: k, code: `Digit${k}` }))
 
   it('заминка после первой цифры → уходит полный код, вызов один', () => {
     const onScan = vi.fn()
@@ -253,9 +299,11 @@ describe('createScannerListener — заминка сканера внутри �
     expect(onScan).toHaveBeenCalledWith(EAN)
   })
 
-  it('ручной ввод (все интервалы длинные) → не скан, Enter не перехвачен', () => {
+  it('ручной ввод в поле (все интервалы длинные) → не скан, Enter не перехвачен', () => {
     const onScan = vi.fn()
-    const { listener, tick } = makeListener(onScan)
+    const { listener, tick } = makeListener(onScan, {
+      activeElement: { tagName: 'INPUT', value: '1234567' },
+    })
 
     sendChars(listener, asChars('1234567'), tick, 250)
     const enter = sendEnter(listener)
