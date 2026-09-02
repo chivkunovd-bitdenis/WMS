@@ -3,6 +3,7 @@ import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined'
 import { useEffect, useMemo, useState } from 'react'
 import {
   ActionGroup,
+  AppDialog,
   CheckboxInput,
   DangerAction,
   ErrorNotice,
@@ -122,6 +123,13 @@ export function FfInventoryCountScreen({
   const [openPlace, setOpenPlace] = useState<ScanOpenPlace>(NOTHING_OPEN)
   const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
   const [scanFocus, setScanFocus] = useState<{ key: string; request: number } | null>(null)
+  // Переспрос перед проведением.
+  //
+  // 02.09.2026 кладовщик нажал «Провести» посреди пересчёта, случайно. Документ
+  // закрылся, остаток изменился, сканер на проведённом документе не показывается
+  // — работа встала, и возвращать пришлось руками в базе. Кнопка стоит рядом с
+  // «Сохранить», действие необратимое, а спросить было некому.
+  const [confirmPost, setConfirmPost] = useState(false)
 
   useEffect(() => {
     if (!scanFocus) return
@@ -456,10 +464,44 @@ export function FfInventoryCountScreen({
         >
           Сохранить
         </SecondaryAction>
-        <PrimaryAction onClick={onPost} disabledReason={postReason} data-testid="inv-post">
+        <PrimaryAction
+          onClick={() => setConfirmPost(true)}
+          disabledReason={postReason}
+          data-testid="inv-post"
+        >
           Провести
         </PrimaryAction>
       </Paper>
+
+      <AppDialog
+        open={confirmPost}
+        title="Вы уверены, что хотите провести документ?"
+        onClose={() => setConfirmPost(false)}
+        testId="inv-post-confirm"
+        actions={
+          <>
+            <SecondaryAction
+              onClick={() => setConfirmPost(false)}
+              data-testid="inv-post-confirm-cancel"
+            >
+              Не проводить
+            </SecondaryAction>
+            <PrimaryAction
+              onClick={() => {
+                setConfirmPost(false)
+                onPost()
+              }}
+              data-testid="inv-post-confirm-ok"
+            >
+              Провести
+            </PrimaryAction>
+          </>
+        }
+      >
+        <Typography variant="body2">
+          Актуальный остаток на складе будет изменён.
+        </Typography>
+      </AppDialog>
     </Box>
   )
 }
