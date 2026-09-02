@@ -30,6 +30,19 @@ export type ScanOpenPlace = {
 
 export const NOTHING_OPEN: ScanOpenPlace = { containerId: null, cellId: null }
 
+/**
+ * Строка дерева «Без ячеек» — не ячейка.
+ *
+ * Под ней сервер собирает две вещи: товар, лежащий россыпью без адреса, и тару,
+ * которая стоит не в ячейке. Идентификатор у неё — слово, а не ссылка на место,
+ * поэтому наружу его отдавать нельзя: сервер такую «ячейку» не найдёт.
+ */
+export const UNASSIGNED_CELL_ID = 'unassigned'
+
+function realCellId(cellId: string | null): string | null {
+  return cellId && cellId !== UNASSIGNED_CELL_ID ? cellId : null
+}
+
 export type ScanResult = {
   count: InventoryCount
   /** Что осталось открытым после этого скана. */
@@ -50,7 +63,8 @@ export type ScanResult = {
   found?: {
     /** Все прочтения кода: как пришло со сканера и как в латинской раскладке. */
     barcodes: string[]
-    storageLocationId: string
+    /** Ячейка, если она открыта. null — россыпь без ячейки или адрес берётся у тары. */
+    cellId: string | null
     containerKind: ContainerKind | null
     containerId: string | null
   }
@@ -187,11 +201,6 @@ function productMatches(product: ProductNode, normalizedCodes: Set<string>): boo
   })
 }
 
-/** Единственная ячейка документа: у пересчёта короба или палеты она всегда одна. */
-function soleCellId(count: InventoryCount): string | null {
-  return count.cells.length === 1 ? count.cells[0].id : null
-}
-
 /**
  * Куда записать находку.
  *
@@ -202,16 +211,15 @@ function soleCellId(count: InventoryCount): string | null {
 function foundPlace(
   count: InventoryCount,
   open: ScanOpenPlace,
-): { storageLocationId: string; containerKind: ContainerKind | null; containerId: string | null } | null {
+): { cellId: string | null; containerKind: ContainerKind | null; containerId: string | null } | null {
   if (open.containerId) {
     const kind = containerKindOf(count, open.containerId)
-    const cellId = open.cellId ?? cellOfContainer(count, open.containerId)
-    if (!kind || !cellId) return null
-    return { storageLocationId: cellId, containerKind: kind, containerId: open.containerId }
+    if (!kind) return null
+    // Ячейку тары сервер возьмёт из её карточки: палета или грузоместо могут
+    // стоять без ячейки, и знать об этом должна карточка, а не экран.
+    return { cellId: null, containerKind: kind, containerId: open.containerId }
   }
-  const cellId = open.cellId ?? soleCellId(count)
-  if (!cellId) return null
-  return { storageLocationId: cellId, containerKind: null, containerId: null }
+  return { cellId: realCellId(open.cellId), containerKind: null, containerId: null }
 }
 
 function containerKindOf(count: InventoryCount, containerId: string): ContainerKind | null {
@@ -228,25 +236,6 @@ function containerKindOf(count: InventoryCount, containerId: string): ContainerK
   }
   for (const cell of count.cells) walk(cell.children)
   return kind
-}
-
-function cellOfContainer(count: InventoryCount, containerId: string): string | null {
-  for (const cell of count.cells) {
-    let hit = false
-    function walk(nodes: InventoryNode[]) {
-      for (const node of nodes) {
-        if (node.kind === 'product') continue
-        if (node.id === containerId) {
-          hit = true
-          return
-        }
-        walk(node.children)
-      }
-    }
-    walk(cell.children)
-    if (hit) return cell.id
-  }
-  return null
 }
 
 const CLOSED: Record<ContainerKind, string> = {
@@ -330,9 +319,7 @@ export function applyScan(
       return {
         count,
         open,
-        message: allowFound
-          ? `Код ${code} в этом документе не числится. Отсканируйте тару или ячейку, куда его записать.`
-          : `Код ${code} в этом документе не числится. Находку вносят в полном документе инвентаризации.`,
+        message: `Код ${code} в этом документе не числится. Находку вносят в полном документе инвентаризации.`,
         tone: 'warn',
       }
     }
@@ -362,7 +349,7 @@ export function applyScan(
       return {
         count,
         open,
-        message: `${byBarcode[0].product.name} — числится не здесь. Отсканируйте тару, куда его записать.`,
+        message: `${byBarcode[0].product.name} — числится не здесь. Находку вносят в полном документе инвентаризации.`,
         tone: 'warn',
       }
     }
@@ -377,8 +364,11 @@ export function applyScan(
 
   // Тара не открыта: считаем россыпь. Строка россыпи в открытой ячейке — самый
   // частый случай, поэтому ищем сначала её.
+  // Россыпь ищем ровно в открытом месте: открыта ячейка — в ней, не открыто
+  // ничего — в «Без ячеек». Иначе пик засчитался бы в чужую ячейку.
+  const looseCell = open.cellId ?? UNASSIGNED_CELL_ID
   const loose = byBarcode.find(
-    (item) => item.containerId === null && (!open.cellId || looseCellOf(count, item) === open.cellId),
+    (item) => item.containerId === null && looseCellOf(count, item) === looseCell,
   )
   if (loose) {
     return {
@@ -398,7 +388,7 @@ export function applyScan(
     return {
       count,
       open,
-      message: `${byBarcode[0].product.name} — числится в таре. Отсканируйте тару или ячейку, куда его записать.`,
+      message: `${byBarcode[0].product.name} — числится в другом месте. Находку вносят в полном документе инвентаризации.`,
       tone: 'warn',
     }
   }
@@ -406,7 +396,7 @@ export function applyScan(
     count,
     open,
     message:
-      `${byBarcode[0].product.name} числится в таре, а не россыпью — записываем находку россыпью. `
+      `${byBarcode[0].product.name} числится в другом месте — записываем находку сюда. `
       + 'Если он лежит в таре, отсканируйте её и посчитайте там.',
     tone: 'warn',
     found: { barcodes: codes, ...place },

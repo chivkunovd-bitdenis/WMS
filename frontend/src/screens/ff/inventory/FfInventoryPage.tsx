@@ -166,7 +166,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
    */
   async function recordFound(place: {
     barcodes: string[]
-    storageLocationId: string
+    cellId: string | null
     containerKind: 'pallet' | 'box' | 'cargo_place' | null
     containerId: string | null
   }) {

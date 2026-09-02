@@ -75,7 +75,10 @@ class InventoryCountFoundIn(BaseModel):
     # нашёл переводом раскладки, сервер не находил, и оператор видел зелёное
     # «записываем» рядом с красным «товар не найден».
     barcodes: list[str] = Field(min_length=1, max_length=4)
-    storage_location_id: uuid.UUID
+    # Экран говорит, что ОТКРЫТО у сканера, а не куда писать: тара, ячейка или
+    # ничего. Адрес из этого выводит сервер — палета может стоять без ячейки, и
+    # знать об этом карточке тары, а не экрану.
+    cell_id: uuid.UUID | None = None
     container_kind: Literal["pallet", "box", "cargo_place"] | None = None
     container_id: uuid.UUID | None = None
 
@@ -480,6 +483,7 @@ def _http_error(exc: service.InventoryCountError) -> HTTPException:
         "not_found",
         "count_not_found",
         "container_not_found",
+        "warehouse_required_without_address_storage",
         "line_not_found",
         "seller_not_found",
         "warehouse_not_found",
@@ -619,7 +623,7 @@ async def record_inventory_count_found(
             user.tenant_id,
             count_id,
             barcodes=body.barcodes,
-            storage_location_id=body.storage_location_id,
+            cell_id=body.cell_id,
             container_kind=body.container_kind,
             container_id=body.container_id,
         )

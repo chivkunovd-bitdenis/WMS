@@ -253,7 +253,7 @@ export async function recordCountFound(
   countId: string,
   place: {
     barcodes: string[]
-    storageLocationId: string
+    cellId: string | null
     containerKind: 'pallet' | 'box' | 'cargo_place' | null
     containerId: string | null
   },
@@ -263,7 +263,7 @@ export async function recordCountFound(
     headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
     body: JSON.stringify({
       barcodes: place.barcodes,
-      storage_location_id: place.storageLocationId,
+      cell_id: place.cellId,
       container_kind: place.containerKind,
       container_id: place.containerId,
     }),

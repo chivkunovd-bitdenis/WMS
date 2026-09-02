@@ -77,7 +77,7 @@ type Props = {
   /** Записать находку: товар лежит там, где по учёту его нет. */
   onFound?: (place: {
     barcodes: string[]
-    storageLocationId: string
+    cellId: string | null
     containerKind: 'pallet' | 'box' | 'cargo_place' | null
     containerId: string | null
   }) => void

@@ -27,7 +27,10 @@ from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
 from app.services import inventory_service, tenant_settings_service
 from app.services.inventory_container_service import ContainerKind, validate_container
-from app.services.sorting_location_service import SORTING_LOCATION_CODE
+from app.services.sorting_location_service import (
+    SORTING_LOCATION_CODE,
+    get_or_create_sorting_location,
+)
 from app.services.wb_card_enrichment import subject_name_from_card
 
 STATUS_DRAFT = "draft"
@@ -500,7 +503,7 @@ async def record_found(
     count_id: uuid.UUID,
     *,
     barcodes: list[str],
-    storage_location_id: uuid.UUID,
+    cell_id: uuid.UUID | None,
     container_kind: str | None,
     container_id: uuid.UUID | None,
 ) -> InventoryCount:
@@ -560,26 +563,14 @@ async def record_found(
         raise InventoryCountError("barcode_is_ambiguous")
     product = products[0]
 
-    location = await session.get(StorageLocation, storage_location_id)
-    if location is None or location.tenant_id != tenant_id or location.deleted_at is not None:
-        raise InventoryCountError("storage_location_not_found")
-
-    # Тару проверяем здесь, а не на проведении. Иначе несуществующая или чужая
-    # тара доезжала до записи движения и вылетала оттуда пятисоткой, а документ
-    # уже нельзя было провести, пока оператор не догадается стереть эту строку.
-    if (container_kind is None) != (container_id is None):
-        raise InventoryCountError("container_reference_invalid")
-    if container_kind is not None and container_id is not None:
-        try:
-            await validate_container(
-                session,
-                tenant_id,
-                location.warehouse_id,
-                cast(ContainerKind, container_kind),
-                container_id,
-            )
-        except ValueError as exc:
-            raise InventoryCountError("container_not_found") from exc
+    storage_location_id = await _resolve_found_location(
+        session,
+        tenant_id,
+        count,
+        cell_id=cell_id,
+        container_kind=container_kind,
+        container_id=container_id,
+    )
 
     existing = next(
         (
@@ -635,6 +626,86 @@ async def record_found(
     loaded = await get_count(session, tenant_id, count_id)
     assert loaded is not None
     return loaded
+
+
+async def _resolve_found_location(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    count: InventoryCount,
+    *,
+    cell_id: uuid.UUID | None,
+    container_kind: str | None,
+    container_id: uuid.UUID | None,
+) -> uuid.UUID:
+    """Определяет адрес находки. Угадывать его на экране нельзя.
+
+    Модель сканера у оператора простая: он пикает МЕСТО, а не адрес. Место —
+    это либо тара, либо ячейка, либо ничего. Адрес из места выводит сервер:
+
+    * пикнули тару — адрес берём из карточки самой тары; палета или грузоместо
+      могут стоять без ячейки, и это нормальное состояние, а не ошибка: тогда
+      адресом становится зона сортировки;
+    * пикнули ячейку — она и есть адрес;
+    * не пикнули ничего — россыпь без ячейки, то есть та же зона сортировки.
+
+    Раньше адрес считал экран, и на двух этих случаях он присылал строку
+    «unassigned» — виртуальную строку дерева, а не ячейку, — и находка падала.
+    """
+    if (container_kind is None) != (container_id is None):
+        raise InventoryCountError("container_reference_invalid")
+
+    warehouse_id = count.warehouse_id
+    if warehouse_id is None:
+        raise InventoryCountError("warehouse_required_without_address_storage")
+
+    if container_kind is not None and container_id is not None:
+        # Тару проверяем здесь, а не на проведении: иначе чужая или удалённая
+        # тара доезжала до записи движения и вылетала оттуда пятисоткой, а
+        # документ нельзя было провести, пока оператор не сотрёт эту строку.
+        try:
+            await validate_container(
+                session,
+                tenant_id,
+                warehouse_id,
+                cast(ContainerKind, container_kind),
+                container_id,
+            )
+        except ValueError as exc:
+            raise InventoryCountError("container_not_found") from exc
+        placed_at = await _container_location_id(session, container_kind, container_id)
+        if placed_at is not None:
+            return placed_at
+        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+        return sorting.id
+
+    if cell_id is not None:
+        location = await session.get(StorageLocation, cell_id)
+        if (
+            location is None
+            or location.tenant_id != tenant_id
+            or location.deleted_at is not None
+            or location.warehouse_id != warehouse_id
+        ):
+            raise InventoryCountError("storage_location_not_found")
+        return location.id
+
+    sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+    return sorting.id
+
+
+async def _container_location_id(
+    session: AsyncSession,
+    container_kind: str,
+    container_id: uuid.UUID,
+) -> uuid.UUID | None:
+    """Ячейка, в которой стоит тара. None — тара стоит без ячейки."""
+    if container_kind == "pallet":
+        return await session.scalar(
+            select(Pallet.storage_location_id).where(Pallet.id == container_id)
+        )
+    return await session.scalar(
+        select(WarehouseBox.storage_location_id).where(WarehouseBox.id == container_id)
+    )
 
 
 async def _increment_existing_found_line(

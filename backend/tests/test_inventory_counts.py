@@ -17,6 +17,7 @@ from app.models.inventory_movement import InventoryMovement
 from app.models.pallet import Pallet
 from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
+from app.models.storage_location import StorageLocation
 from app.models.warehouse_box import WarehouseBox
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
@@ -765,7 +766,6 @@ async def test_inventory_count_found_creates_line_and_second_scan_increments(
 
     body = {
         "barcodes": ["4600000000001"],
-        "storage_location_id": str(setup.location_id),
         "container_kind": "box",
         "container_id": str(box_id),
     }
@@ -820,7 +820,7 @@ async def test_inventory_count_found_survives_scanner_layout_and_case(
         # Первым идёт то, что реально приехало со сканера, вторым — перевод раскладки.
         json={
             "barcodes": ["Сршт-56005", "CHIN-56005"],
-            "storage_location_id": str(setup.location_id),
+            "cell_id": str(setup.location_id),
             "container_kind": None,
             "container_id": None,
         },
@@ -860,10 +860,53 @@ async def test_inventory_count_found_rejects_container_from_another_warehouse(
         headers=setup.headers,
         json={
             "barcodes": ["4600000000009"],
-            "storage_location_id": str(setup.location_id),
             "container_kind": "box",
             "container_id": str(alien_box_id),
         },
     )
     assert response.status_code == 404, response.text
     assert response.json()["detail"] == "container_not_found"
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_found_without_place_goes_to_sorting_zone(
+    async_client: AsyncClient,
+) -> None:
+    """Первый пункт модели владельца: просто сканирую товар — он в россыпи без ячейки.
+
+    Адрес в этом случае определяет сервер, а не экран: в дереве «Без ячеек» —
+    виртуальная строка, ячейкой она не является.
+    """
+    setup = await _tenant(async_client, "LooseCount")
+    surprise = await _product(async_client, setup, name="Ничего не открыто")
+    anchor = await _product(async_client, setup, name="Якорь")
+    await _balance(setup, anchor, 2)
+    async with SessionLocal() as session:
+        product = await session.get(Product, surprise)
+        assert product is not None
+        product.wb_barcode = "4600000000777"
+        await session.commit()
+
+    created = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={"source": "planned", "filters": {}},
+    )
+    assert created.status_code == 201, created.text
+
+    response = await async_client.post(
+        f"/operations/inventory-counts/{created.json()['id']}/found",
+        headers=setup.headers,
+        json={"barcodes": ["4600000000777"], "cell_id": None},
+    )
+    assert response.status_code == 200, response.text
+    line = next(
+        line for line in response.json()["lines"] if line["product_id"] == str(surprise)
+    )
+    assert line["actual_quantity"] == 1
+    assert line["container_id"] is None
+
+    async with SessionLocal() as session:
+        location = await session.get(StorageLocation, uuid.UUID(line["storage_location_id"]))
+        assert location is not None
+        assert location.code == "__SORTING__"

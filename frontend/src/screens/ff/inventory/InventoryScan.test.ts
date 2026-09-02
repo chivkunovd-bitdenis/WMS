@@ -157,9 +157,10 @@ describe('закрытие тары и находки', () => {
     const opened = applyScan(count, 'BOX-BARCODE-1', NOTHING_OPEN)
     const found = applyScan(opened.count, '9999999999999', opened.open)
 
+    // Ячейку тары сервер возьмёт из её карточки — экран её не называет.
     expect(found.found).toEqual({
       barcodes: ['9999999999999'],
-      storageLocationId: 'cell-1',
+      cellId: null,
       containerKind: 'box',
       containerId: 'box-1',
     })
@@ -188,7 +189,7 @@ describe('закрытие тары и находки', () => {
     const found = applyScan(closed.count, '9999999999999', closed.open)
     expect(found.found).toEqual({
       barcodes: ['9999999999999'],
-      storageLocationId: 'cell-1',
+      cellId: 'cell-1',
       containerKind: null,
       containerId: null,
     })
@@ -215,7 +216,7 @@ describe('закрытие тары и находки', () => {
     expect(result.tone).toBe('warn')
     expect(result.message).toContain('Если он лежит в таре')
     expect(result.found?.containerId).toBeNull()
-    expect(result.found?.storageLocationId).toBe('cell-1')
+    expect(result.found?.cellId).toBe('cell-1')
   })
 
   it('экран без доступа к серверу находок не обещает', () => {
@@ -225,5 +226,33 @@ describe('закрытие тары и находки', () => {
 
     expect(result.found).toBeUndefined()
     expect(result.message).toContain('полном документе')
+  })
+})
+
+
+describe('россыпь без ячейки', () => {
+  it('ничего не открыто — находка уходит без ячейки и без тары', () => {
+    // Первый пункт модели владельца: «просто сканирую товар — он падает в
+    // россыпь, без ячейки». Адрес в этом случае определяет сервер: это зона
+    // сортировки, а не какая-то угаданная ячейка документа.
+    const count = countWithBox(product())
+    const result = applyScan(count, '9999999999999', NOTHING_OPEN)
+
+    expect(result.found).toEqual({
+      barcodes: ['9999999999999'],
+      cellId: null,
+      containerKind: null,
+      containerId: null,
+    })
+  })
+
+  it('открытое место заменяется одним сканом, без выхода', () => {
+    const count = countWithBox(product())
+    const box = applyScan(count, 'BOX-BARCODE-1', NOTHING_OPEN)
+    expect(box.open).toEqual({ containerId: 'box-1', cellId: 'cell-1' })
+
+    // Пикнул ячейку прямо поверх открытого короба — короб закрылся сам.
+    const cell = applyScan(box.count, 'CELL-BARCODE-1', box.open)
+    expect(cell.open).toEqual({ containerId: null, cellId: 'cell-1' })
   })
 })
