@@ -167,6 +167,7 @@ const INVOICE_PREVIEW = {
 }
 
 function stubResponse(url: string): unknown {
+  if (url.includes('/billing/seller-report/storage-total')) return { liter_days: 3820, amount_kopecks: 191000, complete: true }
   if (url.includes('/billing/seller-report/summary')) return SUMMARY
   const details = /\/billing\/seller-report\/sellers\/([^/?]+)\/details/.exec(url)
   if (details) return detailsFor(details[1] ?? 'seller-1')

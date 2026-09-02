@@ -47,6 +47,7 @@ from app.services.billing_seller_report_service import (
     SellerReportError,
     build_seller_report,
     seller_details,
+    storage_totals,
 )
 from app.services.billing_tariff_matrix_service import (
     MAX_TARIFF_RATE_KOPECKS,
@@ -490,6 +491,28 @@ async def get_seller_report_summary(
         if include_finance
         else SellerReportPhysicalSummaryOut.model_validate(payload)
     )
+
+
+@router.get("/seller-report/storage-total")
+async def get_seller_report_storage_total(
+    *,
+    date_from: date,
+    date_to: date,
+    seller_id: uuid.UUID | None = None,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """Литро-дни хранения за период — отдельно от сводки, чтобы её не тормозить."""
+    try:
+        return await storage_totals(
+            session,
+            tenant_id=user.tenant_id,
+            date_from=date_from,
+            date_to=date_to,
+            seller_id=seller_id,
+        )
+    except SellerReportError as exc:
+        raise _seller_report_error(exc) from exc
 
 
 @router.get(

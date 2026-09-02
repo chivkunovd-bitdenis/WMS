@@ -565,6 +565,52 @@ async def build_seller_report(
     return {"rows": rows, "totals": {"seller_count": len(rows), **totals}, "entries": entries, "start": start, "end": end}
 
 
+async def storage_totals(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    date_from: date,
+    date_to: date,
+    seller_id: uuid.UUID | None = None,
+) -> dict[str, Any]:
+    """Литро-дни хранения за период — по всем селлерам или по одному.
+
+    Считается отдельным запросом, а не вместе со сводкой: расчёт хранения
+    прокручивает движения товара с самого начала, и тащить его в основную
+    таблицу значило бы заставлять оператора ждать ради одной плашки.
+    """
+    start, end = moscow_interval(date_from, date_to)
+    if seller_id is not None:
+        seller_ids = [seller_id]
+    else:
+        seller_ids = list(
+            (
+                await session.scalars(select(Seller.id).where(Seller.tenant_id == tenant_id))
+            ).all()
+        )
+    liter_days = 0.0
+    amount = 0
+    complete = True
+    for current in seller_ids:
+        row = await _storage_row(
+            session,
+            tenant_id=tenant_id,
+            seller_id=current,
+            date_from=date_from,
+            date_to=date_to,
+            start=start,
+            end=end,
+            include_finance=True,
+        )
+        liter_days += float(row.get("liter_days") or 0)
+        money = row.get("amount_kopecks")
+        if isinstance(money, int):
+            amount += money
+        elif row.get("status") == "missing_dimensions":
+            complete = False
+    return {"liter_days": liter_days, "amount_kopecks": amount, "complete": complete}
+
+
 async def seller_details(
     session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID, date_from: date, date_to: date, include_finance: bool, limit: int = 50, cursor: str | None = None,
 ) -> dict[str, Any]:

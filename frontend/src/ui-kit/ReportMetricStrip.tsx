@@ -47,7 +47,7 @@ function formatDelta(delta: NonNullable<ReportMetricItem['delta']>, unit: string
 export function ReportMetricStrip({ items, loading = false, testId }: ReportMetricStripProps) {
   // Больше четырёх показателей раскладываем в две строки по три: раньше лишние
   // молча обрезались, и экран показывал не то, что ему передали.
-  const columns = items.length > 4 ? 3 : 4
+  const columns = items.length > 4 && items.length <= 6 ? 3 : 4
   return (
     <Paper
       variant="outlined"
