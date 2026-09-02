@@ -110,6 +110,7 @@ export function countFromMapRow(
   return {
     id: `map-${target.id}`,
     scannableCells: [],
+    scannableContainers: [],
     // Номер выдаёт сервер при сохранении. До этого документа в базе нет, и
     // выдумывать ему номер на клиенте нельзя: он разойдётся с настоящим.
     number: 'новый',

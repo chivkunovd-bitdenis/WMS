@@ -104,7 +104,14 @@ type EventLike = {
 type ActiveElementLike = {
   tagName?: string
   value?: string
+  isContentEditable?: boolean
 } | null
+
+/** Место, куда человек может печатать руками. */
+function isTextEntry(el: ActiveElementLike): boolean {
+  if (el === null || el === undefined || typeof el.tagName !== 'string') return false
+  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable === true
+}
 
 type ScannerListenerOptions = {
   onScan: (code: string) => void
@@ -181,12 +188,28 @@ export function createScannerListener(opts: ScannerListenerOptions) {
     // Прочие ctrl-комбинации — не трогаем
     if (e.ctrlKey) return
 
-    if (e.key === 'Enter') {
+    // Enter и Tab — два ходовых суффикса «клавиатурных» сканеров. Какой из них
+    // выставлен, зависит от настройки самого устройства, и полагаться только на
+    // Enter нельзя: с Tab-суффиксом код молча уходил в никуда.
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      const el = opts.getActiveElement()
+      // Темп меряем только там, где печатает человек.
+      //
+      // В текстовом поле темп — единственное, чем скан отличается от ручного
+      // ввода: человек тоже набирает символы и жмёт Enter, и отбирать у него
+      // ввод нельзя. А вне текстового поля печатать попросту некуда: пачка
+      // печатных символов, законченная Enter, приходит там только со сканера.
+      // Мерить ей темп — значит выбросить законный скан за то, что у сканера
+      // выставлена большая задержка между символами.
+      //
+      // Ровно на этом встала инвентаризация 02.09.2026: стоило фокусу уйти из
+      // поля, код улетал в никуда, а оператор видел «пикнул — и ничего».
+      const typingHere = isTextEntry(el)
       // Сканер это или человек, решаем по всей пачке, а не по одной заминке:
       // у сканера почти все интервалы короткие, у ручного ввода — все длинные.
       const allowedSlowGaps = Math.max(1, Math.floor(buffer.length * 0.2))
       const looksLikeScan =
-        buffer.length >= opts.minLength && slowGaps <= allowedSlowGaps
+        buffer.length >= opts.minLength && (!typingHere || slowGaps <= allowedSlowGaps)
 
       if (looksLikeScan) {
         e.preventDefault()
@@ -197,7 +220,6 @@ export function createScannerListener(opts: ScannerListenerOptions) {
           .join('')
 
         // Вычищаем просочившиеся символы из сфокусированного поля
-        const el = opts.getActiveElement()
         if (
           el !== null &&
           el !== undefined &&

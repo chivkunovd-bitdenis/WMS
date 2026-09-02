@@ -1,6 +1,7 @@
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import type {
+  ContainerKind,
   ContainerNode,
   CountListItem,
   CountStatus,
@@ -97,6 +98,13 @@ export type ApiDetail = {
   address_storage: boolean
   cells: ApiCell[]
   scannable_cells?: Array<{ id: string; label: string; barcode: string | null }>
+  scannable_containers?: Array<{
+    kind: ContainerKind
+    id: string
+    code: string
+    barcode: string | null
+    cell_id: string | null
+  }>
 }
 
 export type ApiSummary = {
@@ -176,6 +184,13 @@ export function toCount(detail: ApiDetail): InventoryCount {
       id: cell.id,
       label: cell.label,
       barcode: cell.barcode,
+    })),
+    scannableContainers: (detail.scannable_containers ?? []).map((item) => ({
+      kind: item.kind,
+      id: item.id,
+      code: item.code,
+      barcode: item.barcode,
+      cellId: item.cell_id,
     })),
     cells: detail.cells.map((cell) => ({
       id: cell.id,

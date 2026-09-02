@@ -973,3 +973,98 @@ async def test_inventory_count_found_is_idempotent_per_scan(
         line for line in third.json()["count"]["lines"] if line["product_id"] == str(surprise)
     )
     assert line["actual_quantity"] == 2
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_drops_empty_containers_but_keeps_them_scannable(
+    async_client: AsyncClient,
+) -> None:
+    # Пустая по документу тара не должна занимать строку в дереве, но обязана
+    # открываться сканом. В пересчёте «Империи ФФ» из 420 коробов товар лежал в
+    # 113: остальные 307 висели строками «0 из 0», документ вырастал до сорока
+    # тысяч пикселей, и оператор не мог найти в нём свой короб глазами.
+    setup = await _tenant(async_client, "EmptyBox")
+    product = await _product(async_client, setup, name="Товар в коробе")
+    _pallet_id, box_id, _cargo_place_id, empty_box_id = await _containers(setup)
+    await _balance(
+        setup,
+        product,
+        3,
+        location_id=setup.location_id,
+        container_kind="box",
+        container_id=box_id,
+    )
+
+    count = await _create_all(async_client, setup)
+
+    def container_ids(nodes: list[dict[str, object]]) -> set[str]:
+        found: set[str] = set()
+        for node in nodes:
+            if node["kind"] == "product":
+                continue
+            found.add(str(node["id"]))
+            found |= container_ids(node["children"])  # type: ignore[arg-type]
+        return found
+
+    in_tree: set[str] = set()
+    for cell in count["cells"]:
+        in_tree |= container_ids(cell["children"])  # type: ignore[arg-type]
+
+    assert str(box_id) in in_tree
+    assert str(empty_box_id) not in in_tree
+
+    scannable = {item["id"]: item for item in count["scannable_containers"]}
+    assert str(empty_box_id) in scannable
+    assert scannable[str(empty_box_id)]["kind"] == "box"
+    assert scannable[str(empty_box_id)]["cell_id"] == str(setup.location_id)
+    # Тара со строками остаётся в дереве и в списке сканируемой не дублируется.
+    assert str(box_id) not in scannable
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_records_found_into_container_dropped_as_empty(
+    async_client: AsyncClient,
+) -> None:
+    # Пустой короб выброшен из дерева, но оператор подошёл к нему и нашёл товар.
+    # Находка обязана лечь именно в этот короб — иначе выброс строки превратился
+    # бы в запрет считать то, ради чего пересчёт и делают.
+    setup = await _tenant(async_client, "FoundEmptyBox")
+    product = await _product(async_client, setup, name="Товар в коробе")
+    found_product = await _product(async_client, setup, name="Найденный товар")
+    _pallet_id, box_id, _cargo_place_id, empty_box_id = await _containers(setup)
+    await _balance(
+        setup,
+        product,
+        3,
+        location_id=setup.location_id,
+        container_kind="box",
+        container_id=box_id,
+    )
+    barcode = f"FOUND-{uuid.uuid4().hex[:10]}"
+    async with SessionLocal() as session:
+        card = await session.get(Product, found_product)
+        assert card is not None
+        card.wb_barcode = barcode
+        await session.commit()
+
+    count = await _create_all(async_client, setup)
+    assert str(empty_box_id) in {item["id"] for item in count["scannable_containers"]}
+
+    found = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/found",
+        headers=setup.headers,
+        json={
+            "barcodes": [barcode],
+            "container_kind": "box",
+            "container_id": str(empty_box_id),
+            "scan_id": str(uuid.uuid4()),
+        },
+    )
+    assert found.status_code == 200, found.text
+    line = next(
+        item
+        for item in found.json()["count"]["lines"]
+        if item["product_id"] == str(found_product)
+    )
+    assert line["container_id"] == str(empty_box_id)
+    assert line["actual_quantity"] == 1

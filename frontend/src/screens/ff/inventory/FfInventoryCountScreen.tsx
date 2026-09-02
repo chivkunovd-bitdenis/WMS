@@ -27,6 +27,7 @@ import {
   type ScanTone,
 } from './InventoryScan'
 import { InventoryScanField } from './InventoryScanField'
+import { randomId } from '../../../utils/randomId'
 import { InventoryTree } from './InventoryTree'
 import {
   EMPTY_FILTERS,
@@ -153,7 +154,7 @@ export function FfInventoryCountScreen({
       // Идентификатор скана рождается здесь, на одном пике. Если ответ не
       // доедет и оператор пикнет ещё раз, это будет уже другой скан — а вот
       // повтор этого же запроса сервер узнает и не посчитает дважды.
-      onFound?.({ ...result.found, scanId: crypto.randomUUID() })
+      onFound?.({ ...result.found, scanId: randomId() })
     }
     if (result.count !== count) {
       const touched = result.focusRowKey?.startsWith('product:')
@@ -306,9 +307,25 @@ export function FfInventoryCountScreen({
       <ReportMetricStrip items={metrics} loading={loading} testId="inv-metrics" />
 
       {/* Сканер: пикнул тару — она открылась, дальше каждый пик товара кладёт в неё
-          штуку. Тара не открыта — считаем то, что лежит в ячейке россыпью. */}
+          штуку. Тара не открыта — считаем то, что лежит в ячейке россыпью.
+
+          Блок прилеплен к верхнему краю. Документ по складу — это сорок тысяч
+          пикселей: скан уводит экран к найденной строке вниз, а ответ сканера
+          («короб открыт», «1 из 5») остаётся наверху, за кадром. Оператор пикает
+          и не видит ничего — ровно то, что на складе называют «система не
+          реагирует». Пока поле видно всегда, ответ виден всегда. */}
       {!readOnly ? (
-        <Box sx={{ maxWidth: 640, mb: 2 }}>
+        <Box
+          sx={{
+            maxWidth: 640,
+            mb: 2,
+            position: 'sticky',
+            top: 0,
+            zIndex: 3,
+            backgroundColor: 'background.default',
+            pt: 1,
+          }}
+        >
           <InventoryScanField
             onScan={handleScan}
             expects={
