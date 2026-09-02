@@ -787,15 +787,13 @@ def _build_delivery_checks(
             )
 
     if source_plan is not None:
-        wb_ids = {order.id: int(order.wb_order_id) for order in orders}
         for resolution in source_plan.resolutions:
             if resolution.shortage_quantity:
                 checks.append(
                     DeliveryCheck(
                         code="negative_stock",
                         message=(
-                            f"Заказ WB {wb_ids.get(resolution.fbs_order_id, '—')}: "
-                            f"не хватает {resolution.shortage_quantity} шт.; после "
+                            f"Не хватает {resolution.shortage_quantity} шт.; после "
                             "подтверждения остаток будет списан в минус."
                         ),
                         ok=False,
