@@ -28,9 +28,11 @@ jobs:
             # отдельно: скрипт на сервере обновляется только успешным fetch'ем,
             # то есть починить его собой он не может. Конфиг передаём
             # переменными окружения — на сервере ничего не меняем.
-            export GIT_CONFIG_COUNT=1
+            export GIT_CONFIG_COUNT=2
             export GIT_CONFIG_KEY_0=protocol.version
             export GIT_CONFIG_VALUE_0=1
+            export GIT_CONFIG_KEY_1=http.version
+            export GIT_CONFIG_VALUE_1=HTTP/1.1
             cd "${WMS_REPO_DIR:-/opt/wms}"
             ./scripts/deploy/prod-update.sh
 
