@@ -81,6 +81,7 @@ export default defineConfig({
         inventory: 'inventory.html',
         fbsSpeed: 'fbs-speed.html',
         raschety: 'raschety.html',
+        knowledge: 'knowledge.html',
       },
     },
   },

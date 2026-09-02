@@ -280,6 +280,16 @@ export function AuthedAppLayout({
           </List>
           {/* NAV-01: календарь, настройки и упаковка прижаты к низу, но список выше остаётся плотным */}
           <List dense aria-label="Разделы ФФ, нижние" sx={{ mt: 'auto' }}>
+            {/* Инструкции нужны любому сотруднику склада, поэтому пункт не закрыт
+                правами: закрывать доступ к объяснению «как здесь работать» смысла нет. */}
+            <ListItemButton
+              component={NavLink}
+              to={`${base}/knowledge`}
+              data-testid="nav-ff-knowledge"
+              data-task-id="NAV-01"
+            >
+              <ListItemText primary="База знаний" />
+            </ListItemButton>
             <ListItemButton
               component={NavLink}
               to={`${base}/dashboard`}
