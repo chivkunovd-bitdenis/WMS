@@ -93,7 +93,7 @@ function matrixForSave(matrix: TariffMatrix) {
 }
 
 const serviceName: Record<string, string> = {
-  inbound: 'Приёмка', marketplace_outbound: 'Отгрузка', packing: 'Упаковка', return: 'Возврат', picking: 'Комплектация', storage: 'Хранение',
+  inbound: 'Приёмка', marketplace_outbound: 'Отгрузка', packing: 'Упаковка', return: 'Возврат', picking: 'Комплектация', storage: 'Хранение', fbs_order: 'FBS, сборка заказов',
 }
 const employeeServices = ['inbound', 'picking', 'marketplace_outbound', 'return']
 const employeeServiceName: Record<string, string> = { ...serviceName, picking: 'Подбор' }

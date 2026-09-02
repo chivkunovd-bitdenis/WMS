@@ -195,7 +195,7 @@ class BillingTariffServiceState(Base):
         UniqueConstraint("tenant_id", "service_code", name="uq_billing_tariff_service_state"),
         CheckConstraint(
             "service_code IN "
-            "('inbound', 'marketplace_outbound', 'packing', 'return', 'storage')",
+            "('inbound', 'marketplace_outbound', 'packing', 'return', 'storage', 'fbs_order')",
             name="ck_billing_tariff_service_state_code",
         ),
     )
@@ -225,7 +225,9 @@ class BillingTariffVersionV2(Base):
         # поэтому единица добавлена, но разрешена только хранению.
         CheckConstraint(
             "(service_code = 'storage' AND unit = 'liter_day')"
-            " OR (service_code <> 'storage' AND unit IN ('document', 'item'))",
+            " OR (service_code = 'fbs_order' AND unit = 'item')"
+            " OR (service_code NOT IN ('storage', 'fbs_order')"
+            " AND unit IN ('document', 'item'))",
             name="ck_billing_tariff_v2_unit",
         ),
         CheckConstraint("rate >= 0", name="ck_billing_tariff_v2_rate_nonnegative"),
@@ -243,7 +245,7 @@ class BillingTariffVersionV2(Base):
             ") OR ("
             "employee_user_id IS NULL "
             "AND service_code IN "
-            "('inbound', 'marketplace_outbound', 'packing', 'return', 'storage') "
+            "('inbound', 'marketplace_outbound', 'packing', 'return', 'storage', 'fbs_order') "
             "AND (product_id IS NULL OR (seller_id IS NOT NULL AND unit = 'item'))"
             ")",
             name="ck_billing_tariff_v2_scope",

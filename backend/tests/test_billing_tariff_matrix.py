@@ -71,13 +71,15 @@ async def test_new_tenant_gets_persisted_disabled_matrix_including_storage(async
             )
         ).all()
     # Хранение переехало в общую матрицу: держать его на отдельном экране
-    # означало единственную услугу с другим местом настройки.
+    # означало единственную услугу с другим местом настройки. Сборка заказов FBS
+    # пришла туда же — за штуку товара.
     assert {state.service_code for state in states} == {
         "inbound",
         "marketplace_outbound",
         "packing",
         "return",
         "storage",
+        "fbs_order",
     }
     assert all(not state.enabled for state in states)
 

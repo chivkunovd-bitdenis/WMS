@@ -25,6 +25,7 @@ FULL_SERVICES = [
     {"service_code": "packing", "enabled": False},
     {"service_code": "return", "enabled": True},
     {"service_code": "storage", "enabled": True},
+    {"service_code": "fbs_order", "enabled": False},
 ]
 
 
