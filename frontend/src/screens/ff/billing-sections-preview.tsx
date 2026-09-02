@@ -6,6 +6,7 @@ import { CssBaseline, ThemeProvider } from '@mui/material'
 import { muiTheme } from '../../mui/theme'
 import { AuthedAppLayout } from '../../layouts/AuthedAppLayout'
 import { FfBillingScreen } from './FfBillingScreen'
+import type { SellerReportEntry } from './FfBillingSellerDetails'
 import '../../index.css'
 
 // Полный макет экрана «Расчёты» на подставных данных.
@@ -100,6 +101,9 @@ const ENTRIES: Record<string, StubEntry[]> = {
     { id: 'out-1', service: 'marketplace_outbound', number: 'Отгрузка № 000012', quantity: 820, rate: 300, day: 21 },
     { id: 'out-2', service: 'marketplace_outbound', number: 'Отгрузка № 000014', quantity: 260, rate: 300, day: 26 },
     { id: 'ret-1', service: 'return', number: 'Возврат № 000004', quantity: 18, rate: 400, day: 27 },
+    { id: 'fbs-1', service: 'fbs_order', number: 'Заказ 271834606', quantity: 1, rate: 1500, day: 22 },
+    { id: 'fbs-2', service: 'fbs_order', number: 'Заказ 271834712', quantity: 1, rate: 1500, day: 22 },
+    { id: 'fbs-3', service: 'fbs_order', number: 'Заказ 271901188', quantity: 1, rate: 1500, day: 24 },
   ],
   'seller-2': [
     { id: 'in-3', service: 'inbound', number: 'Приёмка № 000041', quantity: 560, rate: 300, day: 9 },
@@ -112,28 +116,49 @@ const ENTRIES: Record<string, StubEntry[]> = {
 
 function detailsFor(sellerId: string) {
   const seller = SELLERS.find((row) => row.id === sellerId)
+  const entries: SellerReportEntry[] = (ENTRIES[sellerId] ?? []).map((row) => ({
+    id: row.id,
+    kind: 'operation_fact' as const,
+    occurred_at: `2026-08-${String(row.day).padStart(2, '0')}T09:30:00Z`,
+    service_code: row.service,
+    item_quantity: row.quantity,
+    source_type: row.service === 'inbound' ? 'inbound_intake' : 'marketplace_unload',
+    source_id: row.id,
+    source_target: { kind: 'route' as const, to: '#' },
+    document_number: row.number,
+    product_name: null,
+    sku: null,
+    result: 'completed' as const,
+    unit: 'item',
+    rate_kopecks: row.rate,
+    amount_kopecks: row.rate * row.quantity,
+    billing_ledger_entry_id: `ledger-${row.id}`,
+    invoice_history: { state: 'known' as const, count: row.invoiced ?? 0 },
+    ...(row.service === 'fbs_order' ? { fbs_status_label: 'ВБ получил' } : {}),
+  }))
+  // Переданный в WB заказ денег не приносит, но в списке виден — ради этого
+  // строка и заведена в макете.
+  if (sellerId === 'seller-1') {
+    entries.push({
+      id: 'fbs-handed-1',
+      kind: 'fbs_order_handed' as SellerReportEntry['kind'],
+      occurred_at: '2026-08-26T12:10:00Z',
+      service_code: 'fbs_order',
+      item_quantity: null,
+      source_type: 'fbs_order',
+      source_id: 'fbs-handed-1',
+      source_target: null,
+      document_number: 'Заказ 272608041',
+      product_name: null,
+      sku: null,
+      result: 'not_billable',
+      fbs_status_label: 'Передан ВБ',
+    })
+  }
   return {
     seller_id: sellerId,
     seller_name: seller?.name ?? 'Селлер',
-    entries: (ENTRIES[sellerId] ?? []).map((row) => ({
-      id: row.id,
-      kind: 'operation_fact' as const,
-      occurred_at: `2026-08-${String(row.day).padStart(2, '0')}T09:30:00Z`,
-      service_code: row.service,
-      item_quantity: row.quantity,
-      source_type: row.service === 'inbound' ? 'inbound_intake' : 'marketplace_unload',
-      source_id: row.id,
-      source_target: { kind: 'route' as const, to: '#' },
-      document_number: row.number,
-      product_name: null,
-      sku: null,
-      result: 'completed' as const,
-      unit: 'item',
-      rate_kopecks: row.rate,
-      amount_kopecks: row.rate * row.quantity,
-      billing_ledger_entry_id: `ledger-${row.id}`,
-      invoice_history: { state: 'known' as const, count: row.invoiced ?? 0 },
-    })),
+    entries,
     storage_row: {
       kind: 'storage' as const,
       date_from: '2026-08-01',
