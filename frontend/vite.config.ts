@@ -83,6 +83,7 @@ export default defineConfig({
         raschety: 'raschety.html',
         raschetyRazdely: 'raschety-razdely.html',
         schet: 'schet.html',
+        fbsHistory: 'fbs-history.html',
       },
     },
   },

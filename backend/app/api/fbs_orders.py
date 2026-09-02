@@ -31,6 +31,7 @@ from app.services.fbs_cancellation_service import (
     sync_seller_order_statuses,
 )
 from app.services.fbs_cancelled_after_pack_service import fetch_cancelled_after_pack_page
+from app.services.fbs_order_history_service import FbsOrderHistoryError, order_history
 from app.services.fbs_worklist_service import fetch_worklist_page
 from app.services.marketplace_provider import (
     FakeMarketplaceTransport,
@@ -508,6 +509,23 @@ async def get_fbs_orders_worklist(
             "warehouse_options": page.warehouse_options,
         }
     )
+
+
+@router.get("/{order_id}/history")
+async def get_fbs_order_history(
+    order_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """Хронология заказа: подбор, упаковка, коды, печать, поставка.
+
+    Собирается из уже существующих записей, поэтому работает и по старым
+    заказам, а не только по тем, что появятся после выкатки.
+    """
+    try:
+        return await order_history(session, tenant_id=user.tenant_id, order_id=order_id)
+    except FbsOrderHistoryError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.get("", response_model=list[FbsOrderOut])
