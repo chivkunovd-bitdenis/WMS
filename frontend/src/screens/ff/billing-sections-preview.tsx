@@ -21,50 +21,64 @@ const SELLERS = [
   { id: 'seller-3', name: 'Луна Трейд' },
 ]
 
-const SUMMARY = {
-  rows: [
-    {
-      seller_id: 'seller-1',
-      seller_name: 'Ромашка',
-      operation_count: 24,
-      item_quantity: 2745,
-      not_billable_count: 2,
-      details_target: '',
-      unpriced_count: 0,
-      net_total_kopecks: 913500,
-    },
-    {
-      seller_id: 'seller-2',
-      seller_name: 'Северный ветер',
-      operation_count: 11,
-      item_quantity: 860,
-      not_billable_count: 0,
-      details_target: '',
-      unpriced_count: 3,
-      net_total_kopecks: 264000,
-    },
-    {
-      seller_id: 'seller-3',
-      seller_name: 'Луна Трейд',
-      operation_count: 6,
-      item_quantity: 410,
-      not_billable_count: 1,
-      details_target: '',
-      unpriced_count: 0,
-      net_total_kopecks: 118000,
-    },
-  ],
-  totals: {
-    seller_count: 3,
-    operation_count: 41,
-    item_quantity: 4015,
-    not_billable_count: 3,
-    net_total_kopecks: 1295500,
-    inbound_items: 2770,
-    packing_items: 685,
-    outbound_items: 1380,
-    fbs_items: 317,
+type StubSeller = {
+  seller_id: string
+  seller_name: string
+  operation_count: number
+  item_quantity: number
+  not_billable_count: number
+  details_target: string
+  unpriced_count: number
+  net_total_kopecks: number
+  inbound_items: number
+  packing_items: number
+  outbound_items: number
+  fbs_items: number
+  liter_days: number
+}
+
+const SELLER_ROWS: StubSeller[] = [
+  {
+    seller_id: 'seller-1', seller_name: 'Ромашка', operation_count: 24, item_quantity: 2745,
+    not_billable_count: 2, details_target: '', unpriced_count: 0, net_total_kopecks: 913500,
+    inbound_items: 1800, packing_items: 685, outbound_items: 1080, fbs_items: 317, liter_days: 1240,
   },
+  {
+    seller_id: 'seller-2', seller_name: 'Северный ветер', operation_count: 11, item_quantity: 860,
+    not_billable_count: 0, details_target: '', unpriced_count: 3, net_total_kopecks: 264000,
+    inbound_items: 560, packing_items: 0, outbound_items: 300, fbs_items: 0, liter_days: 1720,
+  },
+  {
+    seller_id: 'seller-3', seller_name: 'Луна Трейд', operation_count: 6, item_quantity: 410,
+    not_billable_count: 1, details_target: '', unpriced_count: 0, net_total_kopecks: 118000,
+    inbound_items: 410, packing_items: 0, outbound_items: 0, fbs_items: 0, liter_days: 860,
+  },
+]
+
+/** Фильтр по селлеру в макете работает по-настоящему: иначе не видно, что экран считает. */
+function summaryFor(sellerId: string | null) {
+  const rows = SELLER_ROWS.filter((row) => !sellerId || sellerId === 'all' || row.seller_id === sellerId)
+  const sum = (key: keyof StubSeller) => rows.reduce((total, row) => total + Number(row[key] ?? 0), 0)
+  return {
+    rows: rows.map(({ liter_days: _literDays, ...row }) => row),
+    totals: {
+      seller_count: rows.length,
+      operation_count: sum('operation_count'),
+      item_quantity: sum('item_quantity'),
+      not_billable_count: sum('not_billable_count'),
+      net_total_kopecks: sum('net_total_kopecks'),
+      inbound_items: sum('inbound_items'),
+      packing_items: sum('packing_items'),
+      outbound_items: sum('outbound_items'),
+      fbs_items: sum('fbs_items'),
+    },
+  }
+}
+
+function storageFor(sellerId: string | null) {
+  const rows = SELLER_ROWS.filter((row) => !sellerId || sellerId === 'all' || row.seller_id === sellerId)
+  const literDays = rows.reduce((total, row) => total + row.liter_days, 0)
+  return { liter_days: literDays, amount_kopecks: literDays * 50, complete: true }
 }
 
 type StubEntry = {
@@ -167,8 +181,9 @@ const INVOICE_PREVIEW = {
 }
 
 function stubResponse(url: string): unknown {
-  if (url.includes('/billing/seller-report/storage-total')) return { liter_days: 3820, amount_kopecks: 191000, complete: true }
-  if (url.includes('/billing/seller-report/summary')) return SUMMARY
+  const sellerId = new URL(url, window.location.origin).searchParams.get('seller_id')
+  if (url.includes('/billing/seller-report/storage-total')) return storageFor(sellerId)
+  if (url.includes('/billing/seller-report/summary')) return summaryFor(sellerId)
   const details = /\/billing\/seller-report\/sellers\/([^/?]+)\/details/.exec(url)
   if (details) return detailsFor(details[1] ?? 'seller-1')
   if (url.includes('/billing/invoices-v2')) return INVOICE_PREVIEW
