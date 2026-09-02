@@ -322,8 +322,9 @@ async def test_tc21_warehouse_sc_qr_after_deliver_route_diff(
     await _attach_products(tenant_id, seller_id, pvz_order_ids)
     actual_composition[pvz_supply["wb_supply_id"]] = [982002]
 
-    # Route difference #1: PVZ cannot be delivered without physical boxes first
-    # (warehouse/sc has no such requirement, see wh_preflight above).
+    # Отличие маршрута ПВЗ: у него появляется предупреждение про физические
+    # короба, которого нет у склада/СЦ. Запретом оно не является — с 01.09.2026
+    # передачу останавливает только уже переданная или пустая поставка.
     pvz_barcode = await async_client.get(
         f"/operations/fbs-supplies/{pvz_supply['id']}/barcode",
         headers=headers,
@@ -331,9 +332,9 @@ async def test_tc21_warehouse_sc_qr_after_deliver_route_diff(
     assert pvz_barcode.status_code == 409
     assert pvz_barcode.json()["detail"]["code"] == "supply_bad_status"
     pvz_preflight = await _delivery_preflight(async_client, headers, pvz_supply["id"])
-    assert pvz_preflight["can_deliver"] is False
+    assert pvz_preflight["can_deliver"] is True
     assert any(
-        check["code"] == "physical_boxes_required" and not check["ok"]
+        check["code"] == "physical_boxes_required" and check["severity"] == "warning"
         for check in pvz_preflight["checks"]
     )
 

@@ -528,6 +528,9 @@ class FbsDeliveryCheckOut(BaseModel):
     code: str
     message: str
     ok: bool
+    # blocker — передача запрещена; warning — оператор должен знать, но идёт
+    # дальше; info — просто факт. Экран красит по этому полю, а не по `ok`.
+    severity: str
     order_id: str | None
 
 

@@ -28,6 +28,29 @@ export function fbsBoxEditingDisabled(
   return fbsBoxOperationsDisabled(marketplace) || deliveryConfirmed
 }
 
+export function fbsOrdersAvailableForBox<T extends { id: string }>(
+  orders: T[],
+  assignedOrderIds: Set<string>,
+): T[] {
+  // Для WB упаковка — отметка, а не ворота. Backend уже разрешает положить в
+  // короб неупакованный заказ, поэтому frontend не должен прятать его из списка.
+  return orders.filter((order) => !assignedOrderIds.has(order.id))
+}
+
+export function fbsDeliveryConfirmDisabled(
+  marketplace: FbsMarketplace,
+  loading: boolean,
+  preflight: { can_deliver: boolean } | null,
+): boolean {
+  // Ошибка получения preflight оставляет `preflight=null`. В этом состоянии
+  // оператор вправе повторить проверку или попробовать передачу: сам deliver
+  // заново синхронизирует WB и вернёт честный ответ. Серой кнопка остаётся
+  // только пока запрос выполняется или сервер вернул реальный blocker.
+  if (loading) return true
+  if (marketplace !== 'wb' && preflight === null) return true
+  return Boolean(preflight && !preflight.can_deliver)
+}
+
 export function supplyQrExpectedForStatus(status: string): boolean {
   // WB issues the supply QR only after handoff. Cargo-place QR codes are
   // available earlier and must stay printable without counting the future
@@ -42,18 +65,42 @@ const FBS_OPERATOR_STAGES: FbsOperatorStageKey[] = ['composition', 'picking', 'p
 export function fbsAccessibleStageIndex(input: {
   marketplace: FbsMarketplace
   currentStage: FbsOperatorStageKey
-  packed: number
-  total: number
 }): number {
-  let accessible = FBS_OPERATOR_STAGES.indexOf(input.currentStage)
-  if (input.marketplace !== 'wb' || input.currentStage === 'composition') return accessible
+  const accessible = FBS_OPERATOR_STAGES.indexOf(input.currentStage)
+  if (input.marketplace !== 'wb') return accessible
 
-  // Подбор WB можно пропустить и сразу перейти к упаковке.
-  accessible = Math.max(accessible, FBS_OPERATOR_STAGES.indexOf('packing'))
-  if (input.total > 0 && input.packed === input.total) {
-    accessible = Math.max(accessible, FBS_OPERATOR_STAGES.indexOf('boxes'))
-  }
-  return accessible
+  // Все рабочие поверхности WB открыты одновременно, включая черновик.
+  // «Начать работу» может создать удобное упаковочное задание, но наличие этого
+  // задания не даёт права открыть короба или передать поставку — право уже есть.
+  // Упаковка — только зафиксированный факт, а не право открыть короба или
+  // передать поставку. Не добавляйте сюда progress.packed/pack.status.
+  return FBS_OPERATOR_STAGES.indexOf('boxes')
+}
+
+export function fbsStageAfterWorkspaceRefresh(
+  marketplace: FbsMarketplace,
+  currentStage: FbsOperatorStageKey,
+  serverStage: FbsOperatorStageKey,
+): FbsOperatorStageKey {
+  // Polling and ordinary mutations must not throw a WB operator back from
+  // boxes/packing because some optional fact changed on the server.
+  return marketplace === 'wb' && currentStage !== 'composition'
+    ? currentStage
+    : serverStage
+}
+
+export function fbsDeliveryErrorKeepsIdempotencyKey(error: {
+  code?: string
+  retryable?: boolean
+}): boolean {
+  // Эти ответы означают, что исход WB ещё неизвестен либо WB просит повторить
+  // ту же операцию. Для окончательного отказа следующая попытка обязана получить
+  // новый ключ, иначе исправленный оператором запрос застрянет на старом failed.
+  return error.retryable === true && new Set([
+    'wb_timeout',
+    'wb_pending_confirmation',
+    'operation_in_progress',
+  ]).has(error.code ?? '')
 }
 
 export function fbsOrdersSyncErrorMessage(cause: unknown): string {
@@ -233,4 +280,52 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
     </script>
   </body>
 </html>`
+}
+
+export type FbsDeliveryCheckRow = {
+  code: string
+  message: string
+  ok: boolean
+  severity: 'blocker' | 'warning' | 'info'
+  order_id: string | null
+}
+
+export type FbsDeliveryCheckSummary = {
+  blockers: string[]
+  warnings: string[]
+}
+
+/**
+ * Готовит текст предполётной проверки для оператора.
+ *
+ * Сервер отдаёт по одной строке на заказ, поэтому «Честный знак не нанесён»
+ * приходило три раза подряд без единого номера заказа — понять, какие именно
+ * заказы виноваты, было нельзя. Здесь одинаковые причины схлопываются в одну
+ * строку, а номера заказов WB собираются в её конце.
+ *
+ * Запреты и предупреждения разводятся по уровню, а не по полю `ok`: уход
+ * остатка в минус и отменённый заказ WB приходят с `ok = false`, но передачу
+ * не запрещают, и красить их как отказ — врать оператору.
+ */
+export function summarizeDeliveryChecks(
+  checks: FbsDeliveryCheckRow[],
+  wbOrderIdByOrderId: Map<string, number>,
+): FbsDeliveryCheckSummary {
+  const collect = (severity: 'blocker' | 'warning') => {
+    const byMessage = new Map<string, number[]>()
+    for (const check of checks) {
+      if (check.severity !== severity) continue
+      const orders = byMessage.get(check.message) ?? []
+      const wbOrderId = check.order_id ? wbOrderIdByOrderId.get(check.order_id) : undefined
+      if (wbOrderId !== undefined && !orders.includes(wbOrderId)) orders.push(wbOrderId)
+      byMessage.set(check.message, orders)
+    }
+    return [...byMessage.entries()].map(([message, orders]) => {
+      if (orders.length === 0) return message
+      const sorted = [...orders].sort((a, b) => a - b)
+      const label = sorted.length === 1 ? 'заказ' : 'заказы'
+      return `${message} (${label} ${sorted.join(', ')})`
+    })
+  }
+  return { blockers: collect('blocker'), warnings: collect('warning') }
 }
