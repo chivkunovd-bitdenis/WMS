@@ -785,18 +785,63 @@ async def current_quantities(
     session: AsyncSession,
     count: InventoryCount,
 ) -> dict[uuid.UUID, int]:
+    """Сколько числится сейчас по каждой строке документа.
+
+    Раньше здесь был запрос на каждую строку. Документ на тысячу строк давал
+    тысячу запросов, и это выполнялось на каждой отдаче документа — то есть на
+    каждом сохранении и на каждой находке. Кладовщик сканирует непрерывно, и
+    ждать он не должен. Теперь весь остаток по местам документа поднимается
+    одним запросом, а строки разбираются по нему в памяти.
+    """
     values: dict[uuid.UUID, int] = {}
+    pending = [
+        line
+        for line in count.lines
+        if not (count.status == STATUS_POSTED and line.actual_quantity is not None)
+    ]
     for line in count.lines:
         if count.status == STATUS_POSTED and line.actual_quantity is not None:
-            posted_delta = int(line.posted_delta or 0)
-            values[line.id] = int(line.actual_quantity) - posted_delta
-        else:
-            values[line.id] = await _current_quantity(
-                session,
-                tenant_id=count.tenant_id,
-                line=line,
-                lock=False,
+            values[line.id] = int(line.actual_quantity) - int(line.posted_delta or 0)
+
+    if not pending:
+        return values
+
+    location_ids = {
+        line.storage_location_id for line in pending if line.storage_location_id is not None
+    }
+    product_ids = {line.product_id for line in pending}
+    balances: dict[
+        tuple[uuid.UUID, uuid.UUID, str | None, uuid.UUID | None], int
+    ] = {}
+    if location_ids and product_ids:
+        rows = await session.execute(
+            select(
+                InventoryBalance.product_id,
+                InventoryBalance.storage_location_id,
+                InventoryBalance.container_kind,
+                InventoryBalance.container_id,
+                InventoryBalance.quantity,
+            ).where(
+                InventoryBalance.tenant_id == count.tenant_id,
+                InventoryBalance.storage_location_id.in_(location_ids),
+                InventoryBalance.product_id.in_(product_ids),
             )
+        )
+        for product_id, location_id, kind, container_id, quantity in rows:
+            balances[(product_id, location_id, kind, container_id)] = int(quantity or 0)
+
+    for line in pending:
+        if line.storage_location_id is None:
+            raise InventoryCountError("line_storage_location_missing")
+        values[line.id] = balances.get(
+            (
+                line.product_id,
+                line.storage_location_id,
+                line.container_kind,
+                line.container_id,
+            ),
+            0,
+        )
     return values
 
 
