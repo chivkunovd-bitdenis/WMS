@@ -185,6 +185,25 @@ function findScanTargets(
     }
     walk(item.children, item.id, null, [cellKey])
   }
+  if (!container) {
+    // Тара, пустая по документу, в дерево не попадает — иначе пересчёт по
+    // складу превращается в стену строк «0 из 0». Но пикнуть её оператор
+    // должен: он подошёл к коробу, а в нём лежит то, чего по учёту тут нет.
+    const empty = count.scannableContainers.find(
+      (item) => matchesPlace(normalizedCodes, item.barcode, item.code),
+    )
+    if (empty) {
+      const cellKey = `cell:${empty.cellId ?? UNASSIGNED_CELL_ID}`
+      container = {
+        id: empty.id,
+        kind: empty.kind,
+        code: empty.code,
+        cellId: empty.cellId ?? UNASSIGNED_CELL_ID,
+        // Строки в дереве у такой тары нет, подсвечивать нечего.
+        pathKeys: [cellKey],
+      }
+    }
+  }
   if (!cell) {
     // Ячейки, пустые по учёту, в дерево не попадают, но сканер обязан их знать:
     // именно в такой чаще всего и находят то, чего по учёту тут нет.
@@ -262,7 +281,10 @@ function containerKindOf(count: InventoryCount, containerId: string): ContainerK
     }
   }
   for (const cell of count.cells) walk(cell.children)
-  return kind
+  if (kind) return kind
+  // Открытая тара может не иметь строки в дереве — её выбросили как пустую.
+  // Без этой ветки находка в такой короб молча не записалась бы.
+  return count.scannableContainers.find((item) => item.id === containerId)?.kind ?? null
 }
 
 const CLOSED: Record<ContainerKind, string> = {
@@ -471,7 +493,10 @@ export function containerName(count: InventoryCount, containerId: string): strin
     }
   }
   for (const cell of count.cells) walk(cell.children)
-  return name
+  if (name !== 'таре') return name
+  // Тара, выброшенная из дерева как пустая: имя у неё есть, строки нет.
+  const outside = count.scannableContainers.find((item) => item.id === containerId)
+  return outside ? `${IN_CONTAINER[outside.kind]} ${outside.code}` : name
 }
 
 

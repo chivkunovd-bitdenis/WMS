@@ -24,6 +24,7 @@ function countWithBox(item: ProductNode): InventoryCount {
   return {
     id: 'count-1',
     scannableCells: [],
+    scannableContainers: [],
     number: 'ИНВ-1',
     status: 'draft',
     warehouseName: 'Склад',
@@ -302,5 +303,62 @@ describe('короб узнаётся и по видимому номеру', ()
     const count = countWithBox(product())
     const byLabel = applyScan(count, 'A-01', NOTHING_OPEN)
     expect(byLabel.open).toEqual({ containerId: null, cellId: 'cell-1' })
+  })
+})
+
+describe('пустая по документу тара выброшена из дерева, но пикается', () => {
+  // В пересчёте «Империи ФФ» из 420 коробов товар лежал в 113. Остальные 307
+  // висели строками «0 из 0»: документ вырастал до сорока тысяч пикселей, и
+  // найти в нём свой короб глазами было нельзя. Строки убрали — но подойти к
+  // такому коробу и посчитать то, что в нём лежит, оператор обязан.
+  const dropped = {
+    kind: 'box' as const,
+    id: 'box-empty',
+    code: 'КР-000108',
+    barcode: 'INB-1B7EE88D369F',
+    cellId: 'cell-1',
+  }
+
+  it('открывается по штрихкоду и по видимому номеру', () => {
+    const count: InventoryCount = {
+      ...countWithBox(product()),
+      scannableContainers: [dropped],
+    }
+
+    const byBarcode = applyScan(count, 'INB-1B7EE88D369F', NOTHING_OPEN)
+    expect(byBarcode.open).toEqual({ containerId: 'box-empty', cellId: 'cell-1' })
+    expect(byBarcode.message).toContain('КР-000108')
+
+    const byCode = applyScan(count, 'КР-000108', NOTHING_OPEN)
+    expect(byCode.open.containerId).toBe('box-empty')
+  })
+
+  it('находка ложится именно в него, а не в ячейку рядом', () => {
+    const count: InventoryCount = {
+      ...countWithBox(product()),
+      scannableContainers: [dropped],
+    }
+
+    const opened = applyScan(count, 'INB-1B7EE88D369F', NOTHING_OPEN)
+    const found = applyScan(opened.count, '9999999999999', opened.open)
+
+    expect(found.found).toEqual({
+      barcodes: ['9999999999999'],
+      cellId: null,
+      containerKind: 'box',
+      containerId: 'box-empty',
+    })
+    expect(found.message).toContain('записываем находку')
+  })
+
+  it('тара из дерева важнее выброшенной: строку не теряем', () => {
+    const count: InventoryCount = {
+      ...countWithBox(product()),
+      scannableContainers: [{ ...dropped, id: 'box-empty', barcode: 'BOX-BARCODE-1' }],
+    }
+
+    const scanned = applyScan(count, 'BOX-BARCODE-1', NOTHING_OPEN)
+    expect(scanned.open.containerId).toBe('box-1')
+    expect(scanned.focusPathKeys).toBeDefined()
   })
 })

@@ -67,6 +67,22 @@ export type CellNode = {
  */
 export type ScannableCell = { id: string; label: string; barcode: string | null }
 
+/**
+ * Тара склада, которую сканер обязан узнать, хотя строк документа в ней нет.
+ *
+ * Пустую по учёту тару в дерево не тащим: в пересчёте по складу таких коробов
+ * бывают сотни, и документ вырастает в стену строк «0 из 0», где свой короб уже
+ * не найти. Но пикнуть её оператор должен — «в коробе лежит то, чего по учёту
+ * тут нет» и есть находка.
+ */
+export type ScannableContainer = {
+  kind: ContainerKind
+  id: string
+  code: string
+  barcode: string | null
+  cellId: string | null
+}
+
 export type CountStatus = 'draft' | 'posted' | 'cancelled'
 
 export type CountFill =
@@ -103,6 +119,8 @@ export type InventoryCount = {
   cells: CellNode[]
   /** Все ячейки склада для сканера, включая пустые по учёту. */
   scannableCells: ScannableCell[]
+  /** Тара склада для сканера, выброшенная из дерева как пустая по документу. */
+  scannableContainers: ScannableContainer[]
 }
 
 /** Строка списка документов. */

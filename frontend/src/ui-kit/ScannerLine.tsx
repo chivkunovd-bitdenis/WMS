@@ -78,7 +78,11 @@ export function ScannerField({
   useEffect(() => {
     if (busy) return
     if (!ownsFocusRef.current) return
-    inputRef.current?.focus()
+    // preventScroll обязателен. Обычный focus() подтягивает поле в кадр, а на
+    // длинном документе поле стоит вверху страницы: после каждого пика экран
+    // прыгал с той строки, куда его только что увёл скан, обратно наверх. Два
+    // скролла дрались за кадр, и оператор видел телепортацию вместо ответа.
+    inputRef.current?.focus({ preventScroll: true })
   }, [busy, notice, error])
 
   return (

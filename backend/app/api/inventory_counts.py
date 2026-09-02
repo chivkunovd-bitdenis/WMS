@@ -128,6 +128,16 @@ class CountScannableCellOut(BaseModel):
     barcode: str | None
 
 
+class CountScannableContainerOut(BaseModel):
+    """Тара склада, которую сканер обязан узнать, даже если по учёту она пуста."""
+
+    kind: Literal["pallet", "box", "cargo_place"]
+    id: str
+    code: str
+    barcode: str | None
+    cell_id: str | None
+
+
 class CountCellOut(BaseModel):
     id: str
     label: str
@@ -199,6 +209,11 @@ class InventoryCountDetailOut(BaseModel):
     # Ячейки склада, которые сканер обязан узнавать, включая пустые по учёту.
     # В дерево они не попадают, иначе документ распухнет пустыми строками.
     scannable_cells: list[CountScannableCellOut] = []
+    # Тара, выброшенная из дерева как пустая. Сканер обязан её открывать: пустой
+    # по учёту короб — самый частый адресат находки («тут лежит то, чего по
+    # бумагам здесь нет»). Пустые строки в дереве оператору не нужны, а пикнуть
+    # такую тару он должен.
+    scannable_containers: list[CountScannableContainerOut] = []
 
 
 class ChangedBalanceOut(BaseModel):
@@ -319,6 +334,8 @@ def _product_node(
 def _container_tree(
     rows: list[dict[str, Any]],
     containers: dict[tuple[str, str], CountContainerNodeOut],
+    cell_id: str | None,
+    cell_of: dict[str, str | None],
 ) -> list[CountProductNodeOut | CountContainerNodeOut]:
     result: list[CountProductNodeOut | CountContainerNodeOut] = []
     for row in rows:
@@ -330,11 +347,48 @@ def _container_tree(
             id=str(row["id"]),
             code=str(row["code"]),
             barcode=str(row["barcode"]) if row.get("barcode") is not None else None,
-            children=_container_tree(row.get("children", []), containers),
+            children=_container_tree(row.get("children", []), containers, cell_id, cell_of),
         )
         containers[(kind, node.id)] = node
+        cell_of[node.id] = cell_id
         result.append(node)
     return result
+
+
+def _prune_empty_containers(
+    nodes: list[CountProductNodeOut | CountContainerNodeOut],
+    cell_of: dict[str, str | None],
+    dropped: list[CountScannableContainerOut],
+) -> list[CountProductNodeOut | CountContainerNodeOut]:
+    """Убрать из дерева тару, в которой по документу ничего не лежит.
+
+    Карта склада отдаёт всю тару склада, а документ может быть по одному
+    селлеру или по одной категории. В пересчёте «Империи ФФ» из 420 коробов
+    товар лежал в 113, а остальные 307 висели строками «0 из 0»: документ
+    вырастал до сорока тысяч пикселей, и найти в нём свой короб глазами было
+    нельзя. Выброшенная тара не пропадает — она уезжает в `scannable_containers`
+    и по-прежнему открывается сканом, чтобы записать в неё находку.
+    """
+
+    kept: list[CountProductNodeOut | CountContainerNodeOut] = []
+    for node in nodes:
+        if isinstance(node, CountProductNodeOut):
+            kept.append(node)
+            continue
+        node.children = _prune_empty_containers(node.children, cell_of, dropped)
+        if node.children:
+            kept.append(node)
+            continue
+        dropped.append(
+            CountScannableContainerOut(
+                kind=node.kind,
+                id=node.id,
+                code=node.code,
+                barcode=node.barcode,
+                cell_id=cell_of.get(node.id),
+            )
+        )
+    return kept
 
 
 async def _detail_out(
@@ -354,6 +408,9 @@ async def _detail_out(
     ] = defaultdict(list)
     no_address_nodes: list[CountProductNodeOut | CountContainerNodeOut] = []
     containers: dict[tuple[str, str], CountContainerNodeOut] = {}
+    # В какой ячейке стоит тара: нужно, чтобы выброшенная из дерева пустая тара
+    # знала свой адрес и находка легла туда же, куда легла бы по дереву.
+    cell_of_container: dict[str, str | None] = {}
     cells_by_id: dict[str, CountCellOut] = {}
     unassigned: CountCellOut | None = None
     if count.warehouse_id is not None:
@@ -366,7 +423,9 @@ async def _detail_out(
             id="unassigned",
             label=UNASSIGNED_LABEL if address_storage else "",
             barcode=None,
-            children=_container_tree(warehouse_map["unassigned"], containers),
+            children=_container_tree(
+                warehouse_map["unassigned"], containers, None, cell_of_container
+            ),
         )
         for map_cell in warehouse_map["cells"]:
             cell = CountCellOut(
@@ -377,7 +436,12 @@ async def _detail_out(
                     if map_cell.get("barcode") is not None
                     else None
                 ),
-                children=_container_tree(map_cell["children"], containers),
+                children=_container_tree(
+                    map_cell["children"],
+                    containers,
+                    str(map_cell["id"]),
+                    cell_of_container,
+                ),
             )
             cells_by_id[cell.id] = cell
     for line in count.lines:
@@ -445,6 +509,18 @@ async def _detail_out(
                 balance_changed=current[line.id] != line.expected_quantity,
             )
         )
+    # Тара без строк документа уезжает из дерева в список сканируемой: пикнуть
+    # её по-прежнему можно, а пустой строкой она документ не раздувает.
+    scannable_containers: list[CountScannableContainerOut] = []
+    if unassigned is not None:
+        unassigned.children = _prune_empty_containers(
+            unassigned.children, cell_of_container, scannable_containers
+        )
+    for cell in cells_by_id.values():
+        cell.children = _prune_empty_containers(
+            cell.children, cell_of_container, scannable_containers
+        )
+
     if address_storage:
         fallback_cells = [
             CountCellOut(id=cell_id, label=label, barcode=None, children=children)
@@ -503,6 +579,7 @@ async def _detail_out(
         lines=line_rows,
         cells=cells,
         scannable_cells=scannable_cells,
+        scannable_containers=scannable_containers,
     )
 
 
