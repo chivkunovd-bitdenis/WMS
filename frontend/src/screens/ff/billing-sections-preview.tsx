@@ -60,6 +60,10 @@ const SUMMARY = {
     item_quantity: 4015,
     not_billable_count: 3,
     net_total_kopecks: 1295500,
+    inbound_items: 2770,
+    packing_items: 685,
+    outbound_items: 1380,
+    fbs_items: 317,
   },
 }
 

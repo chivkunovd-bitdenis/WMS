@@ -45,19 +45,22 @@ function formatDelta(delta: NonNullable<ReportMetricItem['delta']>, unit: string
 }
 
 export function ReportMetricStrip({ items, loading = false, testId }: ReportMetricStripProps) {
+  // Больше четырёх показателей раскладываем в две строки по три: раньше лишние
+  // молча обрезались, и экран показывал не то, что ему передали.
+  const columns = items.length > 4 ? 3 : 4
   return (
     <Paper
       variant="outlined"
       sx={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+        gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
         overflow: 'hidden',
         mb: 2,
       }}
       data-testid={testId}
       aria-label="Показатели отчёта"
     >
-      {items.slice(0, 4).map((item, index) => {
+      {items.map((item, index) => {
         const unit = item.unit ?? 'шт.'
         const value = item.moneyMinor !== undefined
           ? formatMoney(item.moneyMinor)
@@ -68,7 +71,8 @@ export function ReportMetricStrip({ items, loading = false, testId }: ReportMetr
             sx={{
               minWidth: 0,
               p: 2,
-              borderRight: index < 3 ? 1 : 0,
+              borderRight: (index + 1) % columns === 0 ? 0 : 1,
+              borderBottom: index < items.length - columns ? 1 : 0,
               borderColor: 'divider',
             }}
             data-testid={testId ? `${testId}-${item.key}` : undefined}

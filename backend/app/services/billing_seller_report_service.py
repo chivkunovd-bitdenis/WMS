@@ -152,11 +152,39 @@ def _financial_totals(entries: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
+_NATURAL_GROUPS: dict[str, tuple[str, ...]] = {
+    "inbound_items": ("inbound",),
+    "packing_items": ("packing", "packaging"),
+    "outbound_items": ("marketplace_outbound",),
+    "fbs_items": ("fbs_order",),
+}
+
+
+def _natural_totals(entries: list[dict[str, Any]]) -> dict[str, int]:
+    """Сколько штук товара прошло через каждый участок за период.
+
+    Считаем только сделанную работу: сторно вычитать нечего, а строки без
+    ставки — это всё равно принятый и упакованный товар, просто ещё не
+    оценённый деньгами.
+    """
+    result = {key: 0 for key in _NATURAL_GROUPS}
+    for row in entries:
+        if row.get("result") in {"reversed", "not_billable"}:
+            continue
+        code = str(row.get("service_code") or "")
+        quantity = int(row.get("item_quantity") or 0)
+        for key, codes in _NATURAL_GROUPS.items():
+            if code in codes:
+                result[key] += quantity
+    return result
+
+
 def _totals(entries: list[dict[str, Any]], *, include_finance: bool) -> dict[str, int]:
     result: dict[str, int] = {
         "operation_count": len(entries),
         "item_quantity": sum(int(row.get("item_quantity") or 0) for row in entries),
         "not_billable_count": sum(1 for row in entries if row.get("result") == "not_billable"),
+        **_natural_totals(entries),
     }
     if include_finance:
         result.update(_financial_totals(entries))
