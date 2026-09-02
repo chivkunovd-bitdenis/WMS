@@ -206,8 +206,15 @@ def _meta_validation_message(exc: WildberriesBusinessError) -> tuple[str, bool]:
     details: list[str] = []
     for item in exc.meta_validation:
         prefix = f"Заказ WB {item.order_id}: " if item.order_id is not None else ""
-        if item.reason:
-            reason = translate_wb_message(item.reason) or f"Wildberries ответил: {item.reason}"
+        # Причина может приехать и в reason, и в decision — переводим обе.
+        # Слово `sgtinRetired` кладовщику не говорит ничего, а «код Честного
+        # знака выведен из оборота» говорит, что делать.
+        raw_reason = item.reason or item.decision
+        translated = translate_wb_message(raw_reason) if raw_reason else None
+        if translated:
+            reason = translated
+        elif item.reason:
+            reason = f"Wildberries ответил: {item.reason}"
         else:
             reason = f"маркировка {item.key} — {item.decision}"
         rendered = f"{prefix}{reason}"

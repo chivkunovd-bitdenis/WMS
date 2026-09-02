@@ -560,3 +560,44 @@ def test_wb_dispatch_refusal_without_details_still_suggests_a_retry() -> None:
     assert "просит исправить" in message
     assert "кабинете продавца" in message
     assert retryable is True
+
+
+def test_real_wb_refusal_from_2026_09_02_reads_as_an_instruction() -> None:
+    """Дословный отказ WB по поставке WB-GI-272608041 — целиком, до текста.
+
+    Этот случай остановил склад: WB назвал заказ и сказал, что код Честного
+    знака выведен из оборота, а оператор прочитал «повторите через минуту».
+    Тест держит весь путь: разбор вложенного `data`, перевод причины и то, что
+    отказ перестал считаться повторяемым.
+    """
+    from app.services.fbs_shipment_service import _meta_validation_message
+    from app.services.wildberries_errors import WildberriesBusinessError
+    from app.services.wildberries_fbs_client import parse_meta_validation_fail
+
+    body = {
+        "data": {
+            "orders": [
+                {
+                    "id": 5644318926,
+                    "metaDetails": [
+                        {"key": "sgtin", "value": "x", "decision": "sgtinRetired"}
+                    ],
+                }
+            ]
+        },
+        "code": "MetaValidationFail",
+        "message": "Fix them to dispatch items",
+    }
+    exc = WildberriesBusinessError(
+        "meta_validation_fail",
+        wb_code="MetaValidationFail",
+        message="Fix them to dispatch items",
+        meta_validation=parse_meta_validation_fail(body),
+    )
+
+    message, retryable = _meta_validation_message(exc)
+
+    assert "5644318926" in message
+    assert "Честного знака выведен из оборота" in message
+    assert "sgtinRetired" not in message
+    assert retryable is False
