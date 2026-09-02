@@ -146,6 +146,15 @@ def _matrix_date_in_moscow(value: datetime) -> str:
     return local.date().isoformat()
 
 
+def _dimensions_mm(row: StorageMeasurement) -> list[int] | None:
+    """Габариты, по которым посчитан объём: из обмера, иначе из карточки товара."""
+    source = row.dimension_event if row.dimension_event is not None else row.product
+    sides = (source.length_mm, source.width_mm, source.height_mm)
+    if any(side is None for side in sides):
+        return None
+    return [int(side) for side in sides if side is not None]
+
+
 def _statement_out(
     statement: StorageStatement, rows: list[StorageMeasurement]
 ) -> StorageStatementOut:
@@ -165,7 +174,12 @@ def _statement_out(
             {
                 "product_id": row.product_id,
                 "sku": row.product.sku_code,
+                "product_name": row.product.name,
                 "seller_article": row.product.wb_vendor_code,
+                # Габариты и штуко-дни отвечают на два вопроса кладовщика:
+                # «что это за коробка» и «сколько её лежало за месяц».
+                "dimensions_mm": _dimensions_mm(row),
+                "quantity_days": str(row.quantity_days),
                 "volume_liters": (
                     str(row.dimension_event.volume_liters)
                     if row.dimension_event is not None
@@ -202,7 +216,10 @@ def _print_measurements(
         {
             "product_id": row.product_id,
             "sku": row.product.sku_code,
+            "product_name": row.product.name,
             "seller_article": row.product.wb_vendor_code,
+            "dimensions_mm": _dimensions_mm(row),
+            "quantity_days": str(row.quantity_days),
             "volume_liters": str(
                 row.dimension_event.volume_liters
                 if row.dimension_event is not None

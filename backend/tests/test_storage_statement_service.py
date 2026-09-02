@@ -93,12 +93,17 @@ def test_print_row_uses_charged_ledger_quantity_instead_of_full_month_measuremen
         product_id=product_id,
         product=SimpleNamespace(
             sku_code="MID-MONTH",
+            name="Товар середины месяца",
             wb_vendor_code="ARTICLE",
             volume_liters=Decimal("1"),
             dimensions_source="manual",
+            length_mm=100,
+            width_mm=200,
+            height_mm=50,
         ),
         dimension_event=None,
         liter_days=Decimal("31"),
+        quantity_days=Decimal("31"),
     )
     ledger = SimpleNamespace(
         source_id=measurement_id,
@@ -113,6 +118,8 @@ def test_print_row_uses_charged_ledger_quantity_instead_of_full_month_measuremen
     [printed] = _print_measurements([measurement], [ledger])
 
     assert printed["liter_days"] == "22"
+    assert printed["dimensions_mm"] == [100, 200, 50]
+    assert printed["quantity_days"] == "31"
     assert printed["rate_snapshot"] == "2.00"
     assert printed["amount"] == "44.00"
 

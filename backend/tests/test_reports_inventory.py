@@ -327,3 +327,40 @@ async def test_reports_inventory_hides_transfers_without_warehouse_and_flags_inc
         "net": -11, "integrity_error": True,
     }
     assert rows["Приёмка"]["integrity_error"] is False
+
+
+@pytest.mark.asyncio
+async def test_reports_inventory_groups_by_seller_with_products_and_balance(
+    async_client: AsyncClient,
+) -> None:
+    """Верхний уровень отчёта — селлер: сколько товаров, приход, расход, нетто."""
+    headers, tenant_id, seller_id, warehouse_id, location_id = await _report_context(async_client)
+    await _seed_product_movement(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+        location_id=location_id, number=1, quantity_delta=5,
+    )
+    await _seed_product_movement(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+        location_id=location_id, number=2, quantity_delta=-2,
+        movement_type="marketplace_unload",
+    )
+    response = await async_client.get("/reports/inventory", headers=headers, params={
+        "date_from": "2026-08-01T00:00:00Z", "date_to": "2026-08-02T00:00:00Z",
+        "group_by": "seller",
+    })
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["group_by"] == "seller"
+    assert len(payload["rows"]) == 1
+    row = payload["rows"][0]
+    assert row["seller_id"] == seller_id
+    assert row["seller_name"] == "Seller"
+    assert row["product_count"] == 2
+    assert row["total_in"] == 5
+    assert row["total_out"] == 2
+    assert row["net"] == 3
+    rejected = await async_client.get("/reports/inventory", headers=headers, params={
+        "date_from": "2026-08-01T00:00:00Z", "date_to": "2026-08-02T00:00:00Z",
+        "group_by": "seller", "sort_by": "sku",
+    })
+    assert rejected.status_code == 422
