@@ -35,7 +35,8 @@ export type ReportMetricStripProps = {
 const numberFormatter = new Intl.NumberFormat('ru-RU')
 
 function formatValue(value: number | null | undefined, unit: string) {
-  return value == null ? '—' : `${numberFormatter.format(value)} ${unit}`
+  if (value == null) return '—'
+  return unit ? `${numberFormatter.format(value)} ${unit}` : numberFormatter.format(value)
 }
 
 function formatDelta(delta: NonNullable<ReportMetricItem['delta']>, unit: string) {

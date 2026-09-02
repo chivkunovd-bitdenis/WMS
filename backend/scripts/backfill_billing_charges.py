@@ -36,15 +36,22 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
-from app.models.operation_fact import OperationFact
+from app.models.operation_fact import OperationFact, OperationFactLine
 from app.models.tenant import Tenant
 from app.services.billing_ledger_service import (
     BillingLedgerError,
     _active_charge_for_source,
+    product_billing_lines,
     record_operational_charge,
 )
 
 MOSCOW = ZoneInfo("Europe/Moscow")
+
+# Начисляем только то, что живой код начисляет сам. У упаковки и подбора FBS
+# факт пишется на каждое событие, а документ у них общий: одно начисление
+# закрыло бы весь документ и оплатило его по первому событию. Такие услуги
+# трогать нельзя — они попадут в отчёт скрипта отдельной строкой.
+CHARGEABLE_SERVICES = frozenset({"inbound", "marketplace_outbound", "return", "fbs_order"})
 
 
 def _interval(date_from: date, date_to: date) -> tuple[datetime, datetime]:
@@ -100,6 +107,10 @@ async def main() -> None:
 
     async with SessionLocal() as session:
         if enable_from is not None:
+            if not args.tenant_id:
+                # Без явного арендатора один флаг включил бы биллинг задним
+                # числом всем, у кого он сознательно выключен.
+                raise SystemExit("--enable-billing-from требует --tenant")
             tenants = list((await session.scalars(select(Tenant))).all())
             for tenant in tenants:
                 if args.tenant_id and str(tenant.id) != args.tenant_id:
@@ -115,6 +126,10 @@ async def main() -> None:
         print(f"операций за период: {len(facts)}")
 
         for fact in facts:
+            service = str(fact.billable_service_code)
+            if service not in CHARGEABLE_SERVICES:
+                unpriced[f"услуга начисляется не по документу: {service}"] += 1
+                continue
             existing = await _active_charge_for_source(
                 session,
                 tenant_id=fact.tenant_id,
@@ -124,6 +139,15 @@ async def main() -> None:
             if existing is not None:
                 existed += 1
                 continue
+            lines = list(
+                (
+                    await session.scalars(
+                        select(OperationFactLine).where(
+                            OperationFactLine.operation_fact_id == fact.id
+                        )
+                    )
+                ).all()
+            )
             try:
                 entry = await record_operational_charge(
                     session,
@@ -132,11 +156,19 @@ async def main() -> None:
                     source_type=fact.document_type,
                     source_id=fact.document_id,
                     source=fact.source_kind,
-                    service_code=str(fact.billable_service_code),
+                    service_code=service,
                     quantity=Decimal(int(fact.item_quantity or 0)),
                     occurred_at=fact.occurred_at,
                     performer_id=None,
                     warehouse_id=fact.warehouse_id,
+                    # Без строк ставка ищется только в старой таблице тарифов, а
+                    # матрица пишет в новую: начисление вышло бы с пустой суммой,
+                    # и повторный, уже правильный, прогон стал бы невозможен.
+                    lines=product_billing_lines(
+                        (line.product_id, Decimal(int(line.item_quantity)), {"fact": str(fact.id)})
+                        for line in lines
+                        if line.product_id is not None
+                    ),
                 )
             except BillingLedgerError as exc:
                 unpriced[f"ошибка: {exc}"] += 1
@@ -147,10 +179,14 @@ async def main() -> None:
                 unpriced["биллинг не включён на эту дату"] += 1
                 continue
             if entry.amount is None:
-                unpriced[f"нет ставки: {fact.billable_service_code}"] += 1
+                unpriced[f"нет ставки: {service}"] += 1
             else:
                 money += int(entry.amount)
             created += 1
+            if args.apply and created % 200 == 0:
+                # Длинная транзакция на боевой базе держит блокировки и копит
+                # вложенные подтранзакции. Пишем порциями.
+                await session.commit()
 
         if args.apply:
             await session.commit()

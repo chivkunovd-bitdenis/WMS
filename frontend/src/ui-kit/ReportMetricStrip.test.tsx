@@ -23,10 +23,12 @@ describe('ReportMetricStrip', () => {
     expect(markup).toContain('Приход за период')
     expect(markup).toContain('Расход за период')
     expect(markup).toContain('Расход к прошлому периоду')
-    expect(markup).toContain('12 480 шт.')
-    expect(markup).toContain('0 шт.')
-    expect(markup).toContain('2 918 шт.')
-    expect(markup).toContain('184 шт.')
+    // Число и единица теперь рисуются отдельными элементами: цифра крупная,
+    // подпись рядом мельче. Поэтому проверяем их по отдельности.
+    expect(markup).toContain('12\u00A0480')
+    expect(markup).toContain('2\u00A0918')
+    expect(markup).toContain('184')
+    expect(markup).toContain('шт.')
     expect(markup).toContain('Расход вырос на 6,7 процента')
     expect(markup).toContain('+6,7 %')
     expect(markup).not.toContain('+6,7 шт.')

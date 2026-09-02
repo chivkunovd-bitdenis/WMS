@@ -17,7 +17,7 @@ const MOSCOW_TIME_ZONE = 'Europe/Moscow'
 
 export type SellerReportEntry = {
   id: string
-  kind: 'operation_fact' | 'legacy_billing'
+  kind: 'operation_fact' | 'legacy_billing' | 'fbs_order_handed'
   occurred_at: string
   service_code: string
   item_quantity: number | null
@@ -448,7 +448,9 @@ export function FfBillingSellerDetails({
         row.kind === 'storage' ? (
           <TextCell value="за период" />
         ) : (
-          <QtyCell value={row.entries.length} />
+          // Переданные в WB заказы денег не приносят и в счётчик документов не
+          // идут: иначе «4 документа по 15 ₽» давало бы 45 ₽ и выглядело ошибкой.
+          <QtyCell value={row.entries.filter((entry) => entry.kind !== 'fbs_order_handed').length} />
         ),
     },
     {

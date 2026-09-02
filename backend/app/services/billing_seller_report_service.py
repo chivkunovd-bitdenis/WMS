@@ -210,6 +210,7 @@ async def _live_price(
     *,
     tenant_id: uuid.UUID,
     fact: OperationFact,
+    product_id: uuid.UUID | None = None,
 ) -> tuple[int | None, str | None, int | None]:
     """Цена операции по истории ставок: ставка, единица, сумма.
 
@@ -225,7 +226,7 @@ async def _live_price(
         session,
         tenant_id=tenant_id,
         seller_id=fact.seller_id,
-        product_id=None,
+        product_id=product_id,
         service_code=fact.billable_service_code,
         occurred_at=fact.occurred_at,
     )
@@ -233,6 +234,10 @@ async def _live_price(
         return None, None, None
     # «За документ» стоит одинаково, сколько бы строк в документе ни было.
     quantity = 1 if tariff.unit == "document" else int(fact.item_quantity or 0)
+    if quantity <= 0:
+        # Ноль штук — это не «бесплатно», это нечего считать. Иначе строка
+        # выпадает из счётчика непроценённых и дырку никто не замечает.
+        return None, None, None
     return tariff.rate, tariff.unit, tariff.rate * quantity
 
 
@@ -296,7 +301,12 @@ async def _operation_entries(
             row["unit"] = priced[0].unit if priced else None
             row["invoice_history"] = {"state": "unknown"}
             if money is None and not fact.reversal_of_id:
-                rate, unit, amount = await _live_price(session, tenant_id=tenant_id, fact=fact)
+                single_product = (
+                    product_lines[0].product_id if len(product_lines) == 1 else None
+                )
+                rate, unit, amount = await _live_price(
+                    session, tenant_id=tenant_id, fact=fact, product_id=single_product
+                )
                 if amount is not None:
                     row["rate_kopecks"] = rate
                     row["unit"] = unit
@@ -343,6 +353,7 @@ async def _fbs_handed_entries(
                     FbsOrder.updated_at < end,
                 )
                 .order_by(FbsOrder.updated_at.desc())
+                .limit(200)
             )
         ).all()
     )

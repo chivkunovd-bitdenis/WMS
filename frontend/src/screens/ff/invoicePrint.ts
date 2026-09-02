@@ -77,7 +77,10 @@ export function amountInWords(totalKopecks: number): string {
   const rubles = Math.floor(safe / 100)
   const kopecks = safe % 100
   if (rubles === 0) {
-    return `Ноль рублей ${String(kopecks).padStart(2, '0')} копеек`
+    return (
+      `Ноль рублей ${String(kopecks).padStart(2, '0')} ` +
+      plural(kopecks, 'копейка', 'копейки', 'копеек')
+    )
   }
   const groups: Array<{ value: number; female: boolean; forms: [string, string, string] }> = [
     { value: Math.floor(rubles / 1_000_000_000) % 1000, female: false, forms: ['миллиард', 'миллиарда', 'миллиардов'] },

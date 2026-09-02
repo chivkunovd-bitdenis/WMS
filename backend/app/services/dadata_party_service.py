@@ -75,7 +75,13 @@ async def lookup_party_by_inn(inn: str) -> dict[str, Any]:
         logger.warning("dadata answered %s", response.status_code)
         raise DadataError("dadata_unavailable")
 
-    party = _first_party(response.json())
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        logger.warning("dadata answered non-json")
+        raise DadataError("dadata_unavailable") from exc
+
+    party = _first_party(payload)
     if party is None:
         raise DadataError("party_not_found")
 

@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -24,7 +25,13 @@ from app.models.fbs_order import (
     FbsOrder,
     FbsOrderProduct,
 )
-from app.services.billing_ledger_service import BillingLedgerError, record_operational_charge
+from app.models.product import Product
+from app.models.seller import Seller
+from app.services.billing_ledger_service import (
+    BillingLedgerError,
+    product_billing_lines,
+    record_operational_charge,
+)
 from app.services.operation_fact_service import OperationFactError, line_input, write_operation_fact
 
 logger = logging.getLogger(__name__)
@@ -34,17 +41,22 @@ CONFIRMED_STATUSES = frozenset({FBS_ORDER_STATUS_SORTED, FBS_ORDER_STATUS_DONE})
 SOURCE_TYPE = "fbs_order"
 
 
-async def _order_quantity(session: AsyncSession, order: FbsOrder) -> int:
-    """Сколько штук товара уехало заказом."""
-    positions = (
-        await session.scalars(
-            select(FbsOrderProduct.quantity).where(FbsOrderProduct.order_id == order.id)
+async def _positions(session: AsyncSession, order: FbsOrder) -> list[tuple[uuid.UUID | None, int]]:
+    """Позиции заказа: товар и количество.
+
+    У Wildberries это одна штука одного товара, у Ozon в отправлении может быть
+    несколько позиций.
+    """
+    rows = (
+        await session.execute(
+            select(FbsOrderProduct.product_id, FbsOrderProduct.quantity).where(
+                FbsOrderProduct.order_id == order.id
+            )
         )
     ).all()
-    if positions:
-        return sum(int(quantity) for quantity in positions)
-    # Заказ Wildberries — одна штука одного товара, отдельных позиций у него нет.
-    return 1
+    if rows:
+        return [(row[0], int(row[1])) for row in rows]
+    return [(order.product_id, 1)]
 
 
 async def record_fbs_order_confirmed(
@@ -59,7 +71,25 @@ async def record_fbs_order_confirmed(
     if order.seller_id is None:
         return
     moment = occurred_at or datetime.now(UTC)
-    quantity = await _order_quantity(session, order)
+    positions = await _positions(session, order)
+    quantity = sum(count for _, count in positions)
+
+    # Связи заказа не трогаем через `order.seller` и `order.product`: заказы в
+    # синхронизацию приходят голым запросом, ленивая подгрузка в асинхронном коде
+    # бросает MissingGreenlet и роняет весь проход опроса статусов вместе с
+    # блокировками на батч.
+    seller_name = await session.scalar(
+        select(Seller.name).where(Seller.id == order.seller_id)
+    )
+    product_ids = [product_id for product_id, _ in positions if product_id is not None]
+    products: dict[uuid.UUID, Product] = {}
+    if product_ids:
+        products = {
+            product.id: product
+            for product in (
+                await session.scalars(select(Product).where(Product.id.in_(product_ids)))
+            ).all()
+        }
 
     try:
         await write_operation_fact(
@@ -71,7 +101,7 @@ async def record_fbs_order_confirmed(
             source_event_id=order.id,
             idempotency_key=f"fbs-order:{order.id}",
             seller_id=order.seller_id,
-            seller_name_snapshot=getattr(getattr(order, "seller", None), "name", None),
+            seller_name_snapshot=seller_name,
             warehouse_id=order.warehouse_id,
             marketplace=order.marketplace,
             document_type="fbs_order",
@@ -79,7 +109,10 @@ async def record_fbs_order_confirmed(
             document_number_snapshot=str(order.wb_order_id),
             occurred_at=moment,
             item_quantity=quantity,
-            lines=[line_input(getattr(order, "product", None), order.product_id, quantity)],
+            lines=[
+                line_input(products.get(product_id) if product_id else None, product_id, count)
+                for product_id, count in positions
+            ],
         )
     except OperationFactError:
         # Факт — это летопись, а не деньги: если он не записался, начисление всё
@@ -99,6 +132,14 @@ async def record_fbs_order_confirmed(
             occurred_at=moment,
             performer_id=None,
             warehouse_id=order.warehouse_id,
+            # Без строк ставка ищется только в старой таблице тарифов, а матрица
+            # — единственный живой экран — пишет в новую: начисление выходило с
+            # пустой суммой.
+            lines=product_billing_lines(
+                (product_id, Decimal(count), {"fbs_order_id": str(order.id)})
+                for product_id, count in positions
+                if product_id is not None
+            ),
         )
     except BillingLedgerError:
         logger.exception("fbs order charge failed: order_id=%s", order.id)

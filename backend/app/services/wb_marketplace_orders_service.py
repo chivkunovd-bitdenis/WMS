@@ -1165,7 +1165,13 @@ async def _charge_confirmed_order(session: AsyncSession, order: FbsOrder) -> Non
     """
     from app.services.fbs_order_billing_service import record_fbs_order_confirmed
 
-    await record_fbs_order_confirmed(session, order)
+    try:
+        await record_fbs_order_confirmed(session, order)
+    except Exception:
+        # Деньги важны, но статусы важнее: если начисление почему-то не легло,
+        # проход опроса обязан довезти статусы по всему батчу, а не откатиться
+        # вместе с блокировками. Разбираемся по логу, а не по остановленному складу.
+        logger.exception("fbs order charge skipped: order_id=%s", order.id)
 
 
 def _wb_orders_error_from_client(
