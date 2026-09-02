@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 from sqlalchemy import Select, and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -15,7 +16,11 @@ from app.models.inbound_intake import (
     InboundIntakeRequest,
 )
 from app.models.inventory_balance import InventoryBalance
-from app.models.inventory_count import InventoryCount, InventoryCountLine
+from app.models.inventory_count import (
+    InventoryCount,
+    InventoryCountFoundScan,
+    InventoryCountLine,
+)
 from app.models.inventory_movement import MOVEMENT_TYPE_INVENTORY_COUNT
 from app.models.pallet import Pallet
 from app.models.product import Product
@@ -26,7 +31,10 @@ from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
 from app.services import inventory_service, tenant_settings_service
 from app.services.inventory_container_service import ContainerKind
-from app.services.sorting_location_service import SORTING_LOCATION_CODE
+from app.services.sorting_location_service import (
+    SORTING_LOCATION_CODE,
+    get_or_create_sorting_location,
+)
 from app.services.wb_card_enrichment import subject_name_from_card
 
 STATUS_DRAFT = "draft"
@@ -215,7 +223,18 @@ def _balance_query(
             Product.tenant_id == tenant_id,
             StorageLocation.tenant_id == tenant_id,
             StorageLocation.deleted_at.is_(None),
-            InventoryBalance.quantity > 0,
+            # ⛔ Раньше здесь стояло «остаток больше нуля», и документ молча
+            # собирался без отрицательных строк. А минус в ячейке — самый
+            # сильный признак того, что учёт разъехался с полкой: именно её и
+            # надо пересчитать, а было нельзя. Решение владельца от 01.09.2026.
+            #
+            # Нули при этом не тащим. Строка баланса при обнулении не удаляется,
+            # поэтому в базе лежат нули по всем сочетаниям «товар, ячейка,
+            # тара», которые когда-либо существовали, включая давно уехавшие
+            # короба. Тянуть их в документ значит раздуть его фантомными
+            # строками. Товар, который лежит там, где по учёту его нет,
+            # записывается находкой — для этого есть record_found.
+            InventoryBalance.quantity != 0,
         )
         .options(selectinload(Product.seller))
         .order_by(StorageLocation.code, Product.sku_code)
@@ -403,6 +422,11 @@ async def get_count(
             InventoryCount.tenant_id == tenant_id,
         )
         .options(*_load_options())
+        # Документ мог быть загружен в этой же сессии до вставки строки: без
+        # populate_existing SQLAlchemy вернёт объект из карты идентичности со
+        # старой коллекцией строк, и только что записанной находки в ответе не
+        # окажется.
+        .execution_options(populate_existing=True)
     )
     return result.scalar_one_or_none()
 
@@ -477,6 +501,324 @@ async def save_actuals(
     return loaded
 
 
+@dataclass(frozen=True)
+class FoundResult:
+    """Результат записи находки вместе с честным текстом для оператора."""
+
+    count: InventoryCount
+    expected_quantity: int
+    notice: str
+
+
+def _found_notice(expected_quantity: int) -> str:
+    """Что сказать оператору. Правду, а не то, что удобно.
+
+    Экран решает «это находка» по одному признаку: строки нет в документе. Но
+    документ бывает отобран — по селлеру, по категории, по одному объекту. Тогда
+    «строки нет в документе» и «по учёту здесь ничего нет» — разные вещи, и
+    сказать оператору «не числится», когда на месте лежит двадцать штук,
+    значит соврать: он посчитает одну и уйдёт, а проведение спишет девятнадцать.
+    """
+    if expected_quantity == 0:
+        return "По учёту здесь ничего не числится — записали находку."
+    return (
+        f"По учёту здесь числится {expected_quantity} шт., но строки в документе "
+        "не было — она добавлена. Посчитайте это место целиком, иначе при "
+        "проведении недостающее спишется."
+    )
+
+
+async def record_found(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    count_id: uuid.UUID,
+    *,
+    barcodes: list[str],
+    cell_id: uuid.UUID | None,
+    container_kind: str | None,
+    container_id: uuid.UUID | None,
+    scan_id: str | None = None,
+) -> FoundResult:
+    """Записывает находку: товар лежит там, где по учёту его нет.
+
+    Ради этого пересчёт и затевают. Раньше такой скан отклонялся словами «код в
+    этом документе не числится, находку вносим отдельно» — а «отдельно» не
+    существовало ни кнопкой, ни ручкой, и записать факт было нечем. Решение
+    владельца от 01.09.2026: отсканировал в короб то, чего там нет — строка
+    появляется и в ней становится единица.
+
+    Повторный скан того же товара в том же месте не плодит строки, а
+    увеличивает счёт: человек считает штуками.
+    """
+    # ⛔ Порядок здесь важен. Адрес находки вычисляется ДО блокировки.
+    #
+    # Внутри вычисления может понадобиться создать зону сортировки, а её
+    # создание при гонке делает rollback. Если к тому моменту документ уже
+    # заблокирован, rollback снимет блокировку и обнулит загруженный объект —
+    # следующее обращение к его строкам упадёт пятисоткой. Случай узкий (первая
+    # в жизни склада находка без ячейки), но он есть.
+    preview = await get_count(session, tenant_id, count_id)
+    if preview is None:
+        raise InventoryCountError("count_not_found")
+    if preview.status != STATUS_DRAFT:
+        raise InventoryCountError("count_not_editable")
+    storage_location_id = await _resolve_found_location(
+        session,
+        tenant_id,
+        preview,
+        cell_id=cell_id,
+        container_kind=container_kind,
+        container_id=container_id,
+    )
+
+    # Документ блокируется на всё время записи. Без этого два быстрых скана
+    # одного и того же кода расходятся: оба читают факт 1, оба пишут 2, и одна
+    # штука теряется — а если строки ещё не было, второй ловит уникальный индекс
+    # и оператор получает 500 вместо записи.
+    locked = await session.execute(
+        select(InventoryCount)
+        .where(InventoryCount.id == count_id, InventoryCount.tenant_id == tenant_id)
+        .with_for_update()
+    )
+    if locked.scalar_one_or_none() is None:
+        raise InventoryCountError("count_not_found")
+    count = await get_count(session, tenant_id, count_id)
+    if count is None:
+        raise InventoryCountError("count_not_found")
+    if count.status != STATUS_DRAFT:
+        raise InventoryCountError("count_not_editable")
+
+    codes = [candidate.strip() for candidate in barcodes if candidate.strip()]
+    if not codes:
+        raise InventoryCountError("barcode_required")
+
+    # Повтор того же скана ничего не прибавляет. Склад работает по вайфаю,
+    # который рвётся: ответ не доехал, экран показал ошибку, а запись уже
+    # прошла. Кладовщик сканирует ещё раз — и без этой проверки на остатке
+    # оказывается лишняя штука, которую потом нечем найти.
+    if scan_id:
+        seen = await session.scalar(
+            select(InventoryCountFoundScan).where(
+                InventoryCountFoundScan.count_id == count_id,
+                InventoryCountFoundScan.scan_id == scan_id,
+            )
+        )
+        if seen is not None:
+            loaded = await get_count(session, tenant_id, count_id)
+            assert loaded is not None
+            return FoundResult(
+                loaded, seen.expected_quantity, _found_notice(seen.expected_quantity)
+            )
+
+    # Сканер — обычная клавиатура, и в русской раскладке он отдаёт кириллицу.
+    # Экран умеет переводить раскладку и присылает оба варианта, поэтому ищем по
+    # всем кандидатам и без учёта регистра: точное сравнение отвергало товар,
+    # который экран только что нашёл, и оператор видел два взаимоисключающих
+    # сообщения сразу.
+    lowered = [candidate.lower() for candidate in codes]
+    product_stmt = select(Product).where(
+        Product.tenant_id == tenant_id,
+        or_(
+            func.lower(Product.wb_barcode).in_(lowered),
+            func.lower(Product.sku_code).in_(lowered),
+        ),
+    )
+    # Документ, собранный по одному продавцу, чужой товар не принимает: иначе
+    # пересчёт одного селлера начнёт править остатки другого.
+    if count.seller_id is not None:
+        product_stmt = product_stmt.where(Product.seller_id == count.seller_id)
+    products = list((await session.execute(product_stmt)).scalars().all())
+    if not products:
+        raise InventoryCountError("product_not_found")
+    if len(products) > 1:
+        raise InventoryCountError("barcode_is_ambiguous")
+    product = products[0]
+
+    existing = next(
+        (
+            line
+            for line in count.lines
+            if line.product_id == product.id
+            and line.storage_location_id == storage_location_id
+            and line.container_kind == container_kind
+            and line.container_id == container_id
+        ),
+        None,
+    )
+    if existing is not None:
+        existing.actual_quantity = int(existing.actual_quantity or 0) + 1
+        expected = int(existing.expected_quantity)
+        _remember_scan(session, tenant_id, count_id, existing.id, scan_id, expected)
+        await session.commit()
+        loaded = await get_count(session, tenant_id, count_id)
+        assert loaded is not None
+        return FoundResult(loaded, expected, _found_notice(expected))
+
+    line = InventoryCountLine(
+        count_id=count.id,
+        product_id=product.id,
+        storage_location_id=storage_location_id,
+        container_kind=container_kind,
+        container_id=container_id,
+        expected_quantity=0,
+        actual_quantity=1,
+        posted_delta=None,
+    )
+    # «Числится» берём из живого остатка: обычно это ноль, но товар мог
+    # приехать сюда уже после наполнения документа, и тогда честнее показать
+    # реальное число, а не выдуманный ноль.
+    line.expected_quantity = await _current_quantity(
+        session, tenant_id=tenant_id, line=line, lock=False
+    )
+    expected = int(line.expected_quantity)
+    session.add(line)
+    await session.flush()
+    _remember_scan(session, tenant_id, count_id, line.id, scan_id, expected)
+    try:
+        await session.commit()
+    except IntegrityError:
+        # Гонку с параллельным сканом того же товара разбираем как инкремент:
+        # уникальный индекс по строке документа сработал, значит соседний запрос
+        # уже завёл её, и правильный ответ — прибавить штуку, а не отдать 500.
+        await session.rollback()
+        return await _increment_existing_found_line(
+            session,
+            tenant_id,
+            count_id,
+            product_id=product.id,
+            storage_location_id=storage_location_id,
+            container_kind=container_kind,
+            container_id=container_id,
+        )
+    loaded = await get_count(session, tenant_id, count_id)
+    assert loaded is not None
+    return FoundResult(loaded, expected, _found_notice(expected))
+
+
+def _remember_scan(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    count_id: uuid.UUID,
+    line_id: uuid.UUID,
+    scan_id: str | None,
+    expected_quantity: int,
+) -> None:
+    """Запоминает скан, чтобы его повтор не прибавил вторую штуку."""
+    if not scan_id:
+        return
+    session.add(
+        InventoryCountFoundScan(
+            tenant_id=tenant_id,
+            count_id=count_id,
+            line_id=line_id,
+            scan_id=scan_id,
+            expected_quantity=expected_quantity,
+        )
+    )
+
+
+async def _resolve_found_location(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    count: InventoryCount,
+    *,
+    cell_id: uuid.UUID | None,
+    container_kind: str | None,
+    container_id: uuid.UUID | None,
+) -> uuid.UUID:
+    """Определяет адрес находки. Угадывать его на экране нельзя.
+
+    Модель сканера у оператора простая: он пикает МЕСТО, а не адрес. Место —
+    это либо тара, либо ячейка, либо ничего. Адрес из места выводит сервер:
+
+    * пикнули тару — адрес берём из карточки самой тары; палета или грузоместо
+      могут стоять без ячейки, и это нормальное состояние, а не ошибка: тогда
+      адресом становится зона сортировки;
+    * пикнули ячейку — она и есть адрес;
+    * не пикнули ничего — россыпь без ячейки, то есть та же зона сортировки.
+
+    Раньше адрес считал экран, и на двух этих случаях он присылал строку
+    «unassigned» — виртуальную строку дерева, а не ячейку, — и находка падала.
+    """
+    if (container_kind is None) != (container_id is None):
+        raise InventoryCountError("container_reference_invalid")
+
+    warehouse_id = count.warehouse_id
+    if warehouse_id is None:
+        raise InventoryCountError("warehouse_required_without_address_storage")
+
+    if container_kind is not None and container_id is not None:
+        # ⛔ Не писать здесь свой поиск «где стоит эта тара».
+        #
+        # Он уже есть один на всю систему и знает то, чего не видно с первого
+        # взгляда: у короба, положенного на палету, собственная ячейка
+        # обнуляется и остаётся только ссылка на палету; приёмочные короба и
+        # грузоместа живут в отдельных таблицах; если ничего не проставлено,
+        # адрес берётся из фактического остатка этой тары. Своя короткая
+        # версия этой функции возвращала «ячейки нет» и уводила находку в зону
+        # сортировки — а оттуда товар уходит в кабинет продавца как доступный к
+        # продаже, но подобрать его под отгрузку уже нельзя.
+        #
+        # Проверку тары resolve_container_location делает сам.
+        from app.services.warehouse_map_service import resolve_container_location
+
+        try:
+            return await resolve_container_location(
+                session,
+                tenant_id,
+                warehouse_id,
+                cast(ContainerKind, container_kind),
+                container_id,
+            )
+        except ValueError as exc:
+            raise InventoryCountError("container_not_found") from exc
+
+    if cell_id is not None:
+        location = await session.get(StorageLocation, cell_id)
+        if (
+            location is None
+            or location.tenant_id != tenant_id
+            or location.deleted_at is not None
+            or location.warehouse_id != warehouse_id
+        ):
+            raise InventoryCountError("storage_location_not_found")
+        return location.id
+
+    sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+    return sorting.id
+
+
+async def _increment_existing_found_line(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    count_id: uuid.UUID,
+    *,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+    container_kind: str | None,
+    container_id: uuid.UUID | None,
+) -> FoundResult:
+    line = await session.scalar(
+        select(InventoryCountLine)
+        .where(
+            InventoryCountLine.count_id == count_id,
+            InventoryCountLine.product_id == product_id,
+            InventoryCountLine.storage_location_id == storage_location_id,
+            InventoryCountLine.container_kind == container_kind,
+            InventoryCountLine.container_id == container_id,
+        )
+        .with_for_update()
+    )
+    if line is None:
+        raise InventoryCountError("count_not_found")
+    line.actual_quantity = int(line.actual_quantity or 0) + 1
+    expected = int(line.expected_quantity)
+    await session.commit()
+    loaded = await get_count(session, tenant_id, count_id)
+    assert loaded is not None
+    return FoundResult(loaded, expected, _found_notice(expected))
+
+
 async def _current_quantity(
     session: AsyncSession,
     *,
@@ -503,18 +845,63 @@ async def current_quantities(
     session: AsyncSession,
     count: InventoryCount,
 ) -> dict[uuid.UUID, int]:
+    """Сколько числится сейчас по каждой строке документа.
+
+    Раньше здесь был запрос на каждую строку. Документ на тысячу строк давал
+    тысячу запросов, и это выполнялось на каждой отдаче документа — то есть на
+    каждом сохранении и на каждой находке. Кладовщик сканирует непрерывно, и
+    ждать он не должен. Теперь весь остаток по местам документа поднимается
+    одним запросом, а строки разбираются по нему в памяти.
+    """
     values: dict[uuid.UUID, int] = {}
+    pending = [
+        line
+        for line in count.lines
+        if not (count.status == STATUS_POSTED and line.actual_quantity is not None)
+    ]
     for line in count.lines:
         if count.status == STATUS_POSTED and line.actual_quantity is not None:
-            posted_delta = int(line.posted_delta or 0)
-            values[line.id] = int(line.actual_quantity) - posted_delta
-        else:
-            values[line.id] = await _current_quantity(
-                session,
-                tenant_id=count.tenant_id,
-                line=line,
-                lock=False,
+            values[line.id] = int(line.actual_quantity) - int(line.posted_delta or 0)
+
+    if not pending:
+        return values
+
+    location_ids = {
+        line.storage_location_id for line in pending if line.storage_location_id is not None
+    }
+    product_ids = {line.product_id for line in pending}
+    balances: dict[
+        tuple[uuid.UUID, uuid.UUID, str | None, uuid.UUID | None], int
+    ] = {}
+    if location_ids and product_ids:
+        rows = await session.execute(
+            select(
+                InventoryBalance.product_id,
+                InventoryBalance.storage_location_id,
+                InventoryBalance.container_kind,
+                InventoryBalance.container_id,
+                InventoryBalance.quantity,
+            ).where(
+                InventoryBalance.tenant_id == count.tenant_id,
+                InventoryBalance.storage_location_id.in_(location_ids),
+                InventoryBalance.product_id.in_(product_ids),
             )
+        )
+        for product_id, location_id, kind, container_id, quantity in rows:
+            balances[(product_id, location_id, kind, container_id)] = int(quantity or 0)
+
+    for line in pending:
+        if line.storage_location_id is None:
+            raise InventoryCountError("line_storage_location_missing")
+        values[line.id] = balances.get(
+            (
+                line.product_id,
+                line.storage_location_id,
+                line.container_kind,
+                line.container_id,
+            ),
+            0,
+        )
     return values
 
 

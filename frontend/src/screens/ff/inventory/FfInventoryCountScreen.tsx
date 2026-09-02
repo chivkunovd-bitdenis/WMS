@@ -20,7 +20,10 @@ import type { ReportMetricItem, StatusTone } from '../../../ui-kit'
 import { CommentField } from './CommentField'
 import {
   applyScan,
+  cellLabel,
   containerName,
+  NOTHING_OPEN,
+  type ScanOpenPlace,
   type ScanTone,
 } from './InventoryScan'
 import { InventoryScanField } from './InventoryScanField'
@@ -66,11 +69,32 @@ type Props = {
   error: string | null
   /** Что сказали в ответ на сохранение или проведение. */
   note: string | null
-  onChange: (next: InventoryCount) => void
+  /**
+   * Изменение документа. Второй аргумент — строка, которую тронул оператор:
+   * по нему страница понимает, что именно отправлять на сервер, и не пишет
+   * поверх работы второго кладовщика в том же документе.
+   */
+  onChange: (next: InventoryCount, touchedLineId?: string) => void
   onSave: () => void
   onPost: () => void
   onCancelDocument: () => void
+  /**
+   * Сколько сканов находок ещё не доставлено на сервер.
+   *
+   * Пока их больше нуля, документ проводить нельзя: проведение зафиксирует
+   * остаток без того, что оператор уже отсканировал, а вернуться в проведённый
+   * документ невозможно.
+   */
+  pendingFound?: number
   onCreateContainer?: (kind: 'pallet' | 'box' | 'cargo_place') => void
+  /** Записать находку: товар лежит там, где по учёту его нет. */
+  onFound?: (place: {
+    barcodes: string[]
+    cellId: string | null
+    containerKind: 'pallet' | 'box' | 'cargo_place' | null
+    containerId: string | null
+    scanId: string
+  }) => void
   onBack: () => void
 }
 
@@ -84,13 +108,15 @@ export function FfInventoryCountScreen({
   onSave,
   onPost,
   onCancelDocument,
+  pendingFound = 0,
   onCreateContainer,
+  onFound,
   onBack,
 }: Props) {
   const [filters, setFilters] = useState<InvFilters>(EMPTY_FILTERS)
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
-  // Память сканера на одну вещь: какую тару открыли. Пока открыта, пики идут в неё.
-  const [openContainerId, setOpenContainerId] = useState<string | null>(null)
+  // Память сканера: что сейчас открыто — тара и/или ячейка. Пики идут туда.
+  const [openPlace, setOpenPlace] = useState<ScanOpenPlace>(NOTHING_OPEN)
   const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
   const [scanFocus, setScanFocus] = useState<{ key: string; request: number } | null>(null)
 
@@ -105,8 +131,8 @@ export function FfInventoryCountScreen({
   }, [scanFocus])
 
   function handleScan(code: string) {
-    const result = applyScan(count, code, openContainerId)
-    setOpenContainerId(result.activeContainerId)
+    const result = applyScan(count, code, openPlace)
+    setOpenPlace(result.open)
     setScanNote({ text: result.message, tone: result.tone })
     if (result.focusRowKey) {
       const openKeys = result.focusPathKeys ?? []
@@ -123,7 +149,32 @@ export function FfInventoryCountScreen({
         request: (current?.request ?? 0) + 1,
       }))
     }
-    if (result.count !== count) onChange(result.count)
+    if (result.found) {
+      // Идентификатор скана рождается здесь, на одном пике. Если ответ не
+      // доедет и оператор пикнет ещё раз, это будет уже другой скан — а вот
+      // повтор этого же запроса сервер узнает и не посчитает дважды.
+      onFound?.({ ...result.found, scanId: crypto.randomUUID() })
+    }
+    if (result.count !== count) {
+      const touched = result.focusRowKey?.startsWith('product:')
+        ? result.focusRowKey.slice('product:'.length)
+        : undefined
+      onChange(result.count, touched)
+    }
+  }
+
+  // Явная кнопка рядом со сканером: не у каждого оператора под рукой штрихкод
+  // открытой тары, а совет «закройте тару» без способа закрыть — издевательство.
+  function closeOpenPlace() {
+    if (openPlace.containerId) {
+      const name = containerName(count, openPlace.containerId)
+      setOpenPlace({ containerId: null, cellId: openPlace.cellId })
+      setScanNote({ text: `Закрыли ${name}. Пики идут россыпью в эту ячейку.`, tone: 'ok' })
+      return
+    }
+    if (!openPlace.cellId) return
+    setOpenPlace(NOTHING_OPEN)
+    setScanNote({ text: 'Ячейка закрыта.', tone: 'ok' })
   }
 
   const readOnly = count.status !== 'draft'
@@ -148,7 +199,7 @@ export function FfInventoryCountScreen({
   }
 
   function handleActual(row: InvRow, value: number | null) {
-    onChange(setActual(count, row.id, value))
+    onChange(setActual(count, row.id, value), row.id)
   }
 
   const metrics: ReportMetricItem[] = [
@@ -164,9 +215,11 @@ export function FfInventoryCountScreen({
   const nothingCounted = t.counted === 0
   const postReason = readOnly
     ? 'Документ уже проведён — правки закрыты'
-    : nothingCounted
-      ? 'Не введено ни одной цифры'
-      : undefined
+    : pendingFound > 0
+      ? `Ещё не сохранено находок: ${pendingFound}. Дождитесь отправки`
+      : nothingCounted
+        ? 'Не введено ни одной цифры'
+        : undefined
 
   return (
     <Box sx={{ p: 3 }}>
@@ -259,14 +312,23 @@ export function FfInventoryCountScreen({
           <InventoryScanField
             onScan={handleScan}
             expects={
-              openContainerId
-                ? `товар в ${containerName(count, openContainerId)}`
-                : 'ШК тары или товара'
+              openPlace.containerId
+                ? `товар в ${containerName(count, openPlace.containerId)}`
+                : openPlace.cellId
+                  ? `товар россыпью в ячейке ${cellLabel(count, openPlace.cellId)}`
+                  : 'ШК ячейки, тары или товара'
             }
             error={scanNote?.tone === 'error' ? scanNote.text : null}
             notice={scanNote && scanNote.tone !== 'error' ? scanNote.text : null}
             testId="inv-scan"
           />
+          {openPlace.containerId || openPlace.cellId ? (
+            <Box sx={{ mt: 1 }}>
+              <SecondaryAction onClick={closeOpenPlace} data-testid="inv-close-container">
+                {openPlace.containerId ? 'Закрыть тару' : 'Закрыть ячейку'}
+              </SecondaryAction>
+            </Box>
+          ) : null}
         </Box>
       ) : null}
 
