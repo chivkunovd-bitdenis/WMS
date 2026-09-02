@@ -695,7 +695,7 @@ def _build_delivery_checks(
                     )
                 )
 
-        if order.product_id is None:
+        if supply.marketplace == "wb" and order.product_id is None:
             checks.append(
                 DeliveryCheck(
                     code="order_product_not_mapped",
@@ -1221,10 +1221,14 @@ async def _write_off_delivered_orders_once(
             existing_ledgers[order.id] = ledger
         if ledger is None:
             if order.product_id is None:
-                # Товар не сопоставлен с карточкой: списывать нечего. Заказ
-                # уедет в WB вместе с поставкой, но движения по складу не будет
-                # — оператор увидел это предупреждением перед передачей.
-                continue
+                # Сюда доходит только Ozon: заказы WB без сопоставленного товара
+                # отсеяны фильтром active_orders выше — для них решение владельца
+                # уже применено, они уезжают с предупреждением и без списания.
+                #
+                # У Ozon такого решения нет, и молча отпускать поставку без
+                # списания нельзя: товар уедет физически, а в системе останется,
+                # и найти это расхождение будет нечем — ledger не создаётся.
+                raise FbsShipmentError("fbs_shipment_product_missing", http_status=409)
             resolution = resolutions.get(order.id)
             if resolution is None and order.marketplace == "ozon":
                 sorting = await get_or_create_sorting_location(
