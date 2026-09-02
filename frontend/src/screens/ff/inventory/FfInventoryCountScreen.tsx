@@ -27,6 +27,7 @@ import {
   type ScanTone,
 } from './InventoryScan'
 import { InventoryScanField } from './InventoryScanField'
+import { randomId } from '../../../utils/randomId'
 import { InventoryTree } from './InventoryTree'
 import {
   EMPTY_FILTERS,
@@ -153,7 +154,7 @@ export function FfInventoryCountScreen({
       // Идентификатор скана рождается здесь, на одном пике. Если ответ не
       // доедет и оператор пикнет ещё раз, это будет уже другой скан — а вот
       // повтор этого же запроса сервер узнает и не посчитает дважды.
-      onFound?.({ ...result.found, scanId: crypto.randomUUID() })
+      onFound?.({ ...result.found, scanId: randomId() })
     }
     if (result.count !== count) {
       const touched = result.focusRowKey?.startsWith('product:')
