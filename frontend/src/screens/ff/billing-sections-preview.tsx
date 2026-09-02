@@ -1,96 +1,194 @@
-import { StrictMode, useState } from 'react'
+import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
-import { Box, CssBaseline, ThemeProvider, Typography } from '@mui/material'
+import { CssBaseline, ThemeProvider } from '@mui/material'
 
 import { muiTheme } from '../../mui/theme'
-import { FfBillingSellerDetails } from './FfBillingSellerDetails'
-import type { SellerReportDetails, SellerReportEntry } from './FfBillingSellerDetails'
+import { AuthedAppLayout } from '../../layouts/AuthedAppLayout'
+import { FfBillingScreen } from './FfBillingScreen'
 import '../../index.css'
 
-// Превью раскрывашки селлера на выдуманных данных: сервер и вход не нужны.
-// Экран расчётов целиком без токена не открыть, а смотреть на разделы глазами
-// надо — иначе правка вёрстки проверяется только на стенде после выкатки.
+// Полный макет экрана «Расчёты» на подставных данных.
+//
+// Это не отдельная страница-рисунок: рендерится настоящий экран внутри
+// настоящего шелла портала — левое меню, шапка, вкладки, фильтры, плашки,
+// кнопка «Выставить счёт». Подменён только сервер: `fetch` отвечает выдуманным
+// отчётом. Поэтому макет показывает ровно то, что увидит оператор вживую.
 
-function entry(
-  id: string,
-  serviceCode: string,
-  documentNumber: string,
-  quantity: number,
-  rate: number,
-  day: number,
-): SellerReportEntry {
+const SELLERS = [
+  { id: 'seller-1', name: 'Ромашка' },
+  { id: 'seller-2', name: 'Северный ветер' },
+  { id: 'seller-3', name: 'Луна Трейд' },
+]
+
+const SUMMARY = {
+  rows: [
+    {
+      seller_id: 'seller-1',
+      seller_name: 'Ромашка',
+      operation_count: 24,
+      item_quantity: 2745,
+      not_billable_count: 2,
+      details_target: '',
+      unpriced_count: 0,
+      net_total_kopecks: 913500,
+    },
+    {
+      seller_id: 'seller-2',
+      seller_name: 'Северный ветер',
+      operation_count: 11,
+      item_quantity: 860,
+      not_billable_count: 0,
+      details_target: '',
+      unpriced_count: 3,
+      net_total_kopecks: 264000,
+    },
+    {
+      seller_id: 'seller-3',
+      seller_name: 'Луна Трейд',
+      operation_count: 6,
+      item_quantity: 410,
+      not_billable_count: 1,
+      details_target: '',
+      unpriced_count: 0,
+      net_total_kopecks: 118000,
+    },
+  ],
+  totals: {
+    seller_count: 3,
+    operation_count: 41,
+    item_quantity: 4015,
+    not_billable_count: 3,
+    net_total_kopecks: 1295500,
+  },
+}
+
+type StubEntry = {
+  id: string
+  service: string
+  number: string
+  quantity: number
+  rate: number
+  day: number
+  invoiced?: number
+}
+
+const ENTRIES: Record<string, StubEntry[]> = {
+  'seller-1': [
+    { id: 'in-1', service: 'inbound', number: 'Приёмка № 000045', quantity: 1480, rate: 300, day: 12, invoiced: 1 },
+    { id: 'in-2', service: 'inbound', number: 'Приёмка № 000046', quantity: 320, rate: 300, day: 14 },
+    { id: 'pack-1', service: 'packing', number: 'Упаковка № 000031', quantity: 640, rate: 500, day: 18 },
+    { id: 'pack-2', service: 'packing', number: 'Упаковка № 000032', quantity: 45, rate: 700, day: 19 },
+    { id: 'out-1', service: 'marketplace_outbound', number: 'Отгрузка № 000012', quantity: 820, rate: 300, day: 21 },
+    { id: 'out-2', service: 'marketplace_outbound', number: 'Отгрузка № 000014', quantity: 260, rate: 300, day: 26 },
+    { id: 'ret-1', service: 'return', number: 'Возврат № 000004', quantity: 18, rate: 400, day: 27 },
+  ],
+  'seller-2': [
+    { id: 'in-3', service: 'inbound', number: 'Приёмка № 000041', quantity: 560, rate: 300, day: 9 },
+    { id: 'out-3', service: 'marketplace_outbound', number: 'Отгрузка № 000009', quantity: 300, rate: 300, day: 16 },
+  ],
+  'seller-3': [
+    { id: 'in-4', service: 'inbound', number: 'Приёмка № 000038', quantity: 410, rate: 300, day: 11 },
+  ],
+}
+
+function detailsFor(sellerId: string) {
+  const seller = SELLERS.find((row) => row.id === sellerId)
   return {
-    id,
-    kind: 'operation_fact',
-    occurred_at: `2026-08-${String(day).padStart(2, '0')}T09:30:00Z`,
-    service_code: serviceCode,
-    item_quantity: quantity,
-    source_type: serviceCode === 'inbound' ? 'inbound_intake' : 'marketplace_unload',
-    source_id: id,
-    source_target: { kind: 'route', to: '#' },
-    document_number: documentNumber,
-    product_name: null,
-    sku: null,
-    result: 'completed',
-    unit: 'item',
-    rate_kopecks: rate,
-    amount_kopecks: rate * quantity,
-    billing_ledger_entry_id: `ledger-${id}`,
-    invoice_history: { state: 'known', count: id.endsWith('1') ? 1 : 0 },
+    seller_id: sellerId,
+    seller_name: seller?.name ?? 'Селлер',
+    entries: (ENTRIES[sellerId] ?? []).map((row) => ({
+      id: row.id,
+      kind: 'operation_fact' as const,
+      occurred_at: `2026-08-${String(row.day).padStart(2, '0')}T09:30:00Z`,
+      service_code: row.service,
+      item_quantity: row.quantity,
+      source_type: row.service === 'inbound' ? 'inbound_intake' : 'marketplace_unload',
+      source_id: row.id,
+      source_target: { kind: 'route' as const, to: '#' },
+      document_number: row.number,
+      product_name: null,
+      sku: null,
+      result: 'completed' as const,
+      unit: 'item',
+      rate_kopecks: row.rate,
+      amount_kopecks: row.rate * row.quantity,
+      billing_ledger_entry_id: `ledger-${row.id}`,
+      invoice_history: { state: 'known' as const, count: row.invoiced ?? 0 },
+    })),
+    storage_row: {
+      kind: 'storage' as const,
+      date_from: '2026-08-01',
+      date_to: '2026-08-31',
+      liter_days: 1240,
+      status: 'calculated' as const,
+      amount_kopecks: 62000,
+      calculation_token: 'preview-token',
+    },
+    next_cursor: null,
   }
 }
 
-const details: SellerReportDetails = {
-  seller_id: 'seller-1',
-  seller_name: 'Ромашка',
-  entries: [
-    entry('in-1', 'inbound', 'Приёмка № 000045', 120, 300, 12),
-    entry('in-2', 'inbound', 'Приёмка № 000046', 80, 300, 14),
-    entry('out-1', 'marketplace_outbound', 'Отгрузка № 000012', 200, 300, 18),
-    entry('pack-1', 'packing', 'Упаковка № 000031', 200, 500, 18),
-    entry('pack-2', 'packing', 'Упаковка № 000032', 45, 700, 19),
-  ],
-  storage_row: {
-    kind: 'storage',
-    date_from: '2026-08-01',
-    date_to: '2026-08-31',
-    liter_days: 1240,
-    status: 'calculated',
-    amount_kopecks: 62000,
-    calculation_token: 'token',
-  },
-  next_cursor: null,
+function stubResponse(url: string): unknown {
+  if (url.includes('/billing/seller-report/summary')) return SUMMARY
+  const details = /\/billing\/seller-report\/sellers\/([^/?]+)\/details/.exec(url)
+  if (details) return detailsFor(details[1] ?? 'seller-1')
+  if (url.includes('/billing/invoices')) return { items: [], next_cursor: null }
+  if (url.includes('/notifications')) return { items: [], unread_count: 0 }
+  return {}
 }
 
-export function BillingSectionsPreview() {
-  const [picked, setPicked] = useState<string[]>([])
-  const [storagePicked, setStoragePicked] = useState(false)
+function installStubServer() {
+  window.fetch = ((input: RequestInfo | URL) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+    return Promise.resolve(
+      new Response(JSON.stringify(stubResponse(url)), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+  }) as typeof window.fetch
+}
+
+// Раскрыть надо ровно один раз за загрузку страницы: StrictMode прогоняет
+// эффект дважды, и второй клик сложил бы селлера обратно.
+let autoExpanded = false
+
+export function BillingScreenPreview() {
+  // Селлер раскрывается сам: макет должен показывать разделы, а не пустую
+  // таблицу, в которую ещё надо догадаться ткнуть.
+  useEffect(() => {
+    if (autoExpanded) return
+    let tries = 0
+    const timer = window.setInterval(() => {
+      tries += 1
+      const toggle = document.querySelector<HTMLButtonElement>(
+        '[data-testid^="billing-seller-summary-expand-"]',
+      )
+      if (toggle) {
+        autoExpanded = true
+        toggle.click()
+        window.clearInterval(timer)
+        return
+      }
+      if (tries > 40) window.clearInterval(timer)
+    }, 100)
+    return () => window.clearInterval(timer)
+  }, [])
+
   return (
     <ThemeProvider theme={muiTheme}>
       <CssBaseline />
-      <MemoryRouter>
-        <Box sx={{ p: 3 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-            Превью раскрывашки селлера на выдуманных данных. В портале она живёт под строкой
-            селлера в таблице «Расчёты». Выбрано начислений: {picked.length}
-            {storagePicked ? ' + хранение' : ''}.
-          </Typography>
-          <FfBillingSellerDetails
-            details={details}
-            loading={false}
-            error={false}
-            includeFinance
-            selectedRootIds={picked}
-            onToggleRoot={(id, checked) =>
-              setPicked((ids) => (checked ? [...new Set([...ids, id])] : ids.filter((x) => x !== id)))
-            }
-            storageSelected={storagePicked}
-            onToggleStorage={setStoragePicked}
-            onLoadMore={() => undefined}
-            onOpenInbound={() => undefined}
-          />
-        </Box>
+      <MemoryRouter initialEntries={['/app/ff/billing']}>
+        <AuthedAppLayout
+          onLogout={() => undefined}
+          portal="ff"
+          meRole="fulfillment_admin"
+          userLabel="staging-admin@example.com"
+          userRoleLabel="администратор"
+        >
+          <FfBillingScreen token="preview" sellers={SELLERS} onOpenInbound={() => undefined} />
+        </AuthedAppLayout>
       </MemoryRouter>
     </ThemeProvider>
   )
@@ -98,13 +196,15 @@ export function BillingSectionsPreview() {
 
 type RootHost = HTMLElement & { __previewRoot?: ReturnType<typeof createRoot> }
 
+installStubServer()
+
 const container = document.getElementById('root') as RootHost | null
 if (container) {
   const root = container.__previewRoot ?? createRoot(container)
   container.__previewRoot = root
   root.render(
     <StrictMode>
-      <BillingSectionsPreview />
+      <BillingScreenPreview />
     </StrictMode>,
   )
 }
