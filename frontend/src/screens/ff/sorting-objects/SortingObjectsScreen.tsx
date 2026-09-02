@@ -89,13 +89,20 @@ type SortingScreenProps = {
    */
   savedImmediately?: boolean
   /** Поставить объект или товар на ячейку. Без него экран двигает только себя. */
+  /**
+   * Отдать перенос серверу.
+   *
+   * Возвращает идентификатор строки остатка в месте назначения — экран
+   * подставит его вместо временного. Без этого второй перенос той же строки
+   * уходит с выдуманным id и ловит 404 «объект не найден».
+   */
   onPlace?: (payload: {
     kind: ObjKind | 'product'
     id: string
     cellId: string | null
     toId: string | null
     qty: number
-  }) => void
+  }) => void | Promise<string | null>
 }
 
 export function SortingObjectsScreen({
@@ -159,6 +166,14 @@ export function SortingObjectsScreen({
   }
 
   function moveGoods(line: GoodsLine, qty: number, target: Holder) {
+    // Строка, за которую сервер ещё не ответил, не имеет настоящего
+    // идентификатора. Отправить её нельзя: сервер такой строки не знает и
+    // ответит «объект не найден», а экран откатит перенос, и оператор решит,
+    // что раскладка сбрасывается сама.
+    if (line.id.startsWith('pending-')) {
+      onNote('Секунду — предыдущий перенос ещё записывается. Повторите.')
+      return
+    }
     // Экран двигает у себя сразу, не дожидаясь сервера: оператор ставит короба
     // подряд, и пауза на каждый ответ превращает раскладку в ожидание.
     //
@@ -169,15 +184,25 @@ export function SortingObjectsScreen({
     // любая раскладка россыпи — и в ячейку, и в короб — отвечала 404
     // `object_not_found`: экран откатывал перенос и перечитывал склад, а
     // оператор видел, что строка «сбрасывается».
-    onPlace?.({ kind: 'product', id: line.id, qty, ...targetParts(target) })
+    const sent = onPlace?.({ kind: 'product', id: line.id, qty, ...targetParts(target) })
+    // Временный идентификатор живёт ровно до ответа сервера. Он нужен, чтобы
+    // строка появилась на экране мгновенно, но уходить на сервер он не должен
+    // никогда — сервер знает только настоящие строки остатка.
+    const pendingId = `pending-${crypto.randomUUID()}`
     setLines((current) => {
       const rest = current.filter((one) => one.id !== line.id)
       const left = line.qty - qty
       const twin = rest.find((one) => one.productId === line.productId && one.holder === target)
       const withTarget = twin
         ? rest.map((one) => (one === twin ? { ...one, qty: one.qty + qty } : one))
-        : [...rest, { id: `l-${Date.now()}-${line.id}`, productId: line.productId, qty, holder: target }]
+        : [...rest, { id: pendingId, productId: line.productId, qty, holder: target }]
       return left > 0 ? [...withTarget, { ...line, qty: left }] : withTarget
+    })
+    void Promise.resolve(sent).then((balanceId) => {
+      if (!balanceId) return
+      setLines((current) =>
+        current.map((one) => (one.id === pendingId ? { ...one, id: balanceId } : one)),
+      )
     })
   }
 

@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import selectinload
 
 from app.db.session import SessionLocal
@@ -3588,14 +3588,15 @@ def test_gs_restore_normalizes_trailing_gs1_terminator_without_losing_data() -> 
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "ДЕФЕКТ (остаточный, внесён починкой половинчатых кодов): очистка "
-        "хвоста от разделителей сделала достраивание применимым и к кодам, "
-        "которые уже разбирались однозначно. КИЗ вида 21<серийник><GS>92<44> "
-        "(без блока 91), чей серийник заканчивается на шаблон '91'+2 символа, "
-        "переразбирается: шесть символов серийного номера уезжают в выдуманный "
-        "блок 91, и в WB уходит другой ЛОГИЧЕСКИЙ код при тех же байтах. "
-        "Лечится проверкой «если значение уже разбирается как валидный GS1 "
-        "имеющимися разделителями — не трогать»."
+        "ГРАНИЦА ВОЗМОЖНОСТЕЙ, а не недоделка. Два случая структурно "
+        "НЕОТЛИЧИМЫ: 21<серийник>91<4><GS>92<44> — это и код, потерявший "
+        "разделитель перед 91 (чинить надо), и код, чей серийник сам "
+        "оканчивается на '91'+4 символа (чинить нельзя). Признака, по которому "
+        "их развести внутри самой строки, не существует — проверено. Поэтому "
+        "чистая функция разбирает частый случай, а спор решается данными: "
+        "alternative_cis_reading() отдаёт второе прочтение, и _validate_kiz_pair "
+        "выбирает то, которое знает наш пул. См. "
+        "test_kiz_ambiguous_reading_resolved_by_pool."
     ),
 )
 def test_gs_restore_does_not_reparse_a_code_that_already_parses() -> None:
@@ -3643,3 +3644,159 @@ def test_gs_restore_refuses_rather_than_guesses_unknown_kiz_shapes(
 
     assert value == raw, case
     assert hints == ["gs_unrestorable"], case
+
+
+@pytest.mark.asyncio
+async def test_fbs_kiz_duplicate_is_caught_across_separator_representations(
+    async_client: AsyncClient,
+) -> None:
+    # TC-NEW-FBS-KIZ-I3-015: разделители GS — разметка, а не данные. Один и тот
+    # же физический код склад мог сохранить и с ними, и без: на бою из 42
+    # привязанных к заказам кодов 16 при пересканировании давали другую строку.
+    # Пока сверка шла по сырой строке, такой код спокойно уезжал во ВТОРОЙ
+    # заказ — оператор не получал ни отказа, ни подсказки, а в WB один КИЗ
+    # уходил дважды.
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    # Заказ-владелец хранит код БЕЗ разделителей — как он лежит в боевой базе.
+    stored = _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=False)
+    rescanned = _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=True)
+    assert stored != rescanned
+    assert stored.replace(_GS, "") == rescanned.replace(_GS, "")
+
+    await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=933101,
+        sticker_code="GSDUP-OWNER",
+        wb_barcode="GSDUP-OWNER-BAR",
+        marking=FbsOrderMarking(
+            order_id=uuid.uuid4(),
+            tenant_id=tenant_id,
+            kind=MARKING_KIND_SGTIN,
+            value=stored,
+            source="operator",
+            check_status=CHECK_STATUS_NEW,
+            meta_status=META_STATUS_ACCEPTED,
+        ),
+    )
+    target = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=933102,
+        sticker_code="GSDUP-TARGET",
+        wb_barcode="GSDUP-TARGET-BAR",
+    )
+
+    response = await async_client.post(
+        "/operations/fbs-orders/kiz/validate",
+        headers=headers,
+        json={"order_id": str(target.order_id), "value": rescanned},
+    )
+
+    assert response.status_code == 409, response.text
+    detail = response.json()["detail"]
+    assert detail["code"] == "duplicate_kiz"
+    assert detail["context"]["wb_order_id"] == 933101
+
+
+def test_alternative_reading_offered_only_when_two_readings_are_legal() -> None:
+    # TC-NEW-FBS-KIZ-I3-016: развести «потерян разделитель» и «серийник сам
+    # кончается на 91+4» внутри строки нельзя — обе выглядят одинаково.
+    # Функция обязана честно отдать второе прочтение там, где спор есть, и
+    # молчать там, где его нет.
+    ambiguous = f"01{_GTIN14}21AB91ZZQQ{_GS}92{_SIGNATURE_44}"
+    assert kiz_svc.alternative_cis_reading(ambiguous) == ambiguous
+
+    # Склеенный код: своими разделителями не разбирается, спорить не о чем.
+    glued = _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=False)
+    assert kiz_svc.alternative_cis_reading(glued) is None
+
+    # Канонический код: достраивание ничего не меняет, спора нет.
+    canonical = _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=True)
+    assert kiz_svc.alternative_cis_reading(canonical) is None
+
+
+@pytest.mark.asyncio
+async def test_kiz_ambiguous_reading_resolved_by_pool(
+    async_client: AsyncClient,
+) -> None:
+    # TC-NEW-FBS-KIZ-I3-017: два законных прочтения спорного кода развести
+    # внутри строки нельзя — оба выглядят как «серийник, оканчивающийся на 91
+    # плюс четыре символа, разделитель, блок 92». Спор решает наш пул: если мы
+    # выпускали код именно в исходном виде, достраивать его нельзя, иначе в WB
+    # уедет ДРУГОЙ логический код при тех же байтах.
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=933201,
+        sticker_code="AMBIG",
+        wb_barcode="AMBIG-BAR",
+        with_packaging=True,
+    )
+    scanned = f"01{_GTIN14}21AB91ZZQQ{_GS}92{_SIGNATURE_44}"
+    # Чистый разбор распиливает этот код: шесть символов серийника уезжают в
+    # выдуманный блок 91.
+    reparsed, _ = kiz_svc.normalize_scanned_cis(scanned)
+    assert reparsed != scanned
+    assert reparsed.replace(_GS, "") == scanned.replace(_GS, "")
+
+    async with SessionLocal() as session:
+        session.add(
+            MarkingCode(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                product_id=order.product_id,
+                cis_code=scanned,
+                source="pool",
+                status=STATUS_AVAILABLE,
+            )
+        )
+        await session.commit()
+
+    async with SessionLocal() as session:
+        validated = await kiz_svc._validate_kiz_pair(
+            session, tenant_id, order.order_id, scanned
+        )
+
+    # Пул знает исходное прочтение — значит его и берём, а не распиленное.
+    assert validated.value == scanned
+
+    # А если бы того же кода в пуле не было, спорить было бы не с чем и
+    # сработал бы обычный разбор: проверяем, что развязка именно данными, а
+    # не случайностью.
+    async with SessionLocal() as session:
+        await session.execute(delete(MarkingCode).where(MarkingCode.tenant_id == tenant_id))
+        await session.commit()
+    async with SessionLocal() as session:
+        without_pool = await kiz_svc._validate_kiz_pair(
+            session, tenant_id, order.order_id, scanned
+        )
+    assert without_pool.value == reparsed

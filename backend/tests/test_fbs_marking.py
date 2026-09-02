@@ -1117,3 +1117,53 @@ def test_decision_key_normalization_is_separator_insensitive() -> None:
         assert map_wb_decision_to_meta_status(variant) == META_STATUS_REPLACEMENT_REQUIRED
     for variant in ("allowed_without_check", "allowedWithoutCheck"):
         assert map_wb_decision_to_meta_status(variant) == META_STATUS_ALLOWED_WITHOUT_CHECK
+
+
+@pytest.mark.asyncio
+async def test_pool_lookup_finds_code_stored_with_other_separators() -> None:
+    # TC-NEW-FBS-MARK-I3-007: проверка «код занят» и фактический ЗАХВАТ кода из
+    # пула обязаны видеть одно и то же. Пока захват сравнивал сырые строки,
+    # боевой случай «в пуле лежит без разделителей, пересканировали с
+    # разделителями» проходил проверку, но пул не захватывался: заводился
+    # новый внешний код, а пуловый оставался свободным — один физический ЧЗ
+    # числился и там, и там.
+    from app.models.marking_code import STATUS_AVAILABLE, MarkingCode
+    from app.models.seller import Seller
+    from app.models.tenant import Tenant
+    from app.services import fbs_marking_service as marking_svc
+
+    gs = "\x1d"
+    stored = "010460601234567821aXq7Tz9Km91K7pQ92" + "M" * 44
+    rescanned = f"010460601234567821aXq7Tz9Km{gs}91K7pQ{gs}92" + "M" * 44
+    assert stored != rescanned
+    assert stored.replace(gs, "") == rescanned.replace(gs, "")
+
+    async with SessionLocal() as session:
+        tenant = Tenant(
+            name=f"PoolGs {uuid.uuid4().hex[:6]}",
+            slug=f"poolgs-{uuid.uuid4().hex[:8]}",
+        )
+        session.add(tenant)
+        await session.flush()
+        seller = Seller(tenant_id=tenant.id, name="Селлер пула")
+        session.add(seller)
+        await session.flush()
+        session.add(
+            MarkingCode(
+                tenant_id=tenant.id,
+                seller_id=seller.id,
+                cis_code=stored,
+                source="pool",
+                status=STATUS_AVAILABLE,
+            )
+        )
+        await session.commit()
+        tenant_id = tenant.id
+
+    async with SessionLocal() as session:
+        found = await marking_svc._lookup_marking_code_in_tenant(
+            session, tenant_id=tenant_id, cis_code=rescanned
+        )
+
+    assert found is not None
+    assert found.cis_code == stored
