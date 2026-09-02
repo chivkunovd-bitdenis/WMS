@@ -825,6 +825,30 @@ async def _get_marking_code_by_cis(
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def _get_marking_code_by_exact_cis(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    value: str,
+) -> MarkingCode | None:
+    """Найти код ровно по строке, БЕЗ приведения разделителей.
+
+    Нужен ровно в одном месте: развести два законных прочтения спорного кода.
+    Каноническое сравнение здесь бесполезно по построению — оба прочтения
+    отличаются только расстановкой разделителей, то есть канонически они
+    равны, и «нашёлся один, не нашёлся другой» никогда не случится. Различить
+    их может только точное совпадение строки.
+    """
+
+    return (
+        await session.execute(
+            select(MarkingCode).where(
+                MarkingCode.tenant_id == tenant_id,
+                MarkingCode.cis_code == value,
+            )
+        )
+    ).scalar_one_or_none()
+
+
 async def _ensure_kiz_not_occupied_in_pool(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -889,8 +913,11 @@ async def _validate_kiz_pair(
     if (
         alternative is not None
         and alternative != value
-        and await _get_marking_code_by_cis(session, tenant_id, value) is None
-        and await _get_marking_code_by_cis(session, tenant_id, alternative) is not None
+        # Сравнение ТОЧНОЕ. Канонически эти два прочтения равны — они и
+        # отличаются только тем, где стоят разделители, — поэтому спор
+        # решается лишь тем, какую именно строку мы у себя выпускали.
+        and await _get_marking_code_by_exact_cis(session, tenant_id, value) is None
+        and await _get_marking_code_by_exact_cis(session, tenant_id, alternative) is not None
     ):
         value = alternative
 

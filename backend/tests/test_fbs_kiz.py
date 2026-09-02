@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import selectinload
 
 from app.db.session import SessionLocal
@@ -3729,3 +3729,74 @@ def test_alternative_reading_offered_only_when_two_readings_are_legal() -> None:
     # Канонический код: достраивание ничего не меняет, спора нет.
     canonical = _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=True)
     assert kiz_svc.alternative_cis_reading(canonical) is None
+
+
+@pytest.mark.asyncio
+async def test_kiz_ambiguous_reading_resolved_by_pool(
+    async_client: AsyncClient,
+) -> None:
+    # TC-NEW-FBS-KIZ-I3-017: два законных прочтения спорного кода развести
+    # внутри строки нельзя — оба выглядят как «серийник, оканчивающийся на 91
+    # плюс четыре символа, разделитель, блок 92». Спор решает наш пул: если мы
+    # выпускали код именно в исходном виде, достраивать его нельзя, иначе в WB
+    # уедет ДРУГОЙ логический код при тех же байтах.
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=933201,
+        sticker_code="AMBIG",
+        wb_barcode="AMBIG-BAR",
+        with_packaging=True,
+    )
+    scanned = f"01{_GTIN14}21AB91ZZQQ{_GS}92{_SIGNATURE_44}"
+    # Чистый разбор распиливает этот код: шесть символов серийника уезжают в
+    # выдуманный блок 91.
+    reparsed, _ = kiz_svc.normalize_scanned_cis(scanned)
+    assert reparsed != scanned
+    assert reparsed.replace(_GS, "") == scanned.replace(_GS, "")
+
+    async with SessionLocal() as session:
+        session.add(
+            MarkingCode(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                product_id=order.product_id,
+                cis_code=scanned,
+                source="pool",
+                status=STATUS_AVAILABLE,
+            )
+        )
+        await session.commit()
+
+    async with SessionLocal() as session:
+        validated = await kiz_svc._validate_kiz_pair(
+            session, tenant_id, order.order_id, scanned
+        )
+
+    # Пул знает исходное прочтение — значит его и берём, а не распиленное.
+    assert validated.value == scanned
+
+    # А если бы того же кода в пуле не было, спорить было бы не с чем и
+    # сработал бы обычный разбор: проверяем, что развязка именно данными, а
+    # не случайностью.
+    async with SessionLocal() as session:
+        await session.execute(delete(MarkingCode).where(MarkingCode.tenant_id == tenant_id))
+        await session.commit()
+    async with SessionLocal() as session:
+        without_pool = await kiz_svc._validate_kiz_pair(
+            session, tenant_id, order.order_id, scanned
+        )
+    assert without_pool.value == reparsed

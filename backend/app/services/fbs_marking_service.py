@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -70,6 +70,9 @@ from app.services.wildberries_fbs_client import (
     MarketplaceOrderMetaRow,
     fetch_marketplace_orders_meta_batch,
 )
+
+_GS = "\x1d"
+
 
 _META_KIND_FROM_PLURAL: dict[str, str] = {
     "sgtins": MARKING_KIND_SGTIN,
@@ -541,13 +544,21 @@ async def _lookup_marking_code_in_tenant(
     tenant_id: uuid.UUID,
     cis_code: str,
 ) -> MarkingCode | None:
+    # Ищем по каноническому виду — без разделителей GS.
+    #
+    # Проверка «код уже занят» и фактический ЗАХВАТ кода из пула должны видеть
+    # одно и то же. Пока захват сравнивал сырые строки, боевой случай «в пуле
+    # лежит без разделителей, пересканировали с разделителями» проходил
+    # проверку, но пул не захватывался: заводился новый внешний код, а
+    # пуловый оставался свободным. Один физический ЧЗ числился и там, и там.
     lookup_values = [cis_code]
     normalized = normalize_cis(cis_code)
     if normalized and normalized not in lookup_values:
         lookup_values.append(normalized)
+    plain_values = {value.replace(_GS, "") for value in lookup_values}
     stmt = select(MarkingCode).where(
         MarkingCode.tenant_id == tenant_id,
-        MarkingCode.cis_code.in_(lookup_values),
+        func.replace(MarkingCode.cis_code, _GS, "").in_(plain_values),
     )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
