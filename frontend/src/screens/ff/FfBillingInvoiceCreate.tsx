@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { Stack, Typography } from '@mui/material'
+import { Box, Stack, Typography } from '@mui/material'
+import DeleteOutlined from '@mui/icons-material/DeleteOutlined'
 import {
   ActionGroup,
   AppDialog,
   DataTable,
   ErrorNotice,
+  IconAction,
   formatMoney,
   MoneyCell,
   MoneyInput,
@@ -288,6 +290,7 @@ export function FfBillingInvoiceCreate({
           />
           {manualLines.map((line, index) => (
             <Stack direction="row" spacing={1} key={line.key} sx={{ alignItems: 'flex-start' }}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
               <TextInput
                 label="Услуга"
                 value={line.description}
@@ -300,6 +303,8 @@ export function FfBillingInvoiceCreate({
                 }
                 testId={`billing-manual-description-${index}`}
               />
+              </Box>
+              <Box sx={{ width: 200, flexShrink: 0 }}>
               <MoneyInput
                 label="Сумма"
                 value={line.amount}
@@ -312,6 +317,21 @@ export function FfBillingInvoiceCreate({
                 }
                 testId={`billing-manual-amount-${index}`}
               />
+              </Box>
+              <IconAction
+                title="Удалить строку"
+                onClick={() =>
+                  setManualLines((lines) =>
+                    lines.length > 1 ? lines.filter((_, position) => position !== index) : lines,
+                  )
+                }
+                disabledReason={
+                  manualLines.length > 1 ? undefined : 'В счёте должна остаться хотя бы одна строка'
+                }
+                testId={`billing-manual-remove-${index}`}
+              >
+                <DeleteOutlined fontSize="small" />
+              </IconAction>
             </Stack>
           ))}
           <SecondaryAction

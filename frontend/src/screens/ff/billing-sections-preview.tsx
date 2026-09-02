@@ -186,6 +186,14 @@ function stubResponse(url: string): unknown {
   if (url.includes('/billing/seller-report/summary')) return summaryFor(sellerId)
   const details = /\/billing\/seller-report\/sellers\/([^/?]+)\/details/.exec(url)
   if (details) return detailsFor(details[1] ?? 'seller-1')
+  if (url.includes('/billing/profiles/lookup-inn')) return {
+    legal_name: 'ООО «Ромашка»', inn: '5024998877', kpp: '502401001', ogrn: '1125024000123',
+    address: 'Московская обл, г Красногорск, ул Ленина, д 1', manager: 'Иванова Мария Петровна', state: 'ACTIVE',
+  }
+  if (url.includes('/billing/profiles/')) return {
+    legal_name: 'ООО «Короб ВМС»', inn: '7712345678', kpp: '771201001', bank_name: 'АО «Тинькофф Банк»',
+    bik: '044525974', settlement_account: '40702810000000012345', correspondent_account: '30101810145250000974',
+  }
   if (url.includes('/billing/invoices-v2')) return INVOICE_PREVIEW
   if (url.includes('/billing/invoices')) return { items: [], next_cursor: null }
   if (url.includes('/notifications')) return { items: [], unread_count: 0 }

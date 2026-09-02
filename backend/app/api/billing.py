@@ -57,6 +57,7 @@ from app.services.billing_tariff_matrix_service import (
     list_tariff_matrix_versions,
     save_tariff_matrix,
 )
+from app.services.dadata_party_service import DadataError, lookup_party_by_inn
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -491,6 +492,26 @@ async def get_seller_report_summary(
         if include_finance
         else SellerReportPhysicalSummaryOut.model_validate(payload)
     )
+
+
+@router.get("/profiles/lookup-inn")
+async def lookup_profile_by_inn(
+    *,
+    inn: str,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+) -> dict[str, Any]:
+    """Реквизиты организации по ИНН — чтобы их не набивали руками с опечатками."""
+    _ = user
+    try:
+        return await lookup_party_by_inn(inn)
+    except DadataError as exc:
+        code = str(exc)
+        status_code = {
+            "dadata_not_configured": status.HTTP_501_NOT_IMPLEMENTED,
+            "inn_invalid": status.HTTP_400_BAD_REQUEST,
+            "party_not_found": status.HTTP_404_NOT_FOUND,
+        }.get(code, status.HTTP_502_BAD_GATEWAY)
+        raise HTTPException(status_code=status_code, detail=code) from exc
 
 
 @router.get("/seller-report/storage-total")
