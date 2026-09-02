@@ -185,6 +185,14 @@ function findScanTargets(
     }
     walk(item.children, item.id, null, [cellKey])
   }
+  if (!cell) {
+    // Ячейки, пустые по учёту, в дерево не попадают, но сканер обязан их знать:
+    // именно в такой чаще всего и находят то, чего по учёту тут нет.
+    const empty = count.scannableCells.find(
+      (item) => item.barcode && normalizedCodes.has(item.barcode.trim().toLowerCase()),
+    )
+    if (empty) cell = { id: empty.id, label: empty.label, pathKeys: [`cell:${empty.id}`] }
+  }
   return { container, cell, products }
 }
 

@@ -1,10 +1,21 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, Uuid, func, text
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -128,4 +139,44 @@ class InventoryCountLine(Base):
     movements: Mapped[list[InventoryMovement]] = relationship(
         "InventoryMovement",
         back_populates="inventory_count_line",
+    )
+
+
+class InventoryCountFoundScan(Base):
+    """Один скан находки — чтобы повтор не превращался в лишнюю штуку.
+
+    Кладовщик сканирует по складскому вайфаю, который рвётся. Ответ не доехал,
+    экран показал ошибку, а сервер уже записал. Человек сканирует ещё раз —
+    и на сервере становится две штуки вместо одной. Излишек на ровном месте, и
+    найти его потом нечем: в документе просто стоит цифра.
+
+    Клиент присылает идентификатор скана, мы его запоминаем и на повтор
+    отвечаем тем же результатом, ничего не прибавляя.
+    """
+
+    __tablename__ = "inventory_count_found_scans"
+    __table_args__ = (
+        UniqueConstraint("count_id", "scan_id", name="uq_inventory_found_scan"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False, index=True
+    )
+    count_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("inventory_counts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    line_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("inventory_count_lines.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    scan_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    expected_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )

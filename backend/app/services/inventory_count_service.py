@@ -16,7 +16,11 @@ from app.models.inbound_intake import (
     InboundIntakeRequest,
 )
 from app.models.inventory_balance import InventoryBalance
-from app.models.inventory_count import InventoryCount, InventoryCountLine
+from app.models.inventory_count import (
+    InventoryCount,
+    InventoryCountFoundScan,
+    InventoryCountLine,
+)
 from app.models.inventory_movement import MOVEMENT_TYPE_INVENTORY_COUNT
 from app.models.pallet import Pallet
 from app.models.product import Product
@@ -533,6 +537,7 @@ async def record_found(
     cell_id: uuid.UUID | None,
     container_kind: str | None,
     container_id: uuid.UUID | None,
+    scan_id: str | None = None,
 ) -> FoundResult:
     """Записывает находку: товар лежит там, где по учёту его нет.
 
@@ -545,6 +550,27 @@ async def record_found(
     Повторный скан того же товара в том же месте не плодит строки, а
     увеличивает счёт: человек считает штуками.
     """
+    # ⛔ Порядок здесь важен. Адрес находки вычисляется ДО блокировки.
+    #
+    # Внутри вычисления может понадобиться создать зону сортировки, а её
+    # создание при гонке делает rollback. Если к тому моменту документ уже
+    # заблокирован, rollback снимет блокировку и обнулит загруженный объект —
+    # следующее обращение к его строкам упадёт пятисоткой. Случай узкий (первая
+    # в жизни склада находка без ячейки), но он есть.
+    preview = await get_count(session, tenant_id, count_id)
+    if preview is None:
+        raise InventoryCountError("count_not_found")
+    if preview.status != STATUS_DRAFT:
+        raise InventoryCountError("count_not_editable")
+    storage_location_id = await _resolve_found_location(
+        session,
+        tenant_id,
+        preview,
+        cell_id=cell_id,
+        container_kind=container_kind,
+        container_id=container_id,
+    )
+
     # Документ блокируется на всё время записи. Без этого два быстрых скана
     # одного и того же кода расходятся: оба читают факт 1, оба пишут 2, и одна
     # штука теряется — а если строки ещё не было, второй ловит уникальный индекс
@@ -565,6 +591,24 @@ async def record_found(
     codes = [candidate.strip() for candidate in barcodes if candidate.strip()]
     if not codes:
         raise InventoryCountError("barcode_required")
+
+    # Повтор того же скана ничего не прибавляет. Склад работает по вайфаю,
+    # который рвётся: ответ не доехал, экран показал ошибку, а запись уже
+    # прошла. Кладовщик сканирует ещё раз — и без этой проверки на остатке
+    # оказывается лишняя штука, которую потом нечем найти.
+    if scan_id:
+        seen = await session.scalar(
+            select(InventoryCountFoundScan).where(
+                InventoryCountFoundScan.count_id == count_id,
+                InventoryCountFoundScan.scan_id == scan_id,
+            )
+        )
+        if seen is not None:
+            loaded = await get_count(session, tenant_id, count_id)
+            assert loaded is not None
+            return FoundResult(
+                loaded, seen.expected_quantity, _found_notice(seen.expected_quantity)
+            )
 
     # Сканер — обычная клавиатура, и в русской раскладке он отдаёт кириллицу.
     # Экран умеет переводить раскладку и присылает оба варианта, поэтому ищем по
@@ -590,15 +634,6 @@ async def record_found(
         raise InventoryCountError("barcode_is_ambiguous")
     product = products[0]
 
-    storage_location_id = await _resolve_found_location(
-        session,
-        tenant_id,
-        count,
-        cell_id=cell_id,
-        container_kind=container_kind,
-        container_id=container_id,
-    )
-
     existing = next(
         (
             line
@@ -613,6 +648,7 @@ async def record_found(
     if existing is not None:
         existing.actual_quantity = int(existing.actual_quantity or 0) + 1
         expected = int(existing.expected_quantity)
+        _remember_scan(session, tenant_id, count_id, existing.id, scan_id, expected)
         await session.commit()
         loaded = await get_count(session, tenant_id, count_id)
         assert loaded is not None
@@ -636,6 +672,8 @@ async def record_found(
     )
     expected = int(line.expected_quantity)
     session.add(line)
+    await session.flush()
+    _remember_scan(session, tenant_id, count_id, line.id, scan_id, expected)
     try:
         await session.commit()
     except IntegrityError:
@@ -655,6 +693,28 @@ async def record_found(
     loaded = await get_count(session, tenant_id, count_id)
     assert loaded is not None
     return FoundResult(loaded, expected, _found_notice(expected))
+
+
+def _remember_scan(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    count_id: uuid.UUID,
+    line_id: uuid.UUID,
+    scan_id: str | None,
+    expected_quantity: int,
+) -> None:
+    """Запоминает скан, чтобы его повтор не прибавил вторую штуку."""
+    if not scan_id:
+        return
+    session.add(
+        InventoryCountFoundScan(
+            tenant_id=tenant_id,
+            count_id=count_id,
+            line_id=line_id,
+            scan_id=scan_id,
+            expected_quantity=expected_quantity,
+        )
+    )
 
 
 async def _resolve_found_location(

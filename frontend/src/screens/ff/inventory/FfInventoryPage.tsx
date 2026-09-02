@@ -180,6 +180,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     cellId: string | null
     containerKind: 'pallet' | 'box' | 'cargo_place' | null
     containerId: string | null
+    scanId: string
   }) {
     if (!count || count.status !== 'draft') return
     setError(null)

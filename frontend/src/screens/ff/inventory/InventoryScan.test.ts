@@ -23,6 +23,7 @@ function product(overrides: Partial<ProductNode> = {}): ProductNode {
 function countWithBox(item: ProductNode): InventoryCount {
   return {
     id: 'count-1',
+    scannableCells: [],
     number: 'ИНВ-1',
     status: 'draft',
     warehouseName: 'Склад',
@@ -254,5 +255,30 @@ describe('россыпь без ячейки', () => {
     // Пикнул ячейку прямо поверх открытого короба — короб закрылся сам.
     const cell = applyScan(box.count, 'CELL-BARCODE-1', box.open)
     expect(cell.open).toEqual({ containerId: null, cellId: 'cell-1' })
+  })
+})
+
+describe('пустая по учёту ячейка', () => {
+  it('сканер узнаёт ячейку, которой нет в дереве, и находка идёт в неё', () => {
+    // «В ячейке лежит то, чего по учёту тут быть не должно» — первый случай,
+    // ради которого пересчёт и делают. Раньше штрихкод такой ячейки сканер не
+    // знал: уходил искать товар, не находил и предлагал записать находку со
+    // штрихкодом ЯЧЕЙКИ вместо товара.
+    const count: InventoryCount = {
+      ...countWithBox(product()),
+      scannableCells: [{ id: 'cell-empty', label: 'B-07', barcode: 'CELL-EMPTY-7' }],
+    }
+
+    const opened = applyScan(count, 'CELL-EMPTY-7', NOTHING_OPEN)
+    expect(opened.open).toEqual({ containerId: null, cellId: 'cell-empty' })
+    expect(opened.message).toContain('B-07')
+
+    const found = applyScan(opened.count, '9999999999999', opened.open)
+    expect(found.found).toEqual({
+      barcodes: ['9999999999999'],
+      cellId: 'cell-empty',
+      containerKind: null,
+      containerId: null,
+    })
   })
 })

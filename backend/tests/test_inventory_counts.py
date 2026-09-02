@@ -910,3 +910,66 @@ async def test_inventory_count_found_without_place_goes_to_sorting_zone(
         location = await session.get(StorageLocation, uuid.UUID(line["storage_location_id"]))
         assert location is not None
         assert location.code == "__SORTING__"
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_found_is_idempotent_per_scan(
+    async_client: AsyncClient,
+) -> None:
+    """Повтор того же скана не превращается в лишнюю штуку на остатке.
+
+    Склад работает по вайфаю, который рвётся: ответ не доехал, экран показал
+    ошибку, а запись уже прошла. Кладовщик сканирует ещё раз — и без этой
+    защиты на остатке оказывается двойка, которую потом нечем найти.
+    """
+    setup = await _tenant(async_client, "IdemCount")
+    surprise = await _product(async_client, setup, name="Находка с повтором")
+    anchor = await _product(async_client, setup, name="Якорь")
+    await _balance(setup, anchor, 2)
+    async with SessionLocal() as session:
+        product = await session.get(Product, surprise)
+        assert product is not None
+        product.wb_barcode = "4600000000555"
+        await session.commit()
+
+    created = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={"source": "planned", "filters": {}},
+    )
+    assert created.status_code == 201, created.text
+    count_id = created.json()["id"]
+
+    body = {
+        "barcodes": ["4600000000555"],
+        "cell_id": str(setup.location_id),
+        "scan_id": "scan-0001",
+    }
+    first = await async_client.post(
+        f"/operations/inventory-counts/{count_id}/found", headers=setup.headers, json=body
+    )
+    assert first.status_code == 200, first.text
+
+    # Тот же скан ещё раз — как будто оператор не увидел ответа и повторил.
+    again = await async_client.post(
+        f"/operations/inventory-counts/{count_id}/found", headers=setup.headers, json=body
+    )
+    assert again.status_code == 200, again.text
+
+    lines = [
+        line for line in again.json()["count"]["lines"] if line["product_id"] == str(surprise)
+    ]
+    assert len(lines) == 1
+    assert lines[0]["actual_quantity"] == 1
+
+    # А настоящий второй пик — это уже другой скан, и он считается.
+    third = await async_client.post(
+        f"/operations/inventory-counts/{count_id}/found",
+        headers=setup.headers,
+        json={**body, "scan_id": "scan-0002"},
+    )
+    assert third.status_code == 200, third.text
+    line = next(
+        line for line in third.json()["count"]["lines"] if line["product_id"] == str(surprise)
+    )
+    assert line["actual_quantity"] == 2

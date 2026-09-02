@@ -85,6 +85,7 @@ type Props = {
     cellId: string | null
     containerKind: 'pallet' | 'box' | 'cargo_place' | null
     containerId: string | null
+    scanId: string
   }) => void
   onBack: () => void
 }
@@ -139,7 +140,12 @@ export function FfInventoryCountScreen({
         request: (current?.request ?? 0) + 1,
       }))
     }
-    if (result.found) onFound?.(result.found)
+    if (result.found) {
+      // Идентификатор скана рождается здесь, на одном пике. Если ответ не
+      // доедет и оператор пикнет ещё раз, это будет уже другой скан — а вот
+      // повтор этого же запроса сервер узнает и не посчитает дважды.
+      onFound?.({ ...result.found, scanId: crypto.randomUUID() })
+    }
     if (result.count !== count) {
       const touched = result.focusRowKey?.startsWith('product:')
         ? result.focusRowKey.slice('product:'.length)

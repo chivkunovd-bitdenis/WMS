@@ -81,6 +81,9 @@ class InventoryCountFoundIn(BaseModel):
     cell_id: uuid.UUID | None = None
     container_kind: Literal["pallet", "box", "cargo_place"] | None = None
     container_id: uuid.UUID | None = None
+    # Идентификатор скана: экран генерирует его один раз на пик. Повтор того же
+    # скана (оборвался вайфай, оператор пикнул ещё раз) ничего не прибавляет.
+    scan_id: str | None = Field(default=None, max_length=64)
 
 
 class CountFillOut(BaseModel):
@@ -115,6 +118,14 @@ class CountContainerNodeOut(BaseModel):
     code: str
     barcode: str | None = None
     children: list[CountProductNodeOut | CountContainerNodeOut]
+
+
+class CountScannableCellOut(BaseModel):
+    """Ячейка склада, которую сканер обязан узнать, даже если она пуста."""
+
+    id: str
+    label: str
+    barcode: str | None
 
 
 class CountCellOut(BaseModel):
@@ -185,6 +196,9 @@ class InventoryCountDetailOut(BaseModel):
     address_storage: bool
     lines: list[InventoryCountLineOut]
     cells: list[CountCellOut]
+    # Ячейки склада, которые сканер обязан узнавать, включая пустые по учёту.
+    # В дерево они не попадают, иначе документ распухнет пустыми строками.
+    scannable_cells: list[CountScannableCellOut] = []
 
 
 class ChangedBalanceOut(BaseModel):
@@ -333,6 +347,8 @@ async def _detail_out(
     current = await service.current_quantities(session, count)
     categories = await _categories(session, count)
     line_rows: list[InventoryCountLineOut] = []
+    # Пустой список — нормальное значение: без адресного хранения ячеек нет.
+    scannable_cells: list[CountScannableCellOut] = []
     nodes_by_cell: dict[
         tuple[str, str], list[CountProductNodeOut | CountContainerNodeOut]
     ] = defaultdict(list)
@@ -445,6 +461,17 @@ async def _detail_out(
             ],
             *fallback_cells,
         ]
+        # ⛔ Пустые по учёту ячейки в дерево не тащим — иначе документ по складу
+        # распухнет сотнями пустых строк. Но сканер обязан их узнавать: «в
+        # ячейке лежит то, чего по учёту тут нет» — это первый и главный случай,
+        # ради которого пересчёт и делают. Раньше штрихкод такой ячейки сканер
+        # не знал, уходил искать товар, не находил и предлагал записать находку
+        # со штрихкодом ЯЧЕЙКИ вместо товара.
+        scannable_cells = [
+            CountScannableCellOut(id=cell.id, label=cell.label, barcode=cell.barcode)
+            for cell in cells_by_id.values()
+            if cell.barcode
+        ]
     else:
         # Frontend flattens children when addressStorage=false and never renders
         # this technical wrapper as a cell.
@@ -475,6 +502,7 @@ async def _detail_out(
         address_storage=address_storage,
         lines=line_rows,
         cells=cells,
+        scannable_cells=scannable_cells,
     )
 
 
@@ -636,6 +664,7 @@ async def record_inventory_count_found(
             cell_id=body.cell_id,
             container_kind=body.container_kind,
             container_id=body.container_id,
+            scan_id=body.scan_id,
         )
     except service.InventoryCountError as exc:
         raise _http_error(exc) from None

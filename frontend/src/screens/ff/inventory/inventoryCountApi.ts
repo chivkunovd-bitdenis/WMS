@@ -96,6 +96,7 @@ export type ApiDetail = {
   comment: string
   address_storage: boolean
   cells: ApiCell[]
+  scannable_cells?: Array<{ id: string; label: string; barcode: string | null }>
 }
 
 export type ApiSummary = {
@@ -171,6 +172,11 @@ export function toCount(detail: ApiDetail): InventoryCount {
     postedBy: detail.posted_by,
     comment: detail.comment,
     addressStorage: detail.address_storage,
+    scannableCells: (detail.scannable_cells ?? []).map((cell) => ({
+      id: cell.id,
+      label: cell.label,
+      barcode: cell.barcode,
+    })),
     cells: detail.cells.map((cell) => ({
       id: cell.id,
       label: cell.label,
@@ -268,6 +274,8 @@ export async function recordCountFound(
     cellId: string | null
     containerKind: 'pallet' | 'box' | 'cargo_place' | null
     containerId: string | null
+    /** Один идентификатор на пик: повтор того же скана не прибавит вторую штуку. */
+    scanId: string
   },
 ): Promise<{ count: InventoryCount; expectedQuantity: number; notice: string }> {
   const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/found`), {
@@ -278,6 +286,7 @@ export async function recordCountFound(
       cell_id: place.cellId,
       container_kind: place.containerKind,
       container_id: place.containerId,
+      scan_id: place.scanId,
     }),
   })
   if (!res.ok) throw new Error(await readApiErrorMessage(res))
