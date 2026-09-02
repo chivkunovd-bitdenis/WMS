@@ -507,3 +507,53 @@ def test_order_without_mapped_product_warns_and_does_not_stop_the_supply() -> No
     assert warned.order_id == order.id
     assert _checks_allow_delivery(checks) is True
     _validate_checks_pass(checks)
+
+
+def test_wb_dispatch_refusal_shows_order_reasons_instead_of_advice_to_wait() -> None:
+    """Когда WB назвал конкретные заказы, оператор обязан их увидеть.
+
+    Фраза WB «fix them to dispatch items» перехватывалась первой и превращалась в
+    «ещё обрабатывает поставку, повторите через минуту», а всё, что WB сказал про
+    заказы, выбрасывалось. Оператор жал «Повторить» по кругу, и ничего не
+    менялось: WB просил починить данные, а не подождать.
+    """
+    from app.services.fbs_shipment_service import _meta_validation_message
+    from app.services.wildberries_errors import (
+        MetaValidationFailItem,
+        WildberriesBusinessError,
+    )
+
+    exc = WildberriesBusinessError(
+        "meta_validation_fail",
+        wb_code="meta_validation",
+        message="Some orders have unfilled required meta, fix them to dispatch items",
+        meta_validation=[
+            MetaValidationFailItem(
+                order_id=530009, key="sgtin", value=None, decision="required",
+                reason="uinBadStatus",
+            )
+        ],
+    )
+    message, retryable = _meta_validation_message(exc)
+
+    assert "530009" in message
+    assert "uinBadStatus" in message or "маркировк" in message.lower()
+    assert "через минуту" not in message
+    assert retryable is False
+
+
+def test_wb_dispatch_refusal_without_details_still_suggests_a_retry() -> None:
+    """Если WB не назвал ни одного заказа, повторить — единственное разумное."""
+    from app.services.fbs_shipment_service import _meta_validation_message
+    from app.services.wildberries_errors import WildberriesBusinessError
+
+    exc = WildberriesBusinessError(
+        "meta_validation_fail",
+        wb_code="meta_validation",
+        message="fix them to dispatch items",
+        meta_validation=[],
+    )
+    message, retryable = _meta_validation_message(exc)
+
+    assert "Повторите передачу через минуту" in message
+    assert retryable is True

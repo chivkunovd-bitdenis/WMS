@@ -198,11 +198,9 @@ def _meta_validation_message(exc: WildberriesBusinessError) -> tuple[str, bool]:
         for value in [exc.message, *(item.reason for item in exc.meta_validation)]
         if isinstance(value, str) and value.strip()
     ]
-    if any(_WB_DISPATCH_PENDING_MESSAGE in value.lower() for value in raw_messages):
-        return (
-            "Wildberries ещё обрабатывает поставку. Повторите передачу через минуту.",
-            True,
-        )
+    dispatch_pending = any(
+        _WB_DISPATCH_PENDING_MESSAGE in value.lower() for value in raw_messages
+    )
 
     details: list[str] = []
     for item in exc.meta_validation:
@@ -214,8 +212,30 @@ def _meta_validation_message(exc: WildberriesBusinessError) -> tuple[str, bool]:
         rendered = f"{prefix}{reason}"
         if rendered not in details:
             details.append(rendered)
+    # ⛔ Подробности по заказам показываем ВСЕГДА, если они есть.
+    #
+    # Раньше фраза WB «fix them to dispatch items» перехватывалась первой и
+    # превращалась в «Wildberries ещё обрабатывает поставку, повторите через
+    # минуту» — а всё, что WB сказал про конкретные заказы, выбрасывалось.
+    # Английский оригинал читается как «исправьте их, чтобы отгрузить», то есть
+    # WB просит починить данные заказов, а мы советовали подождать. Оператор жал
+    # «Повторить» по кругу, и ничего не менялось, потому что само оно не
+    # рассасывается.
     if details:
-        return "; ".join(details), False
+        head = (
+            "Wildberries не принял поставку и просит исправить заказы: "
+            if dispatch_pending
+            else ""
+        )
+        return f"{head}{'; '.join(details)}", False
+
+    # Подробностей нет — тогда и правда остаётся только повторить: WB мог просто
+    # не успеть дообработать поставку на своей стороне.
+    if dispatch_pending:
+        return (
+            "Wildberries ещё обрабатывает поставку. Повторите передачу через минуту.",
+            True,
+        )
 
     if exc.message:
         translated = translate_wb_message(exc.message)
