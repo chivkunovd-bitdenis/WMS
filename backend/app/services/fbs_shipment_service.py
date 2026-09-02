@@ -107,6 +107,7 @@ from app.services.wildberries_errors import (
     WildberriesClientError,
     log_wb_client_error,
     translate_wb_message,
+    truncate_wb_response_body,
     wb_error_context,
     wb_error_ref,
     wb_operator_message,
@@ -229,9 +230,22 @@ def _meta_validation_message(exc: WildberriesBusinessError) -> tuple[str, bool]:
         )
         return f"{head}{'; '.join(details)}", False
 
-    # Подробностей нет — тогда и правда остаётся только повторить: WB мог просто
-    # не успеть дообработать поставку на своей стороне.
+    # Подробностей по заказам нет. Показываем оператору собственные слова WB —
+    # молчать и советовать «повторите через минуту» нельзя: 02.09.2026 склад так
+    # шесть раз подряд нажал повтор и остановился, а причина осталась только в
+    # голове у Wildberries.
     if dispatch_pending:
+        own = next((value for value in raw_messages if value), "")
+        translated = translate_wb_message(own) if own else None
+        if translated:
+            return translated, True
+        if own:
+            return (
+                f"Wildberries не принял поставку и ответил: «{own}». "
+                "Если повтор через минуту не помогает, причину надо смотреть "
+                "в кабинете продавца.",
+                True,
+            )
         return (
             "Wildberries ещё обрабатывает поставку. Повторите передачу через минуту.",
             True,
@@ -2288,7 +2302,20 @@ async def deliver_supply(
             session,
             operation,
             error_code="meta_validation_fail",
-            error_context={"meta_validation": meta_context},
+            # ⛔ Сырой ответ WB сохраняем обязательно.
+            #
+            # 02.09.2026 склад шесть раз подряд получил «повторите через минуту»
+            # и встал. В базе от этих попыток остался пустой список
+            # meta_validation и больше ничего: что именно сказал Wildberries,
+            # восстановить было нечем — ни в логах, ни в операции. Разбор
+            # занял час и потребовал лезть на боевой сервер.
+            error_context={
+                "meta_validation": meta_context,
+                "wb_code": exc.wb_code,
+                "wb_message": exc.message,
+                "wb_response_body": truncate_wb_response_body(exc.response_body),
+                "wb_endpoint": exc.endpoint,
+            },
             wb_supply_id=supply.wb_supply_id,
             local_supply_id=supply.id,
         )

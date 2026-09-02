@@ -555,5 +555,6 @@ def test_wb_dispatch_refusal_without_details_still_suggests_a_retry() -> None:
     )
     message, retryable = _meta_validation_message(exc)
 
-    assert "Повторите передачу через минуту" in message
+    # Своих слов у нас нет — показываем слова WB, а не совет подождать.
+    assert "fix them to dispatch items" in message
     assert retryable is True
