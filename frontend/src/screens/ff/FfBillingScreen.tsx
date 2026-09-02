@@ -10,7 +10,6 @@ import {
   ScreenHeader,
   TextCell,
   MoscowDateRangeInput,
-  PreferenceSwitch,
   ReportMetricStrip,
   SecondaryAction,
   SelectInput,
@@ -100,13 +99,6 @@ export function sellerQuickRange(period: SellerQuickPeriod, today = moscowToday(
   if (period === 'current_month') return { start: `${today.slice(0, 8)}01`, end: today }
   value.setUTCDate(0)
   return { start: `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, '0')}-01`, end: asIsoDate(value) }
-}
-
-function sellerFinanceStorageKey(token: string) {
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as { tenant_id?: string; sub?: string }
-    return `${payload.tenant_id ?? 'tenant'}:${payload.sub ?? 'user'}:billing:sellers:finance`
-  } catch { return 'tenant:user:billing:sellers:finance' }
 }
 
 type CancelInvoiceResult = { ok: true; status: Invoice['status'] } | { ok: false; message: string }
@@ -230,8 +222,10 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
   const [error, setError] = useState(false)
   const today = moscowToday()
   const [reportRange, setReportRange] = useState({ start: today, end: today })
-  const financeStorageKey = sellerFinanceStorageKey(token)
-  const [includeFinance, setIncludeFinance] = useState(() => localStorage.getItem(financeStorageKey) === 'true')
+  // Финансы на «Расчётах» включены всегда. Переключатель прятал единственное,
+  // ради чего экран открывают, — суммы; товародвижение живёт на своём экране,
+  // и совмещать их в одной таблице отдельно решено не было.
+  const includeFinance = true
   const [report, setReport] = useState<SellerReportSummary>({ rows: [], totals: { seller_count: 0, operation_count: 0, item_quantity: 0, not_billable_count: 0 } })
   const [selectedReportSeller, setSelectedReportSeller] = useState<string | null>(null)
   const [reportDetails, setReportDetails] = useState<SellerReportDetails | null>(null)
@@ -272,8 +266,6 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
       .finally(() => { if (alive && requestId === summaryRequestId.current) setLoading(false) })
     return () => { alive = false; controller.abort() }
   }, [includeFinance, reportRange, search, sellerId, tab, token])
-
-  useEffect(() => { localStorage.setItem(financeStorageKey, String(includeFinance)) }, [financeStorageKey, includeFinance])
 
   useEffect(() => {
     if (tab !== 'charges' || !selectedReportSeller) return
@@ -319,9 +311,9 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
       <Tab label="Селлеры" value="charges" data-testid="billing-tab-sellers" /><Tab label="Выставленные счета" value="invoices" data-testid="billing-tab-invoices" />
     </Tabs>
     {tab === 'charges' ? <FilterBar testId="billing-filter-bar">
-      <><MoscowDateRangeInput label="Период" startLabel="с" endLabel="по" value={reportRange} onChange={(value) => { clearSellerReportDetails(); setReportRange({ start: value.start ?? today, end: value.end ?? today }) }} maxDate={today} maxDays={366} testId="billing-seller-range" /><Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }} aria-label="Быстрый период">{([['today', 'Сегодня'], ['seven_days', '7 дней'], ['thirty_days', '30 дней'], ['current_month', 'Этот месяц'], ['previous_month', 'Прошлый месяц']] as Array<[SellerQuickPeriod, string]>).map(([period, label]) => <SecondaryAction key={period} onClick={() => { clearSellerReportDetails(); setReportRange(sellerQuickRange(period, today)) }}>{label}</SecondaryAction>)}</Stack><PreferenceSwitch label="Финансы" checked={includeFinance} onChange={(value) => { clearSellerReportDetails(); setIncludeFinance(value) }} testId="billing-seller-finance" /></>
+      <><MoscowDateRangeInput label="Период" startLabel="с" endLabel="по" value={reportRange} onChange={(value) => { clearSellerReportDetails(); setReportRange({ start: value.start ?? today, end: value.end ?? today }) }} maxDate={today} maxDays={366} testId="billing-seller-range" /><Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', alignSelf: { sm: 'flex-end' }, pb: { sm: 0.25 } }} aria-label="Быстрый период">{([['today', 'Сегодня'], ['seven_days', '7 дней'], ['thirty_days', '30 дней'], ['current_month', 'Этот месяц'], ['previous_month', 'Прошлый месяц']] as Array<[SellerQuickPeriod, string]>).map(([period, label]) => <SecondaryAction key={period} onClick={() => { clearSellerReportDetails(); setReportRange(sellerQuickRange(period, today)) }}>{label}</SecondaryAction>)}</Stack></>
       <SelectInput label="Селлер" value={sellerId} onChange={(value) => { clearSellerReportDetails(); setSellerId(value) }} options={[{ value: 'all', label: 'Все селлеры' }, ...sellers.map((seller) => ({ value: seller.id, label: seller.name }))]} testId="billing-seller" />
     </FilterBar> : null}
-    {tab === 'charges' ? <>{error ? <ErrorNotice testId="billing-seller-report-error">Не удалось загрузить отчёт по селлерам. Повторите попытку</ErrorNotice> : null}<ReportMetricStrip items={[{ key: 'sellers', label: 'Селлеров', value: report.totals.seller_count }, { key: 'operations', label: 'Документов', value: report.totals.operation_count }, { key: 'items', label: 'Штук', value: report.totals.item_quantity }, ...(includeFinance ? [{ key: 'accrued', label: 'Стоимость услуг', moneyMinor: report.totals.net_total_kopecks ?? 0 }] : [])]} loading={loading} testId="billing-seller-metrics" /><ActionGroup>{includeFinance ? <FfBillingInvoiceCreate token={token} sellers={sellers} sellerId={selectedReportSeller} sellerName={reportDetails?.seller_name ?? ''} dateFrom={reportRange.start} dateTo={reportRange.end} selectedRootIds={selectedRootIds} storageToken={storageSelected ? reportDetails?.storage_row?.calculation_token ?? null : null} onIssued={() => { setSelectedRootIds([]); setStorageSelected(false); setInvoicesRefresh((value) => value + 1) }} /> : null}</ActionGroup><DataTable columns={sellerColumns} rows={report.rows} loading={loading} getRowKey={(row) => row.seller_id} testId="billing-seller-summary" empty={{ title: 'За выбранный период документов нет', hint: 'Измените период или фильтр селлера.' }} expand={{ isExpanded: (row) => row.seller_id === selectedReportSeller, label: (row) => `Показать документы селлера ${row.seller_name}`, onToggle: (row) => { if (row.seller_id === selectedReportSeller) { clearSellerReportDetails(); return } clearSellerReportDetails(); setSelectedReportSeller(row.seller_id) }, render: () => <FfBillingSellerDetails details={reportDetails} loading={detailsLoading} error={detailsError} includeFinance={includeFinance} selectedRootIds={selectedRootIds} onToggleRoot={toggleRoot} storageSelected={storageSelected} onToggleStorage={setStorageSelected} onLoadMore={setDetailsCursor} onOpenInbound={onOpenInbound} /> }} /></> : <FfBillingInvoicesPanel token={token} sellers={sellers} refreshToken={invoicesRefresh} />}
+    {tab === 'charges' ? <>{error ? <ErrorNotice testId="billing-seller-report-error">Не удалось загрузить отчёт по селлерам. Повторите попытку</ErrorNotice> : null}<ReportMetricStrip items={[{ key: 'sellers', label: 'Селлеров', value: report.totals.seller_count }, { key: 'items', label: 'Штук', value: report.totals.item_quantity }, ...(includeFinance ? [{ key: 'accrued', label: 'Стоимость услуг', moneyMinor: report.totals.net_total_kopecks ?? 0 }] : [])]} loading={loading} testId="billing-seller-metrics" /><ActionGroup>{includeFinance ? <FfBillingInvoiceCreate token={token} sellers={sellers} sellerId={selectedReportSeller} sellerName={reportDetails?.seller_name ?? ''} dateFrom={reportRange.start} dateTo={reportRange.end} selectedRootIds={selectedRootIds} storageToken={storageSelected ? reportDetails?.storage_row?.calculation_token ?? null : null} onIssued={() => { setSelectedRootIds([]); setStorageSelected(false); setInvoicesRefresh((value) => value + 1) }} /> : null}</ActionGroup><DataTable columns={sellerColumns} rows={report.rows} loading={loading} getRowKey={(row) => row.seller_id} testId="billing-seller-summary" empty={{ title: 'За выбранный период документов нет', hint: 'Измените период или фильтр селлера.' }} expand={{ isExpanded: (row) => row.seller_id === selectedReportSeller, label: (row) => `Показать документы селлера ${row.seller_name}`, onToggle: (row) => { if (row.seller_id === selectedReportSeller) { clearSellerReportDetails(); return } clearSellerReportDetails(); setSelectedReportSeller(row.seller_id) }, render: () => <FfBillingSellerDetails details={reportDetails} loading={detailsLoading} error={detailsError} includeFinance={includeFinance} selectedRootIds={selectedRootIds} onToggleRoot={toggleRoot} storageSelected={storageSelected} onToggleStorage={setStorageSelected} onLoadMore={setDetailsCursor} onOpenInbound={onOpenInbound} /> }} /></> : <FfBillingInvoicesPanel token={token} sellers={sellers} refreshToken={invoicesRefresh} />}
   </Box>
 }

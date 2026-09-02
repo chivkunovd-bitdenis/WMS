@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Box, Link, Stack } from '@mui/material'
 import { Link as RouterLink } from 'react-router-dom'
 import {
@@ -7,7 +8,6 @@ import {
   MoneyCell,
   QtyCell,
   SecondaryAction,
-  StatusChip,
   TextCell,
 } from '../../ui-kit'
 
@@ -52,31 +52,47 @@ export type SellerReportDetails = {
 }
 
 /**
- * Строка раскрывашки: документ селлера либо одна агрегированная строка хранения.
+ * Раскрывашка селлера — два уровня: раздел услуги, внутри него документы.
  *
- * Обе живут в ОДНОЙ таблице с одной шапкой. Две таблицы со своими шапками под
- * строкой селлера оператор читает как два разных отчёта и теряет, к чему они
- * относятся.
+ * Плоский список документов, где приёмка, отгрузка и упаковка идут вперемешку,
+ * не отвечает на главный вопрос экрана — «сколько я беру с этого селлера за
+ * отгрузки». Поэтому сверху лежат разделы с итогом и ставкой, а документы
+ * прячутся на уровень ниже, под свой раздел.
  */
-type DetailRow =
+type SectionRow =
+  | { kind: 'service'; id: string; label: string; entries: SellerReportEntry[] }
   | { kind: 'storage'; id: 'storage'; storage: StorageReportRow }
-  | { kind: 'document'; id: string; entry: SellerReportEntry }
 
-const serviceLabels: Record<string, string> = {
+type DocumentRow =
+  | { kind: 'document'; id: string; entry: SellerReportEntry }
+  | { kind: 'storagePeriod'; id: 'storage-period'; storage: StorageReportRow }
+
+/** Порядок разделов — по ходу работы склада, а не по алфавиту. */
+const SECTION_ORDER = ['inbound', 'packing', 'fbs', 'marketplace_outbound', 'picking', 'return', 'other']
+
+const sectionLabels: Record<string, string> = {
   inbound: 'Приёмка',
-  marketplace_outbound: 'Отгрузка',
   packing: 'Упаковка',
-  packaging: 'Упаковка',
-  fbs_pick: 'Подбор FBS',
+  fbs: 'ФБС',
+  marketplace_outbound: 'Отгрузка',
   picking: 'Подбор',
   return: 'Возврат',
   storage: 'Хранение',
-  storage_liter_day: 'Хранение',
+  other: 'Прочие услуги',
+}
+
+/** Коды услуг с бэкенда сводим в разделы: `packing` и `packaging` — одно и то же. */
+function sectionKey(serviceCode: string): string {
+  if (serviceCode === 'packing' || serviceCode === 'packaging') return 'packing'
+  if (serviceCode === 'fbs_pick' || serviceCode === 'fbs_order') return 'fbs'
+  if (serviceCode === 'storage' || serviceCode === 'storage_liter_day') return 'storage'
+  if (sectionLabels[serviceCode]) return serviceCode
+  return 'other'
 }
 
 const sourceTypeLabels: Record<string, string> = {
   inbound_intake: 'Приёмка',
-  marketplace_unload: 'Разгрузка',
+  marketplace_unload: 'Отгрузка',
 }
 
 function formatMoscowDateTime(value: string): string {
@@ -102,6 +118,66 @@ export function selectionReason(entry: SellerReportEntry): string | undefined {
   return undefined
 }
 
+/** Начисления раздела, которые можно положить в счёт. */
+export function billableIds(entries: SellerReportEntry[]): string[] {
+  return entries
+    .filter((entry) => !selectionReason(entry) && entry.billing_ledger_entry_id)
+    .map((entry) => entry.billing_ledger_entry_id as string)
+}
+
+function sumItems(entries: SellerReportEntry[]): number {
+  return entries.reduce((sum, entry) => sum + (entry.item_quantity ?? 0), 0)
+}
+
+function sumAmount(entries: SellerReportEntry[]): number | null {
+  const priced = entries.filter((entry) => typeof entry.amount_kopecks === 'number')
+  if (!priced.length) return null
+  return priced.reduce((sum, entry) => sum + (entry.amount_kopecks ?? 0), 0)
+}
+
+/**
+ * Ставка раздела. Если внутри документы шли по разным ставкам — одну цифру
+ * показывать нельзя, она соврёт; тогда ставка живёт только у документов.
+ */
+function sectionRate(entries: SellerReportEntry[]): number | null {
+  const rates = new Set(
+    entries
+      .map((entry) => entry.rate_kopecks)
+      .filter((rate): rate is number => typeof rate === 'number'),
+  )
+  return rates.size === 1 ? ([...rates][0] ?? null) : null
+}
+
+function buildSections(details: SellerReportDetails | null): SectionRow[] {
+  const grouped = new Map<string, SellerReportEntry[]>()
+  for (const entry of details?.entries ?? []) {
+    const key = sectionKey(entry.service_code)
+    const bucket = grouped.get(key)
+    if (bucket) bucket.push(entry)
+    else grouped.set(key, [entry])
+  }
+  const known = SECTION_ORDER.filter((key) => grouped.has(key)).map((key) => ({
+    kind: 'service' as const,
+    id: key,
+    label: sectionLabels[key] ?? key,
+    entries: grouped.get(key) as SellerReportEntry[],
+  }))
+  // Раздел, которого нет в порядке выше, всё равно должен быть виден: услуга
+  // существует и деньги по ней идут, даже если про неё забыли на фронте.
+  const rest = [...grouped.keys()]
+    .filter((key) => !SECTION_ORDER.includes(key) && key !== 'storage')
+    .map((key) => ({
+      kind: 'service' as const,
+      id: key,
+      label: sectionLabels[key] ?? key,
+      entries: grouped.get(key) as SellerReportEntry[],
+    }))
+  const storage: SectionRow[] = details?.storage_row
+    ? [{ kind: 'storage' as const, id: 'storage' as const, storage: details.storage_row }]
+    : []
+  return [...known, ...rest, ...storage]
+}
+
 export function FfBillingSellerDetails({
   details,
   loading,
@@ -125,217 +201,270 @@ export function FfBillingSellerDetails({
   onLoadMore: (cursor: string) => void
   onOpenInbound: (id: string) => void
 }) {
-  const rows: DetailRow[] = [
-    ...(details?.storage_row
-      ? [{ kind: 'storage' as const, id: 'storage' as const, storage: details.storage_row }]
-      : []),
-    ...(details?.entries ?? []).map((entry) => ({
-      kind: 'document' as const,
-      id: entry.id,
-      entry,
-    })),
-  ]
+  const [openSections, setOpenSections] = useState<string[]>([])
+  const sections = buildSections(details)
 
-  const pickColumn = includeFinance
-    ? [
-        {
-          key: 'pick',
-          header: '',
-          width: 60,
-          render: (row: DetailRow) =>
-            row.kind === 'storage' ? (
-              <CheckboxInput
-                label="Выбрать хранение за период"
-                hideLabel
-                checked={storageSelected}
-                onChange={onToggleStorage}
-                disabledReason={
-                  row.storage.status === 'missing_dimensions'
-                    ? 'Нет габаритов у товара — хранение в счёт не включить'
-                    : undefined
-                }
-                testId="billing-pick-storage"
-              />
-            ) : (
-              <CheckboxInput
-                label={`Выбрать документ ${row.entry.document_number ?? ''}`.trim()}
-                hideLabel
-                checked={selectedRootIds.includes(row.entry.billing_ledger_entry_id ?? '')}
-                onChange={(checked) =>
-                  onToggleRoot(row.entry.billing_ledger_entry_id ?? '', checked)
-                }
-                disabledReason={selectionReason(row.entry)}
-                testId={`billing-pick-${row.entry.id}`}
-              />
-            ),
+  const toggleSection = (row: SectionRow) =>
+    setOpenSections((open) =>
+      open.includes(row.id) ? open.filter((id) => id !== row.id) : [...open, row.id],
+    )
+
+  function documentColumns() {
+    return [
+      ...(includeFinance
+        ? [
+            {
+              key: 'pick',
+              header: '',
+              width: 60,
+              render: (row: DocumentRow) =>
+                row.kind === 'storagePeriod' ? (
+                  <CheckboxInput
+                    label="Выбрать хранение за период"
+                    hideLabel
+                    checked={storageSelected}
+                    onChange={onToggleStorage}
+                    disabledReason={
+                      row.storage.status === 'missing_dimensions'
+                        ? 'Нет габаритов у товара — хранение в счёт не включить'
+                        : undefined
+                    }
+                    testId="billing-pick-storage"
+                  />
+                ) : (
+                  <CheckboxInput
+                    label={`Выбрать документ ${row.entry.document_number ?? ''}`.trim()}
+                    hideLabel
+                    checked={selectedRootIds.includes(row.entry.billing_ledger_entry_id ?? '')}
+                    onChange={(checked) =>
+                      onToggleRoot(row.entry.billing_ledger_entry_id ?? '', checked)
+                    }
+                    disabledReason={selectionReason(row.entry)}
+                    testId={`billing-pick-${row.entry.id}`}
+                  />
+                ),
+            },
+          ]
+        : []),
+      {
+        key: 'when',
+        header: 'Дата',
+        width: 170,
+        render: (row: DocumentRow) => (
+          <TextCell
+            value={
+              row.kind === 'storagePeriod'
+                ? `${formatMoscowDate(row.storage.date_from)} — ${formatMoscowDate(row.storage.date_to)}`
+                : formatMoscowDateTime(row.entry.occurred_at)
+            }
+          />
+        ),
+      },
+      {
+        key: 'document',
+        header: 'Документ',
+        width: 260,
+        render: (row: DocumentRow) => {
+          if (row.kind === 'storagePeriod') return <TextCell value="Хранение за период" />
+          // Номер документа уже содержит его вид («Приёмка № 000045»), поэтому
+          // подпись типа добавляется только тогда, когда номера нет вовсе.
+          const title =
+            row.entry.document_number ??
+            (sourceTypeLabels[row.entry.source_type] ?? 'Документ без номера')
+          const target = row.entry.source_target
+          // Номер документа сам и есть переход: отдельная колонка «Открыть»
+          // занимала место и заставляла искать глазами вторую точку клика.
+          if (target?.kind === 'inbound') {
+            return (
+              <Link
+                component="button"
+                type="button"
+                sx={{ textAlign: 'left' }}
+                onClick={() => onOpenInbound(target.source_id)}
+              >
+                {title}
+              </Link>
+            )
+          }
+          if (target?.kind === 'route') {
+            return (
+              <Link component={RouterLink} to={target.to} sx={{ textAlign: 'left' }}>
+                {title}
+              </Link>
+            )
+          }
+          return (
+            <TextCell
+              value={title}
+              hint="Первоисточник недоступен или не поддерживает переход"
+            />
+          )
         },
-      ]
-    : []
+      },
+      {
+        key: 'quantity',
+        header: 'Количество',
+        width: 130,
+        align: 'right' as const,
+        render: (row: DocumentRow) =>
+          row.kind === 'storagePeriod' ? (
+            <TextCell value={`${row.storage.liter_days} л·дн`} />
+          ) : (
+            <QtyCell value={row.entry.item_quantity ?? 0} />
+          ),
+      },
+      ...(includeFinance
+        ? [
+            {
+              key: 'rate',
+              header: 'Ставка',
+              width: 120,
+              align: 'right' as const,
+              render: (row: DocumentRow) => (
+                <MoneyCell
+                  minor={row.kind === 'storagePeriod' ? null : (row.entry.rate_kopecks ?? null)}
+                />
+              ),
+            },
+            {
+              key: 'amount',
+              header: 'Сумма',
+              width: 140,
+              align: 'right' as const,
+              render: (row: DocumentRow) => (
+                <MoneyCell
+                  minor={
+                    row.kind === 'storagePeriod'
+                      ? (row.storage.amount_kopecks ?? null)
+                      : (row.entry.amount_kopecks ?? null)
+                  }
+                />
+              ),
+            },
+            {
+              key: 'invoiced',
+              header: 'Счёт выставлялся',
+              width: 160,
+              render: (row: DocumentRow) => {
+                if (row.kind === 'storagePeriod') return <TextCell value="—" />
+                const history = row.entry.invoice_history
+                if (!history || history.state !== 'known') return <TextCell value="—" />
+                return <TextCell value={history.count ? `✓ ${history.count}` : '—'} />
+              },
+            },
+          ]
+        : []),
+    ]
+  }
 
-  const columns = [
-    ...pickColumn,
-    {
-      key: 'when',
-      header: 'Дата',
-      width: 190,
-      render: (row: DetailRow) => (
-        <TextCell
-          value={
-            row.kind === 'storage'
-              ? `${formatMoscowDate(row.storage.date_from)} — ${formatMoscowDate(row.storage.date_to)}`
-              : formatMoscowDateTime(row.entry.occurred_at)
-          }
-        />
-      ),
-    },
-    {
-      key: 'document',
-      header: 'Документ',
-      width: 190,
-      render: (row: DetailRow) => (
-        <TextCell
-          value={
-            row.kind === 'storage'
-              ? 'За период'
-              : [
-                  sourceTypeLabels[row.entry.source_type] ?? 'Документ',
-                  row.entry.document_number,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')
-          }
-        />
-      ),
-    },
+  const sectionColumns = [
+    ...(includeFinance
+      ? [
+          {
+            key: 'pick',
+            header: '',
+            width: 60,
+            render: (row: SectionRow) => {
+              if (row.kind === 'storage') {
+                return (
+                  <CheckboxInput
+                    label="Выбрать хранение за период"
+                    hideLabel
+                    checked={storageSelected}
+                    onChange={onToggleStorage}
+                    disabledReason={
+                      row.storage.status === 'missing_dimensions'
+                        ? 'Нет габаритов у товара — хранение в счёт не включить'
+                        : undefined
+                    }
+                    testId="billing-pick-section-storage"
+                  />
+                )
+              }
+              const ids = billableIds(row.entries)
+              const allPicked = ids.length > 0 && ids.every((id) => selectedRootIds.includes(id))
+              return (
+                <CheckboxInput
+                  label={`Выбрать весь раздел «${row.label}»`}
+                  hideLabel
+                  checked={allPicked}
+                  onChange={(checked) => ids.forEach((id) => onToggleRoot(id, checked))}
+                  disabledReason={
+                    ids.length ? undefined : 'В разделе нет начислений, которые можно выставить'
+                  }
+                  testId={`billing-pick-section-${row.id}`}
+                />
+              )
+            },
+          },
+        ]
+      : []),
     {
       key: 'service',
       header: 'Услуга',
-      width: 150,
-      render: (row: DetailRow) => {
-        if (row.kind === 'storage') return <TextCell value="Хранение" />
-        const label = serviceLabels[row.entry.service_code]
-        // Сырой код услуги оператору не показываем, но и прочерк молчит о том,
-        // что услуга есть, просто без подписи. Код уходит в подсказку.
-        return label ? (
-          <TextCell value={label} />
-        ) : (
-          <TextCell
-            value="Услуга без подписи"
-            hint={`Код услуги «${row.entry.service_code}» не имеет названия в интерфейсе`}
-          />
-        )
-      },
+      width: 220,
+      render: (row: SectionRow) => (
+        <TextCell value={row.kind === 'storage' ? 'Хранение' : row.label} />
+      ),
     },
     {
-      key: 'quantity',
-      header: 'Количество',
+      key: 'documents',
+      header: 'Документов',
       width: 130,
       align: 'right' as const,
-      render: (row: DetailRow) =>
+      render: (row: SectionRow) =>
         row.kind === 'storage' ? (
-          <TextCell value={`${row.storage.liter_days} л·дн`} />
+          <TextCell value="за период" />
         ) : (
-          <QtyCell value={row.entry.item_quantity ?? 0} />
+          <QtyCell value={row.entries.length} />
         ),
     },
     {
-      key: 'result',
-      header: 'Результат',
-      width: 170,
-      render: (row: DetailRow) => {
-        if (row.kind === 'storage') {
-          return row.storage.status === 'missing_dimensions' ? (
-            <StatusChip
-              label="Нет габаритов"
-              tone="warn"
-              hint="У товара нет габаритов для точного расчёта"
-            />
-          ) : (
-            <StatusChip label="Рассчитано" tone="ok" />
-          )
-        }
-        const presentation = {
-          completed: { label: 'Выполнено', tone: 'ok' as const },
-          reversed: { label: 'Сторно', tone: 'neutral' as const },
-          not_billable: { label: 'Не тарифицируется', tone: 'neutral' as const },
-          unpriced: { label: 'Нет ставки', tone: 'warn' as const },
-        }[row.entry.result]
-        return <StatusChip label={presentation.label} tone={presentation.tone} />
-      },
+      key: 'items',
+      header: 'Товаров',
+      width: 130,
+      align: 'right' as const,
+      render: (row: SectionRow) =>
+        row.kind === 'storage' ? (
+          <TextCell value={`${row.storage.liter_days} л·дн`} />
+        ) : (
+          <QtyCell value={sumItems(row.entries)} />
+        ),
     },
     ...(includeFinance
       ? [
           {
             key: 'rate',
             header: 'Ставка',
-            width: 120,
+            width: 130,
             align: 'right' as const,
-            render: (row: DetailRow) => (
-              <MoneyCell minor={row.kind === 'storage' ? null : (row.entry.rate_kopecks ?? null)} />
-            ),
+            render: (row: SectionRow) => {
+              if (row.kind === 'storage') return <TextCell value="—" />
+              const rate = sectionRate(row.entries)
+              return rate === null ? (
+                <TextCell value="разные" hint="Документы раздела прошли по разным ставкам" />
+              ) : (
+                <MoneyCell minor={rate} />
+              )
+            },
           },
           {
             key: 'amount',
             header: 'Сумма',
-            width: 140,
+            width: 150,
             align: 'right' as const,
-            render: (row: DetailRow) => (
+            render: (row: SectionRow) => (
               <MoneyCell
                 minor={
                   row.kind === 'storage'
                     ? (row.storage.amount_kopecks ?? null)
-                    : (row.entry.amount_kopecks ?? null)
+                    : sumAmount(row.entries)
                 }
               />
             ),
           },
-          {
-            key: 'invoiced',
-            header: 'Счёт выставлялся',
-            width: 160,
-            render: (row: DetailRow) => {
-              if (row.kind === 'storage') return <TextCell value="—" />
-              const history = row.entry.invoice_history
-              if (!history || history.state !== 'known') return <TextCell value="—" />
-              return <TextCell value={history.count ? `✓ ${history.count}` : '—'} />
-            },
-          },
         ]
       : []),
-    {
-      key: 'source',
-      header: 'Источник',
-      width: 170,
-      render: (row: DetailRow) => {
-        if (row.kind === 'storage') return <TextCell value="—" />
-        const target = row.entry.source_target
-        if (target?.kind === 'inbound') {
-          return (
-            <Link
-              component="button"
-              type="button"
-              sx={{ whiteSpace: 'nowrap' }}
-              onClick={() => onOpenInbound(target.source_id)}
-            >
-              Открыть
-            </Link>
-          )
-        }
-        if (target?.kind === 'route') {
-          return (
-            <Link component={RouterLink} to={target.to} sx={{ whiteSpace: 'nowrap' }}>
-              Открыть
-            </Link>
-          )
-        }
-        return (
-          <TextCell
-            value="Недоступен"
-            hint="Первоисточник недоступен или не поддерживает переход"
-          />
-        )
-      },
-    },
   ]
 
   return (
@@ -347,12 +476,46 @@ export function FfBillingSellerDetails({
           </ErrorNotice>
         ) : null}
         <DataTable
-          columns={columns}
-          rows={rows}
+          columns={sectionColumns}
+          rows={sections}
           loading={loading}
           getRowKey={(row) => row.id}
-          testId="billing-seller-entries"
+          testId="billing-seller-sections"
           empty={{ title: 'За выбранный период документов нет' }}
+          expand={{
+            isExpanded: (row) => openSections.includes(row.id),
+            label: (row) =>
+              row.kind === 'storage'
+                ? 'Показать хранение за период'
+                : `Показать документы раздела «${row.label}»`,
+            onToggle: toggleSection,
+            render: (row) => (
+              <Box sx={{ px: 2, py: 1 }}>
+                <DataTable
+                  columns={documentColumns()}
+                  rows={
+                    row.kind === 'storage'
+                      ? [
+                          {
+                            kind: 'storagePeriod' as const,
+                            id: 'storage-period' as const,
+                            storage: row.storage,
+                          },
+                        ]
+                      : row.entries.map((entry) => ({
+                          kind: 'document' as const,
+                          id: entry.id,
+                          entry,
+                        }))
+                  }
+                  loading={false}
+                  getRowKey={(documentRow) => documentRow.id}
+                  testId={`billing-seller-entries-${row.id}`}
+                  empty={{ title: 'В разделе нет документов' }}
+                />
+              </Box>
+            ),
+          }}
         />
         {details?.next_cursor ? (
           <SecondaryAction
