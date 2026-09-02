@@ -71,6 +71,13 @@ type Props = {
   onPost: () => void
   onCancelDocument: () => void
   onCreateContainer?: (kind: 'pallet' | 'box' | 'cargo_place') => void
+  /** Записать находку: товар лежит там, где по учёту его нет. */
+  onFound?: (place: {
+    barcode: string
+    storageLocationId: string
+    containerKind: 'pallet' | 'box' | 'cargo_place' | null
+    containerId: string | null
+  }) => void
   onBack: () => void
 }
 
@@ -85,6 +92,7 @@ export function FfInventoryCountScreen({
   onPost,
   onCancelDocument,
   onCreateContainer,
+  onFound,
   onBack,
 }: Props) {
   const [filters, setFilters] = useState<InvFilters>(EMPTY_FILTERS)
@@ -123,7 +131,17 @@ export function FfInventoryCountScreen({
         request: (current?.request ?? 0) + 1,
       }))
     }
+    if (result.found) onFound?.(result.found)
     if (result.count !== count) onChange(result.count)
+  }
+
+  // Явная кнопка рядом со сканером: не у каждого оператора под рукой штрихкод
+  // открытой тары, а совет «закройте тару» без способа закрыть — издевательство.
+  function closeContainer() {
+    if (!openContainerId) return
+    const name = containerName(count, openContainerId)
+    setOpenContainerId(null)
+    setScanNote({ text: `Закрыли ${name}. Следующие пики считают россыпь.`, tone: 'ok' })
   }
 
   const readOnly = count.status !== 'draft'
@@ -267,6 +285,13 @@ export function FfInventoryCountScreen({
             notice={scanNote && scanNote.tone !== 'error' ? scanNote.text : null}
             testId="inv-scan"
           />
+          {openContainerId ? (
+            <Box sx={{ mt: 1 }}>
+              <SecondaryAction onClick={closeContainer} data-testid="inv-close-container">
+                Закрыть тару
+              </SecondaryAction>
+            </Box>
+          ) : null}
         </Box>
       ) : null}
 

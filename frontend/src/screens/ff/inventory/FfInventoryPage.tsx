@@ -14,6 +14,7 @@ import {
   toListItem,
   type ApiDetail,
   type ApiSummary,
+  recordCountFound,
 } from './inventoryCountApi'
 
 // Экран инвентаризации, подключённый к серверу.
@@ -156,6 +157,27 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     }
   }
 
+  /**
+   * Записать находку и перечитать документ.
+   *
+   * Строку заводит сервер, поэтому после ответа берём его версию документа
+   * целиком: у новой строки есть id, которого на клиенте быть не могло.
+   */
+  async function recordFound(place: {
+    barcode: string
+    storageLocationId: string
+    containerKind: 'pallet' | 'box' | 'cargo_place' | null
+    containerId: string | null
+  }) {
+    if (!count || count.status !== 'draft') return
+    setError(null)
+    try {
+      setCount(await recordCountFound(token, count.id, place))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось записать находку')
+    }
+  }
+
   async function createContainer(kind: 'pallet' | 'box' | 'cargo_place') {
     if (!count || count.status !== 'draft') return
     const warehouseId = count.warehouseId
@@ -224,6 +246,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         onPost={() => void post()}
         onCancelDocument={() => void cancelDocument()}
         onCreateContainer={(kind) => void createContainer(kind)}
+        onFound={(place) => void recordFound(place)}
         onBack={() => {
           setCount(null)
           setNote(null)

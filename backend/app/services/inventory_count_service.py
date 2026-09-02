@@ -215,7 +215,14 @@ def _balance_query(
             Product.tenant_id == tenant_id,
             StorageLocation.tenant_id == tenant_id,
             StorageLocation.deleted_at.is_(None),
-            InventoryBalance.quantity > 0,
+            # ⛔ Условия «остаток больше нуля» здесь быть не должно.
+            #
+            # Пересчёт затевают ровно тогда, когда учёт разъехался с полкой, и
+            # отрицательная ячейка — самый сильный признак такого расхождения.
+            # Пока строка с минусом в документ не попадала, её нельзя было ни
+            # пересчитать, ни выправить: документ молча собирался без неё.
+            # Нулевые строки нужны по той же причине — это законный кандидат на
+            # находку. Решение владельца от 01.09.2026.
         )
         .options(selectinload(Product.seller))
         .order_by(StorageLocation.code, Product.sku_code)
@@ -473,6 +480,97 @@ async def save_actuals(
         lines[line_id].actual_quantity = actual_quantity
     await session.commit()
     loaded = await get_count(session, tenant_id, count.id)
+    assert loaded is not None
+    return loaded
+
+
+async def record_found(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    count_id: uuid.UUID,
+    *,
+    barcode: str,
+    storage_location_id: uuid.UUID,
+    container_kind: str | None,
+    container_id: uuid.UUID | None,
+) -> InventoryCount:
+    """Записывает находку: товар лежит там, где по учёту его нет.
+
+    Ради этого пересчёт и затевают. Раньше такой скан отклонялся словами «код в
+    этом документе не числится, находку вносим отдельно» — а «отдельно» не
+    существовало ни кнопкой, ни ручкой, и записать факт было нечем. Решение
+    владельца от 01.09.2026: отсканировал в короб то, чего там нет — строка
+    появляется и в ней становится единица.
+
+    Повторный скан того же товара в том же месте не плодит строки, а
+    увеличивает счёт: человек считает штуками.
+    """
+    count = await get_count(session, tenant_id, count_id)
+    if count is None:
+        raise InventoryCountError("count_not_found")
+    if count.status != STATUS_DRAFT:
+        raise InventoryCountError("count_not_editable")
+
+    code = barcode.strip()
+    if not code:
+        raise InventoryCountError("barcode_required")
+
+    product_stmt = select(Product).where(
+        Product.tenant_id == tenant_id,
+        or_(Product.wb_barcode == code, Product.sku_code == code),
+    )
+    # Документ, собранный по одному продавцу, чужой товар не принимает: иначе
+    # пересчёт одного селлера начнёт править остатки другого.
+    if count.seller_id is not None:
+        product_stmt = product_stmt.where(Product.seller_id == count.seller_id)
+    products = list((await session.execute(product_stmt)).scalars().all())
+    if not products:
+        raise InventoryCountError("product_not_found")
+    if len(products) > 1:
+        raise InventoryCountError("barcode_is_ambiguous")
+    product = products[0]
+
+    location = await session.get(StorageLocation, storage_location_id)
+    if location is None or location.tenant_id != tenant_id or location.deleted_at is not None:
+        raise InventoryCountError("storage_location_not_found")
+
+    existing = next(
+        (
+            line
+            for line in count.lines
+            if line.product_id == product.id
+            and line.storage_location_id == storage_location_id
+            and line.container_kind == container_kind
+            and line.container_id == container_id
+        ),
+        None,
+    )
+    if existing is not None:
+        existing.actual_quantity = int(existing.actual_quantity or 0) + 1
+        await session.commit()
+        loaded = await get_count(session, tenant_id, count_id)
+        assert loaded is not None
+        return loaded
+
+    line = InventoryCountLine(
+        count_id=count.id,
+        product_id=product.id,
+        storage_location_id=storage_location_id,
+        container_kind=container_kind,
+        container_id=container_id,
+        expected_quantity=0,
+        actual_quantity=1,
+        posted_delta=None,
+    )
+    # «Числится» берём из живого остатка: обычно это ноль, но товар мог
+    # приехать сюда уже после наполнения документа, и тогда честнее показать
+    # реальное число, а не выдуманный ноль.
+    line.expected_quantity = await _current_quantity(
+        session, tenant_id=tenant_id, line=line, lock=False
+    )
+    session.add(line)
+    await session.commit()
+    loaded = await get_count(session, tenant_id, count_id)
     assert loaded is not None
     return loaded
 

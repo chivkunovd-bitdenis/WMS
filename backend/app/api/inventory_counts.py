@@ -67,6 +67,15 @@ class InventoryCountActualBatchIn(BaseModel):
     lines: list[InventoryCountActualIn]
 
 
+class InventoryCountFoundIn(BaseModel):
+    """Находка: товар лежит там, где по учёту его нет."""
+
+    barcode: str = Field(min_length=1, max_length=128)
+    storage_location_id: uuid.UUID
+    container_kind: Literal["pallet", "box", "cargo_place"] | None = None
+    container_id: uuid.UUID | None = None
+
+
 class CountFillOut(BaseModel):
     mode: Literal["object", "all", "filters"]
     seller_id: str | None = None
@@ -465,10 +474,13 @@ async def _detail_out(
 def _http_error(exc: service.InventoryCountError) -> HTTPException:
     if exc.code in {
         "not_found",
+        "count_not_found",
         "line_not_found",
         "seller_not_found",
         "warehouse_not_found",
         "object_not_found",
+        "product_not_found",
+        "storage_location_not_found",
     }:
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
     if exc.code in {
@@ -478,6 +490,8 @@ def _http_error(exc: service.InventoryCountError) -> HTTPException:
         "empty_count",
         "container_has_no_stock",
         "balance_changed_during_post",
+        "count_not_editable",
+        "barcode_is_ambiguous",
     }:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.code)
@@ -574,6 +588,34 @@ async def save_inventory_count_lines(
             user.tenant_id,
             count_id,
             [(line.line_id, line.actual_quantity) for line in body.lines],
+        )
+    except service.InventoryCountError as exc:
+        raise _http_error(exc) from None
+    return await _detail_out(session, count)
+
+
+@router.post("/{count_id}/found", response_model=InventoryCountDetailOut)
+async def record_inventory_count_found(
+    count_id: uuid.UUID,
+    body: InventoryCountFoundIn,
+    user: Annotated[User, Depends(require_inventory_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryCountDetailOut:
+    """Добавляет в пересчёт строку товара, которого в этом месте не числится.
+
+    Ровно тот случай, ради которого пересчёт и делают: оператор сканирует в
+    короб то, чего по учёту там нет. Строка появляется со счётом 1, повторный
+    скан увеличивает счёт.
+    """
+    try:
+        count = await service.record_found(
+            session,
+            user.tenant_id,
+            count_id,
+            barcode=body.barcode,
+            storage_location_id=body.storage_location_id,
+            container_kind=body.container_kind,
+            container_id=body.container_id,
         )
     except service.InventoryCountError as exc:
         raise _http_error(exc) from None

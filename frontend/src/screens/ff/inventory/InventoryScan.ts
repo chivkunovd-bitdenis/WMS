@@ -1,4 +1,4 @@
-import type { InventoryCount, InventoryNode, ProductNode } from './InventoryTypes'
+import type { ContainerKind, InventoryCount, InventoryNode, ProductNode } from './InventoryTypes'
 import { KIND_TITLE } from './InventoryTypes'
 import { expectedNow, setActual } from './InventoryRows'
 
@@ -24,6 +24,19 @@ export type ScanResult = {
   focusPathKeys?: string[]
   message: string
   tone: ScanTone
+  /**
+   * Находка: товар лежит там, где по учёту его нет.
+   *
+   * Скан сам строку не создаёт — её заводит сервер, потому что документ и его
+   * строки живут на сервере. Экран, получив это поле, дёргает ручку находки и
+   * перезагружает документ.
+   */
+  found?: {
+    barcode: string
+    storageLocationId: string
+    containerKind: ContainerKind | null
+    containerId: string | null
+  }
 }
 
 // «Короб открыт», но «палета открыта» и «грузоместо открыто». Род у слов разный,
@@ -135,6 +148,34 @@ function findScanTargets(
   return { container, products }
 }
 
+/** Ячейка и вид открытой тары: находке нужно точное место, а не просто «где-то». */
+function locateContainer(
+  count: InventoryCount,
+  containerId: string,
+): { cellId: string; kind: ContainerKind } | null {
+  for (const cell of count.cells) {
+    let found: ContainerKind | null = null
+    const walk = (nodes: InventoryNode[]) => {
+      for (const node of nodes) {
+        if (node.kind === 'product') continue
+        if (node.id === containerId) {
+          found = node.kind
+          return
+        }
+        walk(node.children)
+      }
+    }
+    walk(cell.children)
+    if (found) return { cellId: cell.id, kind: found }
+  }
+  return null
+}
+
+/** Единственная ячейка документа: только тогда россыпь можно записать без вопросов. */
+function soleCellId(count: InventoryCount): string | null {
+  return count.cells.length === 1 ? count.cells[0].id : null
+}
+
 /** Пик увеличивает факт на единицу: человек считает штуками, а не вводит итог. */
 function bump(count: InventoryCount, product: ProductNode): InventoryCount {
   return setActual(count, product.id, (product.actual ?? 0) + 1)
@@ -152,6 +193,15 @@ export function applyScan(
   count: InventoryCount,
   rawCode: string,
   activeContainerId: string | null,
+  /**
+   * Разрешено ли записывать находки.
+   *
+   * Строку находки заводит сервер, поэтому экран, у которого нет доступа к нему
+   * (компактный диалог с карты склада), находку записать не может. Обещать
+   * оператору «записываем» и ничего не записать — хуже, чем честно сказать, что
+   * находку вносят в полном документе.
+   */
+  allowFound = true,
 ): ScanResult {
   const codes = scanCandidates(rawCode)
   const code = codes[0] ?? ''
@@ -163,6 +213,19 @@ export function applyScan(
   const targets = findScanTargets(count, normalizedCodes)
   const container = targets.container
   if (container) {
+    if (container.id === activeContainerId) {
+      // Повторный скан той же тары закрывает её. До 02.09.2026 система советовала
+      // «закройте тару, чтобы считать россыпь», а способа закрыть не было ни
+      // сканом, ни кнопкой — оператор выходил из документа и заходил заново.
+      return {
+        count,
+        activeContainerId: null,
+        focusRowKey: `${container.kind}:${container.id}`,
+        focusPathKeys: container.pathKeys,
+        message: `${KIND_TITLE[container.kind]} ${container.code} закрыт${container.kind === 'pallet' ? 'а' : container.kind === 'cargo_place' ? 'о' : ''}. Следующие пики считают россыпь.`,
+        tone: 'ok',
+      }
+    }
     return {
       count,
       activeContainerId: container.id,
@@ -176,11 +239,23 @@ export function applyScan(
   const byBarcode = targets.products
 
   if (byBarcode.length === 0) {
+    const place = allowFound ? foundPlace(count, activeContainerId) : null
+    if (!place) {
+      return {
+        count,
+        activeContainerId,
+        message: allowFound
+          ? `Код ${code} в этом документе не числится. Отсканируйте тару или ячейку, куда его записать.`
+          : `Код ${code} в этом документе не числится. Находку вносят в полном документе инвентаризации.`,
+        tone: 'warn',
+      }
+    }
     return {
       count,
       activeContainerId,
-      message: `Код ${code} в этом документе не числится. Если товар лежит здесь — это находка, её вносим отдельно.`,
-      tone: 'error',
+      message: `Код ${code} по учёту здесь не числится — записываем как находку.`,
+      tone: 'ok',
+      found: { barcode: code, ...place },
     }
   }
 
@@ -189,13 +264,15 @@ export function applyScan(
     if (!inside) {
       const where = byBarcode[0]
       const openName = containerName(count, activeContainerId)
+      const place = allowFound ? foundPlace(count, activeContainerId) : null
       return {
         count,
         activeContainerId,
-        message: where.containerId
-          ? `${where.product.name} — числится не здесь, а в другой таре. В ${openName} его нет.`
-          : `${where.product.name} — числится россыпью, а не в ${openName}. Закройте тару, чтобы считать россыпь.`,
-        tone: 'warn',
+        message: place
+          ? `${where.product.name} по учёту в ${openName} не числится — записываем как находку.`
+          : `${where.product.name} — числится не здесь. Отсканируйте тару, куда его записать.`,
+        tone: place ? 'ok' : 'warn',
+        ...(place ? { found: { barcode: code, ...place } } : {}),
       }
     }
     const next = bump(count, inside.product)
@@ -211,12 +288,22 @@ export function applyScan(
 
   const loose = byBarcode.find((item) => item.containerId === null)
   if (!loose) {
+    const place = allowFound ? foundPlace(count, null) : null
+    if (!place) {
+      // Ровно тот случай, который назвал владелец: товар есть, но он в таре.
+      return {
+        count,
+        activeContainerId,
+        message: `${byBarcode[0].product.name} — лежит в таре. Отсканируйте тару.`,
+        tone: 'warn',
+      }
+    }
     return {
       count,
       activeContainerId,
-      // Ровно тот случай, который назвал владелец: товар есть, но он в таре.
-      message: `${byBarcode[0].product.name} — лежит в таре. Отсканируйте тару.`,
-      tone: 'warn',
+      message: `${byBarcode[0].product.name} по учёту лежит в таре — записываем находку россыпью.`,
+      tone: 'ok',
+      found: { barcode: code, ...place },
     }
   }
   return {
@@ -263,4 +350,30 @@ export function containerName(count: InventoryCount, containerId: string): strin
   }
   for (const cell of count.cells) walk(cell.children)
   return name
+}
+
+
+/**
+ * Куда записать находку.
+ *
+ * Открыта тара — в неё. Тары нет, но в документе одна ячейка — в эту ячейку.
+ * Ячеек несколько и тара не открыта — места нет, и выдумывать его нельзя:
+ * записанная не туда находка испортит остаток чужой ячейки.
+ */
+function foundPlace(
+  count: InventoryCount,
+  activeContainerId: string | null,
+): { storageLocationId: string; containerKind: ContainerKind | null; containerId: string | null } | null {
+  if (activeContainerId) {
+    const placed = locateContainer(count, activeContainerId)
+    if (!placed) return null
+    return {
+      storageLocationId: placed.cellId,
+      containerKind: placed.kind,
+      containerId: activeContainerId,
+    }
+  }
+  const cellId = soleCellId(count)
+  if (!cellId) return null
+  return { storageLocationId: cellId, containerKind: null, containerId: null }
 }

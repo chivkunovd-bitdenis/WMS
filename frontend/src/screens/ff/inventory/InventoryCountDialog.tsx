@@ -111,7 +111,8 @@ function InventoryCountDialogState({
   function handleScan(code: string) {
     setCount((current) => {
       if (!current) return current
-      const result = applyScan(current, code, openContainerId)
+      // Диалог с карты склада не ходит на сервер, значит и находку не запишет.
+      const result = applyScan(current, code, openContainerId, false)
       setOpenContainerId(result.activeContainerId)
       setScanNote({ text: result.message, tone: result.tone })
       if (result.focusRowKey) {

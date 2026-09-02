@@ -242,6 +242,36 @@ export async function createObjectCount(
   return toCount((await res.json()) as ApiDetail)
 }
 
+/**
+ * Записать находку: товар лежит там, где по учёту его нет.
+ *
+ * Строку заводит сервер, а не экран: документ и его строки живут на сервере, и
+ * придуманная на клиенте строка всё равно не пережила бы сохранение.
+ */
+export async function recordCountFound(
+  token: string,
+  countId: string,
+  place: {
+    barcode: string
+    storageLocationId: string
+    containerKind: 'pallet' | 'box' | 'cargo_place' | null
+    containerId: string | null
+  },
+): Promise<InventoryCount> {
+  const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/found`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
+    body: JSON.stringify({
+      barcode: place.barcode,
+      storage_location_id: place.storageLocationId,
+      container_kind: place.containerKind,
+      container_id: place.containerId,
+    }),
+  })
+  if (!res.ok) throw new Error(await readApiErrorMessage(res))
+  return toCount((await res.json()) as ApiDetail)
+}
+
 /** Положить введённый факт. Остатки не трогает: документ остаётся черновиком. */
 export async function saveCountActuals(
   token: string,
