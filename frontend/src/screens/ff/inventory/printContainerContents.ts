@@ -67,10 +67,19 @@ export function printContainerContents(options: ContainerContentsPrintOptions): 
     <meta charset="utf-8" />
     <title>Опись ${escapeHtml(contents.label)}</title>
     <style>
-      @page { size: A4 portrait; margin: 12mm; }
+      /* Поля НУЛЕВЫЕ, отступ даёт сама страница.
+         Иначе браузер печатает в оставленное поле свою шапку — дату слева и
+         заголовок вкладки справа. Отключить её из вёрстки нельзя, она живёт в
+         настройках печати; но если полей нет, вписывать её некуда. */
+      @page { size: A4 portrait; margin: 0; }
       * { box-sizing: border-box; }
+      /* Без этого Chrome не печатает заливки: чёрная плашка выходит белой, а
+         белый текст на ней — серым. Ровно так лист и выглядел на первой
+         печати. */
+      html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       body {
         margin: 0;
+        padding: 12mm;
         color: #14110F;
         background: #FFFFFF;
         font-family: "Arial Narrow", Arial, Helvetica, system-ui, sans-serif;
@@ -89,6 +98,8 @@ export function printContainerContents(options: ContainerContentsPrintOptions): 
         padding: 3mm 5mm 4mm;
         background: #14110F;
         color: #FFFFFF;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
       .plate .kind {
         font-size: 5mm;
@@ -99,9 +110,15 @@ export function printContainerContents(options: ContainerContentsPrintOptions): 
       .plate .code {
         margin-top: 1mm;
         font-family: "Courier New", ui-monospace, monospace;
-        font-size: 11mm;
-        line-height: 1;
+        font-size: 9mm;
+        line-height: 1.05;
         font-weight: 700;
+        /* Код тары не переносится. Дефис внутри INB-… и WHB-… браузер считает
+           законным местом разрыва, и код разъезжался на две строки — на ярлыке
+           это читается как два разных кода. */
+        white-space: nowrap;
+        overflow-wrap: normal;
+        word-break: keep-all;
       }
       .meta {
         margin-top: 4mm;
@@ -116,6 +133,9 @@ export function printContainerContents(options: ContainerContentsPrintOptions): 
       .meta .k { font-size: 2.8mm; letter-spacing: 0.1em; text-transform: uppercase; color: #6E6862; }
       .meta .v { font-weight: 700; font-family: "Courier New", monospace; }
       table { margin-top: 6mm; width: 100%; border-collapse: collapse; }
+      /* Длинную опись рвёт на страницы — шапка колонок обязана повториться,
+         иначе на втором листе стоят голые цифры без подписей. */
+      thead { display: table-header-group; }
       thead th {
         font-size: 3.4mm;
         letter-spacing: 0.12em;
