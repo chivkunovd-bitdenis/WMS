@@ -25,7 +25,7 @@ from app.models.fbs_order import (
     FbsOrder,
     FbsOrderMarking,
 )
-from app.models.fbs_supply import FBS_SUPPLY_STATUS_ASSEMBLING, FbsSupply
+from app.models.fbs_supply import FBS_SUPPLY_STATUS_PACKED, FbsSupply
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import reset_mock_marketplace_order_meta
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
@@ -448,7 +448,9 @@ async def test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_fail
             warehouse_id=warehouse_uuid,
             wb_supply_id=f"WB-BATCH-{suffix[-8:]}",
             name="Batch marking supply",
-            status=FBS_SUPPLY_STATUS_ASSEMBLING,
+            # Legacy aggregate packaging status must not stop WB metadata
+            # polling; packing is a fact, never a subscription gate.
+            status=FBS_SUPPLY_STATUS_PACKED,
             delivery_type="warehouse_sc",
         )
         session.add(supply)

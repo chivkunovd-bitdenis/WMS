@@ -239,7 +239,7 @@ async def test_fbs_supply_add_order_ok(
 
 
 @pytest.mark.asyncio
-async def test_fbs_supply_deliver_in_supply_still_requires_boxes(
+async def test_fbs_supply_deliver_in_supply_goes_without_boxes(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
@@ -282,9 +282,9 @@ async def test_fbs_supply_deliver_in_supply_still_requires_boxes(
     )
     assert add.status_code == 200, add.text
 
+    # Коробов нет — оператор видит предупреждение и всё равно уезжает.
     deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
-    assert deliver.status_code == 400
-    assert deliver.json()["detail"]["code"] == "physical_boxes_required"
+    assert deliver.status_code == 200, deliver.text
 
 
 @pytest.mark.asyncio

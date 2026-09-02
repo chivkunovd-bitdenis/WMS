@@ -1276,7 +1276,15 @@ async def list_supply_worklist(
                     else None
                 ),
                 "can_add_orders": supply.status
-                in {FBS_SUPPLY_STATUS_DRAFT, FBS_SUPPLY_STATUS_ASSEMBLING},
+                in (
+                    {
+                        FBS_SUPPLY_STATUS_DRAFT,
+                        FBS_SUPPLY_STATUS_ASSEMBLING,
+                        FBS_SUPPLY_STATUS_PACKED,
+                    }
+                    if supply.marketplace == "wb"
+                    else {FBS_SUPPLY_STATUS_DRAFT, FBS_SUPPLY_STATUS_ASSEMBLING}
+                ),
             }
         )
     return {"items": items, "server_now": datetime.now(tz=UTC).isoformat()}
@@ -1300,7 +1308,11 @@ async def update_planned_shipment_date(
 
 
 REPAIRABLE_SUPPLY_STATUSES = frozenset(
-    {FBS_SUPPLY_STATUS_DRAFT, FBS_SUPPLY_STATUS_ASSEMBLING}
+    {
+        FBS_SUPPLY_STATUS_DRAFT,
+        FBS_SUPPLY_STATUS_ASSEMBLING,
+        FBS_SUPPLY_STATUS_PACKED,
+    }
 )
 # За один цикл автоопроса чиним не больше этого числа поставок на селлера.
 PENDING_SUPPLY_REPAIR_BATCH = 10
@@ -1538,7 +1550,15 @@ async def add_order_to_supply(
     supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
     if supply is None:
         raise FbsSupplyError("supply_not_found")
-    if supply.status != FBS_SUPPLY_STATUS_DRAFT:
+    editable_statuses = {FBS_SUPPLY_STATUS_DRAFT}
+    if supply.marketplace == "wb":
+        # Deprecated clients still use this endpoint.  They must obey the same
+        # WB contract as the batch endpoint: the packaging aggregate never
+        # freezes composition.
+        editable_statuses.update(
+            {FBS_SUPPLY_STATUS_ASSEMBLING, FBS_SUPPLY_STATUS_PACKED}
+        )
+    if supply.status not in editable_statuses:
         raise FbsSupplyError("supply_not_editable")
 
     order_stmt = (
@@ -1667,7 +1687,13 @@ async def add_orders_to_existing_supply(
     supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
     if supply is None:
         raise FbsSupplyError("supply_not_found")
-    if supply.status not in {FBS_SUPPLY_STATUS_DRAFT, FBS_SUPPLY_STATUS_ASSEMBLING}:
+    editable_statuses = {FBS_SUPPLY_STATUS_DRAFT, FBS_SUPPLY_STATUS_ASSEMBLING}
+    if supply.marketplace == "wb":
+        # `packed` is a legacy aggregate of packaging checkboxes.  For WB it
+        # never freezes composition; adding an order may move the aggregate
+        # fact back to assembling, but the checkbox has no authority itself.
+        editable_statuses.add(FBS_SUPPLY_STATUS_PACKED)
+    if supply.status not in editable_statuses:
         raise FbsSupplyError(
             "supply_not_editable",
             message="В эту поставку уже нельзя добавлять заказы.",

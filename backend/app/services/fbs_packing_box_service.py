@@ -52,7 +52,7 @@ async def get_delivery_box_readiness(
     supply_id: uuid.UUID,
     orders: list[FbsOrder],
 ) -> DeliveryBoxReadiness:
-    """Return the durable box membership gate used by preflight and delivery."""
+    """Return box facts shown by preflight and used by box operations."""
     boxes = list(
         (
             await session.scalars(
@@ -65,13 +65,12 @@ async def get_delivery_box_readiness(
     )
     supply = await _get_supply(session, tenant_id, supply_id)
     without_distribution = await _supply_without_distribution(session, supply)
-    # Packaging remains optional for WB.  An unpacked order must not become a
-    # dead-end merely because boxes were already created in distribution mode:
-    # the unchanged UI only offers packed orders for manual box assignment.
-    # If the operator did record packaging, that packed order still has to be
-    # assigned unless the durable "without distribution" mode was selected.
+    # Для WB принадлежность коробу считается по составу поставки, без чтения
+    # pack_status: упаковка — только факт в БД. Ozon сохраняет свой контракт.
     assignment_required_order_ids = {
-        order.id for order in orders if order.pack_status == PACK_STATUS_PACKED
+        order.id
+        for order in orders
+        if supply.marketplace == "wb" or order.pack_status == PACK_STATUS_PACKED
     }
     if not assignment_required_order_ids or without_distribution:
         return DeliveryBoxReadiness(bool(boxes), without_distribution, frozenset())

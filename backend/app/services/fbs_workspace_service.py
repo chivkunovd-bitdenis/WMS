@@ -114,7 +114,9 @@ async def get_supply_workspace(
         session, tenant_id, supply, orders
     )
     unassigned_packed_order_ids = (
-        set() if boxes_without_distribution else _unassigned_packed_order_ids(orders, boxes)
+        set()
+        if boxes_without_distribution
+        else _unassigned_order_ids(supply, orders, boxes)
     )
     stage = _compute_stage(
         supply,
@@ -254,7 +256,9 @@ async def _inject_order_pick_fallback(
         order = orders_by_id.get(str(item.get("id")))
         if order is None or order.product_id is None:
             continue
-        if order.pick_status == PICK_STATUS_PICKED or order.pack_status == PACK_STATUS_PACKED:
+        if order.pick_status == PICK_STATUS_PICKED or (
+            supply.marketplace != "wb" and order.pack_status == PACK_STATUS_PACKED
+        ):
             continue
         inventory = item.get("inventory")
         if not isinstance(inventory, dict):
@@ -391,20 +395,11 @@ def _compute_stage(
     if progress.total == 0:
         return "composition"
 
-    # WB: ЭТАПЫ НЕ ЯВЛЯЮТСЯ ГЕЙТАМИ. Подбор и упаковка — операторские рабочие
-    # поверхности, а не разрешения на следующую вкладку. После начала более
-    # позднего этапа сервер никогда не возвращает рабочее место назад. В
-    # частности, запрещено восстанавливать старый fallback
-    # `assembling -> picking`: он возвращал полностью готовую поставку на
-    # «Подбор» при 0 оставшихся единиц.
+    # WB: упаковка — только факт в БД и не участвует даже в выборе стартовой
+    # рабочей поверхности. Короба открываются фронтом независимо от этого
+    # значения; здесь остаются только состав, подбор и уже созданные короба.
     if getattr(supply, "marketplace", None) == "wb":
-        if progress.packed > 0:
-            if progress.packed < progress.total:
-                return "packing"
-            if supply.status == FBS_SUPPLY_STATUS_PACKED and (
-                has_physical_boxes or without_distribution
-            ):
-                return "delivery"
+        if has_physical_boxes or without_distribution:
             return "handoff_prep"
         if progress.picked < progress.total:
             return "picking"
@@ -557,8 +552,10 @@ def _compute_workspace_blockers(
     return blockers
 
 
-def _unassigned_packed_order_ids(
-    orders: list[FbsOrder], boxes: list[dict[str, object]]
+def _unassigned_order_ids(
+    supply: FbsSupply,
+    orders: list[FbsOrder],
+    boxes: list[dict[str, object]],
 ) -> set[uuid.UUID]:
     assigned: set[uuid.UUID] = set()
     for box in boxes:
@@ -568,7 +565,8 @@ def _unassigned_packed_order_ids(
     return {
         order.id
         for order in orders
-        if order.pack_status == PACK_STATUS_PACKED and order.id not in assigned
+        if (supply.marketplace == "wb" or order.pack_status == PACK_STATUS_PACKED)
+        and order.id not in assigned
     }
 
 

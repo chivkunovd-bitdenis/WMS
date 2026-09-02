@@ -439,7 +439,14 @@ export type FbsDeliveryPreflight = {
   can_deliver: boolean
   version: string
   checked_at: string
-  checks: Array<{ code: string; message: string; ok: boolean; order_id: string | null }>
+  checks: Array<{
+    code: string
+    message: string
+    ok: boolean
+    /** blocker — передача запрещена; warning — предупреждение; info — факт. */
+    severity: 'blocker' | 'warning' | 'info'
+    order_id: string | null
+  }>
 }
 
 export type FbsTrackingOrder = {
@@ -1051,11 +1058,6 @@ export async function deliverFbsSupply(
     body: JSON.stringify(body),
   })
   return jsonOrThrow<FbsWorkspace>(res)
-}
-
-/** Delivery is allowed only after packaging task completed (supply.status === packed). */
-export function canDeliverFbsSupply(supply: FbsSupply): boolean {
-  return supply.status === 'packed'
 }
 
 // Лист подбора (Экран 3). GET /operations/fbs-supplies/{id}/picking-list → { items }.

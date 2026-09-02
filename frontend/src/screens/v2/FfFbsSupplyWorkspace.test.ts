@@ -4,9 +4,14 @@ import {
   buildFbsSyncTargets,
   fbsAccessibleStageIndex,
   fbsBoxOperationsDisabled,
+  fbsDeliveryErrorKeepsIdempotencyKey,
+  fbsDeliveryConfirmDisabled,
+  fbsOrdersAvailableForBox,
+  fbsStageAfterWorkspaceRefresh,
   fbsOrdersSyncErrorMessage,
   mixedMarketplaceSelectionMessage,
   normalizeMetadataKind,
+  summarizeDeliveryChecks,
 } from './fbsUx'
 
 describe('Ozon FBS UI boundaries', () => {
@@ -49,15 +54,71 @@ describe('FBS required identifiers', () => {
 
 describe('WB optional picking', () => {
   it('opens packing immediately after work starts without picked units', () => {
-    expect(fbsAccessibleStageIndex({ marketplace: 'wb', currentStage: 'picking', packed: 0, total: 10 })).toBe(2)
+    expect(fbsAccessibleStageIndex({ marketplace: 'wb', currentStage: 'picking' })).toBe(3)
   })
 
   it('keeps the Ozon picking gate unchanged', () => {
-    expect(fbsAccessibleStageIndex({ marketplace: 'ozon', currentStage: 'picking', packed: 0, total: 10 })).toBe(1)
+    expect(fbsAccessibleStageIndex({ marketplace: 'ozon', currentStage: 'picking' })).toBe(1)
   })
 
-  it('opens boxes after every WB order is packed even when picking was skipped', () => {
-    expect(fbsAccessibleStageIndex({ marketplace: 'wb', currentStage: 'picking', packed: 10, total: 10 })).toBe(3)
+  it('opens boxes without consulting WB packaging progress', () => {
+    expect(fbsAccessibleStageIndex({ marketplace: 'wb', currentStage: 'packing' })).toBe(3)
+  })
+
+  it('does not require a packaging task to leave WB composition', () => {
+    expect(fbsAccessibleStageIndex({ marketplace: 'wb', currentStage: 'composition' })).toBe(3)
+  })
+
+  it('does not yank the WB operator back from boxes during refresh', () => {
+    expect(fbsStageAfterWorkspaceRefresh('wb', 'boxes', 'picking')).toBe('boxes')
+    expect(fbsStageAfterWorkspaceRefresh('wb', 'packing', 'picking')).toBe('packing')
+  })
+
+  it('keeps the server-driven Ozon stage', () => {
+    expect(fbsStageAfterWorkspaceRefresh('ozon', 'boxes', 'picking')).toBe('picking')
+  })
+
+  it('offers unassigned orders in boxes regardless of packaging status', () => {
+    const orders = [
+      { id: 'pending', pack: { status: 'pending' } },
+      { id: 'packed', pack: { status: 'packed' } },
+      { id: 'assigned', pack: { status: 'pending' } },
+    ]
+    expect(fbsOrdersAvailableForBox(orders, new Set(['assigned']))).toEqual([
+      orders[0],
+      orders[1],
+    ])
+  })
+})
+
+describe('WB delivery idempotency retry', () => {
+  it('keeps the key only while the result of the same operation is unresolved', () => {
+    expect(fbsDeliveryErrorKeepsIdempotencyKey({ code: 'wb_timeout', retryable: true })).toBe(true)
+    expect(fbsDeliveryErrorKeepsIdempotencyKey({ code: 'operation_in_progress', retryable: true })).toBe(true)
+  })
+
+  it('rotates the key after a definitive WB rejection', () => {
+    expect(fbsDeliveryErrorKeepsIdempotencyKey({ code: 'meta_validation_fail', retryable: true })).toBe(false)
+    expect(fbsDeliveryErrorKeepsIdempotencyKey({ code: 'meta_validation_fail', retryable: false })).toBe(false)
+    expect(fbsDeliveryErrorKeepsIdempotencyKey({ code: 'wb_upstream_error_502', retryable: false })).toBe(false)
+  })
+})
+
+describe('WB delivery confirmation', () => {
+  it('does not freeze the action after a failed preflight request', () => {
+    expect(fbsDeliveryConfirmDisabled('wb', false, null)).toBe(false)
+  })
+
+  it('stays disabled while loading or after a real server blocker', () => {
+    expect(fbsDeliveryConfirmDisabled('wb', true, null)).toBe(true)
+    expect(fbsDeliveryConfirmDisabled('wb', false, { can_deliver: false })).toBe(true)
+    expect(fbsDeliveryConfirmDisabled('wb', false, { can_deliver: true })).toBe(false)
+  })
+
+  it('keeps Ozon disabled until a successful preflight exists', () => {
+    expect(fbsDeliveryConfirmDisabled('ozon', false, null)).toBe(true)
+    expect(fbsDeliveryConfirmDisabled('ozon', false, { can_deliver: false })).toBe(true)
+    expect(fbsDeliveryConfirmDisabled('ozon', false, { can_deliver: true })).toBe(false)
   })
 })
 
@@ -125,5 +186,42 @@ describe('FBS picking list print document', () => {
 
     const noSize = buildFbsPickingListPrintHtml({ ...base, rows: [{ ...row, size: null }] })
     expect(noSize).toContain('<td class="size">—</td>')
+  })
+})
+
+describe('summarizeDeliveryChecks', () => {
+  const check = (
+    code: string,
+    message: string,
+    severity: 'blocker' | 'warning' | 'info',
+    orderId: string | null = null,
+  ) => ({ code, message, ok: severity === 'info', severity, order_id: orderId })
+
+  it('схлопывает одинаковые причины и подписывает номера заказов WB', () => {
+    const summary = summarizeDeliveryChecks(
+      [
+        check('marking_required', 'Честный знак не нанесён.', 'warning', 'a'),
+        check('marking_required', 'Честный знак не нанесён.', 'warning', 'b'),
+        check('marking_required', 'Честный знак не нанесён.', 'warning', 'c'),
+      ],
+      new Map([['a', 530009], ['b', 530011], ['c', 530015]]),
+    )
+    expect(summary.blockers).toEqual([])
+    expect(summary.warnings).toEqual([
+      'Честный знак не нанесён. (заказы 530009, 530011, 530015)',
+    ])
+  })
+
+  it('разводит запреты и предупреждения по уровню, а не по признаку ok', () => {
+    const summary = summarizeDeliveryChecks(
+      [
+        check('supply_bad_status', 'Поставка уже передана или закрыта.', 'blocker'),
+        check('negative_stock', 'Остаток уйдёт в минус.', 'warning', 'a'),
+        check('order_sticker_ready', 'Стикер готов.', 'info', 'a'),
+      ],
+      new Map([['a', 777]]),
+    )
+    expect(summary.blockers).toEqual(['Поставка уже передана или закрыта.'])
+    expect(summary.warnings).toEqual(['Остаток уйдёт в минус. (заказ 777)'])
   })
 })
