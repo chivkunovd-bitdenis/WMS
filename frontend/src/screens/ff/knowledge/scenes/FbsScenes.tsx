@@ -477,6 +477,8 @@ function workspace(stage: SupplyStage): FbsWorkspace {
       id: SUPPLY_ID,
       marketplace: 'wb',
       wb_supply_id: 'WB-GI-1284471',
+      // Поле появилось в стволе позже, чем писалась сцена: поставка заведена в WMS.
+      source: 'wms' as const,
       name: 'Поставка 000318',
       status: packed ? 'packed' : 'assembling',
       delivery_type: 'warehouse_sc',
