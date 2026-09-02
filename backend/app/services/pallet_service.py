@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.inbound_intake import (
     InboundIntakeBox,
@@ -75,6 +76,7 @@ async def create_pallet(
     storage_location_id: uuid.UUID | None = None,
     inbound_request_id: uuid.UUID | None = None,
     free_text: str | None = None,
+    commit: bool = True,
 ) -> Pallet:
     warehouse = await session.get(Warehouse, warehouse_id)
     if warehouse is None or warehouse.tenant_id != tenant_id:
@@ -87,6 +89,14 @@ async def create_pallet(
             or location.warehouse_id != warehouse_id
         ):
             raise PalletServiceError("location_not_found")
+    if inbound_request_id is not None:
+        inbound_request = await session.get(InboundIntakeRequest, inbound_request_id)
+        if (
+            inbound_request is None
+            or inbound_request.tenant_id != tenant_id
+            or inbound_request.warehouse_id != warehouse_id
+        ):
+            raise PalletServiceError("inbound_request_not_found")
     number = await _next_code_number(session, tenant_id)
     pallet = Pallet(
         tenant_id=tenant_id,
@@ -99,11 +109,15 @@ async def create_pallet(
     )
     session.add(pallet)
     try:
-        await session.commit()
+        if commit:
+            await session.commit()
+        else:
+            await session.flush()
     except IntegrityError as exc:
         await session.rollback()
         raise PalletServiceError("pallet_identifier_conflict") from exc
-    await session.refresh(pallet)
+    if commit:
+        await session.refresh(pallet)
     return pallet
 
 
@@ -112,15 +126,61 @@ async def list_pallets(
     tenant_id: uuid.UUID,
     *,
     warehouse_id: uuid.UUID | None = None,
+    inbound_request_id: uuid.UUID | None = None,
     include_disbanded: bool = False,
 ) -> list[Pallet]:
-    stmt = select(Pallet).where(Pallet.tenant_id == tenant_id)
+    stmt = select(Pallet).where(Pallet.tenant_id == tenant_id).options(
+        selectinload(Pallet.storage_location)
+    )
     if warehouse_id is not None:
         stmt = stmt.where(Pallet.warehouse_id == warehouse_id)
+    if inbound_request_id is not None:
+        stmt = stmt.where(Pallet.inbound_request_id == inbound_request_id)
     if not include_disbanded:
         stmt = stmt.where(Pallet.disbanded_at.is_(None))
     rows = await session.execute(stmt.order_by(Pallet.code.asc()))
     return list(rows.scalars().all())
+
+
+async def assert_receiving_inbound_request(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    inbound_request_id: uuid.UUID,
+) -> InboundIntakeRequest:
+    request = await session.get(InboundIntakeRequest, inbound_request_id)
+    if (
+        request is None
+        or request.tenant_id != tenant_id
+        or request.warehouse_id != warehouse_id
+    ):
+        raise PalletServiceError("inbound_request_not_found")
+    if request.status != "receiving":
+        raise PalletServiceError("inbound_request_not_receiving")
+    return request
+
+
+async def get_pallet(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    pallet_id: uuid.UUID,
+    *,
+    warehouse_id: uuid.UUID | None = None,
+    inbound_request_id: uuid.UUID | None = None,
+) -> Pallet:
+    stmt = (
+        select(Pallet)
+        .where(Pallet.id == pallet_id, Pallet.tenant_id == tenant_id)
+        .options(selectinload(Pallet.storage_location))
+    )
+    if warehouse_id is not None:
+        stmt = stmt.where(Pallet.warehouse_id == warehouse_id)
+    if inbound_request_id is not None:
+        stmt = stmt.where(Pallet.inbound_request_id == inbound_request_id)
+    pallet = (await session.execute(stmt)).scalar_one_or_none()
+    if pallet is None:
+        raise PalletServiceError("pallet_not_found")
+    return pallet
 
 
 async def _load_inbound_boxes(
@@ -128,10 +188,12 @@ async def _load_inbound_boxes(
     tenant_id: uuid.UUID,
     warehouse_id: uuid.UUID,
     ids: set[uuid.UUID],
+    *,
+    inbound_request_id: uuid.UUID | None = None,
 ) -> list[InboundIntakeBox]:
     if not ids:
         return []
-    rows = await session.execute(
+    stmt = (
         select(InboundIntakeBox)
         .join(InboundIntakeRequest, InboundIntakeRequest.id == InboundIntakeBox.request_id)
         .where(
@@ -142,6 +204,9 @@ async def _load_inbound_boxes(
         )
         .with_for_update()
     )
+    if inbound_request_id is not None:
+        stmt = stmt.where(InboundIntakeBox.request_id == inbound_request_id)
+    rows = await session.execute(stmt)
     boxes = list(rows.scalars().all())
     if {box.id for box in boxes} != ids:
         raise PalletServiceError("box_not_found")
@@ -153,10 +218,12 @@ async def _load_cargo_places(
     tenant_id: uuid.UUID,
     warehouse_id: uuid.UUID,
     ids: set[uuid.UUID],
+    *,
+    inbound_request_id: uuid.UUID | None = None,
 ) -> list[InboundIntakeCargoPlace]:
     if not ids:
         return []
-    rows = await session.execute(
+    stmt = (
         select(InboundIntakeCargoPlace)
         .join(
             InboundIntakeRequest,
@@ -170,6 +237,9 @@ async def _load_cargo_places(
         )
         .with_for_update()
     )
+    if inbound_request_id is not None:
+        stmt = stmt.where(InboundIntakeCargoPlace.request_id == inbound_request_id)
+    rows = await session.execute(stmt)
     places = list(rows.scalars().all())
     if {place.id for place in places} != ids:
         raise PalletServiceError("cargo_place_not_found")
@@ -323,6 +393,7 @@ async def combine_into_pallet(
     inbound_box_ids: Iterable[uuid.UUID] = (),
     cargo_place_ids: Iterable[uuid.UUID] = (),
     warehouse_box_ids: Iterable[uuid.UUID] = (),
+    inbound_request_id: uuid.UUID | None = None,
 ) -> Pallet:
     pallet = await _load_pallet(session, tenant_id, pallet_id, for_update=True)
     if pallet.disbanded_at is not None:
@@ -334,10 +405,18 @@ async def combine_into_pallet(
         raise PalletServiceError("containers_required")
 
     inbound_boxes = await _load_inbound_boxes(
-        session, tenant_id, pallet.warehouse_id, inbound_ids
+        session,
+        tenant_id,
+        pallet.warehouse_id,
+        inbound_ids,
+        inbound_request_id=inbound_request_id,
     )
     cargo_places = await _load_cargo_places(
-        session, tenant_id, pallet.warehouse_id, cargo_ids
+        session,
+        tenant_id,
+        pallet.warehouse_id,
+        cargo_ids,
+        inbound_request_id=inbound_request_id,
     )
     warehouse_boxes = await _load_warehouse_boxes(
         session, tenant_id, pallet.warehouse_id, warehouse_ids

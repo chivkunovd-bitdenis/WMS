@@ -197,6 +197,17 @@ function humanFfCatalogError(message: string): string {
   return normalized || 'Не удалось загрузить каталог.'
 }
 
+function fbsWarehousesLoadError(status: number, message: string): string {
+  const lower = message.toLowerCase()
+  if (status === 403 || lower.includes('нет токена') || lower.includes('missing_marketplace_token')) {
+    return 'Backend не нашёл ключ, пригодный для Marketplace. Если ключ WB уже сохранён, проверьте его права Marketplace в карточке селлера.'
+  }
+  if (status === 401 || status === 502) {
+    return 'Wildberries отклонил сохранённый ключ при загрузке складов. Проверьте права Marketplace у ключа селлера.'
+  }
+  return `Не удалось загрузить склады Wildberries: ${message}`
+}
+
 export function FfProductsCatalogScreen({
   token,
   authHeaders,
@@ -566,7 +577,7 @@ export function FfProductsCatalogScreen({
       return
     }
     try {
-      const [rulesRes, whRes] = await Promise.all([
+      const [rulesRes, whRes, bindingsRes] = await Promise.all([
         fetch(apiUrl('/products/fbs-rule/bulk'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
@@ -575,20 +586,48 @@ export function FfProductsCatalogScreen({
         fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/warehouses`), {
           headers: { ...authHeaders(token) },
         }),
+        fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/warehouse-bindings`), {
+          headers: { ...authHeaders(token) },
+        }),
       ])
       if (!rulesRes.ok) throw new Error(await readApiErrorMessage(rulesRes))
       const rulesBody = (await rulesRes.json()) as {
         items: Array<FbsApiRule & { product_id: string }>
       }
       const ruleById = new Map(rulesBody.items.map((one) => [one.product_id, one]))
-      const whRows = whRes.ok
-        ? ((await whRes.json()) as Array<{
-            wb_warehouse_id: number | string
-            name: string | null
-            wms_warehouse_id: string | null
-            served: boolean
-          }>)
+      type SellerWarehouseRow = {
+        wb_warehouse_id: number | string
+        name: string | null
+        wms_warehouse_id: string | null
+        served: boolean
+      }
+      const whRows: SellerWarehouseRow[] = whRes.ok
+        ? ((await whRes.json()) as SellerWarehouseRow[])
         : []
+      const warehouseLoadError = whRes.ok
+        ? null
+        : fbsWarehousesLoadError(whRes.status, await readApiErrorMessage(whRes))
+
+      // Если WB временно не отдал список, не прячем уже сохранённые привязки:
+      // оператор всё равно должен видеть внешний ID и выбранный WMS-склад.
+      if (bindingsRes.ok) {
+        const savedBindings = (await bindingsRes.json()) as Array<{
+          wb_warehouse_id: number | string
+          wms_warehouse_id: string
+          is_active: boolean
+          stock_sync_enabled: boolean
+        }>
+        const knownIds = new Set(whRows.map((one) => String(one.wb_warehouse_id)))
+        for (const binding of savedBindings) {
+          if (knownIds.has(String(binding.wb_warehouse_id))) continue
+          whRows.push({
+            wb_warehouse_id: binding.wb_warehouse_id,
+            name: `Склад WB ${binding.wb_warehouse_id}`,
+            wms_warehouse_id: binding.wms_warehouse_id,
+            served: binding.is_active && binding.stock_sync_enabled,
+          })
+        }
+      }
       const seller: FbsSeller = {
         id: sellerId,
         name: chosen[0]!.seller_name ?? '—',
@@ -621,54 +660,90 @@ export function FfProductsCatalogScreen({
       )
       const rule: FbsRuleModel = toFbsRule(chosen[0]!.id, ruleById.get(chosen[0]!.id))
       setFbsDialog({ products, seller, rule })
+      if (warehouseLoadError) setFbsDialogError(warehouseLoadError)
     } catch (e) {
       setFbsDialogError(e instanceof Error ? e.message : 'Не удалось открыть настройку остатка')
     }
   }, [authHeaders, rows, selectedIds, token, warehouses])
+
+  // Одна ручка на обе настройки склада продавца: сопоставление и «обслуживаем».
+  // Сервер принимает их вместе, поэтому при смене одного всегда отправляем и
+  // второе — иначе он затрёт то, что мы не прислали.
+  const saveFbsWarehouse = useCallback(
+    async (
+      wbWarehouseId: string,
+      next: { served?: boolean; wmsWarehouseId: string | null },
+      failureMessage: string,
+    ) => {
+      if (!fbsDialog) return
+      setFbsDialogError(null)
+      try {
+        const res = await fetch(
+          apiUrl(`/fbs-sellers/${fbsDialog.seller.id}/warehouses/${wbWarehouseId}`),
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+            body: JSON.stringify({
+              ...(next.served === undefined ? {} : { served: next.served }),
+              wms_warehouse_id: next.wmsWarehouseId,
+            }),
+          },
+        )
+        if (!res.ok) throw new Error(await readApiErrorMessage(res))
+        const saved = (await res.json()) as {
+          served: boolean
+          wms_warehouse_id: string | null
+        }
+        setFbsDialog((current) => {
+          if (!current) return current
+          return {
+            ...current,
+            seller: {
+              ...current.seller,
+              warehouses: current.seller.warehouses.map((one) =>
+                one.id === wbWarehouseId
+                  ? {
+                      ...one,
+                      boundTo: saved.wms_warehouse_id,
+                      fbsEnabled: saved.served,
+                    }
+                  : one,
+              ),
+            },
+          }
+        })
+      } catch (e) {
+        setFbsDialogError(e instanceof Error ? e.message : failureMessage)
+      }
+    },
+    [authHeaders, fbsDialog, token],
+  )
 
   const bindFbsWarehouse = useCallback(async (wbWarehouseId: string, wmsWarehouseId: string) => {
     if (!fbsDialog) return
     // Пустое значение не превращаем в served=false: иначе обслуживаемое
     // WB-направление исчезнет из dialog и вернуть его отсюда будет невозможно.
     if (!wmsWarehouseId) return
-    setFbsDialogError(null)
-    try {
-      const res = await fetch(
-        apiUrl(`/fbs-sellers/${fbsDialog.seller.id}/warehouses/${wbWarehouseId}`),
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
-          // Контрол показывается только для уже обслуживаемых WB-направлений.
-          // Выбор физического склада не включает скрытые served=false склады.
-          body: JSON.stringify({
-            served: true,
-            wms_warehouse_id: wmsWarehouseId,
-          }),
-        },
-      )
-      if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      setFbsDialog((current) => {
-        if (!current) return current
-        return {
-          ...current,
-          seller: {
-            ...current.seller,
-            warehouses: current.seller.warehouses.map((one) =>
-              one.id === wbWarehouseId
-                ? {
-                    ...one,
-                    boundTo: wmsWarehouseId,
-                    fbsEnabled: true,
-                  }
-                : one,
-            ),
-          },
-        }
-      })
-    } catch (e) {
-      setFbsDialogError(e instanceof Error ? e.message : 'Не удалось сопоставить склад')
-    }
-  }, [authHeaders, fbsDialog, token])
+    // Сопоставление и решение обслуживать склад — два разных действия.
+    // Поэтому served здесь не отправляем: новая привязка останется выключенной,
+    // а существующая сохранит своё текущее состояние. После выбора WMS-склада
+    // оператор отдельно включает направление явной галочкой.
+    await saveFbsWarehouse(
+      wbWarehouseId,
+      { wmsWarehouseId },
+      'Не удалось сопоставить склад',
+    )
+  }, [fbsDialog, saveFbsWarehouse])
+
+  const setFbsWarehouseServed = useCallback(async (wbWarehouseId: string, served: boolean) => {
+    if (!fbsDialog) return
+    const current = fbsDialog.seller.warehouses.find((one) => one.id === wbWarehouseId)
+    await saveFbsWarehouse(
+      wbWarehouseId,
+      { served, wmsWarehouseId: current?.boundTo ?? null },
+      served ? 'Не удалось включить склад' : 'Не удалось отключить склад',
+    )
+  }, [fbsDialog, saveFbsWarehouse])
 
   // Ссылка ?fbs_limit=<id> ведёт сюда из раскладки остатка по складам WB.
   // Старая модалка абсолютного лимита убрана, ссылка открывает ту же модалку
@@ -1824,6 +1899,9 @@ export function FfProductsCatalogScreen({
             }}
             onBind={(wbWarehouseId, wmsWarehouseId) => {
               void bindFbsWarehouse(wbWarehouseId, wmsWarehouseId)
+            }}
+            onServedChange={(wbWarehouseId, served) => {
+              void setFbsWarehouseServed(wbWarehouseId, served)
             }}
             onSave={(rule) => {
               const ids = fbsDialog.products.map((one) => one.id)

@@ -56,6 +56,14 @@ class Settings(BaseSettings):
         default="https://marketplace-api.wildberries.ru",
         description="WB Marketplace API host (FBS orders; override in tests/mocks).",
     )
+    wildberries_marketplace_warehouse_api_base: str | None = Field(
+        default=None,
+        description=(
+            "Optional read-only WB Marketplace host for seller warehouse discovery. "
+            "Unset: use wildberries_marketplace_api_base. This allows staging to read "
+            "real warehouse names while all mutating FBS calls remain on the emulator."
+        ),
+    )
     wms_secrets_fernet_key: str | None = Field(
         default=None,
         description="Optional Fernet key (urlsafe base64) for integration tokens. "
@@ -185,6 +193,22 @@ class Settings(BaseSettings):
         description=(
             "Celery Beat interval for the FBS stock safety net: republishes availability "
             "even when no movement event fired (seconds)."
+        ),
+    )
+    fbs_universal_test_kiz: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FBS_UNIVERSAL_TEST_KIZ"),
+        description=(
+            "Explicit staging/demo-only KIZ alias. Each order receives a deterministic "
+            "unique CIS internally, so the same scanner input can be reused in video flows."
+        ),
+    )
+    fbs_universal_test_sticker: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FBS_UNIVERSAL_TEST_STICKER"),
+        description=(
+            "Explicit staging/demo-only order sticker alias selecting the next "
+            "writable order without an SGTIN in the current supply."
         ),
     )
 

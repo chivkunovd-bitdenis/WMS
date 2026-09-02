@@ -1,6 +1,7 @@
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import type {
+  ContainerKind,
   ContainerNode,
   CountListItem,
   CountStatus,
@@ -96,6 +97,14 @@ export type ApiDetail = {
   comment: string
   address_storage: boolean
   cells: ApiCell[]
+  scannable_cells?: Array<{ id: string; label: string; barcode: string | null }>
+  scannable_containers?: Array<{
+    kind: ContainerKind
+    id: string
+    code: string
+    barcode: string | null
+    cell_id: string | null
+  }>
 }
 
 export type ApiSummary = {
@@ -171,6 +180,18 @@ export function toCount(detail: ApiDetail): InventoryCount {
     postedBy: detail.posted_by,
     comment: detail.comment,
     addressStorage: detail.address_storage,
+    scannableCells: (detail.scannable_cells ?? []).map((cell) => ({
+      id: cell.id,
+      label: cell.label,
+      barcode: cell.barcode,
+    })),
+    scannableContainers: (detail.scannable_containers ?? []).map((item) => ({
+      kind: item.kind,
+      id: item.id,
+      code: item.code,
+      barcode: item.barcode,
+      cellId: item.cell_id,
+    })),
     cells: detail.cells.map((cell) => ({
       id: cell.id,
       label: cell.label,
@@ -198,12 +219,24 @@ export function toListItem(row: ApiSummary): CountListItem {
 }
 
 /** Введённые факты для отправки: сервер ждёт строку и число. */
-export function actualPayload(count: InventoryCount) {
+/**
+ * Что отправить на сервер: только те строки, которые правил этот оператор.
+ *
+ * Раньше уходил весь документ целиком, включая непосчитанные строки с пустым
+ * фактом. В одиночку это безобидно, но в одном документе работают вдвоём: один
+ * открыл экран, второй посчитал десять строк, первый нажал «Сохранить» — и
+ * записал поверх свои пустые значения, стерев чужую работу. Строка, которую
+ * этот оператор не трогал, не должна попадать в запрос вообще: сервер её тогда
+ * не тронет.
+ */
+export function actualPayload(count: InventoryCount, touched?: ReadonlySet<string>) {
   const lines: Array<{ line_id: string; actual_quantity: number | null }> = []
   function collect(nodes: InventoryNode[]) {
     for (const node of nodes) {
       if (node.kind === 'product') {
-        lines.push({ line_id: node.id, actual_quantity: node.actual })
+        if (!touched || touched.has(node.id)) {
+          lines.push({ line_id: node.id, actual_quantity: node.actual })
+        }
       } else {
         collect(node.children)
       }
@@ -242,15 +275,71 @@ export async function createObjectCount(
   return toCount((await res.json()) as ApiDetail)
 }
 
+/**
+ * Записать находку: товар лежит там, где по учёту его нет.
+ *
+ * Строку заводит сервер, а не экран: документ и его строки живут на сервере, и
+ * придуманная на клиенте строка всё равно не пережила бы сохранение.
+ */
+/**
+ * Отказ сервера, в отличие от оборвавшейся сети.
+ *
+ * Разница важна для очереди сканов: сетевой обрыв надо повторить тем же
+ * идентификатором скана, а отказ сервера повторять бессмысленно — его надо
+ * показать человеку.
+ */
+export class InventoryHttpError extends Error {
+  readonly status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'InventoryHttpError'
+    this.status = status
+  }
+}
+
+export async function recordCountFound(
+  token: string,
+  countId: string,
+  place: {
+    barcodes: string[]
+    cellId: string | null
+    containerKind: 'pallet' | 'box' | 'cargo_place' | null
+    containerId: string | null
+    /** Один идентификатор на пик: повтор того же скана не прибавит вторую штуку. */
+    scanId: string
+  },
+): Promise<{ count: InventoryCount; expectedQuantity: number; notice: string }> {
+  const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/found`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
+    body: JSON.stringify({
+      barcodes: place.barcodes,
+      cell_id: place.cellId,
+      container_kind: place.containerKind,
+      container_id: place.containerId,
+      scan_id: place.scanId,
+    }),
+  })
+  if (!res.ok) throw new InventoryHttpError(await readApiErrorMessage(res), res.status)
+  const body = (await res.json()) as {
+    count: ApiDetail
+    expected_quantity: number
+    notice: string
+  }
+  return { count: toCount(body.count), expectedQuantity: body.expected_quantity, notice: body.notice }
+}
+
 /** Положить введённый факт. Остатки не трогает: документ остаётся черновиком. */
 export async function saveCountActuals(
   token: string,
   count: InventoryCount,
+  touched?: ReadonlySet<string>,
 ): Promise<InventoryCount> {
   const res = await fetch(apiUrl(`${INVENTORY_BASE}/${count.id}/lines`), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
-    body: JSON.stringify(actualPayload(count)),
+    body: JSON.stringify(actualPayload(count, touched)),
   })
   if (!res.ok) throw new Error(await readApiErrorMessage(res))
   return toCount((await res.json()) as ApiDetail)
@@ -262,11 +351,15 @@ export async function saveCountActuals(
  * Сначала кладём введённое, потом проводим — иначе проведётся то, что сервер
  * помнит с прошлого сохранения, а не то, что человек видит на экране.
  */
-export async function postCount(token: string, count: InventoryCount): Promise<PostResult> {
+export async function postCount(
+  token: string,
+  count: InventoryCount,
+  touched?: ReadonlySet<string>,
+): Promise<PostResult> {
   const saved = await fetch(apiUrl(`${INVENTORY_BASE}/${count.id}/lines`), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
-    body: JSON.stringify(actualPayload(count)),
+    body: JSON.stringify(actualPayload(count, touched)),
   })
   if (!saved.ok) throw new Error(await readApiErrorMessage(saved))
   const res = await fetch(apiUrl(`${INVENTORY_BASE}/${count.id}/post`), {

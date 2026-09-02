@@ -139,7 +139,11 @@ class FbsSupplyOut(BaseModel):
 class FbsSupplyWorklistItemOut(BaseModel):
     id: str
     marketplace: str = "wb"
-    wb_supply_id: str
+    # Номер поставки в WB появляется не сразу: до подтверждения маркетплейсом
+    # его нет, и в базе колонка nullable. Модель требовала строку, поэтому одна
+    # такая поставка роняла весь список пятисоткой — оператор терял вкладку
+    # целиком из-за одной строки.
+    wb_supply_id: str | None
     name: str
     status: str
     seller: dict[str, str]
@@ -414,6 +418,8 @@ class FbsWorkspaceSupplyOut(BaseModel):
     id: str
     marketplace: str = "wb"
     wb_supply_id: str | None
+    # «wms» — поставку собрали мы, «wb» — её собрал продавец в своём кабинете.
+    source: str = "wms"
     name: str
     status: str
     delivery_type: str
@@ -528,6 +534,9 @@ class FbsDeliveryCheckOut(BaseModel):
     code: str
     message: str
     ok: bool
+    # blocker — передача запрещена; warning — оператор должен знать, но идёт
+    # дальше; info — просто факт. Экран красит по этому полю, а не по `ok`.
+    severity: str
     order_id: str | None
 
 

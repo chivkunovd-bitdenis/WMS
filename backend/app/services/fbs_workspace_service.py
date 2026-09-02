@@ -114,7 +114,9 @@ async def get_supply_workspace(
         session, tenant_id, supply, orders
     )
     unassigned_packed_order_ids = (
-        set() if boxes_without_distribution else _unassigned_packed_order_ids(orders, boxes)
+        set()
+        if boxes_without_distribution
+        else _unassigned_order_ids(supply, orders, boxes)
     )
     stage = _compute_stage(
         supply,
@@ -149,6 +151,11 @@ async def get_supply_workspace(
             "marketplace": supply.marketplace,
             "wb_supply_id": supply.wb_supply_id,
             "external_supply_id": supply.external_supply_id,
+            # «wms» — поставку собрали у нас, «wb» — её собрал сам продавец в
+            # своём кабинете. Работать с такой можно как с обычной, но оператор
+            # обязан видеть, что состав пришёл снаружи и может измениться без
+            # нашего участия (требование владельца от 31.08.2026).
+            "source": supply.source,
             "name": supply.name,
             "status": supply.status,
             "delivery_type": supply.delivery_type,
@@ -254,7 +261,9 @@ async def _inject_order_pick_fallback(
         order = orders_by_id.get(str(item.get("id")))
         if order is None or order.product_id is None:
             continue
-        if order.pick_status == PICK_STATUS_PICKED or order.pack_status == PACK_STATUS_PACKED:
+        if order.pick_status == PICK_STATUS_PICKED or (
+            supply.marketplace != "wb" and order.pack_status == PACK_STATUS_PACKED
+        ):
             continue
         inventory = item.get("inventory")
         if not isinstance(inventory, dict):
@@ -390,13 +399,17 @@ def _compute_stage(
         return "composition"
     if progress.total == 0:
         return "composition"
-    if getattr(supply, "marketplace", None) == "wb" and (
-        progress.picked < progress.total
-        or progress.packed < progress.total
-        or progress.metadata_ready < progress.total
-        or supply.status == FBS_SUPPLY_STATUS_ASSEMBLING
-    ):
-        return "handoff_prep"
+
+    # WB: упаковка — только факт в БД и не участвует даже в выборе стартовой
+    # рабочей поверхности. Короба открываются фронтом независимо от этого
+    # значения; здесь остаются только состав, подбор и уже созданные короба.
+    if getattr(supply, "marketplace", None) == "wb":
+        if has_physical_boxes or without_distribution:
+            return "handoff_prep"
+        if progress.picked < progress.total:
+            return "picking"
+        return "packing"
+
     if progress.picked < progress.total:
         return "picking"
     if progress.packed < progress.total:
@@ -436,6 +449,12 @@ def _compute_workspace_blockers(
     unassigned_packed_order_ids: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
 ) -> list[dict[str, Any]]:
     blockers: list[dict[str, Any]] = []
+    # WB: рабочее место не публикует навигационные блокеры. Факты подбора,
+    # упаковки, метаданных, стикеров и коробов остаются в progress/orders и
+    # проверяются в конкретной операции передачи, но не запирают вкладки и не
+    # отправляют оператора на уже пройденный этап.
+    if getattr(supply, "marketplace", None) == "wb":
+        return blockers
     if not orders:
         blockers.append(
             {
@@ -447,12 +466,16 @@ def _compute_workspace_blockers(
             }
         )
     for order in orders:
-        if order.pick_status != PICK_STATUS_PICKED and stage in {
+        if (
+            getattr(supply, "marketplace", None) != "wb"
+            and order.pick_status != PICK_STATUS_PICKED
+            and stage in {
             "packing",
             "order_stickers",
             "handoff_prep",
             "delivery",
-        }:
+            }
+        ):
             blockers.append(
                 {
                     "stage": "picking",
@@ -534,8 +557,10 @@ def _compute_workspace_blockers(
     return blockers
 
 
-def _unassigned_packed_order_ids(
-    orders: list[FbsOrder], boxes: list[dict[str, object]]
+def _unassigned_order_ids(
+    supply: FbsSupply,
+    orders: list[FbsOrder],
+    boxes: list[dict[str, object]],
 ) -> set[uuid.UUID]:
     assigned: set[uuid.UUID] = set()
     for box in boxes:
@@ -545,7 +570,8 @@ def _unassigned_packed_order_ids(
     return {
         order.id
         for order in orders
-        if order.pack_status == PACK_STATUS_PACKED and order.id not in assigned
+        if (supply.marketplace == "wb" or order.pack_status == PACK_STATUS_PACKED)
+        and order.id not in assigned
     }
 
 

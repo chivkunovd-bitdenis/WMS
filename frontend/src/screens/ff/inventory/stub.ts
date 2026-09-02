@@ -64,6 +64,8 @@ export function stubCount(): InventoryCount {
   seq = 0
   return {
     id: 'inv-124',
+    scannableCells: [],
+    scannableContainers: [],
     number: 'ИНВ-000124',
     status: 'draft',
     warehouseName: 'Ярцево',

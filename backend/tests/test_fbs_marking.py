@@ -25,7 +25,7 @@ from app.models.fbs_order import (
     FbsOrder,
     FbsOrderMarking,
 )
-from app.models.fbs_supply import FBS_SUPPLY_STATUS_ASSEMBLING, FbsSupply
+from app.models.fbs_supply import FBS_SUPPLY_STATUS_PACKED, FbsSupply
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import reset_mock_marketplace_order_meta
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
@@ -448,7 +448,9 @@ async def test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_fail
             warehouse_id=warehouse_uuid,
             wb_supply_id=f"WB-BATCH-{suffix[-8:]}",
             name="Batch marking supply",
-            status=FBS_SUPPLY_STATUS_ASSEMBLING,
+            # Legacy aggregate packaging status must not stop WB metadata
+            # polling; packing is a fact, never a subscription gate.
+            status=FBS_SUPPLY_STATUS_PACKED,
             delivery_type="warehouse_sc",
         )
         session.add(supply)
@@ -609,3 +611,509 @@ async def test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_fail
         and marking.meta_status == META_STATUS_PENDING
         for marking in failed_batch_markings
     )
+
+
+# --------------------------------------------------------------------------
+# Бой 28.08.2026 (ИП Рябов, десять залипших заказов): у нас код лежит склеенным
+# (сканер-клавиатура не отдал разделители 0x1D), WB возвращает тот же код со
+# своими разделителями и решением "sgtinIntroduced". Две проверки подряд врали:
+# побайтное сравнение объявляло это «другим кодом», а незнакомое решение —
+# «WB ещё не подтвердил».
+# --------------------------------------------------------------------------
+
+_GS = "\x1d"
+_GLUED_CIS = (
+    "0104630710098651215VaAOh'u!tRFR"
+    "91EE12"
+    "92/p5ES3Y984dx9CHANLa3oqpTJkYWL0iMcO/2z6i0be4="
+)
+_WB_CIS = (
+    "0104630710098651215VaAOh'u!tRFR"
+    f"{_GS}91EE12"
+    f"{_GS}92/p5ES3Y984dx9CHANLa3oqpTJkYWL0iMcO/2z6i0be4="
+)
+# Другой код: отличается не разделителями, а данными (серийник другой).
+_OTHER_CIS = _WB_CIS.replace("5VaAOh'u!tRFR", "5VaAOh'u!tRFX")
+
+
+def _marking_stub(
+    *,
+    value: str,
+    decision: str | None,
+    remote_value: str | None,
+    meta_status: str = META_STATUS_ACCEPTED,
+    reason: str | None = None,
+) -> Any:
+    from types import SimpleNamespace
+
+    details: dict[str, Any] = {"decision": decision, "reason": reason}
+    if remote_value is not None:
+        details["value"] = remote_value
+    return SimpleNamespace(
+        kind="sgtin",
+        value=value,
+        meta_status=meta_status,
+        meta_details_json=details,
+        reason=reason,
+    )
+
+
+def _order_stub() -> Any:
+    from types import SimpleNamespace
+
+    return SimpleNamespace(required_meta_json=["sgtin"])
+
+
+@pytest.mark.parametrize(
+    "decision",
+    ["sgtinIntroduced", "sgtinintroduced", "SGTININTRODUCED", "sgtin_introduced",
+     "sgtin-introduced", "sgtin introduced", "  sgtinIntroduced  "],
+)
+def test_wb_decision_sgtin_introduced_maps_to_accepted(decision: str) -> None:
+    # TC-NEW-FBS-MARK-I3-001: WB присылает решение в camelCase. Раньше его не
+    # было в словаре, оно считалось неизвестным, а неизвестное — «ещё не
+    # подтвердил», и сдача вставала намертво, хотя ответ WB уже финальный.
+    from app.services.fbs_marking_service import map_wb_decision_to_meta_status
+
+    assert map_wb_decision_to_meta_status(decision) == META_STATUS_ACCEPTED
+
+
+@pytest.mark.parametrize(
+    ("decision", "expected"),
+    [
+        ("rejected", META_STATUS_REJECTED),
+        ("invalid", META_STATUS_REJECTED),
+        ("replacementRequired", META_STATUS_REPLACEMENT_REQUIRED),
+        ("pending", META_STATUS_PENDING),
+        ("required", None),
+        # Похожие, но не те — расширение словаря не должно превратиться
+        # в «принимаем всё, что начинается на sgtin».
+        ("sgtinIntroduce", None),
+        ("sgtinRejected", None),
+        ("sgtin", None),
+        ("introduced", None),
+        ("", None),
+        (None, None),
+    ],
+)
+def test_wb_decision_mapping_stays_fail_closed(
+    decision: str | None, expected: str | None
+) -> None:
+    # TC-NEW-FBS-MARK-I3-001 (negative): всё, кроме явно разрешённого, обязано
+    # остаться неизвестным или отказом — иначе сдача пойдёт на непроверенном коде.
+    from app.services.fbs_marking_service import map_wb_decision_to_meta_status
+
+    assert map_wb_decision_to_meta_status(decision) == expected
+
+
+@pytest.mark.parametrize(
+    ("local", "remote", "expected"),
+    [
+        (_GLUED_CIS, _WB_CIS, True),
+        (_WB_CIS, _GLUED_CIS, True),
+        (_WB_CIS, _WB_CIS, True),
+        (_GLUED_CIS, _GLUED_CIS, True),
+        # Отличие не в разделителях — это действительно другой код.
+        (_GLUED_CIS, _OTHER_CIS, False),
+        (_WB_CIS, _OTHER_CIS, False),
+        # Обрезанный код — тоже другой, длина сама по себе значима.
+        (_GLUED_CIS, _WB_CIS[:-1], False),
+        (None, None, True),
+        (None, _WB_CIS, False),
+        (_WB_CIS, None, False),
+        ("", "", True),
+    ],
+)
+def test_same_marking_value_ignores_only_separators(
+    local: str | None, remote: str | None, expected: bool
+) -> None:
+    # TC-NEW-FBS-MARK-I3-002: сравнение обязано игнорировать ровно невидимые
+    # разделители и ничего больше. Слишком мягкое сравнение — и подмена кода
+    # пройдёт незамеченной; слишком строгое — вернётся боевой дефект.
+    from app.services.fbs_marking_service import _same_marking_value
+
+    assert _same_marking_value(local, remote) is expected
+
+
+def test_delivery_gate_accepts_glued_local_code_confirmed_by_wb() -> None:
+    # TC-NEW-FBS-MARK-I3-003: боевой случай на уровне ворот сдачи. Наш код без
+    # разделителей, WB вернул его же с разделителями и решением sgtinIntroduced
+    # — сдача обязана быть разрешена, а оператор увидеть подтверждение.
+    from app.services.fbs_marking_service import (
+        compute_delivery_allowed,
+        delivery_marking_message,
+    )
+
+    order = _order_stub()
+    mark = _marking_stub(
+        value=_GLUED_CIS, decision="sgtinIntroduced", remote_value=_WB_CIS
+    )
+
+    assert compute_delivery_allowed(order, [mark]) is True
+    assert delivery_marking_message(order, [mark]) == "WB: маркировка подтверждена."
+
+
+def test_delivery_gate_still_blocks_a_genuinely_different_code() -> None:
+    # TC-NEW-FBS-MARK-I3-003 (negative): послабление не должно съесть настоящую
+    # подмену кода — если WB подтвердил ДРУГИЕ данные, сдачу надо блокировать.
+    from app.services.fbs_marking_service import (
+        compute_delivery_allowed,
+        delivery_marking_message,
+    )
+
+    order = _order_stub()
+    mark = _marking_stub(
+        value=_GLUED_CIS, decision="sgtinIntroduced", remote_value=_OTHER_CIS
+    )
+
+    assert compute_delivery_allowed(order, [mark]) is False
+    assert delivery_marking_message(order, [mark]) == "WB подтвердил другой код маркировки."
+
+
+@pytest.mark.parametrize(
+    ("decision", "meta_status", "reason", "message"),
+    [
+        ("rejected", META_STATUS_REJECTED, None, "WB не принял маркировку."),
+        ("invalid", META_STATUS_REJECTED, None, "WB не принял маркировку."),
+        (
+            "sgtinIntroduced",
+            META_STATUS_ACCEPTED,
+            "sgtinNoGS",
+            "WB не принял маркировку: sgtinNoGS",
+        ),
+        ("required", META_STATUS_PENDING, None, "WB ещё не подтвердил маркировку."),
+        ("pending", META_STATUS_PENDING, None, "WB ещё не подтвердил маркировку."),
+        (None, META_STATUS_PENDING, None, "WB ещё не подтвердил маркировку."),
+        (
+            "somethingNew",
+            META_STATUS_UNKNOWN,
+            None,
+            "WB ещё не подтвердил маркировку.",
+        ),
+    ],
+)
+def test_delivery_gate_blocks_bad_wb_answers(
+    decision: str | None, meta_status: str, reason: str | None, message: str
+) -> None:
+    # TC-NEW-FBS-MARK-I3-004 (negative): расширение словаря решений не должно
+    # ослабить отказы. Отказ, причина в ответе, отсутствие решения и незнакомое
+    # решение по-прежнему держат сдачу закрытой.
+    from app.services.fbs_marking_service import (
+        compute_delivery_allowed,
+        delivery_marking_message,
+    )
+
+    order = _order_stub()
+    mark = _marking_stub(
+        value=_GLUED_CIS,
+        decision=decision,
+        remote_value=_WB_CIS,
+        meta_status=meta_status,
+        reason=reason,
+    )
+
+    assert compute_delivery_allowed(order, [mark]) is False
+    assert delivery_marking_message(order, [mark]) == message
+
+
+@pytest.mark.asyncio
+async def test_fbs_marking_sync_does_not_flag_replacement_for_separator_only_diff(
+    async_client: AsyncClient,
+    enable_wb_marketplace_marking_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # TC-NEW-FBS-MARK-I3-005: воспроизведение боя целиком через синхронизацию с
+    # WB. Раньше именно здесь маркировка получала replacement_required и заказ
+    # залипал: оператор видел «честные знаки неправильны» и сдать не мог.
+    from app.models.fbs_order import CHECK_STATUS_OK
+    from app.services.wildberries_fbs_client import (
+        MarketplaceMetaDetail,
+        MarketplaceOrderMetaRow,
+    )
+
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    order_id = await _create_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_id),
+        order_id=938001,
+        status=FBS_ORDER_STATUS_PACKED,
+        wb_row_extra={"requiredMeta": ["sgtin"]},
+    )
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        order.required_meta_json = ["sgtin"]
+        session.add(
+            FbsOrderMarking(
+                order_id=order_id,
+                tenant_id=tenant_id,
+                kind="sgtin",
+                value=_GLUED_CIS,
+                check_status=CHECK_STATUS_NEW,
+                meta_status=META_STATUS_PENDING,
+            )
+        )
+        await session.commit()
+
+    async def fake_meta_batch(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=938001,
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key="sgtin",
+                        # WB отдаёт код со СВОИМИ разделителями — 85 символов
+                        # против наших склеенных 83.
+                        value=_WB_CIS,
+                        decision="sgtinIntroduced",
+                        reason=None,
+                    ),
+                ),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        fake_meta_batch,
+    )
+
+    sync = await async_client.post(
+        f"/operations/fbs-orders/{order_id}/markings/sync",
+        headers=headers,
+    )
+    assert sync.status_code == 200, sync.text
+    rows = sync.json()
+    assert len(rows) == 1
+    assert rows[0]["meta_status"] == META_STATUS_ACCEPTED
+    assert rows[0]["check_status"] == CHECK_STATUS_OK
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.metadata_delivery_allowed is True
+        marking = (
+            await session.execute(
+                select(FbsOrderMarking).where(FbsOrderMarking.order_id == order_id)
+            )
+        ).scalar_one()
+        assert marking.meta_status == META_STATUS_ACCEPTED
+        # Локальное значение — источник физической привязки, его подменять
+        # ответом WB не должны.
+        assert marking.value == _GLUED_CIS
+
+
+@pytest.mark.asyncio
+async def test_fbs_marking_sync_still_flags_replacement_for_a_different_code(
+    async_client: AsyncClient,
+    enable_wb_marketplace_marking_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # TC-NEW-FBS-MARK-I3-005 (negative): если WB подтвердил другой код —
+    # replacement_required обязан остаться. Иначе послабление превратится
+    # в дыру: чужой КИЗ у заказа никто не заметит.
+    from app.models.fbs_order import CHECK_STATUS_ERROR
+    from app.services.wildberries_fbs_client import (
+        MarketplaceMetaDetail,
+        MarketplaceOrderMetaRow,
+    )
+
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    order_id = await _create_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_id),
+        order_id=938002,
+        status=FBS_ORDER_STATUS_PACKED,
+        wb_row_extra={"requiredMeta": ["sgtin"]},
+    )
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        order.required_meta_json = ["sgtin"]
+        session.add(
+            FbsOrderMarking(
+                order_id=order_id,
+                tenant_id=tenant_id,
+                kind="sgtin",
+                value=_GLUED_CIS,
+                check_status=CHECK_STATUS_NEW,
+                meta_status=META_STATUS_PENDING,
+            )
+        )
+        await session.commit()
+
+    async def fake_meta_batch(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=938002,
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key="sgtin",
+                        value=_OTHER_CIS,
+                        decision="sgtinIntroduced",
+                        reason=None,
+                    ),
+                ),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        fake_meta_batch,
+    )
+
+    sync = await async_client.post(
+        f"/operations/fbs-orders/{order_id}/markings/sync",
+        headers=headers,
+    )
+    assert sync.status_code == 200, sync.text
+    assert sync.json()[0]["meta_status"] == META_STATUS_REPLACEMENT_REQUIRED
+    assert sync.json()[0]["check_status"] == CHECK_STATUS_ERROR
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.metadata_delivery_allowed is False
+
+
+# --- Расширенный словарь вердиктов WB (появился вместе с починкой I3) -------
+
+
+@pytest.mark.parametrize(
+    ("decision", "expected"),
+    [
+        # Сдавать можно.
+        ("sgtinIntroduced", META_STATUS_ACCEPTED),
+        ("sgtinSoldB2B", META_STATUS_ACCEPTED),
+        ("deadlineExceeded", META_STATUS_ACCEPTED),
+        # Отказ, а не «подождите»: ждать бесполезно, нужен другой код.
+        ("sgtinApplied", META_STATUS_REJECTED),
+        ("sgtinAppliedNotPaid", META_STATUS_REJECTED),
+        ("sgtinEmitted", META_STATUS_REJECTED),
+        ("sgtinWrittenOff", META_STATUS_REJECTED),
+        ("sgtinWithdrawn", META_STATUS_REJECTED),
+        ("sgtinNotFound", META_STATUS_REJECTED),
+        ("sgtinNoGS", META_STATUS_REJECTED),
+        ("sgtinInvalidFormat", META_STATUS_REJECTED),
+        ("sgtinHasNonLatinSymbols", META_STATUS_REJECTED),
+    ],
+)
+def test_wb_sgtin_verdicts_are_split_into_ship_and_refuse(
+    decision: str, expected: str
+) -> None:
+    # TC-NEW-FBS-MARK-I3-006: главный риск расширенного словаря — записать в
+    # «принято» вердикт, который на самом деле отказ. sgtinApplied («нанесён,
+    # но не введён в оборот») выглядит успехом, но сдавать по нему нельзя.
+    from app.services.fbs_marking_service import map_wb_decision_to_meta_status
+
+    assert map_wb_decision_to_meta_status(decision) == expected
+
+
+@pytest.mark.parametrize(
+    "decision",
+    [
+        "sgtinApplied",
+        "sgtinAppliedNotPaid",
+        "sgtinEmitted",
+        "sgtinNotFound",
+        "sgtinNoGS",
+        "sgtinWrittenOff",
+        "sgtinInvalidFormat",
+    ],
+)
+def test_refusing_verdicts_never_open_the_delivery_gate(decision: str) -> None:
+    # TC-NEW-FBS-MARK-I3-006 (negative): вердикт-отказ обязан держать сдачу
+    # закрытой при ЛЮБОМ локальном meta_status — в том числе если локально
+    # успел залечь устаревший accepted. Иначе заказ уедет на непринятом коде.
+    from app.services.fbs_marking_service import compute_delivery_allowed
+
+    order = _order_stub()
+    for stale_status in (META_STATUS_ACCEPTED, META_STATUS_PENDING, META_STATUS_REJECTED):
+        mark = _marking_stub(
+            value=_GLUED_CIS,
+            decision=decision,
+            remote_value=_WB_CIS,
+            meta_status=stale_status,
+        )
+        assert compute_delivery_allowed(order, [mark]) is False, (decision, stale_status)
+
+
+@pytest.mark.parametrize(
+    ("decision", "fragment"),
+    [
+        ("sgtinApplied", "не введён в оборот"),
+        ("sgtinAppliedNotPaid", "не оплачен"),
+        ("sgtinNoGS", "разделител"),
+        ("sgtinNotFound", "не знает такого кода"),
+        ("sgtinWrittenOff", "выведен из оборота"),
+    ],
+)
+def test_refusing_verdicts_tell_the_operator_what_actually_happened(
+    decision: str, fragment: str
+) -> None:
+    # TC-NEW-FBS-MARK-I3-007: «WB не принял маркировку» не подсказывает
+    # кладовщику ничего. У вердиктов с известной причиной должен быть
+    # адресный текст, иначе заказ снова уедет в «разбирайтесь сами».
+    from app.services.fbs_marking_service import delivery_marking_message
+
+    order = _order_stub()
+    mark = _marking_stub(
+        value=_GLUED_CIS,
+        decision=decision,
+        remote_value=_WB_CIS,
+        meta_status=META_STATUS_REJECTED,
+    )
+
+    message = delivery_marking_message(order, [mark])
+
+    assert fragment.lower() in message.lower(), message
+    assert message != "WB не принял маркировку."
+
+
+def test_unknown_sgtin_verdict_still_blocks_delivery() -> None:
+    # TC-NEW-FBS-MARK-I3-006 (negative): словарь заведомо неполон — WB может
+    # добавить вердикт завтра. Незнакомое обязано остаться закрытым.
+    from app.services.fbs_marking_service import (
+        compute_delivery_allowed,
+        map_wb_decision_to_meta_status,
+    )
+
+    assert map_wb_decision_to_meta_status("sgtinSomethingBrandNew") is None
+    order = _order_stub()
+    mark = _marking_stub(
+        value=_GLUED_CIS, decision="sgtinSomethingBrandNew", remote_value=_WB_CIS
+    )
+    assert compute_delivery_allowed(order, [mark]) is False
+
+
+def test_decision_key_normalization_is_separator_insensitive() -> None:
+    # TC-NEW-FBS-MARK-I3-008: словарь перешёл на ключи без разделителей, и
+    # явные варианты вида "not_required" из него убраны. Если нормализация
+    # ключа отвалится, они молча станут неизвестными и заблокируют сдачу.
+    from app.services.fbs_marking_service import map_wb_decision_to_meta_status
+
+    for variant in ("not_required", "not-required", "not required", "notRequired"):
+        assert map_wb_decision_to_meta_status(variant) == META_STATUS_ALLOWED_WITHOUT_CHECK
+    for variant in ("replacement_required", "replacement-required", "replacementRequired"):
+        assert map_wb_decision_to_meta_status(variant) == META_STATUS_REPLACEMENT_REQUIRED
+    for variant in ("allowed_without_check", "allowedWithoutCheck"):
+        assert map_wb_decision_to_meta_status(variant) == META_STATUS_ALLOWED_WITHOUT_CHECK

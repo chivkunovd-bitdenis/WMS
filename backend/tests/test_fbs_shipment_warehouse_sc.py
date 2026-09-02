@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient, Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
@@ -32,7 +32,13 @@ from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
-from app.models.fbs_wb_operation import WB_OPERATION_STATE_CONFIRMED, FbsWbOperation
+from app.models.fbs_wb_operation import (
+    WB_OPERATION_STATE_CONFIRMED,
+    WB_OPERATION_STATE_FAILED,
+    WB_OPERATION_STATE_PENDING,
+    WB_OPERATION_STATE_PENDING_CONFIRMATION,
+    FbsWbOperation,
+)
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryMovement
 from app.models.product import Product
@@ -408,9 +414,17 @@ async def test_fbs_shipment_deliver_ok_and_orders_not_ready(
         supply_name="Deliver bad status",
     )
 
+    # Отсутствие физических коробов больше не запрет, а предупреждение:
+    # решение владельца от 01.09.2026 — склад из-за коробов не стоит.
+    preflight = await _delivery_preflight(async_client, headers, supply_bad["id"])
+    assert preflight["can_deliver"] is True
+    boxes_check = next(
+        check for check in preflight["checks"] if check["code"] == "physical_boxes_required"
+    )
+    assert boxes_check["severity"] == "warning"
+
     bad = await _deliver_with_preflight(async_client, headers, supply_bad["id"])
-    assert bad.status_code == 400
-    assert bad.json()["detail"]["code"] == "physical_boxes_required"
+    assert bad.status_code == 200, bad.text
 
 
 # TC-NEW-FBS-SHIP-STOCK-002, TC-NEW-FBS-SHIP-STOCK-003
@@ -585,9 +599,11 @@ async def test_fbs_shipment_translates_temporary_dispatch_rejection(
     assert response.status_code == 409, response.text
     detail = response.json()["detail"]
     assert detail["code"] == "meta_validation_fail"
-    assert detail["message"] == (
-        "Wildberries ещё обрабатывает поставку. Повторите передачу через минуту."
-    )
+    # Отказ остаётся повторяемым, но текст больше не советует просто ждать:
+    # WB просит починить заказы. 02.09.2026 склад шесть раз нажал повтор
+    # впустую, потому что сообщение обещало, что само рассосётся.
+    assert "просит исправить" in detail["message"]
+    assert "кабинете продавца" in detail["message"]
     assert detail["retryable"] is True
     assert deliver_calls == 1
 
@@ -767,9 +783,13 @@ async def test_fbs_shipment_marking_required_and_ok(
         supply_name="Marking required",
     )
 
-    missing = await _deliver_with_preflight(async_client, headers, supply["id"])
-    assert missing.status_code == 400
-    assert missing.json()["detail"]["code"] == "marking_required"
+    # Ненанесённый Честный знак виден оператору, но передачу не запрещает.
+    preflight = await _delivery_preflight(async_client, headers, supply["id"])
+    assert preflight["can_deliver"] is True
+    marking_check = next(
+        check for check in preflight["checks"] if check["code"] == "marking_required"
+    )
+    assert marking_check["severity"] == "warning"
 
     async with SessionLocal() as session:
         session.add(
@@ -811,6 +831,9 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
         wb_order_ids=[953001],
         supply_name="WB fail",
     )
+    idempotency_key = str(uuid.uuid4())
+    active_key = {"value": idempotency_key}
+    deliver_calls = 0
 
     async def fail_deliver(
         client: object,
@@ -819,6 +842,31 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
         supply_id: str,
         marketplace_api_base: str | None = None,
     ) -> None:
+        nonlocal deliver_calls
+        deliver_calls += 1
+        # Отдельная сессия видит журнал и план источника до внешнего вызова WB.
+        # Flush здесь недостаточен: этот assert проходит только после commit.
+        async with SessionLocal() as audit_session:
+            operation = await audit_session.scalar(
+                select(FbsWbOperation).where(
+                    FbsWbOperation.idempotency_key == active_key["value"]
+                )
+            )
+            assert operation is not None
+            assert operation.state == WB_OPERATION_STATE_PENDING
+            ledger = await audit_session.scalar(
+                select(FbsShipmentReversalLedger).where(
+                    FbsShipmentReversalLedger.fbs_order_id == order_ids[0]
+                )
+            )
+            assert ledger is not None
+            assert ledger.shipment_movement_id is None
+            checkpoint = (operation.request_summary_json or {}).get(
+                "checkpoint_source_plan"
+            )
+            assert isinstance(checkpoint, dict)
+            assert checkpoint["resolutions"][0]["fbs_order_id"] == str(order_ids[0])
+            assert ledger.wb_operation_id == operation.id
         raise WildberriesClientError("upstream_error", status_code=502)
 
     monkeypatch.setattr(
@@ -827,7 +875,12 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
     )
 
     await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
-    resp = await _deliver_with_preflight(async_client, headers, supply["id"])
+    resp = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=idempotency_key,
+    )
     assert resp.status_code == 502
     assert resp.json()["detail"]["code"] == "wb_upstream_error_502"
 
@@ -839,6 +892,638 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
         order = await session.get(FbsOrder, order_ids[0])
         assert order is not None
         assert order.status == FBS_ORDER_STATUS_PACKED
+        operation = await session.scalar(
+            select(FbsWbOperation).where(
+                FbsWbOperation.idempotency_key == idempotency_key
+            )
+        )
+        assert operation is not None
+        assert operation.state == WB_OPERATION_STATE_FAILED
+        ledger = await session.scalar(
+            select(FbsShipmentReversalLedger).where(
+                FbsShipmentReversalLedger.fbs_order_id == order_ids[0]
+            )
+        )
+        assert ledger is not None
+        original_physical_source = (
+            ledger.id,
+            ledger.product_id,
+            ledger.storage_location_id,
+            ledger.source_warehouse_id,
+            ledger.container_kind,
+            ledger.container_id,
+            ledger.source_mode,
+            ledger.quantity,
+            ledger.shortage_quantity,
+            ledger.negative_quantity,
+        )
+        original_operation_id = operation.id
+        original_audit_checkpoint = (operation.request_summary_json or {}).get(
+            "checkpoint_source_plan"
+        )
+        assert isinstance(original_audit_checkpoint, dict)
+
+    closed_key = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=idempotency_key,
+    )
+    assert closed_key.status_code == 409, closed_key.text
+    assert closed_key.json()["detail"]["code"] == "idempotency_key_reused"
+    assert deliver_calls == 1
+
+    replacement_key = str(uuid.uuid4())
+    active_key["value"] = replacement_key
+    replacement = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=replacement_key,
+    )
+    assert replacement.status_code == 502, replacement.text
+    assert deliver_calls == 2
+
+    async with SessionLocal() as session:
+        ledger = await session.get(FbsShipmentReversalLedger, original_physical_source[0])
+        assert ledger is not None
+        assert (
+            ledger.id,
+            ledger.product_id,
+            ledger.storage_location_id,
+            ledger.source_warehouse_id,
+            ledger.container_kind,
+            ledger.container_id,
+            ledger.source_mode,
+            ledger.quantity,
+            ledger.shortage_quantity,
+            ledger.negative_quantity,
+        ) == original_physical_source
+        original_operation = await session.get(FbsWbOperation, original_operation_id)
+        assert original_operation is not None
+        assert (original_operation.request_summary_json or {}).get(
+            "checkpoint_source_plan"
+        ) == original_audit_checkpoint
+        replacement_operation = await session.scalar(
+            select(FbsWbOperation).where(
+                FbsWbOperation.idempotency_key == replacement_key
+            )
+        )
+        assert replacement_operation is not None
+        assert ledger.wb_operation_id == replacement_operation.id
+        assert (replacement_operation.request_summary_json or {}).get(
+            "checkpoint_source_plan"
+        ) == original_audit_checkpoint
+
+
+@pytest.mark.asyncio
+async def test_pending_delivery_recovers_after_process_crash_without_second_wb_call(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, _order_ids = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[953051],
+        supply_name="WB process crash checkpoint",
+    )
+    idempotency_key = str(uuid.uuid4())
+    stale_failed_key = str(uuid.uuid4())
+
+    async with SessionLocal() as session:
+        supply_row = await session.get(FbsSupply, uuid.UUID(supply["id"]))
+        assert supply_row is not None
+        session.add(
+            FbsWbOperation(
+                tenant_id=tenant_id,
+                seller_id=supply_row.seller_id,
+                operation_kind="supply_deliver",
+                idempotency_key=stale_failed_key,
+                local_entity_type="fbs_supply",
+                local_entity_id=supply_row.id,
+                state=WB_OPERATION_STATE_FAILED,
+                error_code="meta_validation_fail",
+            )
+        )
+        await session.commit()
+
+    import app.services.fbs_shipment_service as shipment_mod
+
+    real_persist = shipment_mod._persist_confirmed_delivery
+    deliver_calls = 0
+
+    async def accepted_by_wb(*_args: object, **_kwargs: object) -> None:
+        nonlocal deliver_calls
+        deliver_calls += 1
+
+    async def crash_before_local_confirmation(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("simulated process crash after WB 2xx")
+
+    monkeypatch.setattr(shipment_mod, "deliver_marketplace_supply", accepted_by_wb)
+    monkeypatch.setattr(
+        shipment_mod,
+        "_persist_confirmed_delivery",
+        crash_before_local_confirmation,
+    )
+
+    with pytest.raises(RuntimeError, match="simulated process crash"):
+        await _deliver_with_preflight(
+            async_client,
+            headers,
+            supply["id"],
+            idempotency_key=idempotency_key,
+        )
+
+    async with SessionLocal() as session:
+        operation = await session.scalar(
+            select(FbsWbOperation).where(
+                FbsWbOperation.idempotency_key == idempotency_key
+            )
+        )
+        assert operation is not None
+        assert operation.state == WB_OPERATION_STATE_PENDING
+
+    async def confirmed_on_reconcile(*_args: object, **_kwargs: object) -> str:
+        return WB_OPERATION_STATE_CONFIRMED
+
+    monkeypatch.setattr(shipment_mod, "_persist_confirmed_delivery", real_persist)
+    monkeypatch.setattr(shipment_mod, "reconcile_supply_delivered", confirmed_on_reconcile)
+
+    stale_retry = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=stale_failed_key,
+    )
+    assert stale_retry.status_code == 409, stale_retry.text
+    assert stale_retry.json()["detail"]["code"] == "idempotency_key_reused"
+    assert deliver_calls == 1
+
+    retry = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=idempotency_key,
+    )
+    assert retry.status_code == 200, retry.text
+    assert deliver_calls == 1
+    assert retry.json()["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
+
+
+@pytest.mark.asyncio
+async def test_pending_reconcile_never_overwrites_parallel_definitive_failure(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, _order_ids = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[953061],
+        supply_name="WB reconcile definitive race",
+    )
+    idempotency_key = str(uuid.uuid4())
+
+    import app.services.fbs_shipment_service as shipment_mod
+
+    deliver_calls = 0
+
+    async def accepted_by_wb(*_args: object, **_kwargs: object) -> None:
+        nonlocal deliver_calls
+        deliver_calls += 1
+
+    async def crash_after_wb(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("simulated process crash after WB 2xx")
+
+    monkeypatch.setattr(shipment_mod, "deliver_marketplace_supply", accepted_by_wb)
+    monkeypatch.setattr(shipment_mod, "_persist_confirmed_delivery", crash_after_wb)
+    with pytest.raises(RuntimeError, match="simulated process crash"):
+        await _deliver_with_preflight(
+            async_client,
+            headers,
+            supply["id"],
+            idempotency_key=idempotency_key,
+        )
+
+    async def failed_while_reconcile_was_in_flight(*_args: object, **_kwargs: object) -> str:
+        async with SessionLocal() as parallel_session:
+            operation = await parallel_session.scalar(
+                select(FbsWbOperation).where(
+                    FbsWbOperation.idempotency_key == idempotency_key
+                )
+            )
+            assert operation is not None
+            operation.state = WB_OPERATION_STATE_FAILED
+            operation.error_code = "meta_validation_fail"
+            await parallel_session.commit()
+        return "pending_confirmation"
+
+    monkeypatch.setattr(
+        shipment_mod,
+        "reconcile_supply_delivered",
+        failed_while_reconcile_was_in_flight,
+    )
+    retry = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=str(uuid.uuid4()),
+    )
+    assert retry.status_code == 409, retry.text
+    assert retry.json()["detail"]["code"] == "meta_validation_fail"
+    assert deliver_calls == 1
+
+    async with SessionLocal() as session:
+        operation = await session.scalar(
+            select(FbsWbOperation).where(
+                FbsWbOperation.idempotency_key == idempotency_key
+            )
+        )
+        assert operation is not None
+        assert operation.state == WB_OPERATION_STATE_FAILED
+
+
+@pytest.mark.asyncio
+async def test_stale_not_delivered_never_overwrites_parallel_ambiguity(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, _ = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[953066],
+        supply_name="WB reconcile ambiguity race",
+    )
+    idempotency_key = str(uuid.uuid4())
+
+    import app.services.fbs_shipment_service as shipment_mod
+
+    deliver_calls = 0
+
+    async def accepted_by_wb(*_args: object, **_kwargs: object) -> None:
+        nonlocal deliver_calls
+        deliver_calls += 1
+
+    async def crash_after_wb(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("simulated process crash after WB 2xx")
+
+    monkeypatch.setattr(shipment_mod, "deliver_marketplace_supply", accepted_by_wb)
+    monkeypatch.setattr(shipment_mod, "_persist_confirmed_delivery", crash_after_wb)
+    with pytest.raises(RuntimeError, match="simulated process crash"):
+        await _deliver_with_preflight(
+            async_client,
+            headers,
+            supply["id"],
+            idempotency_key=idempotency_key,
+        )
+
+    async def ambiguity_while_readback_was_in_flight(
+        *_args: object, **_kwargs: object
+    ) -> str:
+        async with SessionLocal() as parallel_session:
+            operation = await parallel_session.scalar(
+                select(FbsWbOperation).where(
+                    FbsWbOperation.idempotency_key == idempotency_key
+                )
+            )
+            assert operation is not None
+            operation.state = WB_OPERATION_STATE_PENDING_CONFIRMATION
+            operation.error_code = "wb_timeout"
+            await parallel_session.commit()
+        return shipment_mod.WB_RECONCILE_NOT_DELIVERED
+
+    monkeypatch.setattr(
+        shipment_mod,
+        "reconcile_supply_delivered",
+        ambiguity_while_readback_was_in_flight,
+    )
+    retry = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=str(uuid.uuid4()),
+    )
+    assert retry.status_code == 504, retry.text
+    assert retry.json()["detail"]["code"] == "wb_pending_confirmation"
+    assert deliver_calls == 1
+
+    async with SessionLocal() as session:
+        operation = await session.scalar(
+            select(FbsWbOperation).where(
+                FbsWbOperation.idempotency_key == idempotency_key
+            )
+        )
+        assert operation is not None
+        assert operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION
+        assert operation.error_code == "wb_timeout"
+
+
+@pytest.mark.asyncio
+async def test_failed_key_cannot_close_another_active_delivery_attempt(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, _ = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[953068],
+        supply_name="WB stale failed key",
+    )
+    failed_key = str(uuid.uuid4())
+    active_key = str(uuid.uuid4())
+
+    async with SessionLocal() as session:
+        supply_row = await session.get(FbsSupply, uuid.UUID(supply["id"]))
+        assert supply_row is not None
+        session.add_all(
+            [
+                FbsWbOperation(
+                    tenant_id=tenant_id,
+                    seller_id=supply_row.seller_id,
+                    operation_kind="supply_deliver",
+                    idempotency_key=failed_key,
+                    local_entity_type="fbs_supply",
+                    local_entity_id=supply_row.id,
+                    state=WB_OPERATION_STATE_FAILED,
+                    error_code="meta_validation_fail",
+                ),
+                FbsWbOperation(
+                    tenant_id=tenant_id,
+                    seller_id=supply_row.seller_id,
+                    operation_kind="supply_deliver",
+                    idempotency_key=active_key,
+                    local_entity_type="fbs_supply",
+                    local_entity_id=supply_row.id,
+                    state=WB_OPERATION_STATE_PENDING,
+                    request_summary_json={"checkpoint_source_plan": {"frozen": True}},
+                ),
+            ]
+        )
+        await session.commit()
+
+    import app.services.fbs_shipment_service as shipment_mod
+
+    async def forbid_reconcile(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("failed key must be rejected before active reconciliation")
+
+    monkeypatch.setattr(shipment_mod, "reconcile_supply_delivered", forbid_reconcile)
+    retry = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=failed_key,
+    )
+    assert retry.status_code == 409, retry.text
+    assert retry.json()["detail"]["code"] == "idempotency_key_reused"
+
+    async with SessionLocal() as session:
+        active_operation = await session.scalar(
+            select(FbsWbOperation).where(
+                FbsWbOperation.idempotency_key == active_key
+            )
+        )
+        assert active_operation is not None
+        assert active_operation.state == WB_OPERATION_STATE_PENDING
+        assert active_operation.error_code is None
+
+
+@pytest.mark.asyncio
+async def test_pending_retry_uses_frozen_plan_without_recomputing_sources(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, _ = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[953071],
+        supply_name="WB frozen retry plan",
+    )
+    idempotency_key = str(uuid.uuid4())
+
+    import app.services.fbs_shipment_service as shipment_mod
+
+    async def crash_before_wb(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("simulated crash before WB request")
+
+    monkeypatch.setattr(shipment_mod, "deliver_marketplace_supply", crash_before_wb)
+    with pytest.raises(RuntimeError, match="simulated crash before WB request"):
+        await _deliver_with_preflight(
+            async_client,
+            headers,
+            supply["id"],
+            idempotency_key=idempotency_key,
+        )
+
+    async def not_delivered(*_args: object, **_kwargs: object) -> str:
+        return shipment_mod.WB_RECONCILE_NOT_DELIVERED
+
+    async def forbid_source_recompute(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("resumable attempt must use its frozen source plan")
+
+    wb_calls = 0
+
+    async def accepted_by_wb(*_args: object, **_kwargs: object) -> None:
+        nonlocal wb_calls
+        wb_calls += 1
+
+    monkeypatch.setattr(shipment_mod, "reconcile_supply_delivered", not_delivered)
+    monkeypatch.setattr(shipment_mod, "_sync_and_validate_deliver", forbid_source_recompute)
+    monkeypatch.setattr(shipment_mod, "deliver_marketplace_supply", accepted_by_wb)
+
+    retry = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=idempotency_key,
+    )
+    assert retry.status_code == 200, retry.text
+    assert wb_calls == 1
+    assert retry.json()["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
+
+
+@pytest.mark.asyncio
+async def test_relock_refresh_prevents_parallel_second_wb_call(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, _ = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[953081],
+        supply_name="WB relock confirmed race",
+    )
+
+    import app.services.fbs_shipment_service as shipment_mod
+
+    real_get_supply_for_update = shipment_mod._get_supply_for_update
+    injected_confirmation = False
+
+    async def confirm_between_checkpoint_and_relock(
+        session: object,
+        current_tenant_id: uuid.UUID,
+        current_supply_id: uuid.UUID,
+        *,
+        with_trbxes: bool = False,
+    ) -> FbsSupply | None:
+        nonlocal injected_confirmation
+        if not injected_confirmation:
+            async with SessionLocal() as parallel_session:
+                operation = await parallel_session.scalar(
+                    select(FbsWbOperation).where(
+                        FbsWbOperation.local_entity_id == current_supply_id,
+                        FbsWbOperation.state == WB_OPERATION_STATE_PENDING,
+                    )
+                )
+                checkpoint = (
+                    (operation.request_summary_json or {}).get("checkpoint_source_plan")
+                    if operation is not None
+                    else None
+                )
+                if operation is not None and checkpoint is not None:
+                    operation.state = WB_OPERATION_STATE_CONFIRMED
+                    await parallel_session.commit()
+                    injected_confirmation = True
+        return await real_get_supply_for_update(
+            session,
+            current_tenant_id,
+            current_supply_id,
+            with_trbxes=with_trbxes,
+        )
+
+    wb_calls = 0
+
+    async def must_not_call_wb(*_args: object, **_kwargs: object) -> None:
+        nonlocal wb_calls
+        wb_calls += 1
+
+    monkeypatch.setattr(
+        shipment_mod,
+        "_get_supply_for_update",
+        confirm_between_checkpoint_and_relock,
+    )
+    monkeypatch.setattr(shipment_mod, "deliver_marketplace_supply", must_not_call_wb)
+
+    response = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=str(uuid.uuid4()),
+    )
+    assert response.status_code == 200, response.text
+    assert injected_confirmation is True
+    assert wb_calls == 0
+    assert response.json()["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
+
+
+@pytest.mark.asyncio
+async def test_pending_delivery_key_cannot_be_rebound_to_another_supply(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply_a, _ = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[953071],
+        supply_name="WB operation owner A",
+    )
+    supply_b, _ = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[953072],
+        supply_name="WB operation owner B",
+    )
+    reused_key = str(uuid.uuid4())
+
+    async with SessionLocal() as session:
+        supply_a_row = await session.get(FbsSupply, uuid.UUID(supply_a["id"]))
+        assert supply_a_row is not None
+        operation = FbsWbOperation(
+            tenant_id=tenant_id,
+            seller_id=supply_a_row.seller_id,
+            operation_kind="supply_deliver",
+            idempotency_key=reused_key,
+            # Legacy pending rows may predate request hashes.  Immutable local
+            # ownership must still reject using this key for another supply.
+            request_hash=None,
+            local_entity_type="fbs_supply",
+            local_entity_id=supply_a_row.id,
+            state=WB_OPERATION_STATE_PENDING,
+        )
+        session.add(operation)
+        await session.commit()
+        operation_id = operation.id
+
+    response = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply_b["id"],
+        idempotency_key=reused_key,
+    )
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["code"] == "idempotency_key_reused"
+
+    async with SessionLocal() as session:
+        operation = await session.get(FbsWbOperation, operation_id)
+        assert operation is not None
+        assert operation.local_entity_id == uuid.UUID(supply_a["id"])
+        assert operation.state == WB_OPERATION_STATE_PENDING
 
 
 # TC-NEW-FBS-SHIPWH-007 — successful WB deliver survives QR failure and retry does not deliver again
@@ -1071,9 +1756,9 @@ async def test_retry_supply_qr_succeeds_for_pvz_delivery_type(
     assert retry_qr.json()["supply"]["barcode_asset"]["status"] == "ready"
 
 
-# TC-NEW-FBS-SHIPWH-005 — PVZ deliver requires physical boxes before WB transfer
+# TC-NEW-FBS-SHIPWH-005 — ПВЗ уезжает и без физических коробов (решение владельца 01.09.2026)
 @pytest.mark.asyncio
-async def test_fbs_shipment_deliver_pvz_requires_trbx(
+async def test_fbs_shipment_deliver_pvz_without_boxes_still_goes(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
@@ -1093,12 +1778,19 @@ async def test_fbs_shipment_deliver_pvz_requires_trbx(
         delivery_type="pvz",
     )
 
+    preflight = await _delivery_preflight(async_client, headers, supply["id"])
+    assert preflight["can_deliver"] is True
+    assert {
+        check["code"]
+        for check in preflight["checks"]
+        if check["severity"] == "blocker"
+    } == set()
+
     resp = await _deliver_with_preflight(async_client, headers, supply["id"])
-    assert resp.status_code == 400
-    assert resp.json()["detail"]["code"] == "physical_boxes_required"
+    assert resp.status_code == 200, resp.text
 
 
-# TC-NEW-FBS-SHIPWH-006 — cancelled order blocks deliver
+# TC-NEW-FBS-SHIPWH-006 — cancelled WB order is skipped without blocking deliver
 @pytest.mark.asyncio
 async def test_fbs_shipment_deliver_cancelled_order_in_supply(
     async_client: AsyncClient,
@@ -1126,16 +1818,163 @@ async def test_fbs_shipment_deliver_cancelled_order_in_supply(
         order.status = FBS_ORDER_STATUS_CANCELLED
         await session.commit()
 
+    await _create_and_fill_physical_box(
+        async_client,
+        headers,
+        supply["id"],
+        [order_ids[1]],
+    )
+
     resp = await _deliver_with_preflight(async_client, headers, supply["id"])
-    assert resp.status_code == 409
-    assert resp.json()["detail"]["code"] == "wb_supply_composition_discrepancy"
+    assert resp.status_code == 200, resp.text
 
     async with SessionLocal() as session:
         supply_row = await session.get(FbsSupply, uuid.UUID(supply["id"]))
         assert supply_row is not None
-        assert supply_row.status == FBS_SUPPLY_STATUS_PACKED
-        assert supply_row.delivered_at is None
+        assert supply_row.status == FBS_SUPPLY_STATUS_IN_DELIVERY
+        assert supply_row.delivered_at is not None
+        cancelled_order = await session.get(FbsOrder, order_ids[0])
+        active_order = await session.get(FbsOrder, order_ids[1])
+        assert cancelled_order is not None and active_order is not None
+        assert cancelled_order.status == FBS_ORDER_STATUS_CANCELLED
+        assert active_order.status == FBS_ORDER_STATUS_IN_DELIVERY
+
+
+# ⛔ Эти два теста доводят поставку ДО ПЕРЕДАЧИ, а не до чек-листа.
+#
+# Первая попытка починить «незнакомый артикул не держит поставку» проверялась
+# юнит-тестом на чек-лист: он был зелёный, а поставка всё равно не уезжала —
+# падала уже после подтверждения WB, на восстановлении плана списания. Проверять
+# надо результат для оператора, а не промежуточный флаг.
+@pytest.mark.asyncio
+async def test_supply_of_only_unmapped_orders_still_reaches_wb(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """Поставка, где ни один заказ не сопоставлен с товаром, обязана уехать.
+
+    Так выглядит поставка, состав которой собрал сам продавец, положив туда
+    артикул, которого нет в нашем каталоге. Списывать с нашего склада нечего, но
+    товар физически стоит на рампе, и держать его нельзя.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, order_ids = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[971001],
+        supply_name="Only unmapped",
+    )
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_ids[0])
+        assert order is not None
+        order.product_id = None
+        await session.commit()
+
+    preflight = await _delivery_preflight(async_client, headers, supply["id"])
+    assert preflight["can_deliver"] is True
+    assert any(
+        check["code"] == "order_product_not_mapped" and check["severity"] == "warning"
+        for check in preflight["checks"]
+    )
+
+    deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
+    assert deliver.status_code == 200, deliver.text
+    assert deliver.json()["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_ids[0])
+        assert order is not None
+        assert order.status == FBS_ORDER_STATUS_IN_DELIVERY
+        written_off = await session.scalar(
+            select(func.count(FbsShipmentReversalLedger.id)).where(
+                FbsShipmentReversalLedger.fbs_order_id == order_ids[0]
+            )
+        )
+        # Списывать нечего: товар не сопоставлен, движения по складу нет.
+        assert written_off == 0
+
+
+@pytest.mark.asyncio
+async def test_mixed_supply_marks_every_order_delivered(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """Уехала поставка — уехали все её заказы, включая несопоставленный.
+
+    Иначе оператор видит внутри переданной поставки заказ в статусе «упакован»
+    и не понимает, отгрузили его или нет.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, order_ids = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[972001, 972002],
+        supply_name="Mixed mapping",
+    )
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_ids[0])
+        assert order is not None
+        order.product_id = None
+        await session.commit()
+
+    deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
+    assert deliver.status_code == 200, deliver.text
+
+    async with SessionLocal() as session:
         for local_order_id in order_ids:
             order = await session.get(FbsOrder, local_order_id)
             assert order is not None
-            assert order.status != FBS_ORDER_STATUS_IN_DELIVERY
+            assert order.status == FBS_ORDER_STATUS_IN_DELIVERY
+
+
+@pytest.mark.asyncio
+async def test_supply_without_wb_number_does_not_break_the_whole_worklist(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """Одна поставка без номера WB не имеет права ронять весь список.
+
+    Номер в WB появляется не сразу, а колонка в базе nullable. Модель ответа
+    требовала строку, и одна такая поставка отдавала пятисотку на весь список —
+    оператор терял вкладку целиком и не понимал почему.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, _ = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[992001],
+        supply_name="Без номера WB",
+    )
+    deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
+    assert deliver.status_code == 200, deliver.text
+
+    async with SessionLocal() as session:
+        row = await session.get(FbsSupply, uuid.UUID(supply["id"]))
+        assert row is not None
+        row.wb_supply_id = None
+        await session.commit()
+
+    worklist = await async_client.get(
+        "/operations/fbs-supplies/worklist?status_group=delivery&limit=500",
+        headers=headers,
+    )
+    assert worklist.status_code == 200, worklist.text
+    assert any(item["wb_supply_id"] is None for item in worklist.json()["items"])

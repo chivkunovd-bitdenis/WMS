@@ -10,6 +10,7 @@ import {
   SecondaryAction,
   SelectInput,
   StatusChip,
+  WarningNotice,
 } from '../../../ui-kit'
 import {
   freeStock,
@@ -38,6 +39,7 @@ export function FbsStockDialog({
   onClose,
   onSave,
   onBind,
+  onServedChange,
   saveError,
 }: {
   open: boolean
@@ -48,6 +50,8 @@ export function FbsStockDialog({
   onClose: () => void
   onSave: (rule: FbsRule) => void
   onBind: (warehouseId: string, wbWarehouseId: string) => void
+  /** Обслуживаем ли мы склад продавца. Свойство продавца, не товара. */
+  onServedChange?: (warehouseId: string, served: boolean) => void
   /** Отказ сервера. Показываем прямо здесь: окно с введённым не закрываем. */
   saveError?: string | null
 }) {
@@ -60,6 +64,7 @@ export function FbsStockDialog({
       onClose={onClose}
       onSave={onSave}
       onBind={onBind}
+      onServedChange={onServedChange}
       saveError={saveError}
     />
   )
@@ -72,6 +77,7 @@ function FbsStockDialogBody({
   onClose,
   onSave,
   onBind,
+  onServedChange,
   saveError,
 }: {
   products: Product[]
@@ -80,18 +86,9 @@ function FbsStockDialogBody({
   onClose: () => void
   onSave: (rule: FbsRule) => void
   onBind: (warehouseId: string, wbWarehouseId: string) => void
+  onServedChange?: (warehouseId: string, served: boolean) => void
   saveError?: string | null
 }) {
-  // Черновик начинается с текущего правила; тело монтируется на каждое открытие,
-  // поэтому синхронизировать его с внешним значением не нужно.
-  const [draft, setDraft] = useState<FbsRule>(rule)
-
-  const many = products.length > 1
-  // При нескольких товарах свободный остаток у каждого свой; показываем сумму,
-  // чтобы процент не выглядел числом, взятым с потолка.
-  const base = products.reduce((sum, product) => sum + freeStock(product), 0)
-  const onHand = products.reduce((sum, product) => sum + onHandTotal(product), 0)
-  const reserved = products.reduce((sum, product) => sum + reservedTotal(product), 0)
   // Склады делят между собой ОДИН свободный остаток, а не имеют каждый свой.
   // Товар лежит у нас, а склады продавца в кабинете WB — это направления, куда
   // мы его выставляем. Поэтому сумма долей не может превысить сто процентов:
@@ -100,7 +97,34 @@ function FbsStockDialogBody({
   // Раздаём остаток только по складам, которые обслуживаем. Если он один —
   // делить не с кем, и выбор складов на экране только мешает: один ползунок.
   const served = servedWarehouses(seller)
+  // Ни одного обслуживаемого склада — раздавать долю некуда. Ползунок в этом
+  // состоянии обманывает: он показывает штуки, которых в кабинете не появится,
+  // потому что публикация идёт только по обслуживаемым складам.
+  const noWarehouses = seller.warehouses.length === 0
+  const noneServed = served.length === 0
   const single = served.length <= 1
+
+  // Черновик начинается с текущего правила; тело монтируется на каждое открытие,
+  // поэтому синхронизировать его с внешним значением не нужно.
+  //
+  // Единственный обслуживаемый склад — особый случай. Галочку «одинаково по
+  // всем складам» в этом режиме не показывают (делить не с кем), а расчёт при
+  // выключенной галочке берёт проценты складов и общий процент игнорирует.
+  // Товар с выключённым флагом попадал в тупик: верхний ползунок стоял на 100%,
+  // а в Wildberries уходила старая доля склада (свободно 5, доля склада 30% —
+  // «1 шт уйдёт» при «100% — это 5 шт»), и включить флаг было негде. Поэтому
+  // при одном складе черновик всегда считается по общему проценту: что оператор
+  // видит на ползунке, то и уезжает.
+  const [draft, setDraft] = useState<FbsRule>(
+    single ? { ...rule, sameEverywhere: true } : rule,
+  )
+
+  const many = products.length > 1
+  // При нескольких товарах свободный остаток у каждого свой; показываем сумму,
+  // чтобы процент не выглядел числом, взятым с потолка.
+  const base = products.reduce((sum, product) => sum + freeStock(product), 0)
+  const onHand = products.reduce((sum, product) => sum + onHandTotal(product), 0)
+  const reserved = products.reduce((sum, product) => sum + reservedTotal(product), 0)
 
   const spent = served.reduce(
     (sum, warehouse) => sum + (draft.byWarehouse[warehouse.id] ?? 0),
@@ -150,10 +174,21 @@ function FbsStockDialogBody({
           </Typography>
         </Stack>
 
+        {noneServed ? (
+          <WarningNotice testId="fbs-stock-none-served">
+            {noWarehouses
+              ? 'Склады Wildberries не загрузились. Выбор склада WMS появится здесь после загрузки хотя бы одного направления WB.'
+              : 'Ни один склад Wildberries не выбран. Выберите ниже физический склад WMS хотя бы для одного направления — до этого доля не задаётся и остаток в Wildberries не уйдёт.'}
+          </WarningNotice>
+        ) : null}
+
         <CheckboxInput
           label="Передавать остаток в Wildberries"
           checked={draft.publish}
           onChange={(publish) => setDraft((one) => ({ ...one, publish }))}
+          disabledReason={
+            noneServed ? 'Сначала выберите хотя бы один склад Wildberries' : undefined
+          }
           testId="fbs-stock-publish"
         />
 
@@ -162,8 +197,12 @@ function FbsStockDialogBody({
           value={draft.percent}
           onChange={(percent) => setDraft((one) => ({ ...one, percent }))}
           base={base}
-          disabled={!single && !draft.sameEverywhere}
-          disabledReason="Сейчас доля задаётся по каждому складу отдельно"
+          disabled={noneServed || (!single && !draft.sameEverywhere)}
+          disabledReason={
+            noneServed
+              ? 'Сначала выберите хотя бы один склад Wildberries'
+              : 'Сейчас доля задаётся по каждому складу отдельно'
+          }
           testId="fbs-stock-percent"
         />
 
@@ -189,11 +228,38 @@ function FbsStockDialogBody({
         )}
 
         <Stack spacing={2}>
+          {noWarehouses ? (
+            <Typography color="text.secondary" data-testid="fbs-stock-no-warehouses">
+              Нет направлений Wildberries, которые можно сопоставить со складом WMS.
+            </Typography>
+          ) : null}
           {seller.warehouses.map((warehouse) => (
             <Stack key={warehouse.id} spacing={1}>
               <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                <Typography variant="subtitle2">{warehouse.name}</Typography>
-                {warehouse.boundTo === null ? (
+                {/* Галочка «обслуживаем» — свойство продавца, а не товара, но живёт
+                    здесь же: оператор видит склады продавца именно в этом окне, и
+                    гонять его на другой экран ради одной галки незачем. Она решает
+                    сразу две вещи: чьи заказы наши и по каким складам раздаём
+                    остаток. Снятая галка — склад чужого фулфилмента. */}
+                <CheckboxInput
+                  label={`Обслуживаем склад «${warehouse.name}»`}
+                  checked={warehouse.fbsEnabled}
+                  onChange={(checked) => onServedChange?.(warehouse.id, checked)}
+                  disabledReason={
+                    !onServedChange
+                      ? 'Настройка доступна из каталога'
+                      : warehouse.boundTo === null && !warehouse.fbsEnabled
+                        ? 'Сначала выберите склад WMS'
+                        : undefined
+                  }
+                  testId={`fbs-stock-served-${warehouse.id}`}
+                />
+                {!warehouse.fbsEnabled ? (
+                  <StatusChip
+                    label="не обслуживаем"
+                    hint="Заказы с этого склада к нам не приходят, остаток на него не отправляется"
+                  />
+                ) : warehouse.boundTo === null ? (
                   <StatusChip
                     label="склад не сопоставлен"
                     tone="warn"
@@ -202,12 +268,16 @@ function FbsStockDialogBody({
                 ) : null}
                 <Box sx={{ flexGrow: 1 }} />
                 <Box sx={{ minWidth: 240 }}>
+                  {/* У отключённого склада выбор заперт: сопоставление означает
+                      «склад наш» и включило бы его обратно молча. Сначала галочка,
+                      потом склад. */}
                   <SelectInput
                     label="Склад WMS"
                     value={warehouse.boundTo ?? ''}
                     onChange={(value) => onBind(warehouse.id, value)}
                     options={seller.wbWarehouses.map((one) => ({ value: one.id, label: one.name }))}
                     emptyLabel="не сопоставлен"
+                    disabled={!warehouse.fbsEnabled && warehouse.boundTo !== null}
                     testId={`fbs-stock-bind-${warehouse.id}`}
                   />
                 </Box>
@@ -242,9 +312,11 @@ function FbsStockDialogBody({
             {willPublish.toLocaleString('ru-RU')} шт
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {draft.publish
-              ? 'уйдёт в Wildberries прямо сейчас и будет пересчитываться само'
-              : 'передача выключена — в Wildberries не уйдёт ничего'}
+            {noneServed
+              ? 'ни один склад Wildberries не выбран — отправлять некуда'
+              : draft.publish
+                ? 'уйдёт в Wildberries прямо сейчас и будет пересчитываться само'
+                : 'передача выключена — в Wildberries не уйдёт ничего'}
           </Typography>
         </Stack>
 

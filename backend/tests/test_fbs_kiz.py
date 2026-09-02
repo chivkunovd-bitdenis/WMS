@@ -83,6 +83,26 @@ def test_wb_decision_mapping_covers_safe_sync_states(
     assert fbs_marking_svc.map_wb_decision_to_meta_status(decision) == expected
 
 
+def test_universal_test_kiz_is_opt_in_and_unique_per_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    alias = "010200000000001221UNIVERSALSTAGE01"
+    first = FbsOrder(id=uuid.uuid4(), wb_order_id=530006)
+    second = FbsOrder(id=uuid.uuid4(), wb_order_id=530007)
+
+    monkeypatch.setattr(kiz_svc.settings, "fbs_universal_test_kiz", None)
+    assert kiz_svc._universal_test_kiz_for_order(first, alias) == alias
+
+    monkeypatch.setattr(kiz_svc.settings, "fbs_universal_test_kiz", alias)
+    first_value = kiz_svc._universal_test_kiz_for_order(first, alias)
+    second_value = kiz_svc._universal_test_kiz_for_order(second, alias)
+
+    assert first_value != second_value
+    assert kiz_svc.is_probably_cis(first_value)
+    assert kiz_svc.is_probably_cis(second_value)
+    assert kiz_svc._universal_test_kiz_for_order(first, "010200000000001221OTHER") == (
+        "010200000000001221OTHER"
+    )
+
+
 _GS = "\x1d"
 _CLEAN_CIS = f"010460043993125321AbCxyz{_GS}91K1aZ{_GS}92Crypto~|#<GS>tail"
 
@@ -3048,3 +3068,598 @@ async def test_fbs_marking_pool_counts_replacement_required_order_as_needing_cod
     assert marking_pool["available"] == 1
     assert marking_pool["shortage"] == 0
     assert marking_pool["orders_without_code"] == []
+
+
+# --------------------------------------------------------------------------
+# I3 — GS-разделители, вырезанные браузерным полем ввода целиком.
+#
+# Отличие от блока "gs_substitute" выше: там сканер подставляет ВИДИМЫЙ символ
+# ("~", "<GS>"), и по нему видно, где резать. Здесь HTML-поле не пропускает сам
+# байт 0x1D, никакого следа не остаётся, и единственный ориентир — структура
+# КИЗ: 01<GTIN,14>21<серийник,1..20>|91<код,4>|92<подпись,44 одежда / 88 обувь>.
+# --------------------------------------------------------------------------
+
+# Реальный скан с прода 28.08.2026 (ИП Рябов, десять залипших заказов): 83
+# символа, склеено, WB принял и вернул те же данные со своими разделителями —
+# 85 символов.
+_PROD_GLUED_CIS = (
+    "0104630710098651215VaAOh'u!tRFR"
+    "91EE12"
+    "92/p5ES3Y984dx9CHANLa3oqpTJkYWL0iMcO/2z6i0be4="
+)
+_PROD_RESTORED_CIS = (
+    "0104630710098651215VaAOh'u!tRFR"
+    f"{_GS}91EE12"
+    f"{_GS}92/p5ES3Y984dx9CHANLa3oqpTJkYWL0iMcO/2z6i0be4="
+)
+
+_GTIN14 = "04606012345678"
+_SIGNATURE_44 = "MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY="
+_SIGNATURE_88 = _SIGNATURE_44 + "MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3"
+
+
+def _kiz(
+    serial: str,
+    verification: str,
+    signature: str,
+    *,
+    with_gs: bool,
+    gtin: str = _GTIN14,
+) -> str:
+    sep = _GS if with_gs else ""
+    return f"01{gtin}21{serial}{sep}91{verification}{sep}92{signature}"
+
+
+def test_gs_restore_fixes_production_scan_byte_for_byte() -> None:
+    # TC-NEW-FBS-KIZ-I3-001: боевой случай 28.08.2026 целиком. Проверяем не
+    # «примерно починилось», а буквальное равенство тому, что вернул WB:
+    # 83 символа на входе, 85 на выходе, ровно два вставленных разделителя.
+    assert len(_PROD_GLUED_CIS) == 83
+    assert len(_PROD_RESTORED_CIS) == 85
+    assert _GS not in _PROD_GLUED_CIS
+
+    value, hints = kiz_svc.normalize_scanned_cis(_PROD_GLUED_CIS)
+
+    assert value == _PROD_RESTORED_CIS
+    assert value.count(_GS) == 2
+    assert hints == ["gs_structure_restored"]
+    assert kiz_svc.is_probably_cis(value) is True
+    # Данные не переставлены и не потеряны — изменились только разделители.
+    assert value.replace(_GS, "") == _PROD_GLUED_CIS
+
+
+def test_gs_restore_is_idempotent_on_production_scan() -> None:
+    # TC-NEW-FBS-KIZ-I3-001: повторный прогон уже починенного значения не должен
+    # ни вставлять третий разделитель, ни выставлять hint. Риск реальный: после
+    # первого прохода в хвосте появляется GS, и второй проход обязан это увидеть.
+    once, first_hints = kiz_svc.normalize_scanned_cis(_PROD_GLUED_CIS)
+    twice, second_hints = kiz_svc.normalize_scanned_cis(once)
+    thrice, third_hints = kiz_svc.normalize_scanned_cis(twice)
+
+    assert first_hints == ["gs_structure_restored"]
+    assert twice == once == thrice
+    assert second_hints == []
+    assert third_hints == []
+
+
+def test_gs_restore_handles_footwear_88_char_signature() -> None:
+    # TC-NEW-FBS-KIZ-I3-002: у обуви криптоподпись 88 символов, а не 44. Разбор
+    # обязан попробовать обе длины, иначе обувь целиком уедет в отказ.
+    glued = _kiz("Zk9L2pQ1", "M3xR", _SIGNATURE_88, with_gs=False)
+    expected = _kiz("Zk9L2pQ1", "M3xR", _SIGNATURE_88, with_gs=True)
+    assert len(_SIGNATURE_88) == 88
+
+    value, hints = kiz_svc.normalize_scanned_cis(glued)
+
+    assert value == expected
+    assert hints == ["gs_structure_restored"]
+
+
+def test_gs_restore_not_fooled_by_91_and_92_inside_serial() -> None:
+    # TC-NEW-FBS-KIZ-I3-003: главная ловушка. Серийник сам содержит "91" и "92".
+    # Наивный поиск подстроки обрубил бы серийник на первом ложном совпадении и
+    # отправил бы в WB другой код — тихая порча данных, которую оператор не
+    # заметит. Разбор от конца строки обязан найти настоящие маркеры.
+    trap_serial = "A91XB92YC7z"
+    glued = _kiz(trap_serial, "Q9zK", _SIGNATURE_44, with_gs=False)
+    expected = _kiz(trap_serial, "Q9zK", _SIGNATURE_44, with_gs=True)
+
+    value, hints = kiz_svc.normalize_scanned_cis(glued)
+
+    assert value == expected
+    assert hints == ["gs_structure_restored"]
+    # Серийник дошёл целиком, вместе с ложными "91"/"92" внутри.
+    assert f"21{trap_serial}{_GS}91" in value
+    assert value.count(_GS) == 2
+
+
+def test_gs_restore_leaves_already_separated_code_untouched() -> None:
+    # TC-NEW-FBS-KIZ-I3-004: главный регрессионный риск задачи — испортить
+    # нормальный код. Разделители на месте → значение не меняется, hint пустой.
+    already_ok = _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=True)
+
+    value, hints = kiz_svc.normalize_scanned_cis(already_ok)
+
+    assert value == already_ok
+    assert hints == []
+
+
+def test_gs_restore_leaves_short_form_kiz_without_crypto_tail() -> None:
+    # TC-NEW-FBS-KIZ-I3-005: короткий КИЗ (01+GTIN+21+серийник) — валидный
+    # формат WB. Блоков 91/92 у него нет, разделитель перед последним полем не
+    # нужен. Такой код нельзя ни «чинить», ни браковать как неразбираемый.
+    short_form = "010460601234567821SHORT1234"
+
+    value, hints = kiz_svc.normalize_scanned_cis(short_form)
+
+    assert value == short_form
+    assert hints == []
+    assert kiz_svc.is_probably_cis(value) is True
+
+
+@pytest.mark.parametrize(
+    ("case", "raw"),
+    [
+        # Подпись обрублена при передаче — не 44 и не 88.
+        ("truncated_signature", _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=False)[:-5]),
+        # Подпись длиннее одежды и короче обуви.
+        ("signature_66", _kiz("aXq7Tz9Km", "K7pQ", "A" * 66, with_gs=False)),
+        # Серийник длиннее максимума GS1 (20) — структура не сходится.
+        ("serial_21", _kiz("A" * 21, "K7pQ", _SIGNATURE_44, with_gs=False)),
+        # Серийника нет вовсе.
+        ("serial_empty", _kiz("", "K7pQ", _SIGNATURE_44, with_gs=False)),
+        # На месте маркера 91 стоит что-то другое.
+        (
+            "wrong_ai_marker",
+            _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=False).replace(
+                "91K7pQ", "93K7pQ"
+            ),
+        ),
+        # Просто длинный мусор с правильным началом.
+        ("long_noise", "01" + _GTIN14 + "21" + "X" * 300),
+    ],
+)
+def test_gs_restore_refuses_to_guess_when_structure_does_not_match(
+    case: str, raw: str
+) -> None:
+    # TC-NEW-FBS-KIZ-I3-006: если длина хвоста не сходится ни с одеждой, ни с
+    # обувью — гадать нельзя. Значение не подменяется на догадку, а помечается
+    # служебным hint, по которому вызывающий код откажется слать код в WB.
+    value, hints = kiz_svc.normalize_scanned_cis(raw)
+
+    assert value == raw, case
+    assert hints == ["gs_unrestorable"], case
+    assert _GS not in value, case
+
+
+@pytest.mark.parametrize("serial_length", [1, 20])
+def test_gs_restore_accepts_serial_length_boundaries(serial_length: int) -> None:
+    # TC-NEW-FBS-KIZ-I3-006: границы допустимой длины серийного номера GS1
+    # (1..20) должны попадать внутрь, а не срезаться проверкой «строго меньше».
+    serial = "A" * serial_length
+    glued = _kiz(serial, "K7pQ", _SIGNATURE_44, with_gs=False)
+
+    value, hints = kiz_svc.normalize_scanned_cis(glued)
+
+    assert value == _kiz(serial, "K7pQ", _SIGNATURE_44, with_gs=True)
+    assert hints == ["gs_structure_restored"]
+
+
+@pytest.mark.parametrize(
+    ("case", "raw"),
+    [
+        ("empty", ""),
+        ("only_separators", _GS * 3),
+        ("noise", "laser scanner noise"),
+        ("gtin_not_digits", "01ABCDEFGHIJKLMN21aXq7Tz9Km91K7pQ92" + _SIGNATURE_44),
+        ("gtin_13_digits", "01" + "0" * 13 + "21aXq7Tz9Km91K7pQ92" + _SIGNATURE_44),
+        ("no_ai21", "01" + _GTIN14 + "10aXq7Tz9Km91K7pQ92" + _SIGNATURE_44),
+        ("not_a_gs1_string_at_all", "PROD-BARCODE-1234567890"),
+    ],
+)
+def test_gs_restore_ignores_values_that_are_not_kiz_prefixed(case: str, raw: str) -> None:
+    # TC-NEW-FBS-KIZ-I3-007: всё, что не начинается с 01<14 цифр>21, новый шаг
+    # трогать не должен вообще — ни чинить, ни брать на себя отказ. Такой вход
+    # обязан дойти до старой проверки is_probably_cis и упасть как not_a_kiz.
+    value, hints = kiz_svc.normalize_scanned_cis(raw)
+
+    assert value == raw, case
+    assert hints == [], case
+
+
+def test_gs_restore_survives_aim_prefix_and_russian_layout() -> None:
+    # TC-NEW-FBS-KIZ-I3-008: восстановление структуры идёт последним шагом, уже
+    # после снятия AIM-префикса и разворота раскладки. Если порядок шагов
+    # сломать, префикс сдвинет все смещения и структура не сойдётся.
+    glued = _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=False)
+    expected = _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=True)
+    ru_layout = str.maketrans("qwertyuiopasdfghjklzxcvbnm", "йцукенгшщзфывапролдячсмить")
+    scanned = "]d2" + glued.translate(ru_layout)
+    assert scanned != "]d2" + glued
+
+    value, hints = kiz_svc.normalize_scanned_cis(scanned)
+
+    assert value == expected
+    assert hints == ["aim_prefix", "keyboard_layout", "gs_structure_restored"]
+
+
+def test_gs_restore_ignores_trailing_scanner_newline() -> None:
+    # TC-NEW-FBS-KIZ-I3-008: сканер дописывает Enter. Хвост длиннее на символ —
+    # если его не срезать до разбора структуры, длина подписи не сойдётся и
+    # рабочий скан уедет в отказ gs_separator_lost.
+    glued = _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=False)
+
+    value, hints = kiz_svc.normalize_scanned_cis(f"{glued}\r\n ")
+
+    assert value == _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=True)
+    assert hints == ["gs_structure_restored"]
+
+
+@pytest.mark.parametrize("suffix", ["\t", " ", "\r\n", "\x0b", "\x0c", "\t\t \r\n"])
+def test_gs_restore_ignores_any_trailing_scanner_whitespace(suffix: str) -> None:
+    # TC-NEW-FBS-KIZ-I3-008 (negative): сканер дописывает суффикс, и Tab —
+    # такая же штатная настройка, как Enter. Лишний символ сдвигает длину
+    # хвоста, структура не сходится, и рабочий скан уезжает в отказ
+    # gs_separator_lost — то есть кладовщик вообще не может сдать заказ.
+    glued = _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=False)
+
+    value, hints = kiz_svc.normalize_scanned_cis(f"{glued}{suffix}")
+
+    assert value == _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=True)
+    assert hints == ["gs_structure_restored"]
+
+
+def test_normalize_does_not_strip_separator_as_if_it_were_whitespace() -> None:
+    # TC-NEW-FBS-KIZ-I3-008 (negative): 0x1D Python считает пробельным
+    # символом, поэтому голый rstrip() срезал бы САМ разделитель — ровно то,
+    # что мы тут восстанавливаем. Список срезаемых символов обязан быть явным.
+    assert "\x1d".isspace() is True
+    # Значение, которое новый шаг не трогает (структура не опознана), обязано
+    # дойти до проверки байт в байт, вместе с концевым разделителем.
+    tail_separator = f"{_CLEAN_CIS}{_GS}"
+
+    value, hints = kiz_svc.normalize_scanned_cis(tail_separator)
+
+    assert value == tail_separator
+    assert value.endswith(_GS)
+    assert hints == []
+
+
+def test_gs_restore_never_loses_payload_characters() -> None:
+    # TC-NEW-FBS-KIZ-I3-008: инвариант на все входы разом — восстановление
+    # имеет право менять ТОЛЬКО расстановку разделителей. Если из значения
+    # пропадёт хоть один символ данных, в WB уедет другой код.
+    samples = [
+        _PROD_GLUED_CIS,
+        _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=False),
+        _kiz("Zk9L2pQ1", "M3xR", _SIGNATURE_88, with_gs=False),
+        _kiz("A91XB92YC7z", "Q9zK", _SIGNATURE_44, with_gs=False),
+        _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=True),
+        "010460601234567821SHORT1234",
+        _CLEAN_CIS,
+    ]
+    for raw in samples:
+        value, _ = kiz_svc.normalize_scanned_cis(raw)
+        assert value.replace(_GS, "") == raw.replace(_GS, ""), raw
+
+
+@pytest.mark.parametrize("missing_before", ["91", "92"])
+def test_gs_restore_repairs_code_with_only_one_of_two_separators(
+    missing_before: str,
+) -> None:
+    # TC-NEW-FBS-KIZ-I3-009: разделители теряются и поодиночке. Половинчатый
+    # код обязан достраиваться до канонического вида с ОБОИМИ разделителями —
+    # раньше он проходил насквозь как «нормальный» и получал от WB sgtinNoGS.
+    full = _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=True)
+    half = full.replace(f"{_GS}{missing_before}", missing_before, 1)
+    assert half.count(_GS) == 1
+
+    value, hints = kiz_svc.normalize_scanned_cis(half)
+
+    assert value == full
+    assert value.count(_GS) == 2
+    assert hints == ["gs_structure_restored"]
+
+
+def test_gs_restore_collapses_duplicated_separators_to_canonical_form() -> None:
+    # TC-NEW-FBS-KIZ-I3-009: если разделитель приехал дважды (сканер отдал и
+    # байт, и видимую замену), результат всё равно должен быть каноническим —
+    # WB сверяет значение со своим, лишний байт сделает его «другим кодом».
+    doubled = (
+        f"01{_GTIN14}21aXq7Tz9Km{_GS}{_GS}91K7pQ{_GS}92{_SIGNATURE_44}"
+    )
+
+    value, hints = kiz_svc.normalize_scanned_cis(doubled)
+
+    assert value == _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=True)
+    assert hints == ["gs_structure_restored"]
+
+
+def test_gs_restore_does_not_call_a_separated_code_lost() -> None:
+    # TC-NEW-FBS-KIZ-I3-009 (negative): у кода разделители есть, но структуру
+    # мы не опознали (лишнее поле, обрезанная подпись). Звать такой код
+    # «разделители потеряны» — врать оператору и без нужды блокировать сдачу:
+    # диагноз про потерю разделителей тут заведомо неверен.
+    half_broken = _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=True)[:-5]
+    assert _GS in half_broken
+
+    value, hints = kiz_svc.normalize_scanned_cis(half_broken)
+
+    assert value == half_broken
+    assert hints == []
+
+
+@pytest.mark.asyncio
+async def test_fbs_kiz_validate_rejects_unrestorable_glued_code(
+    async_client: AsyncClient,
+) -> None:
+    # TC-NEW-FBS-KIZ-I3-010: неразбираемый склеенный код останавливается на
+    # валидации с адресной причиной, а не с общим not_a_kiz — оператор должен
+    # понять, что код надо пересканировать целиком.
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=934001,
+        sticker_code="GS-UNRESTORABLE",
+        wb_barcode="GS-UNRESTORABLE-BAR",
+        with_packaging=True,
+    )
+    broken = _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=False)[:-5]
+
+    response = await async_client.post(
+        "/operations/fbs-orders/kiz/validate",
+        headers=headers,
+        json={"order_id": str(order.order_id), "value": broken},
+    )
+
+    detail = response.json()["detail"]
+    assert detail["code"] == "gs_separator_lost"
+    assert "раздел" in detail["message"].lower()
+    assert detail["retryable"] is False
+    # Оператору отдаём форму скана для диагностики, а не сам код.
+    assert detail["context"]["debug"]["length"] == len(broken)
+
+
+@pytest.mark.asyncio
+async def test_fbs_kiz_validate_unrestorable_code_is_client_error_not_500(
+    async_client: AsyncClient,
+) -> None:
+    # TC-NEW-FBS-KIZ-I3-010 (negative): плохой скан — это 4xx. 500 поднимает
+    # алерты как отказ сервиса и на клиенте обрабатывается общим «сервер лёг»,
+    # а не адресной подсказкой оператору.
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=934004,
+        sticker_code="GS-STATUS",
+        wb_barcode="GS-STATUS-BAR",
+        with_packaging=True,
+    )
+    broken = _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=False)[:-5]
+
+    response = await async_client.post(
+        "/operations/fbs-orders/kiz/validate",
+        headers=headers,
+        json={"order_id": str(order.order_id), "value": broken},
+    )
+
+    assert response.status_code == 400, response.text
+
+
+@pytest.mark.asyncio
+async def test_fbs_kiz_commit_never_sends_unrestorable_code_to_wb(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # TC-NEW-FBS-KIZ-I3-011: суть отказа — не текст на экране, а то, что запроса
+    # в WB не было и в базе ничего не осталось. Если склеенный код всё-таки
+    # уедет, WB ответит sgtinNoGS и заказ снова залипнет.
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=934002,
+        sticker_code="GS-NO-WB",
+        wb_barcode="GS-NO-WB-BAR",
+        with_packaging=True,
+    )
+    sent = _patch_wb_acceptance(monkeypatch)
+    markings_before, codes_before = await _marking_row_counts(tenant_id)
+    broken = _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=False)[:-5]
+
+    response = await async_client.post(
+        "/operations/fbs-orders/kiz/commit",
+        headers=headers,
+        json={
+            "idempotency_key": "kiz-gs-unrestorable",
+            "pairs": [
+                {"order_id": str(order.order_id), "value": broken, "confirmed": False}
+            ],
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body[0]["status"] == "error"
+    assert body[0]["code"] == "gs_separator_lost"
+    # Главное: WB не трогали вообще.
+    assert sent == {}
+    assert await _marking_row_counts(tenant_id) == (markings_before, codes_before)
+
+
+@pytest.mark.asyncio
+async def test_fbs_kiz_commit_sends_restored_production_value_to_wb(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # TC-NEW-FBS-KIZ-I3-012: сквозная проверка боевого случая. Раньше в WB
+    # уходили склеенные 83 символа; теперь WB обязан получить ровно те 85, что
+    # он сам вернул, и столько же должно осесть в базе.
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=934003,
+        sticker_code="GS-RESTORE",
+        wb_barcode="GS-RESTORE-BAR",
+        with_packaging=True,
+    )
+    sent = _patch_wb_acceptance(monkeypatch)
+
+    response = await async_client.post(
+        "/operations/fbs-orders/kiz/commit",
+        headers=headers,
+        json={
+            "idempotency_key": "kiz-gs-restore-prod",
+            "pairs": [
+                {
+                    "order_id": str(order.order_id),
+                    "value": _PROD_GLUED_CIS,
+                    "confirmed": False,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()[0]["status"] == "ok", response.text
+    assert sent[934003] == _PROD_RESTORED_CIS
+    assert len(sent[934003]) == 85
+
+    async with SessionLocal() as session:
+        marking = (
+            await session.execute(
+                select(FbsOrderMarking).where(
+                    FbsOrderMarking.order_id == order.order_id
+                )
+            )
+        ).scalar_one()
+        assert marking.value == _PROD_RESTORED_CIS
+        code = (
+            await session.execute(
+                select(MarkingCode).where(MarkingCode.tenant_id == tenant_id)
+            )
+        ).scalar_one()
+        assert code.cis_code == _PROD_RESTORED_CIS
+
+
+def test_gs_restore_normalizes_trailing_gs1_terminator_without_losing_data() -> None:
+    # TC-NEW-FBS-KIZ-I3-009: у канонического кода концевой 0x1D — это
+    # терминатор GS1, а не разделитель поля. Убрать его можно, но данные при
+    # этом должны остаться байт в байт: WB сверяет значение со своим.
+    canonical = _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=True)
+
+    value, _ = kiz_svc.normalize_scanned_cis(f"{canonical}{_GS}")
+
+    assert value == canonical
+    assert value.replace(_GS, "") == canonical.replace(_GS, "")
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "ДЕФЕКТ (остаточный, внесён починкой половинчатых кодов): очистка "
+        "хвоста от разделителей сделала достраивание применимым и к кодам, "
+        "которые уже разбирались однозначно. КИЗ вида 21<серийник><GS>92<44> "
+        "(без блока 91), чей серийник заканчивается на шаблон '91'+2 символа, "
+        "переразбирается: шесть символов серийного номера уезжают в выдуманный "
+        "блок 91, и в WB уходит другой ЛОГИЧЕСКИЙ код при тех же байтах. "
+        "Лечится проверкой «если значение уже разбирается как валидный GS1 "
+        "имеющимися разделителями — не трогать»."
+    ),
+)
+def test_gs_restore_does_not_reparse_a_code_that_already_parses() -> None:
+    # TC-NEW-FBS-KIZ-I3-013 (negative): тихая подмена границ полей — худший
+    # вид отказа: байты те же, оператор ничего не замечает, а WB видит другой
+    # серийный номер.
+    victim = f"01{_GTIN14}21AB91ZZQQ{_GS}92{_SIGNATURE_44}"
+
+    value, hints = kiz_svc.normalize_scanned_cis(victim)
+
+    assert value == victim
+    assert hints == []
+
+
+def test_gs_restore_leaves_alternative_crypto_tag_93_alone_when_separated() -> None:
+    # TC-NEW-FBS-KIZ-I3-014: по документации WB (wb-docs/04-labeling/
+    # verify-product-identifiers.md) криптохвост стоит «после тега 92 ИЛИ 93»,
+    # а его длина зависит от категории товара. Мы умеем восстанавливать только
+    # 92 + 44/88. Нормально отсканированный код с тегом 93 обязан проходить
+    # насквозь без изменений — граница возможностей не должна ломать то, что
+    # и так работает.
+    separated = f"01{_GTIN14}21aXq7Tz9Km{_GS}91K7pQ{_GS}93{'M' * 44}"
+
+    value, hints = kiz_svc.normalize_scanned_cis(separated)
+
+    assert value == separated
+    assert hints == []
+
+
+@pytest.mark.parametrize(
+    ("case", "raw"),
+    [
+        ("crypto_tag_93", f"01{_GTIN14}21aXq7Tz9Km91K7pQ93{'M' * 44}"),
+        ("unknown_tail_length_60", f"01{_GTIN14}21aXq7Tz9Km91K7pQ92{'M' * 60}"),
+    ],
+)
+def test_gs_restore_refuses_rather_than_guesses_unknown_kiz_shapes(
+    case: str, raw: str
+) -> None:
+    # TC-NEW-FBS-KIZ-I3-014 (negative): формы КИЗ, которых нет в нашей таблице
+    # (тег 93, другая длина криптохвоста), склеенными восстановить нельзя.
+    # Правильное поведение — назвать причину оператору, а не гадать и не слать
+    # в WB заведомо битый код.
+    value, hints = kiz_svc.normalize_scanned_cis(raw)
+
+    assert value == raw, case
+    assert hints == ["gs_unrestorable"], case

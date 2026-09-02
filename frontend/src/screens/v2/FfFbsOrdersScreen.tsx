@@ -55,6 +55,7 @@ import {
   mixedMarketplaceSelectionMessage,
   orderStatusForChip,
   ordersWord,
+  supplyQrExpectedForStatus,
 } from './fbsUx'
 import { plural } from '../../utils/plural'
 import {
@@ -294,35 +295,22 @@ const NewOrderRow = memo(function NewOrderRow({
           onChange={() => onToggle(order)}
         />
       </TableCell>
-      <TableCell>
+      <TableCell sx={{ minWidth: 300 }}>
         <Stack direction="row" spacing={1.25}>
           <LazyProductPhotoThumb
             src={order.product.image_url}
             alt={order.product.name}
-            size={44}
+            size={52}
             previewSize={280}
             testId={`fbs-product-photo-${order.id}`}
           />
-          <Box sx={{ minWidth: 0 }}>
-            <Tooltip title={order.product.id ? order.product.name : 'Товар не сопоставлен'}>
-              <Typography variant="subtitle2" noWrap sx={{ lineHeight: 1.25, maxWidth: 150 }}>
-                {order.product.id ? order.product.name : 'Товар не сопоставлен'}
-              </Typography>
-            </Tooltip>
-            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
-              {orderNumberLabel(order)} · ШК: {order.product.barcode ?? '—'}
+          <Box sx={{ minWidth: 220 }}>
+            <Typography variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
+              {order.product.id ? order.product.name : 'Товар не сопоставлен'}
             </Typography>
-            {order.product.sku ? (
-              <Tooltip title={order.product.sku}>
-                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
-                  SKU {order.product.sku}
-                </Typography>
-              </Tooltip>
-            ) : order.product.seller_article ? (
-              <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
-                Артикул: {order.product.seller_article}
-              </Typography>
-            ) : null}
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+              {orderNumberLabel(order)}
+            </Typography>
             {blocked ? (
               <Stack sx={{ mt: 0.75 }} spacing={0.25}>
                 {order.selection_blockers.map((blocker) => (
@@ -336,6 +324,31 @@ const NewOrderRow = memo(function NewOrderRow({
             ) : null}
           </Box>
         </Stack>
+      </TableCell>
+      <TableCell sx={{ minWidth: 170 }}>
+        <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+          {order.product.seller_article ?? '—'}
+        </Typography>
+        {order.product.wb_article ? (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'nowrap' }}>
+            WB {order.product.wb_article}
+          </Typography>
+        ) : null}
+      </TableCell>
+      <TableCell sx={{ minWidth: 170 }}>
+        <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+          {order.product.sku ?? '—'}
+        </Typography>
+      </TableCell>
+      <TableCell sx={{ minWidth: 150 }}>
+        <Typography variant="body2" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}>
+          {order.product.barcode ?? '—'}
+        </Typography>
+      </TableCell>
+      <TableCell sx={{ minWidth: 80 }}>
+        <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+          {order.product.size ?? '—'}
+        </Typography>
       </TableCell>
       <TableCell>
         <Tooltip title={order.seller.name ?? '—'}>
@@ -841,7 +854,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     )
   }, [activeSupplies, selectedOrders])
   const selectionBlockers = useMemo(
-    () => selectedOrders.flatMap((order) => order.selection_blockers.map((blocker) => ({ order, blocker }))),
+    () => selectedOrders.flatMap((order) =>
+      blockingSelectionBlockers(order.selection_blockers).map((blocker) => ({ order, blocker })),
+    ),
     [selectedOrders],
   )
   const selectableIds = useMemo(
@@ -954,7 +969,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     setError(null)
   }, [])
 
-  const openSupplyQrPrint = useCallback(async (supplyId: string) => {
+  const openSupplyQrPrint = useCallback(async (supply: FbsSupplyWorklistItem) => {
+    const supplyId = supply.id
     setPrintingSupplyId(supplyId)
     setError(null)
     setNotice(null)
@@ -963,17 +979,22 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     let supplyAsset: FbsPrintAsset | null = null
     let cargoAssets: FbsPrintAsset[] = []
     let cargoPlacesCount = 0
+    let currentSupplyStatus = supply.status
 
     try {
-      await syncFbsSupplyTracking(token, authHeaders, supplyId)
+      const refreshed = await syncFbsSupplyTracking(token, authHeaders, supplyId)
+      currentSupplyStatus = refreshed.supply.status
     } catch (cause) {
       failures.push(cause instanceof Error ? cause.message : 'Статус поставки не обновлён.')
     }
-    try {
-      const refreshed = await retryFbsSupplyQr(token, authHeaders, supplyId)
-      supplyAsset = refreshed.supply.barcode_asset
-    } catch (cause) {
-      failures.push(cause instanceof Error ? cause.message : 'QR поставки не получен.')
+    const expectsSupplyQr = supplyQrExpectedForStatus(currentSupplyStatus)
+    if (expectsSupplyQr) {
+      try {
+        const refreshed = await retryFbsSupplyQr(token, authHeaders, supplyId)
+        supplyAsset = refreshed.supply.barcode_asset
+      } catch (cause) {
+        failures.push(cause instanceof Error ? cause.message : 'QR поставки не получен.')
+      }
     }
     try {
       const cargoPlaces = await fetchFbsCargoPlaces(token, authHeaders, supplyId)
@@ -992,7 +1013,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     ).values()]
     const ready = assets.filter((asset) => asset.status === 'ready' && asset.preview_url).length
     const failed = assets.filter((asset) => asset.status === 'error').length
-    const requested = 1 + cargoPlacesCount
+    const requested = cargoPlacesCount + (expectsSupplyQr ? 1 : 0)
     setSupplyQrBatch({
       requested,
       ready,
@@ -1384,7 +1405,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                         ? <CircularProgress size={14} />
                         : <PrintOutlinedIcon />}
                       disabled={Boolean(printingSupplyId)}
-                      onClick={() => void openSupplyQrPrint(supply.id)}
+                      onClick={() => void openSupplyQrPrint(supply)}
                       data-testid={`fbs-supply-qr-print-${supply.id}`}
                     >
                       QR
@@ -1445,14 +1466,22 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               </TableCell>
               {statusGroup === 'new' ? (
                 <>
-                  <TableCell sx={{ minWidth: 270 }}>Товар</TableCell>
+                  <TableCell sx={{ minWidth: 300 }}>Товар</TableCell>
+                  <TableCell sx={{ minWidth: 170 }}>Артикул продавца</TableCell>
+                  <TableCell sx={{ minWidth: 170 }}>SKU</TableCell>
+                  <TableCell sx={{ minWidth: 150 }}>ШК</TableCell>
+                  <TableCell sx={{ minWidth: 80 }}>Размер</TableCell>
                   <TableCell sx={{ minWidth: 135 }}>Селлер</TableCell>
                   <TableCell sx={{ minWidth: 125 }}>Маршрут сдачи</TableCell>
                   <TableCell sx={{ minWidth: 105 }}>Отгрузить до</TableCell>
                 </>
               ) : (
                 <>
-                  <TableCell sx={{ minWidth: 270 }}>Товар</TableCell>
+                  <TableCell sx={{ minWidth: 300 }}>Товар</TableCell>
+                  <TableCell sx={{ minWidth: 170 }}>Артикул продавца</TableCell>
+                  <TableCell sx={{ minWidth: 170 }}>SKU</TableCell>
+                  <TableCell sx={{ minWidth: 150 }}>ШК</TableCell>
+                  <TableCell sx={{ minWidth: 80 }}>Размер</TableCell>
                   <TableCell sx={{ minWidth: 125 }}>Селлер</TableCell>
                   <TableCell sx={{ minWidth: 125 }}>Маршрут сдачи</TableCell>
                   <TableCell sx={{ minWidth: 105 }}>Отгрузить до</TableCell>
@@ -1505,7 +1534,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                 >
                   <TableCell padding="checkbox" />
                     <>
-                      <TableCell>
+                      <TableCell sx={{ minWidth: 300 }}>
                         <Stack direction="row" spacing={1.25}>
                           <ProductPhotoThumb
                             src={order.product.image_url}
@@ -1514,21 +1543,40 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                             previewSize={280}
                             testId={`fbs-product-photo-${order.id}`}
                           />
-                          <Box sx={{ minWidth: 0 }}>
-                            <Typography variant="subtitle2" sx={{ lineHeight: 1.25 }}>
+                          <Box sx={{ minWidth: 220 }}>
+                            <Typography variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
                               {order.product.id ? order.product.name : 'Товар не сопоставлен'}
                             </Typography>
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                               Заказ WB №{order.wb_order_id}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                              Артикул: {order.product.seller_article ?? '—'}{order.product.wb_article ? ` · WB ${order.product.wb_article}` : ''}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                              ШК: {order.product.barcode ?? '—'}{order.product.size ? ` · Размер: ${order.product.size}` : ''}
-                            </Typography>
                           </Box>
                         </Stack>
+                      </TableCell>
+                      <TableCell sx={{ minWidth: 170 }}>
+                        <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+                          {order.product.seller_article ?? '—'}
+                        </Typography>
+                        {order.product.wb_article ? (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'nowrap' }}>
+                            WB {order.product.wb_article}
+                          </Typography>
+                        ) : null}
+                      </TableCell>
+                      <TableCell sx={{ minWidth: 170 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          {order.product.sku ?? '—'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ minWidth: 150 }}>
+                        <Typography variant="body2" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}>
+                          {order.product.barcode ?? '—'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ minWidth: 80 }}>
+                        <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+                          {order.product.size ?? '—'}
+                        </Typography>
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">{order.seller.name ?? '—'}</Typography>
@@ -1590,7 +1638,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
             })}
             {!busy && orders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={statusGroup === 'new' ? 5 : 6}>
+                <TableCell colSpan={statusGroup === 'new' ? 9 : 10}>
                   <Box sx={{ py: 8, textAlign: 'center' }}>
                     <Inventory2OutlinedIcon sx={{ fontSize: 42, color: 'text.disabled' }} />
                     <Typography variant="subtitle1" sx={{ mt: 1 }}>

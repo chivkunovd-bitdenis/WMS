@@ -303,7 +303,8 @@ export type FbsSupplyAddOrdersRequest = {
 export type FbsSupplyWorklistItem = {
   id: string
   marketplace: 'wb' | 'ozon'
-  wb_supply_id: string
+  /** Номер в WB появляется не сразу — до подтверждения маркетплейсом его нет. */
+  wb_supply_id: string | null
   name: string
   status: string
   seller: { id: string; name: string }
@@ -439,7 +440,14 @@ export type FbsDeliveryPreflight = {
   can_deliver: boolean
   version: string
   checked_at: string
-  checks: Array<{ code: string; message: string; ok: boolean; order_id: string | null }>
+  checks: Array<{
+    code: string
+    message: string
+    ok: boolean
+    /** blocker — передача запрещена; warning — предупреждение; info — факт. */
+    severity: 'blocker' | 'warning' | 'info'
+    order_id: string | null
+  }>
 }
 
 export type FbsTrackingOrder = {
@@ -467,6 +475,8 @@ export type FbsWorkspace = {
     id: string
     marketplace: 'wb' | 'ozon'
     wb_supply_id: string
+    /** 'wms' — поставку собрали мы, 'wb' — её собрал продавец в своём кабинете. */
+    source: 'wms' | 'wb'
     name: string
     status: string
     delivery_type: 'warehouse_sc' | 'pvz'
@@ -1051,11 +1061,6 @@ export async function deliverFbsSupply(
     body: JSON.stringify(body),
   })
   return jsonOrThrow<FbsWorkspace>(res)
-}
-
-/** Delivery is allowed only after packaging task completed (supply.status === packed). */
-export function canDeliverFbsSupply(supply: FbsSupply): boolean {
-  return supply.status === 'packed'
 }
 
 // Лист подбора (Экран 3). GET /operations/fbs-supplies/{id}/picking-list → { items }.

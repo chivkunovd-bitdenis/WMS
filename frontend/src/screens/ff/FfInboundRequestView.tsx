@@ -57,7 +57,15 @@ import { WbProductPickerDialog } from '../../components/WbProductPickerDialog'
 import { WmsDateField } from '../../components/WmsDateField'
 import { OzonReturnActions, OzonReturnGroupRow, OzonReturnOrphanGroupRows, ReturnDefectiveQtyCell } from '../../components/OzonReturnDocumentUi'
 import { ozonReturnGroupAt, ozonReturnUnrepresentedGroups } from '../../components/ozonReturnPickerHelpers'
-import { MarketplaceChip } from '../../ui-kit'
+import {
+  AppDialog,
+  CheckboxInput,
+  MarketplaceChip,
+  PrimaryAction,
+  SecondaryAction,
+  SelectInput,
+  StatusChip,
+} from '../../ui-kit'
 import {
   formatProductBarcodeDisplay,
   productDisplayMetaFromCatalog,
@@ -77,6 +85,7 @@ import { BoxImportDialog } from '../../components/BoxImportDialog'
 import {
   buildInboundDiscrepancyLines,
   buildInboundReceivingTotals,
+  containerTotalForProduct,
   effectiveActualQty,
   formatBoxesCountLabel,
   inboundStatusRu,
@@ -118,7 +127,17 @@ type InboundBox = {
   intake_closed_at: string | null
   is_open: boolean
   remaining_qty?: number
+  pallet_id?: string | null
+  pallet_code?: string | null
   lines: InboundBoxLine[]
+}
+
+type InboundPallet = {
+  id: string
+  code: string
+  barcode: string
+  storage_location_id: string | null
+  storage_location_code: string | null
 }
 
 type InboundCargoPlace = {
@@ -474,6 +493,13 @@ export function FfInboundRequestView({
   const [cargoDialogOpen, setCargoDialogOpen] = useState(false)
   const [cargoCount, setCargoCount] = useState('1')
   const [cargoError, setCargoError] = useState<string | null>(null)
+  const [selectedPalletBoxIds, setSelectedPalletBoxIds] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const [combinePalletOpen, setCombinePalletOpen] = useState(false)
+  const [combinePalletBusy, setCombinePalletBusy] = useState(false)
+  const [combinePalletId, setCombinePalletId] = useState('')
+  const [inboundPallets, setInboundPallets] = useState<InboundPallet[]>([])
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null)
   const [newLocationCode, setNewLocationCode] = useState('')
@@ -518,6 +544,7 @@ export function FfInboundRequestView({
       !sortingView &&
       receivingActive &&
       boxAddDialogBoxId == null &&
+      cargoAddDialogPlaceId == null &&
       !pickerOpen &&
       dimensionsLine == null,
     onScan: (code) => {
@@ -531,6 +558,7 @@ export function FfInboundRequestView({
       !sortingView &&
       detail?.status === 'draft' &&
       boxAddDialogBoxId == null &&
+      cargoAddDialogPlaceId == null &&
       !pickerOpen &&
       dimensionsLine == null,
     onScan: (code) => {
@@ -1769,6 +1797,66 @@ export function FfInboundRequestView({
     }
   }
 
+  const openCombinePallet = async () => {
+    if (!detail) return
+    setCombinePalletOpen(true)
+    setCombinePalletId('')
+    setCombinePalletBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/warehouses/${detail.warehouse_id}/pallets?inbound_request_id=${encodeURIComponent(requestId)}`,
+        ),
+        { headers: authHeaders },
+      )
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        setCombinePalletOpen(false)
+        return
+      }
+      setInboundPallets((await res.json()) as InboundPallet[])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось загрузить палеты приёмки.')
+      setCombinePalletOpen(false)
+    } finally {
+      setCombinePalletBusy(false)
+    }
+  }
+
+  const combineSelectedBoxesIntoPallet = async () => {
+    if (!detail || selectedPalletBoxIds.size === 0) return
+    setCombinePalletBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/warehouses/${detail.warehouse_id}/pallets/combine`),
+        {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pallet_id: combinePalletId || null,
+            inbound_request_id: requestId,
+            inbound_box_ids: [...selectedPalletBoxIds],
+            cargo_place_ids: [],
+            warehouse_box_ids: [],
+          }),
+        },
+      )
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      setCombinePalletOpen(false)
+      setSelectedPalletBoxIds(new Set())
+      await loadDetail()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось собрать палету.')
+    } finally {
+      setCombinePalletBusy(false)
+    }
+  }
+
   const deleteInboundBox = async (boxId: string) => {
     setBusy(true)
     setError(null)
@@ -1843,7 +1931,7 @@ export function FfInboundRequestView({
     void completeReceiving()
   }
 
-  const setLineActual = async (lineId: string, actualQty: number) => {
+  const setLineActual = async (lineId: string, actualQty: number): Promise<boolean> => {
     setBusy(true)
     setError(null)
     try {
@@ -1858,11 +1946,13 @@ export function FfInboundRequestView({
       if (!res.ok) {
         const msg = await readApiErrorMessage(res)
         setError(msg === 'actual_missing' ? 'Укажите факт по всем строкам.' : msg)
-        return
+        return false
       }
       await loadDetail()
+      return true
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось сохранить факт.')
+      return false
     } finally {
       setBusy(false)
     }
@@ -1889,14 +1979,30 @@ export function FfInboundRequestView({
       return
     }
     const boxes = detail?.boxes ?? []
+    const cargoPlaces = detail?.cargo_places ?? []
     const currentEffective = effectiveActualQty(line, boxes, detail?.status)
     if (displayed === currentEffective) {
       setActualDraftErrorByLineId((prev) => ({ ...prev, [lineId]: '' }))
       setManualEditLineId(null)
       return
     }
-    const loose = looseQtyFromDisplayedTotal(displayed, line, boxes)
-    await setLineActual(lineId, loose)
+    const loose = looseQtyFromDisplayedTotal(displayed, line, boxes, cargoPlaces)
+    if (loose == null) {
+      const containerTotal = containerTotalForProduct(boxes, cargoPlaces, line.product_id)
+      setActualDraftErrorByLineId((prev) => ({
+        ...prev,
+        [lineId]: `Нельзя указать меньше ${containerTotal}: товар уже разложен по коробам и грузоместам.`,
+      }))
+      setManualEditLineId(lineId)
+      focusActualInput(lineId)
+      return
+    }
+    const saved = await setLineActual(lineId, loose)
+    if (!saved) {
+      setManualEditLineId(lineId)
+      focusActualInput(lineId)
+      return
+    }
     setActualDraftErrorByLineId((prev) => ({ ...prev, [lineId]: '' }))
     setManualEditLineId(null)
   }
@@ -1937,6 +2043,29 @@ export function FfInboundRequestView({
     () => [...(detail?.boxes ?? [])].sort((a, b) => a.box_number - b.box_number),
     [detail?.boxes],
   )
+  const palletCount = useMemo(
+    () => new Set(boxes.flatMap((box) => (box.pallet_id ? [box.pallet_id] : []))).size,
+    [boxes],
+  )
+  const selectedPalletBoxes = useMemo(
+    () => boxes.filter((box) => selectedPalletBoxIds.has(box.id)),
+    [boxes, selectedPalletBoxIds],
+  )
+  const selectedExistingPallet = useMemo(
+    () => inboundPallets.find((pallet) => pallet.id === combinePalletId) ?? null,
+    [combinePalletId, inboundPallets],
+  )
+
+  useEffect(() => {
+    const available = new Set(boxes.filter((box) => !box.pallet_id).map((box) => box.id))
+    setSelectedPalletBoxIds((current) => {
+      const next = new Set([...current].filter((boxId) => available.has(boxId)))
+      if (next.size === current.size && [...next].every((boxId) => current.has(boxId))) {
+        return current
+      }
+      return next
+    })
+  }, [boxes])
 
   const cargoPlaces = useMemo(
     () => [...(detail?.cargo_places ?? [])].sort((a, b) => a.place_number - b.place_number),
@@ -2729,6 +2858,7 @@ export function FfInboundRequestView({
                   </Typography>
                   <Chip size="small" label={`Короба: ${boxes.length}`} />
                   <Chip size="small" label={`Грузоместа: ${cargoPlaces.length}`} />
+                  <Chip size="small" label={`Палеты: ${palletCount}`} />
                 </Stack>
               </AccordionSummary>
               <AccordionDetails data-testid="ff-inbound-boxes-panel">
@@ -2783,6 +2913,23 @@ export function FfInboundRequestView({
                     >
                       Печать грузомест
                     </Button>
+                    {boxes.some((box) => !box.pallet_id) ? (
+                      <PrimaryAction
+                        disabledReason={
+                          !receivingActive
+                            ? 'Приёмка уже завершена'
+                            : busy || combinePalletBusy
+                            ? 'Дождитесь завершения текущей операции'
+                            : selectedPalletBoxIds.size === 0
+                              ? 'Отметьте короба, которые ставите на палету'
+                              : undefined
+                        }
+                        onClick={() => void openCombinePallet()}
+                        data-testid="ff-inbound-combine-pallet"
+                      >
+                        Собрать палету
+                      </PrimaryAction>
+                    ) : null}
                   </Stack>
 
                   <Stack spacing={1}>
@@ -2811,12 +2958,36 @@ export function FfInboundRequestView({
                             }}
                             data-testid={`ff-inbound-box-header-${box.id}`}
                           >
+                            {!box.pallet_id ? (
+                              <CheckboxInput
+                                label={`Выбрать короб № ${box.box_number}`}
+                                hideLabel
+                                checked={selectedPalletBoxIds.has(box.id)}
+                                onChange={(checked) => {
+                                  setSelectedPalletBoxIds((current) => {
+                                    const next = new Set(current)
+                                    if (checked) next.add(box.id)
+                                    else next.delete(box.id)
+                                    return next
+                                  })
+                                }}
+                                disabled={!receivingActive || busy || combinePalletBusy}
+                                testId={`ff-inbound-box-select-${box.id}`}
+                              />
+                            ) : null}
                             <Typography variant="body2" sx={{ fontWeight: 700 }}>
                               Короб № {box.box_number}{' '}
                               <Typography component="code" variant="body2">
                                 {box.internal_barcode}
                               </Typography>
                             </Typography>
+                            {box.pallet_code ? (
+                              <StatusChip
+                                label={`Палета ${box.pallet_code}`}
+                                tone="neutral"
+                                testId={`ff-inbound-box-pallet-${box.id}`}
+                              />
+                            ) : null}
                             <Box sx={{ flexGrow: 1 }} />
                             <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
                               <Button
@@ -2879,45 +3050,62 @@ export function FfInboundRequestView({
                     <Typography variant="body2" sx={{ fontWeight: 700 }}>
                       Грузоместа
                     </Typography>
-                    {cargoPlaces.map((place) => (
-                      <Paper
-                        key={place.id}
-                        variant="outlined"
-                        sx={{ px: 1.25, py: 1 }}
-                        data-testid="ff-inbound-cargo-place-row"
-                      >
-                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
-                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                            Грузоместо № {place.place_number}{' '}
-                            <Typography component="code" variant="body2">
-                              {place.internal_barcode}
+                    {cargoPlaces.map((place) => {
+                      const visibleLines = (place.lines ?? []).filter((line) => line.quantity > 0)
+                      return (
+                        <Paper
+                          key={place.id}
+                          variant="outlined"
+                          sx={{ px: 1.25, py: 1 }}
+                          data-testid="ff-inbound-cargo-place-row"
+                        >
+                          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                              Грузоместо № {place.place_number}{' '}
+                              <Typography component="code" variant="body2">
+                                {place.internal_barcode}
+                              </Typography>
                             </Typography>
-                          </Typography>
-                          <Box sx={{ flexGrow: 1 }} />
-                          {place.label_printed_at ? (
-                            <Chip size="small" color="success" label="Этикетка напечатана" />
+                            <Box sx={{ flexGrow: 1 }} />
+                            {place.label_printed_at ? (
+                              <Chip size="small" color="success" label="Этикетка напечатана" />
+                            ) : null}
+                            <Button
+                              size="small"
+                              variant="contained"
+                              disabled={busy || !receivingActive}
+                              onClick={() => openCargoAddDialog(place.id)}
+                              data-testid={`ff-inbound-cargo-place-fill-${place.id}`}
+                            >
+                              Наполнить
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              disabled={busy}
+                              onClick={() => requestPrintInboundCargoPlace(place)}
+                              data-testid={`ff-inbound-cargo-place-print-${place.id}`}
+                            >
+                              Печать
+                            </Button>
+                          </Stack>
+                          {visibleLines.length > 0 ? (
+                            <Stack spacing={0.75} sx={{ mt: 1 }} data-testid="ff-inbound-cargo-place-lines">
+                              {visibleLines.map((line) => (
+                                <InboundBoxContentLine
+                                  key={line.id}
+                                  meta={
+                                    displayMetaByProductId.get(line.product_id) ??
+                                    productDisplayMetaFromCatalog(line.product_id, line, catalogById)
+                                  }
+                                  quantity={line.quantity}
+                                />
+                              ))}
+                            </Stack>
                           ) : null}
-                          <Button
-                            size="small"
-                            variant="contained"
-                            disabled={busy || !receivingActive}
-                            onClick={() => openCargoAddDialog(place.id)}
-                            data-testid={`ff-inbound-cargo-place-fill-${place.id}`}
-                          >
-                            Наполнить
-                          </Button>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            disabled={busy}
-                            onClick={() => requestPrintInboundCargoPlace(place)}
-                            data-testid={`ff-inbound-cargo-place-print-${place.id}`}
-                          >
-                            Печать
-                          </Button>
-                        </Stack>
-                      </Paper>
-                    ))}
+                        </Paper>
+                      )
+                    })}
                   </Stack>
                 </Stack>
               </AccordionDetails>
@@ -3466,6 +3654,56 @@ export function FfInboundRequestView({
           }}
         />
       ) : null}
+
+      <AppDialog
+        open={combinePalletOpen}
+        onClose={() => {
+          if (!combinePalletBusy) setCombinePalletOpen(false)
+        }}
+        title="Собрать палету"
+        testId="ff-inbound-combine-pallet-dialog"
+        actions={
+          <>
+            <SecondaryAction
+              onClick={() => setCombinePalletOpen(false)}
+              disabledReason={combinePalletBusy ? 'Идёт сборка палеты' : undefined}
+            >
+              Отмена
+            </SecondaryAction>
+            <PrimaryAction
+              onClick={() => void combineSelectedBoxesIntoPallet()}
+              disabledReason={combinePalletBusy ? 'Идёт сборка палеты' : undefined}
+              data-testid="ff-inbound-combine-pallet-submit"
+            >
+              Собрать
+            </PrimaryAction>
+          </>
+        }
+      >
+        <Stack spacing={2} sx={{ pt: 0.5 }}>
+          <Typography variant="body2">
+            На палету встанут короба:{' '}
+            {selectedPalletBoxes.map((box) => `№ ${box.box_number}`).join(', ')}
+          </Typography>
+          <SelectInput
+            label="Палета"
+            value={combinePalletId}
+            onChange={setCombinePalletId}
+            emptyLabel="Новая палета"
+            options={inboundPallets.map((pallet) => ({
+              value: pallet.id,
+              label: pallet.code,
+            }))}
+            disabled={combinePalletBusy}
+            testId="ff-inbound-combine-pallet-select"
+          />
+          <Typography variant="body2" color="text.secondary">
+            {selectedExistingPallet
+              ? `${selectedExistingPallet.code} · ${selectedExistingPallet.storage_location_code ?? 'Не поставлена'}`
+              : 'Палета встанет в зону сортировки, пока её не поставят в ячейку'}
+          </Typography>
+        </Stack>
+      </AppDialog>
 
       <Dialog
         open={cargoDialogOpen}

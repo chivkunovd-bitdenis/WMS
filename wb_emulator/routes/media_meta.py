@@ -52,7 +52,7 @@ async def post_order_stickers(
     width: int = Query(default=58, ge=1),
     height: int = Query(default=40, ge=1),
 ) -> dict[str, list[dict[str, Any]]]:
-    """POST /api/v3/orders/stickers — batch Code128 PNG stickers."""
+    """POST /api/v3/orders/stickers — complete WB 58x40 order sticker PNGs."""
     seller_key = _seller_key(request)
     await maybe_delay(seller_key)
     if type.lower() != "png":

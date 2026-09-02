@@ -387,14 +387,28 @@ export function setActual(
   actual: number | null,
 ): InventoryCount {
   function mapNodes(nodes: InventoryNode[]): InventoryNode[] {
-    return nodes.map((node) => {
+    let changed = false
+    const next = nodes.map((node) => {
       if (node.kind === 'product') {
-        return node.id === productId ? { ...node, actual } : node
+        if (node.id !== productId || node.actual === actual) return node
+        changed = true
+        return { ...node, actual }
       }
-      return { ...node, children: mapNodes(node.children) }
+      const children = mapNodes(node.children)
+      if (children === node.children) return node
+      changed = true
+      return { ...node, children }
     })
+    return changed ? next : nodes
   }
-  return { ...count, cells: count.cells.map((c) => ({ ...c, children: mapNodes(c.children) })) }
+  let changed = false
+  const cells = count.cells.map((cell) => {
+    const children = mapNodes(cell.children)
+    if (children === cell.children) return cell
+    changed = true
+    return { ...cell, children }
+  })
+  return changed ? { ...count, cells } : count
 }
 
 export function collapseAllKeys(count: InventoryCount): Set<string> {
@@ -411,4 +425,35 @@ export function collapseAllKeys(count: InventoryCount): Set<string> {
     walkNodes(cell.children)
   }
   return keys
+}
+
+/**
+ * Накладывает пики, сделанные пока летел запрос, на ответ сервера.
+ *
+ * Кладовщик сканирует непрерывно, а запись находки — это два запроса подряд.
+ * Пока они летят, он успевает пикнуть ещё несколько штук: они попадают в
+ * состояние экрана, но не в снимок, который мы отправили. Подставить ответ
+ * сервера поверх состояния целиком — значит молча стереть эти пики.
+ *
+ * Поэтому сравниваем отправленный снимок с тем, что на экране сейчас, и всё,
+ * что за это время изменилось, переносим на серверную версию. Серверная версия
+ * при этом остаётся источником структуры: у новой строки находки есть
+ * идентификатор, которого на клиенте быть не могло.
+ */
+export function mergeInFlightActuals(
+  server: InventoryCount,
+  sent: InventoryCount,
+  current: InventoryCount,
+): InventoryCount {
+  const sentActuals = new Map(allProducts(sent).map((item) => [item.id, item.actual]))
+  const changed = new Map<string, number | null>()
+  for (const item of allProducts(current)) {
+    if (!sentActuals.has(item.id)) continue
+    if (sentActuals.get(item.id) !== item.actual) changed.set(item.id, item.actual)
+  }
+  let merged = server
+  for (const [productId, actual] of changed) {
+    merged = setActual(merged, productId, actual)
+  }
+  return merged
 }

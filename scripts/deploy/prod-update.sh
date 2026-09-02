@@ -14,7 +14,18 @@ DEPLOY_TRUNK_REF="${WMS_DEPLOY_TRUNK_REF:-${DEPLOY_REMOTE}/etalon}"
 DEPLOY_TARGET_REF="${DEPLOY_REMOTE}/${DEPLOY_BRANCH}"
 
 echo "==> git fetch"
-git fetch --prune "$DEPLOY_REMOTE"
+# Протокол v2 с боевого сервера ломается: GitHub отвечает 401, git просит логин
+# и падает с «expected flush after ref listing» — при том что репозиторий
+# публичный и curl тот же адрес отдаёт 200. Выкатка 02.09.2026 встала на этом
+# дважды подряд. На v1 тот же fetch проходит мгновенно, поэтому фиксируем версию
+# протокола явно, а не гадаем, вернётся ли v2 сам.
+# И HTTP/1.1 поверх этого. 02.09.2026 выкатка встала снова, уже с другой
+# половиной той же беды: `ls-remote` проходил, а `fetch` падал тем же «could
+# not read Username». Виноват HTTP/2 — по нему GitHub с этого сервера отвечает
+# на POST 401, и git идёт спрашивать логин, которого тут нет и не должно быть.
+# На HTTP/1.1 тот же fetch проходит сразу. Проверено перебором: v0, v1 и v2
+# протокола падают одинаково, а смена версии HTTP чинит все три.
+git -c protocol.version=1 -c http.version=HTTP/1.1 fetch --prune "$DEPLOY_REMOTE"
 
 if ! git rev-parse --verify --quiet "${DEPLOY_TRUNK_REF}^{commit}" >/dev/null; then
   echo "ERROR: deploy trunk ref '${DEPLOY_TRUNK_REF}' was not found." >&2

@@ -272,14 +272,37 @@ def _extend_meta_validation_items(
 
 
 def parse_meta_validation_fail(data: dict[str, Any]) -> list[MetaValidationFailItem]:
+    """Достаёт из отказа WB список заказов и причин.
+
+    ⛔ Разбирать надо И верхний уровень, И вложенный `data`.
+
+    Wildberries отвечает на отказ передачи так:
+
+        {"data": {"orders": [{"id": 5644318926, "metaDetails": [
+            {"key": "sgtin", "value": "…", "decision": "sgtinRetired"}]}]},
+         "code": "MetaValidationFail", "message": "Fix them to dispatch items"}
+
+    Раньше здесь читался только верхний уровень, где ключа `orders` нет, — и
+    список причин всегда выходил пустым. 02.09.2026 из-за этого склад шесть раз
+    подряд нажал «Повторить» и остановился: WB прямо назвал заказ и сказал, что
+    код Честного знака выведен из оборота, а оператор видел «повторите через
+    минуту». Разбор занял час и потребовал дёргать WB руками с боевого сервера.
+    """
     items: list[MetaValidationFailItem] = []
-    _extend_meta_validation_items(
-        items,
-        order_id=None,
-        details_raw=data.get("metaDetails"),
-    )
-    orders_raw = data.get("orders")
-    if isinstance(orders_raw, list):
+    scopes: list[dict[str, Any]] = [data]
+    nested = data.get("data")
+    if isinstance(nested, dict):
+        scopes.append(nested)
+
+    for scope in scopes:
+        _extend_meta_validation_items(
+            items,
+            order_id=None,
+            details_raw=scope.get("metaDetails"),
+        )
+        orders_raw = scope.get("orders")
+        if not isinstance(orders_raw, list):
+            continue
         for order in orders_raw:
             if not isinstance(order, dict):
                 continue

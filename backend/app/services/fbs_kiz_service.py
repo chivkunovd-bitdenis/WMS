@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -13,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.settings import settings
 from app.models.fbs_order import (
     CHECK_STATUS_NEW,
     FBS_ORDER_MARKING_FROZEN_STATUSES,
@@ -328,6 +330,107 @@ def is_probably_cis(value: str) -> bool:
     )
 
 
+# --- I3: GS-разделители, вырезанные целиком браузерным полем ввода ---------
+#
+# _restore_gs_substitutes (выше) лечит другой случай: когда сканер настроен
+# передавать разделитель ВИДИМЫМ символом-заменителем (F8/Alt+0029 в режимах
+# сканера превращаются в "~", "<GS>" и т.п.) — тогда в строке остаётся след,
+# по которому видно, где резать. Дефект I3 — хуже: HTML-поле ввода браузера
+# самих 0x1D байтов не пропускает вообще, без всякой замены, и код склеивается
+# без единого намёка на границу. Единственный способ понять, где резать —
+# знать структуру КИЗ и разобрать её с конца.
+#
+# Структура полного КИЗ Честного знака (см. tasks/fbs-marketplace-orders/
+# wb-docs/04-labeling/kiz-common-errors.md и verify-product-identifiers.md):
+#   01<GTIN, 14 цифр>21<серийный номер, переменная длина>
+#   91<проверочный код, ровно 4 символа>
+#   92<криптоподпись: 44 символа для одежды, 88 — для обуви>
+# Разделитель GS1 нужен только после переменных полей — перед 91 и перед 92,
+# перед 91 разделитель не факультативен, WB кладёт его туда даже при том, что
+# длина значения 91 сама по себе фиксирована (так делает реальный сканер,
+# поэтому его и восстанавливаем на этом же месте).
+#
+# Искать подстроки "91"/"92" по всей строке нельзя — они регулярно попадают в
+# серийный номер (пример есть в тестах: серийник "A91XB92YC7z" — с виду начало
+# блока 91, а на деле обычные символы серии). Поэтому разбор идёт не поиском,
+# а фиксированными смещениями ОТ КОНЦА СТРОКИ: пробуем оба известных варианта
+# длины подписи (44 и 88), и засчитываем только тот, для которого на нужном
+# месте от конца буквально стоят маркеры "91" и "92" — с учётом того, что
+# длины 44 и 88 отличаются на 44 символа, а серийный номер по стандарту GS1 не
+# длиннее 20 символов, оба варианта одновременно совпасть не могут: серийники,
+# которые они бы предполагали, отличались бы на те же 44 символа, а в окно
+# длиной 20 такая пара не поместится. Значит, если совпал ровно один вариант —
+# структура однозначна.
+_CIS_PREFIX_LENGTH = 18  # "01" + 14-значный GTIN + "21"
+_CIS_SERIAL_MAX_LENGTH = _GS1_VARIABLE_AI_MAX_LENGTHS["21"]
+_GS1_AI91_VALUE_LENGTH = 4
+_CIS_SIGNATURE_LENGTHS = (44, 88)  # одежда, обувь
+_GS_STRUCTURE_HINT = "gs_structure_restored"
+_GS_UNRESTORABLE_HINT = "gs_unrestorable"
+
+
+def _cis_prefix_ok(value: str) -> bool:
+    return (
+        len(value) >= _CIS_PREFIX_LENGTH
+        and value.startswith("01")
+        and value[2:16].isdigit()
+        and value[16:18] == "21"
+    )
+
+
+def _restore_missing_gs_by_structure(value: str) -> tuple[str, bool, bool]:
+    """Восстанавливает GS-разделители, вырезанные целиком, по структуре КИЗ.
+
+    Возвращает (значение, восстановлено, неразбираемо). "Неразбираемо" — это
+    не «ничего не нашли», а «похоже на длинный КИЗ без разделителей, но ни
+    длина одежды, ни длина обуви не сошлись» — именно этот случай задача
+    требует не пропускать молча дальше в WB.
+    """
+    if not _cis_prefix_ok(value):
+        return value, False, False
+
+    tail = value[_CIS_PREFIX_LENGTH:]
+    # Раньше выход был по первому же найденному разделителю. Но сканер теряет
+    # их по одному: код, у которого уцелел разделитель перед 91 и пропал перед
+    # 92, не чинился и не браковался — молча уходил в WB на верную ошибку
+    # sgtinNoGS. Поэтому структуру считаем по очищенному хвосту, а уцелевшие
+    # разделители расставляем заново на положенные места.
+    tail = tail.replace(_GS, "")
+    had_separators = _GS in value[_CIS_PREFIX_LENGTH:]
+
+    if len(tail) <= _CIS_SERIAL_MAX_LENGTH:
+        # Похоже на короткий КИЗ без криптохвоста — валидный формат самого
+        # WB (см. verify-product-identifiers.md, раздел «Короткий и длинный
+        # КИЗ»). Разделитель перед последним полем GS1 не ставит никто —
+        # он нужен только чтобы отделить одно переменное поле от следующего.
+        return value, False, False
+
+    candidates: list[tuple[str, str, str]] = []
+    for signature_length in _CIS_SIGNATURE_LENGTHS:
+        suffix_length = 2 + _GS1_AI91_VALUE_LENGTH + 2 + signature_length
+        if len(tail) <= suffix_length:
+            continue
+        serial = tail[: len(tail) - suffix_length]
+        block = tail[len(tail) - suffix_length :]
+        if not (1 <= len(serial) <= _CIS_SERIAL_MAX_LENGTH):
+            continue
+        if block[0:2] != "91" or block[6:8] != "92":
+            continue
+        candidates.append((serial, block[2:6], block[8:]))
+
+    if len(candidates) != 1:
+        # Ноль совпадений — длина хвоста не подошла ни под один известный
+        # формат подписи. Два совпадения математически не должны случаться
+        # (см. комментарий выше), но если всё же случились — тоже не гадаем.
+        # Код с уцелевшими разделителями оставляем как есть: структуру мы не
+        # опознали, но и оснований звать её потерянной нет.
+        return value, False, not had_separators
+
+    serial, verification, signature = candidates[0]
+    restored = f"{value[:_CIS_PREFIX_LENGTH]}{serial}{_GS}91{verification}{_GS}92{signature}"
+    return restored, restored != value, False
+
+
 def _has_keyboard_layout_noise(value: str) -> bool:
     return any(char in _KEYBOARD_LAYOUT_MARKERS for char in value)
 
@@ -340,7 +443,11 @@ def _strip_aim_prefix(value: str) -> tuple[str, bool]:
 
 
 def normalize_scanned_cis(raw: str) -> tuple[str, list[str]]:
-    value = raw.rstrip(" \r\n")
+    # Пробельный хвост, который дописывает сканер: кроме пробела и перевода
+    # строки бывает Tab, и лишний символ ломал разбор структуры кода. Список
+    # символов задан явно: голый rstrip() в Python срезает и 0x1D — а это сам
+    # разделитель GS1, и код, заканчивающийся на него, потерял бы разделитель.
+    value = raw.rstrip(" \t\r\n\v\f")
     hints: list[str] = []
 
     value, aim_prefix_removed = _strip_aim_prefix(value)
@@ -367,9 +474,41 @@ def normalize_scanned_cis(raw: str) -> tuple[str, list[str]]:
         if gs_changed_after_layout and "gs_substitute" not in hints:
             hints.append("gs_substitute")
 
-    hint_order = {"aim_prefix": 0, "gs_substitute": 1, "keyboard_layout": 2}
+    # Последний шаг: разделитель вырезан целиком, без замены (I3). Идёт после
+    # всех остальных репаров, на максимально уже вычищенном значении — если
+    # раскладка или AIM-префикс мешали, они уже сняты выше.
+    value, gs_structure_restored, gs_unrestorable = _restore_missing_gs_by_structure(value)
+    if gs_structure_restored:
+        hints.append(_GS_STRUCTURE_HINT)
+    elif gs_unrestorable:
+        hints.append(_GS_UNRESTORABLE_HINT)
+
+    hint_order = {
+        "aim_prefix": 0,
+        "gs_substitute": 1,
+        "keyboard_layout": 2,
+        _GS_STRUCTURE_HINT: 3,
+        _GS_UNRESTORABLE_HINT: 4,
+    }
     hints.sort(key=hint_order.__getitem__)
     return value, hints
+
+
+def _universal_test_kiz_for_order(order: FbsOrder, value: str) -> str:
+    """Resolve one explicitly configured demo scan to a unique CIS per order.
+
+    The alias is disabled by default.  A configured staging stand can therefore
+    reuse one scanner value throughout a video without weakening production KIZ
+    uniqueness or changing how ordinary codes are validated.
+    """
+    configured = settings.fbs_universal_test_kiz
+    if not configured:
+        return value
+    normalized_configured, _ = normalize_scanned_cis(configured)
+    if value != normalized_configured:
+        return value
+    serial = "U" + hashlib.sha256(f"{value}:{order.id}".encode()).hexdigest()[:19].upper()
+    return f"{value[:18]}{serial}"
 
 
 def _debug_visible(value: str) -> str:
@@ -408,6 +547,25 @@ def _find_order_by_sticker(orders: list[FbsOrder], sticker: str) -> FbsOrder | N
         if _normalized_optional(order.wb_barcode) == sticker:
             return order
     return None
+
+
+def _find_order_by_universal_test_sticker(
+    orders: list[FbsOrder], candidates: list[str]
+) -> FbsOrder | None:
+    configured = settings.fbs_universal_test_sticker
+    if not configured:
+        return None
+    configured_candidates = sticker_scan_candidates(configured)
+    if not set(candidates).intersection(configured_candidates):
+        return None
+    writable = [
+        order
+        for order in orders
+        if order.status in FBS_ORDER_MARKING_WRITE_STATUSES
+        and order.status not in FBS_ORDER_MARKING_FROZEN_STATUSES
+        and _current_sgtin_marking(order) is None
+    ]
+    return min(writable, key=lambda order: (order.wb_order_id, order.id), default=None)
 
 
 def _current_sgtin_marking(order: FbsOrder) -> FbsOrderMarking | None:
@@ -477,14 +635,16 @@ async def lookup_order_by_sticker(
         .order_by(FbsOrder.created_at, FbsOrder.id)
     )
     orders = list((await session.execute(stmt)).scalars().all())
-    order = next(
-        (
-            found
-            for candidate in candidates
-            if (found := _find_order_by_sticker(orders, candidate)) is not None
-        ),
-        None,
-    )
+    order = _find_order_by_universal_test_sticker(orders, candidates)
+    if order is None:
+        order = next(
+            (
+                found
+                for candidate in candidates
+                if (found := _find_order_by_sticker(orders, candidate)) is not None
+            ),
+            None,
+        )
     if order is None:
         raise FbsKizError("sticker_not_found")
 
@@ -641,6 +801,20 @@ async def _validate_kiz_pair(
     check_marking_code_occupancy: bool = True,
 ) -> _ValidatedKizPair:
     value, hints = normalize_scanned_cis(raw_value)
+    if _GS_UNRESTORABLE_HINT in hints:
+        # I3: похоже на длинный КИЗ без разделителей (склеенный сканером,
+        # см. _restore_missing_gs_by_structure), но ни длина одежды, ни длина
+        # обуви не сошлись — угадывать нельзя. Код не уходит дальше, оператору
+        # называем причину словами, а не молча шлём WB на верную ошибку
+        # sgtinNoGS.
+        raise FbsKizError(
+            "gs_separator_lost",
+            context={"debug": scan_debug(raw_value)},
+            message=(
+                "Разделители кода потеряны при вводе, а структуру не удалось "
+                "восстановить — отсканируйте Честный знак заново целиком"
+            ),
+        )
     if not is_probably_cis(value):
         raise FbsKizError(
             "not_a_kiz",
@@ -654,6 +828,9 @@ async def _validate_kiz_pair(
         order_id,
         for_update=for_update,
     )
+    resolved_value = _universal_test_kiz_for_order(order, value)
+    if resolved_value != value:
+        value = resolved_value
     await _ensure_kiz_not_bound_to_other_order(session, tenant_id, order.id, value)
     if check_marking_code_occupancy:
         await _ensure_kiz_not_occupied_in_pool(session, tenant_id, order, value)

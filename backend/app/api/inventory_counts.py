@@ -67,6 +67,25 @@ class InventoryCountActualBatchIn(BaseModel):
     lines: list[InventoryCountActualIn]
 
 
+class InventoryCountFoundIn(BaseModel):
+    """Находка: товар лежит там, где по учёту его нет."""
+
+    # Экран присылает все прочтения кода: как пришло со сканера и как это
+    # выглядело бы в латинской раскладке. Иначе товар, который экран только что
+    # нашёл переводом раскладки, сервер не находил, и оператор видел зелёное
+    # «записываем» рядом с красным «товар не найден».
+    barcodes: list[str] = Field(min_length=1, max_length=4)
+    # Экран говорит, что ОТКРЫТО у сканера, а не куда писать: тара, ячейка или
+    # ничего. Адрес из этого выводит сервер — палета может стоять без ячейки, и
+    # знать об этом карточке тары, а не экрану.
+    cell_id: uuid.UUID | None = None
+    container_kind: Literal["pallet", "box", "cargo_place"] | None = None
+    container_id: uuid.UUID | None = None
+    # Идентификатор скана: экран генерирует его один раз на пик. Повтор того же
+    # скана (оборвался вайфай, оператор пикнул ещё раз) ничего не прибавляет.
+    scan_id: str | None = Field(default=None, max_length=64)
+
+
 class CountFillOut(BaseModel):
     mode: Literal["object", "all", "filters"]
     seller_id: str | None = None
@@ -99,6 +118,24 @@ class CountContainerNodeOut(BaseModel):
     code: str
     barcode: str | None = None
     children: list[CountProductNodeOut | CountContainerNodeOut]
+
+
+class CountScannableCellOut(BaseModel):
+    """Ячейка склада, которую сканер обязан узнать, даже если она пуста."""
+
+    id: str
+    label: str
+    barcode: str | None
+
+
+class CountScannableContainerOut(BaseModel):
+    """Тара склада, которую сканер обязан узнать, даже если по учёту она пуста."""
+
+    kind: Literal["pallet", "box", "cargo_place"]
+    id: str
+    code: str
+    barcode: str | None
+    cell_id: str | None
 
 
 class CountCellOut(BaseModel):
@@ -169,6 +206,14 @@ class InventoryCountDetailOut(BaseModel):
     address_storage: bool
     lines: list[InventoryCountLineOut]
     cells: list[CountCellOut]
+    # Ячейки склада, которые сканер обязан узнавать, включая пустые по учёту.
+    # В дерево они не попадают, иначе документ распухнет пустыми строками.
+    scannable_cells: list[CountScannableCellOut] = []
+    # Тара, выброшенная из дерева как пустая. Сканер обязан её открывать: пустой
+    # по учёту короб — самый частый адресат находки («тут лежит то, чего по
+    # бумагам здесь нет»). Пустые строки в дереве оператору не нужны, а пикнуть
+    # такую тару он должен.
+    scannable_containers: list[CountScannableContainerOut] = []
 
 
 class ChangedBalanceOut(BaseModel):
@@ -215,6 +260,14 @@ async def _categories(
 ) -> dict[uuid.UUID, str | None]:
     unique = {line.product.id: line.product for line in count.lines}
     return await service.product_categories(session, list(unique.values()))
+
+
+async def _photos(
+    session: AsyncSession,
+    count: InventoryCount,
+) -> dict[uuid.UUID, str | None]:
+    unique = {line.product.id: line.product for line in count.lines}
+    return await service.product_photos(session, list(unique.values()))
 
 
 async def _summary_out(
@@ -264,6 +317,7 @@ def _product_node(
     line: InventoryCountLine,
     *,
     category: str | None,
+    photo_url: str | None,
     current_quantity: int,
 ) -> CountProductNodeOut:
     product = line.product
@@ -280,6 +334,7 @@ def _product_node(
         wb_vendor_code=product.wb_vendor_code,
         wb_barcode=product.wb_barcode,
         wb_size=product.wb_size,
+        photo_url=photo_url,
         expected=int(line.expected_quantity),
         actual=int(line.actual_quantity) if line.actual_quantity is not None else None,
         expected_now=expected_now,
@@ -289,6 +344,8 @@ def _product_node(
 def _container_tree(
     rows: list[dict[str, Any]],
     containers: dict[tuple[str, str], CountContainerNodeOut],
+    cell_id: str | None,
+    cell_of: dict[str, str | None],
 ) -> list[CountProductNodeOut | CountContainerNodeOut]:
     result: list[CountProductNodeOut | CountContainerNodeOut] = []
     for row in rows:
@@ -300,11 +357,48 @@ def _container_tree(
             id=str(row["id"]),
             code=str(row["code"]),
             barcode=str(row["barcode"]) if row.get("barcode") is not None else None,
-            children=_container_tree(row.get("children", []), containers),
+            children=_container_tree(row.get("children", []), containers, cell_id, cell_of),
         )
         containers[(kind, node.id)] = node
+        cell_of[node.id] = cell_id
         result.append(node)
     return result
+
+
+def _prune_empty_containers(
+    nodes: list[CountProductNodeOut | CountContainerNodeOut],
+    cell_of: dict[str, str | None],
+    dropped: list[CountScannableContainerOut],
+) -> list[CountProductNodeOut | CountContainerNodeOut]:
+    """Убрать из дерева тару, в которой по документу ничего не лежит.
+
+    Карта склада отдаёт всю тару склада, а документ может быть по одному
+    селлеру или по одной категории. В пересчёте «Империи ФФ» из 420 коробов
+    товар лежал в 113, а остальные 307 висели строками «0 из 0»: документ
+    вырастал до сорока тысяч пикселей, и найти в нём свой короб глазами было
+    нельзя. Выброшенная тара не пропадает — она уезжает в `scannable_containers`
+    и по-прежнему открывается сканом, чтобы записать в неё находку.
+    """
+
+    kept: list[CountProductNodeOut | CountContainerNodeOut] = []
+    for node in nodes:
+        if isinstance(node, CountProductNodeOut):
+            kept.append(node)
+            continue
+        node.children = _prune_empty_containers(node.children, cell_of, dropped)
+        if node.children:
+            kept.append(node)
+            continue
+        dropped.append(
+            CountScannableContainerOut(
+                kind=node.kind,
+                id=node.id,
+                code=node.code,
+                barcode=node.barcode,
+                cell_id=cell_of.get(node.id),
+            )
+        )
+    return kept
 
 
 async def _detail_out(
@@ -316,12 +410,18 @@ async def _detail_out(
     )
     current = await service.current_quantities(session, count)
     categories = await _categories(session, count)
+    photos = await _photos(session, count)
     line_rows: list[InventoryCountLineOut] = []
+    # Пустой список — нормальное значение: без адресного хранения ячеек нет.
+    scannable_cells: list[CountScannableCellOut] = []
     nodes_by_cell: dict[
         tuple[str, str], list[CountProductNodeOut | CountContainerNodeOut]
     ] = defaultdict(list)
     no_address_nodes: list[CountProductNodeOut | CountContainerNodeOut] = []
     containers: dict[tuple[str, str], CountContainerNodeOut] = {}
+    # В какой ячейке стоит тара: нужно, чтобы выброшенная из дерева пустая тара
+    # знала свой адрес и находка легла туда же, куда легла бы по дереву.
+    cell_of_container: dict[str, str | None] = {}
     cells_by_id: dict[str, CountCellOut] = {}
     unassigned: CountCellOut | None = None
     if count.warehouse_id is not None:
@@ -334,7 +434,9 @@ async def _detail_out(
             id="unassigned",
             label=UNASSIGNED_LABEL if address_storage else "",
             barcode=None,
-            children=_container_tree(warehouse_map["unassigned"], containers),
+            children=_container_tree(
+                warehouse_map["unassigned"], containers, None, cell_of_container
+            ),
         )
         for map_cell in warehouse_map["cells"]:
             cell = CountCellOut(
@@ -345,7 +447,12 @@ async def _detail_out(
                     if map_cell.get("barcode") is not None
                     else None
                 ),
-                children=_container_tree(map_cell["children"], containers),
+                children=_container_tree(
+                    map_cell["children"],
+                    containers,
+                    str(map_cell["id"]),
+                    cell_of_container,
+                ),
             )
             cells_by_id[cell.id] = cell
     for line in count.lines:
@@ -355,6 +462,7 @@ async def _detail_out(
         node = _product_node(
             line,
             category=category,
+            photo_url=photos.get(product.id),
             current_quantity=current[line.id],
         )
         container = (
@@ -413,6 +521,18 @@ async def _detail_out(
                 balance_changed=current[line.id] != line.expected_quantity,
             )
         )
+    # Тара без строк документа уезжает из дерева в список сканируемой: пикнуть
+    # её по-прежнему можно, а пустой строкой она документ не раздувает.
+    scannable_containers: list[CountScannableContainerOut] = []
+    if unassigned is not None:
+        unassigned.children = _prune_empty_containers(
+            unassigned.children, cell_of_container, scannable_containers
+        )
+    for cell in cells_by_id.values():
+        cell.children = _prune_empty_containers(
+            cell.children, cell_of_container, scannable_containers
+        )
+
     if address_storage:
         fallback_cells = [
             CountCellOut(id=cell_id, label=label, barcode=None, children=children)
@@ -428,6 +548,17 @@ async def _detail_out(
                 if cell.children
             ],
             *fallback_cells,
+        ]
+        # ⛔ Пустые по учёту ячейки в дерево не тащим — иначе документ по складу
+        # распухнет сотнями пустых строк. Но сканер обязан их узнавать: «в
+        # ячейке лежит то, чего по учёту тут нет» — это первый и главный случай,
+        # ради которого пересчёт и делают. Раньше штрихкод такой ячейки сканер
+        # не знал, уходил искать товар, не находил и предлагал записать находку
+        # со штрихкодом ЯЧЕЙКИ вместо товара.
+        scannable_cells = [
+            CountScannableCellOut(id=cell.id, label=cell.label, barcode=cell.barcode)
+            for cell in cells_by_id.values()
+            if cell.barcode
         ]
     else:
         # Frontend flattens children when addressStorage=false and never renders
@@ -459,16 +590,23 @@ async def _detail_out(
         address_storage=address_storage,
         lines=line_rows,
         cells=cells,
+        scannable_cells=scannable_cells,
+        scannable_containers=scannable_containers,
     )
 
 
 def _http_error(exc: service.InventoryCountError) -> HTTPException:
     if exc.code in {
         "not_found",
+        "count_not_found",
+        "container_not_found",
+        "warehouse_required_without_address_storage",
         "line_not_found",
         "seller_not_found",
         "warehouse_not_found",
         "object_not_found",
+        "product_not_found",
+        "storage_location_not_found",
     }:
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
     if exc.code in {
@@ -478,6 +616,9 @@ def _http_error(exc: service.InventoryCountError) -> HTTPException:
         "empty_count",
         "container_has_no_stock",
         "balance_changed_during_post",
+        "count_not_editable",
+        "barcode_is_ambiguous",
+        "container_reference_invalid",
     }:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.code)
@@ -578,6 +719,49 @@ async def save_inventory_count_lines(
     except service.InventoryCountError as exc:
         raise _http_error(exc) from None
     return await _detail_out(session, count)
+
+
+class InventoryCountFoundOut(BaseModel):
+    """Документ после записи находки плюс честный текст для оператора."""
+
+    count: InventoryCountDetailOut
+    # Сколько числится по учёту в этом месте. Ноль — настоящая находка; больше
+    # нуля — строка, выпавшая из отбора документа, и место надо считать целиком.
+    expected_quantity: int
+    notice: str
+
+
+@router.post("/{count_id}/found", response_model=InventoryCountFoundOut)
+async def record_inventory_count_found(
+    count_id: uuid.UUID,
+    body: InventoryCountFoundIn,
+    user: Annotated[User, Depends(require_inventory_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryCountFoundOut:
+    """Добавляет в пересчёт строку товара, которого в этом месте не числится.
+
+    Ровно тот случай, ради которого пересчёт и делают: оператор сканирует в
+    короб то, чего по учёту там нет. Строка появляется со счётом 1, повторный
+    скан увеличивает счёт.
+    """
+    try:
+        found = await service.record_found(
+            session,
+            user.tenant_id,
+            count_id,
+            barcodes=body.barcodes,
+            cell_id=body.cell_id,
+            container_kind=body.container_kind,
+            container_id=body.container_id,
+            scan_id=body.scan_id,
+        )
+    except service.InventoryCountError as exc:
+        raise _http_error(exc) from None
+    return InventoryCountFoundOut(
+        count=await _detail_out(session, found.count),
+        expected_quantity=found.expected_quantity,
+        notice=found.notice,
+    )
 
 
 @router.post("/{count_id}/post", response_model=InventoryCountPostOut)

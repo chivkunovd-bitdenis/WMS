@@ -1,4 +1,14 @@
 const API_DETAIL_MESSAGES_RU: Record<string, string> = {
+  // Инвентаризация: находки и пересчёт.
+  count_not_found: 'Документ пересчёта не найден.',
+  count_not_editable: 'Документ уже проведён или отменён — правки закрыты.',
+  storage_location_not_found: 'Ячейка не найдена на складе.',
+  container_not_found: 'Тара не найдена на складе документа.',
+  container_reference_invalid: 'Тара указана неполностью — нужны и вид, и номер.',
+  barcode_is_ambiguous:
+    'Один и тот же код у нескольких товаров. Уточните селлера в документе или используйте артикул.',
+  barcode_required: 'Не передан код для поиска товара.',
+
   lines_missing_storage:
     'Назначьте ячейку на каждой строке с количеством перед отправкой заявки.',
   insufficient_available: 'Недостаточно доступного остатка в выбранной ячейке.',
@@ -73,6 +83,17 @@ const API_DETAIL_MESSAGES_RU: Record<string, string> = {
   box_already_attached: 'Этот короб уже привязан к другой отгрузке.',
   warehouse_mismatch: 'Короб создан на другом складе.',
   box_not_empty: 'Сначала уберите товар из короба.',
+  pallet_not_found: 'Палета не найдена. Обновите документ и повторите.',
+  pallet_disbanded: 'Палета расформирована — соберите новую.',
+  containers_required: 'Отметьте хотя бы один короб.',
+  cargo_place_not_found: 'Грузоместо не найдено на этом складе. Обновите документ.',
+  container_wrong_warehouse:
+    'Короб лежит на другом складе — на эту палету его не поставить.',
+  warehouse_not_found: 'Склад приёмки не найден.',
+  inbound_request_not_found: 'Документ приёмки не найден.',
+  inbound_request_required: 'Не указан документ приёмки.',
+  inbound_request_not_receiving: 'Палету можно собрать только во время приёмки.',
+  pallet_identifier_conflict: 'Не удалось выдать номер палеты, повторите.',
 }
 
 export async function readApiErrorMessage(res: Response): Promise<string> {

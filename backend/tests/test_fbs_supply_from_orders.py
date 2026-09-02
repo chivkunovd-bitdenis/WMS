@@ -21,7 +21,7 @@ from app.models.fbs_order import (
     FbsOrder,
 )
 from app.models.fbs_order_pick import FbsOrderPick
-from app.models.fbs_supply import FbsSupply
+from app.models.fbs_supply import FBS_SUPPLY_STATUS_PACKED, FbsSupply
 from app.models.fbs_trbx import FbsTrbx
 from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_CONFIRMED,
@@ -1313,6 +1313,23 @@ async def test_existing_supply_add_orders_partial_readback_binds_only_confirmed(
     )
     assert create.status_code == 201, create.text
     supply_id = create.json()["supply"]["id"]
+
+    # A completed packaging task used to freeze WB composition.  Packaging is
+    # only a recorded fact, so the legacy aggregate `packed` status must keep
+    # the supply available both in the list and in the mutation endpoint.
+    async with SessionLocal() as session:
+        supply_row = await session.get(FbsSupply, uuid.UUID(supply_id))
+        assert supply_row is not None
+        supply_row.status = FBS_SUPPLY_STATUS_PACKED
+        await session.commit()
+
+    worklist = await async_client.get(
+        "/operations/fbs-supplies/worklist?status_group=active",
+        headers=headers,
+    )
+    assert worklist.status_code == 200, worklist.text
+    target = next(row for row in worklist.json()["items"] if row["id"] == supply_id)
+    assert target["can_add_orders"] is True
 
     async def fake_batch_add(
         client: object,

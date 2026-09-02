@@ -28,6 +28,7 @@ from app.models.fbs_order import (
 from app.models.fbs_supply import FBS_SUPPLY_STATUS_IN_DELIVERY, FbsSupply
 from app.models.marking_code import STATUS_AVAILABLE, STATUS_PRINTED, MarkingCode
 from app.models.product import Product
+from app.services.sorting_location_service import SORTING_LOCATION_CODE
 from tests.test_fbs_picking import (
     _create_product,
     _create_seller_and_warehouse,
@@ -239,6 +240,24 @@ async def test_workspace_exposes_packaging_instructions_absent(async_client: Asy
         product_out = order["product"]
         assert product_out["packaging_instructions"] is None
         assert product_out["has_packaging_instructions"] is False
+
+
+@pytest.mark.asyncio
+async def test_wb_pack_checkbox_never_removes_pick_fallback_location(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, _order_ids, _product_id, _tenant_id = await _packed_supply(async_client)
+
+    workspace = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/workspace",
+        headers=headers,
+    )
+    assert workspace.status_code == 200, workspace.text
+    for order in workspace.json()["orders"]:
+        assert order["pack"]["status"] == PACK_STATUS_PACKED
+        locations = order["inventory"]["locations"]
+        assert len(locations) == 1
+        assert locations[0]["code"] == SORTING_LOCATION_CODE
 
 
 @pytest.mark.asyncio

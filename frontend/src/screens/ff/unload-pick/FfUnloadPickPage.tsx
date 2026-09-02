@@ -250,6 +250,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
         id: item.productId,
         name: item.name,
         sku: item.sku,
+        sellerArticle: catalog?.wb_vendor_code ?? '',
         barcode: catalog?.wb_primary_barcode ?? catalog?.wb_barcodes[0] ?? '',
         photo: catalog?.wb_primary_image_url ?? '',
         size: catalog?.wb_size ?? null,
@@ -569,6 +570,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
         key={`${requestId}-${version}`}
         onNote={() => undefined}
         hideHeader={hideHeader}
+        hideFooterActions={source === 'fbs'}
         document={screenData.document}
         seller={screenData.seller}
         products={screenData.products}

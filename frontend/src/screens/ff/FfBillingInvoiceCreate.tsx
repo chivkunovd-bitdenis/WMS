@@ -18,6 +18,7 @@ import {
   TextInput,
 } from '../../ui-kit'
 import { buildInvoicePrintHtml, type OpenedInvoice } from './FfBillingInvoicesPanel'
+import { randomId } from '../../utils/randomId'
 
 type Seller = { id: string; name: string }
 type ProfileSnapshot = Record<string, string | null | undefined>
@@ -183,7 +184,7 @@ export function FfBillingInvoiceCreate({
       setIssued(null)
       // Ключ идемпотентности живёт от предпросмотра до сохранения: повторное
       // нажатие «Сохранить» не должно порождать второй счёт.
-      setIdempotencyKey(crypto.randomUUID())
+      setIdempotencyKey(randomId())
       setManualOpen(false)
     } catch (reason) {
       setError((reason as Error).message)

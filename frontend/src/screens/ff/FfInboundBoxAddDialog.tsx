@@ -295,7 +295,7 @@ export function FfInboundBoxAddDialog({
         setBusy(false)
       }
     },
-    [authHeaders, boxId, onUpdated, qtyInBoxByProductId, readOnly, requestId],
+    [authHeaders, boxId, containerKind, onUpdated, qtyInBoxByProductId, readOnly, requestId],
   )
 
   // Стабильные обработчики — иначе memo у строки не срабатывает.

@@ -10,6 +10,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.settings import settings
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.services.wildberries_client import (
     WildberriesClientError,
@@ -63,21 +64,34 @@ def _wb_error_code(exc: WildberriesClientError) -> str:
     return f"wb_{exc.code}{suffix}"
 
 
-async def _require_marketplace_token(
+async def _marketplace_tokens_to_try(
     session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID
-) -> str:
+) -> list[str]:
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
         raise FbsSellerWarehouseError("seller_not_found")
-    token = await get_decrypted_marketplace_token(session, tenant_id, seller_id)
-    if not token:
-        pair = await get_decrypted_tokens_for_seller(session, tenant_id, seller_id)
-        if pair is None:
-            raise FbsSellerWarehouseError("seller_not_found")
-        _content_token, supplies_token = pair
-        token = supplies_token
-    if not token:
+    marketplace_token = await get_decrypted_marketplace_token(
+        session, tenant_id, seller_id
+    )
+    pair = await get_decrypted_tokens_for_seller(session, tenant_id, seller_id)
+    if pair is None:
+        raise FbsSellerWarehouseError("seller_not_found")
+    content_token, supplies_token = pair
+
+    # Старые селлеры могли сохранить единый ключ WB только в content-поле.
+    # Более того, отдельное marketplace-поле могло остаться со старым ключом,
+    # хотя актуальный единый ключ уже лежит в content. Пробуем все сохранённые
+    # варианты, не повторяя одинаковые значения; сами ключи не логируем.
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for raw in (marketplace_token, supplies_token, content_token):
+        token = raw.strip() if raw else ""
+        if not token or token in seen:
+            continue
+        seen.add(token)
+        tokens.append(token)
+    if not tokens:
         raise FbsSellerWarehouseError("missing_marketplace_token")
-    return token
+    return tokens
 
 
 async def list_seller_warehouses(
@@ -86,19 +100,30 @@ async def list_seller_warehouses(
     seller_id: uuid.UUID,
     http_client: httpx.AsyncClient,
 ) -> list[dict[str, Any]]:
-    token = await _require_marketplace_token(session, tenant_id, seller_id)
-    try:
-        rows = await fetch_marketplace_seller_warehouses(http_client, api_token=token)
-    except WildberriesClientError as exc:
-        log_wb_client_error(
-            logger,
-            "fbs seller warehouses fetch failed",
-            exc,
-            tenant_id=tenant_id,
-            seller_id=seller_id,
-            endpoint=exc.endpoint or "GET /api/v3/warehouses",
-        )
-        raise FbsSellerWarehouseError(_wb_error_code(exc)) from exc
+    tokens = await _marketplace_tokens_to_try(session, tenant_id, seller_id)
+    last_exc: WildberriesClientError | None = None
+    rows: list[dict[str, Any]] = []
+    for attempt, token in enumerate(tokens, start=1):
+        try:
+            rows = await fetch_marketplace_seller_warehouses(
+                http_client,
+                api_token=token,
+                marketplace_api_base=settings.wildberries_marketplace_warehouse_api_base,
+            )
+            break
+        except WildberriesClientError as exc:
+            last_exc = exc
+            log_wb_client_error(
+                logger,
+                f"fbs seller warehouses fetch failed attempt={attempt}/{len(tokens)}",
+                exc,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                endpoint=exc.endpoint or "GET /api/v3/warehouses",
+            )
+    else:
+        assert last_exc is not None
+        raise FbsSellerWarehouseError(_wb_error_code(last_exc)) from last_exc
     wb_rows = [_pick_fields(row, _WAREHOUSE_KEYS) for row in rows if isinstance(row, dict)]
     wb_ids = {
         int(row["id"])
@@ -144,17 +169,28 @@ async def list_seller_offices(
     seller_id: uuid.UUID,
     http_client: httpx.AsyncClient,
 ) -> list[dict[str, Any]]:
-    token = await _require_marketplace_token(session, tenant_id, seller_id)
-    try:
-        rows = await fetch_marketplace_seller_offices(http_client, api_token=token)
-    except WildberriesClientError as exc:
-        log_wb_client_error(
-            logger,
-            "fbs seller offices fetch failed",
-            exc,
-            tenant_id=tenant_id,
-            seller_id=seller_id,
-            endpoint=exc.endpoint or "GET /api/v3/offices",
-        )
-        raise FbsSellerWarehouseError(_wb_error_code(exc)) from exc
+    tokens = await _marketplace_tokens_to_try(session, tenant_id, seller_id)
+    last_exc: WildberriesClientError | None = None
+    rows: list[dict[str, Any]] = []
+    for attempt, token in enumerate(tokens, start=1):
+        try:
+            rows = await fetch_marketplace_seller_offices(
+                http_client,
+                api_token=token,
+                marketplace_api_base=settings.wildberries_marketplace_warehouse_api_base,
+            )
+            break
+        except WildberriesClientError as exc:
+            last_exc = exc
+            log_wb_client_error(
+                logger,
+                f"fbs seller offices fetch failed attempt={attempt}/{len(tokens)}",
+                exc,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                endpoint=exc.endpoint or "GET /api/v3/offices",
+            )
+    else:
+        assert last_exc is not None
+        raise FbsSellerWarehouseError(_wb_error_code(last_exc)) from last_exc
     return [_pick_fields(row, _OFFICE_KEYS) for row in rows if isinstance(row, dict)]

@@ -4,6 +4,7 @@ import GridViewOutlined from '@mui/icons-material/GridViewOutlined'
 import Inventory2Outlined from '@mui/icons-material/Inventory2Outlined'
 import LayersOutlined from '@mui/icons-material/LayersOutlined'
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
+import ListAltOutlined from '@mui/icons-material/ListAltOutlined'
 import WidgetsOutlined from '@mui/icons-material/WidgetsOutlined'
 import { useState, type ReactNode } from 'react'
 import { DataTable, IconAction, NumberInput, QtyCell, StatusChip, TextCell } from '../../../ui-kit'
@@ -116,6 +117,13 @@ type Props = {
   loading: boolean
   readOnly: boolean
   highlightedKey?: string | null
+  /**
+   * Печать описи содержимого тары — листа, который клеят на короб.
+   *
+   * Экран отдаёт его сам, а не дерево: содержимое собирается из документа
+   * целиком, а дерево знает только про плоскую строку.
+   */
+  onPrintContents?: (row: InvRow) => void
   empty?: { title: string; hint?: string; action?: ReactNode }
   onToggle: (row: InvRow) => void
   onActual: (row: InvRow, value: number | null) => void
@@ -129,6 +137,7 @@ export function InventoryTree({
   empty,
   onToggle,
   onActual,
+  onPrintContents,
 }: Props) {
   const [printRow, setPrintRow] = useState<InvRow | null>(null)
   const columns: Column<InvRow>[] = [
@@ -172,6 +181,18 @@ export function InventoryTree({
               testId={`inv-print-${row.key}`}
             >
               <PrintOutlined fontSize="small" />
+            </IconAction>
+          ) : null}
+          {/* Опись содержимого — отдельной кнопкой от печати штрихкода: это два
+              разных листа, и путать их на складе нельзя. ШК клеят один раз при
+              заведении тары, опись — после каждого пересчёта. */}
+          {row.kind !== 'product' && row.kind !== 'cell' && onPrintContents ? (
+            <IconAction
+              title={`Печать описи содержимого: ${row.title}`}
+              onClick={() => onPrintContents(row)}
+              testId={`inv-contents-${row.key}`}
+            >
+              <ListAltOutlined fontSize="small" />
             </IconAction>
           ) : null}
           <Typography

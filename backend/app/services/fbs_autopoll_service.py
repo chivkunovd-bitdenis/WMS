@@ -13,7 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import SessionLocal
 from app.models.fbs_order import FbsOrder
 from app.models.fbs_stock_sync_item import FbsStockSyncItem
-from app.models.fbs_supply import FBS_SUPPLY_STATUS_ASSEMBLING, FbsSupply
+from app.models.fbs_supply import (
+    FBS_SUPPLY_STATUS_ASSEMBLING,
+    FBS_SUPPLY_STATUS_PACKED,
+    FbsSupply,
+)
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.seller import Seller
@@ -360,7 +364,9 @@ async def sync_marking_statuses_for_assembling_supplies(
             FbsOrder.seller_id == target.seller_id,
             FbsOrder.marketplace == "wb",
             FbsSupply.marketplace == "wb",
-            FbsSupply.status == FBS_SUPPLY_STATUS_ASSEMBLING,
+            FbsSupply.status.in_(
+                {FBS_SUPPLY_STATUS_ASSEMBLING, FBS_SUPPLY_STATUS_PACKED}
+            ),
         )
         .order_by(FbsOrder.created_at_wb.asc(), FbsOrder.id.asc())
     )

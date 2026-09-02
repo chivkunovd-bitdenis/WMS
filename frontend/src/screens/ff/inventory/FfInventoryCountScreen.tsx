@@ -10,7 +10,6 @@ import {
   IconAction,
   PrimaryAction,
   ReportMetricStrip,
-  ScannerField,
   ScreenHeader,
   SecondaryAction,
   SelectInput,
@@ -19,7 +18,18 @@ import {
 } from '../../../ui-kit'
 import type { ReportMetricItem, StatusTone } from '../../../ui-kit'
 import { CommentField } from './CommentField'
-import { applyScan, containerName, type ScanTone } from './InventoryScan'
+import {
+  applyScan,
+  cellLabel,
+  containerName,
+  NOTHING_OPEN,
+  type ScanOpenPlace,
+  type ScanTone,
+} from './InventoryScan'
+import { InventoryScanField } from './InventoryScanField'
+import { containerContents } from './containerContents'
+import { printContainerContents } from './printContainerContents'
+import { randomId } from '../../../utils/randomId'
 import { InventoryTree } from './InventoryTree'
 import {
   EMPTY_FILTERS,
@@ -31,7 +41,7 @@ import {
   type InvFilters,
   type InvRow,
 } from './InventoryRows'
-import type { CountStatus, InventoryCount, InventoryNode } from './InventoryTypes'
+import type { CountStatus, InventoryCount } from './InventoryTypes'
 
 const STATUS_LABEL: Record<CountStatus, string> = {
   draft: 'Черновик',
@@ -56,39 +66,41 @@ function plural(n: number, one: string, few: string, many: string): string {
   return `${n} ${many}`
 }
 
-/** Ключи строки тары и всех её родителей, которые надо раскрыть перед прокруткой. */
-function containerPathKeys(count: InventoryCount, containerId: string): string[] {
-  function find(nodes: InventoryNode[]): string[] | null {
-    for (const node of nodes) {
-      if (node.kind === 'product') continue
-      const key = `${node.kind}:${node.id}`
-      if (node.id === containerId) return [key]
-      const nested = find(node.children)
-      if (nested) return [key, ...nested]
-    }
-    return null
-  }
-
-  for (const cell of count.cells) {
-    const nested = find(cell.children)
-    if (nested) return [`cell:${cell.id}`, ...nested]
-  }
-  return []
-}
-
 type Props = {
   count: InventoryCount
   loading: boolean
   error: string | null
   /** Что сказали в ответ на сохранение или проведение. */
   note: string | null
-  onChange: (next: InventoryCount) => void
+  /**
+   * Изменение документа. Второй аргумент — строка, которую тронул оператор:
+   * по нему страница понимает, что именно отправлять на сервер, и не пишет
+   * поверх работы второго кладовщика в том же документе.
+   */
+  onChange: (next: InventoryCount, touchedLineId?: string) => void
   onSave: () => void
   onPost: () => void
   onCancelDocument: () => void
+  /**
+   * Сколько сканов находок ещё не доставлено на сервер.
+   *
+   * Пока их больше нуля, документ проводить нельзя: проведение зафиксирует
+   * остаток без того, что оператор уже отсканировал, а вернуться в проведённый
+   * документ невозможно.
+   */
+  pendingFound?: number
   onCreateContainer?: (kind: 'pallet' | 'box' | 'cargo_place') => void
+  /** Записать находку: товар лежит там, где по учёту его нет. */
+  onFound?: (place: {
+    barcodes: string[]
+    cellId: string | null
+    containerKind: 'pallet' | 'box' | 'cargo_place' | null
+    containerId: string | null
+    scanId: string
+  }) => void
   onBack: () => void
 }
+
 
 export function FfInventoryCountScreen({
   count,
@@ -99,14 +111,15 @@ export function FfInventoryCountScreen({
   onSave,
   onPost,
   onCancelDocument,
+  pendingFound = 0,
   onCreateContainer,
+  onFound,
   onBack,
 }: Props) {
   const [filters, setFilters] = useState<InvFilters>(EMPTY_FILTERS)
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
-  const [scanValue, setScanValue] = useState('')
-  // Память сканера на одну вещь: какую тару открыли. Пока открыта, пики идут в неё.
-  const [openContainerId, setOpenContainerId] = useState<string | null>(null)
+  // Память сканера: что сейчас открыто — тара и/или ячейка. Пики идут туда.
+  const [openPlace, setOpenPlace] = useState<ScanOpenPlace>(NOTHING_OPEN)
   const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
   const [scanFocus, setScanFocus] = useState<{ key: string; request: number } | null>(null)
 
@@ -115,30 +128,56 @@ export function FfInventoryCountScreen({
     const frame = window.requestAnimationFrame(() => {
       document
         .querySelector<HTMLElement>(`[data-row-key="${scanFocus.key}"]`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        ?.scrollIntoView({ behavior: 'auto', block: 'center' })
     })
     return () => window.cancelAnimationFrame(frame)
   }, [scanFocus])
 
   function handleScan(code: string) {
-    setScanValue('')
-    const result = applyScan(count, code, openContainerId)
-    setOpenContainerId(result.activeContainerId)
+    const result = applyScan(count, code, openPlace)
+    setOpenPlace(result.open)
     setScanNote({ text: result.message, tone: result.tone })
-    if (result.focusContainerKey && result.activeContainerId) {
-      const openKeys = containerPathKeys(count, result.activeContainerId)
-      setFilters(EMPTY_FILTERS)
+    if (result.focusRowKey) {
+      const openKeys = result.focusPathKeys ?? []
+      setFilters((current) => current === EMPTY_FILTERS ? current : EMPTY_FILTERS)
       setCollapsed((current) => {
         const next = new Set(current)
-        for (const key of openKeys) next.delete(key)
-        return next
+        let changed = false
+        for (const key of openKeys) changed = next.delete(key) || changed
+        return changed ? next : current
       })
-      setScanFocus((current) => ({
-        key: result.focusContainerKey as string,
+      const focusKey = result.focusRowKey
+      setScanFocus((current) => current?.key === focusKey ? current : ({
+        key: focusKey,
         request: (current?.request ?? 0) + 1,
       }))
     }
-    if (result.count !== count) onChange(result.count)
+    if (result.found) {
+      // Идентификатор скана рождается здесь, на одном пике. Если ответ не
+      // доедет и оператор пикнет ещё раз, это будет уже другой скан — а вот
+      // повтор этого же запроса сервер узнает и не посчитает дважды.
+      onFound?.({ ...result.found, scanId: randomId() })
+    }
+    if (result.count !== count) {
+      const touched = result.focusRowKey?.startsWith('product:')
+        ? result.focusRowKey.slice('product:'.length)
+        : undefined
+      onChange(result.count, touched)
+    }
+  }
+
+  // Явная кнопка рядом со сканером: не у каждого оператора под рукой штрихкод
+  // открытой тары, а совет «закройте тару» без способа закрыть — издевательство.
+  function closeOpenPlace() {
+    if (openPlace.containerId) {
+      const name = containerName(count, openPlace.containerId)
+      setOpenPlace({ containerId: null, cellId: openPlace.cellId })
+      setScanNote({ text: `Закрыли ${name}. Пики идут россыпью в эту ячейку.`, tone: 'ok' })
+      return
+    }
+    if (!openPlace.cellId) return
+    setOpenPlace(NOTHING_OPEN)
+    setScanNote({ text: 'Ячейка закрыта.', tone: 'ok' })
   }
 
   const readOnly = count.status !== 'draft'
@@ -163,7 +202,19 @@ export function FfInventoryCountScreen({
   }
 
   function handleActual(row: InvRow, value: number | null) {
-    onChange(setActual(count, row.id, value))
+    onChange(setActual(count, row.id, value), row.id)
+  }
+
+  // Опись печатается из документа, каким он на экране сейчас: кладовщик клеит
+  // её сразу после пересчёта короба, до сохранения и проведения.
+  function handlePrintContents(row: InvRow) {
+    const contents = containerContents(count, row.id)
+    if (!contents) return
+    printContainerContents({
+      contents,
+      documentNumber: count.number,
+      documentDate: count.createdAt,
+    })
   }
 
   const metrics: ReportMetricItem[] = [
@@ -179,9 +230,11 @@ export function FfInventoryCountScreen({
   const nothingCounted = t.counted === 0
   const postReason = readOnly
     ? 'Документ уже проведён — правки закрыты'
-    : nothingCounted
-      ? 'Не введено ни одной цифры'
-      : undefined
+    : pendingFound > 0
+      ? `Ещё не сохранено находок: ${pendingFound}. Дождитесь отправки`
+      : nothingCounted
+        ? 'Не введено ни одной цифры'
+        : undefined
 
   return (
     <Box sx={{ p: 3 }}>
@@ -268,22 +321,45 @@ export function FfInventoryCountScreen({
       <ReportMetricStrip items={metrics} loading={loading} testId="inv-metrics" />
 
       {/* Сканер: пикнул тару — она открылась, дальше каждый пик товара кладёт в неё
-          штуку. Тара не открыта — считаем то, что лежит в ячейке россыпью. */}
+          штуку. Тара не открыта — считаем то, что лежит в ячейке россыпью.
+
+          Блок прилеплен к верхнему краю. Документ по складу — это сорок тысяч
+          пикселей: скан уводит экран к найденной строке вниз, а ответ сканера
+          («короб открыт», «1 из 5») остаётся наверху, за кадром. Оператор пикает
+          и не видит ничего — ровно то, что на складе называют «система не
+          реагирует». Пока поле видно всегда, ответ виден всегда. */}
       {!readOnly ? (
-        <Box sx={{ maxWidth: 640, mb: 2 }}>
-          <ScannerField
-            value={scanValue}
-            onChange={setScanValue}
+        <Box
+          sx={{
+            maxWidth: 640,
+            mb: 2,
+            position: 'sticky',
+            top: 0,
+            zIndex: 3,
+            backgroundColor: 'background.default',
+            pt: 1,
+          }}
+        >
+          <InventoryScanField
             onScan={handleScan}
             expects={
-              openContainerId
-                ? `товар в ${containerName(count, openContainerId)}`
-                : 'ШК тары или товара'
+              openPlace.containerId
+                ? `товар в ${containerName(count, openPlace.containerId)}`
+                : openPlace.cellId
+                  ? `товар россыпью в ячейке ${cellLabel(count, openPlace.cellId)}`
+                  : 'ШК ячейки, тары или товара'
             }
             error={scanNote?.tone === 'error' ? scanNote.text : null}
             notice={scanNote && scanNote.tone !== 'error' ? scanNote.text : null}
             testId="inv-scan"
           />
+          {openPlace.containerId || openPlace.cellId ? (
+            <Box sx={{ mt: 1 }}>
+              <SecondaryAction onClick={closeOpenPlace} data-testid="inv-close-container">
+                {openPlace.containerId ? 'Закрыть тару' : 'Закрыть ячейку'}
+              </SecondaryAction>
+            </Box>
+          ) : null}
         </Box>
       ) : null}
 
@@ -342,6 +418,7 @@ export function FfInventoryCountScreen({
         }}
         onToggle={toggle}
         onActual={handleActual}
+        onPrintContents={handlePrintContents}
       />
 
       {/* Панель действий прилеплена к нижнему краю: пересчёт длинный, и кнопка
