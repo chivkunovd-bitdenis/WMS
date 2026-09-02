@@ -64,6 +64,7 @@ def _mock_order(status: str, *, order_id: uuid.UUID | None = None) -> SimpleName
         required_meta_json=[],
         sticker_status="ready",
         sticker_file="fbs/orders/sticker.png",
+        product_id=uuid.uuid4(),
         product=None,
         markings=[],
     )
@@ -487,3 +488,22 @@ def _plan(*, shortage: int, location: str = "ячейка-A") -> SimpleNamespace
         negative_quantity=shortage,
     )
     return SimpleNamespace(resolutions=(resolution,), has_shortage=shortage > 0)
+
+
+def test_order_without_mapped_product_warns_and_does_not_stop_the_supply() -> None:
+    """Незнакомый артикул в поставке не имеет права держать весь склад.
+
+    Продавец добавляет в поставку в своём кабинете товар, которого нет в нашем
+    каталоге. Списать такой товар мы не можем — но и отказывать в передаче
+    всей поставки из-за него нельзя: заказ просто уедет без складского движения.
+    """
+    order = _mock_order(FBS_ORDER_STATUS_PACKED)
+    order.product_id = None
+    order.product = None
+    checks = _build_delivery_checks(_mock_supply(), [order], cargo_qr_ready=True)
+
+    warned = next(check for check in checks if check.code == "order_product_not_mapped")
+    assert warned.severity == "warning"
+    assert warned.order_id == order.id
+    assert _checks_allow_delivery(checks) is True
+    _validate_checks_pass(checks)

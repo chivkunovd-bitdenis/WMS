@@ -695,6 +695,20 @@ def _build_delivery_checks(
                     )
                 )
 
+        if order.product_id is None:
+            checks.append(
+                DeliveryCheck(
+                    code="order_product_not_mapped",
+                    message=(
+                        "Товар заказа не сопоставлен с карточкой в WMS — "
+                        "со склада он списан не будет. Передаче не мешает."
+                    ),
+                    ok=False,
+                    severity=CHECK_WARNING,
+                    order_id=order.id,
+                )
+            )
+
         product = order.product
         if (
             product is not None
@@ -921,13 +935,16 @@ async def _actual_wb_orders_and_source_plan(
         for order in composition.active_orders
         if order.status not in _TERMINAL_ORDER_STATUSES
     ]
-    missing_product = next((order for order in orders if order.product_id is None), None)
-    if missing_product is not None:
-        raise FbsShipmentError(
-            "fbs_shipment_product_missing",
-            context={"order_id": str(missing_product.id)},
-            http_status=409,
-        )
+    # ⛔ Раньше здесь падало 409 на первом же заказе без сопоставленного товара,
+    # причём ДО того, как соберётся список проверок. То есть вся защита от
+    # блокировок проходила мимо: один заказ с незнакомым артикулом — и поставка
+    # не уезжала, а кнопка была мертва. Поймать это легко: продавец добавил в
+    # поставку в своём кабинете товар, которого нет в нашем каталоге.
+    #
+    # Теперь такой заказ ведёт себя как отменённый: он исключается из списания
+    # со склада, показывается предупреждением и передаче не мешает. Списать
+    # товар, которого мы не знаем, всё равно невозможно, а держать из-за него
+    # весь склад — нельзя.
     plan = await source_svc.plan_fbs_shipment_sources(
         session,
         tenant_id=tenant_id,
@@ -1204,7 +1221,10 @@ async def _write_off_delivered_orders_once(
             existing_ledgers[order.id] = ledger
         if ledger is None:
             if order.product_id is None:
-                raise FbsShipmentError("fbs_shipment_product_missing", http_status=409)
+                # Товар не сопоставлен с карточкой: списывать нечего. Заказ
+                # уедет в WB вместе с поставкой, но движения по складу не будет
+                # — оператор увидел это предупреждением перед передачей.
+                continue
             resolution = resolutions.get(order.id)
             if resolution is None and order.marketplace == "ozon":
                 sorting = await get_or_create_sorting_location(
