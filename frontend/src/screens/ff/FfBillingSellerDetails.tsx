@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { Box, Link, Stack } from '@mui/material'
 import { Link as RouterLink } from 'react-router-dom'
 import {
@@ -8,6 +9,7 @@ import {
   MoneyCell,
   QtyCell,
   SecondaryAction,
+  StatusChip,
   TextCell,
 } from '../../ui-kit'
 
@@ -30,6 +32,8 @@ export type SellerReportEntry = {
   rate_kopecks?: number | null
   amount_kopecks?: number | null
   billing_ledger_entry_id?: string
+  /** Только у заказов FBS: «Передан ВБ» или «ВБ получил». */
+  fbs_status_label?: string | null
   invoice_history?: { state: 'known'; count: number } | { state: 'unknown' }
 }
 
@@ -73,7 +77,7 @@ const SECTION_ORDER = ['inbound', 'packing', 'fbs', 'marketplace_outbound', 'pic
 const sectionLabels: Record<string, string> = {
   inbound: 'Приёмка',
   packing: 'Упаковка',
-  fbs: 'ФБС',
+  fbs: 'FBS',
   marketplace_outbound: 'Отгрузка',
   picking: 'Подбор',
   return: 'Возврат',
@@ -274,8 +278,29 @@ export function FfBillingSellerDetails({
           const target = row.entry.source_target
           // Номер документа сам и есть переход: отдельная колонка «Открыть»
           // занимала место и заставляла искать глазами вторую точку клика.
+          const status = row.entry.fbs_status_label
+          // У заказа FBS статус — часть его имени: по нему видно, почему заказ
+          // уже в сумме или ещё нет. Отдельной колонкой ради одного раздела
+          // таблицу расширять незачем.
+          const withStatus = (node: ReactNode) =>
+            status ? (
+              <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
+                {node}
+                <StatusChip
+                  label={status}
+                  tone={status === 'ВБ получил' ? 'ok' : 'neutral'}
+                  hint={
+                    status === 'ВБ получил'
+                      ? 'Wildberries подтвердил приём — заказ тарифицируется'
+                      : 'Заказ передан, подтверждения от Wildberries ещё нет'
+                  }
+                />
+              </Stack>
+            ) : (
+              node
+            )
           if (target?.kind === 'inbound') {
-            return (
+            return withStatus(
               <Link
                 component="button"
                 type="button"
@@ -283,21 +308,23 @@ export function FfBillingSellerDetails({
                 onClick={() => onOpenInbound(target.source_id)}
               >
                 {title}
-              </Link>
+              </Link>,
             )
           }
           if (target?.kind === 'route') {
-            return (
+            return withStatus(
               <Link component={RouterLink} to={target.to} sx={{ textAlign: 'left' }}>
                 {title}
-              </Link>
+              </Link>,
             )
           }
-          return (
+          return withStatus(
             <TextCell
               value={title}
-              hint="Первоисточник недоступен или не поддерживает переход"
-            />
+              hint={
+                status ? undefined : 'Первоисточник недоступен или не поддерживает переход'
+              }
+            />,
           )
         },
       },

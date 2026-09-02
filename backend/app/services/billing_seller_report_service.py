@@ -24,6 +24,12 @@ from app.models.billing import (
     BillingLedgerLine,
     BillingTariffVersionV2,
 )
+from app.models.fbs_order import (
+    FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
+    FBS_ORDER_STATUS_IN_DELIVERY,
+    FBS_ORDER_STATUS_PACKED,
+    FbsOrder,
+)
 from app.models.inventory_movement import InventoryMovement
 from app.models.operation_fact import OperationFact, OperationFactCutover, OperationFactLine
 from app.models.product import Product
@@ -218,6 +224,8 @@ async def _operation_entries(
             "source_target": _source_target(fact.document_type, fact.document_id),
             "result": "reversed" if fact.reversal_of_id else ("not_billable" if not fact.billable_service_code else (finance_result if include_finance else "completed")),
         }
+        if fact.document_type == FBS_ORDER_DOCUMENT_TYPE:
+            row["fbs_status_label"] = FBS_STATUS_CONFIRMED_LABEL
         if include_finance:
             row["rate_kopecks"] = priced[0].rate if priced and len({entry.rate for entry in priced}) == 1 else None
             row["amount_kopecks"] = money
@@ -226,6 +234,66 @@ async def _operation_entries(
         result.append(row)
     return result
 
+
+
+
+FBS_ORDER_DOCUMENT_TYPE = "fbs_order"
+FBS_STATUS_CONFIRMED_LABEL = "ВБ получил"
+FBS_STATUS_HANDED_LABEL = "Передан ВБ"
+_FBS_HANDED_STATUSES = (
+    FBS_ORDER_STATUS_PACKED,
+    FBS_ORDER_STATUS_IN_DELIVERY,
+    FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
+)
+
+
+async def _fbs_handed_entries(
+    session: AsyncSession,
+    *, tenant_id: uuid.UUID, start: datetime, end: datetime, seller_id: uuid.UUID,
+) -> list[dict[str, Any]]:
+    """Переданные, но ещё не подтверждённые заказы FBS.
+
+    В сумму раздела они не идут: работа считается сделанной только когда
+    маркетплейс подтвердил, что забрал заказ. Но спрятать их нельзя — оператор
+    должен видеть, что заказ уехал и ждёт подтверждения, а не потерялся.
+    """
+    orders = list(
+        (
+            await session.scalars(
+                select(FbsOrder)
+                .where(
+                    FbsOrder.tenant_id == tenant_id,
+                    FbsOrder.seller_id == seller_id,
+                    FbsOrder.status.in_(_FBS_HANDED_STATUSES),
+                    FbsOrder.updated_at >= start,
+                    FbsOrder.updated_at < end,
+                )
+                .order_by(FbsOrder.updated_at.desc())
+            )
+        ).all()
+    )
+    rows: list[dict[str, Any]] = []
+    for order in orders:
+        rows.append(
+            {
+                "id": f"fbs_order:{order.id}",
+                "kind": "fbs_order_handed",
+                "seller_id": str(order.seller_id),
+                "seller_name": "",
+                "occurred_at": _as_moscow(order.updated_at).isoformat(),
+                "service_code": FBS_ORDER_DOCUMENT_TYPE,
+                "item_quantity": None,
+                "source_type": FBS_ORDER_DOCUMENT_TYPE,
+                "source_id": str(order.id),
+                "document_number": f"Заказ {order.wb_order_id}",
+                "product_name": None,
+                "sku": None,
+                "source_target": None,
+                "result": "not_billable",
+                "fbs_status_label": FBS_STATUS_HANDED_LABEL,
+            }
+        )
+    return rows
 
 async def _legacy_entries(
     session: AsyncSession,
@@ -477,6 +545,12 @@ async def seller_details(
         raise SellerReportError("seller_not_found")
     report = await build_seller_report(session, tenant_id=tenant_id, seller_id=seller_id, date_from=date_from, date_to=date_to, include_finance=include_finance)
     entries = report["entries"]
+    # Итоги считаем до того, как подмешаем переданные заказы FBS: они денег не
+    # приносят и не должны раздувать ни суммы, ни счётчики документов.
+    totals = _totals(entries, include_finance=include_finance)
+    entries = entries + await _fbs_handed_entries(
+        session, tenant_id=tenant_id, seller_id=seller_id, start=report["start"], end=report["end"]
+    )
     # Stable multi-key ordering: occurrence desc, source kind asc, UUID desc.
     entries.sort(key=lambda row: row["id"], reverse=True)
     entries.sort(key=lambda row: row["kind"])
@@ -518,4 +592,4 @@ async def seller_details(
             "key": {"occurred_at": tail["occurred_at"], "id": tail["id"], "kind": tail["kind"]},
         })
     storage = None if cursor else await _storage_row(session, tenant_id=tenant_id, seller_id=seller_id, date_from=date_from, date_to=date_to, start=report["start"], end=report["end"], include_finance=include_finance)
-    return {"seller_id": str(seller_id), "seller_name": seller.name, "entries": page, "next_cursor": next_cursor, "storage_row": storage, "totals": _totals(entries, include_finance=include_finance)}
+    return {"seller_id": str(seller_id), "seller_name": seller.name, "entries": page, "next_cursor": next_cursor, "storage_row": storage, "totals": totals}
