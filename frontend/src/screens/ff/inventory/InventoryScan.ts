@@ -14,10 +14,26 @@ import { expectedNow, setActual } from './InventoryRows'
 
 export type ScanTone = 'ok' | 'warn' | 'error'
 
+/**
+ * Что сейчас открыто у сканера.
+ *
+ * Тара и ячейка — два уровня одного и того же: «куда я сейчас складываю пики».
+ * Открыт короб — пики идут в короб. Короб закрыли — остаётся его ячейка, и пики
+ * идут в неё россыпью. Именно поэтому закрытие короба не сбрасывает место
+ * целиком: оператор пикнул короб второй раз, чтобы считать россыпь ЗДЕСЬ, а не
+ * чтобы система забыла, где он стоит.
+ */
+export type ScanOpenPlace = {
+  containerId: string | null
+  cellId: string | null
+}
+
+export const NOTHING_OPEN: ScanOpenPlace = { containerId: null, cellId: null }
+
 export type ScanResult = {
   count: InventoryCount
-  /** Идентификатор открытой тары. null — считаем россыпь. */
-  activeContainerId: string | null
+  /** Что осталось открытым после этого скана. */
+  open: ScanOpenPlace
   /** Строка тары или товара, которую экран должен раскрыть, показать и подсветить. */
   focusRowKey?: string
   /** Уже найденный при скане путь: повторно обходить всё дерево экрану не нужно. */
@@ -115,19 +131,24 @@ export function inventoryRowPathKeys(count: InventoryCount, targetKey: string): 
 /** Найденная тара и её уже вычисленный путь в дереве. */
 type FoundContainer = {
   id: string
-  kind: 'pallet' | 'box' | 'cargo_place'
+  kind: ContainerKind
   code: string
+  cellId: string
   pathKeys: string[]
 }
 
-/** Тара и товары ищутся одним обходом; на 1000 строках второго прохода нет. */
+/** Найденная ячейка: её тоже можно открыть сканом, как и тару. */
+type FoundCell = { id: string; label: string; pathKeys: string[] }
+
+/** Тара, ячейка и товары ищутся одним обходом; на 1000 строках второго прохода нет. */
 function findScanTargets(
   count: InventoryCount,
   normalizedCodes: Set<string>,
-): { container: FoundContainer | null; products: Located[] } {
+): { container: FoundContainer | null; cell: FoundCell | null; products: Located[] } {
   let container: FoundContainer | null = null
+  let cell: FoundCell | null = null
   const products: Located[] = []
-  function walk(nodes: InventoryNode[], containerId: string | null, pathKeys: string[]) {
+  function walk(nodes: InventoryNode[], cellId: string, containerId: string | null, pathKeys: string[]) {
     for (const node of nodes) {
       const key = `${node.kind}:${node.id}`
       const nextPath = [...pathKeys, key]
@@ -138,43 +159,19 @@ function findScanTargets(
         continue
       }
       if (!container && node.barcode && normalizedCodes.has(node.barcode.trim().toLowerCase())) {
-        container = { id: node.id, kind: node.kind, code: node.code, pathKeys: nextPath }
+        container = { id: node.id, kind: node.kind, code: node.code, cellId, pathKeys: nextPath }
       }
-      walk(node.children, node.id, nextPath)
+      walk(node.children, cellId, node.id, nextPath)
     }
   }
-  for (const cell of count.cells) {
-    walk(cell.children, null, [`cell:${cell.id}`])
-  }
-  return { container, products }
-}
-
-/** Ячейка и вид открытой тары: находке нужно точное место, а не просто «где-то». */
-function locateContainer(
-  count: InventoryCount,
-  containerId: string,
-): { cellId: string; kind: ContainerKind } | null {
-  for (const cell of count.cells) {
-    let found: ContainerKind | null = null
-    const walk = (nodes: InventoryNode[]) => {
-      for (const node of nodes) {
-        if (node.kind === 'product') continue
-        if (node.id === containerId) {
-          found = node.kind
-          return
-        }
-        walk(node.children)
-      }
+  for (const item of count.cells) {
+    const cellKey = `cell:${item.id}`
+    if (!cell && item.barcode && normalizedCodes.has(item.barcode.trim().toLowerCase())) {
+      cell = { id: item.id, label: item.label, pathKeys: [cellKey] }
     }
-    walk(cell.children)
-    if (found) return { cellId: cell.id, kind: found }
+    walk(item.children, item.id, null, [cellKey])
   }
-  return null
-}
-
-/** Единственная ячейка документа: только тогда россыпь можно записать без вопросов. */
-function soleCellId(count: InventoryCount): string | null {
-  return count.cells.length === 1 ? count.cells[0].id : null
+  return { container, cell, products }
 }
 
 /** Пик увеличивает факт на единицу: человек считает штуками, а не вводит итог. */
@@ -190,10 +187,78 @@ function productMatches(product: ProductNode, normalizedCodes: Set<string>): boo
   })
 }
 
+/** Единственная ячейка документа: у пересчёта короба или палеты она всегда одна. */
+function soleCellId(count: InventoryCount): string | null {
+  return count.cells.length === 1 ? count.cells[0].id : null
+}
+
+/**
+ * Куда записать находку.
+ *
+ * Открыта тара — в неё. Открыта ячейка — в неё россыпью. Ничего не открыто, но
+ * в документе одна ячейка — в неё. Иначе места нет, и выдумывать его нельзя:
+ * записанная не туда находка испортит остаток чужой ячейки.
+ */
+function foundPlace(
+  count: InventoryCount,
+  open: ScanOpenPlace,
+): { storageLocationId: string; containerKind: ContainerKind | null; containerId: string | null } | null {
+  if (open.containerId) {
+    const kind = containerKindOf(count, open.containerId)
+    const cellId = open.cellId ?? cellOfContainer(count, open.containerId)
+    if (!kind || !cellId) return null
+    return { storageLocationId: cellId, containerKind: kind, containerId: open.containerId }
+  }
+  const cellId = open.cellId ?? soleCellId(count)
+  if (!cellId) return null
+  return { storageLocationId: cellId, containerKind: null, containerId: null }
+}
+
+function containerKindOf(count: InventoryCount, containerId: string): ContainerKind | null {
+  let kind: ContainerKind | null = null
+  function walk(nodes: InventoryNode[]) {
+    for (const node of nodes) {
+      if (node.kind === 'product') continue
+      if (node.id === containerId) {
+        kind = node.kind
+        return
+      }
+      walk(node.children)
+    }
+  }
+  for (const cell of count.cells) walk(cell.children)
+  return kind
+}
+
+function cellOfContainer(count: InventoryCount, containerId: string): string | null {
+  for (const cell of count.cells) {
+    let hit = false
+    function walk(nodes: InventoryNode[]) {
+      for (const node of nodes) {
+        if (node.kind === 'product') continue
+        if (node.id === containerId) {
+          hit = true
+          return
+        }
+        walk(node.children)
+      }
+    }
+    walk(cell.children)
+    if (hit) return cell.id
+  }
+  return null
+}
+
+const CLOSED: Record<ContainerKind, string> = {
+  pallet: 'закрыта',
+  box: 'закрыт',
+  cargo_place: 'закрыто',
+}
+
 export function applyScan(
   count: InventoryCount,
   rawCode: string,
-  activeContainerId: string | null,
+  open: ScanOpenPlace,
   /**
    * Разрешено ли записывать находки.
    *
@@ -207,29 +272,29 @@ export function applyScan(
   const codes = scanCandidates(rawCode)
   const code = codes[0] ?? ''
   if (!code) {
-    return { count, activeContainerId, message: '', tone: 'ok' }
+    return { count, open, message: '', tone: 'ok' }
   }
 
   const normalizedCodes = new Set(codes.map((candidate) => candidate.toLowerCase()))
   const targets = findScanTargets(count, normalizedCodes)
+
   const container = targets.container
   if (container) {
-    if (container.id === activeContainerId) {
-      // Повторный скан той же тары закрывает её. До 02.09.2026 система советовала
-      // «закройте тару, чтобы считать россыпь», а способа закрыть не было ни
-      // сканом, ни кнопкой — оператор выходил из документа и заходил заново.
+    if (container.id === open.containerId) {
+      // Повторный скан той же тары закрывает её, но ячейку под ней оставляет
+      // открытой: оператор пикнул короб второй раз именно затем, чтобы считать
+      // россыпь ЗДЕСЬ, а не чтобы система забыла, где он стоит.
       return {
         count,
-        activeContainerId: null,
-        focusRowKey: `${container.kind}:${container.id}`,
-        focusPathKeys: container.pathKeys,
-        message: `${KIND_TITLE[container.kind]} ${container.code} закрыт${container.kind === 'pallet' ? 'а' : container.kind === 'cargo_place' ? 'о' : ''}. Следующие пики считают россыпь.`,
+        open: { containerId: null, cellId: container.cellId },
+        focusRowKey: `cell:${container.cellId}`,
+        message: `${KIND_TITLE[container.kind]} ${container.code} ${CLOSED[container.kind]}. Пики идут россыпью в эту ячейку.`,
         tone: 'ok',
       }
     }
     return {
       count,
-      activeContainerId: container.id,
+      open: { containerId: container.id, cellId: container.cellId },
       focusRowKey: `${container.kind}:${container.id}`,
       focusPathKeys: container.pathKeys,
       message: `${KIND_TITLE[container.kind]} ${container.code} ${OPENED[container.kind]}. Пикайте товар — каждый пик добавит штуку.`,
@@ -237,14 +302,34 @@ export function applyScan(
     }
   }
 
+  const cell = targets.cell
+  if (cell) {
+    if (cell.id === open.cellId && !open.containerId) {
+      return {
+        count,
+        open: NOTHING_OPEN,
+        message: `Ячейка ${cell.label} закрыта.`,
+        tone: 'ok',
+      }
+    }
+    return {
+      count,
+      open: { containerId: null, cellId: cell.id },
+      focusRowKey: `cell:${cell.id}`,
+      focusPathKeys: cell.pathKeys,
+      message: `Ячейка ${cell.label} открыта. Пики идут россыпью в неё; чтобы считать тару, отсканируйте её.`,
+      tone: 'ok',
+    }
+  }
+
   const byBarcode = targets.products
+  const place = allowFound ? foundPlace(count, open) : null
 
   if (byBarcode.length === 0) {
-    const place = allowFound ? foundPlace(count, activeContainerId) : null
     if (!place) {
       return {
         count,
-        activeContainerId,
+        open,
         message: allowFound
           ? `Код ${code} в этом документе не числится. Отсканируйте тару или ячейку, куда его записать.`
           : `Код ${code} в этом документе не числится. Находку вносят в полном документе инвентаризации.`,
@@ -253,63 +338,87 @@ export function applyScan(
     }
     return {
       count,
-      activeContainerId,
+      open,
       message: `Код ${code} по учёту здесь не числится — записываем как находку.`,
       tone: 'ok',
       found: { barcodes: codes, ...place },
     }
   }
 
-  if (activeContainerId) {
-    const inside = byBarcode.find((item) => item.containerId === activeContainerId)
-    if (!inside) {
-      const where = byBarcode[0]
-      const openName = containerName(count, activeContainerId)
-      const place = allowFound ? foundPlace(count, activeContainerId) : null
+  if (open.containerId) {
+    const inside = byBarcode.find((item) => item.containerId === open.containerId)
+    if (inside) {
       return {
-        count,
-        activeContainerId,
-        message: place
-          ? `${where.product.name} по учёту в ${openName} не числится — записываем как находку.`
-          : `${where.product.name} — числится не здесь. Отсканируйте тару, куда его записать.`,
-        tone: place ? 'ok' : 'warn',
-        ...(place ? { found: { barcodes: codes, ...place } } : {}),
+        count: bump(count, inside.product),
+        open,
+        focusRowKey: `product:${inside.product.id}`,
+        focusPathKeys: inside.pathKeys,
+        message: scannedMessage(inside.product),
+        tone: 'ok',
       }
     }
-    const next = bump(count, inside.product)
+    const openName = containerName(count, open.containerId)
+    if (!place) {
+      return {
+        count,
+        open,
+        message: `${byBarcode[0].product.name} — числится не здесь. Отсканируйте тару, куда его записать.`,
+        tone: 'warn',
+      }
+    }
     return {
-      count: next,
-      activeContainerId,
-      focusRowKey: `product:${inside.product.id}`,
-      focusPathKeys: inside.pathKeys,
-      message: scannedMessage(inside.product),
+      count,
+      open,
+      message: `${byBarcode[0].product.name} по учёту в ${openName} не числится — записываем как находку.`,
+      tone: 'ok',
+      found: { barcodes: codes, ...place },
+    }
+  }
+
+  // Тара не открыта: считаем россыпь. Строка россыпи в открытой ячейке — самый
+  // частый случай, поэтому ищем сначала её.
+  const loose = byBarcode.find(
+    (item) => item.containerId === null && (!open.cellId || looseCellOf(count, item) === open.cellId),
+  )
+  if (loose) {
+    return {
+      count: bump(count, loose.product),
+      open,
+      focusRowKey: `product:${loose.product.id}`,
+      focusPathKeys: loose.pathKeys,
+      message: scannedMessage(loose.product),
       tone: 'ok',
     }
   }
 
-  const loose = byBarcode.find((item) => item.containerId === null)
-  if (!loose) {
-    // Товар по учёту здесь ЕСТЬ, просто внутри тары — находкой это не является.
-    //
-    // Записать его россыпью значит посчитать одну и ту же вещь дважды: строка
-    // тары останется непосчитанной и при проведении будет пропущена, а рядом
-    // добавится россыпь на то же количество. Оператор просто забыл пикнуть
-    // короб, и правильный ответ — попросить его это сделать.
+  // Товар по учёту лежит в таре, а оператор считает его россыпью. Это законная
+  // находка — но молчать о ней нельзя: если он просто забыл пикнуть короб,
+  // строка короба останется непосчитанной, и один товар посчитается дважды.
+  if (!place) {
     return {
       count,
-      activeContainerId,
-      message: `${byBarcode[0].product.name} — лежит в таре. Отсканируйте тару.`,
+      open,
+      message: `${byBarcode[0].product.name} — числится в таре. Отсканируйте тару или ячейку, куда его записать.`,
       tone: 'warn',
     }
   }
   return {
-    count: bump(count, loose.product),
-    activeContainerId,
-    focusRowKey: `product:${loose.product.id}`,
-    focusPathKeys: loose.pathKeys,
-    message: scannedMessage(loose.product),
-    tone: 'ok',
+    count,
+    open,
+    message:
+      `${byBarcode[0].product.name} числится в таре, а не россыпью — записываем находку россыпью. `
+      + 'Если он лежит в таре, отсканируйте её и посчитайте там.',
+    tone: 'warn',
+    found: { barcodes: codes, ...place },
   }
+}
+
+/** Ячейка, в которой лежит найденная россыпью строка: первый ключ её пути. */
+function looseCellOf(count: InventoryCount, located: Located): string | null {
+  const first = located.pathKeys[0]
+  if (!first || !first.startsWith('cell:')) return null
+  const id = first.slice('cell:'.length)
+  return count.cells.some((cell) => cell.id === id) ? id : null
 }
 
 function scannedMessage(product: ProductNode): string {
@@ -349,27 +458,7 @@ export function containerName(count: InventoryCount, containerId: string): strin
 }
 
 
-/**
- * Куда записать находку.
- *
- * Открыта тара — в неё. Тары нет, но в документе одна ячейка — в эту ячейку.
- * Ячеек несколько и тара не открыта — места нет, и выдумывать его нельзя:
- * записанная не туда находка испортит остаток чужой ячейки.
- */
-function foundPlace(
-  count: InventoryCount,
-  activeContainerId: string | null,
-): { storageLocationId: string; containerKind: ContainerKind | null; containerId: string | null } | null {
-  if (activeContainerId) {
-    const placed = locateContainer(count, activeContainerId)
-    if (!placed) return null
-    return {
-      storageLocationId: placed.cellId,
-      containerKind: placed.kind,
-      containerId: activeContainerId,
-    }
-  }
-  const cellId = soleCellId(count)
-  if (!cellId) return null
-  return { storageLocationId: cellId, containerKind: null, containerId: null }
+/** Подпись ячейки для строки сканера: «А-01», а не сырой идентификатор. */
+export function cellLabel(count: InventoryCount, cellId: string): string {
+  return count.cells.find((cell) => cell.id === cellId)?.label ?? 'ячейке'
 }

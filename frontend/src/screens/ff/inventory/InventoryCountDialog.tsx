@@ -10,6 +10,8 @@ import { CommentField } from './CommentField'
 import {
   applyScan,
   containerName,
+  NOTHING_OPEN,
+  type ScanOpenPlace,
   type ScanTone,
 } from './InventoryScan'
 import { InventoryScanField } from './InventoryScanField'
@@ -93,7 +95,7 @@ function InventoryCountDialogState({
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const [count, setCount] = useState<InventoryCount | null>(initialCount)
   // Память сканера на одну вещь: какую тару открыли. Пока открыта, пики идут в неё.
-  const [openContainerId, setOpenContainerId] = useState<string | null>(null)
+  const [openPlace, setOpenPlace] = useState<ScanOpenPlace>(NOTHING_OPEN)
   const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
   const [scanFocus, setScanFocus] = useState<{ key: string; request: number } | null>(null)
   const treeRef = useRef<HTMLDivElement>(null)
@@ -112,8 +114,8 @@ function InventoryCountDialogState({
     setCount((current) => {
       if (!current) return current
       // Диалог с карты склада не ходит на сервер, значит и находку не запишет.
-      const result = applyScan(current, code, openContainerId, false)
-      setOpenContainerId(result.activeContainerId)
+      const result = applyScan(current, code, openPlace, false)
+      setOpenPlace(result.open)
       setScanNote({ text: result.message, tone: result.tone })
       if (result.focusRowKey) {
         const openKeys = result.focusPathKeys ?? []
@@ -191,8 +193,8 @@ function InventoryCountDialogState({
         <InventoryScanField
           onScan={handleScan}
           expects={
-            openContainerId && count
-              ? `товар в ${containerName(count, openContainerId)}`
+            openPlace.containerId && count
+              ? `товар в ${containerName(count, openPlace.containerId)}`
               : 'ШК тары или товара'
           }
           error={scanNote?.tone === 'error' ? scanNote.text : null}

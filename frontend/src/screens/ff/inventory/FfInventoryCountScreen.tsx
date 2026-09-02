@@ -20,7 +20,10 @@ import type { ReportMetricItem, StatusTone } from '../../../ui-kit'
 import { CommentField } from './CommentField'
 import {
   applyScan,
+  cellLabel,
   containerName,
+  NOTHING_OPEN,
+  type ScanOpenPlace,
   type ScanTone,
 } from './InventoryScan'
 import { InventoryScanField } from './InventoryScanField'
@@ -97,8 +100,8 @@ export function FfInventoryCountScreen({
 }: Props) {
   const [filters, setFilters] = useState<InvFilters>(EMPTY_FILTERS)
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
-  // Память сканера на одну вещь: какую тару открыли. Пока открыта, пики идут в неё.
-  const [openContainerId, setOpenContainerId] = useState<string | null>(null)
+  // Память сканера: что сейчас открыто — тара и/или ячейка. Пики идут туда.
+  const [openPlace, setOpenPlace] = useState<ScanOpenPlace>(NOTHING_OPEN)
   const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
   const [scanFocus, setScanFocus] = useState<{ key: string; request: number } | null>(null)
 
@@ -113,8 +116,8 @@ export function FfInventoryCountScreen({
   }, [scanFocus])
 
   function handleScan(code: string) {
-    const result = applyScan(count, code, openContainerId)
-    setOpenContainerId(result.activeContainerId)
+    const result = applyScan(count, code, openPlace)
+    setOpenPlace(result.open)
     setScanNote({ text: result.message, tone: result.tone })
     if (result.focusRowKey) {
       const openKeys = result.focusPathKeys ?? []
@@ -137,11 +140,16 @@ export function FfInventoryCountScreen({
 
   // Явная кнопка рядом со сканером: не у каждого оператора под рукой штрихкод
   // открытой тары, а совет «закройте тару» без способа закрыть — издевательство.
-  function closeContainer() {
-    if (!openContainerId) return
-    const name = containerName(count, openContainerId)
-    setOpenContainerId(null)
-    setScanNote({ text: `Закрыли ${name}. Следующие пики считают россыпь.`, tone: 'ok' })
+  function closeOpenPlace() {
+    if (openPlace.containerId) {
+      const name = containerName(count, openPlace.containerId)
+      setOpenPlace({ containerId: null, cellId: openPlace.cellId })
+      setScanNote({ text: `Закрыли ${name}. Пики идут россыпью в эту ячейку.`, tone: 'ok' })
+      return
+    }
+    if (!openPlace.cellId) return
+    setOpenPlace(NOTHING_OPEN)
+    setScanNote({ text: 'Ячейка закрыта.', tone: 'ok' })
   }
 
   const readOnly = count.status !== 'draft'
@@ -277,18 +285,20 @@ export function FfInventoryCountScreen({
           <InventoryScanField
             onScan={handleScan}
             expects={
-              openContainerId
-                ? `товар в ${containerName(count, openContainerId)}`
-                : 'ШК тары или товара'
+              openPlace.containerId
+                ? `товар в ${containerName(count, openPlace.containerId)}`
+                : openPlace.cellId
+                  ? `товар россыпью в ячейке ${cellLabel(count, openPlace.cellId)}`
+                  : 'ШК ячейки, тары или товара'
             }
             error={scanNote?.tone === 'error' ? scanNote.text : null}
             notice={scanNote && scanNote.tone !== 'error' ? scanNote.text : null}
             testId="inv-scan"
           />
-          {openContainerId ? (
+          {openPlace.containerId || openPlace.cellId ? (
             <Box sx={{ mt: 1 }}>
-              <SecondaryAction onClick={closeContainer} data-testid="inv-close-container">
-                Закрыть тару
+              <SecondaryAction onClick={closeOpenPlace} data-testid="inv-close-container">
+                {openPlace.containerId ? 'Закрыть тару' : 'Закрыть ячейку'}
               </SecondaryAction>
             </Box>
           ) : null}
