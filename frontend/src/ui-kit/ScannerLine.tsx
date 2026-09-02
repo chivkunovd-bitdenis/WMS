@@ -54,6 +54,28 @@ export function ScannerLine({
 /** Пока символы идут чаще этого, код ещё не закончился. */
 const BURST_TAIL_MS = 400
 
+/**
+ * Тишина, после которой код считается законченным без Enter.
+ *
+ * ⛔ Порог намеренно большой. 02.09.2026 здесь стояло 120 мс, и это резало
+ * штрихкод на пятом символе: у боевого сканера паузы внутри кода длиннее.
+ * Сканер, который молчит почти секунду в середине кода, сломан так, что
+ * программой это не лечится.
+ *
+ * Нужно это ровно для одного случая, и он реальный: «клавиатурный» сканер
+ * настраивается суффиксом ОТДЕЛЬНО ПОД КАЖДЫЙ ТИП КОДА. Внутренний код тары
+ * (Code128) у оператора шлёт Enter — короб открывался. Товарный EAN-13 Enter
+ * не шлёт: код целиком ложился в поле и оставался там навсегда. Со стороны это
+ * «пикаю — ничего не происходит».
+ *
+ * Правильное лечение — дописать суффикс CR в самом сканере. Пока его нет,
+ * дочитываем код по тишине.
+ */
+const NO_SUFFIX_IDLE_MS = 900
+
+/** Короче этого — не код, а случайное нажатие. */
+const MIN_CODE_LENGTH = 5
+
 export function ScannerField({
   value,
   onChange,
@@ -103,6 +125,15 @@ export function ScannerField({
   // штрихкода, а вторая половина ещё летит. Отправить эту половину — значит
   // посчитать несуществующий товар, и это хуже, чем не посчитать ничего.
   const lastKeyAtRef = useRef(0)
+  // Таймер дочитывания кода у сканера без суффикса.
+  const idleRef = useRef<number | null>(null)
+
+  const cancelIdle = () => {
+    if (idleRef.current !== null) {
+      window.clearTimeout(idleRef.current)
+      idleRef.current = null
+    }
+  }
   // Слушает ли поле прямо сейчас. Плашка обязана показывать это честно.
   //
   // Раньше в ней стояло литеральное `active`, то есть «Сканер активен» горело
@@ -152,6 +183,8 @@ export function ScannerField({
     onScan(trimmed)
   }
 
+  useEffect(() => cancelIdle, [])
+
   useEffect(() => {
     if (busy) return
     if (!ownsFocusRef.current) return
@@ -190,6 +223,7 @@ export function ScannerField({
           ownsFocusRef.current = false
           // Пачка ещё идёт — молчим. Код доберут те, кто слушает клавиатуру
           // целиком, а не это поле.
+          cancelIdle()
           if (Date.now() - lastKeyAtRef.current < BURST_TAIL_MS) return
           // Уход фокуса с непустым значением — тот же сигнал, что и Enter
           // (§Ж-02): штрихкод, набранный или вставленный и оставленный в поле,
@@ -202,8 +236,21 @@ export function ScannerField({
           submit(code)
         }}
         onKeyDown={(event) => {
-          if (event.key.length === 1) lastKeyAtRef.current = Date.now()
-          if (event.key !== 'Enter') return
+          if (event.key.length === 1) {
+            lastKeyAtRef.current = Date.now()
+            // Каждый новый символ отодвигает дочитывание: пока код идёт, ждём.
+            cancelIdle()
+            idleRef.current = window.setTimeout(() => {
+              idleRef.current = null
+              const pending = inputRef.current?.value.trim() ?? ''
+              if (pending.length < MIN_CODE_LENGTH) return
+              submit(pending)
+            }, NO_SUFFIX_IDLE_MS)
+            return
+          }
+          // Tab — второй ходовой суффикс сканеров наравне с Enter.
+          if (event.key !== 'Enter' && event.key !== 'Tab') return
+          cancelIdle()
           // Значение берём из самого поля, а не из состояния React. «Клавиатурный»
           // сканер печатает символы и жмёт Enter быстрее, чем происходит
           // перерисовка, и последний символ штрихкода при чтении из состояния

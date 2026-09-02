@@ -188,7 +188,10 @@ export function createScannerListener(opts: ScannerListenerOptions) {
     // Прочие ctrl-комбинации — не трогаем
     if (e.ctrlKey) return
 
-    if (e.key === 'Enter') {
+    // Enter и Tab — два ходовых суффикса «клавиатурных» сканеров. Какой из них
+    // выставлен, зависит от настройки самого устройства, и полагаться только на
+    // Enter нельзя: с Tab-суффиксом код молча уходил в никуда.
+    if (e.key === 'Enter' || e.key === 'Tab') {
       const el = opts.getActiveElement()
       // Темп меряем только там, где печатает человек.
       //
