@@ -78,6 +78,14 @@ type Props = {
   onSave: () => void
   onPost: () => void
   onCancelDocument: () => void
+  /**
+   * Сколько сканов находок ещё не доставлено на сервер.
+   *
+   * Пока их больше нуля, документ проводить нельзя: проведение зафиксирует
+   * остаток без того, что оператор уже отсканировал, а вернуться в проведённый
+   * документ невозможно.
+   */
+  pendingFound?: number
   onCreateContainer?: (kind: 'pallet' | 'box' | 'cargo_place') => void
   /** Записать находку: товар лежит там, где по учёту его нет. */
   onFound?: (place: {
@@ -100,6 +108,7 @@ export function FfInventoryCountScreen({
   onSave,
   onPost,
   onCancelDocument,
+  pendingFound = 0,
   onCreateContainer,
   onFound,
   onBack,
@@ -206,9 +215,11 @@ export function FfInventoryCountScreen({
   const nothingCounted = t.counted === 0
   const postReason = readOnly
     ? 'Документ уже проведён — правки закрыты'
-    : nothingCounted
-      ? 'Не введено ни одной цифры'
-      : undefined
+    : pendingFound > 0
+      ? `Ещё не сохранено находок: ${pendingFound}. Дождитесь отправки`
+      : nothingCounted
+        ? 'Не введено ни одной цифры'
+        : undefined
 
   return (
     <Box sx={{ p: 3 }}>

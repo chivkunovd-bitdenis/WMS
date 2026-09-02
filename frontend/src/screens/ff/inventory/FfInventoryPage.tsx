@@ -3,6 +3,9 @@ import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { FfInventoryCountScreen } from './FfInventoryCountScreen'
 import { mergeInFlightActuals } from './InventoryRows'
+import { createFoundQueue, type FoundPlace } from './foundQueue'
+
+type FoundResponse = Awaited<ReturnType<typeof recordCountFound>>
 import { FfInventoryListScreen } from './FfInventoryListScreen'
 import { InventoryCreateDialog, type CreateFill } from './InventoryCreateDialog'
 import type { CountListItem, InventoryCount } from './InventoryTypes'
@@ -17,6 +20,7 @@ import {
   type ApiSummary,
   recordCountFound,
   saveCountActuals,
+  InventoryHttpError,
 } from './inventoryCountApi'
 
 // Экран инвентаризации, подключённый к серверу.
@@ -98,6 +102,10 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
   // сервер только их: документ один, а кладовщиков в нём может быть двое, и
   // запись всего документа целиком стирает чужую работу.
   const touchedRef = useRef<Set<string>>(new Set())
+  // Очередь работает асинхронно и обязана видеть документ, каким он стал
+  // к моменту отправки, а не каким был при постановке в очередь.
+  const countRef = useRef<InventoryCount | null>(null)
+  countRef.current = count
 
   function noteTouched(lineId?: string) {
     if (lineId) touchedRef.current.add(lineId)
@@ -169,36 +177,54 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     }
   }
 
+  // Недоставленные сканы находок. Пока их больше нуля, документ проводить
+  // нельзя: проведение зафиксировало бы остаток без того, что оператор уже
+  // отсканировал, а вернуться в проведённый документ уже не получится.
+  const [pendingFound, setPendingFound] = useState(0)
+
   /**
-   * Записать находку и перечитать документ.
+   * Очередь находок: строго по одной и с повтором того же скана при обрыве.
    *
-   * Строку заводит сервер, поэтому после ответа берём его версию документа
-   * целиком: у новой строки есть id, которого на клиенте быть не могло.
+   * Раньше каждый скан улетал независимо. Ответы возвращались вперемешку, и
+   * поздний ответ со старым состоянием документа стирал с экрана строку,
+   * которую добавил ранний, — оператор видел, что находки нет, и сканировал её
+   * заново, получая двойной остаток. А при обрыве связи экран показывал ошибку
+   * и выбрасывал запрос: человек пикал ещё раз, это был уже другой скан, и
+   * серверная защита от повтора его не узнавала. Теперь повторяем мы сами и тем
+   * же идентификатором.
    */
-  async function recordFound(place: {
-    barcodes: string[]
-    cellId: string | null
-    containerKind: 'pallet' | 'box' | 'cargo_place' | null
-    containerId: string | null
-    scanId: string
-  }) {
+  const foundQueueRef = useRef<ReturnType<typeof createFoundQueue<FoundResponse>> | null>(null)
+  if (foundQueueRef.current === null) {
+    foundQueueRef.current = createFoundQueue<FoundResponse>({
+      send: async (place) => {
+        const live = countRef.current
+        if (!live || live.status !== 'draft') throw new Error('Документ уже закрыт')
+        // Кладём на сервер то, что оператор насчитал: автосохранения в экране
+        // нет, факт живёт в состоянии React до нажатия «Сохранить».
+        await saveCountActuals(token, live, touchedRef.current)
+        return await recordCountFound(token, live.id, place)
+      },
+      onApplied: (found) => {
+        setCount((live) => {
+          if (!live) return found.count
+          // Пока летел запрос, кладовщик продолжал сканировать. Эти пики есть
+          // на экране, но не в том снимке, который мы отправили.
+          return mergeInFlightActuals(found.count, live, live)
+        })
+        setNote(found.notice)
+      },
+      onRejected: (err) => {
+        setError(err instanceof Error ? err.message : 'Не удалось записать находку')
+      },
+      onPendingChange: setPendingFound,
+      isRetryable: (err) => !(err instanceof InventoryHttpError),
+    })
+  }
+
+  function recordFound(place: FoundPlace) {
     if (!count || count.status !== 'draft') return
     setError(null)
-    try {
-      // Сначала кладём на сервер всё, что оператор уже насчитал: автосохранения
-      // в этом экране нет, факт живёт в состоянии React до нажатия «Сохранить»,
-      // а оператор сканирует, а не жмёт кнопки.
-      const sent = count
-      await saveCountActuals(token, sent, touchedRef.current)
-      const found = await recordCountFound(token, sent.id, place)
-      // Пока летели два запроса, кладовщик продолжал сканировать. Эти пики есть
-      // на экране, но не в отправленном снимке — переносим их на ответ сервера,
-      // иначе они молча исчезнут.
-      setCount((live) => (live ? mergeInFlightActuals(found.count, sent, live) : found.count))
-      setNote(found.notice)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось записать находку')
-    }
+    foundQueueRef.current?.push(place)
   }
 
   async function createContainer(kind: 'pallet' | 'box' | 'cargo_place') {
@@ -268,8 +294,9 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         onSave={() => void save()}
         onPost={() => void post()}
         onCancelDocument={() => void cancelDocument()}
+        pendingFound={pendingFound}
         onCreateContainer={(kind) => void createContainer(kind)}
-        onFound={(place) => void recordFound(place)}
+        onFound={(place) => recordFound(place)}
         onBack={() => {
           setCount(null)
           setNote(null)

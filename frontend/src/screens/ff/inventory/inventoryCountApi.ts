@@ -266,6 +266,23 @@ export async function createObjectCount(
  * Строку заводит сервер, а не экран: документ и его строки живут на сервере, и
  * придуманная на клиенте строка всё равно не пережила бы сохранение.
  */
+/**
+ * Отказ сервера, в отличие от оборвавшейся сети.
+ *
+ * Разница важна для очереди сканов: сетевой обрыв надо повторить тем же
+ * идентификатором скана, а отказ сервера повторять бессмысленно — его надо
+ * показать человеку.
+ */
+export class InventoryHttpError extends Error {
+  readonly status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'InventoryHttpError'
+    this.status = status
+  }
+}
+
 export async function recordCountFound(
   token: string,
   countId: string,
@@ -289,7 +306,7 @@ export async function recordCountFound(
       scan_id: place.scanId,
     }),
   })
-  if (!res.ok) throw new Error(await readApiErrorMessage(res))
+  if (!res.ok) throw new InventoryHttpError(await readApiErrorMessage(res), res.status)
   const body = (await res.json()) as {
     count: ApiDetail
     expected_quantity: number
