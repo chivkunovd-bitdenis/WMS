@@ -1845,6 +1845,14 @@ async def deliver_supply(
             provider=ozon_provider,
             actor_user_id=actor_user_id,
         )
+    if (
+        existing_by_key is not None
+        and existing_by_key.state == WB_OPERATION_STATE_FAILED
+    ):
+        # A closed client key has no authority over a newer supply-scoped
+        # attempt. Reject it before resolving the active operation, otherwise
+        # a stale tab could fail or reconcile another key's durable journal.
+        raise FbsShipmentError("idempotency_key_reused", http_status=409)
     resumable_operation: Any | None = None
     if existing is None or existing.state == WB_OPERATION_STATE_FAILED:
         active_for_supply = await get_active_deliver_operation_for_supply(

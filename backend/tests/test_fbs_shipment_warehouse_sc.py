@@ -1055,14 +1055,21 @@ async def test_pending_delivery_recovers_after_process_crash_without_second_wb_c
     monkeypatch.setattr(shipment_mod, "_persist_confirmed_delivery", real_persist)
     monkeypatch.setattr(shipment_mod, "reconcile_supply_delivered", confirmed_on_reconcile)
 
+    stale_retry = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=stale_failed_key,
+    )
+    assert stale_retry.status_code == 409, stale_retry.text
+    assert stale_retry.json()["detail"]["code"] == "idempotency_key_reused"
+    assert deliver_calls == 1
+
     retry = await _deliver_with_preflight(
         async_client,
         headers,
         supply["id"],
-        # Another tab may still hold an older definitively failed key.  The
-        # active supply-scoped checkpoint wins over that stale key and must be
-        # reconciled instead of sending WB a second time.
-        idempotency_key=stale_failed_key,
+        idempotency_key=idempotency_key,
     )
     assert retry.status_code == 200, retry.text
     assert deliver_calls == 1
@@ -1230,6 +1237,83 @@ async def test_stale_not_delivered_never_overwrites_parallel_ambiguity(
         assert operation is not None
         assert operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION
         assert operation.error_code == "wb_timeout"
+
+
+@pytest.mark.asyncio
+async def test_failed_key_cannot_close_another_active_delivery_attempt(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, _ = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[953068],
+        supply_name="WB stale failed key",
+    )
+    failed_key = str(uuid.uuid4())
+    active_key = str(uuid.uuid4())
+
+    async with SessionLocal() as session:
+        supply_row = await session.get(FbsSupply, uuid.UUID(supply["id"]))
+        assert supply_row is not None
+        session.add_all(
+            [
+                FbsWbOperation(
+                    tenant_id=tenant_id,
+                    seller_id=supply_row.seller_id,
+                    operation_kind="supply_deliver",
+                    idempotency_key=failed_key,
+                    local_entity_type="fbs_supply",
+                    local_entity_id=supply_row.id,
+                    state=WB_OPERATION_STATE_FAILED,
+                    error_code="meta_validation_fail",
+                ),
+                FbsWbOperation(
+                    tenant_id=tenant_id,
+                    seller_id=supply_row.seller_id,
+                    operation_kind="supply_deliver",
+                    idempotency_key=active_key,
+                    local_entity_type="fbs_supply",
+                    local_entity_id=supply_row.id,
+                    state=WB_OPERATION_STATE_PENDING,
+                    request_summary_json={"checkpoint_source_plan": {"frozen": True}},
+                ),
+            ]
+        )
+        await session.commit()
+
+    import app.services.fbs_shipment_service as shipment_mod
+
+    async def forbid_reconcile(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("failed key must be rejected before active reconciliation")
+
+    monkeypatch.setattr(shipment_mod, "reconcile_supply_delivered", forbid_reconcile)
+    retry = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=failed_key,
+    )
+    assert retry.status_code == 409, retry.text
+    assert retry.json()["detail"]["code"] == "idempotency_key_reused"
+
+    async with SessionLocal() as session:
+        active_operation = await session.scalar(
+            select(FbsWbOperation).where(
+                FbsWbOperation.idempotency_key == active_key
+            )
+        )
+        assert active_operation is not None
+        assert active_operation.state == WB_OPERATION_STATE_PENDING
+        assert active_operation.error_code is None
 
 
 @pytest.mark.asyncio
