@@ -84,6 +84,8 @@ export default defineConfig({
         raschetyRazdely: 'raschety-razdely.html',
         schet: 'schet.html',
         fbsHistory: 'fbs-history.html',
+        knowledge: 'knowledge.html',
+        kbScenes: 'kb-scenes.html',
       },
     },
   },
