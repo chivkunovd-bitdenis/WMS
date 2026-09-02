@@ -50,7 +50,7 @@ def test_openapi_reference_date_is_set() -> None:
     ("raw", "expected_fragment"),
     [
         ("Supply not found", "не нашёл эту поставку"),
-        ("fix them to dispatch items", "ещё обрабатывает поставку"),
+        ("fix them to dispatch items", "просит исправить"),
         ("MetaValidationFail: uinBadStatus", "отклонил данные маркировки"),
         ("mandatory mark is required", "требует обязательную маркировку"),
     ],
@@ -559,3 +559,39 @@ async def test_deliver_supply_409_meta_fail_single_request_no_retry() -> None:
     assert excinfo.value.code == "meta_validation_fail"
     assert excinfo.value.meta_validation[0].key == "uin"
     assert excinfo.value.meta_validation[0].decision == "required"
+
+
+def test_wb_meta_validation_is_parsed_from_nested_data_envelope() -> None:
+    """Реальный отказ Wildberries: детали лежат внутри `data`.
+
+    Ровно это тело пришло 02.09.2026 на поставку WB-GI-272608041. Разбор читал
+    только верхний уровень, список причин выходил пустым, и оператор шесть раз
+    подряд нажал «Повторить» вместо того, чтобы перебить код Честного знака.
+    """
+    from app.services.wildberries_fbs_client import parse_meta_validation_fail
+
+    body = {
+        "data": {
+            "orders": [
+                {
+                    "id": 5644318926,
+                    "metaDetails": [
+                        {
+                            "key": "sgtin",
+                            "value": "0104620769677440215%c5esMS'cmDh",
+                            "decision": "sgtinRetired",
+                        }
+                    ],
+                }
+            ]
+        },
+        "code": "MetaValidationFail",
+        "message": "Fix them to dispatch items",
+    }
+
+    items = parse_meta_validation_fail(body)
+
+    assert len(items) == 1
+    assert items[0].order_id == 5644318926
+    assert items[0].key == "sgtin"
+    assert items[0].decision == "sgtinRetired"

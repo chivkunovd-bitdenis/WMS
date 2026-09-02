@@ -393,7 +393,8 @@ def test_meta_validation_message_shows_order_and_concrete_wb_reason() -> None:
         ],
     )
     message, retryable = _meta_validation_message(error)
-    assert retryable is False
+    # Повтор доступен: оператор чинит названное и жмёт кнопку тут же.
+    assert retryable is True
     assert "Заказ WB 9001" in message
     assert "статус КИЗ" in message
 
@@ -412,7 +413,8 @@ def test_meta_validation_message_keeps_unknown_wb_reason() -> None:
         ],
     )
     message, retryable = _meta_validation_message(error)
-    assert retryable is False
+    # Повтор доступен: оператор чинит названное и жмёт кнопку тут же.
+    assert retryable is True
     assert message == "Заказ WB 9002: Wildberries ответил: brand new WB reason"
 
 
@@ -507,3 +509,98 @@ def test_order_without_mapped_product_warns_and_does_not_stop_the_supply() -> No
     assert warned.order_id == order.id
     assert _checks_allow_delivery(checks) is True
     _validate_checks_pass(checks)
+
+
+def test_wb_dispatch_refusal_shows_order_reasons_instead_of_advice_to_wait() -> None:
+    """Когда WB назвал конкретные заказы, оператор обязан их увидеть.
+
+    Фраза WB «fix them to dispatch items» перехватывалась первой и превращалась в
+    «ещё обрабатывает поставку, повторите через минуту», а всё, что WB сказал про
+    заказы, выбрасывалось. Оператор жал «Повторить» по кругу, и ничего не
+    менялось: WB просил починить данные, а не подождать.
+    """
+    from app.services.fbs_shipment_service import _meta_validation_message
+    from app.services.wildberries_errors import (
+        MetaValidationFailItem,
+        WildberriesBusinessError,
+    )
+
+    exc = WildberriesBusinessError(
+        "meta_validation_fail",
+        wb_code="meta_validation",
+        message="Some orders have unfilled required meta, fix them to dispatch items",
+        meta_validation=[
+            MetaValidationFailItem(
+                order_id=530009, key="sgtin", value=None, decision="required",
+                reason="uinBadStatus",
+            )
+        ],
+    )
+    message, retryable = _meta_validation_message(exc)
+
+    assert "530009" in message
+    assert "uinBadStatus" in message or "маркировк" in message.lower()
+    assert "через минуту" not in message
+    # Повтор доступен: оператор чинит названное и жмёт кнопку тут же.
+    assert retryable is True
+
+
+def test_wb_dispatch_refusal_without_details_still_suggests_a_retry() -> None:
+    """Если WB не назвал ни одного заказа, повторить — единственное разумное."""
+    from app.services.fbs_shipment_service import _meta_validation_message
+    from app.services.wildberries_errors import WildberriesBusinessError
+
+    exc = WildberriesBusinessError(
+        "meta_validation_fail",
+        wb_code="meta_validation",
+        message="fix them to dispatch items",
+        meta_validation=[],
+    )
+    message, retryable = _meta_validation_message(exc)
+
+    # Своих слов у нас нет, но и советовать просто «подождите» нельзя: WB
+    # просит починить заказы, а не потерпеть.
+    assert "просит исправить" in message
+    assert "кабинете продавца" in message
+    assert retryable is True
+
+
+def test_real_wb_refusal_from_2026_09_02_reads_as_an_instruction() -> None:
+    """Дословный отказ WB по поставке WB-GI-272608041 — целиком, до текста.
+
+    Этот случай остановил склад: WB назвал заказ и сказал, что код Честного
+    знака выведен из оборота, а оператор прочитал «повторите через минуту».
+    Тест держит весь путь: разбор вложенного `data`, перевод причины и то, что
+    отказ перестал считаться повторяемым.
+    """
+    from app.services.fbs_shipment_service import _meta_validation_message
+    from app.services.wildberries_errors import WildberriesBusinessError
+    from app.services.wildberries_fbs_client import parse_meta_validation_fail
+
+    body = {
+        "data": {
+            "orders": [
+                {
+                    "id": 5644318926,
+                    "metaDetails": [
+                        {"key": "sgtin", "value": "x", "decision": "sgtinRetired"}
+                    ],
+                }
+            ]
+        },
+        "code": "MetaValidationFail",
+        "message": "Fix them to dispatch items",
+    }
+    exc = WildberriesBusinessError(
+        "meta_validation_fail",
+        wb_code="MetaValidationFail",
+        message="Fix them to dispatch items",
+        meta_validation=parse_meta_validation_fail(body),
+    )
+
+    message, retryable = _meta_validation_message(exc)
+
+    assert "5644318926" in message
+    assert "Честного знака выведен из оборота" in message
+    assert "sgtinRetired" not in message
+    assert retryable is True

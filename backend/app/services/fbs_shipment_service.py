@@ -107,6 +107,7 @@ from app.services.wildberries_errors import (
     WildberriesClientError,
     log_wb_client_error,
     translate_wb_message,
+    truncate_wb_response_body,
     wb_error_context,
     wb_error_ref,
     wb_operator_message,
@@ -198,24 +199,70 @@ def _meta_validation_message(exc: WildberriesBusinessError) -> tuple[str, bool]:
         for value in [exc.message, *(item.reason for item in exc.meta_validation)]
         if isinstance(value, str) and value.strip()
     ]
-    if any(_WB_DISPATCH_PENDING_MESSAGE in value.lower() for value in raw_messages):
-        return (
-            "Wildberries ещё обрабатывает поставку. Повторите передачу через минуту.",
-            True,
-        )
+    dispatch_pending = any(
+        _WB_DISPATCH_PENDING_MESSAGE in value.lower() for value in raw_messages
+    )
 
     details: list[str] = []
     for item in exc.meta_validation:
         prefix = f"Заказ WB {item.order_id}: " if item.order_id is not None else ""
-        if item.reason:
-            reason = translate_wb_message(item.reason) or f"Wildberries ответил: {item.reason}"
+        # Причина может приехать и в reason, и в decision — переводим обе.
+        # Слово `sgtinRetired` кладовщику не говорит ничего, а «код Честного
+        # знака выведен из оборота» говорит, что делать.
+        raw_reason = item.reason or item.decision
+        translated = translate_wb_message(raw_reason) if raw_reason else None
+        if translated:
+            reason = translated
+        elif item.reason:
+            reason = f"Wildberries ответил: {item.reason}"
         else:
             reason = f"маркировка {item.key} — {item.decision}"
         rendered = f"{prefix}{reason}"
         if rendered not in details:
             details.append(rendered)
+    # ⛔ Подробности по заказам показываем ВСЕГДА, если они есть.
+    #
+    # Раньше фраза WB «fix them to dispatch items» перехватывалась первой и
+    # превращалась в «Wildberries ещё обрабатывает поставку, повторите через
+    # минуту» — а всё, что WB сказал про конкретные заказы, выбрасывалось.
+    # Английский оригинал читается как «исправьте их, чтобы отгрузить», то есть
+    # WB просит починить данные заказов, а мы советовали подождать. Оператор жал
+    # «Повторить» по кругу, и ничего не менялось, потому что само оно не
+    # рассасывается.
     if details:
-        return "; ".join(details), False
+        head = (
+            "Wildberries не принял поставку и просит исправить заказы: "
+            if dispatch_pending
+            else ""
+        )
+        # Повтор остаётся доступным сознательно. Оператор чинит названное —
+        # перебивает код Честного знака на упаковке — и жмёт «Повторить» тут же,
+        # не выходя из окна. Прятать кнопку значит заставлять его искать путь
+        # заново; вреда от лишнего нажатия нет, ключ идемпотентности на отказе
+        # и так меняется на новый. Вредило утром не наличие кнопки, а текст,
+        # который обещал, что само рассосётся.
+        return f"{head}{'; '.join(details)}", True
+
+    # Подробностей по заказам нет. Показываем оператору собственные слова WB —
+    # молчать и советовать «повторите через минуту» нельзя: 02.09.2026 склад так
+    # шесть раз подряд нажал повтор и остановился, а причина осталась только в
+    # голове у Wildberries.
+    if dispatch_pending:
+        own = next((value for value in raw_messages if value), "")
+        translated = translate_wb_message(own) if own else None
+        if translated:
+            return translated, True
+        if own:
+            return (
+                f"Wildberries не принял поставку и ответил: «{own}». "
+                "Если повтор через минуту не помогает, причину надо смотреть "
+                "в кабинете продавца.",
+                True,
+            )
+        return (
+            "Wildberries ещё обрабатывает поставку. Повторите передачу через минуту.",
+            True,
+        )
 
     if exc.message:
         translated = translate_wb_message(exc.message)
@@ -2268,7 +2315,20 @@ async def deliver_supply(
             session,
             operation,
             error_code="meta_validation_fail",
-            error_context={"meta_validation": meta_context},
+            # ⛔ Сырой ответ WB сохраняем обязательно.
+            #
+            # 02.09.2026 склад шесть раз подряд получил «повторите через минуту»
+            # и встал. В базе от этих попыток остался пустой список
+            # meta_validation и больше ничего: что именно сказал Wildberries,
+            # восстановить было нечем — ни в логах, ни в операции. Разбор
+            # занял час и потребовал лезть на боевой сервер.
+            error_context={
+                "meta_validation": meta_context,
+                "wb_code": exc.wb_code,
+                "wb_message": exc.message,
+                "wb_response_body": truncate_wb_response_body(exc.response_body),
+                "wb_endpoint": exc.endpoint,
+            },
             wb_supply_id=supply.wb_supply_id,
             local_supply_id=supply.id,
         )

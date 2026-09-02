@@ -599,9 +599,11 @@ async def test_fbs_shipment_translates_temporary_dispatch_rejection(
     assert response.status_code == 409, response.text
     detail = response.json()["detail"]
     assert detail["code"] == "meta_validation_fail"
-    assert detail["message"] == (
-        "Wildberries ещё обрабатывает поставку. Повторите передачу через минуту."
-    )
+    # Отказ остаётся повторяемым, но текст больше не советует просто ждать:
+    # WB просит починить заказы. 02.09.2026 склад шесть раз нажал повтор
+    # впустую, потому что сообщение обещало, что само рассосётся.
+    assert "просит исправить" in detail["message"]
+    assert "кабинете продавца" in detail["message"]
     assert detail["retryable"] is True
     assert deliver_calls == 1
 
@@ -1935,3 +1937,44 @@ async def test_mixed_supply_marks_every_order_delivered(
             order = await session.get(FbsOrder, local_order_id)
             assert order is not None
             assert order.status == FBS_ORDER_STATUS_IN_DELIVERY
+
+
+@pytest.mark.asyncio
+async def test_supply_without_wb_number_does_not_break_the_whole_worklist(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """Одна поставка без номера WB не имеет права ронять весь список.
+
+    Номер в WB появляется не сразу, а колонка в базе nullable. Модель ответа
+    требовала строку, и одна такая поставка отдавала пятисотку на весь список —
+    оператор терял вкладку целиком и не понимал почему.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, _ = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[992001],
+        supply_name="Без номера WB",
+    )
+    deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
+    assert deliver.status_code == 200, deliver.text
+
+    async with SessionLocal() as session:
+        row = await session.get(FbsSupply, uuid.UUID(supply["id"]))
+        assert row is not None
+        row.wb_supply_id = None
+        await session.commit()
+
+    worklist = await async_client.get(
+        "/operations/fbs-supplies/worklist?status_group=delivery&limit=500",
+        headers=headers,
+    )
+    assert worklist.status_code == 200, worklist.text
+    assert any(item["wb_supply_id"] is None for item in worklist.json()["items"])
