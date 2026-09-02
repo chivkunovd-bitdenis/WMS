@@ -35,7 +35,10 @@ from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
     get_or_create_sorting_location,
 )
-from app.services.wb_card_enrichment import subject_name_from_card
+from app.services.wb_card_enrichment import (
+    first_photo_url_from_card,
+    subject_name_from_card,
+)
 
 STATUS_DRAFT = "draft"
 STATUS_POSTED = "posted"
@@ -1018,6 +1021,51 @@ async def cancel_count(
     loaded = await get_count(session, tenant_id, count.id)
     assert loaded is not None
     return loaded
+
+
+async def product_photos(
+    session: AsyncSession,
+    products: list[Product],
+) -> dict[uuid.UUID, str | None]:
+    """Снимок товара для печатной описи тары.
+
+    Своей картинки у товара в WMS нет — она живёт в импортированной карточке WB,
+    ровно там же, откуда её берёт рабочий список ФБС. Одним запросом на весь
+    документ: пересчёт по складу — это сотни строк, и запрос на каждую убил бы
+    отдачу документа, которая случается на каждом скане.
+    """
+    result: dict[uuid.UUID, str | None] = {product.id: None for product in products}
+    pairs = {
+        (product.seller_id, product.wb_nm_id)
+        for product in products
+        if product.seller_id is not None and product.wb_nm_id is not None
+    }
+    if not pairs:
+        return result
+    rows = await session.execute(
+        select(SellerWildberriesImportedCard).where(
+            SellerWildberriesImportedCard.tenant_id == products[0].tenant_id,
+            or_(
+                *[
+                    and_(
+                        SellerWildberriesImportedCard.seller_id == seller_id,
+                        SellerWildberriesImportedCard.nm_id == nm_id,
+                    )
+                    for seller_id, nm_id in pairs
+                ]
+            ),
+        )
+    )
+    by_pair = {
+        (card.seller_id, card.nm_id): first_photo_url_from_card(card.raw_json or {})
+        for card in rows.scalars()
+    }
+    for product in products:
+        seller_id = product.seller_id
+        nm_id = product.wb_nm_id
+        if seller_id is not None and nm_id is not None:
+            result[product.id] = by_pair.get((seller_id, nm_id))
+    return result
 
 
 async def product_categories(
