@@ -57,6 +57,16 @@ export type CellNode = {
   children: InventoryNode[]
 }
 
+/**
+ * Ячейка склада, которую сканер обязан узнать, даже если она пуста по учёту.
+ *
+ * В дерево такие ячейки не попадают — иначе документ по складу распухнет
+ * сотнями пустых строк. Но «в ячейке лежит то, чего тут быть не должно» —
+ * первый случай, ради которого пересчёт и делают, и штрихкод такой ячейки
+ * сканер обязан понимать.
+ */
+export type ScannableCell = { id: string; label: string; barcode: string | null }
+
 export type CountStatus = 'draft' | 'posted' | 'cancelled'
 
 export type CountFill =
@@ -91,6 +101,8 @@ export type InventoryCount = {
    */
   scoped?: boolean
   cells: CellNode[]
+  /** Все ячейки склада для сканера, включая пустые по учёту. */
+  scannableCells: ScannableCell[]
 }
 
 /** Строка списка документов. */

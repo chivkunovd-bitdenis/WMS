@@ -67,6 +67,25 @@ class InventoryCountActualBatchIn(BaseModel):
     lines: list[InventoryCountActualIn]
 
 
+class InventoryCountFoundIn(BaseModel):
+    """Находка: товар лежит там, где по учёту его нет."""
+
+    # Экран присылает все прочтения кода: как пришло со сканера и как это
+    # выглядело бы в латинской раскладке. Иначе товар, который экран только что
+    # нашёл переводом раскладки, сервер не находил, и оператор видел зелёное
+    # «записываем» рядом с красным «товар не найден».
+    barcodes: list[str] = Field(min_length=1, max_length=4)
+    # Экран говорит, что ОТКРЫТО у сканера, а не куда писать: тара, ячейка или
+    # ничего. Адрес из этого выводит сервер — палета может стоять без ячейки, и
+    # знать об этом карточке тары, а не экрану.
+    cell_id: uuid.UUID | None = None
+    container_kind: Literal["pallet", "box", "cargo_place"] | None = None
+    container_id: uuid.UUID | None = None
+    # Идентификатор скана: экран генерирует его один раз на пик. Повтор того же
+    # скана (оборвался вайфай, оператор пикнул ещё раз) ничего не прибавляет.
+    scan_id: str | None = Field(default=None, max_length=64)
+
+
 class CountFillOut(BaseModel):
     mode: Literal["object", "all", "filters"]
     seller_id: str | None = None
@@ -99,6 +118,14 @@ class CountContainerNodeOut(BaseModel):
     code: str
     barcode: str | None = None
     children: list[CountProductNodeOut | CountContainerNodeOut]
+
+
+class CountScannableCellOut(BaseModel):
+    """Ячейка склада, которую сканер обязан узнать, даже если она пуста."""
+
+    id: str
+    label: str
+    barcode: str | None
 
 
 class CountCellOut(BaseModel):
@@ -169,6 +196,9 @@ class InventoryCountDetailOut(BaseModel):
     address_storage: bool
     lines: list[InventoryCountLineOut]
     cells: list[CountCellOut]
+    # Ячейки склада, которые сканер обязан узнавать, включая пустые по учёту.
+    # В дерево они не попадают, иначе документ распухнет пустыми строками.
+    scannable_cells: list[CountScannableCellOut] = []
 
 
 class ChangedBalanceOut(BaseModel):
@@ -317,6 +347,8 @@ async def _detail_out(
     current = await service.current_quantities(session, count)
     categories = await _categories(session, count)
     line_rows: list[InventoryCountLineOut] = []
+    # Пустой список — нормальное значение: без адресного хранения ячеек нет.
+    scannable_cells: list[CountScannableCellOut] = []
     nodes_by_cell: dict[
         tuple[str, str], list[CountProductNodeOut | CountContainerNodeOut]
     ] = defaultdict(list)
@@ -429,6 +461,17 @@ async def _detail_out(
             ],
             *fallback_cells,
         ]
+        # ⛔ Пустые по учёту ячейки в дерево не тащим — иначе документ по складу
+        # распухнет сотнями пустых строк. Но сканер обязан их узнавать: «в
+        # ячейке лежит то, чего по учёту тут нет» — это первый и главный случай,
+        # ради которого пересчёт и делают. Раньше штрихкод такой ячейки сканер
+        # не знал, уходил искать товар, не находил и предлагал записать находку
+        # со штрихкодом ЯЧЕЙКИ вместо товара.
+        scannable_cells = [
+            CountScannableCellOut(id=cell.id, label=cell.label, barcode=cell.barcode)
+            for cell in cells_by_id.values()
+            if cell.barcode
+        ]
     else:
         # Frontend flattens children when addressStorage=false and never renders
         # this technical wrapper as a cell.
@@ -459,16 +502,22 @@ async def _detail_out(
         address_storage=address_storage,
         lines=line_rows,
         cells=cells,
+        scannable_cells=scannable_cells,
     )
 
 
 def _http_error(exc: service.InventoryCountError) -> HTTPException:
     if exc.code in {
         "not_found",
+        "count_not_found",
+        "container_not_found",
+        "warehouse_required_without_address_storage",
         "line_not_found",
         "seller_not_found",
         "warehouse_not_found",
         "object_not_found",
+        "product_not_found",
+        "storage_location_not_found",
     }:
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
     if exc.code in {
@@ -478,6 +527,9 @@ def _http_error(exc: service.InventoryCountError) -> HTTPException:
         "empty_count",
         "container_has_no_stock",
         "balance_changed_during_post",
+        "count_not_editable",
+        "barcode_is_ambiguous",
+        "container_reference_invalid",
     }:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.code)
@@ -578,6 +630,49 @@ async def save_inventory_count_lines(
     except service.InventoryCountError as exc:
         raise _http_error(exc) from None
     return await _detail_out(session, count)
+
+
+class InventoryCountFoundOut(BaseModel):
+    """Документ после записи находки плюс честный текст для оператора."""
+
+    count: InventoryCountDetailOut
+    # Сколько числится по учёту в этом месте. Ноль — настоящая находка; больше
+    # нуля — строка, выпавшая из отбора документа, и место надо считать целиком.
+    expected_quantity: int
+    notice: str
+
+
+@router.post("/{count_id}/found", response_model=InventoryCountFoundOut)
+async def record_inventory_count_found(
+    count_id: uuid.UUID,
+    body: InventoryCountFoundIn,
+    user: Annotated[User, Depends(require_inventory_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryCountFoundOut:
+    """Добавляет в пересчёт строку товара, которого в этом месте не числится.
+
+    Ровно тот случай, ради которого пересчёт и делают: оператор сканирует в
+    короб то, чего по учёту там нет. Строка появляется со счётом 1, повторный
+    скан увеличивает счёт.
+    """
+    try:
+        found = await service.record_found(
+            session,
+            user.tenant_id,
+            count_id,
+            barcodes=body.barcodes,
+            cell_id=body.cell_id,
+            container_kind=body.container_kind,
+            container_id=body.container_id,
+            scan_id=body.scan_id,
+        )
+    except service.InventoryCountError as exc:
+        raise _http_error(exc) from None
+    return InventoryCountFoundOut(
+        count=await _detail_out(session, found.count),
+        expected_quantity=found.expected_quantity,
+        notice=found.notice,
+    )
 
 
 @router.post("/{count_id}/post", response_model=InventoryCountPostOut)
