@@ -82,6 +82,7 @@ export default defineConfig({
         fbsSpeed: 'fbs-speed.html',
         raschety: 'raschety.html',
         raschetyRazdely: 'raschety-razdely.html',
+        schet: 'schet.html',
       },
     },
   },
