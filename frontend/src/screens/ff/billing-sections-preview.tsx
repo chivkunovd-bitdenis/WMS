@@ -129,10 +129,44 @@ function detailsFor(sellerId: string) {
   }
 }
 
+// Счёт в макете тоже должен быть настоящим: пустое окно по кнопке «Выставить
+// счёт» ничего не показывает про то, как экран работает.
+const INVOICE_PREVIEW = {
+  id: 'invoice-preview',
+  seller_id: 'seller-1',
+  number: 'СЧ-2026-000117',
+  creation_mode: 'selected_operations' as const,
+  period_start: '2026-08-01',
+  period_end: '2026-08-31',
+  status: 'issued' as const,
+  issued_at: '2026-09-01T08:00:00Z',
+  total_amount_kopecks: 913500,
+  ff_profile: {
+    legal_name: 'ООО «Короб ВМС»',
+    inn: '7712345678',
+    kpp: '771201001',
+    bank_name: 'АО «Тинькофф Банк»',
+    bik: '044525974',
+    settlement_account: '40702810000000012345',
+    correspondent_account: '30101810145250000974',
+  },
+  seller_profile: {
+    legal_name: 'ООО «Ромашка»',
+    inn: '5024998877',
+    kpp: '502401001',
+  },
+  lines: [
+    { id: 'l1', description: 'Приёмка товара, 1 800 шт.', unit_price_kopecks: 300, total_amount_kopecks: 540000, sort_order: 0 },
+    { id: 'l2', description: 'Упаковка, 685 шт.', unit_price_kopecks: null, total_amount_kopecks: 351500, sort_order: 1 },
+    { id: 'l3', description: 'Хранение за август, 1 240 л·дн', unit_price_kopecks: 50, total_amount_kopecks: 62000, sort_order: 2 },
+  ],
+}
+
 function stubResponse(url: string): unknown {
   if (url.includes('/billing/seller-report/summary')) return SUMMARY
   const details = /\/billing\/seller-report\/sellers\/([^/?]+)\/details/.exec(url)
   if (details) return detailsFor(details[1] ?? 'seller-1')
+  if (url.includes('/billing/invoices-v2')) return INVOICE_PREVIEW
   if (url.includes('/billing/invoices')) return { items: [], next_cursor: null }
   if (url.includes('/notifications')) return { items: [], unread_count: 0 }
   return {}
@@ -169,6 +203,17 @@ export function BillingScreenPreview() {
         autoExpanded = true
         toggle.click()
         window.clearInterval(timer)
+        // И сразу отмечаем раздел: с пустым выбором кнопка «Выставить счёт»
+        // открывает пустую форму ручного счёта, и по макету не видно главного —
+        // что счёт собирается из выбранных начислений.
+        window.setTimeout(() => {
+          const box = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find(
+            (input) =>
+              input.closest('[data-testid]')?.getAttribute('data-testid') ===
+              'billing-pick-section-inbound',
+          )
+          box?.click()
+        }, 500)
         return
       }
       if (tries > 40) window.clearInterval(timer)
