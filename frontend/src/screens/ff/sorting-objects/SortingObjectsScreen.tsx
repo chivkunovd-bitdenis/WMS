@@ -161,7 +161,15 @@ export function SortingObjectsScreen({
   function moveGoods(line: GoodsLine, qty: number, target: Holder) {
     // Экран двигает у себя сразу, не дожидаясь сервера: оператор ставит короба
     // подряд, и пауза на каждый ответ превращает раскладку в ожидание.
-    onPlace?.({ kind: 'product', id: line.productId, qty, ...targetParts(target) })
+    //
+    // Серверу уходит `line.id` — идентификатор СТРОКИ ОСТАТКА, а не товара.
+    // Сервер ищет по нему запись «столько-то штук вот в этом месте»
+    // (`InventoryBalance.id == object_id`), потому что один и тот же товар
+    // лежит в разных местах разными строками. Здесь стоял `line.productId`, и
+    // любая раскладка россыпи — и в ячейку, и в короб — отвечала 404
+    // `object_not_found`: экран откатывал перенос и перечитывал склад, а
+    // оператор видел, что строка «сбрасывается».
+    onPlace?.({ kind: 'product', id: line.id, qty, ...targetParts(target) })
     setLines((current) => {
       const rest = current.filter((one) => one.id !== line.id)
       const left = line.qty - qty
