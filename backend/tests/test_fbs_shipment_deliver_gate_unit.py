@@ -435,3 +435,55 @@ def test_empty_supply_still_refuses_handoff() -> None:
     blockers = [check.code for check in checks if check.severity == CHECK_BLOCKER]
     assert blockers == ["supply_empty"]
     assert _checks_allow_delivery(checks) is False
+
+
+def test_wb_checklist_survives_stock_moving_under_the_operator() -> None:
+    """Чужое движение по остатку не должно ронять «Чек-лист устарел».
+
+    На складе одновременно работают несколько человек. Пока оператор читает
+    окно передачи, соседний подбор или проведённая приёмка меняют остаток по
+    тому же товару. Раньше версия чек-листа считалась вместе с точными числами
+    и ячейками, менялась от этого, и оператор получал 409 без выхода.
+    """
+    from app.services.fbs_shipment_service import _compute_preflight_version
+
+    supply = _mock_supply()
+    orders = [_mock_order(FBS_ORDER_STATUS_PACKED)]
+    common = dict(
+        cargo_qr_ready=True,
+        has_physical_boxes=True,
+        without_distribution=False,
+        unassigned_packed_order_ids=frozenset(),
+        composition_fingerprint="wb-fingerprint",
+    )
+
+    before = _compute_preflight_version(
+        supply, orders, source_plan=_plan(shortage=0), **common
+    )
+    after_stock_moved = _compute_preflight_version(
+        supply, orders, source_plan=_plan(shortage=0, location="другая-ячейка"), **common
+    )
+    assert before == after_stock_moved
+
+    # А вот появление минуса там, где его не было, оператор обязан увидеть.
+    with_shortage = _compute_preflight_version(
+        supply, orders, source_plan=_plan(shortage=1), **common
+    )
+    assert with_shortage != before
+
+
+def _plan(*, shortage: int, location: str = "ячейка-A") -> SimpleNamespace:
+    resolution = SimpleNamespace(
+        fbs_order_id=uuid.uuid4(),
+        product_id=uuid.uuid4(),
+        quantity=1,
+        source_warehouse_id=uuid.uuid4(),
+        storage_location_id=location,
+        container_kind=None,
+        container_id=None,
+        source_mode="auto",
+        positive_quantity=1 - shortage,
+        shortage_quantity=shortage,
+        negative_quantity=shortage,
+    )
+    return SimpleNamespace(resolutions=(resolution,), has_shortage=shortage > 0)

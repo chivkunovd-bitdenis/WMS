@@ -506,25 +506,41 @@ def _compute_preflight_version(
                 str(order.metadata_delivery_allowed),
             ]
         parts.extend(order_parts)
-    for item in sorted(
-        source_plan.resolutions if source_plan is not None else (),
-        key=lambda row: (str(row.fbs_order_id), str(row.product_id)),
-    ):
-        parts.extend(
-            [
-                str(item.fbs_order_id),
-                str(item.product_id),
-                str(item.quantity),
-                str(item.source_warehouse_id),
-                str(item.storage_location_id),
-                item.container_kind or "",
-                str(item.container_id or ""),
-                item.source_mode,
-                str(item.positive_quantity),
-                str(item.shortage_quantity),
-                str(item.negative_quantity),
-            ]
-        )
+    if supply.marketplace == "wb":
+        # ⛔ Версия защищает то, что оператор реально видел и с чем согласился:
+        # состав заказов и сам факт «уйдём в минус». Точные числа, ячейки и
+        # режим списания в неё НЕ входят.
+        #
+        # Раньше входили — и на складе, где работают несколько человек, версия
+        # менялась от любого чужого движения по тому же товару: соседний подбор,
+        # проведённая приёмка, перенос короба. Оператор открывал окно, читал
+        # предупреждения, жал «Передать» и получал 409 «Чек-лист устарел».
+        # Чинить это ему было нечем.
+        #
+        # Грубого признака недостачи достаточно: если минус появился там, где
+        # его не было, версия изменится и система переспросит один раз. Если
+        # минус был и просто стал глубже — оператор его уже видел и подтвердил.
+        parts.append("shortage" if source_plan is not None and source_plan.has_shortage else "ok")
+    else:
+        for item in sorted(
+            source_plan.resolutions if source_plan is not None else (),
+            key=lambda row: (str(row.fbs_order_id), str(row.product_id)),
+        ):
+            parts.extend(
+                [
+                    str(item.fbs_order_id),
+                    str(item.product_id),
+                    str(item.quantity),
+                    str(item.source_warehouse_id),
+                    str(item.storage_location_id),
+                    item.container_kind or "",
+                    str(item.container_id or ""),
+                    item.source_mode,
+                    str(item.positive_quantity),
+                    str(item.shortage_quantity),
+                    str(item.negative_quantity),
+                ]
+            )
     raw = "|".join(parts).encode()
     return hashlib.sha256(raw).hexdigest()
 
@@ -962,7 +978,10 @@ async def _sync_and_validate_deliver(
         if current_version != confirmed_preflight_version:
             raise FbsShipmentError(
                 "stale_preflight",
-                message="Чек-лист устарел — обновите preflight.",
+                message=(
+                    "Состав поставки изменился, пока было открыто окно передачи. "
+                    "Закройте его и откройте заново — проверки пересчитаются."
+                ),
                 context={
                     "current_version": current_version,
                     "confirmed_preflight_version": confirmed_preflight_version,
@@ -993,7 +1012,11 @@ async def _sync_and_validate_deliver(
     if source_plan.has_shortage and confirmed_preflight_version != current_version:
         raise FbsShipmentError(
             "negative_stock_confirmation_required",
-            message="Подтвердите актуальный план списания в минус.",
+            message=(
+                "Товара на складе стало меньше, чем было при открытии окна. "
+                "Закройте окно и откройте заново — система покажет, "
+                "какой заказ уйдёт в минус."
+            ),
             context={"current_version": current_version},
             http_status=409,
         )
