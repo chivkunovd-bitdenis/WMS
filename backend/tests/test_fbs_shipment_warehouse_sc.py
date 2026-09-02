@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient, Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
@@ -1836,3 +1836,102 @@ async def test_fbs_shipment_deliver_cancelled_order_in_supply(
         assert cancelled_order is not None and active_order is not None
         assert cancelled_order.status == FBS_ORDER_STATUS_CANCELLED
         assert active_order.status == FBS_ORDER_STATUS_IN_DELIVERY
+
+
+# ⛔ Эти два теста доводят поставку ДО ПЕРЕДАЧИ, а не до чек-листа.
+#
+# Первая попытка починить «незнакомый артикул не держит поставку» проверялась
+# юнит-тестом на чек-лист: он был зелёный, а поставка всё равно не уезжала —
+# падала уже после подтверждения WB, на восстановлении плана списания. Проверять
+# надо результат для оператора, а не промежуточный флаг.
+@pytest.mark.asyncio
+async def test_supply_of_only_unmapped_orders_still_reaches_wb(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """Поставка, где ни один заказ не сопоставлен с товаром, обязана уехать.
+
+    Так выглядит поставка, состав которой собрал сам продавец, положив туда
+    артикул, которого нет в нашем каталоге. Списывать с нашего склада нечего, но
+    товар физически стоит на рампе, и держать его нельзя.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, order_ids = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[971001],
+        supply_name="Only unmapped",
+    )
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_ids[0])
+        assert order is not None
+        order.product_id = None
+        await session.commit()
+
+    preflight = await _delivery_preflight(async_client, headers, supply["id"])
+    assert preflight["can_deliver"] is True
+    assert any(
+        check["code"] == "order_product_not_mapped" and check["severity"] == "warning"
+        for check in preflight["checks"]
+    )
+
+    deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
+    assert deliver.status_code == 200, deliver.text
+    assert deliver.json()["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_ids[0])
+        assert order is not None
+        assert order.status == FBS_ORDER_STATUS_IN_DELIVERY
+        written_off = await session.scalar(
+            select(func.count(FbsShipmentReversalLedger.id)).where(
+                FbsShipmentReversalLedger.fbs_order_id == order_ids[0]
+            )
+        )
+        # Списывать нечего: товар не сопоставлен, движения по складу нет.
+        assert written_off == 0
+
+
+@pytest.mark.asyncio
+async def test_mixed_supply_marks_every_order_delivered(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """Уехала поставка — уехали все её заказы, включая несопоставленный.
+
+    Иначе оператор видит внутри переданной поставки заказ в статусе «упакован»
+    и не понимает, отгрузили его или нет.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, order_ids = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[972001, 972002],
+        supply_name="Mixed mapping",
+    )
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_ids[0])
+        assert order is not None
+        order.product_id = None
+        await session.commit()
+
+    deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
+    assert deliver.status_code == 200, deliver.text
+
+    async with SessionLocal() as session:
+        for local_order_id in order_ids:
+            order = await session.get(FbsOrder, local_order_id)
+            assert order is not None
+            assert order.status == FBS_ORDER_STATUS_IN_DELIVERY

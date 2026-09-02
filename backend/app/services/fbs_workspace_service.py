@@ -151,6 +151,11 @@ async def get_supply_workspace(
             "marketplace": supply.marketplace,
             "wb_supply_id": supply.wb_supply_id,
             "external_supply_id": supply.external_supply_id,
+            # «wms» — поставку собрали у нас, «wb» — её собрал сам продавец в
+            # своём кабинете. Работать с такой можно как с обычной, но оператор
+            # обязан видеть, что состав пришёл снаружи и может измениться без
+            # нашего участия (требование владельца от 31.08.2026).
+            "source": supply.source,
             "name": supply.name,
             "status": supply.status,
             "delivery_type": supply.delivery_type,
