@@ -82,16 +82,6 @@ function FbsStockDialogBody({
   onBind: (warehouseId: string, wbWarehouseId: string) => void
   saveError?: string | null
 }) {
-  // Черновик начинается с текущего правила; тело монтируется на каждое открытие,
-  // поэтому синхронизировать его с внешним значением не нужно.
-  const [draft, setDraft] = useState<FbsRule>(rule)
-
-  const many = products.length > 1
-  // При нескольких товарах свободный остаток у каждого свой; показываем сумму,
-  // чтобы процент не выглядел числом, взятым с потолка.
-  const base = products.reduce((sum, product) => sum + freeStock(product), 0)
-  const onHand = products.reduce((sum, product) => sum + onHandTotal(product), 0)
-  const reserved = products.reduce((sum, product) => sum + reservedTotal(product), 0)
   // Склады делят между собой ОДИН свободный остаток, а не имеют каждый свой.
   // Товар лежит у нас, а склады продавца в кабинете WB — это направления, куда
   // мы его выставляем. Поэтому сумма долей не может превысить сто процентов:
@@ -101,6 +91,28 @@ function FbsStockDialogBody({
   // делить не с кем, и выбор складов на экране только мешает: один ползунок.
   const served = servedWarehouses(seller)
   const single = served.length <= 1
+
+  // Черновик начинается с текущего правила; тело монтируется на каждое открытие,
+  // поэтому синхронизировать его с внешним значением не нужно.
+  //
+  // Единственный обслуживаемый склад — особый случай. Галочку «одинаково по
+  // всем складам» в этом режиме не показывают (делить не с кем), а расчёт при
+  // выключенной галочке берёт проценты складов и общий процент игнорирует.
+  // Товар с выключённым флагом попадал в тупик: верхний ползунок стоял на 100%,
+  // а в Wildberries уходила старая доля склада (свободно 5, доля склада 30% —
+  // «1 шт уйдёт» при «100% — это 5 шт»), и включить флаг было негде. Поэтому
+  // при одном складе черновик всегда считается по общему проценту: что оператор
+  // видит на ползунке, то и уезжает.
+  const [draft, setDraft] = useState<FbsRule>(
+    single ? { ...rule, sameEverywhere: true } : rule,
+  )
+
+  const many = products.length > 1
+  // При нескольких товарах свободный остаток у каждого свой; показываем сумму,
+  // чтобы процент не выглядел числом, взятым с потолка.
+  const base = products.reduce((sum, product) => sum + freeStock(product), 0)
+  const onHand = products.reduce((sum, product) => sum + onHandTotal(product), 0)
+  const reserved = products.reduce((sum, product) => sum + reservedTotal(product), 0)
 
   const spent = served.reduce(
     (sum, warehouse) => sum + (draft.byWarehouse[warehouse.id] ?? 0),
