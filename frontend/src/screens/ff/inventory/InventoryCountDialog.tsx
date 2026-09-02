@@ -99,6 +99,9 @@ function InventoryCountDialogState({
   // Память сканера на одну вещь: какую тару открыли. Пока открыта, пики идут в неё.
   const [openPlace, setOpenPlace] = useState<ScanOpenPlace>(NOTHING_OPEN)
   const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
+  // Переспрос перед проведением — та же защита, что и на полном документе:
+  // кнопка стоит рядом с «Сохранить», а действие необратимое.
+  const [confirmPost, setConfirmPost] = useState(false)
   const [scanFocus, setScanFocus] = useState<{ key: string; request: number } | null>(null)
   const treeRef = useRef<HTMLDivElement>(null)
 
@@ -193,7 +196,7 @@ function InventoryCountDialogState({
             Сохранить
           </SecondaryAction>
           <PrimaryAction
-            onClick={() => count && onPost(count)}
+            onClick={() => setConfirmPost(true)}
             disabledReason={postReason}
             data-testid="inv-dialog-post"
           >
@@ -283,6 +286,35 @@ function InventoryCountDialogState({
           />
         </Box>
       </Stack>
+      <AppDialog
+        open={confirmPost}
+        title="Вы уверены, что хотите провести документ?"
+        onClose={() => setConfirmPost(false)}
+        testId="inv-dialog-post-confirm"
+        actions={
+          <>
+            <SecondaryAction
+              onClick={() => setConfirmPost(false)}
+              data-testid="inv-dialog-post-confirm-cancel"
+            >
+              Не проводить
+            </SecondaryAction>
+            <PrimaryAction
+              onClick={() => {
+                setConfirmPost(false)
+                if (count) onPost(count)
+              }}
+              data-testid="inv-dialog-post-confirm-ok"
+            >
+              Провести
+            </PrimaryAction>
+          </>
+        }
+      >
+        <Typography variant="body2">
+          Актуальный остаток на складе будет изменён.
+        </Typography>
+      </AppDialog>
     </AppDialog>
   )
 }
