@@ -26,7 +26,7 @@ from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
 from app.services import inventory_service, tenant_settings_service
-from app.services.inventory_container_service import ContainerKind, validate_container
+from app.services.inventory_container_service import ContainerKind
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
     get_or_create_sorting_location,
@@ -497,6 +497,33 @@ async def save_actuals(
     return loaded
 
 
+@dataclass(frozen=True)
+class FoundResult:
+    """Результат записи находки вместе с честным текстом для оператора."""
+
+    count: InventoryCount
+    expected_quantity: int
+    notice: str
+
+
+def _found_notice(expected_quantity: int) -> str:
+    """Что сказать оператору. Правду, а не то, что удобно.
+
+    Экран решает «это находка» по одному признаку: строки нет в документе. Но
+    документ бывает отобран — по селлеру, по категории, по одному объекту. Тогда
+    «строки нет в документе» и «по учёту здесь ничего нет» — разные вещи, и
+    сказать оператору «не числится», когда на месте лежит двадцать штук,
+    значит соврать: он посчитает одну и уйдёт, а проведение спишет девятнадцать.
+    """
+    if expected_quantity == 0:
+        return "По учёту здесь ничего не числится — записали находку."
+    return (
+        f"По учёту здесь числится {expected_quantity} шт., но строки в документе "
+        "не было — она добавлена. Посчитайте это место целиком, иначе при "
+        "проведении недостающее спишется."
+    )
+
+
 async def record_found(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -506,7 +533,7 @@ async def record_found(
     cell_id: uuid.UUID | None,
     container_kind: str | None,
     container_id: uuid.UUID | None,
-) -> InventoryCount:
+) -> FoundResult:
     """Записывает находку: товар лежит там, где по учёту его нет.
 
     Ради этого пересчёт и затевают. Раньше такой скан отклонялся словами «код в
@@ -585,10 +612,11 @@ async def record_found(
     )
     if existing is not None:
         existing.actual_quantity = int(existing.actual_quantity or 0) + 1
+        expected = int(existing.expected_quantity)
         await session.commit()
         loaded = await get_count(session, tenant_id, count_id)
         assert loaded is not None
-        return loaded
+        return FoundResult(loaded, expected, _found_notice(expected))
 
     line = InventoryCountLine(
         count_id=count.id,
@@ -606,6 +634,7 @@ async def record_found(
     line.expected_quantity = await _current_quantity(
         session, tenant_id=tenant_id, line=line, lock=False
     )
+    expected = int(line.expected_quantity)
     session.add(line)
     try:
         await session.commit()
@@ -625,7 +654,7 @@ async def record_found(
         )
     loaded = await get_count(session, tenant_id, count_id)
     assert loaded is not None
-    return loaded
+    return FoundResult(loaded, expected, _found_notice(expected))
 
 
 async def _resolve_found_location(
@@ -659,11 +688,22 @@ async def _resolve_found_location(
         raise InventoryCountError("warehouse_required_without_address_storage")
 
     if container_kind is not None and container_id is not None:
-        # Тару проверяем здесь, а не на проведении: иначе чужая или удалённая
-        # тара доезжала до записи движения и вылетала оттуда пятисоткой, а
-        # документ нельзя было провести, пока оператор не сотрёт эту строку.
+        # ⛔ Не писать здесь свой поиск «где стоит эта тара».
+        #
+        # Он уже есть один на всю систему и знает то, чего не видно с первого
+        # взгляда: у короба, положенного на палету, собственная ячейка
+        # обнуляется и остаётся только ссылка на палету; приёмочные короба и
+        # грузоместа живут в отдельных таблицах; если ничего не проставлено,
+        # адрес берётся из фактического остатка этой тары. Своя короткая
+        # версия этой функции возвращала «ячейки нет» и уводила находку в зону
+        # сортировки — а оттуда товар уходит в кабинет продавца как доступный к
+        # продаже, но подобрать его под отгрузку уже нельзя.
+        #
+        # Проверку тары resolve_container_location делает сам.
+        from app.services.warehouse_map_service import resolve_container_location
+
         try:
-            await validate_container(
+            return await resolve_container_location(
                 session,
                 tenant_id,
                 warehouse_id,
@@ -672,11 +712,6 @@ async def _resolve_found_location(
             )
         except ValueError as exc:
             raise InventoryCountError("container_not_found") from exc
-        placed_at = await _container_location_id(session, container_kind, container_id)
-        if placed_at is not None:
-            return placed_at
-        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
-        return sorting.id
 
     if cell_id is not None:
         location = await session.get(StorageLocation, cell_id)
@@ -693,21 +728,6 @@ async def _resolve_found_location(
     return sorting.id
 
 
-async def _container_location_id(
-    session: AsyncSession,
-    container_kind: str,
-    container_id: uuid.UUID,
-) -> uuid.UUID | None:
-    """Ячейка, в которой стоит тара. None — тара стоит без ячейки."""
-    if container_kind == "pallet":
-        return await session.scalar(
-            select(Pallet.storage_location_id).where(Pallet.id == container_id)
-        )
-    return await session.scalar(
-        select(WarehouseBox.storage_location_id).where(WarehouseBox.id == container_id)
-    )
-
-
 async def _increment_existing_found_line(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -717,7 +737,7 @@ async def _increment_existing_found_line(
     storage_location_id: uuid.UUID,
     container_kind: str | None,
     container_id: uuid.UUID | None,
-) -> InventoryCount:
+) -> FoundResult:
     line = await session.scalar(
         select(InventoryCountLine)
         .where(
@@ -732,10 +752,11 @@ async def _increment_existing_found_line(
     if line is None:
         raise InventoryCountError("count_not_found")
     line.actual_quantity = int(line.actual_quantity or 0) + 1
+    expected = int(line.expected_quantity)
     await session.commit()
     loaded = await get_count(session, tenant_id, count_id)
     assert loaded is not None
-    return loaded
+    return FoundResult(loaded, expected, _found_notice(expected))
 
 
 async def _current_quantity(

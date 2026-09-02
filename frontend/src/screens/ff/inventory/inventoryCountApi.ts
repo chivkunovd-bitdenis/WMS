@@ -198,12 +198,24 @@ export function toListItem(row: ApiSummary): CountListItem {
 }
 
 /** Введённые факты для отправки: сервер ждёт строку и число. */
-export function actualPayload(count: InventoryCount) {
+/**
+ * Что отправить на сервер: только те строки, которые правил этот оператор.
+ *
+ * Раньше уходил весь документ целиком, включая непосчитанные строки с пустым
+ * фактом. В одиночку это безобидно, но в одном документе работают вдвоём: один
+ * открыл экран, второй посчитал десять строк, первый нажал «Сохранить» — и
+ * записал поверх свои пустые значения, стерев чужую работу. Строка, которую
+ * этот оператор не трогал, не должна попадать в запрос вообще: сервер её тогда
+ * не тронет.
+ */
+export function actualPayload(count: InventoryCount, touched?: ReadonlySet<string>) {
   const lines: Array<{ line_id: string; actual_quantity: number | null }> = []
   function collect(nodes: InventoryNode[]) {
     for (const node of nodes) {
       if (node.kind === 'product') {
-        lines.push({ line_id: node.id, actual_quantity: node.actual })
+        if (!touched || touched.has(node.id)) {
+          lines.push({ line_id: node.id, actual_quantity: node.actual })
+        }
       } else {
         collect(node.children)
       }
@@ -257,7 +269,7 @@ export async function recordCountFound(
     containerKind: 'pallet' | 'box' | 'cargo_place' | null
     containerId: string | null
   },
-): Promise<InventoryCount> {
+): Promise<{ count: InventoryCount; expectedQuantity: number; notice: string }> {
   const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/found`), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
@@ -269,18 +281,24 @@ export async function recordCountFound(
     }),
   })
   if (!res.ok) throw new Error(await readApiErrorMessage(res))
-  return toCount((await res.json()) as ApiDetail)
+  const body = (await res.json()) as {
+    count: ApiDetail
+    expected_quantity: number
+    notice: string
+  }
+  return { count: toCount(body.count), expectedQuantity: body.expected_quantity, notice: body.notice }
 }
 
 /** Положить введённый факт. Остатки не трогает: документ остаётся черновиком. */
 export async function saveCountActuals(
   token: string,
   count: InventoryCount,
+  touched?: ReadonlySet<string>,
 ): Promise<InventoryCount> {
   const res = await fetch(apiUrl(`${INVENTORY_BASE}/${count.id}/lines`), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
-    body: JSON.stringify(actualPayload(count)),
+    body: JSON.stringify(actualPayload(count, touched)),
   })
   if (!res.ok) throw new Error(await readApiErrorMessage(res))
   return toCount((await res.json()) as ApiDetail)
@@ -292,11 +310,15 @@ export async function saveCountActuals(
  * Сначала кладём введённое, потом проводим — иначе проведётся то, что сервер
  * помнит с прошлого сохранения, а не то, что человек видит на экране.
  */
-export async function postCount(token: string, count: InventoryCount): Promise<PostResult> {
+export async function postCount(
+  token: string,
+  count: InventoryCount,
+  touched?: ReadonlySet<string>,
+): Promise<PostResult> {
   const saved = await fetch(apiUrl(`${INVENTORY_BASE}/${count.id}/lines`), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
-    body: JSON.stringify(actualPayload(count)),
+    body: JSON.stringify(actualPayload(count, touched)),
   })
   if (!saved.ok) throw new Error(await readApiErrorMessage(saved))
   const res = await fetch(apiUrl(`${INVENTORY_BASE}/${count.id}/post`), {

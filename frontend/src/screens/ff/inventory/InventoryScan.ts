@@ -326,7 +326,7 @@ export function applyScan(
     return {
       count,
       open,
-      message: `Код ${code} по учёту здесь не числится — записываем как находку.`,
+      message: `Код ${code} — записываем находку сюда.`,
       tone: 'ok',
       found: { barcodes: codes, ...place },
     }
@@ -356,7 +356,7 @@ export function applyScan(
     return {
       count,
       open,
-      message: `${byBarcode[0].product.name} по учёту в ${openName} не числится — записываем как находку.`,
+      message: `${byBarcode[0].product.name} — записываем находку в ${openName}.`,
       tone: 'ok',
       found: { barcodes: codes, ...place },
     }

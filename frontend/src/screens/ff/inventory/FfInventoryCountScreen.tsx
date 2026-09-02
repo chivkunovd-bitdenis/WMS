@@ -69,7 +69,12 @@ type Props = {
   error: string | null
   /** Что сказали в ответ на сохранение или проведение. */
   note: string | null
-  onChange: (next: InventoryCount) => void
+  /**
+   * Изменение документа. Второй аргумент — строка, которую тронул оператор:
+   * по нему страница понимает, что именно отправлять на сервер, и не пишет
+   * поверх работы второго кладовщика в том же документе.
+   */
+  onChange: (next: InventoryCount, touchedLineId?: string) => void
   onSave: () => void
   onPost: () => void
   onCancelDocument: () => void
@@ -135,7 +140,12 @@ export function FfInventoryCountScreen({
       }))
     }
     if (result.found) onFound?.(result.found)
-    if (result.count !== count) onChange(result.count)
+    if (result.count !== count) {
+      const touched = result.focusRowKey?.startsWith('product:')
+        ? result.focusRowKey.slice('product:'.length)
+        : undefined
+      onChange(result.count, touched)
+    }
   }
 
   // Явная кнопка рядом со сканером: не у каждого оператора под рукой штрихкод
@@ -174,7 +184,7 @@ export function FfInventoryCountScreen({
   }
 
   function handleActual(row: InvRow, value: number | null) {
-    onChange(setActual(count, row.id, value))
+    onChange(setActual(count, row.id, value), row.id)
   }
 
   const metrics: ReportMetricItem[] = [

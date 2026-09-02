@@ -426,3 +426,34 @@ export function collapseAllKeys(count: InventoryCount): Set<string> {
   }
   return keys
 }
+
+/**
+ * Накладывает пики, сделанные пока летел запрос, на ответ сервера.
+ *
+ * Кладовщик сканирует непрерывно, а запись находки — это два запроса подряд.
+ * Пока они летят, он успевает пикнуть ещё несколько штук: они попадают в
+ * состояние экрана, но не в снимок, который мы отправили. Подставить ответ
+ * сервера поверх состояния целиком — значит молча стереть эти пики.
+ *
+ * Поэтому сравниваем отправленный снимок с тем, что на экране сейчас, и всё,
+ * что за это время изменилось, переносим на серверную версию. Серверная версия
+ * при этом остаётся источником структуры: у новой строки находки есть
+ * идентификатор, которого на клиенте быть не могло.
+ */
+export function mergeInFlightActuals(
+  server: InventoryCount,
+  sent: InventoryCount,
+  current: InventoryCount,
+): InventoryCount {
+  const sentActuals = new Map(allProducts(sent).map((item) => [item.id, item.actual]))
+  const changed = new Map<string, number | null>()
+  for (const item of allProducts(current)) {
+    if (!sentActuals.has(item.id)) continue
+    if (sentActuals.get(item.id) !== item.actual) changed.set(item.id, item.actual)
+  }
+  let merged = server
+  for (const [productId, actual] of changed) {
+    merged = setActual(merged, productId, actual)
+  }
+  return merged
+}

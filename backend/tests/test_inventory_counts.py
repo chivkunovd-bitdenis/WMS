@@ -774,7 +774,7 @@ async def test_inventory_count_found_creates_line_and_second_scan_increments(
     )
     assert first.status_code == 200, first.text
     found_line = next(
-        line for line in first.json()["lines"] if line["product_id"] == str(surprise)
+        line for line in first.json()["count"]["lines"] if line["product_id"] == str(surprise)
     )
     assert found_line["expected_quantity"] == 0
     assert found_line["actual_quantity"] == 1
@@ -785,7 +785,7 @@ async def test_inventory_count_found_creates_line_and_second_scan_increments(
     )
     assert second.status_code == 200, second.text
     surprise_lines = [
-        line for line in second.json()["lines"] if line["product_id"] == str(surprise)
+        line for line in second.json()["count"]["lines"] if line["product_id"] == str(surprise)
     ]
     assert len(surprise_lines) == 1
     assert surprise_lines[0]["actual_quantity"] == 2
@@ -827,7 +827,7 @@ async def test_inventory_count_found_survives_scanner_layout_and_case(
     )
     assert response.status_code == 200, response.text
     line = next(
-        line for line in response.json()["lines"] if line["product_id"] == str(surprise)
+        line for line in response.json()["count"]["lines"] if line["product_id"] == str(surprise)
     )
     assert line["actual_quantity"] == 1
 
@@ -901,7 +901,7 @@ async def test_inventory_count_found_without_place_goes_to_sorting_zone(
     )
     assert response.status_code == 200, response.text
     line = next(
-        line for line in response.json()["lines"] if line["product_id"] == str(surprise)
+        line for line in response.json()["count"]["lines"] if line["product_id"] == str(surprise)
     )
     assert line["actual_quantity"] == 1
     assert line["container_id"] is None

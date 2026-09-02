@@ -604,13 +604,23 @@ async def save_inventory_count_lines(
     return await _detail_out(session, count)
 
 
-@router.post("/{count_id}/found", response_model=InventoryCountDetailOut)
+class InventoryCountFoundOut(BaseModel):
+    """Документ после записи находки плюс честный текст для оператора."""
+
+    count: InventoryCountDetailOut
+    # Сколько числится по учёту в этом месте. Ноль — настоящая находка; больше
+    # нуля — строка, выпавшая из отбора документа, и место надо считать целиком.
+    expected_quantity: int
+    notice: str
+
+
+@router.post("/{count_id}/found", response_model=InventoryCountFoundOut)
 async def record_inventory_count_found(
     count_id: uuid.UUID,
     body: InventoryCountFoundIn,
     user: Annotated[User, Depends(require_inventory_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
-) -> InventoryCountDetailOut:
+) -> InventoryCountFoundOut:
     """Добавляет в пересчёт строку товара, которого в этом месте не числится.
 
     Ровно тот случай, ради которого пересчёт и делают: оператор сканирует в
@@ -618,7 +628,7 @@ async def record_inventory_count_found(
     скан увеличивает счёт.
     """
     try:
-        count = await service.record_found(
+        found = await service.record_found(
             session,
             user.tenant_id,
             count_id,
@@ -629,7 +639,11 @@ async def record_inventory_count_found(
         )
     except service.InventoryCountError as exc:
         raise _http_error(exc) from None
-    return await _detail_out(session, count)
+    return InventoryCountFoundOut(
+        count=await _detail_out(session, found.count),
+        expected_quantity=found.expected_quantity,
+        notice=found.notice,
+    )
 
 
 @router.post("/{count_id}/post", response_model=InventoryCountPostOut)

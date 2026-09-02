@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { FfInventoryCountScreen } from './FfInventoryCountScreen'
+import { mergeInFlightActuals } from './InventoryRows'
 import { FfInventoryListScreen } from './FfInventoryListScreen'
 import { InventoryCreateDialog, type CreateFill } from './InventoryCreateDialog'
 import type { CountListItem, InventoryCount } from './InventoryTypes'
@@ -93,6 +94,15 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     }
   }
 
+  // Строки, которые правил ИМЕННО этот оператор в этом сеансе. Отправляем на
+  // сервер только их: документ один, а кладовщиков в нём может быть двое, и
+  // запись всего документа целиком стирает чужую работу.
+  const touchedRef = useRef<Set<string>>(new Set())
+
+  function noteTouched(lineId?: string) {
+    if (lineId) touchedRef.current.add(lineId)
+  }
+
   async function save() {
     if (!count) return
     setLoading(true)
@@ -100,10 +110,11 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
       const res = await fetch(apiUrl(`${BASE}/${count.id}/lines`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
-        body: JSON.stringify(actualPayload(count)),
+        body: JSON.stringify(actualPayload(count, touchedRef.current)),
       })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
       setCount(toCount((await res.json()) as ApiDetail))
+      touchedRef.current = new Set()
       setNote('Сохранено. Остатки не тронуты.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось сохранить')
@@ -121,7 +132,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
       const saved = await fetch(apiUrl(`${BASE}/${count.id}/lines`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
-        body: JSON.stringify(actualPayload(count)),
+        body: JSON.stringify(actualPayload(count, touchedRef.current)),
       })
       if (!saved.ok) throw new Error(await readApiErrorMessage(saved))
       const res = await fetch(apiUrl(`${BASE}/${count.id}/post`), {
@@ -173,16 +184,17 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     if (!count || count.status !== 'draft') return
     setError(null)
     try {
-      // Сначала кладём на сервер всё, что оператор уже насчитал.
-      //
-      // Строку находки заводит сервер и возвращает документ целиком. Если
-      // подставить этот ответ поверх локального состояния, не сохранив
-      // введённое, посчитанное за полчаса сканирования молча обнулится:
-      // автосохранения в этом экране нет, факт живёт в состоянии React до
-      // нажатия «Сохранить». Оператор сканирует, а не жмёт кнопки, — значит
-      // сохранять обязаны мы.
-      await saveCountActuals(token, count)
-      setCount(await recordCountFound(token, count.id, place))
+      // Сначала кладём на сервер всё, что оператор уже насчитал: автосохранения
+      // в этом экране нет, факт живёт в состоянии React до нажатия «Сохранить»,
+      // а оператор сканирует, а не жмёт кнопки.
+      const sent = count
+      await saveCountActuals(token, sent, touchedRef.current)
+      const found = await recordCountFound(token, sent.id, place)
+      // Пока летели два запроса, кладовщик продолжал сканировать. Эти пики есть
+      // на экране, но не в отправленном снимке — переносим их на ответ сервера,
+      // иначе они молча исчезнут.
+      setCount((live) => (live ? mergeInFlightActuals(found.count, sent, live) : found.count))
+      setNote(found.notice)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось записать находку')
     }
@@ -251,7 +263,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         loading={loading}
         error={error}
         note={note}
-        onChange={setCount}
+        onChange={(next, touchedLineId) => { noteTouched(touchedLineId); setCount(next) }}
         onSave={() => void save()}
         onPost={() => void post()}
         onCancelDocument={() => void cancelDocument()}
