@@ -11,6 +11,14 @@ import '../../../index.css'
 // адресу /knowledge.html при запущенном `npm run dev`. Раздел статический, поэтому
 // в превью он ведёт себя ровно так же, как в портале — это единственный способ
 // посмотреть на статьи глазами, не заводя токен.
+//
+// `?article=<slug>` открывает статью сразу. Нужно для проверки снимками: без этого
+// на нужную страницу можно попасть только кликом, а безголовый браузер не кликает.
+
+function initialEntry(): string {
+  const slug = new URLSearchParams(window.location.search).get('article')
+  return slug ? `/app/ff/knowledge/${slug}` : '/app/ff/knowledge'
+}
 
 export function KnowledgePreview() {
   return (
@@ -21,7 +29,7 @@ export function KnowledgePreview() {
           Превью раздела «База знаний». Рамка вокруг — обвязка превью, в портале экран живёт внутри
           общего шелла с левым меню.
         </Typography>
-        <MemoryRouter initialEntries={['/app/ff/knowledge']}>
+        <MemoryRouter initialEntries={[initialEntry()]}>
           <Routes>
             <Route path="/app/ff/knowledge" element={<FfKnowledgeBaseScreen />} />
             <Route path="/app/ff/knowledge/:slug" element={<FfKnowledgeBaseScreen />} />

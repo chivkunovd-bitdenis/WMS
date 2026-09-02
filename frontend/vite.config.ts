@@ -82,6 +82,7 @@ export default defineConfig({
         fbsSpeed: 'fbs-speed.html',
         raschety: 'raschety.html',
         knowledge: 'knowledge.html',
+        kbScenes: 'kb-scenes.html',
       },
     },
   },

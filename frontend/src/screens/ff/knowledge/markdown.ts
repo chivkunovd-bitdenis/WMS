@@ -8,6 +8,12 @@
 //   ## и ### заголовки, абзацы, списки «1.» и «- » (без вложенности),
 //   цитату «> », простую таблицу через «|», картинку «![alt](src)»,
 //   **жирный** и `код` внутри строки.
+//
+// Плюс одна своя строчка-директива, которой в markdown нет: `::scenario id::`
+// вставляет в статью проигрыватель — живой макет, который сам идёт по шагам.
+// Отдельный синтаксис нужен потому, что проигрыватель это не текст и не
+// картинка: он должен попасть в статью так же просто, как картинка, но
+// развернуться в компонент.
 
 export type InlineNode =
   | { kind: 'text'; text: string }
@@ -21,10 +27,12 @@ export type Block =
   | { kind: 'quote'; nodes: InlineNode[] }
   | { kind: 'table'; head: string[]; rows: string[][] }
   | { kind: 'image'; src: string; alt: string }
+  | { kind: 'scenario'; id: string }
 
 export type FrontMatter = { meta: Record<string, string>; body: string }
 
 const IMAGE_RE = /^!\[([^\]]*)\]\(([^)]+)\)$/
+const SCENARIO_RE = /^::scenario\s+([a-z0-9-]+)::$/
 const ORDERED_RE = /^\d+\.\s+(.*)$/
 const BULLET_RE = /^-\s+(.*)$/
 const INLINE_RE = /(\*\*[^*]+\*\*|`[^`]+`)/g
@@ -95,6 +103,13 @@ export function parseMarkdown(body: string): Block[] {
 
     if (!line) {
       flush()
+      continue
+    }
+
+    const scenario = SCENARIO_RE.exec(line)
+    if (scenario) {
+      flush()
+      blocks.push({ kind: 'scenario', id: scenario[1] ?? '' })
       continue
     }
 

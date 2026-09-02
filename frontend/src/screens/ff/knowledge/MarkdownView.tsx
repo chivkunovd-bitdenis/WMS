@@ -1,4 +1,4 @@
-import { Fragment } from 'react'
+import { Fragment, Suspense, lazy } from 'react'
 import type { ReactNode } from 'react'
 import {
   Box,
@@ -13,6 +13,13 @@ import {
 } from '@mui/material'
 
 import type { Block, InlineNode } from './markdown'
+import { findScenario } from './scenes/scenarios'
+
+// Проигрыватель тянет за собой вторую копию портала внутри рамки, поэтому
+// грузим его лениво: статьи без сценария не должны за это платить.
+const ScenarioPlayer = lazy(() =>
+  import('./ScenarioPlayer').then((m) => ({ default: m.ScenarioPlayer })),
+)
 
 type Props = {
   blocks: Block[]
@@ -201,6 +208,16 @@ export function MarkdownView({ blocks, highlight = '' }: Props) {
                 </TableBody>
               </Table>
             </TableContainer>
+          )
+        }
+
+        if (block.kind === 'scenario') {
+          const scenario = findScenario(block.id)
+          if (!scenario) return null
+          return (
+            <Suspense key={key} fallback={null}>
+              <ScenarioPlayer scenario={scenario} />
+            </Suspense>
           )
         }
 
