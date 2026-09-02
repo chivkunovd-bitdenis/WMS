@@ -1138,9 +1138,11 @@ async def _apply_wb_status_to_order(
         await _write_off_sold_order(session, order)
         # Выкуплен: резерв больше не нужен (иначе available навсегда занижен).
         await _release_reservation(session, order)
+        await _charge_confirmed_order(session, order)
         return
     if normalized_wb == "sorted":
         order.status = FBS_ORDER_STATUS_SORTED
+        await _charge_confirmed_order(session, order)
         return
     if normalized_wb == DEFECT_WB_STATUS:
         order.status = FBS_ORDER_STATUS_DEFECT
@@ -1153,6 +1155,17 @@ async def _apply_wb_status_to_order(
         if order.status != FBS_ORDER_STATUS_IN_DELIVERY:
             return
         return
+
+
+async def _charge_confirmed_order(session: AsyncSession, order: FbsOrder) -> None:
+    """Начислить за собранный заказ, когда WB подтвердил, что забрал его.
+
+    Импорт внутри функции: модуль тарификации ходит в биллинг, а биллинг знает
+    про заказы — на уровне модулей это дало бы цикл.
+    """
+    from app.services.fbs_order_billing_service import record_fbs_order_confirmed
+
+    await record_fbs_order_confirmed(session, order)
 
 
 def _wb_orders_error_from_client(
