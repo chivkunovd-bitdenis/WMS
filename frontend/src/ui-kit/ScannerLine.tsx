@@ -51,13 +51,6 @@ export function ScannerLine({
  * найденным, знает экран. Поле само возвращает себе фокус после каждого пика,
  * иначе второй короб уезжает мимо в никуда, и оператор об этом не узнаёт.
  */
-/** Быстрее этого человек не печатает: символ сканера. */
-const BURST_CHAR_MS = 50
-/** Столько подряд быстрых символов — уже очередь, а не случайность. */
-const BURST_MIN_CHARS = 3
-/** Пауза после очереди: код закончился. */
-const BURST_IDLE_MS = 120
-
 export function ScannerField({
   value,
   onChange,
@@ -129,24 +122,15 @@ export function ScannerField({
     }
   }, [])
 
-  // Сканер, который не шлёт Enter.
+  // ⛔ Никакой отправки «по паузе».
   //
-  // «Клавиатурный» сканер настраивается суффиксом, и суффикс этот сплошь и
-  // рядом не выставлен: код печатается в поле и там остаётся. Экран ждал
-  // Enter, не получал его и молчал — со стороны это ровно «сканер сканит,
-  // система ничё не делает». Проверено 02.09.2026: тот же сканер печатает
-  // штрихкод в адресную строку браузера и не отправляет её.
-  //
-  // Поэтому пачку символов узнаём по темпу. Сканер вбивает код за десятки
-  // миллисекунд на символ, человек — за сотни. Если символы шли очередью и
-  // очередь оборвалась паузой, это законченный код: обрабатываем сами.
-  // Ручной ввод под правило не попадает — там интервалы длинные.
-  const burstRef = useRef<{ timer: number | null; last: number; fast: number }>({
-    timer: null,
-    last: 0,
-    fast: 0,
-  })
-
+  // 02.09.2026 такая отправка тут была: если символы шли очередью и очередь
+  // прервалась на 120 мс, код считался законченным. У боевого сканера паузы
+  // внутри кода оказались длиннее, и он резал штрихкод на пятом символе — в
+  // документ уезжало «46304», а хвост печатался уже в очищенное поле. Стало
+  // хуже, чем было. Угадывать конец кода по времени нельзя: у сканера нет
+  // обязанности печатать ровно, а цена ошибки — обрезанный штрихкод в учёте.
+  // Конец кода объявляет сам сканер — суффиксом Enter.
   const clearInput = () => {
     // Неуправляемое поле React не чистит — чистим сами, иначе следующий пик
     // приклеится к предыдущему коду.
@@ -156,35 +140,9 @@ export function ScannerField({
   const submit = (code: string) => {
     const trimmed = code.trim()
     if (!trimmed) return
-    burstRef.current.fast = 0
     clearInput()
     onScan(trimmed)
   }
-
-  const noteKeystroke = (next: string) => {
-    const state = burstRef.current
-    const now = Date.now()
-    const gap = now - state.last
-    state.last = now
-    // Символы, пришедшие быстрее человека. Считаем их, чтобы не сработать на
-    // ручном вводе и на вставке одним куском.
-    if (gap <= BURST_CHAR_MS) state.fast += 1
-    else state.fast = 0
-    if (state.timer !== null) window.clearTimeout(state.timer)
-    if (state.fast < BURST_MIN_CHARS) return
-    state.timer = window.setTimeout(() => {
-      state.timer = null
-      // Значение читаем из поля: последний символ мог не доехать до состояния.
-      submit(inputRef.current?.value ?? next)
-    }, BURST_IDLE_MS)
-  }
-
-  useEffect(
-    () => () => {
-      if (burstRef.current.timer !== null) window.clearTimeout(burstRef.current.timer)
-    },
-    [],
-  )
 
   useEffect(() => {
     if (busy) return
@@ -213,10 +171,7 @@ export function ScannerField({
         fullWidth
         {...(value === undefined ? {} : { value })}
         disabled={busy}
-        onChange={(event) => {
-          onChange?.(event.target.value)
-          noteKeystroke(event.target.value)
-        }}
+        onChange={(event) => onChange?.(event.target.value)}
         onFocus={() => {
           ownsFocusRef.current = true
         }}
@@ -237,12 +192,6 @@ export function ScannerField({
         }}
         onKeyDown={(event) => {
           if (event.key !== 'Enter') return
-          // Enter пришёл — отложенная отправка по паузе больше не нужна.
-          if (burstRef.current.timer !== null) {
-            window.clearTimeout(burstRef.current.timer)
-            burstRef.current.timer = null
-          }
-          burstRef.current.fast = 0
           // Значение берём из самого поля, а не из состояния React. «Клавиатурный»
           // сканер печатает символы и жмёт Enter быстрее, чем происходит
           // перерисовка, и последний символ штрихкода при чтении из состояния
