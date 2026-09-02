@@ -34,6 +34,8 @@ export type SellerReportEntry = {
   billing_ledger_entry_id?: string
   /** Только у заказов FBS: «Передан ВБ» или «ВБ получил». */
   fbs_status_label?: string | null
+  /** Сумма посчитана по тарифу на дату операции, а не взята из начисления. */
+  priced_live?: boolean
   invoice_history?: { state: 'known'; count: number } | { state: 'unknown' }
 }
 
@@ -114,7 +116,9 @@ function formatMoscowDate(value: string): string {
 /** Почему операцию нельзя выбрать в счёт. Молчащий серый квадрат бесполезен. */
 export function selectionReason(entry: SellerReportEntry): string | undefined {
   if (!entry.billing_ledger_entry_id) {
-    return 'Документ ещё не начислен — счёт собирается из начислений'
+    return entry.priced_live
+      ? 'Сумма посчитана по тарифу на дату операции. В счёт документ попадёт, когда по нему пройдёт начисление'
+      : 'Документ ещё не начислен — счёт собирается из начислений'
   }
   if (entry.result === 'unpriced') return 'Нет ставки — задайте тариф в настройках'
   if (entry.result === 'not_billable') return 'Документ не тарифицируется'

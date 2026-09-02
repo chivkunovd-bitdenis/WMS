@@ -36,6 +36,7 @@ from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
 from app.models.seller import Seller
 from app.models.warehouse import Warehouse
+from app.services.billing_ledger_service import _resolve_v2_tariff
 from app.services.storage_measurement_service import MOSCOW, interval_liter_days
 
 
@@ -200,6 +201,37 @@ async def _cutover(session: AsyncSession) -> datetime | None:
     )
 
 
+async def _live_price(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    fact: OperationFact,
+) -> tuple[int | None, str | None, int | None]:
+    """Цена операции по истории ставок: ставка, единица, сумма.
+
+    Начисление пишется в момент события и задним числом не чинится: не нашлась
+    ставка, не отработал фон — строки нет навсегда, и отчёт показывает ноль.
+    Ставки при этом версионные: у каждой есть срок действия, старые не стираются.
+    Значит цену прошлой операции можно спросить заново и получить ровно ту же
+    цифру — снимок для отчёта не нужен.
+    """
+    if fact.billable_service_code is None or fact.seller_id is None:
+        return None, None, None
+    tariff = await _resolve_v2_tariff(
+        session,
+        tenant_id=tenant_id,
+        seller_id=fact.seller_id,
+        product_id=None,
+        service_code=fact.billable_service_code,
+        occurred_at=fact.occurred_at,
+    )
+    if tariff is None:
+        return None, None, None
+    # «За документ» стоит одинаково, сколько бы строк в документе ни было.
+    quantity = 1 if tariff.unit == "document" else int(fact.item_quantity or 0)
+    return tariff.rate, tariff.unit, tariff.rate * quantity
+
+
 async def _operation_entries(
     session: AsyncSession,
     *, tenant_id: uuid.UUID, start: datetime, end: datetime, seller_id: uuid.UUID | None, include_finance: bool,
@@ -259,6 +291,16 @@ async def _operation_entries(
             row["amount_kopecks"] = money
             row["unit"] = priced[0].unit if priced else None
             row["invoice_history"] = {"state": "unknown"}
+            if money is None and not fact.reversal_of_id:
+                rate, unit, amount = await _live_price(session, tenant_id=tenant_id, fact=fact)
+                if amount is not None:
+                    row["rate_kopecks"] = rate
+                    row["unit"] = unit
+                    row["amount_kopecks"] = amount
+                    row["result"] = "completed"
+                    # Начисления у операции нет, поэтому в счёт её пока не
+                    # выбрать: галочка объяснит причину сама.
+                    row["priced_live"] = True
         result.append(row)
     return result
 

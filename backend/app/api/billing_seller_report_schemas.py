@@ -75,6 +75,9 @@ class SellerReportPhysicalEntryOut(SellerReportEntryBaseOut):
 
 class SellerReportFinancialOperationFactEntryOut(SellerReportEntryBaseOut):
     kind: Literal["operation_fact"]
+    # Сумма посчитана по истории ставок, а не взята из начисления: начисления у
+    # операции нет, поэтому в счёт её пока не выбрать.
+    priced_live: bool = False
     result: Literal["completed", "reversed", "not_billable", "unpriced"]
     rate_kopecks: int | None
     amount_kopecks: int | None
