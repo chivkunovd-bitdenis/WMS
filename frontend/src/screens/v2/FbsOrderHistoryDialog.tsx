@@ -44,6 +44,7 @@ const TONE_BY_KIND: Record<string, 'ok' | 'warn' | 'neutral' | 'stop'> = {
   print_ready: 'ok',
   print_applied: 'ok',
   supply: 'neutral',
+  status: 'ok',
 }
 
 function formatMoment(value: string): string {

@@ -19,11 +19,14 @@ if TYPE_CHECKING:
 DOCUMENT_TYPE_INBOUND_INTAKE = "inbound_intake"
 DOCUMENT_TYPE_FBS_SUPPLY = "fbs_supply"
 DOCUMENT_TYPE_MARKETPLACE_UNLOAD = "marketplace_unload"
+# Заказ FBS — тоже документ склада: по нему надо восстанавливать картину по часам.
+DOCUMENT_TYPE_FBS_ORDER = "fbs_order"
 DOCUMENT_TYPES = frozenset(
     {
         DOCUMENT_TYPE_INBOUND_INTAKE,
         DOCUMENT_TYPE_FBS_SUPPLY,
         DOCUMENT_TYPE_MARKETPLACE_UNLOAD,
+        DOCUMENT_TYPE_FBS_ORDER,
     }
 )
 

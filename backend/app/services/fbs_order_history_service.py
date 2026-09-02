@@ -20,7 +20,11 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.document_event import DOCUMENT_TYPE_FBS_SUPPLY, DocumentEvent
+from app.models.document_event import (
+    DOCUMENT_TYPE_FBS_ORDER,
+    DOCUMENT_TYPE_FBS_SUPPLY,
+    DocumentEvent,
+)
 from app.models.fbs_order import FbsOrder, FbsOrderMarking
 from app.models.fbs_order_pick import FbsOrderPick
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
@@ -115,6 +119,20 @@ async def order_history(
             )
         ).all()
     )
+    # Смены статуса самого заказа журнал ведёт с 03.09.2026 — по заказам старше
+    # этой даты их просто нет, и это честнее, чем достраивать задним числом.
+    order_events = list(
+        (
+            await session.scalars(
+                select(DocumentEvent).where(
+                    DocumentEvent.tenant_id == tenant_id,
+                    DocumentEvent.document_type == DOCUMENT_TYPE_FBS_ORDER,
+                    DocumentEvent.document_id == order_id,
+                )
+            )
+        ).all()
+    )
+
     supply_events: list[DocumentEvent] = []
     if order.supply_id is not None:
         supply_events = list(
@@ -133,7 +151,8 @@ async def order_history(
         session,
         {pick.picked_by_user_id for pick in picks if pick.picked_by_user_id}
         | {row.fulfilled_by_user_id for row in packings if row.fulfilled_by_user_id}
-        | {row.actor_user_id for row in supply_events if row.actor_user_id},
+        | {row.actor_user_id for row in supply_events if row.actor_user_id}
+        | {row.actor_user_id for row in order_events if row.actor_user_id},
     )
 
     events: list[dict[str, Any] | None] = [
@@ -191,6 +210,22 @@ async def order_history(
         )
         events.append(_event(asset.wb_fetched_at, "print_ready", f"{label}: получен от WB"))
         events.append(_event(asset.applied_at, "print_applied", f"{label}: наклеен"))
+
+    for order_event in order_events:
+        payload = order_event.payload_json or {}
+        before = payload.get("status_before") or "—"
+        after = payload.get("status_after") or "—"
+        events.append(
+            _event(
+                order_event.occurred_at,
+                "status",
+                f"Статус: {before} → {after}",
+                actor=(
+                    actors.get(order_event.actor_user_id) if order_event.actor_user_id else None
+                ),
+                details=f"статус в WB: {payload.get('wb_status') or '—'}",
+            )
+        )
 
     for supply_event in supply_events:
         payload = supply_event.payload_json or {}
