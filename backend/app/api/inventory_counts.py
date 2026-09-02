@@ -262,6 +262,14 @@ async def _categories(
     return await service.product_categories(session, list(unique.values()))
 
 
+async def _photos(
+    session: AsyncSession,
+    count: InventoryCount,
+) -> dict[uuid.UUID, str | None]:
+    unique = {line.product.id: line.product for line in count.lines}
+    return await service.product_photos(session, list(unique.values()))
+
+
 async def _summary_out(
     session: AsyncSession,
     count: InventoryCount,
@@ -309,6 +317,7 @@ def _product_node(
     line: InventoryCountLine,
     *,
     category: str | None,
+    photo_url: str | None,
     current_quantity: int,
 ) -> CountProductNodeOut:
     product = line.product
@@ -325,6 +334,7 @@ def _product_node(
         wb_vendor_code=product.wb_vendor_code,
         wb_barcode=product.wb_barcode,
         wb_size=product.wb_size,
+        photo_url=photo_url,
         expected=int(line.expected_quantity),
         actual=int(line.actual_quantity) if line.actual_quantity is not None else None,
         expected_now=expected_now,
@@ -400,6 +410,7 @@ async def _detail_out(
     )
     current = await service.current_quantities(session, count)
     categories = await _categories(session, count)
+    photos = await _photos(session, count)
     line_rows: list[InventoryCountLineOut] = []
     # Пустой список — нормальное значение: без адресного хранения ячеек нет.
     scannable_cells: list[CountScannableCellOut] = []
@@ -451,6 +462,7 @@ async def _detail_out(
         node = _product_node(
             line,
             category=category,
+            photo_url=photos.get(product.id),
             current_quantity=current[line.id],
         )
         container = (

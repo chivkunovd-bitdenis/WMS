@@ -15,6 +15,8 @@ import {
   type ScanTone,
 } from './InventoryScan'
 import { InventoryScanField } from './InventoryScanField'
+import { containerContents } from './containerContents'
+import { printContainerContents } from './printContainerContents'
 import { InventoryTree } from './InventoryTree'
 import {
   EMPTY_FILTERS,
@@ -153,6 +155,17 @@ function InventoryCountDialogState({
     })
   }
 
+  function handlePrintContents(row: InvRow) {
+    if (!count) return
+    const contents = containerContents(count, row.id)
+    if (!contents) return
+    printContainerContents({
+      contents,
+      documentNumber: count.number,
+      documentDate: count.createdAt,
+    })
+  }
+
   function handleActual(row: InvRow, value: number | null) {
     setCount((current) => (current ? setActual(current, row.id, value) : current))
   }
@@ -266,6 +279,7 @@ function InventoryCountDialogState({
             }}
             onToggle={toggle}
             onActual={handleActual}
+            onPrintContents={handlePrintContents}
           />
         </Box>
       </Stack>

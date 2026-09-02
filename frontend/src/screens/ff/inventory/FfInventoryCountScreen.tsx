@@ -27,6 +27,8 @@ import {
   type ScanTone,
 } from './InventoryScan'
 import { InventoryScanField } from './InventoryScanField'
+import { containerContents } from './containerContents'
+import { printContainerContents } from './printContainerContents'
 import { randomId } from '../../../utils/randomId'
 import { InventoryTree } from './InventoryTree'
 import {
@@ -201,6 +203,18 @@ export function FfInventoryCountScreen({
 
   function handleActual(row: InvRow, value: number | null) {
     onChange(setActual(count, row.id, value), row.id)
+  }
+
+  // Опись печатается из документа, каким он на экране сейчас: кладовщик клеит
+  // её сразу после пересчёта короба, до сохранения и проведения.
+  function handlePrintContents(row: InvRow) {
+    const contents = containerContents(count, row.id)
+    if (!contents) return
+    printContainerContents({
+      contents,
+      documentNumber: count.number,
+      documentDate: count.createdAt,
+    })
   }
 
   const metrics: ReportMetricItem[] = [
@@ -404,6 +418,7 @@ export function FfInventoryCountScreen({
         }}
         onToggle={toggle}
         onActual={handleActual}
+        onPrintContents={handlePrintContents}
       />
 
       {/* Панель действий прилеплена к нижнему краю: пересчёт длинный, и кнопка
