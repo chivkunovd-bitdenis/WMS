@@ -282,3 +282,25 @@ describe('пустая по учёту ячейка', () => {
     })
   })
 })
+
+describe('короб узнаётся и по видимому номеру', () => {
+  it('открывается и по штрихкоду, и по номеру на ярлыке', () => {
+    // У приёмочного короба штрихкод внутренний — INB-…, — а человек читает на
+    // ярлыке «BOX-1». Если системный ярлык не наклеен, открыть короб внутренним
+    // кодом нечем, и содержимое посчитать нельзя вовсе.
+    const count = countWithBox(product())
+
+    const byBarcode = applyScan(count, 'BOX-BARCODE-1', NOTHING_OPEN)
+    expect(byBarcode.open.containerId).toBe('box-1')
+
+    const byCode = applyScan(count, 'BOX-1', NOTHING_OPEN)
+    expect(byCode.open.containerId).toBe('box-1')
+    expect(byCode.message).toContain('открыт')
+  })
+
+  it('ячейка открывается и по своей подписи', () => {
+    const count = countWithBox(product())
+    const byLabel = applyScan(count, 'A-01', NOTHING_OPEN)
+    expect(byLabel.open).toEqual({ containerId: null, cellId: 'cell-1' })
+  })
+})

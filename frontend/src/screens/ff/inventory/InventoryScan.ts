@@ -172,7 +172,7 @@ function findScanTargets(
         }
         continue
       }
-      if (!container && node.barcode && normalizedCodes.has(node.barcode.trim().toLowerCase())) {
+      if (!container && matchesPlace(normalizedCodes, node.barcode, node.code)) {
         container = { id: node.id, kind: node.kind, code: node.code, cellId, pathKeys: nextPath }
       }
       walk(node.children, cellId, node.id, nextPath)
@@ -180,7 +180,7 @@ function findScanTargets(
   }
   for (const item of count.cells) {
     const cellKey = `cell:${item.id}`
-    if (!cell && item.barcode && normalizedCodes.has(item.barcode.trim().toLowerCase())) {
+    if (!cell && matchesPlace(normalizedCodes, item.barcode, item.label)) {
       cell = { id: item.id, label: item.label, pathKeys: [cellKey] }
     }
     walk(item.children, item.id, null, [cellKey])
@@ -189,11 +189,30 @@ function findScanTargets(
     // Ячейки, пустые по учёту, в дерево не попадают, но сканер обязан их знать:
     // именно в такой чаще всего и находят то, чего по учёту тут нет.
     const empty = count.scannableCells.find(
-      (item) => item.barcode && normalizedCodes.has(item.barcode.trim().toLowerCase()),
+      (item) => matchesPlace(normalizedCodes, item.barcode, item.label),
     )
     if (empty) cell = { id: empty.id, label: empty.label, pathKeys: [`cell:${empty.id}`] }
   }
   return { container, cell, products }
+}
+
+/**
+ * Узнаём место и по штрихкоду, и по видимому номеру.
+ *
+ * У приёмочного короба штрихкод внутренний — вида INB-1B7EE88D369F, — а на
+ * ярлыке человек читает «КР-000108». Если системный ярлык на короб не наклеен
+ * (пришёл чужой короб, ярлык отвалился, распечатать не успели), открыть его
+ * было нечем: сканер знал только внутренний код, а видимый номер не понимал.
+ * Посчитать содержимое такого короба становилось невозможно вовсе.
+ */
+function matchesPlace(
+  normalizedCodes: Set<string>,
+  ...identifiers: Array<string | null | undefined>
+): boolean {
+  return identifiers.some((identifier) => {
+    const normalized = identifier?.trim().toLowerCase()
+    return Boolean(normalized && normalizedCodes.has(normalized))
+  })
 }
 
 /** Пик увеличивает факт на единицу: человек считает штуками, а не вводит итог. */
