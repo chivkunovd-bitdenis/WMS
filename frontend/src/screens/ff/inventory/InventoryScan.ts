@@ -32,7 +32,8 @@ export type ScanResult = {
    * перезагружает документ.
    */
   found?: {
-    barcode: string
+    /** Все прочтения кода: как пришло со сканера и как в латинской раскладке. */
+    barcodes: string[]
     storageLocationId: string
     containerKind: ContainerKind | null
     containerId: string | null
@@ -255,7 +256,7 @@ export function applyScan(
       activeContainerId,
       message: `Код ${code} по учёту здесь не числится — записываем как находку.`,
       tone: 'ok',
-      found: { barcode: code, ...place },
+      found: { barcodes: codes, ...place },
     }
   }
 
@@ -272,7 +273,7 @@ export function applyScan(
           ? `${where.product.name} по учёту в ${openName} не числится — записываем как находку.`
           : `${where.product.name} — числится не здесь. Отсканируйте тару, куда его записать.`,
         tone: place ? 'ok' : 'warn',
-        ...(place ? { found: { barcode: code, ...place } } : {}),
+        ...(place ? { found: { barcodes: codes, ...place } } : {}),
       }
     }
     const next = bump(count, inside.product)
@@ -288,22 +289,17 @@ export function applyScan(
 
   const loose = byBarcode.find((item) => item.containerId === null)
   if (!loose) {
-    const place = allowFound ? foundPlace(count, null) : null
-    if (!place) {
-      // Ровно тот случай, который назвал владелец: товар есть, но он в таре.
-      return {
-        count,
-        activeContainerId,
-        message: `${byBarcode[0].product.name} — лежит в таре. Отсканируйте тару.`,
-        tone: 'warn',
-      }
-    }
+    // Товар по учёту здесь ЕСТЬ, просто внутри тары — находкой это не является.
+    //
+    // Записать его россыпью значит посчитать одну и ту же вещь дважды: строка
+    // тары останется непосчитанной и при проведении будет пропущена, а рядом
+    // добавится россыпь на то же количество. Оператор просто забыл пикнуть
+    // короб, и правильный ответ — попросить его это сделать.
     return {
       count,
       activeContainerId,
-      message: `${byBarcode[0].product.name} по учёту лежит в таре — записываем находку россыпью.`,
-      tone: 'ok',
-      found: { barcode: code, ...place },
+      message: `${byBarcode[0].product.name} — лежит в таре. Отсканируйте тару.`,
+      tone: 'warn',
     }
   }
   return {

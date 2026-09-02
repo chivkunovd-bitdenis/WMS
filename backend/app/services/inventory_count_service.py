@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 from sqlalchemy import Select, and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -25,7 +26,7 @@ from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
 from app.services import inventory_service, tenant_settings_service
-from app.services.inventory_container_service import ContainerKind
+from app.services.inventory_container_service import ContainerKind, validate_container
 from app.services.sorting_location_service import SORTING_LOCATION_CODE
 from app.services.wb_card_enrichment import subject_name_from_card
 
@@ -215,14 +216,18 @@ def _balance_query(
             Product.tenant_id == tenant_id,
             StorageLocation.tenant_id == tenant_id,
             StorageLocation.deleted_at.is_(None),
-            # ⛔ Условия «остаток больше нуля» здесь быть не должно.
+            # ⛔ Раньше здесь стояло «остаток больше нуля», и документ молча
+            # собирался без отрицательных строк. А минус в ячейке — самый
+            # сильный признак того, что учёт разъехался с полкой: именно её и
+            # надо пересчитать, а было нельзя. Решение владельца от 01.09.2026.
             #
-            # Пересчёт затевают ровно тогда, когда учёт разъехался с полкой, и
-            # отрицательная ячейка — самый сильный признак такого расхождения.
-            # Пока строка с минусом в документ не попадала, её нельзя было ни
-            # пересчитать, ни выправить: документ молча собирался без неё.
-            # Нулевые строки нужны по той же причине — это законный кандидат на
-            # находку. Решение владельца от 01.09.2026.
+            # Нули при этом не тащим. Строка баланса при обнулении не удаляется,
+            # поэтому в базе лежат нули по всем сочетаниям «товар, ячейка,
+            # тара», которые когда-либо существовали, включая давно уехавшие
+            # короба. Тянуть их в документ значит раздуть его фантомными
+            # строками. Товар, который лежит там, где по учёту его нет,
+            # записывается находкой — для этого есть record_found.
+            InventoryBalance.quantity != 0,
         )
         .options(selectinload(Product.seller))
         .order_by(StorageLocation.code, Product.sku_code)
@@ -410,6 +415,11 @@ async def get_count(
             InventoryCount.tenant_id == tenant_id,
         )
         .options(*_load_options())
+        # Документ мог быть загружен в этой же сессии до вставки строки: без
+        # populate_existing SQLAlchemy вернёт объект из карты идентичности со
+        # старой коллекцией строк, и только что записанной находки в ответе не
+        # окажется.
+        .execution_options(populate_existing=True)
     )
     return result.scalar_one_or_none()
 
@@ -489,7 +499,7 @@ async def record_found(
     tenant_id: uuid.UUID,
     count_id: uuid.UUID,
     *,
-    barcode: str,
+    barcodes: list[str],
     storage_location_id: uuid.UUID,
     container_kind: str | None,
     container_id: uuid.UUID | None,
@@ -505,19 +515,39 @@ async def record_found(
     Повторный скан того же товара в том же месте не плодит строки, а
     увеличивает счёт: человек считает штуками.
     """
+    # Документ блокируется на всё время записи. Без этого два быстрых скана
+    # одного и того же кода расходятся: оба читают факт 1, оба пишут 2, и одна
+    # штука теряется — а если строки ещё не было, второй ловит уникальный индекс
+    # и оператор получает 500 вместо записи.
+    locked = await session.execute(
+        select(InventoryCount)
+        .where(InventoryCount.id == count_id, InventoryCount.tenant_id == tenant_id)
+        .with_for_update()
+    )
+    if locked.scalar_one_or_none() is None:
+        raise InventoryCountError("count_not_found")
     count = await get_count(session, tenant_id, count_id)
     if count is None:
         raise InventoryCountError("count_not_found")
     if count.status != STATUS_DRAFT:
         raise InventoryCountError("count_not_editable")
 
-    code = barcode.strip()
-    if not code:
+    codes = [candidate.strip() for candidate in barcodes if candidate.strip()]
+    if not codes:
         raise InventoryCountError("barcode_required")
 
+    # Сканер — обычная клавиатура, и в русской раскладке он отдаёт кириллицу.
+    # Экран умеет переводить раскладку и присылает оба варианта, поэтому ищем по
+    # всем кандидатам и без учёта регистра: точное сравнение отвергало товар,
+    # который экран только что нашёл, и оператор видел два взаимоисключающих
+    # сообщения сразу.
+    lowered = [candidate.lower() for candidate in codes]
     product_stmt = select(Product).where(
         Product.tenant_id == tenant_id,
-        or_(Product.wb_barcode == code, Product.sku_code == code),
+        or_(
+            func.lower(Product.wb_barcode).in_(lowered),
+            func.lower(Product.sku_code).in_(lowered),
+        ),
     )
     # Документ, собранный по одному продавцу, чужой товар не принимает: иначе
     # пересчёт одного селлера начнёт править остатки другого.
@@ -533,6 +563,23 @@ async def record_found(
     location = await session.get(StorageLocation, storage_location_id)
     if location is None or location.tenant_id != tenant_id or location.deleted_at is not None:
         raise InventoryCountError("storage_location_not_found")
+
+    # Тару проверяем здесь, а не на проведении. Иначе несуществующая или чужая
+    # тара доезжала до записи движения и вылетала оттуда пятисоткой, а документ
+    # уже нельзя было провести, пока оператор не догадается стереть эту строку.
+    if (container_kind is None) != (container_id is None):
+        raise InventoryCountError("container_reference_invalid")
+    if container_kind is not None and container_id is not None:
+        try:
+            await validate_container(
+                session,
+                tenant_id,
+                location.warehouse_id,
+                cast(ContainerKind, container_kind),
+                container_id,
+            )
+        except ValueError as exc:
+            raise InventoryCountError("container_not_found") from exc
 
     existing = next(
         (
@@ -569,6 +616,51 @@ async def record_found(
         session, tenant_id=tenant_id, line=line, lock=False
     )
     session.add(line)
+    try:
+        await session.commit()
+    except IntegrityError:
+        # Гонку с параллельным сканом того же товара разбираем как инкремент:
+        # уникальный индекс по строке документа сработал, значит соседний запрос
+        # уже завёл её, и правильный ответ — прибавить штуку, а не отдать 500.
+        await session.rollback()
+        return await _increment_existing_found_line(
+            session,
+            tenant_id,
+            count_id,
+            product_id=product.id,
+            storage_location_id=storage_location_id,
+            container_kind=container_kind,
+            container_id=container_id,
+        )
+    loaded = await get_count(session, tenant_id, count_id)
+    assert loaded is not None
+    return loaded
+
+
+async def _increment_existing_found_line(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    count_id: uuid.UUID,
+    *,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+    container_kind: str | None,
+    container_id: uuid.UUID | None,
+) -> InventoryCount:
+    line = await session.scalar(
+        select(InventoryCountLine)
+        .where(
+            InventoryCountLine.count_id == count_id,
+            InventoryCountLine.product_id == product_id,
+            InventoryCountLine.storage_location_id == storage_location_id,
+            InventoryCountLine.container_kind == container_kind,
+            InventoryCountLine.container_id == container_id,
+        )
+        .with_for_update()
+    )
+    if line is None:
+        raise InventoryCountError("count_not_found")
+    line.actual_quantity = int(line.actual_quantity or 0) + 1
     await session.commit()
     loaded = await get_count(session, tenant_id, count_id)
     assert loaded is not None

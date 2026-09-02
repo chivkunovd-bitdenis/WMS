@@ -5,7 +5,7 @@ import Inventory2Outlined from '@mui/icons-material/Inventory2Outlined'
 import LayersOutlined from '@mui/icons-material/LayersOutlined'
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
 import WidgetsOutlined from '@mui/icons-material/WidgetsOutlined'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { DataTable, IconAction, NumberInput, QtyCell, StatusChip, TextCell } from '../../../ui-kit'
 import type { Column } from '../../../ui-kit'
 import { ProductPhotoThumb } from '../../../components/ProductPhotoThumb'
@@ -131,10 +131,7 @@ export function InventoryTree({
   onActual,
 }: Props) {
   const [printRow, setPrintRow] = useState<InvRow | null>(null)
-  // Определения колонок собираются заново на каждый рендер, а рендер случается
-  // на каждый скан. На документе в тысячу строк это заметная работа на ровном
-  // месте: сами колонки от скана не меняются, меняются только числа в строках.
-  const columns: Column<InvRow>[] = useMemo(() => [
+  const columns: Column<InvRow>[] = [
     {
       key: 'content',
       header: 'Содержимое',
@@ -301,7 +298,7 @@ export function InventoryTree({
       align: 'right',
       render: (row) => <DeltaCell row={row} />,
     },
-  ], [readOnly, onToggle, onActual])
+  ]
 
   return (
     <>

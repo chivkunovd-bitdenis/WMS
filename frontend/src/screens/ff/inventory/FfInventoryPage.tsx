@@ -15,6 +15,7 @@ import {
   type ApiDetail,
   type ApiSummary,
   recordCountFound,
+  saveCountActuals,
 } from './inventoryCountApi'
 
 // Экран инвентаризации, подключённый к серверу.
@@ -164,7 +165,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
    * целиком: у новой строки есть id, которого на клиенте быть не могло.
    */
   async function recordFound(place: {
-    barcode: string
+    barcodes: string[]
     storageLocationId: string
     containerKind: 'pallet' | 'box' | 'cargo_place' | null
     containerId: string | null
@@ -172,6 +173,15 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     if (!count || count.status !== 'draft') return
     setError(null)
     try {
+      // Сначала кладём на сервер всё, что оператор уже насчитал.
+      //
+      // Строку находки заводит сервер и возвращает документ целиком. Если
+      // подставить этот ответ поверх локального состояния, не сохранив
+      // введённое, посчитанное за полчаса сканирования молча обнулится:
+      // автосохранения в этом экране нет, факт живёт в состоянии React до
+      // нажатия «Сохранить». Оператор сканирует, а не жмёт кнопки, — значит
+      // сохранять обязаны мы.
+      await saveCountActuals(token, count)
       setCount(await recordCountFound(token, count.id, place))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось записать находку')

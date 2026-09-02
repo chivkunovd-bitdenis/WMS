@@ -70,7 +70,11 @@ class InventoryCountActualBatchIn(BaseModel):
 class InventoryCountFoundIn(BaseModel):
     """Находка: товар лежит там, где по учёту его нет."""
 
-    barcode: str = Field(min_length=1, max_length=128)
+    # Экран присылает все прочтения кода: как пришло со сканера и как это
+    # выглядело бы в латинской раскладке. Иначе товар, который экран только что
+    # нашёл переводом раскладки, сервер не находил, и оператор видел зелёное
+    # «записываем» рядом с красным «товар не найден».
+    barcodes: list[str] = Field(min_length=1, max_length=4)
     storage_location_id: uuid.UUID
     container_kind: Literal["pallet", "box", "cargo_place"] | None = None
     container_id: uuid.UUID | None = None
@@ -475,6 +479,7 @@ def _http_error(exc: service.InventoryCountError) -> HTTPException:
     if exc.code in {
         "not_found",
         "count_not_found",
+        "container_not_found",
         "line_not_found",
         "seller_not_found",
         "warehouse_not_found",
@@ -492,6 +497,7 @@ def _http_error(exc: service.InventoryCountError) -> HTTPException:
         "balance_changed_during_post",
         "count_not_editable",
         "barcode_is_ambiguous",
+        "container_reference_invalid",
     }:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.code)
@@ -612,7 +618,7 @@ async def record_inventory_count_found(
             session,
             user.tenant_id,
             count_id,
-            barcode=body.barcode,
+            barcodes=body.barcodes,
             storage_location_id=body.storage_location_id,
             container_kind=body.container_kind,
             container_id=body.container_id,

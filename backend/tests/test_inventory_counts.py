@@ -703,3 +703,167 @@ async def test_inventory_count_without_address_storage_hides_and_does_not_requir
             )
         )
     assert total == 2
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_includes_negative_balance_and_skips_zero(
+    async_client: AsyncClient,
+) -> None:
+    """Минус обязан попасть в документ, ноль — нет.
+
+    Отрицательная ячейка — самый сильный признак того, что учёт разъехался с
+    полкой, и раньше именно её пересчитать было нельзя. Нули не тащим: строка
+    баланса при обнулении не удаляется, и документ распух бы фантомами.
+    """
+    setup = await _tenant(async_client, "NegCount")
+    negative = await _product(async_client, setup, name="Ушёл в минус")
+    zero = await _product(async_client, setup, name="Обнулённый")
+    positive = await _product(async_client, setup, name="Обычный")
+    await _balance(setup, negative, -1)
+    await _balance(setup, zero, 0)
+    await _balance(setup, positive, 5)
+
+    response = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={"source": "planned", "filters": {}},
+    )
+
+    assert response.status_code == 201, response.text
+    lines = {line["product_id"]: line["expected_quantity"] for line in response.json()["lines"]}
+    assert lines == {str(negative): -1, str(positive): 5}
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_found_creates_line_and_second_scan_increments(
+    async_client: AsyncClient,
+) -> None:
+    """Находка: товар лежит в коробе, где по учёту его нет.
+
+    Ради этого пересчёт и затевают. Первый скан заводит строку со счётом 1,
+    второй прибавляет вторую штуку, а не плодит вторую строку.
+    """
+    setup = await _tenant(async_client, "FoundCount")
+    counted = await _product(async_client, setup, name="Числится")
+    surprise = await _product(async_client, setup, name="Находка")
+    _pallet_id, box_id, _cargo_place_id, _empty_box_id = await _containers(setup)
+    await _balance(setup, counted, 3, container_kind="box", container_id=box_id)
+
+    async with SessionLocal() as session:
+        product = await session.get(Product, surprise)
+        assert product is not None
+        product.wb_barcode = "4600000000001"
+        await session.commit()
+
+    created = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={"source": "object", "object": {"type": "box", "id": str(box_id)}},
+    )
+    assert created.status_code == 201, created.text
+    count_id = created.json()["id"]
+
+    body = {
+        "barcodes": ["4600000000001"],
+        "storage_location_id": str(setup.location_id),
+        "container_kind": "box",
+        "container_id": str(box_id),
+    }
+    first = await async_client.post(
+        f"/operations/inventory-counts/{count_id}/found", headers=setup.headers, json=body
+    )
+    assert first.status_code == 200, first.text
+    found_line = next(
+        line for line in first.json()["lines"] if line["product_id"] == str(surprise)
+    )
+    assert found_line["expected_quantity"] == 0
+    assert found_line["actual_quantity"] == 1
+    assert found_line["container_id"] == str(box_id)
+
+    second = await async_client.post(
+        f"/operations/inventory-counts/{count_id}/found", headers=setup.headers, json=body
+    )
+    assert second.status_code == 200, second.text
+    surprise_lines = [
+        line for line in second.json()["lines"] if line["product_id"] == str(surprise)
+    ]
+    assert len(surprise_lines) == 1
+    assert surprise_lines[0]["actual_quantity"] == 2
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_found_survives_scanner_layout_and_case(
+    async_client: AsyncClient,
+) -> None:
+    """Сканер в русской раскладке и верхний регистр не должны ронять находку."""
+    setup = await _tenant(async_client, "LayoutCount")
+    surprise = await _product(async_client, setup, name="Находка раскладкой")
+    await _balance(setup, surprise, 0)
+    async with SessionLocal() as session:
+        product = await session.get(Product, surprise)
+        assert product is not None
+        product.wb_barcode = "chin-56005"
+        await session.commit()
+
+    anchor = await _product(async_client, setup, name="Якорь документа")
+    await _balance(setup, anchor, 2)
+    created = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={"source": "planned", "filters": {}},
+    )
+    assert created.status_code == 201, created.text
+
+    response = await async_client.post(
+        f"/operations/inventory-counts/{created.json()['id']}/found",
+        headers=setup.headers,
+        # Первым идёт то, что реально приехало со сканера, вторым — перевод раскладки.
+        json={
+            "barcodes": ["Сршт-56005", "CHIN-56005"],
+            "storage_location_id": str(setup.location_id),
+            "container_kind": None,
+            "container_id": None,
+        },
+    )
+    assert response.status_code == 200, response.text
+    line = next(
+        line for line in response.json()["lines"] if line["product_id"] == str(surprise)
+    )
+    assert line["actual_quantity"] == 1
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_found_rejects_container_from_another_warehouse(
+    async_client: AsyncClient,
+) -> None:
+    """Чужая тара отбивается при записи, а не пятисоткой на проведении."""
+    setup = await _tenant(async_client, "AlienBoxCount")
+    other = await _tenant(async_client, "AlienBoxOther")
+    surprise = await _product(async_client, setup, name="Товар")
+    await _balance(setup, surprise, 1)
+    async with SessionLocal() as session:
+        product = await session.get(Product, surprise)
+        assert product is not None
+        product.wb_barcode = "4600000000009"
+        await session.commit()
+    _p, alien_box_id, _c, _e = await _containers(other)
+
+    created = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={"source": "planned", "filters": {}},
+    )
+    assert created.status_code == 201, created.text
+
+    response = await async_client.post(
+        f"/operations/inventory-counts/{created.json()['id']}/found",
+        headers=setup.headers,
+        json={
+            "barcodes": ["4600000000009"],
+            "storage_location_id": str(setup.location_id),
+            "container_kind": "box",
+            "container_id": str(alien_box_id),
+        },
+    )
+    assert response.status_code == 404, response.text
+    assert response.json()["detail"] == "container_not_found"

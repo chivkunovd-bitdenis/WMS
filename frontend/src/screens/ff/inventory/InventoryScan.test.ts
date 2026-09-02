@@ -138,3 +138,60 @@ describe('inventory product scan', () => {
     expect(elapsedMs).toBeLessThan(1000)
   })
 })
+
+describe('закрытие тары и находки', () => {
+  it('повторный скан той же тары закрывает её', () => {
+    const count = countWithBox(product())
+    const opened = applyScan(count, 'BOX-BARCODE-1', null)
+    expect(opened.activeContainerId).toBe('box-1')
+
+    const closed = applyScan(opened.count, 'BOX-BARCODE-1', opened.activeContainerId)
+    expect(closed.activeContainerId).toBeNull()
+    expect(closed.tone).toBe('ok')
+    expect(closed.message).toContain('закрыт')
+  })
+
+  it('незнакомый код при открытой таре становится находкой в эту тару', () => {
+    const count = countWithBox(product())
+    const opened = applyScan(count, 'BOX-BARCODE-1', null)
+    const found = applyScan(opened.count, '9999999999999', opened.activeContainerId)
+
+    expect(found.found).toEqual({
+      barcodes: ['9999999999999'],
+      storageLocationId: 'cell-1',
+      containerKind: 'box',
+      containerId: 'box-1',
+    })
+    // Сам скан строку не заводит: её создаёт сервер и возвращает документ.
+    expect(found.count).toBe(opened.count)
+  })
+
+  it('на находку уходят оба прочтения кода: русская раскладка и латиница', () => {
+    const count = countWithBox(product())
+    const opened = applyScan(count, 'BOX-BARCODE-1', null)
+    const found = applyScan(opened.count, 'Сршт-56005', opened.activeContainerId)
+
+    expect(found.found?.barcodes).toEqual(['Сршт-56005', 'Chin-56005'])
+  })
+
+  it('товар, который числится в таре, россыпью не записывается', () => {
+    // Оператор забыл пикнуть короб. Записать это находкой значит посчитать одну
+    // и ту же вещь дважды: строка короба останется непосчитанной, а рядом
+    // добавится россыпь на то же количество.
+    const count = countWithBox(product())
+    const result = applyScan(count, '4601234567890', null)
+
+    expect(result.found).toBeUndefined()
+    expect(result.tone).toBe('warn')
+    expect(result.message).toContain('Отсканируйте тару')
+  })
+
+  it('экран без доступа к серверу находок не обещает', () => {
+    const count = countWithBox(product())
+    const opened = applyScan(count, 'BOX-BARCODE-1', null)
+    const result = applyScan(opened.count, '9999999999999', opened.activeContainerId, false)
+
+    expect(result.found).toBeUndefined()
+    expect(result.message).toContain('полном документе')
+  })
+})
