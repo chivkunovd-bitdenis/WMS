@@ -112,6 +112,16 @@ type UnloadPickScreenProps = {
   }) => Promise<UnloadPickScanResult>
   onPause?: () => void
   onComplete?: () => void
+  /**
+   * Прячет нижние действия «Отложить» и «Завершить подбор».
+   *
+   * В поставке ФБС подбор необязателен и этапы не заперты друг за другом:
+   * оператор уходит на упаковку вкладкой сверху, когда сочтёт нужным. Эти две
+   * кнопки там ничего не решают и только выглядят как обязательный шаг —
+   * владелец 01.09.2026 попросил их убрать. В отдельном экране подбора
+   * отгрузки они остаются: там документ действительно надо закрыть.
+   */
+  hideFooterActions?: boolean
 }
 
 /** «В 3 местах», «В 1 месте», «Нет на складе» — колонка «Где лежит» (§2). */
@@ -136,6 +146,7 @@ export function UnloadPickScreen({
   onScan,
   onPause,
   onComplete,
+  hideFooterActions = false,
 }: UnloadPickScreenProps) {
   const document = documentProp ?? DOCUMENT
   const seller = sellerProp ?? SELLER
@@ -626,6 +637,7 @@ export function UnloadPickScreen({
         }}
       />
 
+      {hideFooterActions ? null : (
       <Stack direction="row" sx={{ mt: 2, justifyContent: 'flex-end' }}>
         <ActionGroup>
           <SecondaryAction
@@ -656,6 +668,7 @@ export function UnloadPickScreen({
           </PrimaryAction>
         </ActionGroup>
       </Stack>
+      )}
     </Box>
   )
 }

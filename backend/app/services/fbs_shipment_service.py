@@ -149,6 +149,14 @@ CHECK_WARNING = "warning"
 CHECK_INFO = "info"
 
 WB_ALLOWED_BLOCKER_CODES = frozenset({"supply_bad_status", "supply_empty"})
+
+# Правило одно, значит и текст один. Раньше оно жило в двух местах с разными
+# формулировками, и вторая говорила «обновите preflight» — слово, которое
+# кладовщику не значит ничего.
+_STALE_PREFLIGHT_MESSAGE = (
+    "Пока было открыто окно передачи, поставка изменилась. Закройте окно и "
+    "откройте заново — проверки пересчитаются."
+)
 _DELIVER_ALLOWED_DELIVERY_TYPES = frozenset({FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_DELIVERY_TYPE_PVZ})
 _DELIVER_BLOCKED_SUPPLY_STATUSES = frozenset(
     {
@@ -506,25 +514,41 @@ def _compute_preflight_version(
                 str(order.metadata_delivery_allowed),
             ]
         parts.extend(order_parts)
-    for item in sorted(
-        source_plan.resolutions if source_plan is not None else (),
-        key=lambda row: (str(row.fbs_order_id), str(row.product_id)),
-    ):
-        parts.extend(
-            [
-                str(item.fbs_order_id),
-                str(item.product_id),
-                str(item.quantity),
-                str(item.source_warehouse_id),
-                str(item.storage_location_id),
-                item.container_kind or "",
-                str(item.container_id or ""),
-                item.source_mode,
-                str(item.positive_quantity),
-                str(item.shortage_quantity),
-                str(item.negative_quantity),
-            ]
-        )
+    if supply.marketplace == "wb":
+        # ⛔ Версия защищает то, что оператор реально видел и с чем согласился:
+        # состав заказов и сам факт «уйдём в минус». Точные числа, ячейки и
+        # режим списания в неё НЕ входят.
+        #
+        # Раньше входили — и на складе, где работают несколько человек, версия
+        # менялась от любого чужого движения по тому же товару: соседний подбор,
+        # проведённая приёмка, перенос короба. Оператор открывал окно, читал
+        # предупреждения, жал «Передать» и получал 409 «Чек-лист устарел».
+        # Чинить это ему было нечем.
+        #
+        # Грубого признака недостачи достаточно: если минус появился там, где
+        # его не было, версия изменится и система переспросит один раз. Если
+        # минус был и просто стал глубже — оператор его уже видел и подтвердил.
+        parts.append("shortage" if source_plan is not None and source_plan.has_shortage else "ok")
+    else:
+        for item in sorted(
+            source_plan.resolutions if source_plan is not None else (),
+            key=lambda row: (str(row.fbs_order_id), str(row.product_id)),
+        ):
+            parts.extend(
+                [
+                    str(item.fbs_order_id),
+                    str(item.product_id),
+                    str(item.quantity),
+                    str(item.source_warehouse_id),
+                    str(item.storage_location_id),
+                    item.container_kind or "",
+                    str(item.container_id or ""),
+                    item.source_mode,
+                    str(item.positive_quantity),
+                    str(item.shortage_quantity),
+                    str(item.negative_quantity),
+                ]
+            )
     raw = "|".join(parts).encode()
     return hashlib.sha256(raw).hexdigest()
 
@@ -679,6 +703,20 @@ def _build_delivery_checks(
                     )
                 )
 
+        if supply.marketplace == "wb" and order.product_id is None:
+            checks.append(
+                DeliveryCheck(
+                    code="order_product_not_mapped",
+                    message=(
+                        "Товар заказа не сопоставлен с карточкой в WMS — "
+                        "со склада он списан не будет. Передаче не мешает."
+                    ),
+                    ok=False,
+                    severity=CHECK_WARNING,
+                    order_id=order.id,
+                )
+            )
+
         product = order.product
         if (
             product is not None
@@ -787,15 +825,13 @@ def _build_delivery_checks(
             )
 
     if source_plan is not None:
-        wb_ids = {order.id: int(order.wb_order_id) for order in orders}
         for resolution in source_plan.resolutions:
             if resolution.shortage_quantity:
                 checks.append(
                     DeliveryCheck(
                         code="negative_stock",
                         message=(
-                            f"Заказ WB {wb_ids.get(resolution.fbs_order_id, '—')}: "
-                            f"не хватает {resolution.shortage_quantity} шт.; после "
+                            f"Не хватает {resolution.shortage_quantity} шт.; после "
                             "подтверждения остаток будет списан в минус."
                         ),
                         ok=False,
@@ -907,13 +943,16 @@ async def _actual_wb_orders_and_source_plan(
         for order in composition.active_orders
         if order.status not in _TERMINAL_ORDER_STATUSES
     ]
-    missing_product = next((order for order in orders if order.product_id is None), None)
-    if missing_product is not None:
-        raise FbsShipmentError(
-            "fbs_shipment_product_missing",
-            context={"order_id": str(missing_product.id)},
-            http_status=409,
-        )
+    # ⛔ Раньше здесь падало 409 на первом же заказе без сопоставленного товара,
+    # причём ДО того, как соберётся список проверок. То есть вся защита от
+    # блокировок проходила мимо: один заказ с незнакомым артикулом — и поставка
+    # не уезжала, а кнопка была мертва. Поймать это легко: продавец добавил в
+    # поставку в своём кабинете товар, которого нет в нашем каталоге.
+    #
+    # Теперь такой заказ ведёт себя как отменённый: он исключается из списания
+    # со склада, показывается предупреждением и передаче не мешает. Списать
+    # товар, которого мы не знаем, всё равно невозможно, а держать из-за него
+    # весь склад — нельзя.
     plan = await source_svc.plan_fbs_shipment_sources(
         session,
         tenant_id=tenant_id,
@@ -964,7 +1003,7 @@ async def _sync_and_validate_deliver(
         if current_version != confirmed_preflight_version:
             raise FbsShipmentError(
                 "stale_preflight",
-                message="Чек-лист устарел — обновите preflight.",
+                message=_STALE_PREFLIGHT_MESSAGE,
                 context={
                     "current_version": current_version,
                     "confirmed_preflight_version": confirmed_preflight_version,
@@ -995,7 +1034,11 @@ async def _sync_and_validate_deliver(
     if source_plan.has_shortage and confirmed_preflight_version != current_version:
         raise FbsShipmentError(
             "negative_stock_confirmation_required",
-            message="Подтвердите актуальный план списания в минус.",
+            message=(
+                "Проверки не подтверждены, а остатка не хватает. Закройте окно "
+                "передачи и откройте заново — система покажет, какой заказ "
+                "уйдёт в минус, и спросит подтверждение."
+            ),
             context={"current_version": current_version},
             http_status=409,
         )
@@ -1183,6 +1226,13 @@ async def _write_off_delivered_orders_once(
             existing_ledgers[order.id] = ledger
         if ledger is None:
             if order.product_id is None:
+                # Сюда доходит только Ozon: заказы WB без сопоставленного товара
+                # отсеяны фильтром active_orders выше — для них решение владельца
+                # уже применено, они уезжают с предупреждением и без списания.
+                #
+                # У Ozon такого решения нет, и молча отпускать поставку без
+                # списания нельзя: товар уедет физически, а в системе останется,
+                # и найти это расхождение будет нечем — ledger не создаётся.
                 raise FbsShipmentError("fbs_shipment_product_missing", http_status=409)
             resolution = resolutions.get(order.id)
             if resolution is None and order.marketplace == "ozon":
@@ -1312,8 +1362,14 @@ async def _stage_wb_shipment_sources(
         for order in orders
         if order.status not in _TERMINAL_ORDER_STATUSES and order.product_id is not None
     ]
-    if not active_orders:
-        return
+    # ⛔ Раньше здесь стоял ранний выход: нет заказов со сопоставленным товаром —
+    # чек-пойнт не пишем. А дальше передача этот чек-пойнт читает, не находит и
+    # падает с «не удалось восстановить план списания». Поставка из одного
+    # заказа с незнакомым артикулом — обычное дело, когда состав собрал сам
+    # продавец, — упиралась в мёртвую кнопку навсегда.
+    #
+    # Пустой план списания — законное состояние: списывать нечего, но передать
+    # надо. Пишем чек-пойнт с пустым списком и уходим.
     checkpoint_source_plan = {
         "supply_warehouse_id": str(source_plan.supply_warehouse_id),
         "resolutions": [
@@ -1336,7 +1392,11 @@ async def _stage_wb_shipment_sources(
     summary = dict(operation.request_summary_json or {})
     previous_checkpoint = summary.get("checkpoint_source_plan")
     if previous_checkpoint is not None and previous_checkpoint != checkpoint_source_plan:
-        raise FbsShipmentError("stale_preflight", http_status=409)
+        raise FbsShipmentError(
+            "stale_preflight",
+            message=_STALE_PREFLIGHT_MESSAGE,
+            http_status=409,
+        )
     summary["checkpoint_source_plan"] = checkpoint_source_plan
     operation.request_summary_json = summary
     existing = {
@@ -1412,7 +1472,10 @@ async def _load_checkpointed_wb_delivery(
     checkpoint_source_plan = summary.get("checkpoint_source_plan")
     if isinstance(checkpoint_source_plan, dict):
         raw_resolutions = checkpoint_source_plan.get("resolutions")
-        if not isinstance(raw_resolutions, list) or not raw_resolutions:
+        # Пустой список — это «списывать нечего», а не битый чек-пойнт. Так
+        # выглядит поставка, в которой ни один заказ не сопоставлен с карточкой
+        # товара: уехать она обязана, движений по складу не создаст.
+        if not isinstance(raw_resolutions, list):
             raise FbsShipmentError("fbs_shipment_checkpoint_incomplete", http_status=409)
         orders = await _load_locked_supply_orders(session, supply.tenant_id, supply.id)
         orders_by_id = {order.id: order for order in orders}
@@ -1426,8 +1489,10 @@ async def _load_checkpointed_wb_delivery(
                 if not isinstance(raw, dict):
                     raise ValueError("invalid checkpoint row")
                 order_id = uuid.UUID(str(raw["fbs_order_id"]))
-                order = orders_by_id[order_id]
-                snapshot_orders.append(order)
+                # Заказ должен быть в поставке, но само его присутствие тут
+                # больше не решает, какие заказы считать уехавшими: список «что
+                # уехало» и список «что списываем» — разные вещи.
+                orders_by_id[order_id]
                 snapshot_resolutions.append(
                     source_svc.FbsShipmentSourceResolution(
                         fbs_order_id=order_id,
@@ -1451,6 +1516,16 @@ async def _load_checkpointed_wb_delivery(
             raise FbsShipmentError(
                 "fbs_shipment_checkpoint_incomplete", http_status=409
             ) from None
+        # Уехало всё, что лежало в поставке и не отменено, — включая заказы без
+        # сопоставленного товара, по которым списывать нечего. Раньше сюда
+        # попадали только строки плана списания, и несопоставленный заказ
+        # оставался «упакован» внутри уже переданной поставки: оператор не мог
+        # понять, уехал он или нет. Хуже того, при повторном подтверждении план
+        # пересчитывался заново и тот же заказ статус получал — одно и то же
+        # вело себя по-разному в зависимости от пути.
+        snapshot_orders = [
+            order for order in orders if order.status not in _TERMINAL_ORDER_STATUSES
+        ]
         return snapshot_orders, source_svc.FbsShipmentSourcePlan(
             tenant_id=supply.tenant_id,
             supply_warehouse_id=supply_warehouse_id,
