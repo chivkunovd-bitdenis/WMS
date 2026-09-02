@@ -555,6 +555,8 @@ def test_wb_dispatch_refusal_without_details_still_suggests_a_retry() -> None:
     )
     message, retryable = _meta_validation_message(exc)
 
-    # Своих слов у нас нет — показываем слова WB, а не совет подождать.
-    assert "fix them to dispatch items" in message
+    # Своих слов у нас нет, но и советовать просто «подождите» нельзя: WB
+    # просит починить заказы, а не потерпеть.
+    assert "просит исправить" in message
+    assert "кабинете продавца" in message
     assert retryable is True

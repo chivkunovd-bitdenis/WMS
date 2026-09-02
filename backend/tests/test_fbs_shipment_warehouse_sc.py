@@ -599,9 +599,11 @@ async def test_fbs_shipment_translates_temporary_dispatch_rejection(
     assert response.status_code == 409, response.text
     detail = response.json()["detail"]
     assert detail["code"] == "meta_validation_fail"
-    assert detail["message"] == (
-        "Wildberries ещё обрабатывает поставку. Повторите передачу через минуту."
-    )
+    # Отказ остаётся повторяемым, но текст больше не советует просто ждать:
+    # WB просит починить заказы. 02.09.2026 склад шесть раз нажал повтор
+    # впустую, потому что сообщение обещало, что само рассосётся.
+    assert "просит исправить" in detail["message"]
+    assert "кабинете продавца" in detail["message"]
     assert detail["retryable"] is True
     assert deliver_calls == 1
 

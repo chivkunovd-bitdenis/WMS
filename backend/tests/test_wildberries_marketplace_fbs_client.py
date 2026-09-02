@@ -50,7 +50,7 @@ def test_openapi_reference_date_is_set() -> None:
     ("raw", "expected_fragment"),
     [
         ("Supply not found", "не нашёл эту поставку"),
-        ("fix them to dispatch items", "ещё обрабатывает поставку"),
+        ("fix them to dispatch items", "просит исправить"),
         ("MetaValidationFail: uinBadStatus", "отклонил данные маркировки"),
         ("mandatory mark is required", "требует обязательную маркировку"),
     ],
