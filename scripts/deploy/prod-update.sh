@@ -14,7 +14,12 @@ DEPLOY_TRUNK_REF="${WMS_DEPLOY_TRUNK_REF:-${DEPLOY_REMOTE}/etalon}"
 DEPLOY_TARGET_REF="${DEPLOY_REMOTE}/${DEPLOY_BRANCH}"
 
 echo "==> git fetch"
-git fetch --prune "$DEPLOY_REMOTE"
+# Протокол v2 с боевого сервера ломается: GitHub отвечает 401, git просит логин
+# и падает с «expected flush after ref listing» — при том что репозиторий
+# публичный и curl тот же адрес отдаёт 200. Выкатка 02.09.2026 встала на этом
+# дважды подряд. На v1 тот же fetch проходит мгновенно, поэтому фиксируем версию
+# протокола явно, а не гадаем, вернётся ли v2 сам.
+git -c protocol.version=1 fetch --prune "$DEPLOY_REMOTE"
 
 if ! git rev-parse --verify --quiet "${DEPLOY_TRUNK_REF}^{commit}" >/dev/null; then
   echo "ERROR: deploy trunk ref '${DEPLOY_TRUNK_REF}' was not found." >&2
