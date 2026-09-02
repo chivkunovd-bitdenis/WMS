@@ -24,6 +24,13 @@ jobs:
           command_timeout: 30m
           script: |
             set -euo pipefail
+            # Тот же обход протокола v2, что и в самом скрипте. Здесь он нужен
+            # отдельно: скрипт на сервере обновляется только успешным fetch'ем,
+            # то есть починить его собой он не может. Конфиг передаём
+            # переменными окружения — на сервере ничего не меняем.
+            export GIT_CONFIG_COUNT=1
+            export GIT_CONFIG_KEY_0=protocol.version
+            export GIT_CONFIG_VALUE_0=1
             cd "${WMS_REPO_DIR:-/opt/wms}"
             ./scripts/deploy/prod-update.sh
 
