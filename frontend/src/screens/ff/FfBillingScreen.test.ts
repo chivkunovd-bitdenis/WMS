@@ -96,7 +96,9 @@ describe('FfBillingScreen billing contract', () => {
       lines: [{ id: 'line-1', service_code: 'inbound', unit: 'item', quantity: '84.000', rate: '1200', amount: '63000' }],
     })
 
-    expect(html).toContain('Юридическое наименование')
+    expect(html).toContain('ООО «Фулфилмент Волна»')
+    expect(html).toContain('ООО «Луна Трейд»')
+    expect(html).toContain('ИНН 7701234567')
     expect(html).toContain('12,00 ₽')
     expect(html).toContain('630,00 ₽')
     expect(html).not.toContain('legal_name')

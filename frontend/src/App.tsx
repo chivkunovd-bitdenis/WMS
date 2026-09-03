@@ -54,6 +54,7 @@ import { FfProductsCatalogScreen } from './screens/v2/FfProductsCatalogScreen'
 import { FfFbsOrdersScreen } from './screens/v2/FfFbsOrdersScreen'
 import { FfSettingsScreen } from './screens/ff/FfSettingsScreen'
 import { FfBillingScreen } from './screens/ff/FfBillingScreen'
+import { FfKnowledgeBaseScreen } from './screens/ff/knowledge/FfKnowledgeBaseScreen'
 import {
   canAccessFfBlock,
   ffRoleLabel,
@@ -3251,6 +3252,17 @@ export default function App() {
                 ffAccessDenied
               )
             }
+          />
+
+          {/* База знаний — статика из репозитория, сервер ей не нужен. Правами
+              не закрыта: инструкция «как здесь работать» нужна любому, кто вошёл. */}
+          <Route
+            path="ff/knowledge"
+            element={token ? <FfKnowledgeBaseScreen /> : ffAccessDenied}
+          />
+          <Route
+            path="ff/knowledge/:slug"
+            element={token ? <FfKnowledgeBaseScreen /> : ffAccessDenied}
           />
 
           <Route

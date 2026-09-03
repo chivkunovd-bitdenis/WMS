@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from typing import Literal, TypedDict, cast
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -19,10 +20,22 @@ from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.user import User
 
+MOSCOW = ZoneInfo("Europe/Moscow")
+
 # Хранение живёт в общей матрице вместе с остальными услугами: держать его
 # на отдельном экране означало единственную услугу с другим местом настройки.
-MATRIX_SERVICE_CODES = ("inbound", "marketplace_outbound", "packing", "return", "storage")
+MATRIX_SERVICE_CODES = (
+    "inbound",
+    "marketplace_outbound",
+    "packing",
+    "return",
+    "storage",
+    "fbs_order",
+)
 STORAGE_SERVICE_CODE = "storage"
+# Сборка заказа FBS считается за штуку товара, а не за заказ: у Wildberries в
+# заказе всегда одна штука, а у Ozon будет иначе, и ставка «за заказ» там соврёт.
+FBS_ORDER_SERVICE_CODE = "fbs_order"
 EMPLOYEE_SERVICE_CODES = ("inbound", "picking", "marketplace_outbound", "return")
 MAX_TARIFF_RATE_KOPECKS = 2_147_483_647
 
@@ -218,6 +231,9 @@ async def save_tariff_matrix(
         if draft["service_code"] == STORAGE_SERVICE_CODE:
             if draft["unit"] != "liter_day":
                 raise BillingTariffMatrixError("billing_tariff_matrix_storage_unit_invalid")
+        elif draft["service_code"] == FBS_ORDER_SERVICE_CODE:
+            if draft["unit"] != "item":
+                raise BillingTariffMatrixError("billing_tariff_matrix_fbs_unit_invalid")
         elif draft["unit"] not in {"document", "item"}:
             raise BillingTariffMatrixError("billing_tariff_matrix_rate_invalid")
         if employee_scope and (draft["seller_id"] is not None or draft["product_id"] is not None):
@@ -353,6 +369,15 @@ async def save_tariff_matrix(
         if states[service_code].enabled != enabled:
             states[service_code].enabled = enabled
             changed = True
+    # Начисления не создаются, пока у арендатора не проставлена дата начала
+    # биллинга. Раньше её ставил только старый путь создания тарифа, а через
+    # матрицу — единственный экран, которым пользуются, — она оставалась пустой,
+    # и работа склада не стоила ничего: ставки заданы, а денег ноль.
+    if normalized_versions and tenant.billing_enabled_from is None:
+        tenant.billing_enabled_from = min(
+            draft["valid_from_at"].astimezone(MOSCOW).date() for draft in normalized_versions
+        )
+        changed = True
     if changed:
         config.revision += 1
     await session.flush()

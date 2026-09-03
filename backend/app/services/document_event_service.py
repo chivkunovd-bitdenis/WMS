@@ -20,6 +20,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from app.models.document_event import (
     DOCUMENT_EVENT_SOURCES,
     DOCUMENT_EVENT_TYPES,
+    DOCUMENT_TYPE_FBS_ORDER,
     DOCUMENT_TYPE_FBS_SUPPLY,
     DOCUMENT_TYPE_INBOUND_INTAKE,
     DOCUMENT_TYPE_MARKETPLACE_UNLOAD,
@@ -702,11 +703,32 @@ def _unload_line_removed_row(
 def _fbs_order_change_rows(
     connection: Connection, order: FbsOrder, actor: DocumentEventActor
 ) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    # Смена статуса заказа — главное событие его жизни: по ней восстанавливают,
+    # когда заказ собрали, когда передали и когда Wildberries его подтвердил.
+    status_change = _history_pair(order, "status")
+    if status_change is not None:
+        status_before, status_after = status_change
+        rows.append(
+            _event_row(
+                tenant_id=order.tenant_id,
+                document_type=DOCUMENT_TYPE_FBS_ORDER,
+                document_id=order.id,
+                event_type=EVENT_STATUS_CHANGED,
+                actor=actor,
+                qty=None,
+                product_id=order.product_id,
+                payload_json={
+                    "status_before": str(status_before) if status_before else None,
+                    "status_after": str(status_after) if status_after else None,
+                    "wb_status": order.wb_status,
+                },
+            )
+        )
     change = _history_pair(order, "supply_id")
     if change is None:
-        return []
+        return rows
     before, after = change
-    rows: list[dict[str, object]] = []
     for supply_id, event_type, qty_before, qty_after in (
         (before, EVENT_LINE_REMOVED, 1, 0),
         (after, EVENT_LINE_ADDED, 0, 1),

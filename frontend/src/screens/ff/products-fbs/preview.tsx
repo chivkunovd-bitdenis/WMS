@@ -29,7 +29,7 @@ export function ProductsHarness() {
             onChange={(_event, value: 'products' | 'fbs' | 'seller' | null) => {
               if (value) setScreen(value)
             }}
-            data-testid="harness-screen"
+            data-testid="preview-state"
           >
             <ToggleButton
               value="products"

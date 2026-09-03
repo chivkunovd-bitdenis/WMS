@@ -17,6 +17,7 @@ import {
   StatusChip,
   TextCell,
 } from '../../ui-kit'
+import { buildInvoicePrintHtml as buildPrintDocument, type PrintProfile } from './invoicePrint'
 
 const MOSCOW_TIME_ZONE = 'Europe/Moscow'
 
@@ -110,37 +111,31 @@ export function profileRows(
   return rows.length ? rows : [['Наименование', fallback]]
 }
 
-function escapeHtml(value: unknown): string {
-  const entities: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  }
-  return String(value ?? '').replace(/[&<>"']/g, (character) => entities[character] ?? character)
-}
-
 /**
- * Печатная форма: ровно две смысловые колонки — «Услуга» и «Сумма».
+ * Печатная форма счёта. Вёрстка одна на все окна — в `invoicePrint.ts`.
  *
- * Хранение приходит одной строкой за весь период, без разбивки по товарам,
- * дням и тарифам, поэтому третьей колонке «Количество» здесь взяться неоткуда.
+ * Здесь только перевод счёта в её язык: у нового счёта позиции идут одной
+ * суммой, без количества и цены, поэтому лишние колонки в документе не
+ * появляются вовсе, а не стоят прочерками.
  */
 export function buildInvoicePrintHtml(invoice: OpenedInvoice): string {
-  const profileHtml = (profile: ProfileSnapshot | undefined, fallback: string) =>
-    profileRows(profile, fallback)
-      .map(([label, value]) => `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</div>`)
-      .join('')
-  const lineHtml = invoice.lines
-    .map(
-      (line) =>
-        `<tr><td>${escapeHtml(line.description)}</td><td>${escapeHtml(formatMoney(line.total_amount_kopecks))}</td></tr>`,
-    )
-    .join('')
-  const issued = invoice.issued_at ? ` · выставлен ${escapeHtml(formatMoscowDate(invoice.issued_at))}` : ''
-  return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Счёт ${escapeHtml(invoice.number)}</title></head><body><h1>Счёт ${escapeHtml(invoice.number)}</h1><p>${escapeHtml(invoice.periodLabel)}${issued}</p><h3>Получатель</h3>${profileHtml(invoice.ff_profile, 'Реквизиты ФФ')}<h3>Плательщик</h3>${profileHtml(invoice.seller_profile, invoice.seller_name)}<table><thead><tr><th>Услуга</th><th>Сумма</th></tr></thead><tbody>${lineHtml}</tbody></table><h2>Итого: ${escapeHtml(formatMoney(invoice.total_amount_kopecks))}</h2></body></html>`
+  return buildPrintDocument({
+    number: invoice.number,
+    dateLabel: invoice.issued_at ? `от ${formatMoscowDate(invoice.issued_at)}` : '',
+    periodLabel: invoice.periodLabel,
+    supplierName: 'Фулфилмент',
+    payerName: invoice.seller_name,
+    supplier: (invoice.ff_profile ?? {}) as PrintProfile,
+    payer: (invoice.seller_profile ?? {}) as PrintProfile,
+    lines: invoice.lines.map((line) => ({
+      description: line.description,
+      amount: formatMoney(line.total_amount_kopecks),
+    })),
+    total: formatMoney(invoice.total_amount_kopecks),
+    totalKopecks: invoice.total_amount_kopecks,
+  })
 }
+
 
 type LegacyLine = { id: string; service_code: string; amount: number | string }
 type LegacyInvoice = {

@@ -10,14 +10,16 @@ import {
   ScreenHeader,
   TextCell,
   MoscowDateRangeInput,
-  PreferenceSwitch,
   ReportMetricStrip,
   SecondaryAction,
   SelectInput,
   ActionGroup,
 } from '../../ui-kit'
+import { buildInvoicePrintHtml as buildPrintDocument, type PrintProfile } from './invoicePrint'
 import { FfBillingInvoiceCreate } from './FfBillingInvoiceCreate'
 import { FfBillingSellerDetails, type SellerReportDetails } from './FfBillingSellerDetails'
+import { FfBillingProfilesDialog } from './FfBillingProfilesDialog'
+import { FbsOrderHistoryDialog } from '../v2/FbsOrderHistoryDialog'
 import { FfBillingInvoicesPanel } from './FfBillingInvoicesPanel'
 
 type Seller = { id: string; name: string }
@@ -43,7 +45,7 @@ type BillingProfileSnapshot = Record<string, string | null | undefined>
 type Invoice = { id: string; number: string; period: string; seller_name: string; issued_at: string; total_amount: ApiDecimal; status: 'issued' | 'cancelled'; issues?: { seller_name: string; period: string; reason: string }[]; lines?: InvoiceLine[]; ff_profile?: BillingProfileSnapshot; seller_profile?: BillingProfileSnapshot }
 type InvoiceLine = { id: string; service_code: string; unit: string; quantity: ApiDecimal; rate: ApiDecimal; amount: ApiDecimal; documents?: { date: string; number: string; quantity: ApiDecimal; amount: ApiDecimal }[] }
 type SellerReportRow = { seller_id: string; seller_name: string; operation_count: number; item_quantity: number; not_billable_count: number; details_target: string; unpriced_count?: number; net_total_kopecks?: number }
-type SellerReportSummary = { rows: SellerReportRow[]; totals: { seller_count: number; operation_count: number; item_quantity: number; not_billable_count: number; net_total_kopecks?: number } }
+type SellerReportSummary = { rows: SellerReportRow[]; totals: { seller_count: number; operation_count: number; item_quantity: number; not_billable_count: number; net_total_kopecks?: number; inbound_items?: number; packing_items?: number; outbound_items?: number; fbs_items?: number } }
 
 export const STORAGE_SERVICE_CODE = 'storage_liter_day'
 export const CANCEL_INVOICE_ERROR_MESSAGE = 'Отмена не подтверждена. Проверьте статус счёта перед повторной попыткой.'
@@ -100,13 +102,6 @@ export function sellerQuickRange(period: SellerQuickPeriod, today = moscowToday(
   if (period === 'current_month') return { start: `${today.slice(0, 8)}01`, end: today }
   value.setUTCDate(0)
   return { start: `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, '0')}-01`, end: asIsoDate(value) }
-}
-
-function sellerFinanceStorageKey(token: string) {
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as { tenant_id?: string; sub?: string }
-    return `${payload.tenant_id ?? 'tenant'}:${payload.sub ?? 'user'}:billing:sellers:finance`
-  } catch { return 'tenant:user:billing:sellers:finance' }
 }
 
 type CancelInvoiceResult = { ok: true; status: Invoice['status'] } | { ok: false; message: string }
@@ -172,40 +167,37 @@ function formatPeriod(period: string): string {
   return new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(new Date(year, month - 1, 1))
 }
 
-function escapeHtml(value: unknown): string {
-  const entities: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
-  return String(value ?? '').replace(/[&<>"']/g, (character) => entities[character] ?? character)
-}
-
 const serviceLabels: Record<string, string> = {
   inbound: 'Приёмка',
   marketplace_outbound: 'Отгрузка',
   storage_liter_day: 'Хранение',
 }
-const unitLabels: Record<string, string> = { document: 'За документ', item: 'За штуку', liter_day: 'За литр-день' }
-const profileFieldLabels: Record<string, string> = {
-  legal_name: 'Юридическое наименование',
-  inn: 'ИНН',
-  kpp: 'КПП',
-  bank_name: 'Название банка',
-  bik: 'БИК',
-  settlement_account: 'Расчётный счёт',
-  correspondent_account: 'Корреспондентский счёт',
-}
-
-function profileRows(profile: BillingProfileSnapshot | undefined, fallback: string): [string, string][] {
-  const rows = Object.entries(profile ?? {})
-    .filter(([key, value]) => Boolean(profileFieldLabels[key] && value))
-    .map(([key, value]) => [profileFieldLabels[key], String(value)] as [string, string])
-  return rows.length ? rows : [['Наименование', fallback]]
-}
+/** В счёте колонка «Ед.» узкая: длинные подписи рвутся на три строки. */
+const printUnitLabels: Record<string, string> = { document: 'док.', item: 'шт.', liter_day: 'л·дн' }
 
 export function buildInvoicePrintHtml(invoice: Invoice): string {
-  const profileHtml = (profile: BillingProfileSnapshot | undefined, fallback: string) => profileRows(profile, fallback)
-    .map(([label, value]) => `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</div>`)
-    .join('')
-  const lineHtml = (invoice.lines ?? []).map((line) => `<tr><td>${escapeHtml(serviceLabels[line.service_code] ?? '—')}</td><td>${escapeHtml(unitLabels[line.unit] ?? '—')}</td><td>${escapeHtml(parseApiDecimal(line.quantity).toLocaleString('ru-RU'))}</td><td>${escapeHtml(formatMoney(line.rate))}</td><td>${escapeHtml(formatMoney(line.amount))}</td></tr>`).join('')
-  return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Счёт ${escapeHtml(invoice.number)}</title></head><body><h1>Счёт ${escapeHtml(invoice.number)}</h1><p>${escapeHtml(formatPeriod(invoice.period))} · выставлен ${escapeHtml(formatMoscowDate(invoice.issued_at))}</p><h3>Получатель</h3>${profileHtml(invoice.ff_profile, 'Реквизиты ФФ')}<h3>Плательщик</h3>${profileHtml(invoice.seller_profile, invoice.seller_name)}<table><thead><tr><th>Услуга</th><th>Расчёт</th><th>Количество</th><th>Ставка</th><th>Сумма</th></tr></thead><tbody>${lineHtml}</tbody></table><h2>Итого: ${escapeHtml(formatMoney(invoice.total_amount))}</h2></body></html>`
+  // Вёрстка счёта одна на все окна и живёт в `invoicePrint.ts`. Здесь только
+  // перевод старого счёта в её язык: у него есть количество и ставка, поэтому
+  // в документе появляются колонки «Кол-во», «Ед.» и «Цена».
+  const totalKopecks = Math.round(parseApiDecimal(invoice.total_amount))
+  return buildPrintDocument({
+    number: invoice.number,
+    dateLabel: invoice.issued_at ? `от ${formatMoscowDate(invoice.issued_at)}` : '',
+    periodLabel: formatPeriod(invoice.period),
+    supplierName: 'Фулфилмент',
+    payerName: invoice.seller_name,
+    supplier: (invoice.ff_profile ?? {}) as PrintProfile,
+    payer: (invoice.seller_profile ?? {}) as PrintProfile,
+    lines: (invoice.lines ?? []).map((line) => ({
+      description: serviceLabels[line.service_code] ?? line.service_code,
+      quantity: parseApiDecimal(line.quantity).toLocaleString('ru-RU'),
+      unit: printUnitLabels[line.unit] ?? '',
+      price: formatMoney(line.rate),
+      amount: formatMoney(line.amount),
+    })),
+    total: formatMoney(invoice.total_amount),
+    totalKopecks,
+  })
 }
 
 export function InvoiceDocumentDetails({ line, period }: { line: InvoiceLine; period: string }) {
@@ -230,8 +222,10 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
   const [error, setError] = useState(false)
   const today = moscowToday()
   const [reportRange, setReportRange] = useState({ start: today, end: today })
-  const financeStorageKey = sellerFinanceStorageKey(token)
-  const [includeFinance, setIncludeFinance] = useState(() => localStorage.getItem(financeStorageKey) === 'true')
+  // Финансы на «Расчётах» включены всегда. Переключатель прятал единственное,
+  // ради чего экран открывают, — суммы; товародвижение живёт на своём экране,
+  // и совмещать их в одной таблице отдельно решено не было.
+  const includeFinance = true
   const [report, setReport] = useState<SellerReportSummary>({ rows: [], totals: { seller_count: 0, operation_count: 0, item_quantity: 0, not_billable_count: 0 } })
   const [selectedReportSeller, setSelectedReportSeller] = useState<string | null>(null)
   const [reportDetails, setReportDetails] = useState<SellerReportDetails | null>(null)
@@ -241,6 +235,12 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
   const [selectedRootIds, setSelectedRootIds] = useState<string[]>([])
   const [storageSelected, setStorageSelected] = useState(false)
   const [invoicesRefresh, setInvoicesRefresh] = useState(0)
+  // История заказа FBS открывается прямо из расчётов: номер заказа и есть
+  // ссылка на его документ.
+  const [historyOrderId, setHistoryOrderId] = useState<string | null>(null)
+  // Хранение приезжает отдельным запросом: его расчёт прокручивает движения
+  // товара с начала времён, и ждать его вместе с таблицей оператор не должен.
+  const [storageLiterDays, setStorageLiterDays] = useState<number | null>(null)
   const summaryRequestId = useRef(0)
   const detailsRequestId = useRef(0)
   const clearSellerReportDetails = () => {
@@ -273,7 +273,19 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
     return () => { alive = false; controller.abort() }
   }, [includeFinance, reportRange, search, sellerId, tab, token])
 
-  useEffect(() => { localStorage.setItem(financeStorageKey, String(includeFinance)) }, [financeStorageKey, includeFinance])
+  useEffect(() => {
+    if (tab !== 'charges') return
+    const controller = new AbortController()
+    let alive = true
+    setStorageLiterDays(null)
+    const params = new URLSearchParams({ date_from: reportRange.start, date_to: reportRange.end })
+    if (sellerId !== 'all') params.set('seller_id', sellerId)
+    fetch(`/api/billing/seller-report/storage-total?${params}`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
+      .then((response) => { if (!response.ok) throw new Error('storage-total'); return response.json() as Promise<{ liter_days: number }> })
+      .then((data) => { if (alive) setStorageLiterDays(Math.round(data.liter_days)) })
+      .catch(() => undefined)
+    return () => { alive = false; controller.abort() }
+  }, [reportRange, sellerId, tab, token])
 
   useEffect(() => {
     if (tab !== 'charges' || !selectedReportSeller) return
@@ -301,27 +313,28 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
 
 
   const sellerColumns = [
-    { key: 'seller', header: 'Селлер', width: 250, render: (row: SellerReportRow) => <TextCell value={row.seller_name} width={230} /> },
-    { key: 'operations', header: 'Документов', width: 130, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.operation_count} /> },
+    { key: 'seller', header: 'Селлер', width: 220, render: (row: SellerReportRow) => <TextCell value={row.seller_name} width={200} /> },
+    { key: 'operations', header: 'Документов', width: 110, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.operation_count} /> },
     { key: 'items', header: 'Штук', width: 100, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.item_quantity} /> },
     // Деньги стоят раньше счётчиков проблем намеренно: на 1280 таблица не
     // помещается в карточку целиком, и вправо должно уезжать то, что смотрят
     // реже, а не сумма, ради которой экран и открывают.
-    ...(includeFinance ? [{ key: 'accrued', header: 'Стоимость услуг', width: 170, align: 'right' as const, render: (row: SellerReportRow) => <MoneyCell minor={row.net_total_kopecks ?? null} /> }] : []),
-    { key: 'notBillable', header: 'Не тарифицируется', width: 160, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.not_billable_count} /> },
-    ...(includeFinance ? [{ key: 'unpriced', header: 'Нет ставки', width: 120, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.unpriced_count ?? 0} /> }] : []),
+    ...(includeFinance ? [{ key: 'accrued', header: 'Стоимость услуг', width: 150, align: 'right' as const, render: (row: SellerReportRow) => <MoneyCell minor={row.net_total_kopecks ?? null} /> }] : []),
+    { key: 'notBillable', header: 'Не тарифицируется', width: 140, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.not_billable_count} /> },
+    ...(includeFinance ? [{ key: 'unpriced', header: 'Нет ставки', width: 105, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.unpriced_count ?? 0} /> }] : []),
   ]
   const toggleRoot = (rootId: string, checked: boolean) => setSelectedRootIds((ids) => checked ? [...new Set([...ids, rootId])] : ids.filter((id) => id !== rootId))
 
-  return <Box data-testid="ff-billing-screen" sx={{ width: 'calc(100vw - 308px)', minWidth: 0 }}>
+  return <Box data-testid="ff-billing-screen" sx={{ width: '100%', maxWidth: '100%', minWidth: 0, overflowX: 'hidden' }}>
     <ScreenHeader title="Расчёты" purpose="Начисления за работу склада и счета селлерам за выбранный период." />
     <Tabs value={tab} onChange={(_, value: BillingTab) => setTab(value)} aria-label="Расчёты">
       <Tab label="Селлеры" value="charges" data-testid="billing-tab-sellers" /><Tab label="Выставленные счета" value="invoices" data-testid="billing-tab-invoices" />
     </Tabs>
     {tab === 'charges' ? <FilterBar testId="billing-filter-bar">
-      <><MoscowDateRangeInput label="Период" startLabel="с" endLabel="по" value={reportRange} onChange={(value) => { clearSellerReportDetails(); setReportRange({ start: value.start ?? today, end: value.end ?? today }) }} maxDate={today} maxDays={366} testId="billing-seller-range" /><Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }} aria-label="Быстрый период">{([['today', 'Сегодня'], ['seven_days', '7 дней'], ['thirty_days', '30 дней'], ['current_month', 'Этот месяц'], ['previous_month', 'Прошлый месяц']] as Array<[SellerQuickPeriod, string]>).map(([period, label]) => <SecondaryAction key={period} onClick={() => { clearSellerReportDetails(); setReportRange(sellerQuickRange(period, today)) }}>{label}</SecondaryAction>)}</Stack><PreferenceSwitch label="Финансы" checked={includeFinance} onChange={(value) => { clearSellerReportDetails(); setIncludeFinance(value) }} testId="billing-seller-finance" /></>
+      <><MoscowDateRangeInput label="Период" startLabel="с" endLabel="по" value={reportRange} onChange={(value) => { clearSellerReportDetails(); setReportRange({ start: value.start ?? today, end: value.end ?? today }) }} maxDate={today} maxDays={366} testId="billing-seller-range" /><Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', alignSelf: { sm: 'flex-end' }, pb: { sm: 0.25 } }} aria-label="Быстрый период">{([['today', 'Сегодня'], ['seven_days', '7 дней'], ['thirty_days', '30 дней'], ['current_month', 'Этот месяц'], ['previous_month', 'Прошлый месяц']] as Array<[SellerQuickPeriod, string]>).map(([period, label]) => <SecondaryAction key={period} onClick={() => { clearSellerReportDetails(); setReportRange(sellerQuickRange(period, today)) }}>{label}</SecondaryAction>)}</Stack></>
       <SelectInput label="Селлер" value={sellerId} onChange={(value) => { clearSellerReportDetails(); setSellerId(value) }} options={[{ value: 'all', label: 'Все селлеры' }, ...sellers.map((seller) => ({ value: seller.id, label: seller.name }))]} testId="billing-seller" />
     </FilterBar> : null}
-    {tab === 'charges' ? <>{error ? <ErrorNotice testId="billing-seller-report-error">Не удалось загрузить отчёт по селлерам. Повторите попытку</ErrorNotice> : null}<ReportMetricStrip items={[{ key: 'sellers', label: 'Селлеров', value: report.totals.seller_count }, { key: 'operations', label: 'Документов', value: report.totals.operation_count }, { key: 'items', label: 'Штук', value: report.totals.item_quantity }, ...(includeFinance ? [{ key: 'accrued', label: 'Стоимость услуг', moneyMinor: report.totals.net_total_kopecks ?? 0 }] : [])]} loading={loading} testId="billing-seller-metrics" /><ActionGroup>{includeFinance ? <FfBillingInvoiceCreate token={token} sellers={sellers} sellerId={selectedReportSeller} sellerName={reportDetails?.seller_name ?? ''} dateFrom={reportRange.start} dateTo={reportRange.end} selectedRootIds={selectedRootIds} storageToken={storageSelected ? reportDetails?.storage_row?.calculation_token ?? null : null} onIssued={() => { setSelectedRootIds([]); setStorageSelected(false); setInvoicesRefresh((value) => value + 1) }} /> : null}</ActionGroup><DataTable columns={sellerColumns} rows={report.rows} loading={loading} getRowKey={(row) => row.seller_id} testId="billing-seller-summary" empty={{ title: 'За выбранный период документов нет', hint: 'Измените период или фильтр селлера.' }} expand={{ isExpanded: (row) => row.seller_id === selectedReportSeller, label: (row) => `Показать документы селлера ${row.seller_name}`, onToggle: (row) => { if (row.seller_id === selectedReportSeller) { clearSellerReportDetails(); return } clearSellerReportDetails(); setSelectedReportSeller(row.seller_id) }, render: () => <FfBillingSellerDetails details={reportDetails} loading={detailsLoading} error={detailsError} includeFinance={includeFinance} selectedRootIds={selectedRootIds} onToggleRoot={toggleRoot} storageSelected={storageSelected} onToggleStorage={setStorageSelected} onLoadMore={setDetailsCursor} onOpenInbound={onOpenInbound} /> }} /></> : <FfBillingInvoicesPanel token={token} sellers={sellers} refreshToken={invoicesRefresh} />}
+    {tab === 'charges' ? <>{error ? <ErrorNotice testId="billing-seller-report-error">Не удалось загрузить отчёт по селлерам. Повторите попытку</ErrorNotice> : null}<ReportMetricStrip items={[{ key: 'sellers', label: 'Селлеров', value: report.totals.seller_count }, { key: 'inbound', label: 'Принято', value: report.totals.inbound_items ?? 0 }, { key: 'packing', label: 'Упаковано', value: report.totals.packing_items ?? 0 }, { key: 'outbound', label: 'Отгружено ФБО', value: report.totals.outbound_items ?? 0 }, { key: 'fbs', label: 'Отгружено FBS', value: report.totals.fbs_items ?? 0 }, { key: 'storage', label: 'Хранение', value: storageLiterDays, unit: 'л·дн', nullValueLabel: 'Считается' }, ...(includeFinance ? [{ key: 'accrued', label: 'Стоимость услуг', moneyMinor: report.totals.net_total_kopecks ?? 0 }] : [])]} loading={loading} testId="billing-seller-metrics" /><ActionGroup><FfBillingProfilesDialog token={token} sellers={sellers} />{includeFinance ? <FfBillingInvoiceCreate token={token} sellers={sellers} sellerId={selectedReportSeller} sellerName={reportDetails?.seller_name ?? ''} dateFrom={reportRange.start} dateTo={reportRange.end} selectedRootIds={selectedRootIds} storageToken={storageSelected ? reportDetails?.storage_row?.calculation_token ?? null : null} onIssued={() => { setSelectedRootIds([]); setStorageSelected(false); setInvoicesRefresh((value) => value + 1) }} /> : null}</ActionGroup><DataTable columns={sellerColumns} rows={report.rows} loading={loading} getRowKey={(row) => row.seller_id} testId="billing-seller-summary" empty={{ title: 'За выбранный период документов нет', hint: 'Измените период или фильтр селлера.' }} expand={{ isExpanded: (row) => row.seller_id === selectedReportSeller, label: (row) => `Показать документы селлера ${row.seller_name}`, onToggle: (row) => { if (row.seller_id === selectedReportSeller) { clearSellerReportDetails(); return } clearSellerReportDetails(); setSelectedReportSeller(row.seller_id) }, render: () => <FfBillingSellerDetails details={reportDetails} loading={detailsLoading} error={detailsError} includeFinance={includeFinance} selectedRootIds={selectedRootIds} onToggleRoot={toggleRoot} storageSelected={storageSelected} onToggleStorage={setStorageSelected} onLoadMore={setDetailsCursor} onOpenInbound={onOpenInbound} onOpenFbsOrder={setHistoryOrderId} /> }} /></> : <FfBillingInvoicesPanel token={token} sellers={sellers} refreshToken={invoicesRefresh} />}
+    <FbsOrderHistoryDialog token={token} orderId={historyOrderId} open={Boolean(historyOrderId)} onClose={() => setHistoryOrderId(null)} />
   </Box>
 }

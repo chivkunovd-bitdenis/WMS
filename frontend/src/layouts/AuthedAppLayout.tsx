@@ -293,11 +293,27 @@ export function AuthedAppLayout({
                 <ListItemText primary="Настройки" />
               </ListItemButton>
             ) : null}
+            {/* «Упаковка» осталась на месте намеренно. Это единственный вход на экран
+                заданий на упаковку для сотрудника без прав администратора: снаружи на
+                `/app/ff/packaging` ведёт только построчная ссылка «Задание» со страницы
+                перепечаток «Честного знака», а она видна одному администратору. Убери
+                пункт — и упаковщик не попадёт на свой экран вообще. */}
             {canPackaging ? (
               <ListItemButton component={NavLink} to={`${base}/packaging`} data-testid="nav-ff-packaging" data-task-id="NAV-01">
                 <ListItemText primary="Упаковка" />
               </ListItemButton>
             ) : null}
+            {/* Инструкции нужны любому сотруднику склада, поэтому пункт не закрыт
+                правами: закрывать доступ к объяснению «как здесь работать» смысла нет.
+                Стоит последним — за инструкцией идут, когда застряли, а не в начале смены. */}
+            <ListItemButton
+              component={NavLink}
+              to={`${base}/knowledge`}
+              data-testid="nav-ff-knowledge"
+              data-task-id="NAV-01"
+            >
+              <ListItemText primary="База знаний" />
+            </ListItemButton>
           </List>
         </Box>
       </Drawer>

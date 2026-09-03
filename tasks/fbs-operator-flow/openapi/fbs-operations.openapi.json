@@ -200,6 +200,57 @@
         }
       }
     },
+    "/operations/fbs-orders/{order_id}/history": {
+      "get": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Get Fbs Order History",
+        "description": "Хронология заказа: подбор, упаковка, коды, печать, поставка.\n\nСобирается из уже существующих записей, поэтому работает и по старым\nзаказам, а не только по тем, что появятся после выкатки.",
+        "operationId": "get_fbs_order_history_operations_fbs_orders__order_id__history_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Order Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Fbs Order History Operations Fbs Orders  Order Id  History Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-orders": {
       "get": {
         "tags": [
@@ -4570,6 +4621,46 @@
         ],
         "title": "BoxImportRowErrorOut"
       },
+      "ChangedBalanceOut": {
+        "properties": {
+          "line_id": {
+            "type": "string",
+            "title": "Line Id"
+          },
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "storage_location_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Location Id"
+          },
+          "expected_quantity": {
+            "type": "integer",
+            "title": "Expected Quantity"
+          },
+          "current_quantity": {
+            "type": "integer",
+            "title": "Current Quantity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "line_id",
+          "product_id",
+          "storage_location_id",
+          "expected_quantity",
+          "current_quantity"
+        ],
+        "title": "ChangedBalanceOut"
+      },
       "CodeHistoryEventOut": {
         "properties": {
           "id": {
@@ -4663,6 +4754,383 @@
         },
         "type": "object",
         "title": "ConfirmPackedIn"
+      },
+      "CountCellOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
+          },
+          "children": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CountProductNodeOut"
+                },
+                {
+                  "$ref": "#/components/schemas/CountContainerNodeOut"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Children"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "children"
+        ],
+        "title": "CountCellOut"
+      },
+      "CountContainerNodeOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "pallet",
+              "box",
+              "cargo_place"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
+          },
+          "children": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CountProductNodeOut"
+                },
+                {
+                  "$ref": "#/components/schemas/CountContainerNodeOut"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Children"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "code",
+          "children"
+        ],
+        "title": "CountContainerNodeOut"
+      },
+      "CountFillOut": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "object",
+              "all",
+              "filters"
+            ],
+            "title": "Mode"
+          },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "object_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Object Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode"
+        ],
+        "title": "CountFillOut"
+      },
+      "CountProductNodeOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "product",
+            "title": "Kind",
+            "default": "product"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "sku": {
+            "type": "string",
+            "title": "Sku"
+          },
+          "seller": {
+            "type": "string",
+            "title": "Seller"
+          },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
+          },
+          "wb_vendor_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Vendor Code"
+          },
+          "wb_barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Barcode"
+          },
+          "wb_size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Size"
+          },
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Url"
+          },
+          "expected": {
+            "type": "integer",
+            "title": "Expected"
+          },
+          "actual": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual"
+          },
+          "expected_now": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Now"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "product_id",
+          "name",
+          "sku",
+          "seller",
+          "expected",
+          "actual"
+        ],
+        "title": "CountProductNodeOut"
+      },
+      "CountScannableCellOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "barcode"
+        ],
+        "title": "CountScannableCellOut",
+        "description": "Ячейка склада, которую сканер обязан узнать, даже если она пуста."
+      },
+      "CountScannableContainerOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "pallet",
+              "box",
+              "cargo_place"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
+          },
+          "cell_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cell Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "code",
+          "barcode",
+          "cell_id"
+        ],
+        "title": "CountScannableContainerOut",
+        "description": "Тара склада, которую сканер обязан узнать, даже если по учёту она пуста."
       },
       "CreatePrintTemplateIn": {
         "properties": {
@@ -4944,6 +5412,492 @@
           "created_at"
         ],
         "title": "DiscrepancyActSummaryOut"
+      },
+      "DocumentEventActorOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "DocumentEventActorOut"
+      },
+      "DocumentEventOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "document_type": {
+            "type": "string",
+            "title": "Document Type"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "event_type": {
+            "type": "string",
+            "title": "Event Type"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentEventActorOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "qty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qty"
+          },
+          "product": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentEventProductOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "document_type",
+          "document_id",
+          "event_type",
+          "actor",
+          "source",
+          "occurred_at",
+          "qty",
+          "product",
+          "payload"
+        ],
+        "title": "DocumentEventOut"
+      },
+      "DocumentEventProductOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "DocumentEventProductOut"
+      },
+      "FbsAssemblyTimeOut": {
+        "properties": {
+          "hours": {
+            "type": "number",
+            "title": "Hours"
+          },
+          "orders": {
+            "type": "integer",
+            "title": "Orders"
+          },
+          "within_12_hours_percent": {
+            "type": "integer",
+            "title": "Within 12 Hours Percent"
+          },
+          "within_24_hours_percent": {
+            "type": "integer",
+            "title": "Within 24 Hours Percent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hours",
+          "orders",
+          "within_12_hours_percent",
+          "within_24_hours_percent"
+        ],
+        "title": "FbsAssemblyTimeOut"
+      },
+      "FbsCancelledAfterPackItemOut": {
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "title": "Order Id"
+          },
+          "wb_order_id": {
+            "type": "integer",
+            "title": "Wb Order Id"
+          },
+          "product": {
+            "$ref": "#/components/schemas/FbsCancelledProductOut"
+          },
+          "seller": {
+            "$ref": "#/components/schemas/FbsCancelledSellerOut"
+          },
+          "supply": {
+            "$ref": "#/components/schemas/FbsCancelledSupplyOut"
+          },
+          "cargo_place": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FbsCancelledCargoPlaceOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "assembled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assembled At"
+          },
+          "picked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Picked At"
+          },
+          "packed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Packed At"
+          },
+          "cancelled_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Cancelled At"
+          },
+          "cancellation_code": {
+            "type": "string",
+            "title": "Cancellation Code"
+          },
+          "cancellation_reason": {
+            "type": "string",
+            "title": "Cancellation Reason"
+          },
+          "sticker_printed": {
+            "type": "boolean",
+            "title": "Sticker Printed"
+          },
+          "sticker_printed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sticker Printed At"
+          },
+          "supply_departed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supply Departed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_id",
+          "wb_order_id",
+          "product",
+          "seller",
+          "supply",
+          "cargo_place",
+          "assembled_at",
+          "picked_at",
+          "packed_at",
+          "cancelled_at",
+          "cancellation_code",
+          "cancellation_reason",
+          "sticker_printed",
+          "sticker_printed_at",
+          "supply_departed"
+        ],
+        "title": "FbsCancelledAfterPackItemOut"
+      },
+      "FbsCancelledAfterPackPageOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FbsCancelledAfterPackItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "FbsCancelledAfterPackPageOut"
+      },
+      "FbsCancelledCargoPlaceOut": {
+        "properties": {
+          "box_id": {
+            "type": "string",
+            "title": "Box Id"
+          },
+          "box_number": {
+            "type": "integer",
+            "title": "Box Number"
+          },
+          "box_barcode": {
+            "type": "string",
+            "title": "Box Barcode"
+          },
+          "trbx_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trbx Id"
+          },
+          "wb_trbx_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Trbx Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "box_id",
+          "box_number",
+          "box_barcode",
+          "trbx_id",
+          "wb_trbx_id"
+        ],
+        "title": "FbsCancelledCargoPlaceOut"
+      },
+      "FbsCancelledProductOut": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "article": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Article"
+          },
+          "wb_article": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Article"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "article",
+          "wb_article",
+          "size"
+        ],
+        "title": "FbsCancelledProductOut"
+      },
+      "FbsCancelledSellerOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "FbsCancelledSellerOut"
+      },
+      "FbsCancelledSupplyOut": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "wb_supply_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Supply Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "wb_supply_id",
+          "name",
+          "status"
+        ],
+        "title": "FbsCancelledSupplyOut"
       },
       "FbsCargoPlaceDraftBody": {
         "properties": {
@@ -5304,6 +6258,10 @@
             "type": "boolean",
             "title": "Ok"
           },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
           "order_id": {
             "anyOf": [
               {
@@ -5321,6 +6279,7 @@
           "code",
           "message",
           "ok",
+          "severity",
           "order_id"
         ],
         "title": "FbsDeliveryCheckOut"
@@ -6378,6 +7337,91 @@
         ],
         "title": "FbsPackingBoxOut"
       },
+      "FbsPickAllocationOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "sku_code": {
+            "type": "string",
+            "title": "Sku Code"
+          },
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "storage_location_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Location Id"
+          },
+          "location_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Code"
+          },
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "product_id",
+          "sku_code",
+          "product_name",
+          "storage_location_id",
+          "location_code",
+          "quantity"
+        ],
+        "title": "FbsPickAllocationOut"
+      },
+      "FbsPickContainerPathItemOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "code",
+          "label"
+        ],
+        "title": "FbsPickContainerPathItemOut"
+      },
       "FbsPickLocationExpectedProductOut": {
         "properties": {
           "product_id": {
@@ -6501,6 +7545,196 @@
         ],
         "title": "FbsPickManualProductBody"
       },
+      "FbsPickOptionLocationOut": {
+        "properties": {
+          "storage_location_id": {
+            "type": "string",
+            "title": "Storage Location Id"
+          },
+          "location_code": {
+            "type": "string",
+            "title": "Location Code"
+          },
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          },
+          "reserved": {
+            "type": "integer",
+            "title": "Reserved"
+          },
+          "available": {
+            "type": "integer",
+            "title": "Available"
+          },
+          "picked": {
+            "type": "integer",
+            "title": "Picked"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/FbsPickOptionSourceOut"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "storage_location_id",
+          "location_code",
+          "quantity",
+          "reserved",
+          "available",
+          "picked",
+          "sources"
+        ],
+        "title": "FbsPickOptionLocationOut"
+      },
+      "FbsPickOptionProductOut": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "sku_code": {
+            "type": "string",
+            "title": "Sku Code"
+          },
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "planned_qty": {
+            "type": "integer",
+            "title": "Planned Qty"
+          },
+          "picked_qty": {
+            "type": "integer",
+            "title": "Picked Qty"
+          },
+          "locations": {
+            "items": {
+              "$ref": "#/components/schemas/FbsPickOptionLocationOut"
+            },
+            "type": "array",
+            "title": "Locations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "sku_code",
+          "product_name",
+          "planned_qty",
+          "picked_qty",
+          "locations"
+        ],
+        "title": "FbsPickOptionProductOut"
+      },
+      "FbsPickOptionSourceOut": {
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          },
+          "picked": {
+            "type": "integer",
+            "title": "Picked"
+          },
+          "is_loose": {
+            "type": "boolean",
+            "title": "Is Loose"
+          },
+          "source_label": {
+            "type": "string",
+            "title": "Source Label"
+          },
+          "container_path": {
+            "items": {
+              "$ref": "#/components/schemas/FbsPickContainerPathItemOut"
+            },
+            "type": "array",
+            "title": "Container Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "quantity",
+          "picked",
+          "is_loose",
+          "source_label",
+          "container_path"
+        ],
+        "title": "FbsPickOptionSourceOut"
+      },
+      "FbsPickScanBody": {
+        "properties": {
+          "barcode": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Barcode"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
+          "storage_location_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Location Id"
+          },
+          "container_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pallet",
+                  "box",
+                  "cargo_place"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Kind"
+          },
+          "container_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "barcode"
+        ],
+        "title": "FbsPickScanBody"
+      },
       "FbsPickScanLocationBody": {
         "properties": {
           "location_barcode": {
@@ -6515,6 +7749,134 @@
           "location_barcode"
         ],
         "title": "FbsPickScanLocationBody"
+      },
+      "FbsPickScanOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "storage_location_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Location Id"
+          },
+          "location_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Code"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
+          "sku_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sku Code"
+          },
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
+          },
+          "picked_qty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Picked Qty"
+          },
+          "allocation_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocation Quantity"
+          },
+          "container_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pallet",
+                  "box",
+                  "cargo_place"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Kind"
+          },
+          "container_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Id"
+          },
+          "container_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "FbsPickScanOut"
       },
       "FbsPickScanProductBody": {
         "properties": {
@@ -6555,6 +7917,61 @@
           "idempotency_key"
         ],
         "title": "FbsPickScanProductBody"
+      },
+      "FbsPickSetBody": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Product Id"
+          },
+          "storage_location_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Storage Location Id"
+          },
+          "quantity": {
+            "type": "integer",
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Quantity"
+          },
+          "container_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pallet",
+                  "box",
+                  "cargo_place"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Kind"
+          },
+          "container_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "storage_location_id",
+          "quantity"
+        ],
+        "title": "FbsPickSetBody"
       },
       "FbsPickUndoBody": {
         "properties": {
@@ -6969,8 +8386,56 @@
         "type": "object",
         "title": "FbsSellerOfficeOut"
       },
+      "FbsSellerWarehouseConfigure": {
+        "properties": {
+          "served": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Served"
+          },
+          "wms_warehouse_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wms Warehouse Id"
+          }
+        },
+        "type": "object",
+        "title": "FbsSellerWarehouseConfigure"
+      },
       "FbsSellerWarehouseOut": {
         "properties": {
+          "wb_warehouse_id": {
+            "type": "integer",
+            "title": "Wb Warehouse Id"
+          },
+          "served": {
+            "type": "boolean",
+            "title": "Served"
+          },
+          "wms_warehouse_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wms Warehouse Id"
+          },
           "id": {
             "anyOf": [
               {
@@ -7061,6 +8526,11 @@
           }
         },
         "type": "object",
+        "required": [
+          "wb_warehouse_id",
+          "served",
+          "wms_warehouse_id"
+        ],
         "title": "FbsSellerWarehouseOut"
       },
       "FbsShipmentCalendarRowOut": {
@@ -8169,7 +9639,14 @@
             "default": "wb"
           },
           "wb_supply_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Wb Supply Id"
           },
           "name": {
@@ -10040,6 +11517,11 @@
             ],
             "title": "Wb Supply Id"
           },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "wms"
+          },
           "name": {
             "type": "string",
             "title": "Name"
@@ -10690,6 +12172,18 @@
           "created_at": {
             "type": "string",
             "title": "Created At"
+          },
+          "remaining_qty": {
+            "type": "integer",
+            "title": "Remaining Qty",
+            "default": 0
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/InboundIntakeBoxLineOut"
+            },
+            "type": "array",
+            "title": "Lines"
           }
         },
         "type": "object",
@@ -10751,11 +12245,25 @@
             "title": "Product Id"
           },
           "storage_location_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Storage Location Id"
           },
           "storage_location_code": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Storage Location Code"
           },
           "quantity": {
@@ -10995,6 +12503,28 @@
             "title": "Remaining Qty",
             "default": 0
           },
+          "pallet_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pallet Id"
+          },
+          "pallet_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pallet Code"
+          },
           "lines": {
             "items": {
               "$ref": "#/components/schemas/InboundIntakeBoxLineOut"
@@ -11058,6 +12588,21 @@
           "expected_qty"
         ],
         "title": "InboundIntakeLineCreate"
+      },
+      "InboundIntakeLineDefectivePatch": {
+        "properties": {
+          "defective_qty": {
+            "type": "integer",
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Defective Qty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "defective_qty"
+        ],
+        "title": "InboundIntakeLineDefectivePatch"
       },
       "InboundIntakeLineExpectedPatch": {
         "properties": {
@@ -11194,6 +12739,11 @@
             ],
             "title": "Effective Actual Qty"
           },
+          "defective_qty": {
+            "type": "integer",
+            "title": "Defective Qty",
+            "default": 0
+          },
           "posted_qty": {
             "type": "integer",
             "title": "Posted Qty"
@@ -11312,6 +12862,21 @@
             "maxLength": 32,
             "title": "Operation Type",
             "default": "inbound"
+          },
+          "marketplace": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "wildberries",
+                  "ozon"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marketplace"
           }
         },
         "type": "object",
@@ -11382,6 +12947,32 @@
             "type": "string",
             "title": "Operation Type",
             "default": "inbound"
+          },
+          "marketplace": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "wildberries",
+                  "ozon"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marketplace"
+          },
+          "marketplace_warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marketplace Warning"
           },
           "planned_delivery_date": {
             "anyOf": [
@@ -11622,6 +13213,21 @@
             "type": "string",
             "title": "Operation Type",
             "default": "inbound"
+          },
+          "marketplace": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "wildberries",
+                  "ozon"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marketplace"
           },
           "line_count": {
             "type": "integer",
@@ -12068,6 +13674,781 @@
         ],
         "title": "InventoryBalanceRowOut"
       },
+      "InventoryCountActualBatchIn": {
+        "properties": {
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/InventoryCountActualIn"
+            },
+            "type": "array",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lines"
+        ],
+        "title": "InventoryCountActualBatchIn"
+      },
+      "InventoryCountActualIn": {
+        "properties": {
+          "line_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Line Id"
+          },
+          "actual_quantity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000000000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Quantity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "line_id"
+        ],
+        "title": "InventoryCountActualIn"
+      },
+      "InventoryCountCreateIn": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "object",
+              "planned"
+            ],
+            "title": "Source"
+          },
+          "object": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InventoryCountObjectIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "filters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InventoryCountFiltersIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source"
+        ],
+        "title": "InventoryCountCreateIn"
+      },
+      "InventoryCountDetailOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "number": {
+            "type": "string",
+            "title": "Number"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          },
+          "warehouse_name": {
+            "type": "string",
+            "title": "Warehouse Name"
+          },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "fill": {
+            "$ref": "#/components/schemas/CountFillOut"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "created_by": {
+            "type": "string",
+            "title": "Created By"
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted At"
+          },
+          "posted_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted By"
+          },
+          "comment": {
+            "type": "string",
+            "title": "Comment"
+          },
+          "address_storage": {
+            "type": "boolean",
+            "title": "Address Storage"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/InventoryCountLineOut"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/CountCellOut"
+            },
+            "type": "array",
+            "title": "Cells"
+          },
+          "scannable_cells": {
+            "items": {
+              "$ref": "#/components/schemas/CountScannableCellOut"
+            },
+            "type": "array",
+            "title": "Scannable Cells",
+            "default": []
+          },
+          "scannable_containers": {
+            "items": {
+              "$ref": "#/components/schemas/CountScannableContainerOut"
+            },
+            "type": "array",
+            "title": "Scannable Containers",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "status",
+          "source",
+          "warehouse_id",
+          "warehouse_name",
+          "seller_id",
+          "category",
+          "fill",
+          "created_at",
+          "created_by",
+          "posted_at",
+          "posted_by",
+          "comment",
+          "address_storage",
+          "lines",
+          "cells"
+        ],
+        "title": "InventoryCountDetailOut"
+      },
+      "InventoryCountFiltersIn": {
+        "properties": {
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          },
+          "all": {
+            "type": "boolean",
+            "title": "All",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "InventoryCountFiltersIn"
+      },
+      "InventoryCountFoundIn": {
+        "properties": {
+          "barcodes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Barcodes"
+          },
+          "cell_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cell Id"
+          },
+          "container_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pallet",
+                  "box",
+                  "cargo_place"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Kind"
+          },
+          "container_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Id"
+          },
+          "scan_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "barcodes"
+        ],
+        "title": "InventoryCountFoundIn",
+        "description": "Находка: товар лежит там, где по учёту его нет."
+      },
+      "InventoryCountFoundOut": {
+        "properties": {
+          "count": {
+            "$ref": "#/components/schemas/InventoryCountDetailOut"
+          },
+          "expected_quantity": {
+            "type": "integer",
+            "title": "Expected Quantity"
+          },
+          "notice": {
+            "type": "string",
+            "title": "Notice"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "expected_quantity",
+          "notice"
+        ],
+        "title": "InventoryCountFoundOut",
+        "description": "Документ после записи находки плюс честный текст для оператора."
+      },
+      "InventoryCountLineOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "storage_location_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Location Id"
+          },
+          "storage_location_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Location Code"
+          },
+          "container_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Kind"
+          },
+          "container_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Id"
+          },
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "sku_code": {
+            "type": "string",
+            "title": "Sku Code"
+          },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          },
+          "seller_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Name"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
+          },
+          "wb_vendor_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Vendor Code"
+          },
+          "wb_barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Barcode"
+          },
+          "wb_size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Size"
+          },
+          "expected_quantity": {
+            "type": "integer",
+            "title": "Expected Quantity"
+          },
+          "current_quantity": {
+            "type": "integer",
+            "title": "Current Quantity"
+          },
+          "actual_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Quantity"
+          },
+          "posted_delta": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted Delta"
+          },
+          "balance_changed": {
+            "type": "boolean",
+            "title": "Balance Changed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "product_id",
+          "storage_location_id",
+          "storage_location_code",
+          "container_kind",
+          "container_id",
+          "product_name",
+          "sku_code",
+          "seller_id",
+          "seller_name",
+          "category",
+          "barcode",
+          "wb_vendor_code",
+          "wb_barcode",
+          "wb_size",
+          "expected_quantity",
+          "current_quantity",
+          "actual_quantity",
+          "posted_delta",
+          "balance_changed"
+        ],
+        "title": "InventoryCountLineOut"
+      },
+      "InventoryCountObjectIn": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "product",
+              "storage_location",
+              "location",
+              "cell",
+              "pallet",
+              "box",
+              "cargo_place"
+            ],
+            "title": "Type"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "storage_location_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Location Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "id"
+        ],
+        "title": "InventoryCountObjectIn"
+      },
+      "InventoryCountPostOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "posted_lines": {
+            "type": "integer",
+            "title": "Posted Lines"
+          },
+          "unchanged_lines": {
+            "type": "integer",
+            "title": "Unchanged Lines"
+          },
+          "changed_balance_count": {
+            "type": "integer",
+            "title": "Changed Balance Count"
+          },
+          "changed_balances": {
+            "items": {
+              "$ref": "#/components/schemas/ChangedBalanceOut"
+            },
+            "type": "array",
+            "title": "Changed Balances"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "posted_lines",
+          "unchanged_lines",
+          "changed_balance_count",
+          "changed_balances"
+        ],
+        "title": "InventoryCountPostOut"
+      },
+      "InventoryCountSummaryOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "number": {
+            "type": "string",
+            "title": "Number"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          },
+          "warehouse_name": {
+            "type": "string",
+            "title": "Warehouse Name"
+          },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "fill": {
+            "$ref": "#/components/schemas/CountFillOut"
+          },
+          "fill_label": {
+            "type": "string",
+            "title": "Fill Label"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "created_by": {
+            "type": "string",
+            "title": "Created By"
+          },
+          "lines": {
+            "type": "integer",
+            "title": "Lines"
+          },
+          "counted": {
+            "type": "integer",
+            "title": "Counted"
+          },
+          "discrepancies": {
+            "type": "integer",
+            "title": "Discrepancies"
+          },
+          "surplus": {
+            "type": "integer",
+            "title": "Surplus"
+          },
+          "shortage": {
+            "type": "integer",
+            "title": "Shortage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "status",
+          "source",
+          "warehouse_id",
+          "warehouse_name",
+          "seller_id",
+          "category",
+          "fill",
+          "fill_label",
+          "created_at",
+          "created_by",
+          "lines",
+          "counted",
+          "discrepancies",
+          "surplus",
+          "shortage"
+        ],
+        "title": "InventoryCountSummaryOut"
+      },
       "InventoryMovementOut": {
         "properties": {
           "id": {
@@ -12079,7 +14460,14 @@
             "title": "Product Id"
           },
           "storage_location_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Storage Location Id"
           },
           "quantity_delta": {
@@ -12089,6 +14477,17 @@
           "movement_type": {
             "type": "string",
             "title": "Movement Type"
+          },
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
           },
           "inbound_intake_line_id": {
             "anyOf": [
@@ -12133,7 +14532,14 @@
             "title": "Sku Code"
           },
           "storage_location_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Storage Location Id"
           },
           "quantity_delta": {
@@ -12143,6 +14549,17 @@
           "movement_type": {
             "type": "string",
             "title": "Movement Type"
+          },
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
           },
           "created_at": {
             "type": "string",
@@ -12160,6 +14577,295 @@
           "created_at"
         ],
         "title": "InventoryMovementRowOut"
+      },
+      "InvoiceHistoryItemOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "legacy",
+              "v2"
+            ],
+            "title": "Origin"
+          },
+          "number": {
+            "type": "string",
+            "title": "Number"
+          },
+          "seller_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Seller Id"
+          },
+          "seller_name": {
+            "type": "string",
+            "title": "Seller Name"
+          },
+          "issued_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Issued At"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Start"
+          },
+          "period_end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          },
+          "creation_mode": {
+            "type": "string",
+            "enum": [
+              "monthly",
+              "manual",
+              "selected_operations"
+            ],
+            "title": "Creation Mode"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "issued",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "total_amount_kopecks": {
+            "type": "integer",
+            "title": "Total Amount Kopecks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "origin",
+          "number",
+          "seller_id",
+          "seller_name",
+          "issued_at",
+          "period_start",
+          "period_end",
+          "creation_mode",
+          "status",
+          "total_amount_kopecks"
+        ],
+        "title": "InvoiceHistoryItemOut",
+        "description": "Строка вкладки «Выставленные счета»: и старые месячные, и новые.\n\n`origin` говорит экрану, за какой карточкой идти при «Открыть»: legacy\nлежит в `/billing/invoices/{id}`, новый — в `/billing/invoices-v2/{id}`."
+      },
+      "InvoiceHistoryOut": {
+        "properties": {
+          "invoices": {
+            "items": {
+              "$ref": "#/components/schemas/InvoiceHistoryItemOut"
+            },
+            "type": "array",
+            "title": "Invoices"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "invoices"
+        ],
+        "title": "InvoiceHistoryOut"
+      },
+      "InvoiceV2LineOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "unit_price_kopecks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Price Kopecks"
+          },
+          "total_amount_kopecks": {
+            "type": "integer",
+            "title": "Total Amount Kopecks"
+          },
+          "sort_order": {
+            "type": "integer",
+            "title": "Sort Order"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "description",
+          "unit_price_kopecks",
+          "total_amount_kopecks",
+          "sort_order"
+        ],
+        "title": "InvoiceV2LineOut"
+      },
+      "InvoiceV2Out": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "seller_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Seller Id"
+          },
+          "number": {
+            "type": "string",
+            "title": "Number"
+          },
+          "creation_mode": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "selected_operations"
+            ],
+            "title": "Creation Mode"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Start"
+          },
+          "period_end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "issued",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "issued_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issued At"
+          },
+          "total_amount_kopecks": {
+            "type": "integer",
+            "title": "Total Amount Kopecks"
+          },
+          "ff_profile": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Ff Profile"
+          },
+          "seller_profile": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Seller Profile"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/InvoiceV2LineOut"
+            },
+            "type": "array",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "seller_id",
+          "number",
+          "creation_mode",
+          "period_start",
+          "period_end",
+          "status",
+          "issued_at",
+          "total_amount_kopecks",
+          "ff_profile",
+          "seller_profile",
+          "lines"
+        ],
+        "title": "InvoiceV2Out"
       },
       "LabelArtifactTapeIn": {
         "properties": {
@@ -12661,6 +15367,67 @@
           "email"
         ],
         "title": "LoginBody"
+      },
+      "ManualInvoiceV2DraftIn": {
+        "properties": {
+          "creation_mode": {
+            "type": "string",
+            "const": "manual",
+            "title": "Creation Mode"
+          },
+          "seller_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Seller Id"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ManualInvoiceV2LineIn"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "creation_mode",
+          "seller_id",
+          "lines"
+        ],
+        "title": "ManualInvoiceV2DraftIn"
+      },
+      "ManualInvoiceV2LineIn": {
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "amount": {
+            "type": "string",
+            "title": "Amount"
+          },
+          "unit_price": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Price"
+          }
+        },
+        "type": "object",
+        "required": [
+          "description",
+          "amount"
+        ],
+        "title": "ManualInvoiceV2LineIn"
       },
       "MarketplaceUnloadAttachBoxBody": {
         "properties": {
@@ -13180,11 +15947,25 @@
             "title": "Product Name"
           },
           "storage_location_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Storage Location Id"
           },
           "location_code": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Location Code"
           },
           "quantity": {
@@ -13203,6 +15984,34 @@
           "quantity"
         ],
         "title": "MarketplaceUnloadPickAllocationOut"
+      },
+      "MarketplaceUnloadPickContainerPathItemOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "code",
+          "label"
+        ],
+        "title": "MarketplaceUnloadPickContainerPathItemOut"
       },
       "MarketplaceUnloadPickOptionLocationOut": {
         "properties": {
@@ -13229,6 +16038,13 @@
           "picked": {
             "type": "integer",
             "title": "Picked"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/MarketplaceUnloadPickOptionSourceOut"
+            },
+            "type": "array",
+            "title": "Sources"
           }
         },
         "type": "object",
@@ -13238,7 +16054,8 @@
           "quantity",
           "reserved",
           "available",
-          "picked"
+          "picked",
+          "sources"
         ],
         "title": "MarketplaceUnloadPickOptionLocationOut"
       },
@@ -13264,6 +16081,11 @@
             "type": "integer",
             "title": "Picked Qty"
           },
+          "boxed_qty": {
+            "type": "integer",
+            "title": "Boxed Qty",
+            "default": 0
+          },
           "locations": {
             "items": {
               "$ref": "#/components/schemas/MarketplaceUnloadPickOptionLocationOut"
@@ -13282,6 +16104,42 @@
           "locations"
         ],
         "title": "MarketplaceUnloadPickOptionProductOut"
+      },
+      "MarketplaceUnloadPickOptionSourceOut": {
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          },
+          "picked": {
+            "type": "integer",
+            "title": "Picked"
+          },
+          "is_loose": {
+            "type": "boolean",
+            "title": "Is Loose"
+          },
+          "source_label": {
+            "type": "string",
+            "title": "Source Label"
+          },
+          "container_path": {
+            "items": {
+              "$ref": "#/components/schemas/MarketplaceUnloadPickContainerPathItemOut"
+            },
+            "type": "array",
+            "title": "Container Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "quantity",
+          "picked",
+          "is_loose",
+          "source_label",
+          "container_path"
+        ],
+        "title": "MarketplaceUnloadPickOptionSourceOut"
       },
       "MarketplaceUnloadPickScanBody": {
         "properties": {
@@ -13314,6 +16172,34 @@
               }
             ],
             "title": "Storage Location Id"
+          },
+          "container_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pallet",
+                  "box",
+                  "cargo_place"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Kind"
+          },
+          "container_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Id"
           }
         },
         "type": "object",
@@ -13404,6 +16290,44 @@
               }
             ],
             "title": "Allocation Quantity"
+          },
+          "container_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pallet",
+                  "box",
+                  "cargo_place"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Kind"
+          },
+          "container_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Id"
+          },
+          "container_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Code"
           }
         },
         "type": "object",
@@ -13429,6 +16353,34 @@
             "maximum": 1000000000.0,
             "minimum": 0.0,
             "title": "Quantity"
+          },
+          "container_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pallet",
+                  "box",
+                  "cargo_place"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Kind"
+          },
+          "container_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Id"
           }
         },
         "type": "object",
@@ -14437,7 +17389,14 @@
             "title": "Product Id"
           },
           "storage_location_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Storage Location Id"
           },
           "quantity_delta": {
@@ -14447,6 +17406,17 @@
           "movement_type": {
             "type": "string",
             "title": "Movement Type"
+          },
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
           },
           "outbound_shipment_line_id": {
             "type": "string",
@@ -14865,6 +17835,506 @@
         ],
         "title": "OzonAccountStatusOut"
       },
+      "OzonFbsReturnPointOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "place_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place Id"
+          },
+          "box_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Box Count"
+          },
+          "returns_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Returns Count"
+          },
+          "utc_offset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utc Offset"
+          },
+          "warehouses_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warehouses Ids"
+          },
+          "pass_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pass Count"
+          },
+          "pass_required": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pass Required"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "OzonFbsReturnPointOut"
+      },
+      "OzonReturnBarcodeOut": {
+        "properties": {
+          "barcode": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Barcode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "barcode"
+        ],
+        "title": "OzonReturnBarcodeOut"
+      },
+      "OzonReturnGiveoutImportIn": {
+        "properties": {
+          "giveout_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Giveout Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "giveout_ids"
+        ],
+        "title": "OzonReturnGiveoutImportIn"
+      },
+      "OzonReturnGiveoutOut": {
+        "properties": {
+          "giveout_id": {
+            "type": "integer",
+            "title": "Giveout Id"
+          },
+          "giveout_status": {
+            "type": "string",
+            "title": "Giveout Status"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          },
+          "warehouse_name": {
+            "type": "string",
+            "title": "Warehouse Name"
+          },
+          "warehouse_address": {
+            "type": "string",
+            "title": "Warehouse Address"
+          },
+          "approved_articles_count": {
+            "type": "integer",
+            "title": "Approved Articles Count",
+            "default": 0
+          },
+          "total_articles_count": {
+            "type": "integer",
+            "title": "Total Articles Count",
+            "default": 0
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "storage_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Days"
+          },
+          "utilization_forecast_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utilization Forecast Date"
+          },
+          "already_imported": {
+            "type": "boolean",
+            "title": "Already Imported",
+            "default": false
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OzonReturnItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "giveout_id",
+          "giveout_status",
+          "warehouse_name",
+          "warehouse_address"
+        ],
+        "title": "OzonReturnGiveoutOut"
+      },
+      "OzonReturnImportOut": {
+        "properties": {
+          "giveouts_imported": {
+            "type": "integer",
+            "title": "Giveouts Imported"
+          },
+          "items_imported": {
+            "type": "integer",
+            "title": "Items Imported"
+          },
+          "unmatched_items": {
+            "type": "integer",
+            "title": "Unmatched Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "giveouts_imported",
+          "items_imported",
+          "unmatched_items"
+        ],
+        "title": "OzonReturnImportOut"
+      },
+      "OzonReturnItemOut": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "inbound_line_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inbound Line Id"
+          },
+          "return_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Id"
+          },
+          "posting_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posting Number"
+          },
+          "return_barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Barcode"
+          },
+          "return_reason_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Reason Name"
+          },
+          "return_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Type"
+          },
+          "offer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offer Id"
+          },
+          "ozon_sku": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ozon Sku"
+          },
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Quantity"
+          },
+          "approved": {
+            "type": "boolean",
+            "title": "Approved",
+            "default": false
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
+          "wms_sku": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wms Sku"
+          },
+          "wms_barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wms Barcode"
+          },
+          "wms_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wms Name"
+          },
+          "matched": {
+            "type": "boolean",
+            "title": "Matched"
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning"
+          },
+          "storage_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Days"
+          },
+          "utilization_forecast_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utilization Forecast Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_name",
+          "quantity",
+          "matched"
+        ],
+        "title": "OzonReturnItemOut"
+      },
+      "OzonReturnPreviewOut": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/OzonReturnGiveoutOut"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "imported_giveout_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Imported Giveout Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "OzonReturnPreviewOut"
+      },
       "PackProgressIn": {
         "properties": {
           "quantity": {
@@ -15257,11 +18727,25 @@
             "title": "Product Name"
           },
           "storage_location_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Storage Location Id"
           },
           "storage_location_code": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Storage Location Code"
           },
           "packaging_instructions": {
@@ -15530,6 +19014,105 @@
         ],
         "title": "PackagingTaskOut"
       },
+      "PalletCombineIn": {
+        "properties": {
+          "pallet_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pallet Id"
+          },
+          "inbound_request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inbound Request Id"
+          },
+          "inbound_box_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Inbound Box Ids"
+          },
+          "cargo_place_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Cargo Place Ids"
+          },
+          "warehouse_box_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Warehouse Box Ids"
+          }
+        },
+        "type": "object",
+        "title": "PalletCombineIn"
+      },
+      "PalletOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "barcode": {
+            "type": "string",
+            "title": "Barcode"
+          },
+          "storage_location_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Location Id"
+          },
+          "storage_location_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Location Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "barcode"
+        ],
+        "title": "PalletOut"
+      },
       "PendingMarkingLineOut": {
         "properties": {
           "packaging_task_id": {
@@ -15590,7 +19173,14 @@
             "title": "Product Name"
           },
           "storage_location_code": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Storage Location Code"
           },
           "qty_need": {
@@ -16986,6 +20576,152 @@
         "type": "object",
         "title": "ProductDimensionsPatch"
       },
+      "ProductFbsRuleBody": {
+        "properties": {
+          "publish": {
+            "type": "boolean",
+            "title": "Publish"
+          },
+          "same_everywhere": {
+            "type": "boolean",
+            "title": "Same Everywhere"
+          },
+          "percent": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Percent"
+          },
+          "by_warehouse": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Warehouse"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "publish",
+          "same_everywhere",
+          "percent"
+        ],
+        "title": "ProductFbsRuleBody",
+        "description": "Правило публикации остатка: доля свободного остатка, а не число штук."
+      },
+      "ProductFbsRuleBulkItemOut": {
+        "properties": {
+          "publish": {
+            "type": "boolean",
+            "title": "Publish"
+          },
+          "same_everywhere": {
+            "type": "boolean",
+            "title": "Same Everywhere"
+          },
+          "percent": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Percent"
+          },
+          "by_warehouse": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Warehouse"
+          },
+          "free_stock": {
+            "type": "integer",
+            "title": "Free Stock"
+          },
+          "on_hand": {
+            "type": "integer",
+            "title": "On Hand"
+          },
+          "reserved": {
+            "type": "integer",
+            "title": "Reserved"
+          },
+          "published_now": {
+            "type": "integer",
+            "title": "Published Now"
+          },
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "publish",
+          "same_everywhere",
+          "percent",
+          "free_stock",
+          "on_hand",
+          "reserved",
+          "published_now",
+          "product_id"
+        ],
+        "title": "ProductFbsRuleBulkItemOut"
+      },
+      "ProductFbsRuleOut": {
+        "properties": {
+          "publish": {
+            "type": "boolean",
+            "title": "Publish"
+          },
+          "same_everywhere": {
+            "type": "boolean",
+            "title": "Same Everywhere"
+          },
+          "percent": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Percent"
+          },
+          "by_warehouse": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Warehouse"
+          },
+          "free_stock": {
+            "type": "integer",
+            "title": "Free Stock"
+          },
+          "on_hand": {
+            "type": "integer",
+            "title": "On Hand"
+          },
+          "reserved": {
+            "type": "integer",
+            "title": "Reserved"
+          },
+          "published_now": {
+            "type": "integer",
+            "title": "Published Now"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "publish",
+          "same_everywhere",
+          "percent",
+          "free_stock",
+          "on_hand",
+          "reserved",
+          "published_now"
+        ],
+        "title": "ProductFbsRuleOut",
+        "description": "То же правило плюс три числа, из которых видно, откуда взялось количество.\n\n`published_now` считает сервер тем же кодом, что и публикация: если бы экран\nпересчитывал долю своей формулой, две формулы однажды разошлись бы."
+      },
       "ProductFbsStockLimitFromBalanceBulkOut": {
         "properties": {
           "updated_count": {
@@ -17426,6 +21162,17 @@
           "sku_code": {
             "type": "string",
             "title": "Sku Code"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
           },
           "length_mm": {
             "anyOf": [
@@ -18006,6 +21753,108 @@
         ],
         "title": "ProductTzRowPreviewOut"
       },
+      "ProductsFbsRuleBulkBody": {
+        "properties": {
+          "product_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Product Ids"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/ProductFbsRuleBody"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "product_ids",
+          "rule"
+        ],
+        "title": "ProductsFbsRuleBulkBody"
+      },
+      "ProductsFbsRuleBulkOut": {
+        "properties": {
+          "updated_count": {
+            "type": "integer",
+            "title": "Updated Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "updated_count"
+        ],
+        "title": "ProductsFbsRuleBulkOut"
+      },
+      "ProductsFbsRuleBulkReadBody": {
+        "properties": {
+          "product_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Product Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "product_ids"
+        ],
+        "title": "ProductsFbsRuleBulkReadBody"
+      },
+      "ProductsFbsRuleBulkReadOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProductFbsRuleBulkItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ProductsFbsRuleBulkReadOut"
+      },
+      "ProductsLegacyFbsLimitsResetBody": {
+        "properties": {
+          "product_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Product Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "product_ids"
+        ],
+        "title": "ProductsLegacyFbsLimitsResetBody"
+      },
+      "ProductsLegacyFbsLimitsResetOut": {
+        "properties": {
+          "updated_count": {
+            "type": "integer",
+            "title": "Updated Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "updated_count"
+        ],
+        "title": "ProductsLegacyFbsLimitsResetOut"
+      },
       "ProfileBody": {
         "properties": {
           "legal_name": {
@@ -18323,6 +22172,105 @@
         ],
         "title": "ScanPrintMarkingIn"
       },
+      "ScanResolveOut": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "cell",
+              "pallet",
+              "box",
+              "cargo_place",
+              "product",
+              "fbs_order",
+              "warehouse"
+            ],
+            "title": "Type"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "id",
+          "name",
+          "warehouse_id"
+        ],
+        "title": "ScanResolveOut"
+      },
+      "SelectedOperationsInvoiceV2DraftIn": {
+        "properties": {
+          "creation_mode": {
+            "type": "string",
+            "const": "selected_operations",
+            "title": "Creation Mode"
+          },
+          "seller_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Seller Id"
+          },
+          "date_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Date From"
+          },
+          "date_to": {
+            "type": "string",
+            "format": "date",
+            "title": "Date To"
+          },
+          "selected_root_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Selected Root Ids"
+          },
+          "storage_calculation_token": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4096
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Calculation Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "creation_mode",
+          "seller_id",
+          "date_from",
+          "date_to"
+        ],
+        "title": "SelectedOperationsInvoiceV2DraftIn"
+      },
       "SellerAccountCreate": {
         "properties": {
           "seller_id": {
@@ -18560,6 +22508,1208 @@
           "staff"
         ],
         "title": "SellerPermissionsOut"
+      },
+      "SellerReportFinancialDetailsOut": {
+        "properties": {
+          "seller_id": {
+            "type": "string",
+            "title": "Seller Id"
+          },
+          "seller_name": {
+            "type": "string",
+            "title": "Seller Name"
+          },
+          "entries": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SellerReportFinancialOperationFactEntryOut"
+                },
+                {
+                  "$ref": "#/components/schemas/SellerReportFinancialLegacyEntryOut"
+                },
+                {
+                  "$ref": "#/components/schemas/SellerReportFinancialHandedFbsEntryOut"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Entries"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "storage_row": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SellerReportFinancialStorageOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "totals": {
+            "$ref": "#/components/schemas/SellerReportFinancialTotals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "seller_id",
+          "seller_name",
+          "entries",
+          "next_cursor",
+          "storage_row",
+          "totals"
+        ],
+        "title": "SellerReportFinancialDetailsOut"
+      },
+      "SellerReportFinancialHandedFbsEntryOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "const": "fbs_order_handed",
+            "title": "Kind"
+          },
+          "occurred_at": {
+            "type": "string",
+            "title": "Occurred At"
+          },
+          "service_code": {
+            "type": "string",
+            "title": "Service Code"
+          },
+          "item_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Quantity"
+          },
+          "source_type": {
+            "type": "string",
+            "title": "Source Type"
+          },
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "source_target": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Target"
+          },
+          "document_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Number"
+          },
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
+          },
+          "sku": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sku"
+          },
+          "fbs_status_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Status Label"
+          },
+          "result": {
+            "type": "string",
+            "const": "not_billable",
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "occurred_at",
+          "service_code",
+          "item_quantity",
+          "source_type",
+          "source_id",
+          "source_target",
+          "document_number",
+          "product_name",
+          "sku",
+          "result"
+        ],
+        "title": "SellerReportFinancialHandedFbsEntryOut",
+        "description": "Заказ FBS, переданный в WB, но ещё не подтверждённый: денег по нему нет."
+      },
+      "SellerReportFinancialLegacyEntryOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "const": "legacy_billing",
+            "title": "Kind"
+          },
+          "occurred_at": {
+            "type": "string",
+            "title": "Occurred At"
+          },
+          "service_code": {
+            "type": "string",
+            "title": "Service Code"
+          },
+          "item_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Quantity"
+          },
+          "source_type": {
+            "type": "string",
+            "title": "Source Type"
+          },
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "source_target": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Target"
+          },
+          "document_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Number"
+          },
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
+          },
+          "sku": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sku"
+          },
+          "fbs_status_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Status Label"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "reversed",
+              "not_billable",
+              "unpriced"
+            ],
+            "title": "Result"
+          },
+          "rate_kopecks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Kopecks"
+          },
+          "amount_kopecks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Kopecks"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "invoice_history": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Invoice History"
+          },
+          "billing_ledger_entry_id": {
+            "type": "string",
+            "title": "Billing Ledger Entry Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "occurred_at",
+          "service_code",
+          "item_quantity",
+          "source_type",
+          "source_id",
+          "source_target",
+          "document_number",
+          "product_name",
+          "sku",
+          "result",
+          "rate_kopecks",
+          "amount_kopecks",
+          "unit",
+          "invoice_history",
+          "billing_ledger_entry_id"
+        ],
+        "title": "SellerReportFinancialLegacyEntryOut"
+      },
+      "SellerReportFinancialOperationFactEntryOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "const": "operation_fact",
+            "title": "Kind"
+          },
+          "occurred_at": {
+            "type": "string",
+            "title": "Occurred At"
+          },
+          "service_code": {
+            "type": "string",
+            "title": "Service Code"
+          },
+          "item_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Quantity"
+          },
+          "source_type": {
+            "type": "string",
+            "title": "Source Type"
+          },
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "source_target": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Target"
+          },
+          "document_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Number"
+          },
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
+          },
+          "sku": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sku"
+          },
+          "fbs_status_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Status Label"
+          },
+          "priced_live": {
+            "type": "boolean",
+            "title": "Priced Live",
+            "default": false
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "reversed",
+              "not_billable",
+              "unpriced"
+            ],
+            "title": "Result"
+          },
+          "rate_kopecks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Kopecks"
+          },
+          "amount_kopecks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Kopecks"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "invoice_history": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Invoice History"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "occurred_at",
+          "service_code",
+          "item_quantity",
+          "source_type",
+          "source_id",
+          "source_target",
+          "document_number",
+          "product_name",
+          "sku",
+          "result",
+          "rate_kopecks",
+          "amount_kopecks",
+          "unit",
+          "invoice_history"
+        ],
+        "title": "SellerReportFinancialOperationFactEntryOut"
+      },
+      "SellerReportFinancialStorageOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "storage",
+            "title": "Kind"
+          },
+          "date_from": {
+            "type": "string",
+            "title": "Date From"
+          },
+          "date_to": {
+            "type": "string",
+            "title": "Date To"
+          },
+          "liter_days": {
+            "type": "number",
+            "title": "Liter Days"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "calculated",
+              "missing_dimensions",
+              "negative_stock"
+            ],
+            "title": "Status"
+          },
+          "calculation_token": {
+            "type": "string",
+            "title": "Calculation Token"
+          },
+          "amount_kopecks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Kopecks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "date_from",
+          "date_to",
+          "liter_days",
+          "status",
+          "calculation_token"
+        ],
+        "title": "SellerReportFinancialStorageOut"
+      },
+      "SellerReportFinancialSummaryOut": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/SellerReportFinancialSummaryRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/SellerReportFinancialTotalsOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rows",
+          "totals"
+        ],
+        "title": "SellerReportFinancialSummaryOut"
+      },
+      "SellerReportFinancialSummaryRow": {
+        "properties": {
+          "operation_count": {
+            "type": "integer",
+            "title": "Operation Count"
+          },
+          "item_quantity": {
+            "type": "integer",
+            "title": "Item Quantity"
+          },
+          "not_billable_count": {
+            "type": "integer",
+            "title": "Not Billable Count"
+          },
+          "inbound_items": {
+            "type": "integer",
+            "title": "Inbound Items",
+            "default": 0
+          },
+          "packing_items": {
+            "type": "integer",
+            "title": "Packing Items",
+            "default": 0
+          },
+          "outbound_items": {
+            "type": "integer",
+            "title": "Outbound Items",
+            "default": 0
+          },
+          "fbs_items": {
+            "type": "integer",
+            "title": "Fbs Items",
+            "default": 0
+          },
+          "unpriced_count": {
+            "type": "integer",
+            "title": "Unpriced Count"
+          },
+          "gross_total_kopecks": {
+            "type": "integer",
+            "title": "Gross Total Kopecks"
+          },
+          "reversal_total_kopecks": {
+            "type": "integer",
+            "title": "Reversal Total Kopecks"
+          },
+          "net_total_kopecks": {
+            "type": "integer",
+            "title": "Net Total Kopecks"
+          },
+          "seller_id": {
+            "type": "string",
+            "title": "Seller Id"
+          },
+          "seller_name": {
+            "type": "string",
+            "title": "Seller Name"
+          },
+          "details_target": {
+            "type": "string",
+            "title": "Details Target"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_count",
+          "item_quantity",
+          "not_billable_count",
+          "unpriced_count",
+          "gross_total_kopecks",
+          "reversal_total_kopecks",
+          "net_total_kopecks",
+          "seller_id",
+          "seller_name",
+          "details_target"
+        ],
+        "title": "SellerReportFinancialSummaryRow"
+      },
+      "SellerReportFinancialTotals": {
+        "properties": {
+          "operation_count": {
+            "type": "integer",
+            "title": "Operation Count"
+          },
+          "item_quantity": {
+            "type": "integer",
+            "title": "Item Quantity"
+          },
+          "not_billable_count": {
+            "type": "integer",
+            "title": "Not Billable Count"
+          },
+          "inbound_items": {
+            "type": "integer",
+            "title": "Inbound Items",
+            "default": 0
+          },
+          "packing_items": {
+            "type": "integer",
+            "title": "Packing Items",
+            "default": 0
+          },
+          "outbound_items": {
+            "type": "integer",
+            "title": "Outbound Items",
+            "default": 0
+          },
+          "fbs_items": {
+            "type": "integer",
+            "title": "Fbs Items",
+            "default": 0
+          },
+          "unpriced_count": {
+            "type": "integer",
+            "title": "Unpriced Count"
+          },
+          "gross_total_kopecks": {
+            "type": "integer",
+            "title": "Gross Total Kopecks"
+          },
+          "reversal_total_kopecks": {
+            "type": "integer",
+            "title": "Reversal Total Kopecks"
+          },
+          "net_total_kopecks": {
+            "type": "integer",
+            "title": "Net Total Kopecks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_count",
+          "item_quantity",
+          "not_billable_count",
+          "unpriced_count",
+          "gross_total_kopecks",
+          "reversal_total_kopecks",
+          "net_total_kopecks"
+        ],
+        "title": "SellerReportFinancialTotals"
+      },
+      "SellerReportFinancialTotalsOut": {
+        "properties": {
+          "operation_count": {
+            "type": "integer",
+            "title": "Operation Count"
+          },
+          "item_quantity": {
+            "type": "integer",
+            "title": "Item Quantity"
+          },
+          "not_billable_count": {
+            "type": "integer",
+            "title": "Not Billable Count"
+          },
+          "inbound_items": {
+            "type": "integer",
+            "title": "Inbound Items",
+            "default": 0
+          },
+          "packing_items": {
+            "type": "integer",
+            "title": "Packing Items",
+            "default": 0
+          },
+          "outbound_items": {
+            "type": "integer",
+            "title": "Outbound Items",
+            "default": 0
+          },
+          "fbs_items": {
+            "type": "integer",
+            "title": "Fbs Items",
+            "default": 0
+          },
+          "unpriced_count": {
+            "type": "integer",
+            "title": "Unpriced Count"
+          },
+          "gross_total_kopecks": {
+            "type": "integer",
+            "title": "Gross Total Kopecks"
+          },
+          "reversal_total_kopecks": {
+            "type": "integer",
+            "title": "Reversal Total Kopecks"
+          },
+          "net_total_kopecks": {
+            "type": "integer",
+            "title": "Net Total Kopecks"
+          },
+          "seller_count": {
+            "type": "integer",
+            "title": "Seller Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_count",
+          "item_quantity",
+          "not_billable_count",
+          "unpriced_count",
+          "gross_total_kopecks",
+          "reversal_total_kopecks",
+          "net_total_kopecks",
+          "seller_count"
+        ],
+        "title": "SellerReportFinancialTotalsOut"
+      },
+      "SellerReportPhysicalDetailsOut": {
+        "properties": {
+          "seller_id": {
+            "type": "string",
+            "title": "Seller Id"
+          },
+          "seller_name": {
+            "type": "string",
+            "title": "Seller Name"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/SellerReportPhysicalEntryOut"
+            },
+            "type": "array",
+            "title": "Entries"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "storage_row": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SellerReportStorageOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "totals": {
+            "$ref": "#/components/schemas/SellerReportPhysicalTotals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "seller_id",
+          "seller_name",
+          "entries",
+          "next_cursor",
+          "storage_row",
+          "totals"
+        ],
+        "title": "SellerReportPhysicalDetailsOut"
+      },
+      "SellerReportPhysicalEntryOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "operation_fact",
+              "legacy_billing",
+              "fbs_order_handed"
+            ],
+            "title": "Kind"
+          },
+          "occurred_at": {
+            "type": "string",
+            "title": "Occurred At"
+          },
+          "service_code": {
+            "type": "string",
+            "title": "Service Code"
+          },
+          "item_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Quantity"
+          },
+          "source_type": {
+            "type": "string",
+            "title": "Source Type"
+          },
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "source_target": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Target"
+          },
+          "document_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Number"
+          },
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
+          },
+          "sku": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sku"
+          },
+          "fbs_status_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Status Label"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "reversed",
+              "not_billable"
+            ],
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "occurred_at",
+          "service_code",
+          "item_quantity",
+          "source_type",
+          "source_id",
+          "source_target",
+          "document_number",
+          "product_name",
+          "sku",
+          "result"
+        ],
+        "title": "SellerReportPhysicalEntryOut"
+      },
+      "SellerReportPhysicalSummaryOut": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/SellerReportSummaryRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/SellerReportPhysicalTotalsOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rows",
+          "totals"
+        ],
+        "title": "SellerReportPhysicalSummaryOut"
+      },
+      "SellerReportPhysicalTotals": {
+        "properties": {
+          "operation_count": {
+            "type": "integer",
+            "title": "Operation Count"
+          },
+          "item_quantity": {
+            "type": "integer",
+            "title": "Item Quantity"
+          },
+          "not_billable_count": {
+            "type": "integer",
+            "title": "Not Billable Count"
+          },
+          "inbound_items": {
+            "type": "integer",
+            "title": "Inbound Items",
+            "default": 0
+          },
+          "packing_items": {
+            "type": "integer",
+            "title": "Packing Items",
+            "default": 0
+          },
+          "outbound_items": {
+            "type": "integer",
+            "title": "Outbound Items",
+            "default": 0
+          },
+          "fbs_items": {
+            "type": "integer",
+            "title": "Fbs Items",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_count",
+          "item_quantity",
+          "not_billable_count"
+        ],
+        "title": "SellerReportPhysicalTotals"
+      },
+      "SellerReportPhysicalTotalsOut": {
+        "properties": {
+          "operation_count": {
+            "type": "integer",
+            "title": "Operation Count"
+          },
+          "item_quantity": {
+            "type": "integer",
+            "title": "Item Quantity"
+          },
+          "not_billable_count": {
+            "type": "integer",
+            "title": "Not Billable Count"
+          },
+          "inbound_items": {
+            "type": "integer",
+            "title": "Inbound Items",
+            "default": 0
+          },
+          "packing_items": {
+            "type": "integer",
+            "title": "Packing Items",
+            "default": 0
+          },
+          "outbound_items": {
+            "type": "integer",
+            "title": "Outbound Items",
+            "default": 0
+          },
+          "fbs_items": {
+            "type": "integer",
+            "title": "Fbs Items",
+            "default": 0
+          },
+          "seller_count": {
+            "type": "integer",
+            "title": "Seller Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_count",
+          "item_quantity",
+          "not_billable_count",
+          "seller_count"
+        ],
+        "title": "SellerReportPhysicalTotalsOut"
+      },
+      "SellerReportStorageOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "storage",
+            "title": "Kind"
+          },
+          "date_from": {
+            "type": "string",
+            "title": "Date From"
+          },
+          "date_to": {
+            "type": "string",
+            "title": "Date To"
+          },
+          "liter_days": {
+            "type": "number",
+            "title": "Liter Days"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "calculated",
+              "missing_dimensions",
+              "negative_stock"
+            ],
+            "title": "Status"
+          },
+          "calculation_token": {
+            "type": "string",
+            "title": "Calculation Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "date_from",
+          "date_to",
+          "liter_days",
+          "status",
+          "calculation_token"
+        ],
+        "title": "SellerReportStorageOut"
+      },
+      "SellerReportSummaryRow": {
+        "properties": {
+          "operation_count": {
+            "type": "integer",
+            "title": "Operation Count"
+          },
+          "item_quantity": {
+            "type": "integer",
+            "title": "Item Quantity"
+          },
+          "not_billable_count": {
+            "type": "integer",
+            "title": "Not Billable Count"
+          },
+          "inbound_items": {
+            "type": "integer",
+            "title": "Inbound Items",
+            "default": 0
+          },
+          "packing_items": {
+            "type": "integer",
+            "title": "Packing Items",
+            "default": 0
+          },
+          "outbound_items": {
+            "type": "integer",
+            "title": "Outbound Items",
+            "default": 0
+          },
+          "fbs_items": {
+            "type": "integer",
+            "title": "Fbs Items",
+            "default": 0
+          },
+          "seller_id": {
+            "type": "string",
+            "title": "Seller Id"
+          },
+          "seller_name": {
+            "type": "string",
+            "title": "Seller Name"
+          },
+          "details_target": {
+            "type": "string",
+            "title": "Details Target"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_count",
+          "item_quantity",
+          "not_billable_count",
+          "seller_id",
+          "seller_name",
+          "details_target"
+        ],
+        "title": "SellerReportSummaryRow"
       },
       "SellerShopOut": {
         "properties": {
@@ -19149,6 +24299,337 @@
           "products_count"
         ],
         "title": "SharedBasketOverviewOut"
+      },
+      "SortingAlreadyAtOut": {
+        "properties": {
+          "cellId": {
+            "type": "string",
+            "title": "Cellid"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cellId",
+          "code",
+          "qty"
+        ],
+        "title": "SortingAlreadyAtOut"
+      },
+      "SortingCellOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "barcode": {
+            "type": "string",
+            "title": "Barcode"
+          },
+          "objects": {
+            "items": {
+              "$ref": "#/components/schemas/SortingObjectOut"
+            },
+            "type": "array",
+            "title": "Objects"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/SortingGoodsLineOut"
+            },
+            "type": "array",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "barcode",
+          "objects",
+          "lines"
+        ],
+        "title": "SortingCellOut"
+      },
+      "SortingGoodsLineOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "productId": {
+            "type": "string",
+            "title": "Productid"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          },
+          "holder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holder"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "productId",
+          "qty",
+          "holder"
+        ],
+        "title": "SortingGoodsLineOut"
+      },
+      "SortingObjectCreateIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "pallet",
+              "box",
+              "cargo_place"
+            ],
+            "title": "Kind"
+          },
+          "inbound_request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inbound Request Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "SortingObjectCreateIn"
+      },
+      "SortingObjectOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "pallet",
+              "box",
+              "cargo_place"
+            ],
+            "title": "Kind"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "barcode": {
+            "type": "string",
+            "title": "Barcode"
+          },
+          "holder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holder"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "code",
+          "barcode",
+          "holder"
+        ],
+        "title": "SortingObjectOut"
+      },
+      "SortingObjectsOut": {
+        "properties": {
+          "objects": {
+            "items": {
+              "$ref": "#/components/schemas/SortingObjectOut"
+            },
+            "type": "array",
+            "title": "Objects"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/SortingGoodsLineOut"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/SortingProductOut"
+            },
+            "type": "array",
+            "title": "Products"
+          },
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/SortingCellOut"
+            },
+            "type": "array",
+            "title": "Cells"
+          }
+        },
+        "type": "object",
+        "required": [
+          "objects",
+          "lines",
+          "products",
+          "cells"
+        ],
+        "title": "SortingObjectsOut"
+      },
+      "SortingPlaceIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "product",
+              "pallet",
+              "box",
+              "cargo_place"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "cell_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cell Id"
+          },
+          "to_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Id"
+          },
+          "qty": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "SortingPlaceIn"
+      },
+      "SortingProductOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "sku": {
+            "type": "string",
+            "title": "Sku"
+          },
+          "seller": {
+            "type": "string",
+            "title": "Seller"
+          },
+          "barcode": {
+            "type": "string",
+            "title": "Barcode"
+          },
+          "photo": {
+            "type": "string",
+            "title": "Photo"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "alreadyAt": {
+            "items": {
+              "$ref": "#/components/schemas/SortingAlreadyAtOut"
+            },
+            "type": "array",
+            "title": "Alreadyat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "sku",
+          "seller",
+          "barcode",
+          "photo",
+          "size",
+          "alreadyAt"
+        ],
+        "title": "SortingProductOut"
       },
       "StaffAccountCreate": {
         "properties": {
@@ -19792,6 +25273,10 @@
             "type": "boolean",
             "title": "Tariff Configured"
           },
+          "tariff_revision": {
+            "type": "integer",
+            "title": "Tariff Revision"
+          },
           "warehouses": {
             "items": {
               "additionalProperties": true,
@@ -19811,6 +25296,7 @@
         "type": "object",
         "required": [
           "tariff_configured",
+          "tariff_revision",
           "warehouses",
           "statements"
         ],
@@ -19849,6 +25335,10 @@
               }
             ]
           },
+          "tariff_revision": {
+            "type": "integer",
+            "title": "Tariff Revision"
+          },
           "recalculated_statements": {
             "items": {
               "$ref": "#/components/schemas/StorageStatementOut"
@@ -19859,9 +25349,141 @@
         },
         "type": "object",
         "required": [
-          "warehouse_tariff"
+          "warehouse_tariff",
+          "tariff_revision"
         ],
         "title": "TariffCreateOut"
+      },
+      "TariffMatrixSaveBody": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Revision"
+          },
+          "services": {
+            "items": {
+              "$ref": "#/components/schemas/TariffMatrixServiceBody"
+            },
+            "type": "array",
+            "title": "Services"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/TariffMatrixVersionBody"
+            },
+            "type": "array",
+            "title": "Versions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "revision",
+          "services"
+        ],
+        "title": "TariffMatrixSaveBody"
+      },
+      "TariffMatrixServiceBody": {
+        "properties": {
+          "service_code": {
+            "type": "string",
+            "title": "Service Code"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "service_code",
+          "enabled"
+        ],
+        "title": "TariffMatrixServiceBody"
+      },
+      "TariffMatrixVersionBody": {
+        "properties": {
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
+          "employee_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee User Id"
+          },
+          "service_code": {
+            "type": "string",
+            "title": "Service Code"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "rate": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Rate"
+          },
+          "valid_from_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Valid From At"
+          },
+          "valid_to_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid To At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "service_code",
+          "unit",
+          "rate",
+          "valid_from_at"
+        ],
+        "title": "TariffMatrixVersionBody"
       },
       "TariffOut": {
         "properties": {
@@ -20386,6 +26008,499 @@
           "code"
         ],
         "title": "WarehouseCreate"
+      },
+      "WarehouseMapCellOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          },
+          "children": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/WarehouseMapProductOut"
+                },
+                {
+                  "$ref": "#/components/schemas/WarehouseMapContainerOut"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Children"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "barcode",
+          "qty",
+          "children"
+        ],
+        "title": "WarehouseMapCellOut"
+      },
+      "WarehouseMapContainerOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "pallet",
+              "box",
+              "cargo_place"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
+          },
+          "seller_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Name"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          },
+          "source_document_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Document Number"
+          },
+          "children": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/WarehouseMapProductOut"
+                },
+                {
+                  "$ref": "#/components/schemas/WarehouseMapContainerOut"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Children"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "code",
+          "barcode",
+          "seller_name",
+          "qty",
+          "children"
+        ],
+        "title": "WarehouseMapContainerOut"
+      },
+      "WarehouseMapDisbandIn": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "pallet_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pallet Id"
+          }
+        },
+        "type": "object",
+        "title": "WarehouseMapDisbandIn"
+      },
+      "WarehouseMapDisbandOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "disbanded": {
+            "type": "boolean",
+            "title": "Disbanded"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "disbanded"
+        ],
+        "title": "WarehouseMapDisbandOut"
+      },
+      "WarehouseMapJournalOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "at": {
+            "type": "string",
+            "title": "At"
+          },
+          "actor_name": {
+            "type": "string",
+            "title": "Actor Name"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "qty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qty"
+          },
+          "from_label": {
+            "type": "string",
+            "title": "From Label"
+          },
+          "to_label": {
+            "type": "string",
+            "title": "To Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "at",
+          "actor_name",
+          "subject",
+          "qty",
+          "from_label",
+          "to_label"
+        ],
+        "title": "WarehouseMapJournalOut"
+      },
+      "WarehouseMapMoveIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "product",
+              "pallet",
+              "box",
+              "cargo_place"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "to_kind": {
+            "type": "string",
+            "enum": [
+              "cell",
+              "unassigned",
+              "sorting",
+              "pallet",
+              "box",
+              "cargo_place"
+            ],
+            "title": "To Kind"
+          },
+          "to_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Id"
+          },
+          "qty": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "to_kind"
+        ],
+        "title": "WarehouseMapMoveIn"
+      },
+      "WarehouseMapMoveOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "moved_qty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moved Qty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "moved_qty"
+        ],
+        "title": "WarehouseMapMoveOut"
+      },
+      "WarehouseMapOut": {
+        "properties": {
+          "warehouses": {
+            "items": {
+              "$ref": "#/components/schemas/WarehouseOptionOut"
+            },
+            "type": "array",
+            "title": "Warehouses"
+          },
+          "sellers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sellers"
+          },
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Categories"
+          },
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/WarehouseMapCellOut"
+            },
+            "type": "array",
+            "title": "Cells"
+          },
+          "unassigned": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/WarehouseMapProductOut"
+                },
+                {
+                  "$ref": "#/components/schemas/WarehouseMapContainerOut"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Unassigned"
+          },
+          "journal": {
+            "items": {
+              "$ref": "#/components/schemas/WarehouseMapJournalOut"
+            },
+            "type": "array",
+            "title": "Journal"
+          }
+        },
+        "type": "object",
+        "required": [
+          "warehouses",
+          "sellers",
+          "categories",
+          "cells",
+          "unassigned",
+          "journal"
+        ],
+        "title": "WarehouseMapOut"
+      },
+      "WarehouseMapProductOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "product",
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "seller_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Name"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
+          },
+          "seller_article": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Article"
+          },
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Url"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "product_id",
+          "name",
+          "seller_name",
+          "category",
+          "barcode",
+          "seller_article",
+          "photo_url",
+          "qty"
+        ],
+        "title": "WarehouseMapProductOut"
+      },
+      "WarehouseOptionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "WarehouseOptionOut"
       },
       "WarehouseOut": {
         "properties": {
@@ -20951,10 +27066,10 @@
       },
       "app__api__storage__TariffCreateBody": {
         "properties": {
-          "warehouse_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Warehouse Id"
+          "revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Revision"
           },
           "amount": {
             "anyOf": [
@@ -20987,303 +27102,11 @@
         },
         "type": "object",
         "required": [
-          "warehouse_id",
+          "revision",
           "amount",
           "valid_from"
         ],
         "title": "TariffCreateBody"
-      },
-      "FbsPickAllocationOut": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "product_id": {
-            "type": "string",
-            "title": "Product Id"
-          },
-          "sku_code": {
-            "type": "string",
-            "title": "Sku Code"
-          },
-          "product_name": {
-            "type": "string",
-            "title": "Product Name"
-          },
-          "storage_location_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Storage Location Id"
-          },
-          "location_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Location Code"
-          },
-          "quantity": {
-            "type": "integer",
-            "title": "Quantity"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "product_id",
-          "sku_code",
-          "product_name",
-          "storage_location_id",
-          "location_code",
-          "quantity"
-        ],
-        "title": "FbsPickAllocationOut"
-      },
-      "FbsPickOptionLocationOut": {
-        "properties": {
-          "storage_location_id": {
-            "type": "string",
-            "title": "Storage Location Id"
-          },
-          "location_code": {
-            "type": "string",
-            "title": "Location Code"
-          },
-          "quantity": {
-            "type": "integer",
-            "title": "Quantity"
-          },
-          "reserved": {
-            "type": "integer",
-            "title": "Reserved"
-          },
-          "available": {
-            "type": "integer",
-            "title": "Available"
-          },
-          "picked": {
-            "type": "integer",
-            "title": "Picked"
-          }
-        },
-        "type": "object",
-        "required": [
-          "storage_location_id",
-          "location_code",
-          "quantity",
-          "reserved",
-          "available",
-          "picked"
-        ],
-        "title": "FbsPickOptionLocationOut"
-      },
-      "FbsPickOptionProductOut": {
-        "properties": {
-          "product_id": {
-            "type": "string",
-            "title": "Product Id"
-          },
-          "sku_code": {
-            "type": "string",
-            "title": "Sku Code"
-          },
-          "product_name": {
-            "type": "string",
-            "title": "Product Name"
-          },
-          "planned_qty": {
-            "type": "integer",
-            "title": "Planned Qty"
-          },
-          "picked_qty": {
-            "type": "integer",
-            "title": "Picked Qty"
-          },
-          "locations": {
-            "items": {
-              "$ref": "#/components/schemas/FbsPickOptionLocationOut"
-            },
-            "type": "array",
-            "title": "Locations"
-          }
-        },
-        "type": "object",
-        "required": [
-          "product_id",
-          "sku_code",
-          "product_name",
-          "planned_qty",
-          "picked_qty",
-          "locations"
-        ],
-        "title": "FbsPickOptionProductOut"
-      },
-      "FbsPickScanBody": {
-        "properties": {
-          "barcode": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 1,
-            "title": "Barcode"
-          },
-          "product_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Product Id"
-          },
-          "storage_location_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Storage Location Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "barcode"
-        ],
-        "title": "FbsPickScanBody"
-      },
-      "FbsPickScanOut": {
-        "properties": {
-          "kind": {
-            "type": "string",
-            "title": "Kind"
-          },
-          "storage_location_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Storage Location Id"
-          },
-          "location_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Location Code"
-          },
-          "product_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Product Id"
-          },
-          "sku_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sku Code"
-          },
-          "product_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Product Name"
-          },
-          "picked_qty": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Picked Qty"
-          },
-          "allocation_quantity": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Allocation Quantity"
-          }
-        },
-        "type": "object",
-        "required": [
-          "kind"
-        ],
-        "title": "FbsPickScanOut"
-      },
-      "FbsPickSetBody": {
-        "properties": {
-          "product_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Product Id"
-          },
-          "storage_location_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Storage Location Id"
-          },
-          "quantity": {
-            "type": "integer",
-            "maximum": 1000000000.0,
-            "minimum": 0.0,
-            "title": "Quantity"
-          }
-        },
-        "type": "object",
-        "required": [
-          "product_id",
-          "storage_location_id",
-          "quantity"
-        ],
-        "title": "FbsPickSetBody"
       }
     },
     "securitySchemes": {

@@ -1,0 +1,319 @@
+import { StrictMode, useEffect } from 'react'
+import { createRoot } from 'react-dom/client'
+import { MemoryRouter } from 'react-router-dom'
+import { CssBaseline, ThemeProvider } from '@mui/material'
+
+import { muiTheme } from '../../mui/theme'
+import { AuthedAppLayout } from '../../layouts/AuthedAppLayout'
+import { FfBillingScreen } from './FfBillingScreen'
+import type { SellerReportEntry } from './FfBillingSellerDetails'
+import '../../index.css'
+
+// Полный макет экрана «Расчёты» на подставных данных.
+//
+// Это не отдельная страница-рисунок: рендерится настоящий экран внутри
+// настоящего шелла портала — левое меню, шапка, вкладки, фильтры, плашки,
+// кнопка «Выставить счёт». Подменён только сервер: `fetch` отвечает выдуманным
+// отчётом. Поэтому макет показывает ровно то, что увидит оператор вживую.
+
+const SELLERS = [
+  { id: 'seller-1', name: 'Ромашка' },
+  { id: 'seller-2', name: 'Северный ветер' },
+  { id: 'seller-3', name: 'Луна Трейд' },
+]
+
+type StubSeller = {
+  seller_id: string
+  seller_name: string
+  operation_count: number
+  item_quantity: number
+  not_billable_count: number
+  details_target: string
+  unpriced_count: number
+  net_total_kopecks: number
+  inbound_items: number
+  packing_items: number
+  outbound_items: number
+  fbs_items: number
+  liter_days: number
+}
+
+const SELLER_ROWS: StubSeller[] = [
+  {
+    seller_id: 'seller-1', seller_name: 'Ромашка', operation_count: 24, item_quantity: 2745,
+    not_billable_count: 2, details_target: '', unpriced_count: 0, net_total_kopecks: 913500,
+    inbound_items: 1800, packing_items: 685, outbound_items: 1080, fbs_items: 317, liter_days: 1240,
+  },
+  {
+    seller_id: 'seller-2', seller_name: 'Северный ветер', operation_count: 11, item_quantity: 860,
+    not_billable_count: 0, details_target: '', unpriced_count: 3, net_total_kopecks: 264000,
+    inbound_items: 560, packing_items: 0, outbound_items: 300, fbs_items: 0, liter_days: 1720,
+  },
+  {
+    seller_id: 'seller-3', seller_name: 'Луна Трейд', operation_count: 6, item_quantity: 410,
+    not_billable_count: 1, details_target: '', unpriced_count: 0, net_total_kopecks: 118000,
+    inbound_items: 410, packing_items: 0, outbound_items: 0, fbs_items: 0, liter_days: 860,
+  },
+]
+
+/** Фильтр по селлеру в макете работает по-настоящему: иначе не видно, что экран считает. */
+function summaryFor(sellerId: string | null) {
+  const rows = SELLER_ROWS.filter((row) => !sellerId || sellerId === 'all' || row.seller_id === sellerId)
+  const sum = (key: keyof StubSeller) => rows.reduce((total, row) => total + Number(row[key] ?? 0), 0)
+  return {
+    rows: rows.map(({ liter_days: _literDays, ...row }) => row),
+    totals: {
+      seller_count: rows.length,
+      operation_count: sum('operation_count'),
+      item_quantity: sum('item_quantity'),
+      not_billable_count: sum('not_billable_count'),
+      net_total_kopecks: sum('net_total_kopecks'),
+      inbound_items: sum('inbound_items'),
+      packing_items: sum('packing_items'),
+      outbound_items: sum('outbound_items'),
+      fbs_items: sum('fbs_items'),
+    },
+  }
+}
+
+function storageFor(sellerId: string | null) {
+  const rows = SELLER_ROWS.filter((row) => !sellerId || sellerId === 'all' || row.seller_id === sellerId)
+  const literDays = rows.reduce((total, row) => total + row.liter_days, 0)
+  return { liter_days: literDays, amount_kopecks: literDays * 50, complete: true }
+}
+
+type StubEntry = {
+  id: string
+  service: string
+  number: string
+  quantity: number
+  rate: number
+  day: number
+  invoiced?: number
+}
+
+const ENTRIES: Record<string, StubEntry[]> = {
+  'seller-1': [
+    { id: 'in-1', service: 'inbound', number: 'Приёмка № 000045', quantity: 1480, rate: 300, day: 12, invoiced: 1 },
+    { id: 'in-2', service: 'inbound', number: 'Приёмка № 000046', quantity: 320, rate: 300, day: 14 },
+    { id: 'pack-1', service: 'packing', number: 'Упаковка № 000031', quantity: 640, rate: 500, day: 18 },
+    { id: 'pack-2', service: 'packing', number: 'Упаковка № 000032', quantity: 45, rate: 700, day: 19 },
+    { id: 'out-1', service: 'marketplace_outbound', number: 'Отгрузка № 000012', quantity: 820, rate: 300, day: 21 },
+    { id: 'out-2', service: 'marketplace_outbound', number: 'Отгрузка № 000014', quantity: 260, rate: 300, day: 26 },
+    { id: 'ret-1', service: 'return', number: 'Возврат № 000004', quantity: 18, rate: 400, day: 27 },
+    { id: 'fbs-1', service: 'fbs_order', number: 'Заказ 271834606', quantity: 1, rate: 1500, day: 22 },
+    { id: 'fbs-2', service: 'fbs_order', number: 'Заказ 271834712', quantity: 1, rate: 1500, day: 22 },
+    { id: 'fbs-3', service: 'fbs_order', number: 'Заказ 271901188', quantity: 1, rate: 1500, day: 24 },
+  ],
+  'seller-2': [
+    { id: 'in-3', service: 'inbound', number: 'Приёмка № 000041', quantity: 560, rate: 300, day: 9 },
+    { id: 'out-3', service: 'marketplace_outbound', number: 'Отгрузка № 000009', quantity: 300, rate: 300, day: 16 },
+  ],
+  'seller-3': [
+    { id: 'in-4', service: 'inbound', number: 'Приёмка № 000038', quantity: 410, rate: 300, day: 11 },
+  ],
+}
+
+function detailsFor(sellerId: string) {
+  const seller = SELLERS.find((row) => row.id === sellerId)
+  const entries: SellerReportEntry[] = (ENTRIES[sellerId] ?? []).map((row) => ({
+    id: row.id,
+    kind: 'operation_fact' as const,
+    occurred_at: `2026-08-${String(row.day).padStart(2, '0')}T09:30:00Z`,
+    service_code: row.service,
+    item_quantity: row.quantity,
+    source_type: row.service === 'inbound' ? 'inbound_intake' : 'marketplace_unload',
+    source_id: row.id,
+    source_target: { kind: 'route' as const, to: '#' },
+    document_number: row.number,
+    product_name: null,
+    sku: null,
+    result: 'completed' as const,
+    unit: 'item',
+    rate_kopecks: row.rate,
+    amount_kopecks: row.rate * row.quantity,
+    billing_ledger_entry_id: `ledger-${row.id}`,
+    invoice_history: { state: 'known' as const, count: row.invoiced ?? 0 },
+    ...(row.service === 'fbs_order' ? { fbs_status_label: 'ВБ получил' } : {}),
+  }))
+  // Переданный в WB заказ денег не приносит, но в списке виден — ради этого
+  // строка и заведена в макете.
+  if (sellerId === 'seller-1') {
+    entries.push({
+      id: 'fbs-handed-1',
+      kind: 'fbs_order_handed' as SellerReportEntry['kind'],
+      occurred_at: '2026-08-26T12:10:00Z',
+      service_code: 'fbs_order',
+      item_quantity: null,
+      source_type: 'fbs_order',
+      source_id: 'fbs-handed-1',
+      source_target: null,
+      document_number: 'Заказ 272608041',
+      product_name: null,
+      sku: null,
+      result: 'not_billable',
+      fbs_status_label: 'Передан ВБ',
+    })
+  }
+  return {
+    seller_id: sellerId,
+    seller_name: seller?.name ?? 'Селлер',
+    entries,
+    storage_row: {
+      kind: 'storage' as const,
+      date_from: '2026-08-01',
+      date_to: '2026-08-31',
+      liter_days: 1240,
+      status: 'calculated' as const,
+      amount_kopecks: 62000,
+      calculation_token: 'preview-token',
+    },
+    next_cursor: null,
+  }
+}
+
+// Счёт в макете тоже должен быть настоящим: пустое окно по кнопке «Выставить
+// счёт» ничего не показывает про то, как экран работает.
+const INVOICE_PREVIEW = {
+  id: 'invoice-preview',
+  seller_id: 'seller-1',
+  number: 'СЧ-2026-000117',
+  creation_mode: 'selected_operations' as const,
+  period_start: '2026-08-01',
+  period_end: '2026-08-31',
+  status: 'issued' as const,
+  issued_at: '2026-09-01T08:00:00Z',
+  total_amount_kopecks: 913500,
+  ff_profile: {
+    legal_name: 'ООО «Короб ВМС»',
+    inn: '7712345678',
+    kpp: '771201001',
+    bank_name: 'АО «Тинькофф Банк»',
+    bik: '044525974',
+    settlement_account: '40702810000000012345',
+    correspondent_account: '30101810145250000974',
+  },
+  seller_profile: {
+    legal_name: 'ООО «Ромашка»',
+    inn: '5024998877',
+    kpp: '502401001',
+  },
+  lines: [
+    { id: 'l1', description: 'Приёмка товара, 1 800 шт.', unit_price_kopecks: 300, total_amount_kopecks: 540000, sort_order: 0 },
+    { id: 'l2', description: 'Упаковка, 685 шт.', unit_price_kopecks: null, total_amount_kopecks: 351500, sort_order: 1 },
+    { id: 'l3', description: 'Хранение за август, 1 240 л·дн', unit_price_kopecks: 50, total_amount_kopecks: 62000, sort_order: 2 },
+  ],
+}
+
+function stubResponse(url: string): unknown {
+  const sellerId = new URL(url, window.location.origin).searchParams.get('seller_id')
+  if (url.includes('/billing/seller-report/storage-total')) return storageFor(sellerId)
+  if (url.includes('/billing/seller-report/summary')) return summaryFor(sellerId)
+  const details = /\/billing\/seller-report\/sellers\/([^/?]+)\/details/.exec(url)
+  if (details) return detailsFor(details[1] ?? 'seller-1')
+  if (url.includes('/billing/profiles/lookup-inn')) return {
+    legal_name: 'ООО «Ромашка»', inn: '5024998877', kpp: '502401001', ogrn: '1125024000123',
+    address: 'Московская обл, г Красногорск, ул Ленина, д 1', manager: 'Иванова Мария Петровна', state: 'ACTIVE',
+  }
+  if (url.includes('/billing/profiles/')) return {
+    legal_name: 'ООО «Короб ВМС»', inn: '7712345678', kpp: '771201001', bank_name: 'АО «Тинькофф Банк»',
+    bik: '044525974', settlement_account: '40702810000000012345', correspondent_account: '30101810145250000974',
+  }
+  if (url.includes('/billing/invoices-v2')) return INVOICE_PREVIEW
+  if (url.includes('/billing/invoices')) return { items: [], next_cursor: null }
+  if (url.includes('/notifications')) return { items: [], unread_count: 0 }
+  return {}
+}
+
+function installStubServer() {
+  window.fetch = ((input: RequestInfo | URL) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+    return Promise.resolve(
+      new Response(JSON.stringify(stubResponse(url)), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+  }) as typeof window.fetch
+}
+
+// Раскрыть надо ровно один раз за загрузку страницы: StrictMode прогоняет
+// эффект дважды, и второй клик сложил бы селлера обратно.
+let autoExpanded = false
+
+export function BillingScreenPreview() {
+  // Селлер раскрывается сам: макет должен показывать разделы, а не пустую
+  // таблицу, в которую ещё надо догадаться ткнуть.
+  useEffect(() => {
+    if (autoExpanded) return
+    let tries = 0
+    const timer = window.setInterval(() => {
+      tries += 1
+      const toggle = document.querySelector<HTMLButtonElement>(
+        '[data-testid^="billing-seller-summary-expand-"]',
+      )
+      if (toggle) {
+        autoExpanded = true
+        toggle.click()
+        window.clearInterval(timer)
+        // И сразу отмечаем раздел: с пустым выбором кнопка «Выставить счёт»
+        // открывает пустую форму ручного счёта, и по макету не видно главного —
+        // что счёт собирается из выбранных начислений.
+        window.setTimeout(() => {
+          // Если разделы не приехали (запрос успел уйти раньше, чем экран был
+          // готов), складываем и раскрываем ещё раз — в макете это заметнее
+          // всего, а пустая раскрывашка вводит в заблуждение.
+          if (!document.body.innerText.includes('Услуга')) {
+            toggle.click()
+            window.setTimeout(() => toggle.click(), 200)
+          }
+          window.setTimeout(() => {
+            const box = [
+              ...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+            ].find(
+              (input) =>
+                input.closest('[data-testid]')?.getAttribute('data-testid') ===
+                'billing-pick-section-inbound',
+            )
+            box?.click()
+          }, 700)
+        }, 500)
+        return
+      }
+      if (tries > 40) window.clearInterval(timer)
+    }, 100)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  return (
+    <ThemeProvider theme={muiTheme}>
+      <CssBaseline />
+      <MemoryRouter initialEntries={['/app/ff/billing']}>
+        <AuthedAppLayout
+          onLogout={() => undefined}
+          portal="ff"
+          meRole="fulfillment_admin"
+          userLabel="staging-admin@example.com"
+          userRoleLabel="администратор"
+        >
+          <FfBillingScreen token="preview" sellers={SELLERS} onOpenInbound={() => undefined} />
+        </AuthedAppLayout>
+      </MemoryRouter>
+    </ThemeProvider>
+  )
+}
+
+type RootHost = HTMLElement & { __previewRoot?: ReturnType<typeof createRoot> }
+
+installStubServer()
+
+const container = document.getElementById('root') as RootHost | null
+if (container) {
+  const root = container.__previewRoot ?? createRoot(container)
+  container.__previewRoot = root
+  root.render(
+    <StrictMode>
+      <BillingScreenPreview />
+    </StrictMode>,
+  )
+}

@@ -38,7 +38,7 @@ export function FilterBar({
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={1.5}
-        sx={{ alignItems: { sm: 'flex-start' }, flexWrap: 'wrap', rowGap: 1.5 }}
+        sx={{ alignItems: { sm: 'flex-end' }, flexWrap: 'wrap', rowGap: 1.5 }}
       >
         {onSearchChange ? (
           <TextField

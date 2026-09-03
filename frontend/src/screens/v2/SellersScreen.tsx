@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import {
   Alert,
   Box,
@@ -18,8 +18,36 @@ import {
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { sellerPortalUrl } from '../../utils/portalUrls'
+import { FfBillingProfilesDialog } from '../ff/FfBillingProfilesDialog'
 
 type SellerRow = { id: string; name: string }
+
+/** Сохранённые реквизиты в строке селлера: видно, но не редактируется. */
+function SellerProfileSummary({ profile }: { profile: SellerProfile | null }) {
+  if (!profile?.inn) {
+    return (
+      <Typography variant="body2" color="text.secondary" data-testid="seller-profile-empty">
+        Не заполнены
+      </Typography>
+    )
+  }
+  const bank = [profile.bank_name, profile.bik ? `БИК ${profile.bik}` : null, profile.settlement_account]
+    .filter(Boolean)
+    .join(' · ')
+  return (
+    <Stack spacing={0.25} data-testid="seller-profile-summary">
+      <Typography variant="body2">{profile.legal_name}</Typography>
+      <Typography variant="caption" color="text.secondary">
+        {[`ИНН ${profile.inn}`, profile.kpp ? `КПП ${profile.kpp}` : null].filter(Boolean).join(', ')}
+      </Typography>
+      {bank ? (
+        <Typography variant="caption" color="text.secondary">
+          {bank}
+        </Typography>
+      ) : null}
+    </Stack>
+  )
+}
 
 type Props = {
   token: string
@@ -27,6 +55,15 @@ type Props = {
   isFulfillmentAdmin: boolean
   sellers: SellerRow[]
   onRefresh: () => void | Promise<void>
+}
+
+type SellerProfile = {
+  legal_name?: string | null
+  inn?: string | null
+  kpp?: string | null
+  bank_name?: string | null
+  bik?: string | null
+  settlement_account?: string | null
 }
 
 export function SellersScreen({
@@ -37,6 +74,31 @@ export function SellersScreen({
   onRefresh,
 }: Props) {
   const [busy, setBusy] = useState(false)
+  // Реквизиты живут на селлере: заполняются один раз и дальше просто видны в
+  // его строке. Счёт собирается по ним же — снимок берётся в момент выставления.
+  const [profiles, setProfiles] = useState<Record<string, SellerProfile | null>>({})
+
+  const loadProfiles = useCallback(async () => {
+    if (!token || !isFulfillmentAdmin) return
+    const pairs = await Promise.all(
+      sellers.map(async (seller) => {
+        try {
+          const response = await fetch(apiUrl(`/billing/profiles/sellers/${seller.id}`), {
+            headers: authHeaders(token),
+          })
+          if (!response.ok) return [seller.id, null] as const
+          return [seller.id, (await response.json()) as SellerProfile | null] as const
+        } catch {
+          return [seller.id, null] as const
+        }
+      }),
+    )
+    setProfiles(Object.fromEntries(pairs))
+  }, [authHeaders, isFulfillmentAdmin, sellers, token])
+
+  useEffect(() => {
+    void loadProfiles()
+  }, [loadProfiles])
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
@@ -122,17 +184,32 @@ export function SellersScreen({
             <TableHead>
               <TableRow>
                 <TableCell>Название</TableCell>
+                <TableCell>Реквизиты для счетов</TableCell>
+                {isFulfillmentAdmin ? <TableCell align="right" /> : null}
               </TableRow>
             </TableHead>
             <TableBody>
               {sellers.map((s) => (
                 <TableRow key={s.id} hover data-testid="seller-row" data-seller-id={s.id}>
                   <TableCell>{s.name}</TableCell>
+                  <TableCell>
+                    <SellerProfileSummary profile={profiles[s.id] ?? null} />
+                  </TableCell>
+                  {isFulfillmentAdmin ? (
+                    <TableCell align="right">
+                      <FfBillingProfilesDialog
+                        token={token}
+                        sellerId={s.id}
+                        sellerName={s.name}
+                        onSaved={() => void loadProfiles()}
+                      />
+                    </TableCell>
+                  ) : null}
                 </TableRow>
               ))}
               {sellers.length === 0 ? (
                 <TableRow>
-                  <TableCell>
+                  <TableCell colSpan={isFulfillmentAdmin ? 3 : 2}>
                     <Typography variant="body2" color="text.secondary" data-testid="sellers-empty">
                       Пока нет селлеров. Добавьте первого в форме справа.
                     </Typography>

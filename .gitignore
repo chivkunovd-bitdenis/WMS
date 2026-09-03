@@ -89,3 +89,5 @@ tasks/**/*.jpg
 tasks/**/*.pdf
 tasks/**/*.zip
 output/
+outputs/
+tmp/

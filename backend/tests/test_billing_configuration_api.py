@@ -154,6 +154,7 @@ async def test_tariff_matrix_api_is_explicit_tenant_scoped_and_atomic(
         "packing",
         "return",
         "storage",
+        "fbs_order",
     }
     assert not any(row["enabled"] for row in matrix.json()["services"])
     # Хранение считается за литро-день, остальные услуги — за штуку.
@@ -169,6 +170,7 @@ async def test_tariff_matrix_api_is_explicit_tenant_scoped_and_atomic(
                 {"service_code": "packing", "enabled": False},
                 {"service_code": "return", "enabled": False},
                 {"service_code": "storage", "enabled": False},
+            {"service_code": "fbs_order", "enabled": False},
             ],
             "versions": [],
         },
@@ -206,6 +208,7 @@ async def test_tariff_matrix_api_returns_and_atomically_persists_full_versioned_
             {"service_code": "packing", "enabled": False},
             {"service_code": "return", "enabled": False},
             {"service_code": "storage", "enabled": False},
+            {"service_code": "fbs_order", "enabled": False},
         ],
         "versions": [
             {
@@ -311,6 +314,7 @@ async def test_tariff_matrix_api_persists_product_and_employee_rates_without_cro
             {"service_code": "packing", "enabled": False},
             {"service_code": "return", "enabled": False},
             {"service_code": "storage", "enabled": False},
+            {"service_code": "fbs_order", "enabled": False},
         ],
         "versions": [
             {
@@ -420,6 +424,7 @@ async def test_tariff_matrix_rate_edit_closes_old_interval_and_rejects_document_
         {"service_code": "packing", "enabled": False},
         {"service_code": "return", "enabled": False},
         {"service_code": "storage", "enabled": False},
+            {"service_code": "fbs_order", "enabled": False},
     ]
     first = {
         "service_code": "inbound",

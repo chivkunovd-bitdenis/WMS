@@ -147,6 +147,7 @@ export function PreviewHarness() {
                 setNote(null)
               }
             }}
+            data-testid="preview-state"
           >
             {STATES.map((item) => (
               <ToggleButton key={item.value} value={item.value}>

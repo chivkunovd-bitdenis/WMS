@@ -27,9 +27,12 @@ from app.services.inventory_movement_report_service import (
 
 TRANSFER_TYPES = {"stock_transfer_in", "stock_transfer_out"}
 PAGE_SIZE = 50
-GROUP_BY_VALUES = {"product", "operation"}
+GROUP_BY_VALUES = {"product", "operation", "seller"}
 PRODUCT_SORTS = {"name", "sku", "in_qty", "out_qty", "net"}
 OPERATION_SORTS = {"operation", "in_qty", "out_qty", "net"}
+# Селлер — верхний уровень отчёта: менеджер сначала смотрит, кто сколько принёс
+# и увёз, и только потом раскрывает товары внутри одного селлера.
+SELLER_SORTS = {"name", "in_qty", "out_qty", "net", "products"}
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 WB_IMPORT_JOB_TYPES = frozenset(
     {"wildberries_cards_sync", "wildberries_supplies_sync", "wildberries_marketplace_orders_sync"}
@@ -161,9 +164,11 @@ def validated_sort(
     group_by: str, sort_by: str | None, sort_order: str
 ) -> tuple[str, str]:
     if group_by not in GROUP_BY_VALUES:
-        raise ValueError("group_by must be product or operation")
-    allowed_sorts = PRODUCT_SORTS if group_by == "product" else OPERATION_SORTS
-    resolved_sort = sort_by or ("name" if group_by == "product" else "operation")
+        raise ValueError("group_by must be product, operation or seller")
+    allowed_sorts = {
+        "product": PRODUCT_SORTS, "operation": OPERATION_SORTS, "seller": SELLER_SORTS,
+    }[group_by]
+    resolved_sort = sort_by or ("operation" if group_by == "operation" else "name")
     if resolved_sort not in allowed_sorts:
         raise ValueError("unsupported sort_by")
     if sort_order not in {"asc", "desc"}:
@@ -219,6 +224,26 @@ async def build_inventory_report(
             sort_columns[sort_by].desc() if sort_order == "desc" else sort_columns[sort_by].asc(),
             Product.id,
         )
+    elif group_by == "seller":
+        # Селлеров в отчёте столько же, сколько их в движениях периода: строка
+        # появляется только у того, у кого что-то приходило или уходило.
+        product_count = func.count(func.distinct(InventoryMovement.product_id))
+        grouped = select(
+            InventoryMovement.seller_id.label("seller_id"), Seller.name.label("seller_name"),
+            product_count.label("product_count"), in_qty, out_qty,
+        ).select_from(InventoryMovement).join(
+            Product, Product.id == InventoryMovement.product_id).outerjoin(
+            Seller, Seller.id == InventoryMovement.seller_id).join(
+            Warehouse, Warehouse.id == InventoryMovement.warehouse_id).where(
+            *filters).group_by(InventoryMovement.seller_id, Seller.name)
+        sort_columns = {
+            "name": Seller.name, "in_qty": in_qty, "out_qty": out_qty,
+            "net": in_qty - out_qty, "products": product_count,
+        }
+        grouped = grouped.order_by(
+            sort_columns[sort_by].desc() if sort_order == "desc" else sort_columns[sort_by].asc(),
+            Seller.name,
+        )
     else:
         operation = operation_group_expr()
         grouped = select(
@@ -265,6 +290,29 @@ async def build_inventory_report(
             product_id: int(quantity)
             for product_id, quantity in (await session.execute(balance_stmt)).all()
         }
+    balances_by_seller: dict[uuid.UUID | None, int] = {}
+    if group_by == "seller" and rows:
+        # Остаток сейчас считается по текущей принадлежности товара селлеру:
+        # это ответ на вопрос «сколько его товара лежит у нас прямо сейчас»,
+        # а не «сколько лежало на момент движения».
+        seller_balance_stmt = (
+            select(Product.seller_id, func.coalesce(func.sum(InventoryBalance.quantity), 0))
+            .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
+            .join(Warehouse, Warehouse.id == StorageLocation.warehouse_id)
+            .join(Product, Product.id == InventoryBalance.product_id)
+            .where(
+                InventoryBalance.tenant_id == tenant_id,
+                Warehouse.is_operational.is_(True),
+                Product.seller_id.in_([row[0] for row in rows]),
+            )
+            .group_by(Product.seller_id)
+        )
+        if warehouse_id is not None:
+            seller_balance_stmt = seller_balance_stmt.where(Warehouse.id == warehouse_id)
+        balances_by_seller = {
+            row_seller_id: int(quantity)
+            for row_seller_id, quantity in (await session.execute(seller_balance_stmt)).all()
+        }
     incomplete_transfer_product_ids, incomplete_transfer_operations = (
         await incomplete_transfer_markers(
             session,
@@ -285,6 +333,14 @@ async def build_inventory_report(
                 "total_in": int(incoming), "total_out": int(outgoing),
                 "net": int(incoming) - int(outgoing),
                 "integrity_error": pid in incomplete_transfer_product_ids})
+        elif group_by == "seller":
+            sid, seller_name, product_count, incoming, outgoing = row
+            result.append({"seller_id": str(sid) if sid else "",
+                "seller_name": seller_name or "Без селлера",
+                "product_count": int(product_count),
+                "current_balance": balances_by_seller.get(sid, 0),
+                "total_in": int(incoming), "total_out": int(outgoing),
+                "net": int(incoming) - int(outgoing)})
         else:
             operation, incoming, outgoing = row
             result.append({"operation": operation, "in_qty": int(incoming),

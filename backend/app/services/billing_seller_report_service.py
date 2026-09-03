@@ -24,13 +24,25 @@ from app.models.billing import (
     BillingLedgerLine,
     BillingTariffVersionV2,
 )
+from app.models.fbs_order import (
+    FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
+    FBS_ORDER_STATUS_IN_DELIVERY,
+    FBS_ORDER_STATUS_PACKED,
+    FbsOrder,
+)
+from app.models.fbs_supply import FbsSupply
 from app.models.inventory_movement import InventoryMovement
 from app.models.operation_fact import OperationFact, OperationFactCutover, OperationFactLine
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
 from app.models.seller import Seller
 from app.models.warehouse import Warehouse
-from app.services.storage_measurement_service import MOSCOW, interval_liter_days
+from app.services.billing_ledger_service import _resolve_v2_tariff
+from app.services.storage_measurement_service import (
+    MOSCOW,
+    StorageMeasurementError,
+    interval_liter_days,
+)
 
 
 class SellerReportError(ValueError):
@@ -60,6 +72,12 @@ def _source_target(source_type: str, source_id: uuid.UUID) -> dict[str, str] | N
         return {"kind": "inbound", "source_id": str(source_id)}
     if source_type == "marketplace_unload":
         return {"kind": "route", "to": f"/app/ff/mp-shipments?open_mp={source_id}"}
+    # Документ заказа FBS — это его история: кто подобрал, упаковал, печатал и
+    # передавал. Открывается тем же кликом по номеру, что и остальные документы.
+    if source_type == "fbs_order":
+        return {"kind": "fbs_order", "source_id": str(source_id)}
+    if source_type == "fbs_supply":
+        return {"kind": "route", "to": f"/app/ff/fbs?supply_id={source_id}"}
     return None
 
 
@@ -146,11 +164,39 @@ def _financial_totals(entries: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
+_NATURAL_GROUPS: dict[str, tuple[str, ...]] = {
+    "inbound_items": ("inbound",),
+    "packing_items": ("packing", "packaging"),
+    "outbound_items": ("marketplace_outbound",),
+    "fbs_items": ("fbs_order",),
+}
+
+
+def _natural_totals(entries: list[dict[str, Any]]) -> dict[str, int]:
+    """Сколько штук товара прошло через каждый участок за период.
+
+    Считаем только сделанную работу: сторно вычитать нечего, а строки без
+    ставки — это всё равно принятый и упакованный товар, просто ещё не
+    оценённый деньгами.
+    """
+    result = {key: 0 for key in _NATURAL_GROUPS}
+    for row in entries:
+        if row.get("result") in {"reversed", "not_billable"}:
+            continue
+        code = str(row.get("service_code") or "")
+        quantity = int(row.get("item_quantity") or 0)
+        for key, codes in _NATURAL_GROUPS.items():
+            if code in codes:
+                result[key] += quantity
+    return result
+
+
 def _totals(entries: list[dict[str, Any]], *, include_finance: bool) -> dict[str, int]:
     result: dict[str, int] = {
         "operation_count": len(entries),
         "item_quantity": sum(int(row.get("item_quantity") or 0) for row in entries),
         "not_billable_count": sum(1 for row in entries if row.get("result") == "not_billable"),
+        **_natural_totals(entries),
     }
     if include_finance:
         result.update(_financial_totals(entries))
@@ -164,6 +210,42 @@ async def _cutover(session: AsyncSession) -> datetime | None:
             select(OperationFactCutover.occurred_at).where(OperationFactCutover.id == 1)
         ),
     )
+
+
+async def _live_price(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    fact: OperationFact,
+    product_id: uuid.UUID | None = None,
+) -> tuple[int | None, str | None, int | None]:
+    """Цена операции по истории ставок: ставка, единица, сумма.
+
+    Начисление пишется в момент события и задним числом не чинится: не нашлась
+    ставка, не отработал фон — строки нет навсегда, и отчёт показывает ноль.
+    Ставки при этом версионные: у каждой есть срок действия, старые не стираются.
+    Значит цену прошлой операции можно спросить заново и получить ровно ту же
+    цифру — снимок для отчёта не нужен.
+    """
+    if fact.billable_service_code is None or fact.seller_id is None:
+        return None, None, None
+    tariff = await _resolve_v2_tariff(
+        session,
+        tenant_id=tenant_id,
+        seller_id=fact.seller_id,
+        product_id=product_id,
+        service_code=fact.billable_service_code,
+        occurred_at=fact.occurred_at,
+    )
+    if tariff is None:
+        return None, None, None
+    # «За документ» стоит одинаково, сколько бы строк в документе ни было.
+    quantity = 1 if tariff.unit == "document" else int(fact.item_quantity or 0)
+    if quantity <= 0:
+        # Ноль штук — это не «бесплатно», это нечего считать. Иначе строка
+        # выпадает из счётчика непроценённых и дырку никто не замечает.
+        return None, None, None
+    return tariff.rate, tariff.unit, tariff.rate * quantity
 
 
 async def _operation_entries(
@@ -199,6 +281,31 @@ async def _operation_entries(
         )
         for line in lines:
             fact_lines[line.operation_fact_id].append(line)
+    # Имя поставки FBS для старых фактов. Снимок номера пишется в момент
+    # события, и у фактов, созданных до того, как витрина научилась брать
+    # отображаемый номер, там пусто — в расчётах строка выходила «Документ без
+    # номера». Достраиваем на чтении, чтобы починились и уже накопленные записи.
+    supply_names: dict[uuid.UUID, str] = {}
+    supply_ids = {
+        fact.document_id
+        for fact in facts
+        if fact.document_type == "fbs_supply" and not fact.document_number_snapshot
+    }
+    if supply_ids:
+        supply_rows = await session.execute(
+            select(
+                FbsSupply.id, FbsSupply.document_number, FbsSupply.display_number,
+                FbsSupply.wb_supply_id, FbsSupply.name,
+            ).where(FbsSupply.id.in_(supply_ids))
+        )
+        for supply_row in supply_rows:
+            label = next(
+                (str(value).strip() for value in supply_row[1:] if str(value or "").strip()),
+                None,
+            )
+            if label is not None:
+                supply_names[supply_row[0]] = f"Поставка {label}"
+
     result: list[dict[str, Any]] = []
     for fact in facts:
         priced = pricing.get(fact.id, [])
@@ -212,20 +319,98 @@ async def _operation_entries(
             "seller_name": fact.seller_name_snapshot or "Не указан", "occurred_at": _as_moscow(fact.occurred_at).isoformat(),
             "service_code": fact.billable_service_code or fact.operation_code, "item_quantity": fact.item_quantity,
             "source_type": fact.document_type, "source_id": str(fact.document_id),
-            "document_number": fact.document_number_snapshot,
+            "document_number": fact.document_number_snapshot or supply_names.get(fact.document_id),
             "product_name": ", ".join(dict.fromkeys(product_names)) or None,
             "sku": ", ".join(dict.fromkeys(skus)) or None,
             "source_target": _source_target(fact.document_type, fact.document_id),
             "result": "reversed" if fact.reversal_of_id else ("not_billable" if not fact.billable_service_code else (finance_result if include_finance else "completed")),
         }
+        if fact.document_type == FBS_ORDER_DOCUMENT_TYPE:
+            row["fbs_status_label"] = FBS_STATUS_CONFIRMED_LABEL
         if include_finance:
             row["rate_kopecks"] = priced[0].rate if priced and len({entry.rate for entry in priced}) == 1 else None
             row["amount_kopecks"] = money
             row["unit"] = priced[0].unit if priced else None
             row["invoice_history"] = {"state": "unknown"}
+            if money is None and not fact.reversal_of_id:
+                single_product = (
+                    product_lines[0].product_id if len(product_lines) == 1 else None
+                )
+                rate, unit, amount = await _live_price(
+                    session, tenant_id=tenant_id, fact=fact, product_id=single_product
+                )
+                if amount is not None:
+                    row["rate_kopecks"] = rate
+                    row["unit"] = unit
+                    row["amount_kopecks"] = amount
+                    row["result"] = "completed"
+                    # Начисления у операции нет, поэтому в счёт её пока не
+                    # выбрать: галочка объяснит причину сама.
+                    row["priced_live"] = True
         result.append(row)
     return result
 
+
+
+
+FBS_ORDER_DOCUMENT_TYPE = "fbs_order"
+FBS_STATUS_CONFIRMED_LABEL = "ВБ получил"
+FBS_STATUS_HANDED_LABEL = "Передан ВБ"
+_FBS_HANDED_STATUSES = (
+    FBS_ORDER_STATUS_PACKED,
+    FBS_ORDER_STATUS_IN_DELIVERY,
+    FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
+)
+
+
+async def _fbs_handed_entries(
+    session: AsyncSession,
+    *, tenant_id: uuid.UUID, start: datetime, end: datetime, seller_id: uuid.UUID,
+) -> list[dict[str, Any]]:
+    """Переданные, но ещё не подтверждённые заказы FBS.
+
+    В сумму раздела они не идут: работа считается сделанной только когда
+    маркетплейс подтвердил, что забрал заказ. Но спрятать их нельзя — оператор
+    должен видеть, что заказ уехал и ждёт подтверждения, а не потерялся.
+    """
+    orders = list(
+        (
+            await session.scalars(
+                select(FbsOrder)
+                .where(
+                    FbsOrder.tenant_id == tenant_id,
+                    FbsOrder.seller_id == seller_id,
+                    FbsOrder.status.in_(_FBS_HANDED_STATUSES),
+                    FbsOrder.updated_at >= start,
+                    FbsOrder.updated_at < end,
+                )
+                .order_by(FbsOrder.updated_at.desc())
+                .limit(200)
+            )
+        ).all()
+    )
+    rows: list[dict[str, Any]] = []
+    for order in orders:
+        rows.append(
+            {
+                "id": f"fbs_order:{order.id}",
+                "kind": "fbs_order_handed",
+                "seller_id": str(order.seller_id),
+                "seller_name": "",
+                "occurred_at": _as_moscow(order.updated_at).isoformat(),
+                "service_code": FBS_ORDER_DOCUMENT_TYPE,
+                "item_quantity": None,
+                "source_type": FBS_ORDER_DOCUMENT_TYPE,
+                "source_id": str(order.id),
+                "document_number": f"Заказ {order.wb_order_id}",
+                "product_name": None,
+                "sku": None,
+                "source_target": {"kind": "fbs_order", "source_id": str(order.id)},
+                "result": "not_billable",
+                "fbs_status_label": FBS_STATUS_HANDED_LABEL,
+            }
+        )
+    return rows
 
 async def _legacy_entries(
     session: AsyncSession,
@@ -406,17 +591,26 @@ async def _storage_row(
     liter_days = Decimal(0)
     missing = False
     fingerprint_sources: list[dict[str, Any]] = []
+    # Восстановленный по движениям остаток может уйти в минус — например, если
+    # списание пришло раньше прихода. Раньше это роняло весь экран селлера
+    # пятисоткой: оператор не видел ни документов, ни причины. Хранение в таком
+    # случае действительно посчитать нельзя, но всё остальное показать можно.
+    broken = False
     for product_id, product_movements in grouped.items():
         product = products.get(product_id)
         if product is None:
             continue
-        calculated, product_missing = interval_liter_days(product_movements, events_by_product[product_id], legacy_volume_liters=product.volume_liters, start=start, end=end)
+        try:
+            calculated, product_missing = interval_liter_days(product_movements, events_by_product[product_id], legacy_volume_liters=product.volume_liters, start=start, end=end)
+        except StorageMeasurementError:
+            broken = True
+            break
         liter_days += calculated
         missing = missing or product_missing
         fingerprint_sources.append({"product": str(product_id), "moves": [(str(m.id), _as_moscow(m.created_at).isoformat(), m.quantity_delta) for m in product_movements], "dimensions": [(str(e.id), _as_moscow(e.observed_at).isoformat(), str(e.volume_liters)) for e in events_by_product[product_id]]})
     tariff_rows = await _storage_matrix_rates(session, tenant_id=tenant_id, seller_id=seller_id)
     amount = 0
-    if not missing:
+    if not missing and not broken:
         for offset in range((date_to - date_from).days + 1):
             day = date_from + timedelta(days=offset)
             daily_liters = Decimal(0)
@@ -425,7 +619,11 @@ async def _storage_row(
             for product_id, product_movements in grouped.items():
                 product = products.get(product_id)
                 if product:
-                    value, absent = interval_liter_days(product_movements, events_by_product[product_id], legacy_volume_liters=product.volume_liters, start=max(start, day_start), end=min(end, day_end))
+                    try:
+                        value, absent = interval_liter_days(product_movements, events_by_product[product_id], legacy_volume_liters=product.volume_liters, start=max(start, day_start), end=min(end, day_end))
+                    except StorageMeasurementError:
+                        broken = True
+                        break
                     if absent:
                         missing = True
                     daily_liters += value
@@ -433,8 +631,8 @@ async def _storage_row(
             if rate is not None:
                 amount += int((daily_liters * Decimal(rate)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
     payload = {"tenant_id": str(tenant_id), "seller_id": str(seller_id), "date_from": date_from.isoformat(), "date_to": date_to.isoformat(), "liter_days": str(liter_days), "amount_kopecks": None if missing else amount, "sources": fingerprint_sources, "tariffs": [(str(t.id), _as_moscow(t.valid_from_at).isoformat(), _as_moscow(t.valid_to_at).isoformat() if t.valid_to_at else None, t.rate, str(t.seller_id) if t.seller_id else None) for t in tariff_rows]}
-    row: dict[str, Any] = {"kind": "storage", "date_from": date_from.isoformat(), "date_to": date_to.isoformat(), "liter_days": float(liter_days), "status": "missing_dimensions" if missing else "calculated", "calculation_token": _token(payload)}
-    if include_finance and not missing:
+    row: dict[str, Any] = {"kind": "storage", "date_from": date_from.isoformat(), "date_to": date_to.isoformat(), "liter_days": float(liter_days), "status": "negative_stock" if broken else ("missing_dimensions" if missing else "calculated"), "calculation_token": _token(payload)}
+    if include_finance and not missing and not broken:
         row["amount_kopecks"] = amount
     return row
 
@@ -469,6 +667,52 @@ async def build_seller_report(
     return {"rows": rows, "totals": {"seller_count": len(rows), **totals}, "entries": entries, "start": start, "end": end}
 
 
+async def storage_totals(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    date_from: date,
+    date_to: date,
+    seller_id: uuid.UUID | None = None,
+) -> dict[str, Any]:
+    """Литро-дни хранения за период — по всем селлерам или по одному.
+
+    Считается отдельным запросом, а не вместе со сводкой: расчёт хранения
+    прокручивает движения товара с самого начала, и тащить его в основную
+    таблицу значило бы заставлять оператора ждать ради одной плашки.
+    """
+    start, end = moscow_interval(date_from, date_to)
+    if seller_id is not None:
+        seller_ids = [seller_id]
+    else:
+        seller_ids = list(
+            (
+                await session.scalars(select(Seller.id).where(Seller.tenant_id == tenant_id))
+            ).all()
+        )
+    liter_days = 0.0
+    amount = 0
+    complete = True
+    for current in seller_ids:
+        row = await _storage_row(
+            session,
+            tenant_id=tenant_id,
+            seller_id=current,
+            date_from=date_from,
+            date_to=date_to,
+            start=start,
+            end=end,
+            include_finance=True,
+        )
+        liter_days += float(row.get("liter_days") or 0)
+        money = row.get("amount_kopecks")
+        if isinstance(money, int):
+            amount += money
+        elif row.get("status") == "missing_dimensions":
+            complete = False
+    return {"liter_days": liter_days, "amount_kopecks": amount, "complete": complete}
+
+
 async def seller_details(
     session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID, date_from: date, date_to: date, include_finance: bool, limit: int = 50, cursor: str | None = None,
 ) -> dict[str, Any]:
@@ -477,6 +721,12 @@ async def seller_details(
         raise SellerReportError("seller_not_found")
     report = await build_seller_report(session, tenant_id=tenant_id, seller_id=seller_id, date_from=date_from, date_to=date_to, include_finance=include_finance)
     entries = report["entries"]
+    # Итоги считаем до того, как подмешаем переданные заказы FBS: они денег не
+    # приносят и не должны раздувать ни суммы, ни счётчики документов.
+    totals = _totals(entries, include_finance=include_finance)
+    entries = entries + await _fbs_handed_entries(
+        session, tenant_id=tenant_id, seller_id=seller_id, start=report["start"], end=report["end"]
+    )
     # Stable multi-key ordering: occurrence desc, source kind asc, UUID desc.
     entries.sort(key=lambda row: row["id"], reverse=True)
     entries.sort(key=lambda row: row["kind"])
@@ -518,4 +768,4 @@ async def seller_details(
             "key": {"occurred_at": tail["occurred_at"], "id": tail["id"], "kind": tail["kind"]},
         })
     storage = None if cursor else await _storage_row(session, tenant_id=tenant_id, seller_id=seller_id, date_from=date_from, date_to=date_to, start=report["start"], end=report["end"], include_finance=include_finance)
-    return {"seller_id": str(seller_id), "seller_name": seller.name, "entries": page, "next_cursor": next_cursor, "storage_row": storage, "totals": _totals(entries, include_finance=include_finance)}
+    return {"seller_id": str(seller_id), "seller_name": seller.name, "entries": page, "next_cursor": next_cursor, "storage_row": storage, "totals": totals}

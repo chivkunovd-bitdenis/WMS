@@ -29,6 +29,14 @@ class Settings(BaseSettings):
         default="change-me-in-production-use-long-random-secret",
         min_length=16,
     )
+    dadata_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("WMS_DADATA_TOKEN", "DADATA_TOKEN"),
+        description=(
+            "Ключ DaData для подстановки реквизитов по ИНН. "
+            "Бесплатный тариф — 10 000 запросов в сутки; без ключа подстановка выключена."
+        ),
+    )
     jwt_algorithm: str = Field(default="HS256")
     access_token_expire_minutes: int = Field(default=60 * 24)
     celery_broker_url: str | None = Field(
