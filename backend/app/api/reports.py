@@ -20,6 +20,7 @@ from app.services.reporting_service import (
     build_inventory_csv,
     build_inventory_report,
     build_overview,
+    list_product_movements,
 )
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -47,6 +48,36 @@ async def get_inventory_report(user: Annotated[User, Depends(get_current_user)],
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc)) from exc
+
+
+@router.get("/inventory/movements")
+async def get_product_movements(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+    product_id: Annotated[uuid.UUID, Query()],
+    date_from: Annotated[datetime, Query()],
+    date_to: Annotated[datetime, Query()],
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
+) -> dict[str, object]:
+    """Движения одного товара за период: когда приехал, когда уехал и по чему."""
+    await assert_inventory_read_access(session, user)
+    try:
+        rows = await list_product_movements(
+            session,
+            user.tenant_id,
+            product_id=product_id,
+            date_from=date_from,
+            date_to=date_to,
+            seller_id=seller_scope if seller_scope is not None else seller_id,
+            warehouse_id=warehouse_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    return {"rows": rows}
 
 
 @router.get("/overview")

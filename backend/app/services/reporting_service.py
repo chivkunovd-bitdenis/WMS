@@ -14,8 +14,10 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.background_job import BackgroundJob
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
+from app.models.marketplace_unload import MarketplaceUnloadRequest
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
@@ -773,3 +775,102 @@ async def build_overview(
         "generated_at": datetime.now(UTC).isoformat(),
         "source_freshness": source_freshness, "warnings": warnings,
     }
+
+
+async def list_product_movements(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    product_id: uuid.UUID,
+    date_from: datetime,
+    date_to: datetime,
+    seller_id: uuid.UUID | None = None,
+    warehouse_id: uuid.UUID | None = None,
+) -> list[dict[str, object]]:
+    """Движения одного товара за период — то, что видно при раскрытии строки.
+
+    Сводка отвечает «сколько пришло и ушло», но не отвечает «когда и по какому
+    документу». Кладовщик открывает товар именно за этим: увидеть приёмку,
+    отгрузку и сборку FBS по датам и перейти в сам документ.
+    """
+    date_from, date_to = normalize_period(date_from, date_to)
+    filters = [
+        InventoryMovement.tenant_id == tenant_id,
+        InventoryMovement.product_id == product_id,
+        InventoryMovement.created_at >= date_from,
+        InventoryMovement.created_at < date_to,
+        Warehouse.is_operational.is_(True),
+    ]
+    if warehouse_id is None:
+        filters.append(InventoryMovement.transfer_group_id.is_(None))
+    else:
+        filters.append(InventoryMovement.warehouse_id == warehouse_id)
+    if seller_id is not None:
+        filters.append(InventoryMovement.seller_id == seller_id)
+
+    rows = (
+        await session.execute(
+            select(InventoryMovement)
+            .join(Warehouse, Warehouse.id == InventoryMovement.warehouse_id)
+            .where(*filters)
+            .order_by(InventoryMovement.created_at.desc(), InventoryMovement.id)
+            .limit(200)
+        )
+    ).scalars().all()
+
+    intake_line_ids = {row.inbound_intake_line_id for row in rows if row.inbound_intake_line_id}
+    unload_ids = {
+        row.marketplace_unload_request_id for row in rows if row.marketplace_unload_request_id
+    }
+    intake_by_line: dict[uuid.UUID, tuple[uuid.UUID, str | None]] = {}
+    if intake_line_ids:
+        intake_rows = await session.execute(
+            select(
+                InboundIntakeLine.id,
+                InboundIntakeRequest.id,
+                InboundIntakeRequest.display_number,
+                InboundIntakeRequest.document_number,
+            )
+            .join(InboundIntakeRequest, InboundIntakeRequest.id == InboundIntakeLine.request_id)
+            .where(InboundIntakeLine.id.in_(intake_line_ids))
+        )
+        for line_id, request_id, display_number, document_number in intake_rows:
+            intake_by_line[line_id] = (request_id, display_number or document_number)
+    unload_numbers: dict[uuid.UUID, str | None] = {}
+    if unload_ids:
+        unload_rows = await session.execute(
+            select(
+                MarketplaceUnloadRequest.id,
+                MarketplaceUnloadRequest.display_number,
+                MarketplaceUnloadRequest.document_number,
+            ).where(MarketplaceUnloadRequest.id.in_(unload_ids))
+        )
+        for unload_id, display_number, document_number in unload_rows:
+            unload_numbers[unload_id] = display_number or document_number
+
+    result: list[dict[str, object]] = []
+    for row in rows:
+        document: dict[str, object] | None = None
+        if row.inbound_intake_line_id and row.inbound_intake_line_id in intake_by_line:
+            request_id, number = intake_by_line[row.inbound_intake_line_id]
+            document = {
+                "kind": "inbound",
+                "id": str(request_id),
+                "number": number or "без номера",
+            }
+        elif row.marketplace_unload_request_id:
+            document = {
+                "kind": "marketplace_unload",
+                "id": str(row.marketplace_unload_request_id),
+                "number": unload_numbers.get(row.marketplace_unload_request_id) or "без номера",
+            }
+        result.append(
+            {
+                "id": str(row.id),
+                "at": row.created_at.isoformat(),
+                "operation": movement_group_label(row.movement_type),
+                "quantity": int(row.quantity_delta),
+                "document": document,
+            }
+        )
+    return result

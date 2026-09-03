@@ -1,24 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Box, MenuItem, Stack, TextField, Typography } from '@mui/material'
+import { Link, MenuItem, Stack, TextField, Typography } from '@mui/material'
+import { Link as RouterLink } from 'react-router-dom'
 import { apiUrl } from '../../api'
+import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
+import { sellerQuickRange } from './FfBillingScreen'
 import {
   ActionGroup,
   DataTable,
   ErrorNotice,
   FilterBar,
+  MoscowDateRangeInput,
   PrimaryAction,
   SecondaryAction,
-  ProductCell,
   QtyCell,
   ReportMetricStrip,
   ScreenHeader,
-  StatusChip,
   TextCell,
   WarningNotice,
 } from '../../ui-kit'
 
 type Props = {
   token: string
+  /** Открыть документ приёмки: экран отчёта сам его не рисует. */
+  onOpenInbound?: (id: string) => void
   sellers?: { id: string; name: string }[]
   warehouses?: { id: string; name: string }[]
   contentInset?: number
@@ -81,6 +85,13 @@ type SellerRow = {
   net: number
 }
 type OperationRow = { operation: string; in_qty: number; out_qty: number; net: number }
+type MovementRow = {
+  id: string
+  at: string
+  operation: string
+  quantity: number
+  document: { kind: 'inbound' | 'marketplace_unload'; id: string; number: string } | null
+}
 type Grouping = 'seller' | 'product' | 'operation'
 
 type CalendarDate = { year: number; month: number; day: number }
@@ -105,8 +116,6 @@ const monthEnd = (date: CalendarDate) => dateString(addDays({
   month: date.month === 12 ? 1 : date.month + 1,
   day: 1,
 }, -1))
-const yearStart = (date: CalendarDate) => `${date.year}-01-01`
-const yearEnd = (date: CalendarDate) => `${date.year}-12-31`
 const nextDateString = (date: string) => {
   const [year, month, day] = date.split('-').map(Number)
   return dateString(addDays({ year, month, day }, 1))
@@ -119,9 +128,8 @@ const warningText = (warning: ReportWarning) => warning.code === 'wildberries_st
   ? `Данные Wildberries могут быть неполными. Последнее обновление: ${moscowTimestamp(warning.last_updated_at)}.`
   : `В отчёте есть исторические записи, восстановленные по доступным связям: ${warning.count}`
 
-export function FfReportsPage({ token, sellers = [], warehouses = [], contentInset = 308 }: Props) {
+export function FfReportsPage({ token, onOpenInbound, sellers = [], warehouses = [], contentInset = 308 }: Props) {
   const now = useMemo(() => moscowCalendarDate(new Date()), [])
-  const [period, setPeriod] = useState('month')
   const [dateFrom, setDateFrom] = useState(monthStart(now))
   const [dateTo, setDateTo] = useState(monthEnd(now))
   const [sellerId, setSellerId] = useState('')
@@ -129,7 +137,7 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
   const [search, setSearch] = useState('')
   const [overview, setOverview] = useState<Overview | null>(null)
   const [rows, setRows] = useState<Row[]>([])
-  const [grouping, setGrouping] = useState<Grouping>('seller')
+  const [grouping, setGrouping] = useState<Grouping>('product')
   const [sellerRows, setSellerRows] = useState<SellerRow[]>([])
   // Раскрытая строка селлера тянет свои данные: товары и разбивку по видам
   // движений. Держать их в основном ответе нельзя — это отчёт по всем селлерам.
@@ -138,9 +146,15 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
   const [sellerOperations, setSellerOperations] = useState<OperationRow[]>([])
   const [sellerDetailLoading, setSellerDetailLoading] = useState(false)
   const [sellerDetailError, setSellerDetailError] = useState(false)
+  // Третий уровень: движения одного товара. Кладовщик открывает товар, чтобы
+  // увидеть, когда он приехал, когда уехал и по какому документу.
+  const [expandedProduct, setExpandedProduct] = useState<string | null>(null)
+  const [movements, setMovements] = useState<MovementRow[]>([])
+  const [movementsLoading, setMovementsLoading] = useState(false)
+  const [movementsError, setMovementsError] = useState(false)
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
-  const groupingRef = useRef<Grouping>('seller')
+  const groupingRef = useRef<Grouping>('product')
   const [loading, setLoading] = useState(false)
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [tableLoading, setTableLoading] = useState(false)
@@ -222,6 +236,27 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
     }
   }, [params, token])
 
+  const loadMovements = useCallback(async (productId: string, scopedSellerId: string) => {
+    setMovementsLoading(true)
+    setMovementsError(false)
+    try {
+      const query = params()
+      query.set('product_id', productId)
+      if (scopedSellerId) query.set('seller_id', scopedSellerId)
+      const response = await fetch(apiUrl(`/reports/inventory/movements?${query.toString()}`), {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!response.ok) throw new Error('movements')
+      const payload = (await response.json()) as { rows?: MovementRow[] }
+      setMovements(payload.rows ?? [])
+    } catch {
+      setMovementsError(true)
+      setMovements([])
+    } finally {
+      setMovementsLoading(false)
+    }
+  }, [params, token])
+
   const load = useCallback(async () => {
     if (periodError) return
     overviewRetryAbortRef.current?.abort()
@@ -238,7 +273,7 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
     try {
       await Promise.all([
         loadOverview(controller.signal).catch(error => { if (!(error instanceof DOMException && error.name === 'AbortError')) setSummaryError(true) }),
-        loadTable(controller.signal, 1, groupingRef.current).catch(error => { if (!(error instanceof DOMException && error.name === 'AbortError')) setTableError(true) }),
+        loadTable(controller.signal, 1, 'seller').catch(error => { if (!(error instanceof DOMException && error.name === 'AbortError')) setTableError(true) }),
       ])
       setPage(1)
     } catch (error) {
@@ -297,14 +332,6 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
     } catch { setCsvError(true) } finally { setCsvLoading(false) }
   }
 
-  const choosePeriod = (value: string) => {
-    setPeriod(value)
-    const end = moscowCalendarDate(new Date())
-    if (value === '7') { setDateFrom(dateString(addDays(end, -6))); setDateTo(dateString(end)) }
-    if (value === '30') { setDateFrom(dateString(addDays(end, -29))); setDateTo(dateString(end)) }
-    if (value === 'month') { setDateFrom(monthStart(end)); setDateTo(monthEnd(end)) }
-    if (value === 'year') { setDateFrom(yearStart(end)); setDateTo(yearEnd(end)) }
-  }
 
   useEffect(() => {
     const from = new Date(`${dateFrom}T00:00:00`)
@@ -328,10 +355,14 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
   return <Stack spacing={0} sx={{ minWidth: 0, width: `calc(100vw - ${contentInset}px)` }} data-testid="ff-reports-page">
     <ScreenHeader title="Остатки и движения" purpose="Текущий остаток и складские движения за выбранный период." />
     <FilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Название, артикул продавца, SKU, ШК" testId="ff-reports-filters">
-      <TextField select size="small" label="Период" value={period} onChange={event => choosePeriod(event.target.value)} data-testid="ff-reports-period"><MenuItem value="7">7 дней</MenuItem><MenuItem value="30">30 дней</MenuItem><MenuItem value="month">Текущий месяц</MenuItem><MenuItem value="year">Текущий год</MenuItem><MenuItem value="custom">Другой период</MenuItem></TextField>
+      <MoscowDateRangeInput label="Период" startLabel="с" endLabel="по" value={{ start: dateFrom, end: dateTo }} onChange={(value) => { setDateFrom(value.start ?? dateFrom); setDateTo(value.end ?? dateTo) }} maxDays={366} testId="ff-reports-range" />
+      <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', alignSelf: { sm: 'flex-end' }, pb: { sm: 0.25 } }} aria-label="Быстрый период">
+        {([['today', 'Сегодня'], ['seven_days', '7 дней'], ['thirty_days', '30 дней'], ['current_month', 'Этот месяц'], ['previous_month', 'Прошлый месяц']] as const).map(([key, label]) => (
+          <SecondaryAction key={key} onClick={() => { const range = sellerQuickRange(key); setDateFrom(range.start); setDateTo(range.end) }}>{label}</SecondaryAction>
+        ))}
+      </Stack>
       {warehouses.length > 1 ? <TextField select size="small" label="Склад" value={warehouseId} onChange={event => setWarehouseId(event.target.value)} data-testid="ff-reports-warehouse"><MenuItem value="">Все склады</MenuItem>{warehouses.map(warehouse => <MenuItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</MenuItem>)}</TextField> : null}
       {sellers.length > 0 ? <TextField select size="small" label="Селлер" value={sellerId} onChange={event => setSellerId(event.target.value)} data-testid="ff-reports-seller"><MenuItem value="">Все селлеры</MenuItem>{sellers.map(seller => <MenuItem key={seller.id} value={seller.id}>{seller.name}</MenuItem>)}</TextField> : null}
-      {period === 'custom' ? <><TextField size="small" label="С" type="date" value={dateFrom} onChange={event => { setDateFrom(event.target.value) }} data-testid="ff-reports-date-from" slotProps={{ inputLabel: { shrink: true } }} /><TextField size="small" label="По" type="date" value={dateTo} onChange={event => { setDateTo(event.target.value) }} data-testid="ff-reports-date-to" slotProps={{ inputLabel: { shrink: true } }} /></> : null}
     </FilterBar>
     {overview?.warnings.map((warning, index) => <WarningNotice key={`${warning.code}-${index}`} testId="ff-reports-warning">{warningText(warning)}</WarningNotice>)}
     {periodError ? <ErrorNotice testId="ff-reports-period-error">{periodError}</ErrorNotice> : null}
@@ -343,18 +374,17 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
     {hasIntegrityError ? <ErrorNotice testId="ff-reports-integrity-error">В истории есть неполное перемещение. Значения показаны как записаны; отчёт ничего не достраивал.</ErrorNotice> : null}
     {csvError ? <ErrorNotice testId="ff-reports-csv-error">Не удалось скачать CSV. Повторите попытку.</ErrorNotice> : null}
     <Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: 'center' }} data-testid="ff-reports-table-controls">
-      <TextField select size="small" label="Группировка" value={grouping} onChange={event => { const next = event.target.value as Grouping; groupingRef.current = next; setGrouping(next); setExpandedSeller(null); void changeTable(next, 1) }} data-testid="ff-reports-grouping">
-        <MenuItem value="seller">По селлерам</MenuItem><MenuItem value="product">По товарам</MenuItem><MenuItem value="operation">По операциям</MenuItem>
+      <TextField select size="small" label="Группировка" value={grouping} onChange={event => { const next = event.target.value as Grouping; groupingRef.current = next; setGrouping(next); setExpandedSeller(null); setExpandedProduct(null) }} data-testid="ff-reports-grouping">
+        <MenuItem value="product">По товарам</MenuItem><MenuItem value="operation">По операциям</MenuItem>
       </TextField>
       <PrimaryAction onClick={() => void downloadCsv()} disabledReason={csvDisabledReason} data-testid="ff-reports-download-csv">{csvLoading ? 'Формирование CSV…' : 'Скачать CSV'}</PrimaryAction>
     </Stack>
-    {tableError ? null : <>{grouping === 'seller' ? <DataTable<SellerRow> columns={[
+    {tableError ? null : <><DataTable<SellerRow> columns={[
       { key: 'seller', header: 'Селлер', render: row => <TextCell value={row.seller_name} /> },
       { key: 'products', header: 'Товаров', align: 'right', width: 110, render: row => <QtyCell value={row.product_count} /> },
-      { key: 'balance', header: <Typography component="span" variant="inherit" sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Остаток сейчас</Typography>, align: 'right', width: 120, render: row => <QtyCell value={row.current_balance} /> },
-      { key: 'in', header: 'Приход', align: 'right', width: 100, render: row => <QtyCell value={row.total_in} /> },
-      { key: 'out', header: 'Расход', align: 'right', width: 100, render: row => <QtyCell value={row.total_out} /> },
-      { key: 'net', header: 'Нетто', align: 'right', width: 100, render: row => <QtyCell value={row.net} /> },
+      { key: 'in', header: 'Приход', align: 'right', width: 110, render: row => <QtyCell value={row.total_in} /> },
+      { key: 'out', header: 'Расход', align: 'right', width: 110, render: row => <QtyCell value={row.total_out} /> },
+      { key: 'balance', header: <Typography component="span" variant="inherit" sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Остаток сейчас</Typography>, align: 'right', width: 130, render: row => <QtyCell value={row.current_balance} /> },
     ]} rows={sellerRows} getRowKey={row => row.seller_id || 'no-seller'} loading={loading || tableLoading} empty={{ title: 'За выбранный период движений нет', hint: 'Измените период или снимите фильтры.' }} testId="ff-reports-seller-table" expand={{
       isExpanded: row => expandedSeller === (row.seller_id || 'no-seller'),
       label: row => `Показать движения селлера ${row.seller_name}`,
@@ -362,54 +392,51 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
         const key = row.seller_id || 'no-seller'
         if (expandedSeller === key) { setExpandedSeller(null); return }
         setExpandedSeller(key)
-        setSellerProducts([]); setSellerOperations([])
+        setExpandedProduct(null)
+        setSellerProducts([]); setSellerOperations([]); setMovements([])
         void loadSellerDetail(row.seller_id)
       },
-      render: () => sellerDetailError
+      render: row => sellerDetailError
         ? <ErrorNotice testId="ff-reports-seller-detail-error">Не удалось загрузить движения селлера</ErrorNotice>
-        : <Stack spacing={2} data-testid="ff-reports-seller-detail">
-          <Box>
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>Виды движений</Typography>
-            <DataTable<OperationRow> columns={[
-              { key: 'operation', header: 'Движение', render: row => <TextCell value={row.operation} /> },
-              { key: 'in', header: 'Приход', align: 'right', width: 100, render: row => <QtyCell value={row.in_qty} /> },
-              { key: 'out', header: 'Расход', align: 'right', width: 100, render: row => <QtyCell value={row.out_qty} /> },
-              { key: 'net', header: 'Нетто', align: 'right', width: 100, render: row => <QtyCell value={row.net} /> },
-            ]} rows={sellerOperations} getRowKey={row => row.operation} loading={sellerDetailLoading} empty={{ title: 'Движений за период нет' }} testId="ff-reports-seller-operations" />
-          </Box>
-          <Box>
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>Товары</Typography>
-            <DataTable<Row> columns={[
-              { key: 'product', header: 'Товар', width: 105, render: row => <ProductCell sku={row.sku_code} photo={row.photo_url ? <img src={row.photo_url} alt="" width="32" height="32" /> : undefined} /> },
-              { key: 'name', header: 'Название', render: row => <TextCell value={row.product_name} /> },
-              { key: 'vendor', header: <Typography component="span" variant="inherit" sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Артикул продавца</Typography>, width: 120, render: row => <TextCell value={row.wb_vendor_code ?? '—'} width={110} /> },
-              { key: 'barcode', header: 'ШК', width: 120, render: row => <TextCell value={row.wb_barcode ?? '—'} width={110} /> },
-              { key: 'balance', header: <Typography component="span" variant="inherit" sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Остаток сейчас</Typography>, align: 'right', width: 105, render: row => <QtyCell value={row.current_balance ?? 0} /> },
-              { key: 'in', header: 'Приход', align: 'right', width: 90, render: row => <QtyCell value={row.total_in} /> },
-              { key: 'out', header: 'Расход', align: 'right', width: 90, render: row => <QtyCell value={row.total_out} /> },
-              { key: 'net', header: 'Нетто', align: 'right', width: 90, render: row => <QtyCell value={row.net} /> },
-            ]} rows={sellerProducts} getRowKey={row => row.product_id} loading={sellerDetailLoading} empty={{ title: 'Товаров за период нет' }} testId="ff-reports-seller-products" />
-          </Box>
-        </Stack>,
-    }} /> : <DataTable<Row> columns={grouping === 'product' ? [
-      { key: 'product', header: 'Товар', width: 105, render: row => <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><ProductCell sku={row.sku_code} photo={row.photo_url ? <img src={row.photo_url} alt="" width="32" height="32" /> : undefined} />{row.integrity_error ? <StatusChip label="Ошибка" tone="stop" testId="ff-reports-row-integrity-error" /> : null}</Stack> },
-      { key: 'name', header: 'Название', width: 125, render: row => <TextCell value={row.product_name} width={115} /> },
-      { key: 'vendor', header: <Typography component="span" variant="inherit" sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Артикул продавца</Typography>, width: 120, render: row => <TextCell value={row.wb_vendor_code ?? '—'} width={110} /> },
-      { key: 'barcode', header: 'ШК', width: 120, render: row => <TextCell value={row.wb_barcode ?? '—'} width={110} /> },
-      ...(sellers.length > 0 ? [{ key: 'seller', header: 'Селлер', width: 90, render: (row: Row) => <TextCell value={row.seller_name ?? '—'} width={80} /> }] : []),
-      { key: 'balance', header: <Typography component="span" variant="inherit" sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Остаток сейчас</Typography>, align: 'right', width: 105, render: row => <QtyCell value={row.current_balance ?? 0} /> },
-      { key: 'in', header: 'Приход', align: 'right', width: 65, render: row => <QtyCell value={row.total_in} /> },
-      { key: 'out', header: 'Расход', align: 'right', width: 65, render: row => <QtyCell value={row.total_out} /> },
-      { key: 'net', header: 'Нетто', align: 'right', width: 65, render: row => <QtyCell value={row.net} /> },
-    ] : [
-      { key: 'operation', header: 'Операция', width: 260, render: row => <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><TextCell value={(row as Row & { operation?: string }).operation ?? '—'} />{row.integrity_error ? <StatusChip label="Ошибка" tone="stop" testId="ff-reports-row-integrity-error" /> : null}</Stack> },
-      { key: 'in', header: 'Приход', width: 130, align: 'right', render: row => { const value = row.total_in ?? (row as Row & { in_qty?: number }).in_qty ?? 0; return <QtyCell value={row.integrity_error && value === 0 ? null : value} /> } },
-      { key: 'out', header: 'Расход', width: 130, align: 'right', render: row => { const value = row.total_out ?? (row as Row & { out_qty?: number }).out_qty ?? 0; return <QtyCell value={row.integrity_error && value === 0 ? null : value} /> } },
-      { key: 'net', header: 'Нетто', width: 130, align: 'right', render: row => <QtyCell value={row.net} /> },
-    ]} rows={rows} getRowKey={row => row.product_id ?? (row as Row & { operation?: string }).operation ?? 'report-row'} loading={loading || tableLoading} empty={{ title: 'За выбранный период движений нет', hint: 'Измените период или снимите фильтры.' }} testId="ff-reports-table" />}
+        : grouping === 'operation'
+          ? <DataTable<OperationRow> columns={[
+              { key: 'operation', header: 'Движение', render: op => <TextCell value={op.operation} /> },
+              { key: 'in', header: 'Приход', align: 'right', width: 110, render: op => <QtyCell value={op.in_qty} /> },
+              { key: 'out', header: 'Расход', align: 'right', width: 110, render: op => <QtyCell value={op.out_qty} /> },
+            ]} rows={sellerOperations} getRowKey={op => op.operation} loading={sellerDetailLoading} empty={{ title: 'Движений за период нет' }} testId="ff-reports-seller-operations" />
+          : <DataTable<Row> columns={[
+              { key: 'product', header: 'Товар', width: 320, render: product => <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', minWidth: 0 }}><ProductPhotoThumb src={product.photo_url} alt={product.product_name} size={40} previewSize={280} testId={`ff-reports-photo-${product.product_id}`} /><Stack sx={{ minWidth: 0 }}><Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{product.product_name}</Typography><Typography variant="caption" color="text.secondary" noWrap>{[product.sku_code, product.wb_vendor_code].filter(Boolean).join(' · ')}</Typography></Stack></Stack> },
+              { key: 'barcode', header: 'ШК', width: 150, render: product => <TextCell value={product.wb_barcode ?? '—'} width={140} /> },
+              { key: 'in', header: 'Приход', align: 'right', width: 110, render: product => <QtyCell value={product.total_in} /> },
+              { key: 'out', header: 'Расход', align: 'right', width: 110, render: product => <QtyCell value={product.total_out} /> },
+              { key: 'balance', header: <Typography component="span" variant="inherit" sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Остаток сейчас</Typography>, align: 'right', width: 130, render: product => <QtyCell value={product.current_balance ?? 0} /> },
+            ]} rows={sellerProducts} getRowKey={product => product.product_id} loading={sellerDetailLoading} empty={{ title: 'Товаров за период нет' }} testId="ff-reports-seller-products" expand={{
+              isExpanded: product => expandedProduct === product.product_id,
+              label: product => `Показать движения товара ${product.product_name}`,
+              onToggle: product => {
+                if (expandedProduct === product.product_id) { setExpandedProduct(null); return }
+                setExpandedProduct(product.product_id)
+                setMovements([])
+                void loadMovements(product.product_id, row.seller_id)
+              },
+              render: () => movementsError
+                ? <ErrorNotice testId="ff-reports-movements-error">Не удалось загрузить движения товара</ErrorNotice>
+                : <DataTable<MovementRow> columns={[
+                    { key: 'at', header: 'Когда', width: 170, render: move => <TextCell value={new Date(move.at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} width={160} /> },
+                    { key: 'operation', header: 'Движение', width: 220, render: move => <TextCell value={move.operation} /> },
+                    { key: 'document', header: 'Документ', render: move => move.document
+                        ? (move.document.kind === 'inbound'
+                            ? <Link component="button" type="button" sx={{ textAlign: 'left' }} onClick={() => onOpenInbound?.(move.document!.id)}>{move.document.number}</Link>
+                            : <Link component={RouterLink} to={`/app/ff/mp-shipments?open_mp=${move.document.id}`} sx={{ textAlign: 'left' }}>{move.document.number}</Link>)
+                        : <TextCell value="—" /> },
+                    { key: 'qty', header: 'Штук', align: 'right', width: 110, render: move => <QtyCell value={move.quantity} /> },
+                  ]} rows={movements} getRowKey={move => move.id} loading={movementsLoading} empty={{ title: 'Движений по товару за период нет' }} testId="ff-reports-movements" />,
+            }} />,
+    }} />
+
     <Stack direction="row" sx={{ py: 2, justifyContent: 'space-between', alignItems: 'center' }} data-testid="ff-reports-pagination">
       <Typography variant="body2" color="text.secondary">{total === 0 ? '0 из 0' : `${(page - 1) * 50 + 1}–${Math.min(page * 50, total)} из ${total}`}</Typography>
-      <ActionGroup><SecondaryAction data-testid="ff-reports-previous-page" disabledReason={page <= 1 ? 'Это первая страница' : undefined} onClick={() => void changeTable(grouping, page - 1)}>Назад</SecondaryAction><SecondaryAction data-testid="ff-reports-next-page" disabledReason={page * 50 >= total ? 'Это последняя страница' : undefined} onClick={() => void changeTable(grouping, page + 1)}>Вперёд</SecondaryAction></ActionGroup>
+      <ActionGroup><SecondaryAction data-testid="ff-reports-previous-page" disabledReason={page <= 1 ? 'Это первая страница' : undefined} onClick={() => void changeTable('seller', page - 1)}>Назад</SecondaryAction><SecondaryAction data-testid="ff-reports-next-page" disabledReason={page * 50 >= total ? 'Это последняя страница' : undefined} onClick={() => void changeTable('seller', page + 1)}>Вперёд</SecondaryAction></ActionGroup>
     </Stack></>}
   </Stack>
 }
