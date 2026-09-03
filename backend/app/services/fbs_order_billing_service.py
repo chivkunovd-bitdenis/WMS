@@ -28,6 +28,7 @@ from app.models.fbs_order import (
 from app.models.product import Product
 from app.models.seller import Seller
 from app.services.billing_ledger_service import (
+    PACKING_SERVICE_CODE,
     BillingLedgerError,
     product_billing_lines,
     record_operational_charge,
@@ -120,26 +121,30 @@ async def record_fbs_order_confirmed(
         logger.exception("operation fact for fbs order failed: order_id=%s", order.id)
 
     try:
-        await record_operational_charge(
-            session,
-            tenant_id=order.tenant_id,
-            seller_id=order.seller_id,
-            source_type=SOURCE_TYPE,
-            source_id=order.id,
-            source="fbs",
-            service_code=FBS_ORDER_SERVICE_CODE,
-            quantity=Decimal(quantity),
-            occurred_at=moment,
-            performer_id=None,
-            warehouse_id=order.warehouse_id,
-            # Без строк ставка ищется только в старой таблице тарифов, а матрица
-            # — единственный живой экран — пишет в новую: начисление выходило с
-            # пустой суммой.
-            lines=product_billing_lines(
-                (product_id, Decimal(count), {"fbs_order_id": str(order.id)})
-                for product_id, count in positions
-                if product_id is not None
-            ),
-        )
+        # Упаковка идёт по тем же штукам, что и сборка заказа: заказ уехал —
+        # значит он упакован. От событий упаковки и кнопки «всё упаковано»
+        # начисление не зависит.
+        for charged_service_code in (FBS_ORDER_SERVICE_CODE, PACKING_SERVICE_CODE):
+            await record_operational_charge(
+                session,
+                tenant_id=order.tenant_id,
+                seller_id=order.seller_id,
+                source_type=SOURCE_TYPE,
+                source_id=order.id,
+                source="fbs",
+                service_code=charged_service_code,
+                quantity=Decimal(quantity),
+                occurred_at=moment,
+                performer_id=None,
+                warehouse_id=order.warehouse_id,
+                # Без строк ставка ищется только в старой таблице тарифов, а
+                # матрица — единственный живой экран — пишет в новую:
+                # начисление выходило с пустой суммой.
+                lines=product_billing_lines(
+                    (product_id, Decimal(count), {"fbs_order_id": str(order.id)})
+                    for product_id, count in positions
+                    if product_id is not None
+                ),
+            )
     except BillingLedgerError:
         logger.exception("fbs order charge failed: order_id=%s", order.id)

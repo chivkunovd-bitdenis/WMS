@@ -28,6 +28,7 @@ from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.services import inventory_service, stock_direction_service
 from app.services.billing_ledger_service import (
+    PACKING_SERVICE_CODE,
     BillingLedgerError,
     product_billing_lines,
     record_operational_billing_issue,
@@ -1065,22 +1066,26 @@ async def complete_unload(
         performer_id=req.completed_by_user_id,
     )
     try:
-        await record_operational_charge(
-            session,
-            tenant_id=tenant_id,
-            seller_id=req.seller_id,
-            source_type="marketplace_unload",
-            source_id=req.id,
-            source="marketplace_unload",
-            service_code="marketplace_outbound",
-            quantity=Decimal(sum(distributed.values())),
-            occurred_at=occurred_at,
-            performer_id=performer_id,
-            lines=product_billing_lines(
-                (product_id, Decimal(quantity), {"marketplace_unload_request_id": str(req.id)})
-                for product_id, quantity in distributed.items() if quantity
-            ),
-        )
+        for charged_service_code in ("marketplace_outbound", PACKING_SERVICE_CODE):
+            # Упаковку считаем по отгруженному товару, а не по событиям упаковки:
+            # уехавшая коробка упакована независимо от того, нажал ли оператор
+            # «всё упаковано». Штуки и построчный состав — те же, что у отгрузки.
+            await record_operational_charge(
+                session,
+                tenant_id=tenant_id,
+                seller_id=req.seller_id,
+                source_type="marketplace_unload",
+                source_id=req.id,
+                source="marketplace_unload",
+                service_code=charged_service_code,
+                quantity=Decimal(sum(distributed.values())),
+                occurred_at=occurred_at,
+                performer_id=performer_id,
+                lines=product_billing_lines(
+                    (product_id, Decimal(quantity), {"marketplace_unload_request_id": str(req.id)})
+                    for product_id, quantity in distributed.items() if quantity
+                ),
+            )
     except BillingLedgerError:
         if req.seller_id is not None:
             await record_operational_billing_issue(
@@ -1170,14 +1175,17 @@ async def cancel_request(
 
     if req.status in BILLING_REVERSIBLE_STATUSES:
         occurred_at = datetime.now(UTC)
-        await record_operational_reversal(
-            session,
-            tenant_id=tenant_id,
-            source_type="marketplace_unload",
-            source_id=req.id,
-            occurred_at=occurred_at,
-            performer_id=performer_id,
-        )
+        for reversed_service_code in ("marketplace_outbound", PACKING_SERVICE_CODE):
+            # Отменяем обе строки документа: и отгрузку, и упаковку по ней.
+            await record_operational_reversal(
+                session,
+                tenant_id=tenant_id,
+                source_type="marketplace_unload",
+                source_id=req.id,
+                occurred_at=occurred_at,
+                performer_id=performer_id,
+                service_code=reversed_service_code,
+            )
         if req.cancelled_by_user_id is None:
             req.cancelled_by_user_id = performer_id
         if req.cancelled_at is None:
