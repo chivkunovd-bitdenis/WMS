@@ -34,8 +34,8 @@ class OzonPostingV4PostingFbsUnfulfilledListRequest(OzonFbsModel):
 class OzonPostingV4PostingFbsUnfulfilledListRequestFilter(OzonFbsModel):
     __openapi_name__ = 'posting.v4.PostingFbsUnfulfilledListRequest.Filter'
     'Фильтр запроса.\n\nИспользуйте фильтр по времени сборки — `cutoff` или по дате передачи отправления в доставку — `delivering_date`.\nЕсли использовать их вместе, в ответе вернётся ошибка.\n\nЧтобы использовать фильтр по времени сборки, заполните поля `cutoff_from` и `cutoff_to`.\n\nЧтобы использовать фильтр по дате передачи отправления в доставку, заполните поля `delivering_date_from` и `delivering_date_to`.\n'
-    cutoff_from: str = Field(_OPTIONAL_FIELD_DEFAULT, description='Время, до которого продавцу нужно собрать заказ. Начало периода.', pattern=' YYYY-MM-DDThh:mm:ss.mcsZ', json_schema_extra={'format': 'date-time'})
-    cutoff_to: str = Field(_OPTIONAL_FIELD_DEFAULT, description='Время, до которого продавцу нужно собрать заказ. Конец периода.', pattern=' YYYY-MM-DDThh:mm:ss.mcsZ', json_schema_extra={'format': 'date-time'})
+    cutoff_from: str = Field(_OPTIONAL_FIELD_DEFAULT, description='Время, до которого продавцу нужно собрать заказ. Начало периода.', json_schema_extra={'format': 'date-time'})
+    cutoff_to: str = Field(_OPTIONAL_FIELD_DEFAULT, description='Время, до которого продавцу нужно собрать заказ. Конец периода.', json_schema_extra={'format': 'date-time'})
     delivering_date_from: str = Field(_OPTIONAL_FIELD_DEFAULT, description='Минимальная дата передачи отправления в доставку.', json_schema_extra={'format': 'date-time'})
     delivering_date_to: str = Field(_OPTIONAL_FIELD_DEFAULT, description='Максимальная дата передачи отправления в доставку.', json_schema_extra={'format': 'date-time'})
     delivery_method_ids: list[str] = Field(_OPTIONAL_FIELD_DEFAULT, description='Идентификатор способа доставки. Можно получить с помощью метода [/v1/delivery-method/list](#operation/WarehouseAPI_DeliveryMethodList).', max_length=1000)
@@ -320,7 +320,7 @@ class OzonPostingV4PostingFbsUnfulfilledListResponsePostingsTariffication(OzonFb
     next_tariff_charge: OzonMoneyMoneyNextTariffCharge = Field(_OPTIONAL_FIELD_DEFAULT)
     next_tariff_min_charge: OzonMoneyMoneyNextTariffMinCharge = Field(_OPTIONAL_FIELD_DEFAULT)
     next_tariff_rate: float = Field(_OPTIONAL_FIELD_DEFAULT, description='Процент, по которому будет тарифицироваться отправление через время из параметра `next_tariff_starts_at`.', json_schema_extra={'format': 'double'})
-    next_tariff_starts_at: str = Field(_OPTIONAL_FIELD_DEFAULT, description='Дата и время, когда начнёт применяться новый тариф.', pattern=' YYYY-MM-DDThh:mm:ss.mcsZ', json_schema_extra={'format': 'date-time'})
+    next_tariff_starts_at: str = Field(_OPTIONAL_FIELD_DEFAULT, description='Дата и время, когда начнёт применяться новый тариф.', json_schema_extra={'format': 'date-time'})
     next_tariff_type: str = Field(_OPTIONAL_FIELD_DEFAULT, description='Тип тарификации через время из параметра `next_tariff_starts_at` — скидка или надбавка.')
 
 
@@ -394,9 +394,9 @@ class OzonPostingV4PostingFbsListRequestFilter(OzonFbsModel):
     order_id: int = Field(_OPTIONAL_FIELD_DEFAULT, description='Идентификатор заказа.', json_schema_extra={'format': 'int64'})
     order_numbers: list[str] = Field(_OPTIONAL_FIELD_DEFAULT, description='Номера заказов, к которым относятся отправления.', max_length=100)
     provider_ids: list[str] = Field(_OPTIONAL_FIELD_DEFAULT, description='Идентификатор службы доставки. Можно получить с помощью метода [/v1/delivery-method/list](#operation/WarehouseAPI_DeliveryMethodList).\n', max_length=1000)
-    since: str = Field(..., description='Дата начала периода, за который нужно получить список отправлений.', pattern=' YYYY-MM-DDThh:mm:ssZ', json_schema_extra={'format': 'date-time'})
+    since: str = Field(..., description='Дата начала периода, за который нужно получить список отправлений.', json_schema_extra={'format': 'date-time'})
     statuses: list[str] = Field(_OPTIONAL_FIELD_DEFAULT, description='Статус отправления:\n- `awaiting_registration` — ожидает регистрации;\n- `acceptance_in_progress` — идёт приёмка;\n- `awaiting_approve` — ожидает подтверждения;\n- `awaiting_packaging` — ожидает упаковки;\n- `awaiting_deliver` — ожидает отгрузки;\n- `arbitration` — арбитраж;\n- `client_arbitration` — клиентский арбитраж доставки;\n- `delivering` — доставляется;\n- `driver_pickup` — у водителя;\n- `delivered` — доставлено;\n- `cancelled` — отменено;\n- `not_accepted` — не принято на сортировочном центре;\n- `sent_by_seller` – отправлено продавцом.\n')
-    to: str = Field(..., description='Дата конца периода, за который нужно получить список отправлений.', pattern=' YYYY-MM-DDThh:mm:ssZ', json_schema_extra={'format': 'date-time'})
+    to: str = Field(..., description='Дата конца периода, за который нужно получить список отправлений.', json_schema_extra={'format': 'date-time'})
     warehouse_ids: list[str] = Field(_OPTIONAL_FIELD_DEFAULT, description='Идентификатор склада. Можно получить с помощью метода [/v1/warehouse/list](#operation/WarehouseAPI_WarehouseList).', max_length=1000)
 
 
@@ -667,7 +667,7 @@ class OzonPostingV4PostingFbsListResponsePostingsTariffication(OzonFbsModel):
     next_tariff_charge: OzonMoneyMoneyNextTariffCharge = Field(_OPTIONAL_FIELD_DEFAULT)
     next_tariff_min_charge: OzonMoneyMoneyNextTariffMinCharge = Field(_OPTIONAL_FIELD_DEFAULT)
     next_tariff_rate: float = Field(_OPTIONAL_FIELD_DEFAULT, description='Процент, по которому будет тарифицироваться отправление через время из параметра `next_tariff_starts_at`.', json_schema_extra={'format': 'double'})
-    next_tariff_starts_at: str = Field(_OPTIONAL_FIELD_DEFAULT, description='Дата и время, когда начнёт применяться новый тариф.', pattern=' YYYY-MM-DDThh:mm:ss.mcsZ', json_schema_extra={'format': 'date-time'})
+    next_tariff_starts_at: str = Field(_OPTIONAL_FIELD_DEFAULT, description='Дата и время, когда начнёт применяться новый тариф.', json_schema_extra={'format': 'date-time'})
     next_tariff_type: str = Field(_OPTIONAL_FIELD_DEFAULT, description='Тип тарификации через время из параметра `next_tariff_starts_at` — скидка или надбавка.')
 
 

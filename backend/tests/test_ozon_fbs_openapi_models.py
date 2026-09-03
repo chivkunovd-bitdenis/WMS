@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from enum import Enum
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
@@ -57,6 +58,11 @@ def test_generated_module_is_current_with_checked_in_openapi() -> None:
     assert GENERATED_MODELS_PATH.read_text(encoding="utf-8") == _generated_source()
 
 
+def _is_real_regex(pattern: object) -> bool:
+    """Настоящий шаблон или человеческое описание формата даты из спеки Ozon."""
+    return isinstance(pattern, str) and not re.search(r"YYYY|MM-DD|hh:mm", pattern)
+
+
 def test_all_openapi_components_have_exact_model_fields_and_requiredness() -> None:
     schemas = _openapi_schemas()
     assert set(MODEL_BY_OPENAPI_NAME) == set(schemas)
@@ -103,8 +109,19 @@ def test_all_openapi_components_have_exact_model_fields_and_requiredness() -> No
                 ("maxItems", "maxItems"),
                 ("pattern", "pattern"),
             ):
-                if source_key in field_schema:
-                    assert _rendered_value(rendered, rendered_key) == field_schema[source_key]
+                if source_key not in field_schema:
+                    continue
+                if source_key == "pattern" and not _is_real_regex(field_schema["pattern"]):
+                    # Даты в спеке Ozon объявлены как pattern " YYYY-MM-DDThh:mm:ss.mcsZ".
+                    # Это подсказка человеку, а не регулярное выражение: перенесённая
+                    # в модель буквально, она делает поле непроходимым — ни одна
+                    # настоящая дата ей не удовлетворяет. Проверено живым кабинетом
+                    # 03.09.2026: запрос новых заказов не собирался вовсе, а ответ с
+                    # плановой сменой тарифа не разбирался. Такие подсказки в модели
+                    # сознательно не воспроизводим.
+                    assert _rendered_value(rendered, "pattern") is None, schema_name
+                    continue
+                assert _rendered_value(rendered, rendered_key) == field_schema[source_key]
 
             referenced = _referenced_model(field_schema)
             if referenced is None and "items" in field_schema:
