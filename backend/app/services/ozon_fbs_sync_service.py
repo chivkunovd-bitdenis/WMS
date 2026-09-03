@@ -293,6 +293,14 @@ def _stock_error_code(error: MarketplaceProviderError) -> str:
     return "ozon_unavailable"
 
 
+def _confirmed_from_error(error: MarketplaceProviderError, *, sent: int) -> int:
+    """Сколько строк Ozon успел подтвердить до отказа публикации."""
+    raw = error.payload.get("confirmed")
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        return 0
+    return max(0, min(raw, sent))
+
+
 async def sync_ozon_stocks(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -387,18 +395,24 @@ async def sync_ozon_stocks(
             continue
 
         try:
-            await provider.publish_stocks(
+            confirmed = await provider.publish_stocks(
                 client_id=client_id,
                 api_key=api_key,
                 stocks=stocks,
             )
         except MarketplaceProviderError as error:
-            result.errors += len(stocks)
+            # Часть строк Ozon мог подтвердить до отказа. Подтверждённым
+            # считаем ровно столько, сколько он назвал сам: приписать себе
+            # весь пакет — значит показать оператору опубликованными остатки,
+            # которых в кабинете нет.
+            confirmed = _confirmed_from_error(error, sent=len(stocks))
+            result.products_confirmed += confirmed
+            result.errors += len(stocks) - confirmed
             result.binding_errors += 1
             binding.last_sync_status = "error"
             binding.last_error_code = _stock_error_code(error)
         else:
-            result.products_confirmed += len(stocks)
+            result.products_confirmed += confirmed
             if not missing_links:
                 binding.last_sync_status = "confirmed"
                 binding.last_error_code = None

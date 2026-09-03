@@ -182,35 +182,121 @@ def _stock_item(stock: Mapping[str, object]) -> dict[str, object]:
     return item
 
 
-def _stock_failures(rows: Sequence[object]) -> list[dict[str, object]]:
-    """Строки ответа, которые Ozon не обновил: `updated=false` плюс его же коды."""
-    failures: list[dict[str, object]] = []
+_StockKey = tuple[str, str, int]
+
+
+def _stock_item_key(item: Mapping[str, object]) -> _StockKey:
+    """Чем отправленная строка отличается от остальных в том же пакете.
+
+    Идентификатор в отправленной строке ровно один — так её собирает
+    `_stock_item`, — поэтому и ключ строится по нему: пара «идентификатор плюс
+    склад».
+    """
+    warehouse_id = int(str(item["warehouse_id"]))
+    if "product_id" in item:
+        return ("product_id", str(item["product_id"]), warehouse_id)
+    return ("offer_id", str(item["offer_id"]), warehouse_id)
+
+
+def _stock_row_keys(row: Mapping[str, object], *, batch_warehouses: set[int]) -> set[_StockKey]:
+    """Ключи, под которыми строка ответа может опознать отправленную.
+
+    Ozon кладёт в ответ оба идентификатора и склад (`result[].offer_id`,
+    `result[].product_id`, `result[].warehouse_id` — поля из его собственной
+    схемы `productv2ProductsStocksResponseResult`), но в живых ответах часть из
+    них бывает пустой. Поэтому строка опознаётся по любому из идентификаторов,
+    а отсутствующий склад берётся из пакета — но только если склад в пакете
+    один и подставлять нечего кроме него. Иначе строка остаётся неопознанной, и
+    отправленные строки честно считаются неподтверждёнными.
+    """
+    row_warehouse = _positive_int(row.get("warehouse_id"))
+    if row_warehouse is not None:
+        warehouses = {row_warehouse}
+    elif len(batch_warehouses) == 1:
+        warehouses = set(batch_warehouses)
+    else:
+        return set()
+    keys: set[_StockKey] = set()
+    product_id = _positive_int(row.get("product_id"))
+    offer_id = row.get("offer_id")
+    for warehouse_id in warehouses:
+        if product_id is not None:
+            keys.add(("product_id", str(product_id), warehouse_id))
+        if isinstance(offer_id, str) and offer_id.strip():
+            keys.add(("offer_id", offer_id.strip(), warehouse_id))
+    return keys
+
+
+def _row_error_texts(row: Mapping[str, object]) -> tuple[list[str], list[str]]:
+    errors = row.get("errors")
+    entries = [
+        error
+        for error in (errors if isinstance(errors, list) else [])
+        if isinstance(error, dict)
+    ]
+    codes = [str(error.get("code") or "") for error in entries]
+    messages = [str(error.get("message") or "") for error in entries]
+    return [code for code in codes if code], [message for message in messages if message]
+
+
+def _reconcile_stock_rows(
+    batch: Sequence[Mapping[str, object]],
+    rows: Sequence[object],
+) -> tuple[int, list[dict[str, object]]]:
+    """Сверить ответ Ozon с отправленным пакетом построчно.
+
+    Ozon не обязан отвечать строкой на каждую отправленную пару товар-склад, и
+    молчание — это не согласие. Особенно опасно молчание по нулю: пропущенный
+    ноль оставляет в кабинете прежний положительный остаток, то есть товар
+    продолжает продаваться, когда его нет. Поэтому подтверждённой считается
+    только та строка, на которую Ozon ответил `updated: true` и которую мы
+    смогли сопоставить с отправленной по идентификатору.
+
+    Возвращает число подтверждённых строк и список неподтверждённых: и тех, что
+    Ozon отклонил, и тех, про которые он промолчал.
+    """
+    batch_warehouses = {int(str(item["warehouse_id"])) for item in batch}
+    confirmed: set[_StockKey] = set()
+    rejected: dict[_StockKey, dict[str, object]] = {}
     for row in rows:
         if not isinstance(row, dict):
             continue
-        if row.get("updated") is True:
+        keys = _stock_row_keys(row, batch_warehouses=batch_warehouses)
+        if not keys:
             continue
-        errors = row.get("errors")
-        codes = [
-            str(error.get("code") or "")
-            for error in (errors if isinstance(errors, list) else [])
-            if isinstance(error, dict)
-        ]
-        messages = [
-            str(error.get("message") or "")
-            for error in (errors if isinstance(errors, list) else [])
-            if isinstance(error, dict)
-        ]
-        failures.append(
-            {
+        if row.get("updated") is True:
+            confirmed |= keys
+            continue
+        codes, messages = _row_error_texts(row)
+        for key in keys:
+            rejected[key] = {
                 "offer_id": row.get("offer_id"),
                 "product_id": row.get("product_id"),
                 "warehouse_id": row.get("warehouse_id"),
-                "codes": [code for code in codes if code],
-                "messages": [message for message in messages if message],
+                "codes": codes,
+                "messages": messages,
+            }
+    failures: list[dict[str, object]] = []
+    confirmed_count = 0
+    for item in batch:
+        key = _stock_item_key(item)
+        if key in confirmed:
+            confirmed_count += 1
+            continue
+        failure = rejected.get(key)
+        if failure is not None:
+            failures.append(failure)
+            continue
+        failures.append(
+            {
+                "offer_id": item.get("offer_id"),
+                "product_id": item.get("product_id"),
+                "warehouse_id": item.get("warehouse_id"),
+                "codes": ["OZON_ROW_MISSING"],
+                "messages": ["Ozon не ответил по этой паре товар-склад."],
             }
         )
-    return failures
+    return confirmed_count, failures
 
 
 class HttpxOzonMarketplaceTransport:
@@ -435,11 +521,18 @@ class HttpxOzonMarketplaceTransport:
         client_id: str,
         api_key: str,
         stocks: Sequence[Mapping[str, object]],
-    ) -> None:
-        """Publish stock per product-warehouse pair, batched to Ozon's own limit of 100."""
+    ) -> int:
+        """Опубликовать остатки парами товар-склад, порциями по сотне.
+
+        Возвращает число строк, которые Ozon подтвердил построчно. Любая
+        неподтверждённая строка — отказ всей публикации: подтверждённое до неё
+        число уезжает в `payload["confirmed"]`, чтобы вызывающий не приписывал
+        себе чужого успеха, но и не терял настоящий.
+        """
         items = [_stock_item(stock) for stock in stocks]
         if not items:
-            return
+            return 0
+        confirmed_total = 0
         for start in range(0, len(items), STOCK_BATCH_SIZE):
             batch = items[start : start + STOCK_BATCH_SIZE]
             raw = await self.call(
@@ -456,17 +549,23 @@ class HttpxOzonMarketplaceTransport:
                 raise MarketplaceProviderError(
                     "ozon",
                     None,
-                    {"sent": len(batch)},
+                    {"sent": len(batch), "confirmed": confirmed_total},
                     code="ozon_stock_unconfirmed",
                 )
-            failures = _stock_failures(rows)
+            confirmed, failures = _reconcile_stock_rows(batch, rows)
+            confirmed_total += confirmed
             if failures:
                 raise MarketplaceProviderError(
                     "ozon",
                     None,
-                    {"failed": failures, "sent": len(batch)},
+                    {
+                        "failed": failures,
+                        "sent": len(batch),
+                        "confirmed": confirmed_total,
+                    },
                     code="ozon_stock_rejected",
                 )
+        return confirmed_total
 
     async def fetch_supply_qr(
         self,

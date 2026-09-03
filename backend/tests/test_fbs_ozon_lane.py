@@ -561,6 +561,108 @@ async def test_ozon_stock_dispatch_uses_binding_pool_with_fake_transport(
 
 
 @pytest.mark.asyncio
+async def test_ozon_partial_stock_confirmation_counts_only_what_ozon_confirmed(
+    db_session: AsyncSession,
+) -> None:
+    """Ozon подтвердил одну строку из двух — второй остаток не «опубликован».
+
+    Раньше сервис прибавлял к подтверждённым весь отправленный пакет, и
+    пропущенный ноль выглядел бы опубликованным, хотя в кабинете остался
+    прежний положительный остаток.
+    """
+    tenant = Tenant(name="Ozon partial stock", slug=f"ozon-partial-{uuid.uuid4().hex[:8]}")
+    seller = Seller(tenant=tenant, name="Seller")
+    warehouse = Warehouse(tenant=tenant, name="FBS", code=f"fbs-{uuid.uuid4().hex[:8]}")
+    products = [
+        Product(
+            tenant=tenant,
+            seller=seller,
+            name=f"Product {index}",
+            sku_code=f"sku-{uuid.uuid4().hex[:8]}",
+        )
+        for index in range(2)
+    ]
+    db_session.add_all([tenant, seller, warehouse, *products])
+    await db_session.flush()
+    binding = FbsWarehouseBinding(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        marketplace="ozon",
+        external_warehouse_id="900002",
+        wb_warehouse_id=-900002,
+        wms_warehouse_id=warehouse.id,
+        is_active=True,
+        stock_sync_enabled=True,
+    )
+    db_session.add_all(
+        [
+            MarketplaceAccount(
+                tenant_id=tenant.id,
+                seller_id=seller.id,
+                marketplace="ozon",
+                account_slot="primary",
+                external_account_id="ozon-client",
+                secret_encrypted=encrypt_secret("ozon-key"),
+                is_active=True,
+                validation_status="valid",
+            ),
+            binding,
+            *[
+                ProductMarketplaceLink(
+                    tenant_id=tenant.id,
+                    seller_id=seller.id,
+                    product_id=product.id,
+                    marketplace="ozon",
+                    external_offer_id=f"offer-{index}",
+                    external_product_id=str(7000 + index),
+                    is_active=True,
+                )
+                for index, product in enumerate(products)
+            ],
+        ]
+    )
+    await db_session.flush()
+    db_session.add_all(
+        [
+            FbsBindingStockPool(
+                tenant_id=tenant.id,
+                binding_id=binding.id,
+                product_id=product.id,
+                quantity=0,
+            )
+            for product in products
+        ]
+    )
+    await db_session.commit()
+
+    transport = FakeMarketplaceTransport(
+        errors={
+            "publish_stocks": MarketplaceProviderError(
+                "ozon",
+                None,
+                {"sent": 2, "confirmed": 1, "failed": [{"codes": ["OZON_ROW_MISSING"]}]},
+                code="ozon_stock_rejected",
+            )
+        }
+    )
+
+    result = await ozon_sync_svc.sync_ozon_stocks(
+        db_session,
+        tenant.id,
+        seller.id,
+        OzonMarketplaceProvider(transport=transport),
+    )
+
+    assert result.products_targeted == 2
+    assert result.products_confirmed == 1
+    assert result.errors == 1
+    assert result.binding_errors == 1
+    await db_session.refresh(binding)
+    assert binding.last_sync_status == "error"
+    assert binding.last_error_code == "ozon_stock_rejected"
+
+
+@pytest.mark.asyncio
 async def test_wb_and_ozon_cannot_allocate_the_same_last_physical_unit(
     db_session: AsyncSession,
 ) -> None:
