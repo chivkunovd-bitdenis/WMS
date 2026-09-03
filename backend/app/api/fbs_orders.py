@@ -60,6 +60,20 @@ class FbsOrderSyncStatusesBody(BaseModel):
     marketplace: Literal["wb", "ozon"] = "wb"
 
 
+class FbsOrderCancelBody(BaseModel):
+    """Причина отмены — она нужна только Ozon и только там применяется.
+
+    Тело необязательное: у метода отмены WB причины нет вовсе, а у Ozon без
+    явного указания берётся «товар закончился на складе продавца» — та, по
+    которой отменяет фулфилмент чаще всего. Экран сегодня тело не шлёт, и
+    ломать его этим полем не нужно: отсутствие тела означает причину по
+    умолчанию.
+    """
+
+    reason_id: int | None = None
+    reason_message: str | None = None
+
+
 class FbsOrderSyncStatusesOut(BaseModel):
     statuses_updated: int
 
@@ -604,6 +618,7 @@ async def cancel_fbs_order(
     order_id: uuid.UUID,
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    body: FbsOrderCancelBody | None = None,
 ) -> FbsOrderOut:
     async with httpx.AsyncClient() as http_client:
         try:
@@ -613,6 +628,8 @@ async def cancel_fbs_order(
                 order_id,
                 http_client,
                 actor_user_id=user.id,
+                reason_id=body.reason_id if body is not None else None,
+                reason_message=body.reason_message if body is not None else None,
             )
         except FbsCancellationError as exc:
             _raise_cancellation_http(exc)

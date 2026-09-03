@@ -116,7 +116,7 @@ class MarketplaceTransport(Protocol):
         client_id: str,
         api_key: str,
         stocks: Sequence[Mapping[str, object]],
-    ) -> None: ...
+    ) -> int: ...
 
     async def fetch_supply_qr(
         self,
@@ -186,12 +186,13 @@ class FakeMarketplaceTransport:
         client_id: str,
         api_key: str,
         stocks: Sequence[Mapping[str, object]],
-    ) -> None:
+    ) -> int:
         _ = api_key
         self.calls.append(("publish_stocks", client_id))
         self.published_stocks.extend(dict(stock) for stock in stocks)
         if error := self.errors.get("publish_stocks"):
             raise error
+        return len(stocks)
 
     async def fetch_order_labels(
         self,
@@ -292,10 +293,10 @@ class OzonMarketplaceProvider:
         client_id: str,
         api_key: str,
         stocks: Sequence[Mapping[str, object]],
-    ) -> None:
+    ) -> int:
         self._raise_if_blocked()
         try:
-            await self.transport.publish_stocks(
+            return await self.transport.publish_stocks(
                 client_id=client_id,
                 api_key=api_key,
                 stocks=stocks,

@@ -335,6 +335,93 @@ async def test_a_rejected_stock_row_is_an_error_and_carries_ozons_own_code() -> 
     assert failed[0]["codes"] == ["PRODUCT_IS_ARCHIVED"]
 
 
+async def test_a_silently_skipped_stock_row_is_not_a_confirmation() -> None:
+    """Отправили два нуля, Ozon ответил про один — это отказ, а не успех.
+
+    Молчание по нулю опаснее явного отказа: в кабинете остаётся прежний
+    положительный остаток, и товар продолжает продаваться, когда его нет.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"result": [{"product_id": 1, "warehouse_id": 42, "updated": True}]},
+        )
+
+    with pytest.raises(MarketplaceProviderError) as caught:
+        await _transport(handler).publish_stocks(
+            client_id="c",
+            api_key="k",
+            stocks=[
+                {"product_id": 1, "stock": 0, "warehouse_id": 42},
+                {"product_id": 2, "stock": 0, "warehouse_id": 42},
+            ],
+        )
+    assert caught.value.code == "ozon_stock_rejected"
+    failed = caught.value.payload["failed"]
+    assert isinstance(failed, list)
+    assert [row["product_id"] for row in failed] == [2]
+    assert failed[0]["codes"] == ["OZON_ROW_MISSING"]
+    # Подтверждённой считается ровно одна строка — та, про которую Ozon сказал.
+    assert caught.value.payload["confirmed"] == 1
+
+
+async def test_a_confirmation_for_another_product_does_not_confirm_ours() -> None:
+    """Строка ответа опознаётся по идентификатору, а не по порядку в списке."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"result": [{"product_id": 999, "warehouse_id": 42, "updated": True}]},
+        )
+
+    with pytest.raises(MarketplaceProviderError) as caught:
+        await _transport(handler).publish_stocks(
+            client_id="c",
+            api_key="k",
+            stocks=[{"product_id": 1, "stock": 0, "warehouse_id": 42}],
+        )
+    assert caught.value.code == "ozon_stock_rejected"
+    assert caught.value.payload["confirmed"] == 0
+
+
+async def test_a_confirmation_for_another_warehouse_does_not_confirm_ours() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"result": [{"product_id": 1, "warehouse_id": 43, "updated": True}]},
+        )
+
+    with pytest.raises(MarketplaceProviderError) as caught:
+        await _transport(handler).publish_stocks(
+            client_id="c",
+            api_key="k",
+            stocks=[{"product_id": 1, "stock": 0, "warehouse_id": 42}],
+        )
+    assert caught.value.code == "ozon_stock_rejected"
+    assert caught.value.payload["confirmed"] == 0
+
+
+async def test_a_full_confirmation_reports_every_sent_row() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        rows = [
+            {"product_id": item["product_id"], "warehouse_id": 42, "updated": True}
+            for item in body["stocks"]
+        ]
+        return httpx.Response(200, json={"result": rows})
+
+    confirmed = await _transport(handler).publish_stocks(
+        client_id="c",
+        api_key="k",
+        stocks=[
+            {"product_id": 1, "stock": 0, "warehouse_id": 42},
+            {"product_id": 2, "stock": 3, "warehouse_id": 42},
+        ],
+    )
+    assert confirmed == 2
+
+
 async def test_an_answer_without_result_rows_is_not_treated_as_a_confirmation() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"result": []})

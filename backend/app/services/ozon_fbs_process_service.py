@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TypeVar
 
@@ -66,7 +67,10 @@ from app.services.ozon_marking_position_service import (
 
 TResponse = TypeVar("TResponse", bound=BaseModel)
 __all__ = [
+    "CANCEL_REASON_OTHER",
+    "CANCEL_REASON_OUT_OF_STOCK",
     "OzonFbsProcessError",
+    "OzonHandoffProgress",
     "cancel_posting",
     "handoff_supply",
     "read_marking_status",
@@ -104,6 +108,101 @@ class OzonHandoffResult:
     barcode_bytes: bytes | None
     barcode_text: str | None
     shipping_list_bytes: bytes | None
+
+
+@dataclass
+class OzonHandoffProgress:
+    """Что в кабинете Ozon уже сделано и повторять этого нельзя.
+
+    Передача поставки — не одна операция, а цепочка необратимых: каждое
+    отправление собирается своим `/v4/posting/fbs/ship`, потом создаётся и
+    подтверждается перевозка. Если цепочка обрывается посередине, сделанное в
+    кабинете назад не отыграть, а локальная транзакция откатывается целиком —
+    и повтор отправляет уже собранное отправление второй раз.
+
+    Поэтому после каждого необратимого шага вызывающий код получает этот
+    снимок и обязан сохранить его так, чтобы он пережил падение (у нас — в
+    журнале операции, с коммитом). На повторе тот же снимок приходит обратно, и
+    передача продолжается с места обрыва, а не начинается заново.
+
+    Хранится он в JSON, поэтому здесь только простые типы: списки строк, число
+    и флаги.
+    """
+
+    shipped_postings: list[str] = field(default_factory=list)
+    posting_numbers: list[str] = field(default_factory=list)
+    carriage_id: int | None = None
+    carriage_postings_set: bool = False
+    carriage_approved: bool = False
+    used_fallback: bool = False
+
+    def to_json(self) -> dict[str, object]:
+        return {
+            "shipped_postings": list(self.shipped_postings),
+            "posting_numbers": list(self.posting_numbers),
+            "carriage_id": self.carriage_id,
+            "carriage_postings_set": self.carriage_postings_set,
+            "carriage_approved": self.carriage_approved,
+            "used_fallback": self.used_fallback,
+        }
+
+    @classmethod
+    def from_json(cls, raw: object) -> OzonHandoffProgress:
+        """Разобрать снимок из журнала; мусор трактуется как «ничего не сделано».
+
+        Пустой снимок безопаснее битого: он заставит передачу пройти путь
+        заново, а повторный `/ship` по уже собранному отправлению Ozon отклонит
+        сам. Молча поверить в непонятную структуру и пропустить сборку — хуже.
+        """
+        if not isinstance(raw, dict):
+            return cls()
+        carriage_id = raw.get("carriage_id")
+        return cls(
+            shipped_postings=[
+                value for value in _str_list(raw.get("shipped_postings")) if value
+            ],
+            posting_numbers=[value for value in _str_list(raw.get("posting_numbers")) if value],
+            carriage_id=(
+                int(carriage_id)
+                if isinstance(carriage_id, int) and not isinstance(carriage_id, bool)
+                else None
+            ),
+            carriage_postings_set=raw.get("carriage_postings_set") is True,
+            carriage_approved=raw.get("carriage_approved") is True,
+            used_fallback=raw.get("used_fallback") is True,
+        )
+
+    def absorb(self, other: OzonHandoffProgress) -> None:
+        """Вобрать в себя чужой снимок: сделанное в кабинете не отменяется.
+
+        Складывать снимки приходится потому, что попыток передачи у одной
+        поставки может быть несколько, и «взять последнюю» — ненадёжно:
+        различить две попытки одной секунды нечем. А складывать безопасно:
+        каждое поле снимка описывает необратимо сделанное, поэтому объединение
+        по всем попыткам и есть полное «что уже нельзя повторять».
+        """
+        for posting in other.shipped_postings:
+            if posting not in self.shipped_postings:
+                self.shipped_postings.append(posting)
+        for posting in other.posting_numbers:
+            if posting not in self.posting_numbers:
+                self.posting_numbers.append(posting)
+        if other.carriage_id is not None:
+            self.carriage_id = other.carriage_id
+        self.carriage_postings_set = self.carriage_postings_set or other.carriage_postings_set
+        self.carriage_approved = self.carriage_approved or other.carriage_approved
+        self.used_fallback = self.used_fallback or other.used_fallback
+
+
+def _str_list(raw: object) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    return [value for value in raw if isinstance(value, str)]
+
+
+# Как вызывающий код сохраняет снимок. Возвращать ничего не нужно: единственная
+# обязанность — сделать сохранение долговечным до возврата управления сюда.
+OzonHandoffCheckpoint = Callable[["OzonHandoffProgress"], Awaitable[None]]
 
 
 @dataclass(frozen=True)
@@ -612,9 +711,26 @@ async def _posting_readback(
     )
 
 
-def _apply_posting_readback(order: FbsOrder, response: OzonV3GetFbsPostingResponseV3) -> None:
+def _apply_posting_readback(
+    order: FbsOrder,
+    response: OzonV3GetFbsPostingResponseV3,
+    *,
+    require_shipped: bool = True,
+) -> None:
+    """Перенести карточку отправления на заказ и, если нужно, проверить сборку.
+
+    `require_shipped=False` — для повтора по отправлению, которое собрано в
+    прошлой попытке. Там гейт «статус должен быть `awaiting_deliver` или
+    `delivering`» вреден: за время между попытками отправление могло уйти
+    дальше по жизненному циклу (перевозку подтвердили, курьер забрал), и тогда
+    проверка сборки заблокировала бы получение уже готовых документов. Провал
+    самой сборки (`ship_failed`) останавливает передачу в обоих случаях — это
+    не «ушло дальше», а «не уехало вовсе».
+    """
     result = response.result
     if result is None:
+        if not require_shipped:
+            return
         raise OzonFbsProcessError("ozon_empty_posting", "Ozon не вернул отправление.")
     order.wb_status = result.status or order.wb_status
     order.supplier_status = result.substatus or order.supplier_status
@@ -638,6 +754,8 @@ def _apply_posting_readback(order: FbsOrder, response: OzonV3GetFbsPostingRespon
             "Сборка Ozon не прошла; заказ не передан.",
             status_code=409,
         )
+    if not require_shipped:
+        return
     if result.status not in {"awaiting_deliver", "delivering"}:
         raise OzonFbsProcessError(
             "ozon_ship_unconfirmed",
@@ -817,12 +935,42 @@ async def handoff_supply(
     provider: OzonMarketplaceProvider,
     client_id: str,
     api_key: str,
+    progress: OzonHandoffProgress | None = None,
+    checkpoint: OzonHandoffCheckpoint | None = None,
 ) -> OzonHandoffResult:
-    posting_numbers: list[str] = []
+    """Передать поставку Ozon, отмечая каждый необратимый шаг.
+
+    `progress` — то, что уже сделано в кабинете по этой поставке в прошлых
+    попытках; `checkpoint` — способ сохранить снимок так, чтобы он пережил
+    падение процесса. Оба необязательны только ради тестов и прямых вызовов:
+    боевой путь (`fbs_shipment_service._deliver_ozon_supply`) передаёт оба, и
+    без них повтор после обрыва отправил бы уже собранное отправление заново.
+    """
+    state = progress if progress is not None else OzonHandoffProgress()
+
+    async def _save() -> None:
+        if checkpoint is not None:
+            await checkpoint(state)
+
     for order in orders:
         posting_number = order.external_order_id or ""
         if not posting_number:
             raise OzonFbsProcessError("ozon_posting_number_missing", "Нет номера отправления Ozon.")
+        if posting_number in state.shipped_postings:
+            # Отправление собрано в прошлой попытке. Второй `/ship` по нему —
+            # это повторная мутация в кабинете, поэтому только перечитываем
+            # карточку, чтобы локальные поля отражали настоящее состояние.
+            _apply_posting_readback(
+                order,
+                await _posting_readback(
+                    provider,
+                    client_id=client_id,
+                    api_key=api_key,
+                    posting_number=posting_number,
+                ),
+                require_shipped=False,
+            )
+            continue
         posting = await _posting_readback(
             provider,
             client_id=client_id,
@@ -882,6 +1030,14 @@ async def handoff_supply(
             response_type=OzonFbsv4FbsPostingShipV4Response,
             read=False,
         )
+        # Точка невозврата: отправление в кабинете уже собрано. Снимок
+        # сохраняется до перечитывания карточки, потому что перечитывание
+        # умеет падать (`ship_failed`, обрыв связи), а факт сборки от этого
+        # никуда не денется.
+        state.shipped_postings.append(posting_number)
+        if posting_number not in state.posting_numbers:
+            state.posting_numbers.append(posting_number)
+        await _save()
         readback = await _posting_readback(
             provider,
             client_id=client_id,
@@ -889,11 +1045,38 @@ async def handoff_supply(
             posting_number=posting_number,
         )
         _apply_posting_readback(order, readback)
-        posting_numbers.append(posting_number)
         related = readback.result.related_postings if readback.result is not None else None
-        if related is not None:
-            posting_numbers.extend(related.related_posting_numbers or [])
-    posting_numbers = list(dict.fromkeys(posting_numbers))
+        for number in (related.related_posting_numbers or []) if related is not None else []:
+            if number and number not in state.posting_numbers:
+                state.posting_numbers.append(number)
+        await _save()
+    posting_numbers = list(dict.fromkeys(state.posting_numbers))
+
+    if state.used_fallback:
+        # Перевозки у этого продавца нет, и отправления уже переведены в
+        # ожидание отгрузки прошлой попыткой. Повторять мутацию незачем.
+        for order in orders:
+            _apply_posting_readback(
+                order,
+                await _posting_readback(
+                    provider,
+                    client_id=client_id,
+                    api_key=api_key,
+                    posting_number=order.external_order_id or "",
+                ),
+                require_shipped=False,
+            )
+        return OzonHandoffResult(None, True, None, None, None)
+
+    if state.carriage_id is not None:
+        return await _finish_carriage_handoff(
+            provider,
+            client_id=client_id,
+            api_key=api_key,
+            posting_numbers=posting_numbers,
+            state=state,
+            save=_save,
+        )
 
     details = orders[0].meta_details_json or {}
     delivery_method = details.get("ozon_delivery_method_id")
@@ -923,6 +1106,8 @@ async def handoff_supply(
             response_type=OzonPostingBooleanResponse,
             read=False,
         )
+        state.used_fallback = True
+        await _save()
         for order in orders:
             response = await _posting_readback(
                 provider,
@@ -935,51 +1120,87 @@ async def handoff_supply(
 
     if not carriage.carriage_id:
         raise OzonFbsProcessError("ozon_carriage_missing", "Ozon не создал отгрузку.")
-    carriage_id = carriage.carriage_id
+    state.carriage_id = carriage.carriage_id
+    await _save()
+    return await _finish_carriage_handoff(
+        provider,
+        client_id=client_id,
+        api_key=api_key,
+        posting_numbers=posting_numbers,
+        state=state,
+        save=_save,
+    )
+
+
+async def _finish_carriage_handoff(
+    provider: OzonMarketplaceProvider,
+    *,
+    client_id: str,
+    api_key: str,
+    posting_numbers: list[str],
+    state: OzonHandoffProgress,
+    save: Callable[[], Awaitable[None]],
+) -> OzonHandoffResult:
+    """Довести созданную перевозку до подтверждения и забрать её документы.
+
+    Вынесено отдельно ровно ради повтора: сюда же попадает попытка, которая в
+    прошлый раз оборвалась после `/v1/carriage/approve` — например на штрихкоде
+    акта. Состав перевозки и её подтверждение — мутации, и каждая отмечается в
+    снимке, чтобы повтор их не задваивал.
+    """
+    carriage_id = state.carriage_id
+    if carriage_id is None:
+        raise OzonFbsProcessError("ozon_carriage_missing", "Ozon не создал отгрузку.")
     get_request = OzonCarriageCarriageGetRequest(carriage_id=carriage_id)
-    await _call(
-        provider,
-        client_id=client_id,
-        api_key=api_key,
-        path="/v1/carriage/get",
-        request=get_request,
-        response_type=OzonCarriageCarriageGetResponse,
-        read=True,
-    )
-    set_result = await _call(
-        provider,
-        client_id=client_id,
-        api_key=api_key,
-        path="/v1/carriage/set-postings",
-        request=OzonV1SetPostingsRequest(
-            carriage_id=carriage_id,
-            posting_numbers=posting_numbers,
-        ),
-        response_type=OzonV1SetPostingsResponse,
-        read=False,
-    )
-    if any(not row.result for row in set_result.result):
-        raise OzonFbsProcessError(
-            "ozon_carriage_postings_failed", "Ozon не добавил все отправления в отгрузку."
+    if not state.carriage_postings_set:
+        await _call(
+            provider,
+            client_id=client_id,
+            api_key=api_key,
+            path="/v1/carriage/get",
+            request=get_request,
+            response_type=OzonCarriageCarriageGetResponse,
+            read=True,
         )
-    await _call(
-        provider,
-        client_id=client_id,
-        api_key=api_key,
-        path="/v1/carriage/get",
-        request=get_request,
-        response_type=OzonCarriageCarriageGetResponse,
-        read=True,
-    )
-    await _call(
-        provider,
-        client_id=client_id,
-        api_key=api_key,
-        path="/v1/carriage/approve",
-        request=OzonV1CarriageApproveRequest.model_validate({"carriage_id": carriage_id}),
-        response_type=OzonV1CarriageApproveResponse,
-        read=False,
-    )
+        set_result = await _call(
+            provider,
+            client_id=client_id,
+            api_key=api_key,
+            path="/v1/carriage/set-postings",
+            request=OzonV1SetPostingsRequest(
+                carriage_id=carriage_id,
+                posting_numbers=posting_numbers,
+            ),
+            response_type=OzonV1SetPostingsResponse,
+            read=False,
+        )
+        if any(not row.result for row in set_result.result):
+            raise OzonFbsProcessError(
+                "ozon_carriage_postings_failed", "Ozon не добавил все отправления в отгрузку."
+            )
+        state.carriage_postings_set = True
+        await save()
+    if not state.carriage_approved:
+        await _call(
+            provider,
+            client_id=client_id,
+            api_key=api_key,
+            path="/v1/carriage/get",
+            request=get_request,
+            response_type=OzonCarriageCarriageGetResponse,
+            read=True,
+        )
+        await _call(
+            provider,
+            client_id=client_id,
+            api_key=api_key,
+            path="/v1/carriage/approve",
+            request=OzonV1CarriageApproveRequest.model_validate({"carriage_id": carriage_id}),
+            response_type=OzonV1CarriageApproveResponse,
+            read=False,
+        )
+        state.carriage_approved = True
+        await save()
     confirmed = await _call(
         provider,
         client_id=client_id,

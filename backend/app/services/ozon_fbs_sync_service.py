@@ -54,6 +54,18 @@ from app.services.wb_marketplace_orders_service import _release_reservation, _tr
 
 OZON_FBS_DEADLINE_HOURS = 120
 
+# Сколько заказов Ozon опрашивается за один круг автоопроса. Ровно столько же
+# получится последовательных запросов `/v3/posting/fbs/get`: карточка отдаётся
+# по одному номеру за раз. Двести — это заведомо больше, чем живых заказов у
+# продавца среднего размера, и заведомо меньше, чем его история.
+OZON_STATUS_SYNC_BATCH_LIMIT = 200
+
+# Конец жизни отправления у Ozon. Опрашивать эти заказы незачем: статус уже не
+# изменится, а каждый из них стоит отдельного запроса.
+OZON_STATUS_SYNC_TERMINAL_STATUSES = frozenset(
+    {FBS_ORDER_STATUS_DONE, FBS_ORDER_STATUS_CANCELLED}
+)
+
 # Ключ в `meta_details_json`, по которому видно: требования по маркировке для
 # этого отправления разобраны. Без него пустое требование неотличимо от
 # неразобранного, и гейт выпуска вынужден гадать — а гадать он не имеет права.
@@ -293,6 +305,14 @@ def _stock_error_code(error: MarketplaceProviderError) -> str:
     return "ozon_unavailable"
 
 
+def _confirmed_from_error(error: MarketplaceProviderError, *, sent: int) -> int:
+    """Сколько строк Ozon успел подтвердить до отказа публикации."""
+    raw = error.payload.get("confirmed")
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        return 0
+    return max(0, min(raw, sent))
+
+
 async def sync_ozon_stocks(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -387,18 +407,24 @@ async def sync_ozon_stocks(
             continue
 
         try:
-            await provider.publish_stocks(
+            confirmed = await provider.publish_stocks(
                 client_id=client_id,
                 api_key=api_key,
                 stocks=stocks,
             )
         except MarketplaceProviderError as error:
-            result.errors += len(stocks)
+            # Часть строк Ozon мог подтвердить до отказа. Подтверждённым
+            # считаем ровно столько, сколько он назвал сам: приписать себе
+            # весь пакет — значит показать оператору опубликованными остатки,
+            # которых в кабинете нет.
+            confirmed = _confirmed_from_error(error, sent=len(stocks))
+            result.products_confirmed += confirmed
+            result.errors += len(stocks) - confirmed
             result.binding_errors += 1
             binding.last_sync_status = "error"
             binding.last_error_code = _stock_error_code(error)
         else:
-            result.products_confirmed += len(stocks)
+            result.products_confirmed += confirmed
             if not missing_links:
                 binding.last_sync_status = "confirmed"
                 binding.last_error_code = None
@@ -786,15 +812,36 @@ async def sync_ozon_order_statuses(
     provider: OzonMarketplaceProvider,
     _http_client: httpx.AsyncClient,
 ) -> int:
+    """Опросить статусы заказов Ozon порцией, а не всей историей продавца.
+
+    Подстатус отправления Ozon отдаёт только карточкой `/v3/posting/fbs/get`, и
+    она читается по одному номеру за запрос. Значит число запросов равно числу
+    заказов в выборке — а выборка брала вообще все когда-либо сохранённые
+    заказы, включая завершённые и отменённые. Десять тысяч исторических
+    заказов превращались в десять тысяч последовательных запросов на каждом
+    круге автоопроса, при тайм-ауте одного в тридцать секунд.
+
+    Поэтому здесь две границы. Завершённые и отменённые не опрашиваются вовсе:
+    у Ozon это конец жизни отправления, менять там нечего. Остальные берутся
+    порцией и по кругу — первыми те, кого дольше всех не спрашивали, — так что
+    ни один заказ не остаётся без опроса навсегда.
+    """
     orders = list(
         (
             await session.execute(
-                select(FbsOrder).where(
+                select(FbsOrder)
+                .where(
                     FbsOrder.tenant_id == tenant_id,
                     FbsOrder.seller_id == seller_id,
                     FbsOrder.marketplace == "ozon",
                     FbsOrder.external_order_id.isnot(None),
+                    FbsOrder.status.notin_(OZON_STATUS_SYNC_TERMINAL_STATUSES),
                 )
+                .order_by(
+                    FbsOrder.last_wb_sync_at.asc().nulls_first(),
+                    FbsOrder.deadline_at.asc(),
+                )
+                .limit(OZON_STATUS_SYNC_BATCH_LIMIT)
             )
         )
         .scalars()
@@ -817,7 +864,12 @@ async def sync_ozon_order_statuses(
         if (external_id := _text(row, "posting_number", "order_id", "id")) is not None
     }
     updated = 0
+    polled_at = datetime.now(tz=UTC)
     for order in orders:
+        # Отметку ставим всем опрошенным, в том числе тем, про кого Ozon
+        # промолчал: иначе исчезнувшее из кабинета отправление навсегда
+        # занимало бы первое место в очереди опроса и вытесняло живые заказы.
+        order.last_wb_sync_at = polled_at
         row = by_external.get(order.external_order_id or "")
         if row is None:
             continue
