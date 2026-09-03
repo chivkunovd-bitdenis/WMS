@@ -196,6 +196,25 @@ const KIZ_HINT_TEXT: Record<string, string> = {
   aim_prefix: 'убран префикс сканера',
 }
 
+/**
+ * Человеческий номер стикера WB вида «5694425 3074»: на печатной этикетке
+ * хвост из четырёх цифр набран крупно и жирно, по нему стикер и находят глазами
+ * в пачке. Показываем так же, иначе оператор сверяет строку целиком.
+ *
+ * Если пробела нет (старые записи, чужой формат) — отделяем последние четыре
+ * знака: это тот же partB, просто записанный слитно.
+ */
+export function stickerCodeParts(code: string | null): { head: string; tail: string } | null {
+  const value = (code ?? '').trim()
+  if (!value) return null
+  const spaced = value.lastIndexOf(' ')
+  if (spaced > 0) {
+    return { head: value.slice(0, spaced), tail: value.slice(spaced + 1) }
+  }
+  if (value.length <= 4) return { head: '', tail: value }
+  return { head: value.slice(0, -4), tail: value.slice(-4) }
+}
+
 function kizErrorTextByCode(code: string, message: string, context: unknown): string {
   if (code === 'sticker_not_found') return 'Стикер не найден в этой поставке'
   if (code === 'order_frozen') return 'Заказ уже передан в доставку — КИЗ не изменить'
@@ -1798,6 +1817,7 @@ export function FfFbsSupplyWorkspace({
                       // красит строку зелёным, активную (только что отсканированный
                       // стикер) — голубым: оператор видит, куда сейчас ляжет код.
                       const tail = kizTail(order)
+                      const stickerParts = stickerCodeParts(order.sticker.code)
                       return (
                         <Stack
                           key={order.id}
@@ -1828,6 +1848,24 @@ export function FfFbsSupplyWorkspace({
                               {ids}
                               {markingShortOrderIds.has(order.id) ? <Box component="span" sx={{ color: '#854f0b' }}> · ЧЗ не хватило</Box> : null}
                             </Typography>
+                          </Box>
+                          <Box sx={{ width: 150, flexShrink: 0, textAlign: 'right' }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
+                              Стикер
+                            </Typography>
+                            {stickerParts ? (
+                              <Typography
+                                sx={{ fontFamily: 'monospace', fontSize: 15, lineHeight: 1.2, color: mutedColor }}
+                                data-testid="fbs-sticker-code"
+                              >
+                                {stickerParts.head ? `${stickerParts.head} ` : ''}
+                                <Box component="span" sx={{ fontWeight: 800, fontSize: 22 }}>
+                                  {stickerParts.tail}
+                                </Box>
+                              </Typography>
+                            ) : (
+                              <Typography sx={{ color: 'text.disabled', fontSize: 15 }}>—</Typography>
+                            )}
                           </Box>
                           <Box sx={{ width: 118, flexShrink: 0, textAlign: 'right' }}>
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
