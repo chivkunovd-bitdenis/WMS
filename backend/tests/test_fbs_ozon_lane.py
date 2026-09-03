@@ -1879,7 +1879,19 @@ async def test_ozon_handoff_after_approved_carriage_does_not_approve_twice(
     assert progress["carriage_id"] == 901
     assert progress["carriage_approved"] is True
 
-    healthy = FakeMarketplaceTransport(endpoint_responses=_ozon_handoff_responses())
+    # За время между попытками отправление ушло дальше по жизни: перевозку
+    # забрали, Ozon показывает приёмку. Гейт «должно быть awaiting_deliver»
+    # относится к сборке, и на повторе он не имеет права запирать документы.
+    retry_responses = _ozon_handoff_responses()
+    retry_responses["/v3/posting/fbs/get"] = {
+        "result": {
+            "posting_number": "ozon-posting-dispatch",
+            "status": "acceptance_in_progress",
+            "substatus": "posting_in_carriage",
+            "related_postings": {"related_posting_numbers": []},
+        }
+    }
+    healthy = FakeMarketplaceTransport(endpoint_responses=retry_responses)
     delivered = await shipment_svc.deliver_supply(
         db_session,
         tenant.id,

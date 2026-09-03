@@ -711,9 +711,26 @@ async def _posting_readback(
     )
 
 
-def _apply_posting_readback(order: FbsOrder, response: OzonV3GetFbsPostingResponseV3) -> None:
+def _apply_posting_readback(
+    order: FbsOrder,
+    response: OzonV3GetFbsPostingResponseV3,
+    *,
+    require_shipped: bool = True,
+) -> None:
+    """Перенести карточку отправления на заказ и, если нужно, проверить сборку.
+
+    `require_shipped=False` — для повтора по отправлению, которое собрано в
+    прошлой попытке. Там гейт «статус должен быть `awaiting_deliver` или
+    `delivering`» вреден: за время между попытками отправление могло уйти
+    дальше по жизненному циклу (перевозку подтвердили, курьер забрал), и тогда
+    проверка сборки заблокировала бы получение уже готовых документов. Провал
+    самой сборки (`ship_failed`) останавливает передачу в обоих случаях — это
+    не «ушло дальше», а «не уехало вовсе».
+    """
     result = response.result
     if result is None:
+        if not require_shipped:
+            return
         raise OzonFbsProcessError("ozon_empty_posting", "Ozon не вернул отправление.")
     order.wb_status = result.status or order.wb_status
     order.supplier_status = result.substatus or order.supplier_status
@@ -737,6 +754,8 @@ def _apply_posting_readback(order: FbsOrder, response: OzonV3GetFbsPostingRespon
             "Сборка Ozon не прошла; заказ не передан.",
             status_code=409,
         )
+    if not require_shipped:
+        return
     if result.status not in {"awaiting_deliver", "delivering"}:
         raise OzonFbsProcessError(
             "ozon_ship_unconfirmed",
@@ -949,6 +968,7 @@ async def handoff_supply(
                     api_key=api_key,
                     posting_number=posting_number,
                 ),
+                require_shipped=False,
             )
             continue
         posting = await _posting_readback(
@@ -1044,6 +1064,7 @@ async def handoff_supply(
                     api_key=api_key,
                     posting_number=order.external_order_id or "",
                 ),
+                require_shipped=False,
             )
         return OzonHandoffResult(None, True, None, None, None)
 
