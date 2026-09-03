@@ -44,6 +44,7 @@ from app.models.fbs_supply import (
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inventory_balance import InventoryBalance
 from app.models.marketplace_account import MarketplaceAccount
+from app.models.marking_code import MarkingCodeEvent
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
@@ -1772,6 +1773,26 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
     assert sorted(marking.meta_details_json["exemplar_id"] for marking in markings) == [81, 82, 83]
     assert [line.qty_marking_external for line in lines] == [1, 2]
     assert order.metadata_delivery_allowed is True
+
+    # TC-S03-OZON-034: лента расхода КМ должна показывать номер упаковочного
+    # документа, а не `wb_order_id` — у заказа Ozon это синтезированный
+    # отрицательный хеш номера отправления, а не читаемый номер документа.
+    events = list(
+        (
+            await db_session.execute(
+                select(MarkingCodeEvent).where(
+                    MarkingCodeEvent.code_id.in_(
+                        [marking.marking_code_id for marking in markings]
+                    )
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(events) == 3
+    assert all(event.document_number == task.document_number for event in events)
+    assert all(event.document_number != str(order.wb_order_id) for event in events)
 
     supply.status = FBS_SUPPLY_STATUS_PACKED
     order.status = FBS_ORDER_STATUS_PACKED
