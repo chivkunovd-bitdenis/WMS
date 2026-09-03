@@ -10,9 +10,8 @@ from typing import cast
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
 
-from app.api.storage import _apply_draft_pricing, _print_measurements, _rate_snapshot
+from app.api.storage import StorageStatementOut, _apply_night_charges, _print_measurements
 from app.db.session import SessionLocal
 from app.models.billing import BillingTariffVersion, BillingTariffVersionV2
 from app.models.inventory_movement import InventoryMovement
@@ -21,44 +20,18 @@ from app.models.product_dimension_event import ProductDimensionEvent
 from app.models.seller import Seller
 from app.models.storage_measurement import StorageMeasurement
 from app.models.storage_statement import StorageStatement
+from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
-from app.services import storage_statement_service
 from app.services.billing_seller_report_service import _storage_row
 from app.services.sorting_location_service import get_or_create_sorting_location
-from app.services.staff_packaging_billing_service import rub_to_kopecks
+from app.services.storage_daily_charge_service import charge_storage_day
 from app.services.storage_measurement_service import MOSCOW
 from app.services.storage_statement_service import (
+    StorageNightCharge,
     StorageStatementError,
-    _price_volume_segments,
     _statement_source_ids,
-    _tariff_for_day,
     normalize_storage_ledger_quantity,
 )
-
-
-def _tariff(
-    amount: str,
-    valid_from: date,
-    *,
-    valid_to: date | None = None,
-    seller_id: uuid.UUID | None = None,
-    warehouse_id: uuid.UUID | None = None,
-) -> BillingTariffVersionV2:
-    return cast(
-        BillingTariffVersionV2,
-        SimpleNamespace(
-            id=uuid.uuid4(),
-            rate=rub_to_kopecks(Decimal(amount)),
-            valid_from_at=datetime.combine(valid_from, datetime.min.time(), MOSCOW),
-            valid_to_at=(
-                datetime.combine(valid_to + timedelta(days=1), datetime.min.time(), MOSCOW)
-                if valid_to is not None
-                else None
-            ),
-            seller_id=seller_id,
-            warehouse_id=warehouse_id,
-        ),
-    )
 
 
 def test_zero_statement_uses_its_own_id_as_the_single_ledger_source() -> None:
@@ -123,29 +96,69 @@ def test_print_row_uses_charged_ledger_quantity_instead_of_full_month_measuremen
     assert printed["amount"] == "44.00"
 
 
-def test_draft_rate_snapshot_does_not_expose_decimal_division_noise() -> None:
-    measurement_id = uuid.uuid4()
+def test_night_rate_snapshot_does_not_expose_decimal_division_noise() -> None:
+    """Фактическая ставка — деньги на литро-дни, и делить надо без хвоста."""
+    product_id = uuid.uuid4()
     output = SimpleNamespace(
-        measurements=[{"rate_snapshot": None, "liter_days": "0", "amount": None}],
-        total_liter_days="0",
-        total_amount="0",
+        measurements=[{"rate_snapshot": None, "liter_days": None, "amount": None}],
+        total_liter_days=None,
+        total_amount=None,
     )
-    measurement = SimpleNamespace(id=measurement_id)
-    tariff = SimpleNamespace(amount=65)
+    measurement = SimpleNamespace(product_id=product_id)
 
-    _apply_draft_pricing(
-        output,
-        [measurement],
+    _apply_night_charges(
+        cast(StorageStatementOut, output),
+        [cast(StorageMeasurement, measurement)],
         {
-            measurement_id: (
-                Decimal("125001.52"),
-                Decimal("81250.98"),
-                tariff,
+            product_id: StorageNightCharge(
+                liter_days=Decimal("125001.52"),
+                amount_kopecks=8_125_098,
             )
         },
     )
 
     assert output.measurements[0]["rate_snapshot"] == "0.65"
+    assert output.measurements[0]["amount"] == "81250.98"
+    assert output.total_amount == "81250.98"
+
+
+def test_night_charge_without_a_rate_shows_liter_days_but_no_money() -> None:
+    """Сутки без ставки — это литро-дни без денег, а не бесплатное хранение."""
+    product_id = uuid.uuid4()
+    output = SimpleNamespace(
+        measurements=[{"rate_snapshot": None, "liter_days": None, "amount": None}],
+        total_liter_days=None,
+        total_amount=None,
+    )
+    measurement = SimpleNamespace(product_id=product_id)
+
+    _apply_night_charges(
+        cast(StorageStatementOut, output),
+        [cast(StorageMeasurement, measurement)],
+        {product_id: StorageNightCharge(liter_days=Decimal("3"), amount_kopecks=None)},
+    )
+
+    assert output.total_liter_days == "3"
+    assert output.measurements[0]["amount"] is None
+    assert output.total_amount is None
+
+
+def test_product_without_night_charges_keeps_the_dash() -> None:
+    """Ночь по товару не проходила — показываем прочерк, а не выдуманный ноль."""
+    output = SimpleNamespace(
+        measurements=[{"rate_snapshot": None, "liter_days": None, "amount": None}],
+        total_liter_days=None,
+        total_amount=None,
+    )
+    measurement = SimpleNamespace(product_id=uuid.uuid4())
+
+    _apply_night_charges(
+        cast(StorageStatementOut, output), [cast(StorageMeasurement, measurement)], {}
+    )
+
+    assert output.measurements[0]["liter_days"] is None
+    assert output.total_liter_days is None
+    assert output.total_amount is None
 
 
 def test_storage_ledger_quantity_is_rounded_within_numeric_14_4() -> None:
@@ -171,64 +184,6 @@ def test_storage_ledger_quantity_rejects_values_outside_numeric_14_4(
         normalize_storage_ledger_quantity(quantity)
 
 
-def test_tariff_starting_mid_month_prices_only_forward() -> None:
-    tariff = _tariff("2.00", date(2026, 7, 10))
-    segments = [
-        (
-            datetime(2026, 7, 1, tzinfo=MOSCOW),
-            datetime(2026, 8, 1, tzinfo=MOSCOW),
-            1,
-            Decimal("1"),
-            None,
-        )
-    ]
-
-    quantity, amount, snapshot = _price_volume_segments(segments, [tariff])
-
-    assert quantity == Decimal("22")
-    assert amount == Decimal("44.00")
-    assert snapshot is tariff
-
-
-def test_tariff_change_inside_month_uses_both_dated_rates() -> None:
-    old = _tariff("1.00", date(2026, 7, 1), valid_to=date(2026, 7, 19))
-    new = _tariff("2.00", date(2026, 7, 20))
-    segments = [
-        (
-            datetime(2026, 7, 1, tzinfo=MOSCOW),
-            datetime(2026, 8, 1, tzinfo=MOSCOW),
-            1,
-            Decimal("1"),
-            None,
-        )
-    ]
-
-    quantity, amount, snapshot = _price_volume_segments(segments, [old, new])
-
-    assert quantity == Decimal("31")
-    assert amount == Decimal("43.00")
-    assert snapshot is new
-    effective_rate = Decimal(
-        _rate_snapshot((amount / quantity).quantize(Decimal("0.000000000001")))
-    )
-    assert (effective_rate * quantity).quantize(Decimal("0.01")) == amount
-
-
-def test_seller_tariff_overrides_common_tariff_only_while_effective() -> None:
-    seller_id = uuid.uuid4()
-    common = _tariff("1.00", date(2026, 7, 1))
-    personal = _tariff(
-        "3.00",
-        date(2026, 7, 10),
-        valid_to=date(2026, 7, 20),
-        seller_id=seller_id,
-    )
-
-    assert _tariff_for_day([common, personal], date(2026, 7, 9)) is common
-    assert _tariff_for_day([common, personal], date(2026, 7, 10)) is personal
-    assert _tariff_for_day([common, personal], date(2026, 7, 21)) is common
-
-
 async def _seed_storage_statement(
     async_client: AsyncClient,
     *,
@@ -236,7 +191,13 @@ async def _seed_storage_statement(
     zero: bool = False,
     current_month: bool = False,
     with_tariff: bool = True,
+    charged_days: int = 1,
 ) -> tuple[dict[str, str], uuid.UUID, uuid.UUID | None]:
+    """Расчёт хранения за месяц плюс ночные начисления за первые его сутки.
+
+    Без начислений на экране честно нечего показывать: деньги за хранение пишет
+    только ночная задача, и тест обязан пройти тем же путём, что и продакшен.
+    """
     suffix = str(time.time_ns())
     registered = await async_client.post(
         "/auth/register",
@@ -272,6 +233,9 @@ async def _seed_storage_statement(
     async with SessionLocal() as session:
         warehouse = await session.get(Warehouse, warehouse_id)
         assert warehouse is not None
+        tenant = await session.get(Tenant, warehouse.tenant_id)
+        assert tenant is not None
+        tenant.billing_enabled_from = period_start
         seller = Seller(tenant_id=warehouse.tenant_id, name=f"Seller {suffix}")
         session.add(seller)
         await session.flush()
@@ -353,8 +317,13 @@ async def _seed_storage_statement(
             measurement_id = measurement.id
         await session.flush()
         statement_id = statement.id
+        tenant_id = warehouse.tenant_id
         await session.commit()
-        return headers, statement_id, measurement_id
+
+    for offset in range(charged_days):
+        async with SessionLocal() as session:
+            await charge_storage_day(session, tenant_id, day=period_start + timedelta(days=offset))
+    return headers, statement_id, measurement_id
 
 
 @pytest.mark.asyncio
@@ -364,8 +333,8 @@ async def test_draft_calculation_prints_and_lists_the_same_numbers(
     """Печать работает без фиксации и совпадает со списком.
 
     Фиксация расчёта убрана: деньги за хранение пишет ночная задача, а не
-    человек. Печать при этом осталась нужна — она показывает текущий расчёт
-    ровно теми же цифрами, что и таблица на экране.
+    человек. Печать при этом осталась нужна — она показывает то же самое, что и
+    таблица на экране, теми же цифрами из тех же начислений.
     """
     headers, statement_id, measurement_id = await _seed_storage_statement(async_client)
     assert measurement_id is not None
@@ -376,8 +345,12 @@ async def test_draft_calculation_prints_and_lists_the_same_numbers(
     assert printed.status_code == 200, printed.text
     payload = printed.json()
     assert payload["status"] == "draft"
+    # Ночь начислила одни сутки: литр объёма по ставке 2 рубля за литро-день.
+    assert payload["measurements"][0]["liter_days"] == "1.0000"
     assert payload["measurements"][0]["rate_snapshot"] == "2.00"
+    assert payload["measurements"][0]["amount"] == "2.00"
     assert payload["measurements"][0]["liter_days"] == payload["total_liter_days"]
+    assert payload["total_amount"] == "2.00"
 
     # Ручная фиксация больше не существует как операция.
     removed = await async_client.post(
@@ -420,19 +393,55 @@ async def test_draft_calculation_prints_and_lists_the_same_numbers(
 
 
 @pytest.mark.asyncio
-async def test_statement_uses_the_same_seller_override_as_the_invoice_report(
+async def test_screen_shows_no_money_until_the_night_has_charged(
     async_client: AsyncClient,
 ) -> None:
-    """TC-NEW-A1-001/002: a deliberately different legacy rate cannot affect storage."""
-    _headers, statement_id, measurement_id = await _seed_storage_statement(async_client)
+    """Обмер есть, ночь ещё не проходила — в деньгах прочерк, а не ноль.
+
+    Ноль в этой клетке читался бы как «хранение бесплатно». Прочерк честно
+    говорит: за эти сутки ещё не начисляли.
+    """
+    headers, statement_id, measurement_id = await _seed_storage_statement(
+        async_client, charged_days=0
+    )
+    assert measurement_id is not None
+
+    printed = await async_client.get(
+        f"/operations/storage/statements/{statement_id}/print", headers=headers
+    )
+    assert printed.status_code == 200, printed.text
+    payload = printed.json()
+
+    assert payload["total_amount"] is None
+    assert payload["total_liter_days"] is None
+    assert payload["measurements"][0]["liter_days"] is None
+    assert payload["measurements"][0]["amount"] is None
+    assert payload["measurements"][0]["rate_snapshot"] is None
+    # Операционная часть строки при этом на месте: печатать расчёт всё равно надо.
+    assert payload["measurements"][0]["volume_liters"] == "1.000000"
+    assert payload["measurements"][0]["status"] == "calculated"
+
+
+@pytest.mark.asyncio
+async def test_screen_and_report_show_the_same_seller_rate_from_the_night(
+    async_client: AsyncClient,
+) -> None:
+    """TC-NEW-A1-001/002: экран и отчёт читают одни начисления, ставка селлера бьёт общую.
+
+    Экран отбирает начисления по ключу суток, отчёт — по моменту начисления;
+    запросы разные, значит совпадение цифр действительно что-то доказывает.
+    Старая складская ставка 99 рублей намеренно лежит рядом: она историческая и
+    не имеет права попасть ни в одну из них.
+    """
+    headers, statement_id, measurement_id = await _seed_storage_statement(
+        async_client, charged_days=0
+    )
     assert measurement_id is not None
     async with SessionLocal() as session:
         statement = await session.get(StorageStatement, statement_id)
         assert statement is not None
         session.add_all(
             [
-                # This was the old statement source.  Its wildly different rate
-                # must not leak into either financial calculation.
                 BillingTariffVersion(
                     tenant_id=statement.tenant_id,
                     seller_id=None,
@@ -458,33 +467,37 @@ async def test_statement_uses_the_same_seller_override_as_the_invoice_report(
             ]
         )
         await session.commit()
-        measurements = list(
-            (
-                await session.scalars(
-                    select(StorageMeasurement).where(StorageMeasurement.id == measurement_id)
-                )
-            ).all()
-        )
-        pricing = await storage_statement_service.get_storage_draft_pricing(
-            session, statement, measurements
-        )
+        tenant_id = statement.tenant_id
+        seller_id = statement.seller_id
+        period_start = statement.period_start
+        period_end = statement.period_end
+
+    for offset in (0, 1):
+        async with SessionLocal() as session:
+            await charge_storage_day(session, tenant_id, day=period_start + timedelta(days=offset))
+
+    listed = await async_client.get(
+        "/operations/storage/statements",
+        headers=headers,
+        params={"year": period_start.year, "month": period_start.month},
+    )
+    assert listed.status_code == 200, listed.text
+    screen = next(
+        row for row in listed.json()["statements"] if row["id"] == str(statement_id)
+    )
+
+    async with SessionLocal() as session:
         report = await _storage_row(
             session,
-            tenant_id=statement.tenant_id,
-            seller_id=statement.seller_id,
-            date_from=statement.period_start,
-            date_to=statement.period_end,
-            start=datetime.combine(statement.period_start, datetime.min.time(), MOSCOW),
-            end=datetime.combine(
-                statement.period_end + timedelta(days=1), datetime.min.time(), MOSCOW
-            ),
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            date_from=period_start,
+            date_to=period_end,
+            start=datetime.combine(period_start, datetime.min.time(), MOSCOW),
+            end=datetime.combine(period_end + timedelta(days=1), datetime.min.time(), MOSCOW),
             include_finance=True,
         )
-    statement_kopecks = sum(
-        int((amount * 100).quantize(Decimal("1")))
-        for _, amount, _ in pricing.values()
-    )
-    assert statement_kopecks == report["amount_kopecks"]
-    assert {tariff.rate for _, _, tariff in pricing.values()} == {300}
 
-
+    screen_kopecks = int((Decimal(screen["total_amount"]) * 100).quantize(Decimal("1")))
+    assert screen_kopecks == report["amount_kopecks"] == 600
+    assert screen["measurements"][0]["rate_snapshot"] == "3.00"
