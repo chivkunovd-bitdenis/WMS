@@ -19,8 +19,10 @@ from app.models.billing import (
 )
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
+from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
 from app.services.sorting_location_service import get_or_create_sorting_location
+from app.services.storage_daily_charge_service import charge_storage_day
 from app.services.storage_measurement_service import MOSCOW
 
 
@@ -452,3 +454,49 @@ async def test_v2_invoice_marks_the_operation_as_already_billed(async_client: As
     # Без этой отметки оператор не увидит, что операция уже в счёте, и выставит
     # её второй раз: повторное выставление разрешено, поэтому сервер не откажет.
     assert after.json()["entries"][0]["invoice_history"] == {"state": "known", "count": 1}
+
+
+@pytest.mark.asyncio
+async def test_storage_period_cannot_be_invoiced_twice(async_client: AsyncClient) -> None:
+    """Одни и те же сутки хранения не должны попасть в два счёта.
+
+    До 03.09.2026 дыра была недостижима только потому, что галочка хранения
+    вообще не доезжала до запроса: фронт ждал подписанный токен, которого
+    бэкенд уже не выдавал. Как только галочка заработала, второй счёт за тот же
+    период снова взял бы деньги за те же сутки.
+    """
+    suffix = f"invoice-v2-storage-twice-{time.time_ns()}"
+    headers, tenant_id, seller_id, _product = await _storage_ready_tenant(async_client, suffix)
+    async with SessionLocal() as session:
+        tenant = await session.get(Tenant, tenant_id)
+        assert tenant is not None
+        tenant.billing_enabled_from = date(2026, 8, 1)
+        await session.commit()
+
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=date(2026, 8, 20)) == 1
+
+    body = {
+        "creation_mode": "selected_operations",
+        "seller_id": str(seller_id),
+        "date_from": "2026-08-20",
+        "date_to": "2026-08-20",
+        "selected_root_ids": [],
+        "include_storage": True,
+    }
+    first = await async_client.post("/billing/invoices-v2/preview", headers=headers, json=body)
+    assert first.status_code == 200, first.text
+    assert len(first.json()["lines"]) == 1, first.text
+    assert first.json()["lines"][0]["total_amount_kopecks"] > 0
+
+    issued = await async_client.post(
+        "/billing/invoices-v2",
+        headers={**headers, "Idempotency-Key": f"{suffix}-1"},
+        json=body,
+    )
+    assert issued.status_code in (200, 201), issued.text
+
+    # Второй счёт за тот же период не должен взять те же сутки повторно.
+    second = await async_client.post("/billing/invoices-v2/preview", headers=headers, json=body)
+    assert second.status_code in (200, 422), second.text
+    assert second.status_code == 422 or second.json()["lines"] == [], second.text

@@ -349,7 +349,7 @@ async def build_inventory_report(
             for pid, sid, nm in (
                 await session.execute(
                     select(Product.id, Product.seller_id, Product.wb_nm_id).where(
-                        Product.id.in_(product_ids)
+                        Product.tenant_id == tenant_id, Product.id.in_(product_ids)
                     )
                 )
             ).all()
@@ -1000,7 +1000,9 @@ async def list_product_movements(
     product_ids = {row.product_id for row in rows if row.product_id}
     if product_ids:
         for pid, name, sku in await session.execute(
-            select(Product.id, Product.name, Product.sku_code).where(Product.id.in_(product_ids))
+            select(Product.id, Product.name, Product.sku_code).where(
+                Product.tenant_id == tenant_id, Product.id.in_(product_ids)
+            )
         ):
             product_names[pid] = (name, sku)
 

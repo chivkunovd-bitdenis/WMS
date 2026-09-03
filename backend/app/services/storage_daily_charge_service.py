@@ -318,23 +318,48 @@ CATCH_UP_DAYS = 14
 async def missing_charge_days(
     session: AsyncSession, tenant_id: uuid.UUID, *, until: date, depth: int = CATCH_UP_DAYS
 ) -> list[date]:
-    """Сутки, которые ночная задача обязана пересмотреть, — весь догоняемый хвост.
+    """Сутки, которые ночная задача обязана пересмотреть.
 
-    Раньше сутки считались закрытыми, если по арендатору нашлась хоть одна
-    строка за этот день. Пропуск при этом бывает частичным: у товара не было
-    обмера, и его строка не появилась, а у соседнего появилась — и день
-    выглядел посчитанным. Оператор вносил габариты, но за прошлые сутки не
-    платили уже никогда, потому что никто к ним не возвращался.
+    Обычно это сутки, по которым нет ни одной строки: ночь не отработала —
+    воркер лежал, выкатка затянулась, — и за них иначе не заплатят никогда.
 
-    Начисление адресуется складом, товаром и датой, поэтому повторный проход по
-    суткам не создаёт вторую строку — он дописывает только недостающие. Значит
-    честнее пересмотреть весь хвост, чем угадывать по одной строке, полон ли он.
+    Но пропуск бывает и частичным: у товара не было обмера, его строка не
+    появилась, а у соседнего появилась — и день выглядел посчитанным. Оператор
+    вносит габариты позже, и за прошлые сутки не платят уже никогда, потому что
+    к ним никто не возвращается. Поэтому, если за последние сутки появился хоть
+    один обмер, пересматриваем весь хвост целиком: пропущенное дописывается,
+    посчитанное не задваивается — строка адресуется складом, товаром и датой.
+
+    Гонять полный хвост каждую ночь без повода нельзя: каждый день заново
+    прокручивает все движения арендатора с начала истории, и четырнадцатикратная
+    цена на большом складе не уложится в ночь.
     """
     first = until - timedelta(days=depth - 1)
+    fresh_measurement = await session.scalar(
+        select(ProductDimensionEvent.id)
+        .where(
+            ProductDimensionEvent.tenant_id == tenant_id,
+            ProductDimensionEvent.created_at >= _day_bounds(until)[0],
+        )
+        .limit(1)
+    )
+    charged = set(
+        (
+            await session.scalars(
+                select(BillingLedgerEntry.event_kind).where(
+                    BillingLedgerEntry.tenant_id == tenant_id,
+                    BillingLedgerEntry.service_code == STORAGE_SERVICE_CODE,
+                    BillingLedgerEntry.source_type == SOURCE_TYPE,
+                    BillingLedgerEntry.occurred_at >= _day_bounds(first)[0],
+                )
+            )
+        ).all()
+    )
     days: list[date] = []
     current = first
     while current <= until:
-        days.append(current)
+        if fresh_measurement is not None or storage_day_event_kind(current) not in charged:
+            days.append(current)
         current += timedelta(days=1)
     return days
 

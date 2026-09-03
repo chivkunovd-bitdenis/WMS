@@ -355,7 +355,12 @@ async def test_seller_with_storage_only_stays_in_the_summary(async_client) -> No
     params = "date_from=2026-08-20&date_to=2026-08-20&include_finance=true"
     summary = await async_client.get(f"/billing/seller-report/summary?{params}", headers=headers)
     assert summary.status_code == 200, summary.text
-    assert [row["seller_id"] for row in summary.json()["rows"]] == [str(seller_id)]
+    row = summary.json()["rows"][0]
+    assert row["seller_id"] == str(seller_id)
+    # Строка не должна показывать ноль там, где в раскрывашке лежат деньги:
+    # счёт хранение включает, значит и «Стоимость услуг» обязана его считать.
+    assert row["net_total_kopecks"] == 2500
+    assert summary.json()["totals"]["net_total_kopecks"] == 2500
 
     details = await async_client.get(
         f"/billing/seller-report/sellers/{seller_id}/details?{params}", headers=headers
@@ -364,3 +369,69 @@ async def test_seller_with_storage_only_stays_in_the_summary(async_client) -> No
     storage_row = details.json()["storage_row"]
     assert storage_row["liter_days"] == 12.5
     assert storage_row["amount_kopecks"] == 2500
+
+
+@pytest.mark.asyncio
+async def test_reversal_money_lands_on_its_own_document(async_client) -> None:
+    """У отменённой операции должны быть видны обе стороны: и плюс, и минус.
+
+    Сторно адресуется не документом, а отменяемым начислением
+    (`source_type='billing_reversal'`), поэтому поиск денег по документу его не
+    находил: в отчёте оставался «плюс», а «минус» не показывал никто.
+    """
+    headers, seller_id, email = await _admin(async_client)
+    occurred_at = datetime(2026, 8, 20, 12, tzinfo=UTC)
+    document_id = uuid.uuid4()
+    async with SessionLocal() as session:
+        user = await session.scalar(select(User).where(User.email == email))
+        assert user is not None
+        charge_id, reversal_id = uuid.uuid4(), uuid.uuid4()
+        fact_id, reversal_fact_id = uuid.uuid4(), uuid.uuid4()
+        session.add_all([
+            OperationFactCutover(id=1, occurred_at=datetime(2026, 8, 1, tzinfo=UTC)),
+            OperationFact(
+                id=fact_id, tenant_id=user.tenant_id, operation_code="marketplace_outbound_completed",
+                billable_service_code="marketplace_outbound", source_kind="marketplace_unload_request",
+                source_event_id=uuid.uuid4(), seller_id=seller_id, seller_name_snapshot="Селлер",
+                document_type="marketplace_unload", document_id=document_id, source="system",
+                occurred_at=occurred_at, item_quantity=2,
+            ),
+            BillingLedgerEntry(
+                id=charge_id, tenant_id=user.tenant_id, seller_id=seller_id,
+                service_code="marketplace_outbound", source="marketplace_unload",
+                source_type="marketplace_unload", source_id=document_id, unit="item",
+                quantity=2, rate=100, amount=200, occurred_at=occurred_at,
+            ),
+        ])
+        await session.flush()
+        session.add_all([
+            OperationFact(
+                id=reversal_fact_id, tenant_id=user.tenant_id, operation_code="marketplace_outbound_reversal",
+                billable_service_code="marketplace_outbound", source_kind="marketplace_unload_request",
+                source_event_id=uuid.uuid4(), seller_id=seller_id, seller_name_snapshot="Селлер",
+                document_type="marketplace_unload", document_id=document_id, source="system",
+                occurred_at=occurred_at, item_quantity=2, reversal_of_id=fact_id,
+            ),
+            BillingLedgerEntry(
+                id=reversal_id, tenant_id=user.tenant_id, seller_id=seller_id,
+                entry_type="reversal", reversal_of_id=charge_id,
+                service_code="marketplace_outbound", source="marketplace_unload",
+                source_type="billing_reversal", source_id=charge_id, unit="item",
+                quantity=-2, rate=100, amount=-200, occurred_at=occurred_at,
+            ),
+        ])
+        await session.commit()
+
+    params = "date_from=2026-08-20&date_to=2026-08-20&include_finance=true"
+    details = await async_client.get(
+        f"/billing/seller-report/sellers/{seller_id}/details?{params}", headers=headers
+    )
+    assert details.status_code == 200, details.text
+    by_id = {entry["id"]: entry for entry in details.json()["entries"]}
+    assert by_id[f"operation_fact:{fact_id}"]["amount_kopecks"] == 200
+    reversal_row = by_id[f"operation_fact:{reversal_fact_id}"]
+    assert reversal_row["result"] == "reversed"
+    assert reversal_row["amount_kopecks"] == -200
+    assert reversal_row["billing_ledger_entry_id"] == str(reversal_id)
+    # Плюс и минус гасят друг друга, а не остаются половиной суммы.
+    assert details.json()["totals"]["net_total_kopecks"] == 0

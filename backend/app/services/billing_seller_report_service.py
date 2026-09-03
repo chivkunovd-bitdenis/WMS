@@ -238,15 +238,38 @@ async def _operation_entries(
     charges: dict[tuple[str, uuid.UUID], list[BillingLedgerEntry]] = defaultdict(list)
     if facts:
         document_ids = {fact.document_id for fact in facts}
-        for entry in (
-            await session.scalars(
-                select(BillingLedgerEntry).where(
-                    BillingLedgerEntry.tenant_id == tenant_id,
-                    BillingLedgerEntry.source_id.in_(document_ids),
+        own_charges = list(
+            (
+                await session.scalars(
+                    select(BillingLedgerEntry).where(
+                        BillingLedgerEntry.tenant_id == tenant_id,
+                        BillingLedgerEntry.source_id.in_(document_ids),
+                    )
                 )
-            )
-        ).all():
+            ).all()
+        )
+        for entry in own_charges:
             charges[(entry.source_type, entry.source_id)].append(entry)
+        # Сторно документом не адресуется: оно ссылается на отменяемое
+        # начисление (`source_type='billing_reversal'`, `source_id` — id той
+        # строки). Поэтому его находим вторым шагом и кладём к тому же
+        # документу — иначе у отменённой операции остаётся только «плюс», а
+        # «минус» не показывает никто.
+        document_of_charge = {
+            entry.id: (entry.source_type, entry.source_id) for entry in own_charges
+        }
+        if document_of_charge:
+            for reversal in (
+                await session.scalars(
+                    select(BillingLedgerEntry).where(
+                        BillingLedgerEntry.tenant_id == tenant_id,
+                        BillingLedgerEntry.reversal_of_id.in_(document_of_charge),
+                    )
+                )
+            ).all():
+                if reversal.reversal_of_id is None:
+                    continue
+                charges[document_of_charge[reversal.reversal_of_id]].append(reversal)
     fact_lines: dict[uuid.UUID, list[OperationFactLine]] = defaultdict(list)
     if fact_ids:
         lines = await session.scalars(
@@ -273,7 +296,7 @@ async def _operation_entries(
                 FbsSupply.wb_supply_id, FbsSupply.name,
             )
             .join(FbsSupply, FbsSupply.id == FbsOrder.supply_id)
-            .where(FbsOrder.id.in_(fbs_order_ids))
+            .where(FbsOrder.tenant_id == tenant_id, FbsOrder.id.in_(fbs_order_ids))
         )
         for supply_row in supply_rows:
             label = next(
@@ -294,7 +317,7 @@ async def _operation_entries(
             select(
                 FbsSupply.id, FbsSupply.document_number, FbsSupply.display_number,
                 FbsSupply.wb_supply_id, FbsSupply.name,
-            ).where(FbsSupply.id.in_(supply_ids))
+            ).where(FbsSupply.tenant_id == tenant_id, FbsSupply.id.in_(supply_ids))
         )
         for supply_row in supply_rows:
             label = next(
@@ -321,6 +344,10 @@ async def _operation_entries(
             and entry.entry_type == wanted_entry_type
         ]
         consumed.update(entry.id for entry in priced)
+        # Строка начисления, показанная здесь, не должна приехать второй раз
+        # старой веткой отчёта: у сторно свой адрес источника, и по документу
+        # оно бы не отсеклось.
+        covered.update((entry.source_type, entry.source_id) for entry in priced)
         money = sum(_amount(entry.amount) for entry in priced) if priced else None
         product_lines = fact_lines[fact.id]
         product_names = [line.product_name_snapshot for line in product_lines if line.product_name_snapshot]
@@ -384,6 +411,7 @@ async def _operation_entries(
             if entry.id in consumed or entry.seller_id is None:
                 continue
             consumed.add(entry.id)
+            covered.add((entry.source_type, entry.source_id))
             extra: dict[str, Any] = {
                 **host,
                 "id": f"billing_entry:{entry.id}",
@@ -452,7 +480,7 @@ async def _fbs_handed_entries(
         for supply_row in await session.execute(
             select(
                 FbsSupply.id, FbsSupply.display_number, FbsSupply.wb_supply_id, FbsSupply.name
-            ).where(FbsSupply.id.in_(supply_ids))
+            ).where(FbsSupply.tenant_id == tenant_id, FbsSupply.id.in_(supply_ids))
         ):
             label = next(
                 (str(value).strip() for value in supply_row[1:] if str(value or "").strip()),
@@ -495,7 +523,11 @@ async def _legacy_entries(
     cutover = await _cutover(session)
     query = select(BillingLedgerEntry, Seller.name).outerjoin(Seller, Seller.id == BillingLedgerEntry.seller_id).where(
         BillingLedgerEntry.tenant_id == tenant_id, BillingLedgerEntry.seller_id.is_not(None),
-        BillingLedgerEntry.service_code != "storage_liter_day", BillingLedgerEntry.occurred_at >= start,
+        # Хранение показывается отдельной строкой раскрывашки и отдельной
+        # суммой в сводке. Строкой операции оно приезжало вторым разом и
+        # удваивало деньги там, где точка отсечки не проставлена.
+        BillingLedgerEntry.service_code.not_in(("storage_liter_day", "storage")),
+        BillingLedgerEntry.occurred_at >= start,
         BillingLedgerEntry.occurred_at < end,
     )
     if cutover is not None:
@@ -540,62 +572,112 @@ async def _legacy_entries(
     return result
 
 
-async def _invoice_history(session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID, entry_id: str) -> dict[str, Any]:
-    invoices = list((await session.scalars(select(BillingInvoice).where(BillingInvoice.tenant_id == tenant_id, BillingInvoice.seller_id == seller_id))).all())
-    known_ids: set[str] = set()
-    for invoice in invoices:
-        for line in invoice.lines:
-            if not isinstance(line, dict):
-                return {"state": "unknown"}
-            docs = line.get("documents", [])
-            if not isinstance(docs, list):
-                return {"state": "unknown"}
-            for document in docs:
-                raw = document.get("id") if isinstance(document, dict) else None
-                try:
-                    known_ids.add(str(uuid.UUID(str(raw))))
-                except (ValueError, TypeError, AttributeError):
-                    return {"state": "unknown"}
-    chain = {entry_id}
-    try:
-        entry_uuid = uuid.UUID(entry_id)
-        frontier = {entry_uuid}
-        while frontier:
-            related = await session.execute(select(BillingLedgerEntry.id, BillingLedgerEntry.reversal_of_id).where(
-                BillingLedgerEntry.tenant_id == tenant_id,
-                (BillingLedgerEntry.id.in_(frontier)) | (BillingLedgerEntry.reversal_of_id.in_(frontier)),
-            ))
-            next_frontier: set[uuid.UUID] = set()
-            for current, reversal_of in related:
-                for related_id in (current, reversal_of):
-                    if related_id is not None and str(related_id) not in chain:
-                        chain.add(str(related_id))
-                        next_frontier.add(related_id)
-            frontier = next_frontier
-    except ValueError:
-        return {"state": "unknown"}
-    count = 0
+async def _invoice_history_map(
+    session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID, entry_ids: list[str]
+) -> dict[str, dict[str, Any]]:
+    """В скольких счетах уже стоит каждое из начислений страницы.
+
+    Считается сразу по всей странице, а не по строке за раз: счета селлера и
+    источники счетов V2 читаются по одному разу на страницу. Построчный вариант
+    открывал пятьдесят одинаковых чтений на каждое открытие раскрывашки.
+
+    Сторно и его начисление считаются одной и той же работой, поэтому цепочка
+    взаимных ссылок раскручивается целиком: счёт, где лежит любое звено,
+    считается счётом всей цепочки.
+    """
+    if not entry_ids:
+        return {}
+    invoices = list(
+        (
+            await session.scalars(
+                select(BillingInvoice).where(
+                    BillingInvoice.tenant_id == tenant_id, BillingInvoice.seller_id == seller_id
+                )
+            )
+        ).all()
+    )
+    invoice_documents: list[set[str]] = []
     for invoice in invoices:
         invoice_ids: set[str] = set()
         for line in invoice.lines:
-            for document in line.get("documents", []):
-                invoice_ids.add(str(document["id"]))
-        if chain & invoice_ids:
-            count += 1
-    # Счета V2 держат источники строками, а не JSON внутри счёта. Без этого
-    # запроса операция, уже включённая в новый счёт, выглядела бы невыставленной,
-    # и оператор спокойно выставил бы её второй раз.
-    v2_rows = await session.execute(
-        select(BillingInvoiceV2Line.invoice_id)
-        .join(BillingInvoiceV2Source, BillingInvoiceV2Source.invoice_line_id == BillingInvoiceV2Line.id)
-        .where(
-            BillingInvoiceV2Line.tenant_id == tenant_id,
-            BillingInvoiceV2Source.billing_ledger_entry_id.in_({uuid.UUID(value) for value in chain}),
+            if not isinstance(line, dict):
+                return {entry_id: {"state": "unknown"} for entry_id in entry_ids}
+            docs = line.get("documents", [])
+            if not isinstance(docs, list):
+                return {entry_id: {"state": "unknown"} for entry_id in entry_ids}
+            for document in docs:
+                raw = document.get("id") if isinstance(document, dict) else None
+                try:
+                    invoice_ids.add(str(uuid.UUID(str(raw))))
+                except (ValueError, TypeError, AttributeError):
+                    return {entry_id: {"state": "unknown"} for entry_id in entry_ids}
+        invoice_documents.append(invoice_ids)
+
+    try:
+        roots = {uuid.UUID(value) for value in entry_ids}
+    except ValueError:
+        return {entry_id: {"state": "unknown"} for entry_id in entry_ids}
+
+    # Цепочки всех строк страницы раскручиваем одним волновым обходом: связей у
+    # начисления одна-две, и волн получается столько же, а не по волне на строку.
+    chains: dict[uuid.UUID, set[str]] = {root: {str(root)} for root in roots}
+    owner: dict[uuid.UUID, set[uuid.UUID]] = {root: {root} for root in roots}
+    frontier = set(roots)
+    seen = set(roots)
+    while frontier:
+        related = await session.execute(
+            select(BillingLedgerEntry.id, BillingLedgerEntry.reversal_of_id).where(
+                BillingLedgerEntry.tenant_id == tenant_id,
+                (BillingLedgerEntry.id.in_(frontier))
+                | (BillingLedgerEntry.reversal_of_id.in_(frontier)),
+            )
         )
-        .distinct()
-    )
-    count += len(list(v2_rows))
-    return {"state": "known", "count": count}
+        next_frontier: set[uuid.UUID] = set()
+        for current, reversal_of in related:
+            for known, discovered in ((current, reversal_of), (reversal_of, current)):
+                if known is None or discovered is None:
+                    continue
+                for root in owner.get(known, set()):
+                    if str(discovered) in chains[root]:
+                        continue
+                    chains[root].add(str(discovered))
+                    owner.setdefault(discovered, set()).add(root)
+                    if discovered not in seen:
+                        seen.add(discovered)
+                        next_frontier.add(discovered)
+        frontier = next_frontier
+
+    all_ids = {uuid.UUID(value) for chain in chains.values() for value in chain}
+    v2_by_entry: dict[str, set[uuid.UUID]] = defaultdict(set)
+    if all_ids:
+        for invoice_id, ledger_entry_id in (
+            await session.execute(
+                select(
+                    BillingInvoiceV2Line.invoice_id,
+                    BillingInvoiceV2Source.billing_ledger_entry_id,
+                )
+                .join(
+                    BillingInvoiceV2Source,
+                    BillingInvoiceV2Source.invoice_line_id == BillingInvoiceV2Line.id,
+                )
+                .where(
+                    BillingInvoiceV2Line.tenant_id == tenant_id,
+                    BillingInvoiceV2Source.billing_ledger_entry_id.in_(all_ids),
+                )
+                .distinct()
+            )
+        ).all():
+            v2_by_entry[str(ledger_entry_id)].add(invoice_id)
+
+    history: dict[str, dict[str, Any]] = {}
+    for entry_id in entry_ids:
+        chain = chains[uuid.UUID(entry_id)]
+        count = sum(1 for invoice_ids in invoice_documents if chain & invoice_ids)
+        v2_invoices: set[uuid.UUID] = set()
+        for value in chain:
+            v2_invoices |= v2_by_entry.get(value, set())
+        history[entry_id] = {"state": "known", "count": count + len(v2_invoices)}
+    return history
 
 
 async def _storage_row(
@@ -652,13 +734,20 @@ async def build_seller_report(
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for entry in entries:
         grouped[entry["seller_id"]].append(entry)
-    # Селлер, у которого за период не было ни одной операции, но было хранение,
-    # обязан остаться в сводке: хранение — такая же услуга, и без строки в
-    # таблице до неё не добраться, потому что раскрывашка живёт внутри строки.
-    storage_sellers = set(
-        (
-            await session.scalars(
-                select(BillingLedgerEntry.seller_id).where(
+    # Хранение живёт отдельной строкой раскрывашки, а не записью операции.
+    # Поэтому в сводке его нет ни в строке селлера, ни в её деньгах: селлер, у
+    # которого за период было только хранение, исчезал совсем, а у остальных
+    # «Стоимость услуг» расходилась с суммой выставленного счёта — счёт-то
+    # хранение включает.
+    storage_money: dict[uuid.UUID, int] = {
+        row[0]: int(row[1] or 0)
+        for row in (
+            await session.execute(
+                select(
+                    BillingLedgerEntry.seller_id,
+                    func.coalesce(func.sum(BillingLedgerEntry.amount), 0),
+                )
+                .where(
                     BillingLedgerEntry.tenant_id == tenant_id,
                     BillingLedgerEntry.service_code == "storage",
                     BillingLedgerEntry.entry_type == "charge",
@@ -666,21 +755,31 @@ async def build_seller_report(
                     BillingLedgerEntry.occurred_at < end,
                     BillingLedgerEntry.seller_id.is_not(None),
                 )
+                .group_by(BillingLedgerEntry.seller_id)
             )
         ).all()
-    )
+    }
     rows: list[dict[str, Any]] = []
+    tenant_storage_money = 0
     for seller in sellers:
         if seller_id is not None and seller.id != seller_id:
             continue
         if search and search.lower() not in seller.name.lower():
             continue
         seller_entries = grouped[str(seller.id)]
-        if not seller_entries and seller.id not in storage_sellers:
+        seller_storage = storage_money.get(seller.id, 0)
+        if not seller_entries and seller.id not in storage_money:
             continue
         total = _totals(seller_entries, include_finance=include_finance)
+        if include_finance and seller_storage:
+            total["gross_total_kopecks"] += seller_storage
+            total["net_total_kopecks"] += seller_storage
+            tenant_storage_money += seller_storage
         rows.append({"seller_id": str(seller.id), "seller_name": seller.name, **total, "details_target": f"/api/billing/seller-report/sellers/{seller.id}/details"})
     totals = _totals(entries, include_finance=include_finance)
+    if include_finance and tenant_storage_money:
+        totals["gross_total_kopecks"] += tenant_storage_money
+        totals["net_total_kopecks"] += tenant_storage_money
     return {"rows": rows, "totals": {"seller_count": len(rows), **totals}, "entries": entries, "start": start, "end": end}
 
 
@@ -774,16 +873,22 @@ async def seller_details(
             raise SellerReportError("invalid_cursor") from None
     page = entries[offset:offset + limit]
     if include_finance:
-        # Историю счетов спрашиваем только по видимой странице. Раньше она
-        # считалась по каждой строке за весь период — отдельным запросом на
-        # строку, и то же самое повторялось на экране сводки, где её никто не
-        # показывает.
+        # Историю счетов спрашиваем только по видимой странице и одним заходом
+        # на всю страницу. Раньше она считалась по каждой строке за весь период
+        # — отдельным чтением всех счетов селлера на строку, — и то же самое
+        # повторялось на экране сводки, где её никто не показывает.
+        page_entry_ids = [
+            str(row["billing_ledger_entry_id"])
+            for row in page
+            if row.get("billing_ledger_entry_id")
+        ]
+        history = await _invoice_history_map(
+            session, tenant_id=tenant_id, seller_id=seller_id, entry_ids=page_entry_ids
+        )
         for row in page:
             entry_id = row.get("billing_ledger_entry_id")
-            if entry_id:
-                row["invoice_history"] = await _invoice_history(
-                    session, tenant_id=tenant_id, seller_id=seller_id, entry_id=str(entry_id)
-                )
+            if entry_id and str(entry_id) in history:
+                row["invoice_history"] = history[str(entry_id)]
     next_cursor = None
     if offset + limit < len(entries):
         tail = page[-1]

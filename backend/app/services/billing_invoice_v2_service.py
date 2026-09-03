@@ -203,6 +203,25 @@ async def _storage_line(
     )
     if not entries:
         return None
+    # Сутки, уже попавшие в выставленный счёт, второй раз в счёт не идут.
+    # Хранение — ежесуточное начисление, и повторно взять за него деньги нельзя
+    # ни при каком сценарии. До 03.09.2026 эта дыра была недостижима только
+    # потому, что галочка хранения вообще не доезжала до запроса.
+    invoiced = set(
+        (
+            await session.scalars(
+                select(BillingInvoiceV2Source.billing_ledger_entry_id).where(
+                    BillingInvoiceV2Source.tenant_id == tenant_id,
+                    BillingInvoiceV2Source.billing_ledger_entry_id.in_(
+                        {entry.id for entry in entries}
+                    ),
+                )
+            )
+        ).all()
+    )
+    entries = [entry for entry in entries if entry.id not in invoiced]
+    if not entries:
+        return None
     # Сутки без заданной ставки идут в счёт нулём, а не отказом: отчёт и счёт
     # показывают одно и то же, а разбираться с незаведённым тарифом — работа
     # человека, а не повод не дать выставить счёт.

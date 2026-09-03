@@ -48,6 +48,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
+from app.models.billing import BillingLedgerEntry
 from app.models.fbs_order import FbsOrder, FbsOrderProduct
 from app.models.operation_fact import OperationFact
 from app.models.product import Product
@@ -106,6 +107,7 @@ async def main() -> None:
     skipped_early = 0
     failed = 0
     redated = 0
+    redated_charges = 0
     by_day: dict[date, int] = defaultdict(int)
 
     async with SessionLocal() as session:
@@ -183,6 +185,22 @@ async def main() -> None:
                     if fact is not None:
                         fact.occurred_at = moment
                         pending += 1
+                    # Если по этому документу деньги уже начислены, дату надо
+                    # переставить и им: счёт собирается из начислений и берёт
+                    # период по их дате, а не по дате факта. Иначе факт стоял бы
+                    # верным числом, а деньги — днём пакетного опроса.
+                    for entry in (
+                        await session.scalars(
+                            select(BillingLedgerEntry).where(
+                                BillingLedgerEntry.tenant_id == tenant_id,
+                                BillingLedgerEntry.source_type == SOURCE_TYPE,
+                                BillingLedgerEntry.source_id == order.id,
+                            )
+                        )
+                    ).all():
+                        entry.occurred_at = moment
+                        redated_charges += 1
+                        pending += 1
                 continue
 
             if order.seller_id is None:
@@ -241,6 +259,8 @@ async def main() -> None:
             print("сухой прогон: ничего не записано, повторите с --apply")
 
     print(f"фактов создано: {created}, дат исправлено: {redated}")
+    if redated_charges:
+        print(f"переставлено дат у уже созданных начислений: {redated_charges}")
     if skipped_no_seller:
         print(f"пропущено без селлера: {skipped_no_seller}")
     if skipped_early:
