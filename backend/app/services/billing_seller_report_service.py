@@ -718,6 +718,10 @@ async def _storage_row(
                     BillingLedgerEntry.tenant_id == tenant_id,
                     BillingLedgerEntry.seller_id == seller_id,
                     BillingLedgerEntry.service_code == "storage",
+                    # Только ночные начисления: старые ведомости лежат тем же
+                    # кодом услуги, но источником `storage_measurement`, и без
+                    # фильтра отчёт показал бы одни сутки дважды — как и счёт.
+                    BillingLedgerEntry.source_type == "storage_day",
                     BillingLedgerEntry.entry_type == "charge",
                     BillingLedgerEntry.occurred_at >= start,
                     BillingLedgerEntry.occurred_at < end,
@@ -768,6 +772,10 @@ async def build_seller_report(
                 .where(
                     BillingLedgerEntry.tenant_id == tenant_id,
                     BillingLedgerEntry.service_code == "storage",
+                    # Только ночные начисления: старые ведомости лежат тем же
+                    # кодом услуги, но источником `storage_measurement`, и без
+                    # фильтра отчёт показал бы одни сутки дважды — как и счёт.
+                    BillingLedgerEntry.source_type == "storage_day",
                     BillingLedgerEntry.entry_type == "charge",
                     BillingLedgerEntry.occurred_at >= start,
                     BillingLedgerEntry.occurred_at < end,

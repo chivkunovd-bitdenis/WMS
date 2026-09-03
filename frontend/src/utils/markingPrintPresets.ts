@@ -146,6 +146,9 @@ export function buildTapePreviewUnits(layout: PrintLayout, maxUnits = 3): TapePr
 export function cloneLayout(layout: PrintLayout): PrintLayout {
   return {
     units: layout.units.map((unit) => ({ ...unit })),
+    // Состав этикетки — часть макета, а не довесок: без него копия теряла
+    // настройку продавца, и печать шла со всеми полями, что бы ни настроили.
+    ...(layout.label_options ? { label_options: { ...layout.label_options } } : {}),
   }
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Box, Paper, Stack, Typography } from '@mui/material'
 import { CheckboxInput, ErrorNotice, PrimaryAction, SelectInput } from '../../ui-kit'
 import { apiUrl } from '../../api'
@@ -34,13 +34,21 @@ export function FfLabelTemplatePanel({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
+  // Ответ на прошлого продавца не должен записываться в галочки нового.
+  // Переключились с А на Б, ответ А пришёл позже — и оператор сохранил бы
+  // настройки А под именем Б, ничего не заметив.
+  const requestedSellerRef = useRef('')
+
   const load = useCallback(async (id: string) => {
     setError(null)
     setSaved(false)
+    requestedSellerRef.current = id
     try {
       const template = await resolvePrintTemplate(token, { sellerId: id })
+      if (requestedSellerRef.current !== id) return
       setOptions(template.layout.label_options ?? DEFAULT_PRINT_LABEL_OPTIONS)
     } catch (cause) {
+      if (requestedSellerRef.current !== id) return
       setError(cause instanceof Error ? cause.message : 'Не удалось загрузить настройку')
     }
   }, [token])

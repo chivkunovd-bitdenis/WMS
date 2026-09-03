@@ -480,6 +480,12 @@ async def save_user_last_print_layout(
     layout: PrintLayout | dict[str, Any],
 ) -> PrintTemplateRow:
     parsed_layout = parse_layout(layout) if not isinstance(layout, PrintLayout) else layout
+    # В личной раскладке оператора состав этикетки не храним вовсе — только
+    # ленту. Иначе он переезжает вместе с ней: напечатал для продавца с
+    # выключенным брендом, и следующий продавец, у которого своей настройки нет,
+    # получил чужой состав. Раскладка — привычка человека, состав — свойство
+    # товара продавца, и смешивать их нельзя.
+    parsed_layout = PrintLayout(units=parsed_layout.units, label_options=DEFAULT_LABEL_OPTIONS)
     existing = await _find_user_last_layout(session, tenant_id, user_id)
     if existing is not None:
         existing.layout_json = layout_to_json(parsed_layout)

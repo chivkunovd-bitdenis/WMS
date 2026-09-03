@@ -163,10 +163,14 @@ async def charge_storage_day(
     if not grouped:
         return 0
 
-    already_charged = set(
-        (
+    # Берём сами строки, а не только их адреса: сутки могли быть посчитаны
+    # частично — товар часть дня лежал без известного объёма. Тогда строка есть,
+    # но она меньше правды, и её надо дописать, а не пропустить навсегда.
+    already_charged_rows = {
+        row.source_id: row
+        for row in (
             await session.scalars(
-                select(BillingLedgerEntry.source_id).where(
+                select(BillingLedgerEntry).where(
                     BillingLedgerEntry.tenant_id == tenant_id,
                     BillingLedgerEntry.service_code == STORAGE_SERVICE_CODE,
                     BillingLedgerEntry.source_type == SOURCE_TYPE,
@@ -174,13 +178,12 @@ async def charge_storage_day(
                 )
             )
         ).all()
-    )
+    }
 
     created = 0
     for (seller_id, warehouse_id, product_id), product_movements in grouped.items():
         source_id = storage_day_source_id(warehouse_id=warehouse_id, product_id=product_id)
-        if source_id in already_charged:
-            continue
+        existing_entry = already_charged_rows.get(source_id)
         product = products[product_id]
         try:
             liter_days, missing_dimensions = interval_liter_days(
@@ -252,6 +255,29 @@ async def charge_storage_day(
                 product_id,
                 day,
             )
+            continue
+
+        if existing_entry is not None:
+            # Сутки уже посчитаны. Дописываем только если стало известно больше:
+            # обмер внесли задним числом, и прежняя строка меньше правды. Меньше
+            # прежнего не пишем никогда — начисление не должно уменьшаться от
+            # повторного прохода.
+            if quantity > (existing_entry.quantity or 0):
+                logger.info(
+                    "storage day topped up after later measurement: "
+                    "tenant=%s product=%s day=%s was=%s now=%s",
+                    tenant_id,
+                    product_id,
+                    day,
+                    existing_entry.quantity,
+                    quantity,
+                )
+                existing_entry.quantity = quantity
+                existing_entry.rate = tariff.rate if tariff is not None else None
+                existing_entry.amount = amount
+                if tariff is not None:
+                    existing_entry.tariff_version_v2_id = tariff.id
+                created += 1
             continue
 
         entry = BillingLedgerEntry(

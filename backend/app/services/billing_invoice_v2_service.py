@@ -207,6 +207,11 @@ async def _storage_line(
                     BillingLedgerEntry.tenant_id == tenant_id,
                     BillingLedgerEntry.seller_id == seller_id,
                     BillingLedgerEntry.service_code == "storage",
+                    # Только ночные начисления. Старые зафиксированные ведомости
+                    # лежат тем же кодом услуги, но другим источником
+                    # (`storage_measurement`), и без этого фильтра счёт сложил бы
+                    # обе строки за одни и те же сутки — заплатили бы дважды.
+                    BillingLedgerEntry.source_type == "storage_day",
                     BillingLedgerEntry.entry_type == "charge",
                     BillingLedgerEntry.occurred_at >= start,
                     BillingLedgerEntry.occurred_at < end,

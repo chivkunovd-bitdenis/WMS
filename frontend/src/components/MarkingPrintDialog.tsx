@@ -32,6 +32,8 @@ import {
   type TapeBlock,
 } from '../utils/markingPrintPresets'
 import { resolvePrintTemplate, type PrintLayout } from '../utils/printTemplate'
+import { labelOptionsFromLayout } from '../utils/printMarkingCodeLabel'
+import type { ProductLabelPrintOptions } from '../utils/productLabelText'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import {
   beginPrintUserGesture,
@@ -179,6 +181,7 @@ function buildProductLabelSections(
   product: ProductThermalLabelData,
   count: number,
   size: LabelSize,
+  labelOptions?: ProductLabelPrintOptions,
 ): string[] {
   const barcode = product.barcode?.trim()
   if (!barcode) {
@@ -189,7 +192,7 @@ function buildProductLabelSections(
     buildProductLabelSectionHtml(
       product,
       barcodeDataUrl,
-      undefined,
+      labelOptions,
       size,
     ).replace('data-testid="product-thermal-label"', 'data-testid="product-thermal-label" data-tape-block="label"'),
   )
@@ -260,6 +263,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [czQty, setCzQty] = useState(2)
   const [wbQty, setWbQty] = useState(0)
   const [tapeOrder, setTapeOrder] = useState<TapeBlock[]>(buildDefaultTape(2, 0))
+  const requestedProductRef = useRef<string | null>(null)
   const [dragTapeIndex, setDragTapeIndex] = useState<number | null>(null)
   const [catalogPrintQty, setCatalogPrintQty] = useState(1)
   const [wbBarcodeQty, setWbBarcodeQty] = useState(1)
@@ -448,7 +452,29 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setCzPrintOrientation(loadLabelPrintOrientation())
     setWbLabelSize(resolveLabelSize(loadLabelSizeId('label')))
     if (!requiresHonestSign) {
+      // Лента у обычного товара фиксированная — один ШК, без Честного знака.
+      // Но состав этикетки всё равно принадлежит продавцу: без этого запроса
+      // настройка не применялась к большинству товаров, у которых маркировки
+      // нет вовсе.
       setLayout(cloneLayout(NON_HONEST_SIGN_LABEL_LAYOUT))
+      requestedProductRef.current = ctx.productId
+      void (async () => {
+        try {
+          const template = await resolvePrintTemplate(ctx.token, {
+            productId: ctx.productId,
+            sellerId: ctx.sellerId ?? undefined,
+          })
+          if (requestedProductRef.current !== ctx.productId) return
+          if (template.layout.label_options) {
+            setLayout({
+              ...cloneLayout(NON_HONEST_SIGN_LABEL_LAYOUT),
+              label_options: { ...template.layout.label_options },
+            })
+          }
+        } catch {
+          // Настройка не загрузилась — печатаем полным составом, как раньше.
+        }
+      })()
       return
     }
     const defaultPresetId = 'pairs' as const
@@ -465,6 +491,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
           productId: ctx.productId,
           sellerId: ctx.sellerId ?? undefined,
         })
+        // Ответ по прошлому товару не применяем к текущему: диалог могли
+        // закрыть и открыть на другом заказе, пока запрос летел.
+        if (requestedProductRef.current !== ctx.productId) return
         const matched = MARKING_PRINT_PRESETS.find(
           (preset) =>
             preset.id !== 'custom' &&
@@ -824,7 +853,12 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               }
             } else if (fallbackLabelCopies > 0) {
               orderSections.push(
-                ...buildProductLabelSections(order.productLabel, fallbackLabelCopies, size),
+                ...buildProductLabelSections(
+                  order.productLabel,
+                  fallbackLabelCopies,
+                  size,
+                  labelOptionsFromLayout(printLayout),
+                ),
               )
             }
             if (orderSections.length === 0) {

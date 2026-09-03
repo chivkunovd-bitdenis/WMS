@@ -357,3 +357,70 @@ async def test_product_measured_later_is_charged_for_the_days_it_was_missed(
         if row.event_kind == f"storage_day:{day.isoformat()}"
     }
     assert len(charged_products) == 2
+
+
+@pytest.mark.asyncio
+async def test_partially_measured_day_is_topped_up_after_later_measurement(
+    async_client: AsyncClient,
+) -> None:
+    """Сутки, посчитанные наполовину, дописываются, когда обмер внесли позже.
+
+    Товар лежал весь день, но объём стал известен только к середине. Первая ночь
+    начисляла часть, а любой следующий проход видел существующую строку и
+    пропускал сутки навсегда — это систематическая недоплата за хранение.
+    """
+    tenant_id, _seller_id, _product_id = await _seed(async_client)
+    day = previous_moscow_day()
+
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=day) == 1
+    full = (await _storage_entries(tenant_id))[0].quantity
+
+    # Изображаем частично посчитанные сутки: строка есть, но меньше правды —
+    # ровно то, что оставляет за собой день с поздним обмером.
+    async with SessionLocal() as session:
+        row = (
+            await session.scalars(
+                select(BillingLedgerEntry).where(
+                    BillingLedgerEntry.tenant_id == tenant_id,
+                    BillingLedgerEntry.service_code == "storage",
+                )
+            )
+        ).one()
+        row.quantity = full / 2
+        await session.commit()
+
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=day) == 1
+
+    after = await _storage_entries(tenant_id)
+    # Строка одна и та же, дописана до полной: второй строки за те же сутки нет.
+    assert len(after) == 1
+    assert after[0].quantity == full
+
+
+@pytest.mark.asyncio
+async def test_repeat_pass_never_reduces_an_existing_charge(
+    async_client: AsyncClient,
+) -> None:
+    """Повторный проход не уменьшает уже начисленное.
+
+    Начисление — событие, а не черновик: если пересчёт вдруг даст меньше,
+    переписывать деньги вниз нельзя.
+    """
+    tenant_id, _seller_id, product_id = await _seed(async_client)
+    day = previous_moscow_day()
+
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=day) == 1
+    was = (await _storage_entries(tenant_id))[0].quantity
+
+    async with SessionLocal() as session:
+        product = await session.get(Product, product_id)
+        assert product is not None
+        product.volume_liters = 1
+        await session.commit()
+
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=day) == 0
+    assert (await _storage_entries(tenant_id))[0].quantity == was

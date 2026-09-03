@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box,
   Button,
@@ -42,6 +42,7 @@ export function ProductBarcodePrintDialog({ open, meta, onClose, token, productI
   const [printOptions, setPrintOptions] = useState<ProductLabelPrintOptions>(
     DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS,
   )
+  const requestedProductRef = useRef<string | null>(null)
 
   const hasComposition = Boolean(meta?.wb_composition?.trim())
 
@@ -55,11 +56,15 @@ export function ProductBarcodePrintDialog({ open, meta, onClose, token, productI
       // Состав, закреплённый за продавцом, важнее локальных галочек: этикетка
       // должна быть одинаковой везде, где её печатают.
       if (token && productId) {
+        // Ответ по прошлому товару не должен применяться к текущему: закрыли
+        // печать одного, открыли другого — медленный ответ первого пришёл бы
+        // последним и напечатал бы чужим составом.
+        requestedProductRef.current = productId
         void (async () => {
           try {
             const template = await resolvePrintTemplate(token, { productId })
             const saved = template.layout.label_options
-            if (saved) {
+            if (saved && requestedProductRef.current === productId) {
               setPrintOptions({
                 includeSize: saved.include_size,
                 includeColor: saved.include_color,
