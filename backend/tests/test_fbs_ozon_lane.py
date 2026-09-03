@@ -5,8 +5,11 @@ from __future__ import annotations
 import base64
 import json
 import uuid
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -1895,6 +1898,90 @@ async def test_ozon_handoff_after_approved_carriage_does_not_approve_twice(
     assert "/v2/posting/fbs/act/get-barcode" in paths
     assert delivered.status == FBS_SUPPLY_STATUS_IN_DELIVERY
     assert delivered.external_supply_id == "901"
+
+
+@dataclass
+class _RecordingStatusTransport(FakeMarketplaceTransport):
+    """Фейк, который помнит, по каким именно отправлениям его спросили."""
+
+    requested: list[list[str]] = field(default_factory=list)
+
+    async def fetch_statuses(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        order_ids: Sequence[str],
+    ) -> list[dict[str, Any]]:
+        self.requested.append(list(order_ids))
+        return await super().fetch_statuses(
+            client_id=client_id,
+            api_key=api_key,
+            order_ids=order_ids,
+        )
+
+
+@pytest.mark.asyncio
+async def test_ozon_status_sync_skips_finished_orders_and_polls_the_rest_in_turns(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Опрос берёт порцию живых заказов по кругу, а не всю историю продавца.
+
+    Подстатус Ozon отдаёт только карточкой по одному номеру, поэтому размер
+    выборки — это ровно число последовательных запросов за круг автоопроса.
+    """
+    tenant, seller, warehouse, product, live_old, _ = await _seed_ozon_supply_case(
+        db_session,
+        packed=False,
+    )
+    now = datetime.now(UTC)
+    live_old.last_wb_sync_at = now - timedelta(hours=2)
+    extra = []
+    for index, status in enumerate(("done", "cancelled", "new"), start=1):
+        extra.append(
+            FbsOrder(
+                tenant_id=tenant.id,
+                seller_id=seller.id,
+                warehouse_id=warehouse.id,
+                product_id=product.id,
+                marketplace="ozon",
+                external_order_id=f"ozon-posting-{status}",
+                wb_order_id=9000 + index,
+                status=status,
+                mapping_status=MAPPING_STATUS_MAPPED,
+                reserve_status=RESERVE_STATUS_RESERVED,
+                created_at_wb=now,
+                deadline_at=now + timedelta(days=1),
+                last_wb_sync_at=now - timedelta(hours=1),
+            )
+        )
+    db_session.add_all(extra)
+    await db_session.commit()
+    monkeypatch.setattr(ozon_sync_svc, "OZON_STATUS_SYNC_BATCH_LIMIT", 1)
+    transport = _RecordingStatusTransport()
+
+    await ozon_sync_svc.sync_ozon_order_statuses(
+        db_session,
+        tenant.id,
+        seller.id,
+        OzonMarketplaceProvider(transport=transport),
+        AsyncMock(),
+    )
+    await ozon_sync_svc.sync_ozon_order_statuses(
+        db_session,
+        tenant.id,
+        seller.id,
+        OzonMarketplaceProvider(transport=transport),
+        AsyncMock(),
+    )
+
+    # Завершённый и отменённый не спрашиваются вовсе; живые идут по кругу,
+    # первым — тот, кого дольше не опрашивали.
+    assert transport.requested == [
+        ["ozon-posting-dispatch"],
+        ["ozon-posting-new"],
+    ]
 
 
 def _ozon_cancel_transport() -> FakeMarketplaceTransport:
