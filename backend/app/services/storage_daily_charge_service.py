@@ -28,7 +28,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
-from app.models.billing import BillingLedgerEntry
+from app.models.billing import BillingInvoiceV2Source, BillingLedgerEntry
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
@@ -68,6 +68,17 @@ def storage_day_source_id(*, warehouse_id: uuid.UUID, product_id: uuid.UUID) -> 
 def storage_day_event_kind(day: date) -> str:
     """Ключ суток начисления — им же экран отбирает нужный месяц."""
     return f"storage_day:{day.isoformat()}"
+
+
+def storage_day_topup_event_kind(day: date, index: int) -> str:
+    """Ключ доначисления за те же сутки.
+
+    Начисление, уже уехавшее в выставленный счёт, переписывать нельзя: счёт
+    помнит свою сумму, а строку считает израсходованной и второй раз в счёт не
+    берёт — разницу не выставят никогда. Поэтому недостающее пишем соседней
+    строкой за те же сутки, и уникальность «услуга + событие» держит её отдельно.
+    """
+    return f"{storage_day_event_kind(day)}:topup{index}"
 
 
 def previous_moscow_day(now: datetime | None = None) -> date:
@@ -166,24 +177,44 @@ async def charge_storage_day(
     # Берём сами строки, а не только их адреса: сутки могли быть посчитаны
     # частично — товар часть дня лежал без известного объёма. Тогда строка есть,
     # но она меньше правды, и её надо дописать, а не пропустить навсегда.
-    already_charged_rows = {
-        row.source_id: row
-        for row in (
-            await session.scalars(
-                select(BillingLedgerEntry).where(
-                    BillingLedgerEntry.tenant_id == tenant_id,
-                    BillingLedgerEntry.service_code == STORAGE_SERVICE_CODE,
-                    BillingLedgerEntry.source_type == SOURCE_TYPE,
-                    BillingLedgerEntry.event_kind == storage_day_event_kind(day),
-                )
+    day_kind = storage_day_event_kind(day)
+    already_charged_rows: dict[uuid.UUID, list[BillingLedgerEntry]] = {}
+    for row in (
+        await session.scalars(
+            select(BillingLedgerEntry).where(
+                BillingLedgerEntry.tenant_id == tenant_id,
+                BillingLedgerEntry.service_code == STORAGE_SERVICE_CODE,
+                BillingLedgerEntry.source_type == SOURCE_TYPE,
+                # Плюс доначисления за те же сутки: они лежат соседними строками
+                # с ключом `…:topupN`, и без них проход посчитал бы, что за сутки
+                # начислено меньше, чем на самом деле, и дописал бы ещё раз.
+                BillingLedgerEntry.event_kind.like(f"{day_kind}%"),
             )
-        ).all()
-    }
+        )
+    ).all():
+        already_charged_rows.setdefault(row.source_id, []).append(row)
+
+    # Какие из этих строк уже уехали в выставленный счёт — их трогать нельзя.
+    charged_ids = {row.id for rows in already_charged_rows.values() for row in rows}
+    invoiced_ids: set[uuid.UUID] = set()
+    if charged_ids:
+        invoiced_ids = {
+            entry_id
+            for entry_id in (
+                await session.scalars(
+                    select(BillingInvoiceV2Source.billing_ledger_entry_id).where(
+                        BillingInvoiceV2Source.tenant_id == tenant_id,
+                        BillingInvoiceV2Source.billing_ledger_entry_id.in_(charged_ids),
+                    )
+                )
+            ).all()
+            if entry_id is not None
+        }
 
     created = 0
     for (seller_id, warehouse_id, product_id), product_movements in grouped.items():
         source_id = storage_day_source_id(warehouse_id=warehouse_id, product_id=product_id)
-        existing_entry = already_charged_rows.get(source_id)
+        existing_rows = already_charged_rows.get(source_id, [])
         product = products[product_id]
         try:
             liter_days, missing_dimensions = interval_liter_days(
@@ -257,27 +288,81 @@ async def charge_storage_day(
             )
             continue
 
-        if existing_entry is not None:
+        if existing_rows:
             # Сутки уже посчитаны. Дописываем только если стало известно больше:
-            # обмер внесли задним числом, и прежняя строка меньше правды. Меньше
+            # обмер внесли задним числом, и прежние строки меньше правды. Меньше
             # прежнего не пишем никогда — начисление не должно уменьшаться от
             # повторного прохода.
-            if quantity > (existing_entry.quantity or 0):
+            charged_quantity = sum(
+                (row.quantity or Decimal(0)) for row in existing_rows
+            )
+            if quantity <= charged_quantity:
+                continue
+            delta = quantity - charged_quantity
+            last_row = max(existing_rows, key=lambda row: row.event_kind)
+            if last_row.id not in invoiced_ids:
+                # Последняя строка ещё не в счёте — честнее дописать её, чем
+                # плодить соседние: в счёт и в отчёт она попадёт целиком.
+                topped = (last_row.quantity or Decimal(0)) + delta
                 logger.info(
                     "storage day topped up after later measurement: "
                     "tenant=%s product=%s day=%s was=%s now=%s",
                     tenant_id,
                     product_id,
                     day,
-                    existing_entry.quantity,
-                    quantity,
+                    last_row.quantity,
+                    topped,
                 )
-                existing_entry.quantity = quantity
-                existing_entry.rate = tariff.rate if tariff is not None else None
-                existing_entry.amount = amount
+                last_row.quantity = topped
+                last_row.rate = tariff.rate if tariff is not None else None
+                last_row.amount = (
+                    None
+                    if tariff is None
+                    else postgres_integer(Decimal(tariff.rate) * topped, field="billing_amount")
+                )
                 if tariff is not None:
-                    existing_entry.tariff_version_v2_id = tariff.id
+                    last_row.tariff_version_v2_id = tariff.id
                 created += 1
+                continue
+            # Строка уже выставлена — переписывать её нельзя: счёт запомнил свою
+            # сумму, а саму строку считает израсходованной и второй раз не
+            # возьмёт. Недостающее пишем отдельной строкой за те же сутки.
+            index = sum(1 for row in existing_rows if row.event_kind != day_kind) + 1
+            logger.info(
+                "storage day charged extra after invoice: "
+                "tenant=%s product=%s day=%s delta=%s",
+                tenant_id,
+                product_id,
+                day,
+                delta,
+            )
+            session.add(
+                BillingLedgerEntry(
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    warehouse_id=warehouse_id,
+                    tariff_version_v2_id=tariff.id if tariff is not None else None,
+                    entry_type="charge",
+                    service_code=STORAGE_SERVICE_CODE,
+                    source=SOURCE,
+                    source_type=SOURCE_TYPE,
+                    source_id=source_id,
+                    event_kind=storage_day_topup_event_kind(day, index),
+                    unit=STORAGE_UNIT,
+                    quantity=delta,
+                    rate=tariff.rate if tariff is not None else None,
+                    amount=(
+                        None
+                        if tariff is None
+                        else postgres_integer(
+                            Decimal(tariff.rate) * delta, field="billing_amount"
+                        )
+                    ),
+                    occurred_at=(end - timedelta(microseconds=1)).astimezone(UTC),
+                )
+            )
+            await session.flush()
+            created += 1
             continue
 
         entry = BillingLedgerEntry(

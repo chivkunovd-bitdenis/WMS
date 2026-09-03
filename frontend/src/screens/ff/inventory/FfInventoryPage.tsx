@@ -3,7 +3,7 @@ import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { FfInventoryCountScreen } from './FfInventoryCountScreen'
 import { mergeInFlightActuals } from './InventoryRows'
-import { createFoundQueue, type FoundPlace } from './foundQueue'
+import { createFoundQueue, FoundPlaceDeferredError, type FoundPlace } from './foundQueue'
 import type { WbProductPickerCatalogRow } from '../../../components/WbProductPickerDialog'
 
 /**
@@ -124,7 +124,12 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     try {
       const res = await fetch(apiUrl(`${BASE}/${id}`), { headers: { ...authHeaders(token) } })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      setCount(toCount((await res.json()) as ApiDetail))
+      const opened = toCount((await res.json()) as ApiDetail)
+      setCount(opened)
+      countRef.current = opened
+      // Сканы, отложенные из-за ухода в другой документ, снова в работе — и
+      // снова держат проведение, пока не доедут.
+      foundQueueRef.current?.resumeFor(opened.id)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось открыть документ')
     } finally {
@@ -236,10 +241,12 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     foundQueueRef.current = createFoundQueue<FoundResponse>({
       send: async (place) => {
         const live = countRef.current
-        if (!live || live.status !== 'draft') throw new Error('Документ уже закрыт')
-        if (live.id !== place.countId) {
-          throw new Error('Находка относится к другому документу пересчёта')
+        if (!live || live.id !== place.countId) {
+          // Оператор ушёл в другой документ, пока скан не доехал. Он не потерян:
+          // очередь отложит его до возвращения в свой пересчёт.
+          throw new FoundPlaceDeferredError('Находка относится к другому документу пересчёта')
         }
+        if (live.status !== 'draft') throw new Error('Документ уже закрыт')
         // Кладём на сервер то, что оператор насчитал: автосохранения в экране
         // нет, факт живёт в состоянии React до нажатия «Сохранить».
         await saveCountActuals(token, live, touchedRef.current)

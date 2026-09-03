@@ -391,6 +391,11 @@ class CreatePrintTemplateIn(BaseModel):
     is_default: bool = False
 
 
+class SellerLabelOptionsIn(BaseModel):
+    seller_id: uuid.UUID | None = None
+    label_options: PrintLabelOptionsOut
+
+
 class UpdatePrintTemplateIn(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=256)
     layout: PrintLayoutOut | None = None
@@ -1368,6 +1373,41 @@ async def create_print_template(
             # по-старому и об этом не знал.
             user_id=None if (target_seller_id or body.product_id) else user.id,
             is_default=body.is_default,
+        )
+    except pt_svc.PrintTemplateServiceError as exc:
+        raise _http_from_pt_error(exc) from exc
+    return _print_template_out(row)
+
+
+@router.put("/print-templates/seller-label-options", response_model=PrintTemplateOut)
+async def set_seller_label_options(
+    body: SellerLabelOptionsIn,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> PrintTemplateOut:
+    """Закрепить за продавцом состав этикетки, не меняя его ленту печати.
+
+    Отдельная ручка появилась потому, что панель настроек раньше сохраняла
+    шаблон целиком и заодно переписывала ленту на «один ШК»: у оператора без
+    личной раскладки из печати пропадал Честный знак.
+    """
+    if user.role == FULFILLMENT_SELLER:
+        if effective_seller_id is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
+        target_seller_id: uuid.UUID | None = effective_seller_id
+    elif user.role == FULFILLMENT_ADMIN:
+        target_seller_id = body.seller_id
+    else:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    if target_seller_id is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="seller_required")
+    try:
+        row = await pt_svc.set_seller_label_options(
+            session,
+            user.tenant_id,
+            seller_id=target_seller_id,
+            options=pt_svc.LabelOptions(**body.label_options.model_dump()),
         )
     except pt_svc.PrintTemplateServiceError as exc:
         raise _http_from_pt_error(exc) from exc

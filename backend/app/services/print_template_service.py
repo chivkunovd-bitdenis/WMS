@@ -88,6 +88,8 @@ class PrintTemplateRow:
 
 SYSTEM_PAIRS_LAYOUT = PrintLayout(units=[LayoutUnit(block=LAYOUT_BLOCK_CZ, copies=2)])
 
+SELLER_LABEL_TEMPLATE_NAME = "Этикетка продавца"
+
 
 def system_pairs_template(tenant_id: uuid.UUID) -> PrintTemplateRow:
     return PrintTemplateRow(
@@ -557,6 +559,58 @@ async def _scoped_label_options(
     if seller_default is None:
         return None
     return parse_layout(seller_default.layout_json).label_options
+
+
+async def set_seller_label_options(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID,
+    options: LabelOptions,
+) -> PrintTemplateRow:
+    """Закрепить за продавцом состав этикетки, не трогая его ленту печати.
+
+    Панель настроек отвечает только за состав: что печатать на этикетке ШК, а
+    что нет. Лента (сколько блоков Честного знака и сколько ШК гнать подряд) —
+    отдельное решение, она приходит из привычки оператора или из умолчания
+    продавца. Пока панель сохраняла шаблон целиком, она заодно переписывала
+    ленту на «один ШК», и у оператора без личной раскладки из печати молча
+    пропадал Честный знак.
+
+    Поэтому у существующего шаблона продавца меняем только состав, а новый
+    заводим с лентой системного умолчания — той же, что действует, когда за
+    продавцом не настроено ничего.
+    """
+    await _validate_scope(session, tenant_id, seller_id=seller_id, product_id=None)
+    stmt = (
+        select(PrintTemplate)
+        .where(
+            PrintTemplate.tenant_id == tenant_id,
+            PrintTemplate.seller_id == seller_id,
+            PrintTemplate.product_id.is_(None),
+            PrintTemplate.user_id.is_(None),
+            PrintTemplate.is_default.is_(True),
+        )
+        .limit(1)
+    )
+    existing = (await session.execute(stmt)).scalar_one_or_none()
+    if existing is not None:
+        current = parse_layout(existing.layout_json)
+        existing.layout_json = layout_to_json(
+            PrintLayout(units=current.units, label_options=options)
+        )
+        await session.flush()
+        await session.refresh(existing)
+        return _row_from_model(existing)
+    return await create_print_template(
+        session,
+        tenant_id,
+        name=SELLER_LABEL_TEMPLATE_NAME,
+        layout=PrintLayout(units=SYSTEM_PAIRS_LAYOUT.units, label_options=options),
+        seller_id=seller_id,
+        user_id=None,
+        is_default=True,
+    )
 
 
 async def resolve_default_print_template(

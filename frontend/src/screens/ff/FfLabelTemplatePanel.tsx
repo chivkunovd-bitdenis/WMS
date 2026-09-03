@@ -78,16 +78,18 @@ export function FfLabelTemplatePanel({ token }: { token: string }) {
     setBusy(true)
     setError(null)
     try {
-      const response = await fetch(apiUrl('/operations/marking-codes/print-templates'), {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'Этикетка продавца',
-          seller_id: sellerId,
-          is_default: true,
-          layout: { units: [{ block: 'label', copies: 1 }], label_options: options },
-        }),
-      })
+      // Отдельная ручка состава: она меняет только галочки и не трогает ленту
+      // печати продавца. Пока панель сохраняла шаблон целиком, она заодно
+      // переписывала ленту на «один ШК», и у оператора без личной раскладки
+      // из печати пропадал Честный знак.
+      const response = await fetch(
+        apiUrl('/operations/marking-codes/print-templates/seller-label-options'),
+        {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ seller_id: sellerId, label_options: options }),
+        },
+      )
       if (!response.ok) throw new Error(await readApiErrorMessage(response))
       setSaved(true)
     } catch (cause) {

@@ -451,13 +451,17 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setCzLabelSize(resolveLabelSize(loadLabelSizeId('cz')))
     setCzPrintOrientation(loadLabelPrintOrientation())
     setWbLabelSize(resolveLabelSize(loadLabelSizeId('label')))
+    // Метка «какой товар мы сейчас спрашиваем» ставится ДО развилки: её сверяют
+    // обе ветки, и обе летят за шаблоном. Пока она стояла только в ветке обычного
+    // товара, у маркируемого сверка шла с null и ответ выбрасывался всегда —
+    // то есть шаблон переставал применяться на живом вайлдберрисовском потоке.
+    requestedProductRef.current = ctx.productId
     if (!requiresHonestSign) {
       // Лента у обычного товара фиксированная — один ШК, без Честного знака.
       // Но состав этикетки всё равно принадлежит продавцу: без этого запроса
       // настройка не применялась к большинству товаров, у которых маркировки
       // нет вовсе.
       setLayout(cloneLayout(NON_HONEST_SIGN_LABEL_LAYOUT))
-      requestedProductRef.current = ctx.productId
       void (async () => {
         try {
           const template = await resolvePrintTemplate(ctx.token, {
@@ -758,7 +762,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       setError('У товара нет штрихкода для печати.')
       return false
     }
-    printProductThermalLabels(label, count, undefined, size)
+    // Состав этикетки принадлежит продавцу и должен действовать одинаково
+    // везде: и в ленте ФБС, и здесь — в упаковке, каталоге и раздельной печати.
+    printProductThermalLabels(label, count, labelOptionsFromLayout(layout), size)
     markSectionDone(markDone)
     ctx.onPrinted()
     if (closeAfter) {
@@ -1426,6 +1432,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                     showOrderQr={includesOrderQr}
                     fbsOrders={fbsPreviewOrders}
                     fbsNonHonestLabelCopies={fbsPreviewLabelCopies}
+                    printOptions={labelOptionsFromLayout(layout)}
                     testId="marking-print-wb-only-preview"
                   />
                 </Box>
@@ -1620,6 +1627,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                       unitsToShow={Math.max(1, sepWbTotal)}
                       totalUnits={Math.max(1, sepWbTotal)}
                       productLabel={ctx?.productLabel ?? null}
+                      printOptions={labelOptionsFromLayout(layout)}
                       testId="marking-print-sep-wb-preview"
                     />
                   </Box>

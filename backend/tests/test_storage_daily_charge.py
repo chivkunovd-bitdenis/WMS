@@ -424,3 +424,86 @@ async def test_repeat_pass_never_reduces_an_existing_charge(
     async with SessionLocal() as session:
         assert await charge_storage_day(session, tenant_id, day=day) == 0
     assert (await _storage_entries(tenant_id))[0].quantity == was
+
+
+@pytest.mark.asyncio
+async def test_invoiced_day_is_topped_up_by_a_separate_line(
+    async_client: AsyncClient,
+) -> None:
+    """Уже выставленное начисление не переписывается — разница идёт отдельной строкой.
+
+    Счёт запоминает свою сумму и помечает строку израсходованной: второй раз в
+    счёт она не пойдёт. Если дописать её на месте, доначисленные деньги не
+    выставят никогда, а отчёт разойдётся со счётом. Поэтому недостающее
+    добавляется соседней строкой за те же сутки — её счёт увидит как новую.
+    """
+    from app.models.billing import (
+        BillingInvoiceV2,
+        BillingInvoiceV2Line,
+        BillingInvoiceV2Source,
+    )
+
+    tenant_id, seller_id, _product_id = await _seed(async_client)
+    day = previous_moscow_day()
+
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=day) == 1
+    full = (await _storage_entries(tenant_id))[0].quantity
+
+    async with SessionLocal() as session:
+        row = (
+            await session.scalars(
+                select(BillingLedgerEntry).where(
+                    BillingLedgerEntry.tenant_id == tenant_id,
+                    BillingLedgerEntry.service_code == "storage",
+                )
+            )
+        ).one()
+        row.quantity = full / 2
+        invoice = BillingInvoiceV2(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            number="TEST-1",
+            period_start=day,
+            period_end=day,
+            total_amount_kopecks=0,
+            status="issued",
+            creation_mode="selected_operations",
+        )
+        session.add(invoice)
+        await session.flush()
+        line = BillingInvoiceV2Line(
+            tenant_id=tenant_id,
+            invoice_id=invoice.id,
+            description_snapshot="Хранение",
+            unit_price_kopecks=None,
+            total_amount_kopecks=0,
+            sort_order=0,
+        )
+        session.add(line)
+        await session.flush()
+        session.add(
+            BillingInvoiceV2Source(
+                tenant_id=tenant_id,
+                invoice_line_id=line.id,
+                billing_ledger_entry_id=row.id,
+                signed_amount_kopecks_snapshot=0,
+            )
+        )
+        await session.commit()
+
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=day) == 1
+
+    after = await _storage_entries(tenant_id)
+    assert len(after) == 2, after
+    # Выставленная строка осталась нетронутой, разница легла соседней.
+    kinds = {entry.event_kind: entry.quantity for entry in after}
+    assert kinds[f"storage_day:{day.isoformat()}"] == full / 2
+    assert kinds[f"storage_day:{day.isoformat()}:topup1"] == full - full / 2
+    assert sum(entry.quantity for entry in after) == full
+
+    # Ещё один проход ничего не добавляет: за сутки уже начислено сколько надо.
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=day) == 0
+    assert len(await _storage_entries(tenant_id)) == 2
