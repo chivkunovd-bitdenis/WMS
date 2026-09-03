@@ -121,6 +121,36 @@ def invoice_v2_out(invoice: BillingInvoiceV2) -> dict[str, Any]:
     }
 
 
+def _manual_lines(
+    raw_lines: list[dict[str, Any]] | Any, *, first_sort_order: int
+) -> list[dict[str, Any]]:
+    """Строки, введённые человеком: описание и сумма, без ссылки на начисление.
+
+    Одна и та же сборка нужна и пустому счёту, и счёту по выбранным операциям:
+    к отгруженным заказам добавляют короба, доставку, разовую работу. Строка без
+    `sources` — это нормально: за ней не стоит начисления, и в базе она хранится
+    так же, просто без источников.
+    """
+    lines: list[dict[str, Any]] = []
+    for index, line in enumerate(raw_lines or []):
+        description = str(line.get("description", "")).strip()
+        if not description:
+            raise BillingInvoiceV2Error("manual_description_required")
+        unit_price = line.get("unit_price")
+        lines.append(
+            {
+                "id": uuid.uuid4(),
+                "description": description,
+                "unit_price_kopecks": decimal_to_kopecks(str(unit_price))
+                if unit_price not in (None, "")
+                else None,
+                "total_amount_kopecks": decimal_to_kopecks(str(line.get("amount", ""))),
+                "sort_order": first_sort_order + index,
+            }
+        )
+    return lines
+
+
 async def preview_invoice_v2(
     session: AsyncSession, *, tenant_id: uuid.UUID, request: dict[str, Any]
 ) -> dict[str, Any]:
@@ -130,24 +160,7 @@ async def preview_invoice_v2(
         raise BillingInvoiceV2Error("invalid_creation_mode")
     seller_id = uuid.UUID(str(request["seller_id"]))
     ff_profile, seller_profile = await _profiles(session, tenant_id=tenant_id, seller_id=seller_id)
-    lines: list[dict[str, Any]] = []
-    for index, line in enumerate(request.get("lines", [])):
-        description = str(line.get("description", "")).strip()
-        if not description:
-            raise BillingInvoiceV2Error("manual_description_required")
-        amount = decimal_to_kopecks(str(line.get("amount", "")))
-        unit_price = line.get("unit_price")
-        lines.append(
-            {
-                "id": uuid.uuid4(),
-                "description": description,
-                "unit_price_kopecks": decimal_to_kopecks(str(unit_price))
-                if unit_price not in (None, "")
-                else None,
-                "total_amount_kopecks": amount,
-                "sort_order": index,
-            }
-        )
+    lines = _manual_lines(request.get("lines", []), first_sort_order=0)
     if not 1 <= len(lines) <= 10:
         raise BillingInvoiceV2Error("manual_line_count")
     return {
@@ -323,6 +336,12 @@ async def _preview_selected_operations(
     )
     if storage_line is not None:
         lines.append(storage_line)
+    # Ручные строки идут последними: сначала то, за что уже начислено, потом
+    # добавленное человеком.
+    extra_lines = _manual_lines(request.get("manual_lines", []), first_sort_order=len(lines))
+    if len(extra_lines) > 10:
+        raise BillingInvoiceV2Error("manual_line_count")
+    lines.extend(extra_lines)
     if not lines:
         raise BillingInvoiceV2Error("selected_operations_required")
     return {

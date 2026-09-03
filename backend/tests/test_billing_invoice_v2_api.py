@@ -500,3 +500,59 @@ async def test_storage_period_cannot_be_invoiced_twice(async_client: AsyncClient
     second = await async_client.post("/billing/invoices-v2/preview", headers=headers, json=body)
     assert second.status_code in (200, 422), second.text
     assert second.status_code == 422 or second.json()["lines"] == [], second.text
+
+
+@pytest.mark.asyncio
+async def test_selected_operations_invoice_carries_manually_added_lines(
+    async_client: AsyncClient,
+) -> None:
+    """К выбранным операциям можно дописать строку, которой нет в начислениях.
+
+    Короба, доставка, разовая работа — за них начисления нет и быть не может,
+    но выставлять за них отдельный счёт значит слать селлеру две бумаги за одну
+    и ту же работу. Строка уходит в тот же счёт и так же попадает в раздел
+    выставленных.
+    """
+    suffix = f"invoice-v2-extra-lines-{time.time_ns()}"
+    headers, tenant_id, seller_id, _product = await _storage_ready_tenant(async_client, suffix)
+    async with SessionLocal() as session:
+        tenant = await session.get(Tenant, tenant_id)
+        assert tenant is not None
+        tenant.billing_enabled_from = date(2026, 8, 1)
+        await session.commit()
+
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=date(2026, 8, 20)) == 1
+
+    body = {
+        "creation_mode": "selected_operations",
+        "seller_id": str(seller_id),
+        "date_from": "2026-08-20",
+        "date_to": "2026-08-20",
+        "selected_root_ids": [],
+        "include_storage": True,
+        "manual_lines": [{"description": "Короба", "amount": "500"}],
+    }
+    preview = await async_client.post(
+        "/billing/invoices-v2/preview", headers=headers, json=body
+    )
+    assert preview.status_code == 200, preview.text
+    lines = preview.json()["lines"]
+    descriptions = [line["description"] for line in lines]
+    assert "Короба" in descriptions, lines
+    # Хранение никуда не делось: обе части в одном счёте.
+    assert len(lines) == 2, lines
+    boxes = next(line for line in lines if line["description"] == "Короба")
+    assert boxes["total_amount_kopecks"] == 50000
+    assert preview.json()["total_amount_kopecks"] == sum(
+        line["total_amount_kopecks"] for line in lines
+    )
+
+    issued = await async_client.post(
+        "/billing/invoices-v2",
+        headers={**headers, "Idempotency-Key": f"{suffix}-1"},
+        json=body,
+    )
+    assert issued.status_code in (200, 201), issued.text
+    # Выставленный счёт помнит добавленную строку, а не только начисления.
+    assert "Короба" in [line["description"] for line in issued.json()["lines"]]

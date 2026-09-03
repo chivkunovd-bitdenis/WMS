@@ -108,6 +108,90 @@ function previewToOpened(preview: InvoicePreview, sellerName: string): OpenedInv
   }
 }
 
+
+/**
+ * Редактор строк, введённых человеком. Один и тот же и для пустого счёта, и для
+ * строк, добавляемых к выбранным операциям: короба, доставка, разовая работа.
+ * `minLines` различает случаи — в пустом счёте должна остаться хотя бы одна
+ * строка, а к операциям строки добавляют по желанию, и удалить можно все.
+ */
+function ManualLinesEditor({
+  lines,
+  onChange,
+  minLines,
+  testIdPrefix,
+}: {
+  lines: ManualLine[]
+  onChange: (next: ManualLine[]) => void
+  minLines: number
+  testIdPrefix: string
+}) {
+  return (
+    <>
+      {lines.map((line, index) => (
+        <Stack direction="row" spacing={1} key={line.key} sx={{ alignItems: 'flex-start' }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <TextInput
+              label="Услуга"
+              value={line.description}
+              onChange={(value) =>
+                onChange(
+                  lines.map((item, position) =>
+                    position === index ? { ...item, description: value } : item,
+                  ),
+                )
+              }
+              testId={`${testIdPrefix}-description-${index}`}
+            />
+          </Box>
+          <Box sx={{ width: 200, flexShrink: 0 }}>
+            <MoneyInput
+              label="Сумма"
+              value={line.amount}
+              onChange={(value) =>
+                onChange(
+                  lines.map((item, position) =>
+                    position === index ? { ...item, amount: value } : item,
+                  ),
+                )
+              }
+              testId={`${testIdPrefix}-amount-${index}`}
+            />
+          </Box>
+          <IconAction
+            title="Удалить строку"
+            onClick={() =>
+              onChange(
+                lines.length > minLines
+                  ? lines.filter((_, position) => position !== index)
+                  : lines,
+              )
+            }
+            disabledReason={
+              lines.length > minLines
+                ? undefined
+                : 'В счёте должна остаться хотя бы одна строка'
+            }
+            testId={`${testIdPrefix}-remove-${index}`}
+          >
+            <DeleteOutlined fontSize="small" />
+          </IconAction>
+        </Stack>
+      ))}
+      <SecondaryAction
+        onClick={() => onChange([...lines, emptyManualLine(lines.length)])}
+        disabledReason={
+          lines.length >= MANUAL_LINE_LIMIT
+            ? `В счёте не больше ${MANUAL_LINE_LIMIT} добавленных строк`
+            : undefined
+        }
+      >
+        Добавить строку
+      </SecondaryAction>
+    </>
+  )
+}
+
 export function FfBillingInvoiceCreate({
   token,
   sellers = [],
@@ -136,6 +220,11 @@ export function FfBillingInvoiceCreate({
   const [manualOpen, setManualOpen] = useState(false)
   const [manualSeller, setManualSeller] = useState('')
   const [manualLines, setManualLines] = useState<ManualLine[]>([emptyManualLine(0)])
+  // Строки, добавляемые к выбранным операциям: короба, доставка, разовая
+  // работа. Их нет в начислениях, но выставлять за них второй счёт отдельно —
+  // лишняя работа и лишняя бумага для селлера.
+  const [extraOpen, setExtraOpen] = useState(false)
+  const [extraLines, setExtraLines] = useState<ManualLine[]>([])
   const [preview, setPreview] = useState<InvoicePreview | null>(null)
   const [issued, setIssued] = useState<InvoicePreview | null>(null)
   const [busy, setBusy] = useState(false)
@@ -168,6 +257,9 @@ export function FfBillingInvoiceCreate({
     date_to: dateTo,
     selected_root_ids: selectedRootIds,
     ...(includeStorage ? { include_storage: true } : {}),
+    manual_lines: extraLines
+      .filter((line) => line.description.trim() && line.amount.trim())
+      .map((line) => ({ description: line.description.trim(), amount: line.amount.trim() })),
   })
 
   const manualBody = () => ({
@@ -219,6 +311,9 @@ export function FfBillingInvoiceCreate({
       const body = preview.creation_mode === 'manual' ? manualBody() : selectedBody()
       const result = await request('invoices-v2', body, idempotencyKey)
       setIssued(result)
+      // Добавленные строки принадлежат выставленному счёту: следующий счёт
+      // начинается с чистого листа.
+      setExtraLines([])
       onIssued()
     } catch (reason) {
       setError((reason as Error).message)
@@ -245,6 +340,9 @@ export function FfBillingInvoiceCreate({
 
   const shown = issued ?? preview
   const manualFilled = manualLines.some((line) => line.description.trim() && line.amount.trim())
+  const filledExtraLines = extraLines.filter(
+    (line) => line.description.trim() && line.amount.trim(),
+  )
 
   return (
     <>
@@ -255,9 +353,51 @@ export function FfBillingInvoiceCreate({
       >
         Выставить счёт
       </PrimaryAction>
+      {hasSelection ? (
+        <SecondaryAction
+          onClick={() => {
+            setError(null)
+            if (extraLines.length === 0) setExtraLines([emptyManualLine(0)])
+            setExtraOpen(true)
+          }}
+          data-testid="billing-extra-lines-open"
+        >
+          {filledExtraLines.length > 0
+            ? `Добавленные строки (${filledExtraLines.length})`
+            : 'Добавить строку'}
+        </SecondaryAction>
+      ) : null}
       {error && !preview && !manualOpen ? (
         <ErrorNotice testId="billing-issue-error">{error}</ErrorNotice>
       ) : null}
+
+      <AppDialog
+        open={extraOpen}
+        title="Строки к счёту"
+        onClose={() => setExtraOpen(false)}
+        maxWidth="lg"
+        testId="billing-invoice-extra-lines"
+        actions={
+          <ActionGroup>
+            <PrimaryAction onClick={() => setExtraOpen(false)} data-testid="billing-extra-lines-done">
+              Готово
+            </PrimaryAction>
+          </ActionGroup>
+        }
+      >
+        <Stack spacing={2}>
+          <Typography>
+            Эти строки уйдут в счёт вместе с выбранными операциями. Начислений за ними нет —
+            сумму ставите вы: короба, доставка, разовая работа.
+          </Typography>
+          <ManualLinesEditor
+            lines={extraLines}
+            onChange={setExtraLines}
+            minLines={0}
+            testIdPrefix="billing-extra"
+          />
+        </Stack>
+      </AppDialog>
 
       <AppDialog
         open={manualOpen}
@@ -292,62 +432,12 @@ export function FfBillingInvoiceCreate({
             options={sellers.map((seller) => ({ value: seller.id, label: seller.name }))}
             testId="billing-manual-seller"
           />
-          {manualLines.map((line, index) => (
-            <Stack direction="row" spacing={1} key={line.key} sx={{ alignItems: 'flex-start' }}>
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-              <TextInput
-                label="Услуга"
-                value={line.description}
-                onChange={(value) =>
-                  setManualLines((lines) =>
-                    lines.map((item, position) =>
-                      position === index ? { ...item, description: value } : item,
-                    ),
-                  )
-                }
-                testId={`billing-manual-description-${index}`}
-              />
-              </Box>
-              <Box sx={{ width: 200, flexShrink: 0 }}>
-              <MoneyInput
-                label="Сумма"
-                value={line.amount}
-                onChange={(value) =>
-                  setManualLines((lines) =>
-                    lines.map((item, position) =>
-                      position === index ? { ...item, amount: value } : item,
-                    ),
-                  )
-                }
-                testId={`billing-manual-amount-${index}`}
-              />
-              </Box>
-              <IconAction
-                title="Удалить строку"
-                onClick={() =>
-                  setManualLines((lines) =>
-                    lines.length > 1 ? lines.filter((_, position) => position !== index) : lines,
-                  )
-                }
-                disabledReason={
-                  manualLines.length > 1 ? undefined : 'В счёте должна остаться хотя бы одна строка'
-                }
-                testId={`billing-manual-remove-${index}`}
-              >
-                <DeleteOutlined fontSize="small" />
-              </IconAction>
-            </Stack>
-          ))}
-          <SecondaryAction
-            onClick={() => setManualLines((lines) => [...lines, emptyManualLine(lines.length)])}
-            disabledReason={
-              manualLines.length >= MANUAL_LINE_LIMIT
-                ? `В ручном счёте не больше ${MANUAL_LINE_LIMIT} строк`
-                : undefined
-            }
-          >
-            Добавить строку
-          </SecondaryAction>
+          <ManualLinesEditor
+            lines={manualLines}
+            onChange={setManualLines}
+            minLines={1}
+            testIdPrefix="billing-manual"
+          />
           {error ? <ErrorNotice testId="billing-manual-error">{error}</ErrorNotice> : null}
         </Stack>
       </AppDialog>
