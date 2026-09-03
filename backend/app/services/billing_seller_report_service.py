@@ -30,6 +30,7 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_PACKED,
     FbsOrder,
 )
+from app.models.fbs_supply import FbsSupply
 from app.models.inventory_movement import InventoryMovement
 from app.models.operation_fact import OperationFact, OperationFactCutover, OperationFactLine
 from app.models.product import Product
@@ -280,6 +281,31 @@ async def _operation_entries(
         )
         for line in lines:
             fact_lines[line.operation_fact_id].append(line)
+    # Имя поставки FBS для старых фактов. Снимок номера пишется в момент
+    # события, и у фактов, созданных до того, как витрина научилась брать
+    # отображаемый номер, там пусто — в расчётах строка выходила «Документ без
+    # номера». Достраиваем на чтении, чтобы починились и уже накопленные записи.
+    supply_names: dict[uuid.UUID, str] = {}
+    supply_ids = {
+        fact.document_id
+        for fact in facts
+        if fact.document_type == "fbs_supply" and not fact.document_number_snapshot
+    }
+    if supply_ids:
+        supply_rows = await session.execute(
+            select(
+                FbsSupply.id, FbsSupply.document_number, FbsSupply.display_number,
+                FbsSupply.wb_supply_id, FbsSupply.name,
+            ).where(FbsSupply.id.in_(supply_ids))
+        )
+        for supply_row in supply_rows:
+            label = next(
+                (str(value).strip() for value in supply_row[1:] if str(value or "").strip()),
+                None,
+            )
+            if label is not None:
+                supply_names[supply_row[0]] = f"Поставка {label}"
+
     result: list[dict[str, Any]] = []
     for fact in facts:
         priced = pricing.get(fact.id, [])
@@ -293,7 +319,7 @@ async def _operation_entries(
             "seller_name": fact.seller_name_snapshot or "Не указан", "occurred_at": _as_moscow(fact.occurred_at).isoformat(),
             "service_code": fact.billable_service_code or fact.operation_code, "item_quantity": fact.item_quantity,
             "source_type": fact.document_type, "source_id": str(fact.document_id),
-            "document_number": fact.document_number_snapshot,
+            "document_number": fact.document_number_snapshot or supply_names.get(fact.document_id),
             "product_name": ", ".join(dict.fromkeys(product_names)) or None,
             "sku": ", ".join(dict.fromkeys(skus)) or None,
             "source_target": _source_target(fact.document_type, fact.document_id),
