@@ -263,6 +263,9 @@ async def get_binding_stock_sync_status(
     stmt = select(FbsWarehouseBinding).where(
         FbsWarehouseBinding.tenant_id == tenant_id,
         FbsWarehouseBinding.seller_id == seller_id,
+        # Статус публикации остатков — вайлдберрисовский экран; числовой ключ
+        # с появлением привязок Ozon перестал быть уникальным сам по себе.
+        FbsWarehouseBinding.marketplace == "wb",
         FbsWarehouseBinding.wb_warehouse_id == wb_warehouse_id,
     )
     binding = (await session.execute(stmt)).scalar_one_or_none()
