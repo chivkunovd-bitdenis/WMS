@@ -75,6 +75,8 @@ def _source_target(source_type: str, source_id: uuid.UUID) -> dict[str, str] | N
     # передавал. Открывается тем же кликом по номеру, что и остальные документы.
     if source_type == "fbs_order":
         return {"kind": "fbs_order", "source_id": str(source_id)}
+    if source_type == "fbs_supply":
+        return {"kind": "route", "to": f"/app/ff/fbs?supply_id={source_id}"}
     return None
 
 

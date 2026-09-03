@@ -125,7 +125,7 @@ async def record_fbs_pick(
         marketplace=getattr(supply, "marketplace"),
         document_type="fbs_supply",
         document_id=getattr(supply, "id"),
-        document_number_snapshot=getattr(supply, "document_number", None),
+        document_number_snapshot=_fbs_supply_number(supply),
         actor_user_id=actor_user_id,
         actor_name_snapshot=None,
         occurred_at=occurred_at,
@@ -133,6 +133,20 @@ async def record_fbs_pick(
         reversal_of_id=original_id,
         lines=[line_input(product, getattr(pick, "product_id"), 1)],
     )
+
+
+def _fbs_supply_number(supply: object) -> str | None:
+    """Как поставка называется в отчёте.
+
+    Номер документа у поставок FBS заполняется не всегда, и в расчётах строка
+    выходила «Документ без номера» — по такой не понять, о какой поставке речь.
+    Берём первое непустое из того, чем поставку зовут на экранах.
+    """
+    for attribute in ("document_number", "display_number", "wb_supply_id", "name"):
+        value = getattr(supply, attribute, None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:64]
+    return None
 
 
 async def record_packaging_event(

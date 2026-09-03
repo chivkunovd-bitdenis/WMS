@@ -113,6 +113,12 @@ function formatMoscowDateTime(value: string): string {
   }).format(new Date(value))
 }
 
+// Литро-дни приходят числом с плавающей точкой во всю точность: «24209.9483946»
+// в таблице читается как сбой расчёта, а не как объём хранения.
+function formatLiterDays(value: number): string {
+  return value.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
 function formatMoscowDate(value: string): string {
   return new Intl.DateTimeFormat('ru-RU', { timeZone: MOSCOW_TIME_ZONE }).format(new Date(value))
 }
@@ -362,7 +368,7 @@ export function FfBillingSellerDetails({
         align: 'right' as const,
         render: (row: DocumentRow) =>
           row.kind === 'storagePeriod' ? (
-            <TextCell value={`${row.storage.liter_days} л·дн`} />
+            <TextCell value={`${formatLiterDays(row.storage.liter_days)} л·дн`} />
           ) : (
             <QtyCell value={row.entry.item_quantity ?? 0} />
           ),
@@ -478,7 +484,7 @@ export function FfBillingSellerDetails({
       align: 'right' as const,
       render: (row: SectionRow) =>
         row.kind === 'storage' ? (
-          <TextCell value={`${row.storage.liter_days} л·дн`} />
+          <TextCell value={`${formatLiterDays(row.storage.liter_days)} л·дн`} />
         ) : (
           <QtyCell value={sumItems(row.entries)} />
         ),
