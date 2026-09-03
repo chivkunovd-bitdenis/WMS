@@ -580,9 +580,21 @@ def _raise_cancellation_http(exc: FbsCancellationError) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
     if exc.code in ("order_not_cancellable", "marketplace_not_supported"):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
-    if exc.code in ("seller_not_found", "missing_marketplace_token"):
+    if exc.code in ("seller_not_found", "missing_marketplace_token", "ozon_not_connected"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
-    if exc.code.startswith("wb_"):
+    # Отказы Ozon — не наша внутренняя ошибка, и отдавать по ним 500 значит
+    # спрятать от оператора причину. «Причина отмены недоступна» — это конфликт
+    # состояния, «транспорт выключен» — временная недоступность, остальное
+    # пришло от маркетплейса.
+    if exc.code in (
+        "ozon_cancel_reason_unavailable",
+        "ozon_cancel_not_available",
+        "ozon_cancel_reason_message_required",
+    ):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+    if exc.code == "ozon_live_cancel_blocked":
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
+    if exc.code.startswith("wb_") or exc.code.startswith("ozon_"):
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
 

@@ -23,7 +23,18 @@ from app.models.fbs_supply import FbsSupply
 from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT
 from app.services import inventory_service as inv_svc
 from app.services.fbs_shipment_source_service import reversal_source_from_ledger
-from app.services.marketplace_scope import is_wildberries, wrong_marketplace_message
+from app.services.marketplace_account_service import (
+    MarketplaceAccountError,
+    MarketplaceAccountService,
+)
+from app.services.marketplace_provider import MarketplaceProviderError, provider_error_message
+from app.services.marketplace_scope import (
+    MARKETPLACE_OZON,
+    is_wildberries,
+    wrong_marketplace_message,
+)
+from app.services.ozon_fbs_process_service import OzonFbsProcessError, cancel_posting
+from app.services.ozon_provider_factory import build_ozon_provider, ozon_live_api_enabled
 from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
     _release_reservation,
@@ -211,6 +222,88 @@ def penalty_band_for_order(created_at_wb: datetime) -> str:
     return "gt120"
 
 
+async def _finish_local_cancellation(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order: FbsOrder,
+    *,
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    """Локальная часть отмены — одна на все маркетплейсы.
+
+    Сторнирование отгрузки, отцепление от поставки и снятие резерва работают с
+    нашими таблицами и о маркетплейсе ничего не знают. Раньше этот блок был
+    вписан в вайлдберрисовскую ветку, и озоновской отмене пришлось бы его
+    повторить — то есть завести второе место, где легко забыть про резерв.
+    """
+    order.status = FBS_ORDER_STATUS_CANCELLED
+    order.wb_status = "cancelled"
+    await reverse_fbs_shipment_if_needed(
+        session,
+        order,
+        actor_user_id=actor_user_id,
+    )
+    from app.services.fbs_packaging_integration_service import (
+        detach_cancelled_order_from_supply,
+    )
+
+    await detach_cancelled_order_from_supply(
+        session,
+        tenant_id,
+        order,
+        actor_user_id=actor_user_id,
+    )
+    await _release_reservation(session, order)
+    await session.flush()
+
+
+async def _cancel_ozon_order(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order: FbsOrder,
+) -> None:
+    """Отменить отправление в кабинете Ozon — до того, как отменим у себя.
+
+    Порядок именно такой: сначала маркетплейс, потом мы. Если отменить сначала
+    локально, а Ozon откажет, покупатель останется с активным заказом, которого
+    на складе уже нет.
+
+    Рубильник боевого транспорта проверяется явно. Без него выключенный Ozon
+    отдал бы локальный фейк, тот вернул бы пустой ответ, и оператор получил бы
+    «Ozon не подтвердил отмену» вместо честного «боевой транспорт не включён».
+    """
+    if not ozon_live_api_enabled():
+        raise FbsCancellationError(
+            "ozon_live_cancel_blocked",
+            message=(
+                "Отмена в Ozon выключена настройкой: боевой транспорт Ozon не включён. "
+                "Заказ не отменён ни в кабинете, ни у нас."
+            ),
+        )
+    try:
+        client_id, api_key = await MarketplaceAccountService(session).stored_credentials(
+            tenant_id,
+            order.seller_id,
+        )
+    except MarketplaceAccountError as exc:
+        raise FbsCancellationError(exc.code, message="Нет доступа к кабинету Ozon.") from exc
+    try:
+        await cancel_posting(
+            build_ozon_provider(),
+            client_id=client_id,
+            api_key=api_key,
+            posting_number=order.external_order_id or "",
+        )
+    except OzonFbsProcessError as exc:
+        raise FbsCancellationError(exc.code, message=exc.message) from exc
+    except MarketplaceProviderError as exc:
+        raise FbsCancellationError(
+            exc.code,
+            message=provider_error_message(exc),
+            retryable=exc.status_code in {429, 500, 502, 503, 504},
+        ) from exc
+
+
 async def cancel_order(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -235,12 +328,22 @@ async def cancel_order(
     if order.status in NON_CANCELLABLE_STATUSES:
         raise FbsCancellationError("order_not_cancellable")
 
-    # Отмена уходит настоящим PATCH в кабинет Wildberries и не смотрит на
-    # маркетплейс заказа. У заказа Ozon `wb_order_id` — синтезированный
-    # отрицательный хеш, и такой запрос ушёл бы в чужой кабинет с заведомо
-    # несуществующим номером. Пока своей отмены для Ozon нет, останавливаемся
-    # здесь: не отменить честнее, чем отменить не там.
+    # Отмена уходит настоящим запросом в кабинет того маркетплейса, которому
+    # принадлежит заказ. Раньше развилки здесь не было вовсе: озоновский заказ
+    # уезжал PATCH-ом в чужой вайлдберрисовский кабинет с отрицательным хешем
+    # вместо номера. Теперь у Ozon свой путь, а маркетплейс, которого мы не
+    # умеем, по-прежнему останавливается: не отменить честнее, чем отменить не
+    # там.
     if not is_wildberries(order):
+        if getattr(order, "marketplace", None) == MARKETPLACE_OZON:
+            await _cancel_ozon_order(session, tenant_id, order)
+            await _finish_local_cancellation(
+                session,
+                tenant_id,
+                order,
+                actor_user_id=actor_user_id,
+            )
+            return order
         raise FbsCancellationError(
             "marketplace_not_supported",
             message=wrong_marketplace_message(order, "Отмена заказа"),
@@ -294,25 +397,7 @@ async def cancel_order(
             retryable=exc.code == "transport_error",
         ) from exc
 
-    order.status = FBS_ORDER_STATUS_CANCELLED
-    order.wb_status = "cancelled"
-    await reverse_fbs_shipment_if_needed(
-        session,
-        order,
-        actor_user_id=actor_user_id,
-    )
-    from app.services.fbs_packaging_integration_service import (
-        detach_cancelled_order_from_supply,
-    )
-
-    await detach_cancelled_order_from_supply(
-        session,
-        tenant_id,
-        order,
-        actor_user_id=actor_user_id,
-    )
-    await _release_reservation(session, order)
-    await session.flush()
+    await _finish_local_cancellation(session, tenant_id, order, actor_user_id=actor_user_id)
     return order
 
 

@@ -1497,6 +1497,36 @@ class OzonPostingBooleanResponse(OzonFbsModel):
     result: bool = Field(_OPTIONAL_FIELD_DEFAULT, description='Результат обработки запроса. `true`, если запрос выполнился без ошибок.')
 
 
+class OzonPostingCancelReasonRequest(OzonFbsModel):
+    __openapi_name__ = 'postingCancelReasonRequest'
+    related_posting_numbers: list[str] = Field(..., description='Номера отправлений.')
+
+
+class OzonPostingCancelReasonResponse(OzonFbsModel):
+    __openapi_name__ = 'postingCancelReasonResponse'
+    result: list[OzonRelatedPostingCancelReason] = Field(_OPTIONAL_FIELD_DEFAULT, description='Результат запроса.')
+
+
+class OzonRelatedPostingCancelReasons(OzonFbsModel):
+    __openapi_name__ = 'relatedPostingCancelReasons'
+    id: int = Field(_OPTIONAL_FIELD_DEFAULT, description='Идентификатор причины отмены:\n- `352` — товар закончился на складе продавца. \n- `400` — остался только бракованный товар.\n- `401` — продавец отклонил арбитраж.\n- `402` — другое (вина продавца).\n- `665` — покупатель не забрал заказ.\n- `666` — возврат из службы доставки: нет доставки в указанный регион.\n- `667` — заказ утерян службой доставки.\n', json_schema_extra={'format': 'int64'})
+    title: str = Field(_OPTIONAL_FIELD_DEFAULT, description='Описание причины отмены.')
+    type_id: str = Field(_OPTIONAL_FIELD_DEFAULT, description='Инициатор отмены отправления: \n  - `buyer` — покупатель,\n  - `seller` — продавец.\n')
+
+
+class OzonRelatedPostingCancelReason(OzonFbsModel):
+    __openapi_name__ = 'relatedPostingCancelReason'
+    posting_number: str = Field(_OPTIONAL_FIELD_DEFAULT, description='Номер отправления.')
+    reasons: list[OzonRelatedPostingCancelReasons] = Field(_OPTIONAL_FIELD_DEFAULT, description='Информация о причинах отмены.')
+
+
+class OzonPostingCancelFbsPostingRequest(OzonFbsModel):
+    __openapi_name__ = 'postingCancelFbsPostingRequest'
+    cancel_reason_id: int = Field(..., description='Идентификатор причины отмены отправления.', json_schema_extra={'format': 'int64'})
+    cancel_reason_message: str = Field(_OPTIONAL_FIELD_DEFAULT, description='Дополнительная информация по отмене. Если `cancel_reason_id = 402`, параметр обязательный.')
+    posting_number: str = Field(..., description='Идентификатор отправления.')
+
+
 MODEL_BY_OPENAPI_NAME: dict[str, type[BaseModel] | type[Enum]] = {
     'posting.v4.PostingFbsUnfulfilledListRequest': OzonPostingV4PostingFbsUnfulfilledListRequest,
     'posting.v4.PostingFbsUnfulfilledListRequest.Filter': OzonPostingV4PostingFbsUnfulfilledListRequestFilter,
@@ -1658,6 +1688,11 @@ MODEL_BY_OPENAPI_NAME: dict[str, type[BaseModel] | type[Enum]] = {
     'v2PostingFBSGetDigitalActResponse': OzonV2PostingFBSGetDigitalActResponse,
     'v2MovePostingToAwaitingDeliveryRequest': OzonV2MovePostingToAwaitingDeliveryRequest,
     'postingBooleanResponse': OzonPostingBooleanResponse,
+    'postingCancelReasonRequest': OzonPostingCancelReasonRequest,
+    'postingCancelReasonResponse': OzonPostingCancelReasonResponse,
+    'relatedPostingCancelReasons': OzonRelatedPostingCancelReasons,
+    'relatedPostingCancelReason': OzonRelatedPostingCancelReason,
+    'postingCancelFbsPostingRequest': OzonPostingCancelFbsPostingRequest,
 }
 
 for _ozon_model in MODEL_BY_OPENAPI_NAME.values():

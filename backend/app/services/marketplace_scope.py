@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import Protocol
 
 MARKETPLACE_WB = "wb"
+MARKETPLACE_OZON = "ozon"
 
 
 class HasMarketplace(Protocol):

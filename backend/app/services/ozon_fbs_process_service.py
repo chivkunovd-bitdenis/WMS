@@ -21,6 +21,9 @@ from app.schemas.ozon_fbs_api import (
     OzonFbsv4FbsPostingShipV4Request,
     OzonFbsv4FbsPostingShipV4Response,
     OzonPostingBooleanResponse,
+    OzonPostingCancelFbsPostingRequest,
+    OzonPostingCancelReasonRequest,
+    OzonPostingCancelReasonResponse,
     OzonPostingv3GetFbsPostingRequest,
     OzonV1CarriageApproveRequest,
     OzonV1CarriageApproveResponse,
@@ -62,7 +65,13 @@ from app.services.ozon_marking_position_service import (
 )
 
 TResponse = TypeVar("TResponse", bound=BaseModel)
-__all__ = ["OzonFbsProcessError", "handoff_supply", "read_marking_status", "submit_marking"]
+__all__ = [
+    "OzonFbsProcessError",
+    "cancel_posting",
+    "handoff_supply",
+    "read_marking_status",
+    "submit_marking",
+]
 
 # Лист отгрузки по перевозке. Старый путь `/v2/posting/fbs/digital/act/get-pdf`
 # Ozon отключил — живой вызов отвечает «obsolete method cannot be used».
@@ -454,6 +463,133 @@ async def read_marking_status(
         "ozon_exemplar_unknown_status",
         f"Ozon вернул неизвестный статус маркировки: {status.status or 'пусто'}.",
     )
+
+
+# Отмена отправления. Метод и его форма взяты из официальной спецификации Ozon
+# (`PostingAPI_CancelFbsPosting`), а не выведены по аналогии: в нашей копии
+# спецификации FBS его не было, поэтому оба пути добавлены в неё дословно и
+# модели пересобраны генератором.
+CANCEL_PATH = "/v2/posting/fbs/cancel"
+CANCEL_REASON_PATH = "/v1/posting/fbs/cancel-reason"
+
+# «Товар закончился на складе продавца». Ровно та причина, по которой отменяет
+# фулфилмент: он не может собрать отправление, потому что товара нет. Официальный
+# FAQ Ozon по FBS говорит то же самое — «Отменяйте заказ, только если товара нет
+# в наличии». Причину не угадываем вслепую: перед отменой спрашиваем у Ozon
+# список причин для этого отправления и сверяемся с ним.
+CANCEL_REASON_OUT_OF_STOCK = 352
+# Причина «другое (вина продавца)»; спецификация требует при ней текст.
+CANCEL_REASON_OTHER = 402
+# Отменять от лица продавца имеет право только продавцовская причина: у Ozon
+# рядом лежат причины покупателя (`type_id == "buyer"`), и подставить их нельзя.
+CANCEL_INITIATOR_SELLER = "seller"
+
+
+async def _seller_cancel_reasons(
+    provider: OzonMarketplaceProvider,
+    *,
+    client_id: str,
+    api_key: str,
+    posting_number: str,
+) -> set[int]:
+    """Причины отмены, которые Ozon разрешает этому отправлению прямо сейчас.
+
+    Список зависит от состояния отправления: четыре причины из семи английская
+    версия спецификации помечает как доступные только в статусах доставки. Плюс
+    у метода отмены есть собственная частая ошибка `HAS_INCORRECT_CANCEL_REASON`
+    — «Указан неправильный идентификатор отмены заказа». Проще спросить, чем
+    получить отказ уже на мутации.
+    """
+    response = await _call(
+        provider,
+        client_id=client_id,
+        api_key=api_key,
+        path=CANCEL_REASON_PATH,
+        request=OzonPostingCancelReasonRequest(related_posting_numbers=[posting_number]),
+        response_type=OzonPostingCancelReasonResponse,
+        read=True,
+    )
+    allowed: set[int] = set()
+    for row in response.result or []:
+        if row.posting_number and row.posting_number != posting_number:
+            continue
+        for reason in row.reasons or []:
+            if reason.id and reason.type_id == CANCEL_INITIATOR_SELLER:
+                allowed.add(int(reason.id))
+    return allowed
+
+
+async def cancel_posting(
+    provider: OzonMarketplaceProvider,
+    *,
+    client_id: str,
+    api_key: str,
+    posting_number: str,
+    reason_id: int = CANCEL_REASON_OUT_OF_STOCK,
+    reason_message: str | None = None,
+) -> None:
+    """Отменить отправление Ozon и убедиться, что он это подтвердил.
+
+    Обратного хода у операции нет: «Статус отправления изменится на Отменено —
+    после этого восстановить заказ не получится» (База знаний Ozon). Поэтому
+    сначала спрашиваем разрешённые причины и отказываемся, если нашей среди них
+    нет, и только потом отменяем.
+    """
+    if not posting_number:
+        raise OzonFbsProcessError("ozon_posting_number_missing", "Нет номера отправления Ozon.")
+    if reason_id == CANCEL_REASON_OTHER and not (reason_message or "").strip():
+        # Требование спецификации, которое её же `required` не ловит: «Если
+        # значение параметра `cancel_reason_id` — 402, заполните поле
+        # `cancel_reason_message`».
+        raise OzonFbsProcessError(
+            "ozon_cancel_reason_message_required",
+            "Для причины «другое» Ozon требует пояснение.",
+            status_code=409,
+        )
+
+    allowed = await _seller_cancel_reasons(
+        provider,
+        client_id=client_id,
+        api_key=api_key,
+        posting_number=posting_number,
+    )
+    if allowed and reason_id not in allowed:
+        raise OzonFbsProcessError(
+            "ozon_cancel_reason_unavailable",
+            "Ozon не разрешает эту причину отмены для отправления.",
+            status_code=409,
+        )
+    if not allowed:
+        # Пустой список — это не «можно любую»: это «Ozon не назвал ни одной
+        # причины, доступной продавцу», то есть отменять нельзя. Отправить
+        # мутацию наугад дороже, чем остановиться.
+        raise OzonFbsProcessError(
+            "ozon_cancel_not_available",
+            "Ozon не предлагает ни одной причины отмены — отправление отменить нельзя.",
+            status_code=409,
+        )
+
+    values: dict[str, object] = {
+        "posting_number": posting_number,
+        "cancel_reason_id": reason_id,
+    }
+    if reason_message and reason_message.strip():
+        values["cancel_reason_message"] = reason_message.strip()
+    confirmed = await _call(
+        provider,
+        client_id=client_id,
+        api_key=api_key,
+        path=CANCEL_PATH,
+        request=OzonPostingCancelFbsPostingRequest.model_validate(values),
+        response_type=OzonPostingBooleanResponse,
+        read=False,
+    )
+    if confirmed.result is not True:
+        raise OzonFbsProcessError(
+            "ozon_cancel_unconfirmed",
+            "Ozon не подтвердил отмену отправления.",
+            status_code=502,
+        )
 
 
 async def _posting_readback(

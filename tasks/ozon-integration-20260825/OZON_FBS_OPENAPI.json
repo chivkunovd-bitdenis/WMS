@@ -2653,6 +2653,223 @@
           "FBS"
         ]
       }
+    },
+    "/v1/posting/fbs/cancel-reason": {
+      "post": {
+        "summary": "Причины отмены отправления",
+        "description": "Возвращает список причин отмены для конкретных отправлений.",
+        "operationId": "PostingAPI_GetPostingFbsCancelReasonV1",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Client-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Api-Key"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/postingCancelReasonRequest"
+              },
+              "example": {
+                "related_posting_numbers": [
+                  "73837363-0010-3"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Причины отмены отправлений",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/postingCancelReasonResponse"
+                },
+                "example": {
+                  "result": [
+                    {
+                      "posting_number": "73837363-0010-3",
+                      "reasons": [
+                        {
+                          "id": 352,
+                          "title": "Товар закончился на складе продавца",
+                          "type_id": "seller"
+                        },
+                        {
+                          "id": 400,
+                          "title": "Остался только бракованный товар",
+                          "type_id": "seller"
+                        },
+                        {
+                          "id": 402,
+                          "title": "Другое (вина продавца)",
+                          "type_id": "seller"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Неверный параметр",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rpcStatus"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Доступ запрещён",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rpcStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ответ не найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rpcStatus"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Конфликт запроса",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rpcStatus"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Внутренняя ошибка сервера",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rpcStatus"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "FBS"
+        ]
+      }
+    },
+    "/v2/posting/fbs/cancel": {
+      "post": {
+        "summary": "Отменить отправление",
+        "description": "Меняет статус отправления на `cancelled`.\n\nПеред началом работы проверьте причины отмены для конкретного отправления методом [/v1/posting/fbs/cancel-reason](#operation/PostingAPI_GetPostingFbsCancelReasonV1).\n\nУсловно-доставленные отправления отменить нельзя.\n\nЕсли значение параметра `cancel_reason_id` — 402, заполните поле `cancel_reason_message`.\n",
+        "operationId": "PostingAPI_CancelFbsPosting",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Client-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Api-Key"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/postingCancelFbsPostingRequest"
+              },
+              "example": {
+                "cancel_reason_id": 352,
+                "cancel_reason_message": "Product is out of stock",
+                "posting_number": "33920113-1231-1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Отправление отменено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/postingBooleanResponse"
+                },
+                "example": {
+                  "result": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Неверный параметр",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rpcStatus"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Доступ запрещён",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rpcStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ответ не найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rpcStatus"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Конфликт запроса",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rpcStatus"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Внутренняя ошибка сервера",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rpcStatus"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "FBS"
+        ]
+      }
     }
   },
   "components": {
@@ -7195,6 +7412,94 @@
           "result": {
             "type": "boolean",
             "description": "Результат обработки запроса. `true`, если запрос выполнился без ошибок."
+          }
+        },
+        "type": "object",
+        "title": "object"
+      },
+      "postingCancelReasonRequest": {
+        "required": [
+          "related_posting_numbers"
+        ],
+        "type": "object",
+        "title": "object",
+        "properties": {
+          "related_posting_numbers": {
+            "type": "array",
+            "description": "Номера отправлений.",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "postingCancelReasonResponse": {
+        "type": "object",
+        "title": "object",
+        "properties": {
+          "result": {
+            "description": "Результат запроса.",
+            "items": {
+              "$ref": "#/components/schemas/relatedPostingCancelReason"
+            },
+            "type": "array"
+          }
+        }
+      },
+      "relatedPostingCancelReasons": {
+        "type": "object",
+        "title": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Идентификатор причины отмены:\n- `352` — товар закончился на складе продавца. \n- `400` — остался только бракованный товар.\n- `401` — продавец отклонил арбитраж.\n- `402` — другое (вина продавца).\n- `665` — покупатель не забрал заказ.\n- `666` — возврат из службы доставки: нет доставки в указанный регион.\n- `667` — заказ утерян службой доставки.\n"
+          },
+          "title": {
+            "type": "string",
+            "description": "Описание причины отмены."
+          },
+          "type_id": {
+            "type": "string",
+            "description": "Инициатор отмены отправления: \n  - `buyer` — покупатель,\n  - `seller` — продавец.\n"
+          }
+        }
+      },
+      "relatedPostingCancelReason": {
+        "type": "object",
+        "title": "object",
+        "properties": {
+          "posting_number": {
+            "type": "string",
+            "description": "Номер отправления."
+          },
+          "reasons": {
+            "type": "array",
+            "description": "Информация о причинах отмены.",
+            "items": {
+              "$ref": "#/components/schemas/relatedPostingCancelReasons"
+            }
+          }
+        }
+      },
+      "postingCancelFbsPostingRequest": {
+        "required": [
+          "cancel_reason_id",
+          "posting_number"
+        ],
+        "properties": {
+          "cancel_reason_id": {
+            "format": "int64",
+            "type": "integer",
+            "description": "Идентификатор причины отмены отправления."
+          },
+          "cancel_reason_message": {
+            "type": "string",
+            "description": "Дополнительная информация по отмене. Если `cancel_reason_id = 402`, параметр обязательный."
+          },
+          "posting_number": {
+            "type": "string",
+            "description": "Идентификатор отправления."
           }
         },
         "type": "object",
