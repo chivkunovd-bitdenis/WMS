@@ -52,7 +52,9 @@ from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.fbs_stock_availability_service import fbs_available_qty_by_product
 from app.services.inventory_service import OUTBOUND_RESERVE_STATUSES
 from app.services.wb_card_enrichment import (
+    brand_from_card,
     color_from_card,
+    composition_from_card,
     first_photo_url_from_card,
     size_from_card_for_barcode,
     subject_name_from_card,
@@ -766,6 +768,10 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     image_url = first_photo_url_from_card(card_raw) if card_raw else None
     category = subject_name_from_card(card_raw) if card_raw else None
     color = color_from_card(card_raw) if card_raw else None
+    # Бренд и состав нужны этикетке ШК: без них она печаталась с пустыми
+    # строками там, где в каталоге всё заполнено, и выглядела обрезанной.
+    brand = brand_from_card(card_raw) if card_raw else None
+    composition = composition_from_card(card_raw) if card_raw else None
     size = None
     if product and product.wb_size:
         size = product.wb_size
@@ -830,6 +836,8 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
             ),
             "category": category,
             "color": color,
+            "brand": brand,
+            "composition": composition,
             "size": size,
             "packaging_instructions": product.packaging_instructions if product else None,
             "has_packaging_instructions": bool(

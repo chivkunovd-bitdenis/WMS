@@ -353,8 +353,23 @@ class PrintLayoutUnitOut(BaseModel):
     copies: int
 
 
+class PrintLabelOptionsOut(BaseModel):
+    """Состав этикетки ШК: что печатать, а что нет.
+
+    Порядок строк не настраивается и един для всех — размер, цвет, бренд,
+    состав (решение владельца 03.09.2026).
+    """
+
+    include_size: bool = True
+    include_color: bool = True
+    include_brand: bool = True
+    include_composition: bool = True
+
+
 class PrintLayoutOut(BaseModel):
     units: list[PrintLayoutUnitOut]
+    # Может не прийти со старого шаблона — тогда печатаем всё, что есть.
+    label_options: PrintLabelOptionsOut = PrintLabelOptionsOut()
 
 
 class PrintTemplateOut(BaseModel):
@@ -393,11 +408,17 @@ def _http_from_pt_error(exc: pt_svc.PrintTemplateServiceError) -> HTTPException:
 def _layout_out(layout: pt_svc.PrintLayout) -> PrintLayoutOut:
     return PrintLayoutOut(
         units=[PrintLayoutUnitOut(block=u.block, copies=u.copies) for u in layout.units],
+        label_options=PrintLabelOptionsOut(**layout.label_options.to_dict()),
     )
 
 
 def _layout_in_to_dict(layout: PrintLayoutOut) -> dict[str, object]:
-    return {"units": [{"block": u.block, "copies": u.copies} for u in layout.units]}
+    return {
+        "units": [{"block": u.block, "copies": u.copies} for u in layout.units],
+        # Без этого состав этикетки молча терялся при сохранении: наружу
+        # уходила только лента, и «настроить этикетку селлеру» не работало.
+        "label_options": layout.label_options.model_dump(),
+    }
 
 
 def _print_marking_codes_out(result: mc_svc.PrintMarkingCodesResult) -> PrintMarkingCodesOut:

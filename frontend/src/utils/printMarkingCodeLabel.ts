@@ -1,6 +1,10 @@
 import { apiUrl } from '../api'
 import { DEFAULT_LABEL_SIZE, loadLabelSizeId, resolveLabelSize, type LabelSize } from './labelSize'
 import { expandLayoutTape } from './markingPrintPresets'
+import {
+  DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS,
+  type ProductLabelPrintOptions,
+} from './productLabelText'
 import { maskCisTail, parseGs1Cis } from './parseGs1Cis'
 import {
   buildProductLabelContentCss,
@@ -344,6 +348,21 @@ function resolveProductLabel(
  * Строит HTML-секции ленты (по одной на этикетку) без запуска печати.
  * Нужно для печати пачками: секции можно резать на куски и печатать частями.
  */
+/**
+ * Опции состава этикетки из сохранённого шаблона. Ключа может не быть у старых
+ * шаблонов — тогда печатаем всё, что есть в данных, как было до 03.09.2026.
+ */
+export function labelOptionsFromLayout(layout: PrintLayout): ProductLabelPrintOptions {
+  const saved = layout.label_options
+  if (!saved) return DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS
+  return {
+    includeSize: saved.include_size,
+    includeColor: saved.include_color,
+    includeBrand: saved.include_brand,
+    includeComposition: saved.include_composition,
+  }
+}
+
 export async function buildMarkingTapeSections(
   units: MarkingTapeUnitInput[],
   layout: PrintLayout,
@@ -386,6 +405,9 @@ export async function buildMarkingTapeSections(
   }
 
   const barcodeBySku = new Map<string, string>()
+  // Состав этикетки берём из того же шаблона, что и ленту: он закреплён за
+  // селлером, товаром или оператором и приезжает одним объектом.
+  const labelPrintOptions = labelOptionsFromLayout(layout)
   const sections: string[] = []
   for (const item of tape) {
     const unitInput = units[item.unitIndex]
@@ -411,7 +433,7 @@ export async function buildMarkingTapeSections(
     const html = buildProductLabelSectionHtml(
       product,
       barcodeDataUrl,
-      undefined,
+      labelPrintOptions,
       options?.labelSize ?? DEFAULT_LABEL_SIZE,
     )
     sections.push(html.replace('data-testid="product-thermal-label"', 'data-testid="product-thermal-label" data-tape-block="label"'))

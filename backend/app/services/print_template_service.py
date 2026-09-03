@@ -31,12 +31,44 @@ class LayoutUnit:
 
 
 @dataclass(frozen=True)
+class LabelOptions:
+    """Что печатать на этикетке ШК, а что нет.
+
+    Раньше это жило только в момент печати: оператор ставил галочку в окне, она
+    действовала один раз и забывалась. Закрепить состав за селлером было нельзя,
+    хотя само хранилище шаблонов с привязкой к селлеру существует с июня —
+    в нём просто хранилась одна лента, без состава самой этикетки.
+
+    Порядок строк не настраивается и остаётся единым для всех: размер, цвет,
+    бренд, состав. Решение владельца от 03.09.2026.
+    """
+
+    include_size: bool = True
+    include_color: bool = True
+    include_brand: bool = True
+    include_composition: bool = True
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "include_size": self.include_size,
+            "include_color": self.include_color,
+            "include_brand": self.include_brand,
+            "include_composition": self.include_composition,
+        }
+
+
+DEFAULT_LABEL_OPTIONS = LabelOptions()
+
+
+@dataclass(frozen=True)
 class PrintLayout:
     units: list[LayoutUnit]
+    label_options: LabelOptions = DEFAULT_LABEL_OPTIONS
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "units": [{"block": u.block, "copies": u.copies} for u in self.units],
+            "label_options": self.label_options.to_dict(),
         }
 
 
@@ -94,7 +126,32 @@ def parse_layout(raw: dict[str, Any] | str) -> PrintLayout:
         if not isinstance(copies, int) or copies < 1 or copies > 10:
             raise PrintTemplateServiceError("invalid_layout_copies")
         units.append(LayoutUnit(block=block, copies=copies))
-    return PrintLayout(units=units)
+    return PrintLayout(units=units, label_options=_parse_label_options(data.get("label_options")))
+
+
+def _parse_label_options(raw: Any) -> LabelOptions:
+    """Состав этикетки из сохранённого шаблона.
+
+    Ключа может не быть вовсе: шаблоны, заведённые до 03.09.2026, хранят только
+    ленту. Для них действует прежнее поведение — печатаем всё, что есть в
+    данных, — иначе выкатка молча урезала бы уже настроенные этикетки.
+    """
+    if raw is None:
+        return DEFAULT_LABEL_OPTIONS
+    if not isinstance(raw, dict):
+        raise PrintTemplateServiceError("invalid_layout_json")
+    values: dict[str, bool] = {}
+    for field, default in (
+        ("include_size", DEFAULT_LABEL_OPTIONS.include_size),
+        ("include_color", DEFAULT_LABEL_OPTIONS.include_color),
+        ("include_brand", DEFAULT_LABEL_OPTIONS.include_brand),
+        ("include_composition", DEFAULT_LABEL_OPTIONS.include_composition),
+    ):
+        value = raw.get(field, default)
+        if not isinstance(value, bool):
+            raise PrintTemplateServiceError("invalid_layout_json")
+        values[field] = value
+    return LabelOptions(**values)
 
 
 def layout_to_json(layout: PrintLayout | dict[str, Any]) -> str:

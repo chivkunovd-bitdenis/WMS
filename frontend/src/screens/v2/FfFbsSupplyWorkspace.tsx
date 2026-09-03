@@ -946,6 +946,7 @@ export function FfFbsSupplyWorkspace({
       {
         token,
         productId: firstOrder.product.id,
+        sellerId: workspace.supply.seller.id,
         documentNumber: workspace.supply.name,
         qtyNeedPack: anyHonestSign ? tapeOrders.filter((order) => order.requiresHonestSign).length : tapeOrders.length,
         markingAvailable: markingAvailableForOrders(orders),
@@ -985,6 +986,7 @@ export function FfFbsSupplyWorkspace({
         token,
         lineId: line.id,
         productId: line.product_id,
+        sellerId: workspace?.supply.seller.id,
         documentNumber: workspace?.supply.name ?? null,
         qtyNeedPack: requiresOrderHonestSign(order) ? 1 : 0,
         markingAvailable: requiresOrderHonestSign(order) ? line.marking_available_count : 0,

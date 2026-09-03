@@ -201,6 +201,8 @@ export type MarkingPrintContext = {
   lineId?: string
   source?: 'packaging' | 'catalog'
   productId: string
+  /** Селлер товара: по нему подбирается закреплённый за селлером шаблон. */
+  sellerId?: string | null
   documentNumber: string | null
   qtyNeedPack: number
   markingAvailable: number
@@ -459,7 +461,10 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setLayout(cloneLayout(defaultPreset.layout))
     void (async () => {
       try {
-        const template = await resolvePrintTemplate(ctx.token, { productId: ctx.productId })
+        const template = await resolvePrintTemplate(ctx.token, {
+          productId: ctx.productId,
+          sellerId: ctx.sellerId ?? undefined,
+        })
         const matched = MARKING_PRINT_PRESETS.find(
           (preset) =>
             preset.id !== 'custom' &&

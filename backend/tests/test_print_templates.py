@@ -406,3 +406,67 @@ async def test_print_auto_saves_user_last_layout(async_client: AsyncClient) -> N
         assert row.layout.units[0].block == LAYOUT_BLOCK_LABEL
         assert len(row.layout.units) == 3
 
+
+
+@pytest.mark.asyncio
+async def test_label_options_survive_save_and_read(async_client: AsyncClient) -> None:
+    """Состав этикетки закрепляется за селлером и не теряется при сохранении.
+
+    Хранилище шаблонов с привязкой к селлеру существует с июня, но хранило
+    только ленту — какие блоки и сколько копий. Состав самой этикетки жил в
+    момент печати и забывался, поэтому «настроить этикетку селлеру» не работало:
+    ручка молча выбрасывала опции.
+    """
+    token, _tenant_id, _user_id, seller_id, _product_id = await _seed_tenant_seller_product(
+        async_client
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+    created = await async_client.post(
+        "/operations/marking-codes/print-templates",
+        headers=headers,
+        json={
+            "name": "Без состава и бренда",
+            "seller_id": str(seller_id),
+            "is_default": True,
+            "layout": {
+                "units": [{"block": "label", "copies": 1}],
+                "label_options": {
+                    "include_size": True,
+                    "include_color": True,
+                    "include_brand": False,
+                    "include_composition": False,
+                },
+            },
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["layout"]["label_options"] == {
+        "include_size": True,
+        "include_color": True,
+        "include_brand": False,
+        "include_composition": False,
+    }
+
+    resolved = await async_client.get(
+        f"/operations/marking-codes/print-templates/resolve?seller_id={seller_id}",
+        headers=headers,
+    )
+    assert resolved.status_code == 200, resolved.text
+    assert resolved.json()["layout"]["label_options"]["include_brand"] is False
+    assert resolved.json()["layout"]["label_options"]["include_composition"] is False
+
+
+@pytest.mark.asyncio
+async def test_old_template_without_options_prints_everything(async_client: AsyncClient) -> None:
+    """Шаблон, заведённый до 03.09.2026, хранит только ленту.
+
+    Для него действует прежнее поведение — печатаем всё, что есть в данных.
+    Иначе выкатка молча урезала бы уже настроенные этикетки.
+    """
+    from app.services.print_template_service import parse_layout
+
+    layout = parse_layout({"units": [{"block": "cz", "copies": 2}]})
+    assert layout.label_options.include_size is True
+    assert layout.label_options.include_color is True
+    assert layout.label_options.include_brand is True
+    assert layout.label_options.include_composition is True
