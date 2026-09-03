@@ -44,6 +44,7 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.fbs_wb_operation import FbsWbOperation
 from app.models.inventory_balance import InventoryBalance
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.marking_code import MarkingCodeEvent
@@ -1622,6 +1623,174 @@ async def test_ozon_ship_failed_readback_stays_visible_and_blocks_handoff(
         "/v4/posting/fbs/ship",
         "/v3/posting/fbs/get",
     ]
+
+
+async def _ozon_deliver_operation(idempotency_key: str) -> FbsWbOperation:
+    """Прочитать журнал передачи из отдельной сессии — то есть только то,
+    что действительно закоммичено, а не то, что живёт в открытой транзакции."""
+    async with SessionLocal() as reader:
+        return (
+            await reader.execute(
+                select(FbsWbOperation).where(
+                    FbsWbOperation.operation_kind == "supply_deliver",
+                    FbsWbOperation.idempotency_key == idempotency_key,
+                )
+            )
+        ).scalar_one()
+
+
+@pytest.mark.asyncio
+async def test_ozon_partial_handoff_is_journalled_and_the_retry_resumes(
+    db_session: AsyncSession,
+) -> None:
+    """Первое отправление уехало, второе упало — повтор не собирает первое заново.
+
+    Это ровно тот сценарий, ради которого заведена точка сохранения: `/ship`
+    необратим, а локальная транзакция при ошибке откатывается целиком.
+    """
+    tenant, seller, warehouse, product, first, supply = await _seed_ozon_supply_case(
+        db_session,
+        packed=True,
+    )
+    assert supply is not None
+    now = datetime.now(UTC)
+    second = FbsOrder(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        warehouse_id=warehouse.id,
+        product_id=product.id,
+        supply_id=supply.id,
+        marketplace="ozon",
+        external_order_id="ozon-posting-second",
+        wb_order_id=2002,
+        wb_nm_id=3002,
+        wb_warehouse_id=11,
+        status=FBS_ORDER_STATUS_PACKED,
+        mapping_status=MAPPING_STATUS_MAPPED,
+        reserve_status=RESERVE_STATUS_RESERVED,
+        created_at_wb=now,
+        deadline_at=now + timedelta(days=1),
+        meta_details_json={"ozon_requirements": {"kinds": []}},
+    )
+    db_session.add(second)
+    await db_session.commit()
+
+    failing = FakeMarketplaceTransport(
+        endpoint_responses=_ozon_handoff_responses(),
+        endpoint_response_queues={
+            "/v4/posting/fbs/ship": [
+                {"result": ["ozon-posting-dispatch"]},
+                MarketplaceProviderError("ozon", 500, {"message": "boom"}),
+            ]
+        },
+    )
+
+    with pytest.raises(shipment_svc.FbsShipmentError):
+        await shipment_svc.deliver_supply(
+            db_session,
+            tenant.id,
+            supply.id,
+            AsyncMock(),
+            idempotency_key="ozon-partial-first",
+            actor_user_id=None,
+            ozon_provider=OzonMarketplaceProvider(transport=failing),
+        )
+
+    assert [path for path, _ in failing.endpoint_calls].count("/v4/posting/fbs/ship") == 2
+    journalled = await _ozon_deliver_operation("ozon-partial-first")
+    assert journalled.state == "failed"
+    assert journalled.request_summary_json is not None
+    progress = journalled.request_summary_json["ozon_handoff_progress"]
+    assert progress["shipped_postings"] == ["ozon-posting-dispatch"]
+    assert progress["carriage_id"] is None
+
+    healthy = FakeMarketplaceTransport(endpoint_responses=_ozon_handoff_responses())
+    delivered = await shipment_svc.deliver_supply(
+        db_session,
+        tenant.id,
+        supply.id,
+        AsyncMock(),
+        idempotency_key="ozon-partial-retry",
+        actor_user_id=None,
+        ozon_provider=OzonMarketplaceProvider(transport=healthy),
+    )
+
+    # Собирается только то отправление, которое в прошлый раз не уехало.
+    ship_payloads = [
+        payload for path, payload in healthy.endpoint_calls if path == "/v4/posting/fbs/ship"
+    ]
+    assert [payload["posting_number"] for payload in ship_payloads] == ["ozon-posting-second"]
+    # А в перевозку попадают оба: первое отправление помнится по снимку.
+    set_postings = next(
+        payload for path, payload in healthy.endpoint_calls if path == "/v1/carriage/set-postings"
+    )
+    assert set_postings["posting_numbers"] == [
+        "ozon-posting-dispatch",
+        "ozon-posting-second",
+    ]
+    assert delivered.status == FBS_SUPPLY_STATUS_IN_DELIVERY
+    assert (await _ozon_deliver_operation("ozon-partial-retry")).state == "confirmed"
+    assert first.status == "in_delivery"
+    assert second.status == "in_delivery"
+
+
+@pytest.mark.asyncio
+async def test_ozon_handoff_after_approved_carriage_does_not_approve_twice(
+    db_session: AsyncSession,
+) -> None:
+    """Перевозка подтверждена, а штрихкод акта не пришёл — повтор идёт за документами.
+
+    Второй `/v1/carriage/approve` по уже подтверждённой перевозке — это
+    повторная мутация в кабинете; снимок обязан её предотвратить.
+    """
+    tenant, _, _, _, _, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    assert supply is not None
+    responses = _ozon_handoff_responses()
+    failing = FakeMarketplaceTransport(
+        endpoint_responses=responses,
+        errors={
+            "/v2/posting/fbs/act/get-barcode": MarketplaceProviderError(
+                "ozon", 503, {"message": "later"}
+            )
+        },
+    )
+
+    with pytest.raises(shipment_svc.FbsShipmentError):
+        await shipment_svc.deliver_supply(
+            db_session,
+            tenant.id,
+            supply.id,
+            AsyncMock(),
+            idempotency_key="ozon-barcode-first",
+            actor_user_id=None,
+            ozon_provider=OzonMarketplaceProvider(transport=failing),
+        )
+
+    progress = (await _ozon_deliver_operation("ozon-barcode-first")).request_summary_json[
+        "ozon_handoff_progress"
+    ]
+    assert progress["carriage_id"] == 901
+    assert progress["carriage_approved"] is True
+
+    healthy = FakeMarketplaceTransport(endpoint_responses=_ozon_handoff_responses())
+    delivered = await shipment_svc.deliver_supply(
+        db_session,
+        tenant.id,
+        supply.id,
+        AsyncMock(),
+        idempotency_key="ozon-barcode-retry",
+        actor_user_id=None,
+        ozon_provider=OzonMarketplaceProvider(transport=healthy),
+    )
+
+    paths = [path for path, _ in healthy.endpoint_calls]
+    assert "/v4/posting/fbs/ship" not in paths
+    assert "/v1/carriage/create" not in paths
+    assert "/v1/carriage/set-postings" not in paths
+    assert "/v1/carriage/approve" not in paths
+    assert "/v2/posting/fbs/act/get-barcode" in paths
+    assert delivered.status == FBS_SUPPLY_STATUS_IN_DELIVERY
+    assert delivered.external_supply_id == "901"
 
 
 @pytest.mark.asyncio
