@@ -815,13 +815,15 @@ async def request_supply_print_batch(
                     png_bytes = decode_png_payload(sticker_row.get(payload_key))
                     if png_bytes is not None:
                         break
-                # Формат печатного файла объявляет тот, кто его принёс. У WB это
-                # всегда PNG, у Ozon — PDF; хранилище сверит сигнатуру с этим
-                # объявлением и не даст записать одно под видом другого.
+                # Формат печатного файла объявляет тот, кто его принёс, но
+                # доверяем этому объявлению только там, где PDF вообще бывает.
+                # У Wildberries стикер всегда PNG: если принять от него PDF по
+                # одному лишь заголовку, мы ослабим путь, который печатается
+                # каждый день. PDF разрешён только озоновской ветке.
                 row_content_type = sticker_row.get("content_type")
                 content_type = (
                     PDF_CONTENT_TYPE
-                    if row_content_type == PDF_CONTENT_TYPE
+                    if row_content_type == PDF_CONTENT_TYPE and marketplace == "ozon"
                     else ORDER_STICKER_CONTENT_TYPE
                 )
                 asset = await _find_order_sticker_asset(session, tenant_id, order.id)

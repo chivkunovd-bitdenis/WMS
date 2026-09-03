@@ -470,3 +470,86 @@ async def test_old_template_without_options_prints_everything(async_client: Asyn
     assert layout.label_options.include_color is True
     assert layout.label_options.include_brand is True
     assert layout.label_options.include_composition is True
+
+
+@pytest.mark.asyncio
+async def test_seller_template_is_visible_to_every_operator(async_client: AsyncClient) -> None:
+    """Настройка продавца — общая, а не личная настройка того, кто её сохранил.
+
+    Ручка всегда штамповала шаблон id администратора, а глобальный шаблон
+    продавца выбирается только при пустом user_id. Другой оператор такой шаблон
+    не находил и печатал по-старому, не зная об этом.
+    """
+    token, _tenant_id, _user_id, seller_id, _product_id = await _seed_tenant_seller_product(
+        async_client
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+    created = await async_client.post(
+        "/operations/marking-codes/print-templates",
+        headers=headers,
+        json={
+            "name": "Этикетка продавца",
+            "seller_id": str(seller_id),
+            "is_default": True,
+            "layout": {"units": [{"block": "label", "copies": 1}]},
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["user_id"] is None, created.text
+
+
+@pytest.mark.asyncio
+async def test_operator_layout_does_not_carry_label_options_across_sellers(
+    async_client: AsyncClient,
+) -> None:
+    """Привычка печати переносится между продавцами, состав этикетки — нет.
+
+    Раскладка оператора сознательно важнее умолчания продавца: это его привычка,
+    сколько блоков гнать лентой. Но состав этикетки — свойство товара продавца.
+    Пока он попадал в ту же раскладку, оператор, напечатав для одного продавца,
+    уносил его состав на следующего.
+    """
+    from app.services.print_template_service import resolve_default_print_template
+
+    token, tenant_id, user_id, seller_id, _product_id = await _seed_tenant_seller_product(
+        async_client
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+    created = await async_client.post(
+        "/operations/marking-codes/print-templates",
+        headers=headers,
+        json={
+            "name": "Без бренда",
+            "seller_id": str(seller_id),
+            "is_default": True,
+            "layout": {
+                "units": [{"block": "label", "copies": 1}],
+                "label_options": {
+                    "include_size": True,
+                    "include_color": True,
+                    "include_brand": False,
+                    "include_composition": True,
+                },
+            },
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    async with SessionLocal() as session:
+        # Оператор до этого печатал парами — привычка сохранена как его раскладка.
+        await pt_svc.save_user_last_print_layout(
+            session,
+            tenant_id,
+            user_id,
+            {"units": [{"block": "cz", "copies": 2}]},
+        )
+        await session.commit()
+
+    async with SessionLocal() as session:
+        resolved = await resolve_default_print_template(
+            session, tenant_id, user_id=user_id, seller_id=seller_id
+        )
+    # Лента — его привычка.
+    assert [(u.block, u.copies) for u in resolved.layout.units] == [("cz", 2)]
+    # Состав — от продавца, а не то, что осталось от прошлой печати.
+    assert resolved.layout.label_options.include_brand is False

@@ -1361,7 +1361,12 @@ async def create_print_template(
             layout=_layout_in_to_dict(body.layout),
             seller_id=target_seller_id,
             product_id=body.product_id,
-            user_id=user.id,
+            # Шаблон, закреплённый за продавцом или товаром, — общий: его должны
+            # видеть все операторы, а не только тот, кто сохранил. Раньше сюда
+            # всегда шёл id администратора, и настройка продавца оставалась
+            # личной настройкой одного человека — другой оператор печатал
+            # по-старому и об этом не знал.
+            user_id=None if (target_seller_id or body.product_id) else user.id,
             is_default=body.is_default,
         )
     except pt_svc.PrintTemplateServiceError as exc:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from sqlalchemy import and_, or_, select, update
@@ -15,6 +15,7 @@ from app.models.print_template import (
     USER_LAST_LAYOUT_NAME,
     PrintTemplate,
 )
+from app.models.seller import Seller
 from app.services.catalog_service import get_product
 
 
@@ -263,6 +264,15 @@ async def _validate_scope(
         if resolved_seller_id is not None and product.seller_id != resolved_seller_id:
             raise PrintTemplateServiceError("product_seller_mismatch")
         resolved_seller_id = product.seller_id
+    elif resolved_seller_id is not None:
+        # Продавца тоже надо сверить с арендатором. Раньше проверка шла только
+        # через товар, и запрос без товара пропускал чужой id: администратор
+        # одного арендатора мог завести шаблон на продавца другого.
+        owner = await session.scalar(
+            select(Seller.tenant_id).where(Seller.id == resolved_seller_id)
+        )
+        if owner != tenant_id:
+            raise PrintTemplateServiceError("seller_not_found")
     return resolved_seller_id
 
 
@@ -494,6 +504,55 @@ async def save_user_last_print_layout(
     return _row_from_model(model)
 
 
+async def _scoped_label_options(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    product_id: uuid.UUID | None,
+    seller_id: uuid.UUID | None,
+) -> LabelOptions | None:
+    """Состав этикетки, закреплённый за товаром или продавцом.
+
+    Возвращает None, когда ничего не закреплено: тогда действует то, что лежит
+    в раскладке оператора, и поведение не меняется.
+    """
+    resolved_seller_id = seller_id
+    if product_id is not None:
+        product = await get_product(session, tenant_id, product_id)
+        if product is not None:
+            resolved_seller_id = product.seller_id
+            stmt = (
+                select(PrintTemplate)
+                .where(
+                    PrintTemplate.tenant_id == tenant_id,
+                    PrintTemplate.product_id == product_id,
+                    PrintTemplate.user_id.is_(None),
+                    PrintTemplate.is_default.is_(True),
+                )
+                .limit(1)
+            )
+            product_default = (await session.execute(stmt)).scalar_one_or_none()
+            if product_default is not None:
+                return parse_layout(product_default.layout_json).label_options
+    if resolved_seller_id is None:
+        return None
+    stmt = (
+        select(PrintTemplate)
+        .where(
+            PrintTemplate.tenant_id == tenant_id,
+            PrintTemplate.seller_id == resolved_seller_id,
+            PrintTemplate.product_id.is_(None),
+            PrintTemplate.user_id.is_(None),
+            PrintTemplate.is_default.is_(True),
+        )
+        .limit(1)
+    )
+    seller_default = (await session.execute(stmt)).scalar_one_or_none()
+    if seller_default is None:
+        return None
+    return parse_layout(seller_default.layout_json).label_options
+
+
 async def resolve_default_print_template(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -505,7 +564,25 @@ async def resolve_default_print_template(
     if user_id is not None:
         user_last = await _find_user_last_layout(session, tenant_id, user_id)
         if user_last is not None:
-            return _row_from_model(user_last)
+            # Раскладка оператора — это его привычка печати: сколько блоков и в
+            # каком порядке гнать лентой. Она сознательно важнее умолчания
+            # продавца (PRINT-05) и остаётся такой.
+            #
+            # А вот состав этикетки — свойство товара продавца, а не привычка
+            # оператора. Раньше он в раскладку не попадал вовсе, и вопрос не
+            # стоял. Теперь попадает — и если брать его отсюда, то напечатав
+            # для продавца А, оператор унесёт его состав на продавца Б.
+            # Поэтому ленту берём из раскладки оператора, а состав — из
+            # шаблона, закреплённого за продавцом или товаром.
+            scoped = await _scoped_label_options(
+                session, tenant_id, product_id=product_id, seller_id=seller_id
+            )
+            row = _row_from_model(user_last)
+            if scoped is None:
+                return row
+            return replace(
+                row, layout=PrintLayout(units=row.layout.units, label_options=scoped)
+            )
 
     if product_id is not None:
         product = await get_product(session, tenant_id, product_id)
