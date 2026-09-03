@@ -547,7 +547,11 @@ def marketplace_scope_condition(
                 ProductMarketplaceLink.is_active.is_(True),
             )
         )
-    if marketplace == "wildberries":
+    # Каталог называет Wildberries полным именем, а заказы, поставки и привязки
+    # складов — коротким `wb`. Пока эти два мира не встречаются в одном запросе,
+    # это безобидно; в день, когда встретятся, половина строк молча выпадет.
+    # Принимаем оба написания на входе фильтра, чтобы не выпадала.
+    if marketplace in {"wildberries", "wb"}:
         return or_(
             Product.wb_nm_id.is_not(None),
             Product.wb_vendor_code.is_not(None),
@@ -555,7 +559,7 @@ def marketplace_scope_condition(
                 select(ProductMarketplaceLink.id).where(
                     ProductMarketplaceLink.tenant_id == tenant_id,
                     ProductMarketplaceLink.product_id == Product.id,
-                    ProductMarketplaceLink.marketplace == "wildberries",
+                    ProductMarketplaceLink.marketplace.in_(("wildberries", "wb")),
                     ProductMarketplaceLink.is_active.is_(True),
                 )
             ),

@@ -287,10 +287,31 @@ async def test_empty_requirements_from_ozon_mean_no_marking_needed(
     assert gate_svc.delivery_message(order, []) == "Ozon: маркировка не требуется."
 
 
+async def test_markable_product_requires_marking_even_when_ozon_stays_silent(
+    db_session: AsyncSession,
+) -> None:
+    """Второй источник требования — наш собственный каталог.
+
+    Маркируемый товар маркируется независимо от того, попросил ли маркетплейс.
+    Серверная проверка готовности к отгрузке смотрит только на «главный» товар
+    заказа, а у Ozon отправление многотоварное — маркируемая вторая позиция
+    мимо неё проезжала.
+    """
+    ctx = await _seed(db_session)
+    ctx.product.requires_honest_sign = True
+    await db_session.commit()
+
+    await _sync(db_session, ctx, [posting_row()])
+
+    order = await _order(db_session)
+    assert order.required_meta_json == ["sgtin"]
+    assert gate_svc.compute_delivery_allowed(order, []) is False
+
+
 async def test_unknown_requirement_is_not_an_answer_and_never_a_permission(
     db_session: AsyncSession,
 ) -> None:
-    """Пока Ozon не ответил про требования, «маркировка не требуется» — враньё."""
+    """Пока требования не разобраны, «маркировка не требуется» — враньё."""
     order = FbsOrder(
         tenant_id=uuid.uuid4(),
         seller_id=uuid.uuid4(),
@@ -303,7 +324,7 @@ async def test_unknown_requirement_is_not_an_answer_and_never_a_permission(
 
     assert gate_svc.ozon_requirements_known(order) is False
     assert gate_svc.compute_delivery_allowed(order, []) is False
-    assert "ещё не сообщил" in gate_svc.delivery_message(order, [])
+    assert "ещё не получены" in gate_svc.delivery_message(order, [])
 
 
 async def test_delivery_method_id_is_stored_for_the_future_carriage(

@@ -901,7 +901,11 @@ async def get_order_metadata(
     if order is None:
         raise FbsMarkingError("order_not_found")
     markings = await list_order_markings(session, tenant_id, order_id)
-    if sync_wb and markings:
+    # Карточка заказа Ozon не должна требовать токен Wildberries. Ветки по
+    # маркетплейсу здесь не было вовсе: открытие карточки озоновского заказа
+    # безусловно шло за чужим токеном и падало, если его нет. Статусы
+    # маркировки Ozon обновляются своей ручкой синхронизации.
+    if sync_wb and markings and getattr(order, "marketplace", "wb") == "wb":
         token = await require_marketplace_token(session, tenant_id, order.seller_id)
         markings = await _sync_order_meta_from_wb(session, order, http_client, token)
         await _notify_supply_marking_update(

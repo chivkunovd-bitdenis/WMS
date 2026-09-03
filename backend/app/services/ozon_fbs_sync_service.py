@@ -41,6 +41,7 @@ from app.models.fbs_order import (
     FbsOrderProduct,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.schemas.ozon_fbs_api import OzonPostingV4PostingFbsUnfulfilledListResponsePostingsProducts
 from app.services.fbs_stock_sync_service import (
@@ -53,9 +54,9 @@ from app.services.wb_marketplace_orders_service import _release_reservation, _tr
 
 OZON_FBS_DEADLINE_HOURS = 120
 
-# Ключ в `meta_details_json`, по которому видно: Ozon уже ответил, нужна ли
-# маркировка по этому отправлению. Без него пустое требование неотличимо от
-# неполученного, и гейт выпуска вынужден гадать.
+# Ключ в `meta_details_json`, по которому видно: требования по маркировке для
+# этого отправления разобраны. Без него пустое требование неотличимо от
+# неразобранного, и гейт выпуска вынужден гадать — а гадать он не имеет права.
 OZON_REQUIREMENTS_KEY = "ozon_requirements"
 
 # Словарь статусов взят из описания поля `status` в официальной спецификации
@@ -277,6 +278,10 @@ async def _credentials(
 def _stock_error_code(error: MarketplaceProviderError) -> str:
     if error.is_account_blocked:
         return "ozon_account_blocked"
+    # Публикация остатков в Ozon выключена решением по проекту, а не сбоем
+    # кабинета: «Ozon временно недоступен» здесь было бы неправдой.
+    if error.code == "ozon_stock_publish_disabled":
+        return error.code
     if error.status_code in {401, 403}:
         return "ozon_auth_failed"
     if error.status_code == 429:
@@ -515,6 +520,37 @@ def _apply_delivery_method(order: FbsOrder, row: dict[str, Any]) -> None:
     order.meta_details_json = details
 
 
+async def _honest_sign_required_by_catalog(
+    session: AsyncSession,
+    positions: list[FbsOrderProduct],
+    fallback_product_id: uuid.UUID | None,
+) -> bool:
+    """Требует ли «Честный знак» хоть один товар этого отправления.
+
+    Второй источник требования, независимый от Ozon. Он нужен по двум причинам.
+    Во-первых, требование маркетплейса — не единственная правда: маркируемый
+    товар маркируется в любом случае. Во-вторых, серверная проверка готовности
+    к отгрузке смотрит только на «главный» товар заказа, а у Ozon отправление
+    многотоварное: маркируемая вторая позиция мимо неё проезжала.
+
+    Связи тянем явным запросом: `position.product` в асинхронном коде даёт
+    MissingGreenlet и роняет весь проход опроса.
+    """
+    product_ids = {
+        position.product_id for position in positions if position.product_id is not None
+    }
+    if fallback_product_id is not None:
+        product_ids.add(fallback_product_id)
+    if not product_ids:
+        return False
+    flag = await session.scalar(
+        select(Product.id)
+        .where(Product.id.in_(product_ids), Product.requires_honest_sign.is_(True))
+        .limit(1)
+    )
+    return flag is not None
+
+
 def _apply_requirements(order: FbsOrder, kinds: list[str], seen: bool) -> None:
     """Записать требования маркировки Ozon туда, где их ищет гейт выпуска.
 
@@ -523,9 +559,10 @@ def _apply_requirements(order: FbsOrder, kinds: list[str], seen: bool) -> None:
     требование гейт трактовал как «маркировка не нужна». Отправление Ozon с
     маркируемым товаром считалось готовым к отгрузке без единого кода.
 
-    Отдельно храним признак «Ozon ответил про требования»: пустой список при
-    полученном ответе — это «не требуется», а при неполученном — «мы не знаем».
-    Гейт обязан различать эти два случая.
+    Отдельно храним признак «требования по этому отправлению разобраны»: пустой
+    список при разобранном отправлении — это «не требуется», а у заказа, которого
+    разбор не касался, — «мы не знаем». Гейт обязан различать эти два случая и
+    не имеет права трактовать незнание как разрешение.
     """
     if not seen:
         return
@@ -578,17 +615,26 @@ async def _apply_status(
                 actor_user_id=None,
             )
         await _release_reservation(session, order)
-    if previous != order.status and order.status in _BILLABLE_STATUSES:
-        # Заказы Ozon не тарифицировались вообще: единственная точка, где
-        # появляются деньги за сборку FBS, вызывалась только из
-        # вайлдберрисовского обработчика статусов. Селлер мог сдать через
-        # фулфилмент сотню заказов Ozon, они уезжали, и в счёт не попадало ни
-        # копейки. Начисление идемпотентно: повторный проход опроса его не
-        # задваивает.
-        from app.services.fbs_order_billing_service import record_fbs_order_confirmed
-
-        await record_fbs_order_confirmed(session, order)
     return changed
+
+
+async def _charge_confirmed_order(session: AsyncSession, order: FbsOrder) -> None:
+    """Начислить за заказ, который маркетплейс подтвердил как забранный.
+
+    Заказы Ozon не тарифицировались вообще: единственная точка, где появляются
+    деньги за сборку FBS, вызывалась только из вайлдберрисовского обработчика
+    статусов. Селлер мог сдать через фулфилмент сотню заказов Ozon, они
+    уезжали, и в счёт не попадало ни копейки.
+
+    Вызывать только после того, как заказ записан в базу: начисление пишет
+    строки со ссылками на него. Само начисление идемпотентно, повторный проход
+    опроса его не задваивает.
+    """
+    if order.status not in _BILLABLE_STATUSES:
+        return
+    from app.services.fbs_order_billing_service import record_fbs_order_confirmed
+
+    await record_fbs_order_confirmed(session, order)
 
 
 async def sync_ozon_orders(
@@ -623,9 +669,15 @@ async def sync_ozon_orders(
         raw_substatus = _text(row, "substatus")
         if raw_status is None:
             raw_status = raw_substatus
-        required_kinds, requirements_seen = _requirement_kinds(row)
+        required_kinds, _ = _requirement_kinds(row)
         fallback_product_id = await _product_id_for_row(session, tenant_id, seller_id, row)
         positions = await _posting_products_for_row(session, tenant_id, seller_id, row)
+        if MARKING_KIND_SGTIN not in required_kinds and await _honest_sign_required_by_catalog(
+            session, positions, fallback_product_id
+        ):
+            required_kinds.append(MARKING_KIND_SGTIN)
+        # Строку отправления мы разобрали — значит про требования знаем.
+        requirements_seen = True
         has_positions_payload = isinstance(row.get("products"), list)
         product_id = _primary_product_id(positions, fallback_product_id)
         positions_mapped = _positions_are_mapped(positions, fallback_product_id)
@@ -657,6 +709,7 @@ async def sync_ozon_orders(
             statuses_updated += int(
                 await _apply_status(session, existing, raw_status, raw_substatus)
             )
+            await _charge_confirmed_order(session, existing)
             if composition_changed and positions:
                 await session.flush()
                 await _try_reserve_order(session, existing)
@@ -711,6 +764,8 @@ async def sync_ozon_orders(
         await _apply_status(session, order, raw_status, raw_substatus)
         session.add(order)
         await session.flush()
+        # Начисление ссылается на заказ строками, поэтому идёт после записи.
+        await _charge_confirmed_order(session, order)
         await _try_reserve_order(session, order)
         created += 1
         upserted += 1
@@ -781,5 +836,6 @@ async def sync_ozon_order_statuses(
                 substatus_value,
             )
         )
+        await _charge_confirmed_order(session, order)
     await session.commit()
     return updated

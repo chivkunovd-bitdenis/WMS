@@ -172,6 +172,10 @@ def fbs_error_message(code: str, explicit: str | None = None) -> str:
         return FBS_ERROR_MESSAGES_RU[code]
     if code.startswith("wb_"):
         return "Ошибка Wildberries."
+    # У вайлдберрисовских кодов запасной текст был, у озоновских — нет, и
+    # оператор видел на экране голый код вида `ozon_ship_unconfirmed`.
+    if code.startswith("ozon_"):
+        return "Ошибка Ozon."
     return code
 
 
