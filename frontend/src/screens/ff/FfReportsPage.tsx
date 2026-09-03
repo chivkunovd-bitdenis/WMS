@@ -16,7 +16,6 @@ import {
   ReportMetricStrip,
   ScreenHeader,
   TextCell,
-  WarningNotice,
 } from '../../ui-kit'
 
 type Props = {
@@ -121,12 +120,6 @@ const nextDateString = (date: string) => {
   return dateString(addDays({ year, month, day }, 1))
 }
 const moscowApiBoundary = (date: string) => `${date}T00:00:00+03:00`
-const moscowTimestamp = (value: string | null) => value
-  ? `${new Date(value).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} МСК`
-  : 'нет данных об обновлении'
-const warningText = (warning: ReportWarning) => warning.code === 'wildberries_stale'
-  ? `Данные Wildberries могут быть неполными. Последнее обновление: ${moscowTimestamp(warning.last_updated_at)}.`
-  : `В отчёте есть исторические записи, восстановленные по доступным связям: ${warning.count}`
 
 export function FfReportsPage({ token, onOpenInbound, sellers = [], warehouses = [], contentInset = 308 }: Props) {
   const now = useMemo(() => moscowCalendarDate(new Date()), [])
@@ -343,6 +336,9 @@ export function FfReportsPage({ token, onOpenInbound, sellers = [], warehouses =
   // Порядок такой, как читают: сколько пришло, сколько ушло, сколько осталось.
   // «Нетто» убрано — оно не отвечало ни на один вопрос склада.
   const metrics = [
+    // Остаток на начало показываем явно: без него «приход 50, расход 2,
+    // остаток 58» читается как ошибка расчёта, хотя арифметика верна.
+    { key: 'opening', label: 'Было на начало', value: overview == null ? null : overview.current_balance - overview.in_qty + overview.out_qty },
     { key: 'inbound', label: 'Приход за период', value: overview?.in_qty ?? null },
     { key: 'outbound', label: 'Расход за период', value: overview?.out_qty ?? null },
     { key: 'balance', label: 'Остаток сейчас', value: overview?.current_balance ?? null },
@@ -365,7 +361,6 @@ export function FfReportsPage({ token, onOpenInbound, sellers = [], warehouses =
       {warehouses.length > 1 ? <TextField select size="small" label="Склад" value={warehouseId} onChange={event => setWarehouseId(event.target.value)} data-testid="ff-reports-warehouse"><MenuItem value="">Все склады</MenuItem>{warehouses.map(warehouse => <MenuItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</MenuItem>)}</TextField> : null}
       {sellers.length > 0 ? <TextField select size="small" label="Селлер" value={sellerId} onChange={event => setSellerId(event.target.value)} data-testid="ff-reports-seller"><MenuItem value="">Все селлеры</MenuItem>{sellers.map(seller => <MenuItem key={seller.id} value={seller.id}>{seller.name}</MenuItem>)}</TextField> : null}
     </FilterBar>
-    {overview?.warnings.map((warning, index) => <WarningNotice key={`${warning.code}-${index}`} testId="ff-reports-warning">{warningText(warning)}</WarningNotice>)}
     {periodError ? <ErrorNotice testId="ff-reports-period-error">{periodError}</ErrorNotice> : null}
     {summaryError ? <ErrorNotice testId="ff-reports-summary-error">Не удалось загрузить сводку. Повторите попытку. <PrimaryAction onClick={() => void retryOverview()}>Повторить</PrimaryAction></ErrorNotice> : <>
       <ReportMetricStrip items={metrics} loading={loading || summaryLoading} testId="ff-reports-metrics" />
@@ -381,7 +376,7 @@ export function FfReportsPage({ token, onOpenInbound, sellers = [], warehouses =
       <PrimaryAction onClick={() => void downloadCsv()} disabledReason={csvDisabledReason} data-testid="ff-reports-download-csv">{csvLoading ? 'Формирование CSV…' : 'Скачать CSV'}</PrimaryAction>
     </Stack>
     {tableError ? null : <><DataTable<SellerRow> columns={[
-      { key: 'seller', header: 'Селлер', render: row => <TextCell value={row.seller_name} /> },
+      { key: 'seller', header: 'Селлер', width: 320, render: row => <TextCell value={row.seller_name} width={310} /> },
       { key: 'products', header: 'Товаров', align: 'right', width: 110, render: row => <QtyCell value={row.product_count} /> },
       { key: 'in', header: 'Приход', align: 'right', width: 110, render: row => <QtyCell value={row.total_in} /> },
       { key: 'out', header: 'Расход', align: 'right', width: 110, render: row => <QtyCell value={row.total_out} /> },
@@ -401,7 +396,7 @@ export function FfReportsPage({ token, onOpenInbound, sellers = [], warehouses =
         ? <ErrorNotice testId="ff-reports-seller-detail-error">Не удалось загрузить движения селлера</ErrorNotice>
         : grouping === 'operation'
           ? <DataTable<OperationRow> columns={[
-              { key: 'operation', header: 'Движение', render: op => <TextCell value={op.operation} /> },
+              { key: 'operation', header: 'Движение', width: 320, render: op => <TextCell value={op.operation} width={310} /> },
               { key: 'in', header: 'Приход', align: 'right', width: 110, render: op => <QtyCell value={op.in_qty} /> },
               { key: 'out', header: 'Расход', align: 'right', width: 110, render: op => <QtyCell value={op.out_qty} /> },
             ]} rows={sellerOperations} getRowKey={op => op.operation} loading={sellerDetailLoading} empty={{ title: 'Движений за период нет' }} testId="ff-reports-seller-operations" />
@@ -423,9 +418,9 @@ export function FfReportsPage({ token, onOpenInbound, sellers = [], warehouses =
               render: () => movementsError
                 ? <ErrorNotice testId="ff-reports-movements-error">Не удалось загрузить движения товара</ErrorNotice>
                 : <DataTable<MovementRow> columns={[
-                    { key: 'at', header: 'Когда', width: 170, render: move => <TextCell value={new Date(move.at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} width={160} /> },
-                    { key: 'operation', header: 'Движение', width: 220, render: move => <TextCell value={move.operation} /> },
-                    { key: 'document', header: 'Документ', render: move => move.document
+                    { key: 'at', header: 'Когда', width: 190, render: move => <TextCell value={new Date(move.at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} width={160} /> },
+                    { key: 'operation', header: 'Движение', width: 260, render: move => <TextCell value={move.operation} /> },
+                    { key: 'document', header: 'Документ', width: 200, render: move => move.document
                         ? (move.document.kind === 'inbound'
                             ? <Link component="button" type="button" sx={{ textAlign: 'left' }} onClick={() => onOpenInbound?.(move.document!.id)}>{move.document.number}</Link>
                             : <Link component={RouterLink} to={`/app/ff/mp-shipments?open_mp=${move.document.id}`} sx={{ textAlign: 'left' }}>{move.document.number}</Link>)

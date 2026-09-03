@@ -247,12 +247,22 @@ async def build_inventory_report(
             Seller.name,
         )
     else:
-        operation = operation_group_expr()
+        # Возврат приезжает движением типа «приёмка» — он и есть приёмка, только
+        # с другим типом операции в документе. В отчёте это должна быть отдельная
+        # строка: возврат и поставка — разные вещи и для склада, и для денег.
+        operation = case(
+            (InboundIntakeRequest.operation_type == "return", "Возврат"),
+            else_=operation_group_expr(),
+        )
         grouped = select(
             operation.label("operation"), in_qty, out_qty,
         ).select_from(InventoryMovement).join(
             Product, Product.id == InventoryMovement.product_id).join(Warehouse,
-            Warehouse.id == InventoryMovement.warehouse_id).where(*filters).group_by(
+            Warehouse.id == InventoryMovement.warehouse_id).outerjoin(
+            InboundIntakeLine,
+            InboundIntakeLine.id == InventoryMovement.inbound_intake_line_id).outerjoin(
+            InboundIntakeRequest,
+            InboundIntakeRequest.id == InboundIntakeLine.request_id).where(*filters).group_by(
             operation)
         sort_columns = {
             "operation": operation, "in_qty": in_qty,
@@ -822,7 +832,10 @@ async def list_product_movements(
     unload_ids = {
         row.marketplace_unload_request_id for row in rows if row.marketplace_unload_request_id
     }
-    intake_by_line: dict[uuid.UUID, tuple[uuid.UUID, str | None]] = {}
+    # Возврат — это документ приёмки с другим типом операции, и движение у него
+    # тоже типа «приёмка». Без разбора типа возврат в отчёте неотличим от
+    # поставки, а это разные вещи и по смыслу, и по деньгам.
+    intake_by_line: dict[uuid.UUID, tuple[uuid.UUID, str | None, str]] = {}
     if intake_line_ids:
         intake_rows = await session.execute(
             select(
@@ -830,12 +843,17 @@ async def list_product_movements(
                 InboundIntakeRequest.id,
                 InboundIntakeRequest.display_number,
                 InboundIntakeRequest.document_number,
+                InboundIntakeRequest.operation_type,
             )
             .join(InboundIntakeRequest, InboundIntakeRequest.id == InboundIntakeLine.request_id)
             .where(InboundIntakeLine.id.in_(intake_line_ids))
         )
-        for line_id, request_id, display_number, document_number in intake_rows:
-            intake_by_line[line_id] = (request_id, display_number or document_number)
+        for line_id, request_id, display_number, document_number, operation_type in intake_rows:
+            intake_by_line[line_id] = (
+                request_id,
+                display_number or document_number,
+                str(operation_type),
+            )
     unload_numbers: dict[uuid.UUID, str | None] = {}
     if unload_ids:
         unload_rows = await session.execute(
@@ -851,8 +869,11 @@ async def list_product_movements(
     result: list[dict[str, object]] = []
     for row in rows:
         document: dict[str, object] | None = None
+        operation = movement_group_label(row.movement_type)
         if row.inbound_intake_line_id and row.inbound_intake_line_id in intake_by_line:
-            request_id, number = intake_by_line[row.inbound_intake_line_id]
+            request_id, number, operation_type = intake_by_line[row.inbound_intake_line_id]
+            if operation_type == "return":
+                operation = "Возврат"
             document = {
                 "kind": "inbound",
                 "id": str(request_id),
@@ -868,7 +889,7 @@ async def list_product_movements(
             {
                 "id": str(row.id),
                 "at": row.created_at.isoformat(),
-                "operation": movement_group_label(row.movement_type),
+                "operation": operation,
                 "quantity": int(row.quantity_delta),
                 "document": document,
             }

@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 import pytest
 from httpx import AsyncClient
 
+from sqlalchemy import select
+
 from app.db.session import SessionLocal
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
@@ -364,3 +366,49 @@ async def test_reports_inventory_groups_by_seller_with_products_and_balance(
         "group_by": "seller", "sort_by": "sku",
     })
     assert rejected.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_return_document_is_a_separate_operation_in_the_report(
+    async_client: AsyncClient,
+) -> None:
+    """Возврат приезжает движением «приёмка», но в отчёте это отдельная строка.
+
+    Возврат и поставка — разные вещи и для склада, и для денег: если возврат
+    сливается с приёмкой, отчёт врёт про оба.
+    """
+    headers, tenant_id, seller_id, warehouse_id, location_id = await _report_context(async_client)
+    product_id = uuid.uuid4()
+    await _seed_product_movement(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+        location_id=location_id, number=1, quantity_delta=7, product_id=product_id,
+    )
+    async with SessionLocal() as session:
+        from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
+        from app.models.inventory_movement import InventoryMovement as Movement
+
+        request = InboundIntakeRequest(
+            id=uuid.uuid4(), tenant_id=tenant_id, seller_id=uuid.UUID(seller_id),
+            warehouse_id=uuid.UUID(warehouse_id), operation_type="return", status="done",
+        )
+        session.add(request)
+        await session.flush()
+        line = InboundIntakeLine(
+            id=uuid.uuid4(), request_id=request.id, product_id=product_id, expected_qty=3,
+        )
+        session.add(line)
+        await session.flush()
+        movement = await session.scalar(
+            select(Movement).where(Movement.product_id == product_id).limit(1)
+        )
+        assert movement is not None
+        movement.inbound_intake_line_id = line.id
+        await session.commit()
+
+    response = await async_client.get("/reports/inventory", headers=headers, params={
+        "date_from": "2026-08-01T00:00:00Z", "date_to": "2026-08-02T00:00:00Z",
+        "group_by": "operation",
+    })
+    assert response.status_code == 200
+    operations = [row["operation"] for row in response.json()["rows"]]
+    assert "Возврат" in operations, operations
