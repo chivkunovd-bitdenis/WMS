@@ -59,11 +59,14 @@ SOURCE_TYPE = "storage_day"
 SOURCE_NAMESPACE = uuid.UUID("6f3b6a2e-1f2c-4a6a-9d5f-2f2d1a7c40b1")
 
 
-def _source_id(*, warehouse_id: uuid.UUID, product_id: uuid.UUID) -> uuid.UUID:
+def storage_day_source_id(*, warehouse_id: uuid.UUID, product_id: uuid.UUID) -> uuid.UUID:
+    """Адрес строки начисления. Публичный: по нему экран хранения находит
+    начисленное за товар, вместо того чтобы считать хранение второй раз."""
     return uuid.uuid5(SOURCE_NAMESPACE, f"{warehouse_id}:{product_id}")
 
 
-def _event_kind(day: date) -> str:
+def storage_day_event_kind(day: date) -> str:
+    """Ключ суток начисления — им же экран отбирает нужный месяц."""
     return f"storage_day:{day.isoformat()}"
 
 
@@ -167,7 +170,7 @@ async def charge_storage_day(
                     BillingLedgerEntry.tenant_id == tenant_id,
                     BillingLedgerEntry.service_code == STORAGE_SERVICE_CODE,
                     BillingLedgerEntry.source_type == SOURCE_TYPE,
-                    BillingLedgerEntry.event_kind == _event_kind(day),
+                    BillingLedgerEntry.event_kind == storage_day_event_kind(day),
                 )
             )
         ).all()
@@ -175,7 +178,7 @@ async def charge_storage_day(
 
     created = 0
     for (seller_id, warehouse_id, product_id), product_movements in grouped.items():
-        source_id = _source_id(warehouse_id=warehouse_id, product_id=product_id)
+        source_id = storage_day_source_id(warehouse_id=warehouse_id, product_id=product_id)
         if source_id in already_charged:
             continue
         product = products[product_id]
@@ -261,7 +264,7 @@ async def charge_storage_day(
             source=SOURCE,
             source_type=SOURCE_TYPE,
             source_id=source_id,
-            event_kind=_event_kind(day),
+            event_kind=storage_day_event_kind(day),
             unit=STORAGE_UNIT,
             quantity=quantity,
             rate=tariff.rate if tariff is not None else None,
@@ -332,7 +335,7 @@ async def missing_charge_days(
     days: list[date] = []
     current = first
     while current <= until:
-        if _event_kind(current) not in charged:
+        if storage_day_event_kind(current) not in charged:
             days.append(current)
         current += timedelta(days=1)
     return days

@@ -5,23 +5,18 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import (
-    ROUND_FLOOR,
     ROUND_HALF_UP,
     Decimal,
     InvalidOperation,
 )
-from itertools import pairwise
 from typing import Any
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.models.billing import BillingLedgerEntry, BillingTariffVersionV2
-from app.models.inventory_movement import InventoryMovement
-from app.models.product import Product
-from app.models.product_dimension_event import ProductDimensionEvent
 from app.models.storage_measurement import StorageMeasurement
 from app.models.storage_statement import StorageStatement
 from app.services.billing_ledger_service import (
@@ -29,7 +24,6 @@ from app.services.billing_ledger_service import (
     postgres_integer,
     postgres_numeric,
 )
-from app.services.billing_seller_report_service import storage_tariff_for_day
 from app.services.billing_tariff_matrix_service import (
     BillingTariffMatrixError,
     TariffVersionDraft,
@@ -37,12 +31,15 @@ from app.services.billing_tariff_matrix_service import (
     save_tariff_matrix,
 )
 from app.services.staff_packaging_billing_service import rub_to_kopecks
-from app.services.storage_measurement_service import (
-    MOSCOW,
-    _seconds,
-    _volume_segments,
-    calculation_end_exclusive,
+from app.services.storage_daily_charge_service import (
+    SOURCE_TYPE as STORAGE_DAY_SOURCE_TYPE,
 )
+from app.services.storage_daily_charge_service import (
+    STORAGE_SERVICE_CODE,
+    storage_day_event_kind,
+    storage_day_source_id,
+)
+from app.services.storage_measurement_service import MOSCOW
 
 
 class StorageStatementError(ValueError):
@@ -50,15 +47,6 @@ class StorageStatementError(ValueError):
 
 
 STORAGE_TARIFF_MONEY_QUANTUM = Decimal("0.01")
-
-
-def _as_moscow_timestamp(value: datetime) -> datetime:
-    """SQLite drops tzinfo from V2 timestamps; persisted values are UTC instants."""
-    return (
-        value.replace(tzinfo=UTC).astimezone(MOSCOW)
-        if value.tzinfo is None
-        else value.astimezone(MOSCOW)
-    )
 
 
 def normalize_storage_tariff_amount(amount: Decimal) -> Decimal:
@@ -92,22 +80,17 @@ def normalize_storage_ledger_quantity(quantity: Decimal) -> Decimal:
     return normalized
 
 
-StorageDraftPricing = dict[
-    uuid.UUID,
-    tuple[Decimal, Decimal, BillingTariffVersionV2],
-]
-RawStorageDraftPricing = dict[
-    uuid.UUID,
-    tuple[Decimal, dict[date, Decimal], BillingTariffVersionV2],
-]
-StoragePricingScope = tuple[StorageStatement, list[StorageMeasurement]]
-
-
 @dataclass(frozen=True)
-class RepricedStorageDraft:
-    statement: StorageStatement
-    measurements: list[StorageMeasurement]
-    pricing: StorageDraftPricing
+class StorageNightCharge:
+    """Итог ночных начислений по одному товару за период расчёта.
+
+    ``amount_kopecks`` пуст, когда ни за одни сутки ставки не было: платить не за
+    что, но литро-дни посчитаны, и показать их надо. Ноль здесь означал бы
+    «бесплатно», а это другое утверждение.
+    """
+
+    liter_days: Decimal
+    amount_kopecks: int | None
 
 
 def _statement_source_ids(
@@ -123,667 +106,95 @@ def _statement_source_ids(
     return {row.id for row in measurements} or {statement.id}
 
 
-def _tariff_for_day(
-    tariffs: list[BillingTariffVersionV2],
-    on_day: date,
-) -> BillingTariffVersionV2 | None:
-    """Use the exact V2 seller/common precedence used by the invoice report."""
-    return storage_tariff_for_day(tariffs, on_day)
+def _storage_day_event_kinds(period_start: date, period_end: date) -> set[str]:
+    """Ключи всех суток периода: по ним отбираются ночные начисления месяца."""
+    kinds: set[str] = set()
+    current = period_start
+    while current <= period_end:
+        kinds.add(storage_day_event_kind(current))
+        current += timedelta(days=1)
+    return kinds
 
 
-def _pricing_boundaries(
-    start: datetime,
-    end: datetime,
-    tariffs: list[BillingTariffVersionV2],
-) -> list[datetime]:
-    boundaries = {start, end}
-    for tariff in tariffs:
-        valid_from = _as_moscow_timestamp(tariff.valid_from_at)
-        if start < valid_from < end:
-            boundaries.add(valid_from)
-        if tariff.valid_to_at is not None:
-            valid_to = _as_moscow_timestamp(tariff.valid_to_at)
-            if start < valid_to < end:
-                boundaries.add(valid_to)
-    return sorted(boundaries)
-
-
-def _price_volume_segments(
-    segments: Sequence[
-        tuple[datetime, datetime, int, Decimal | None, ProductDimensionEvent | None]
-    ],
-    tariffs: list[BillingTariffVersionV2],
-) -> tuple[Decimal, Decimal, BillingTariffVersionV2 | None]:
-    """Price actual liter-day intervals while keeping one ledger row per measurement.
-
-    The shared ledger permits one source row for a storage measurement.  If a rate
-    changes inside the month, ``amount`` is the exact sum of the dated intervals and
-    ``rate`` is their weighted snapshot for the single immutable ledger row.
-    """
-    charged_quantity, amount_by_day, last_tariff = _price_volume_segments_by_day(
-        segments,
-        tariffs,
-    )
-    amount = sum(amount_by_day.values(), start=Decimal(0)) / Decimal(100)
-    return (
-        charged_quantity,
-        amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
-        last_tariff,
-    )
-
-
-def _price_volume_segments_by_day(
-    segments: Sequence[
-        tuple[datetime, datetime, int, Decimal | None, ProductDimensionEvent | None]
-    ],
-    tariffs: list[BillingTariffVersionV2],
-) -> tuple[Decimal, dict[date, Decimal], BillingTariffVersionV2 | None]:
-    """Return exact kopeck contributions split at Moscow day boundaries."""
-    charged_quantity = Decimal(0)
-    amount_by_day: dict[date, Decimal] = {}
-    last_tariff: BillingTariffVersionV2 | None = None
-    for segment_start, segment_end, held, volume, _ in segments:
-        if held <= 0 or volume is None:
-            continue
-        boundaries = set(_pricing_boundaries(segment_start, segment_end, tariffs))
-        next_day = datetime.combine(
-            segment_start.astimezone(MOSCOW).date() + timedelta(days=1),
-            time.min,
-            MOSCOW,
-        )
-        while next_day < segment_end:
-            boundaries.add(next_day)
-            next_day += timedelta(days=1)
-        for left, right in pairwise(sorted(boundaries)):
-            day = left.astimezone(MOSCOW).date()
-            tariff = _tariff_for_day(tariffs, day)
-            if tariff is None:
-                continue
-            quantity = Decimal(held) * _seconds(left, right) * Decimal(volume)
-            charged_quantity += quantity
-            amount_by_day[day] = amount_by_day.get(day, Decimal(0)) + (
-                quantity * Decimal(tariff.rate)
-            )
-            last_tariff = tariff
-    return charged_quantity, amount_by_day, last_tariff
-
-
-async def _measurement_pricing_raw(
-    session: AsyncSession,
-    statement: StorageStatement,
-    measurements: list[StorageMeasurement],
-    tariffs: list[BillingTariffVersionV2],
-) -> RawStorageDraftPricing:
-    product_ids = {measurement.product_id for measurement in measurements}
-    period_end_at = calculation_end_exclusive(statement.period_start, statement.period_end)
-    products = {
-        product.id: product
-        for product in (
-            await session.scalars(select(Product).where(Product.id.in_(product_ids)))
-        ).all()
-    }
-    movements_by_scope: dict[
-        tuple[uuid.UUID | None, uuid.UUID, uuid.UUID],
-        list[InventoryMovement],
-    ] = {}
-    movements = (
-        await session.scalars(
-            select(InventoryMovement)
-            .where(
-                InventoryMovement.tenant_id == statement.tenant_id,
-                InventoryMovement.seller_id == statement.seller_id,
-                InventoryMovement.warehouse_id == statement.warehouse_id,
-                InventoryMovement.product_id.in_(product_ids or {uuid.UUID(int=0)}),
-                InventoryMovement.created_at < period_end_at,
-            )
-            .order_by(InventoryMovement.created_at, InventoryMovement.id)
-        )
-    ).all()
-    for movement in movements:
-        movements_by_scope.setdefault(
-            (movement.seller_id, movement.warehouse_id, movement.product_id),
-            [],
-        ).append(movement)
-    events_by_product: dict[uuid.UUID, list[ProductDimensionEvent]] = {}
-    events = (
-        await session.scalars(
-            select(ProductDimensionEvent)
-            .where(
-                ProductDimensionEvent.tenant_id == statement.tenant_id,
-                ProductDimensionEvent.product_id.in_(product_ids or {uuid.UUID(int=0)}),
-                ProductDimensionEvent.observed_at < period_end_at,
-            )
-            .order_by(ProductDimensionEvent.observed_at, ProductDimensionEvent.id)
-        )
-    ).all()
-    for event in events:
-        events_by_product.setdefault(event.product_id, []).append(event)
-
-    return _measurement_pricing_raw_from_loaded(
-        statement,
-        measurements,
-        tariffs,
-        products,
-        movements_by_scope,
-        events_by_product,
-    )
-
-
-def _measurement_pricing_raw_from_loaded(
-    statement: StorageStatement,
-    measurements: list[StorageMeasurement],
-    tariffs: list[BillingTariffVersionV2],
-    products: dict[uuid.UUID, Product],
-    movements_by_scope: dict[
-        tuple[uuid.UUID | None, uuid.UUID, uuid.UUID],
-        list[InventoryMovement],
-    ],
-    events_by_product: dict[uuid.UUID, list[ProductDimensionEvent]],
-) -> RawStorageDraftPricing:
-    """Рассчитать строки ведомости по уже пакетно загруженным исходным данным."""
-    period_start_at = datetime.combine(statement.period_start, time.min, MOSCOW)
-    period_end_at = calculation_end_exclusive(statement.period_start, statement.period_end)
-
-    raw_pricing: RawStorageDraftPricing = {}
-    for measurement in measurements:
-        product = products[measurement.product_id]
-        segments = _volume_segments(
-            movements_by_scope.get(
-                (
-                    statement.seller_id,
-                    statement.warehouse_id,
-                    measurement.product_id,
-                ),
-                [],
-            ),
-            events_by_product.get(measurement.product_id, []),
-            period_start_at,
-            period_end_at,
-            legacy_volume_liters=product.volume_liters,
-        )
-        charged_quantity, amount_by_day, last_tariff = _price_volume_segments_by_day(
-            segments,
-            tariffs,
-        )
-        if last_tariff is None:
-            # The dated tariff can intersect the statement even when this SKU
-            # had no positive balance after the rate became effective.  Such a
-            # row is a valid zero preview, not a reason to reject the tariff.
-            last_tariff = _tariff_for_day(tariffs, statement.period_end)
-        if last_tariff is None:
-            raise StorageStatementError("tariff_not_found")
-        raw_pricing[measurement.id] = (charged_quantity, amount_by_day, last_tariff)
-    return raw_pricing
-
-
-async def get_storage_draft_pricing_batch(
-    session: AsyncSession,
-    rounding_scopes: Sequence[StoragePricingScope],
-) -> dict[uuid.UUID, StorageDraftPricing]:
-    """Рассчитать список ведомостей фиксированным числом запросов к БД."""
-    scopes = [(statement, rows) for statement, rows in rounding_scopes if rows]
-    if not scopes:
-        return {}
-
-    tenant_id = scopes[0][0].tenant_id
-    seller_ids = {statement.seller_id for statement, _rows in scopes}
-    product_ids = {row.product_id for _statement, rows in scopes for row in rows}
-    warehouse_ids = {statement.warehouse_id for statement, _rows in scopes}
-    period_start_at = min(
-        datetime.combine(statement.period_start, time.min, MOSCOW)
-        for statement, _rows in scopes
-    )
-    period_end_at = max(
-        calculation_end_exclusive(statement.period_start, statement.period_end)
-        for statement, _rows in scopes
-    )
-
-    tariffs = list(
-        (
-            await session.scalars(
-                select(BillingTariffVersionV2).where(
-                    BillingTariffVersionV2.tenant_id == tenant_id,
-                    BillingTariffVersionV2.service_code == "storage",
-                    BillingTariffVersionV2.unit == "liter_day",
-                    BillingTariffVersionV2.enabled.is_(True),
-                    BillingTariffVersionV2.employee_user_id.is_(None),
-                    BillingTariffVersionV2.product_id.is_(None),
-                    BillingTariffVersionV2.valid_from_at < period_end_at,
-                    or_(
-                        BillingTariffVersionV2.valid_to_at.is_(None),
-                        BillingTariffVersionV2.valid_to_at > period_start_at,
-                    ),
-                    or_(
-                        BillingTariffVersionV2.seller_id.is_(None),
-                        BillingTariffVersionV2.seller_id.in_(seller_ids),
-                    ),
-                )
-            )
-        ).all()
-    )
-    products = {
-        product.id: product
-        for product in (
-            await session.scalars(select(Product).where(Product.id.in_(product_ids)))
-        ).all()
-    }
-    movements = list(
-        (
-            await session.scalars(
-                select(InventoryMovement)
-                .where(
-                    InventoryMovement.tenant_id == tenant_id,
-                    InventoryMovement.seller_id.in_(seller_ids),
-                    InventoryMovement.warehouse_id.in_(warehouse_ids),
-                    InventoryMovement.product_id.in_(product_ids),
-                    InventoryMovement.created_at < period_end_at,
-                )
-                .order_by(InventoryMovement.created_at, InventoryMovement.id)
-            )
-        ).all()
-    )
-    movements_by_scope: dict[
-        tuple[uuid.UUID | None, uuid.UUID, uuid.UUID],
-        list[InventoryMovement],
-    ] = {}
-    for movement in movements:
-        movements_by_scope.setdefault(
-            (movement.seller_id, movement.warehouse_id, movement.product_id),
-            [],
-        ).append(movement)
-    events = list(
-        (
-            await session.scalars(
-                select(ProductDimensionEvent)
-                .where(
-                    ProductDimensionEvent.tenant_id == tenant_id,
-                    ProductDimensionEvent.product_id.in_(product_ids),
-                    ProductDimensionEvent.observed_at < period_end_at,
-                )
-                .order_by(ProductDimensionEvent.observed_at, ProductDimensionEvent.id)
-            )
-        ).all()
-    )
-    events_by_product: dict[uuid.UUID, list[ProductDimensionEvent]] = {}
-    for event in events:
-        events_by_product.setdefault(event.product_id, []).append(event)
-
-    scopes_by_seller_period: dict[
-        tuple[uuid.UUID, date, date],
-        list[StoragePricingScope],
-    ] = {}
-    for statement, rows in scopes:
-        key = (
-            statement.seller_id,
-            statement.period_start,
-            statement.period_end,
-        )
-        scopes_by_seller_period.setdefault(key, []).append((statement, rows))
-
-    result: dict[uuid.UUID, StorageDraftPricing] = {}
-    for (seller_id, _period_start, _period_end), seller_scopes in (
-        scopes_by_seller_period.items()
-    ):
-        seller_tariffs = [
-            tariff
-            for tariff in tariffs
-            if tariff.seller_id is None or tariff.seller_id == seller_id
-        ]
-        if not seller_tariffs:
-            continue
-        combined_raw: RawStorageDraftPricing = {}
-        try:
-            for statement, rows in seller_scopes:
-                combined_raw.update(
-                    _measurement_pricing_raw_from_loaded(
-                        statement,
-                        rows,
-                        seller_tariffs,
-                        products,
-                        movements_by_scope,
-                        events_by_product,
-                    )
-                )
-        except StorageStatementError as exc:
-            if str(exc) == "tariff_not_found":
-                continue
-            raise
-        combined_pricing = _allocate_storage_pricing(combined_raw)
-        for statement, rows in seller_scopes:
-            result[statement.id] = {
-                row.id: combined_pricing[row.id]
-                for row in rows
-            }
-    return result
-
-
-def _allocate_storage_pricing(
-    raw_pricing: RawStorageDraftPricing,
-) -> StorageDraftPricing:
-    """Allocate seller/day rounded kopecks across all supplied statement rows."""
-
-    # The invoice rounds the seller's total once per Moscow day. Allocate that
-    # same integer number of kopecks back to visible statement rows using the
-    # largest remainders, with the measurement UUID as a stable tie-breaker.
-    # This keeps both the document total and the sum of its rows exactly equal
-    # to the invoice without inventing sub-kopeck public amounts.
-    allocated_kopecks = {measurement_id: 0 for measurement_id in raw_pricing}
-    days = sorted(
-        {
-            day
-            for _, amount_by_day, _ in raw_pricing.values()
-            for day in amount_by_day
-        }
-    )
-    for day in days:
-        exact = {
-            measurement_id: amount_by_day.get(day, Decimal(0))
-            for measurement_id, (_, amount_by_day, _) in raw_pricing.items()
-        }
-        floors = {
-            measurement_id: int(value.to_integral_value(rounding=ROUND_FLOOR))
-            for measurement_id, value in exact.items()
-        }
-        target = int(
-            sum(exact.values(), start=Decimal(0)).quantize(
-                Decimal("1"),
-                rounding=ROUND_HALF_UP,
-            )
-        )
-        remainder_count = target - sum(floors.values())
-        ranked = sorted(
-            exact,
-            key=lambda measurement_id: (
-                -(exact[measurement_id] - Decimal(floors[measurement_id])),
-                str(measurement_id),
-            ),
-        )
-        for measurement_id, floor in floors.items():
-            allocated_kopecks[measurement_id] += floor
-        for measurement_id in ranked[:remainder_count]:
-            allocated_kopecks[measurement_id] += 1
-
-    result: StorageDraftPricing = {}
-    for measurement_id, (charged_quantity, _, last_tariff) in raw_pricing.items():
-        result[measurement_id] = (
-            charged_quantity,
-            (Decimal(allocated_kopecks[measurement_id]) / Decimal(100)).quantize(
-                STORAGE_TARIFF_MONEY_QUANTUM
-            ),
-            last_tariff,
-        )
-    return result
-
-
-async def _measurement_pricing(
-    session: AsyncSession,
-    statement: StorageStatement,
-    measurements: list[StorageMeasurement],
-    tariffs: list[BillingTariffVersionV2],
-) -> StorageDraftPricing:
-    raw_pricing = await _measurement_pricing_raw(
-        session,
-        statement,
-        measurements,
-        tariffs,
-    )
-    return _allocate_storage_pricing(raw_pricing)
-
-
-async def get_storage_draft_pricing(
-    session: AsyncSession,
-    statement: StorageStatement,
-    measurements: list[StorageMeasurement],
-    newly_created_tariffs: Sequence[BillingTariffVersionV2] = (),
-    *,
-    rounding_scopes: Sequence[
-        tuple[StorageStatement, list[StorageMeasurement]]
-    ] = (),
-) -> StorageDraftPricing:
-    """Calculate the current preview for an editable statement from dated tariffs."""
-    period_start_at = datetime.combine(statement.period_start, time.min, MOSCOW)
-    period_end_at = calculation_end_exclusive(statement.period_start, statement.period_end)
-    tariffs = list(
-        (
-            await session.scalars(
-                select(BillingTariffVersionV2).where(
-                    BillingTariffVersionV2.tenant_id == statement.tenant_id,
-                    BillingTariffVersionV2.service_code == "storage",
-                    BillingTariffVersionV2.unit == "liter_day",
-                    BillingTariffVersionV2.enabled.is_(True),
-                    BillingTariffVersionV2.employee_user_id.is_(None),
-                    BillingTariffVersionV2.product_id.is_(None),
-                    BillingTariffVersionV2.valid_from_at < period_end_at,
-                    or_(
-                        BillingTariffVersionV2.valid_to_at.is_(None),
-                        BillingTariffVersionV2.valid_to_at > period_start_at,
-                    ),
-                    or_(
-                        BillingTariffVersionV2.seller_id.is_(None),
-                        BillingTariffVersionV2.seller_id == statement.seller_id,
-                    ),
-                )
-            )
-        ).all()
-    )
-    known_tariff_ids = {tariff.id for tariff in tariffs}
-    tariffs.extend(
-        tariff
-        for tariff in newly_created_tariffs
-        if tariff.id not in known_tariff_ids
-        and tariff.tenant_id == statement.tenant_id
-        and tariff.service_code == "storage"
-        and tariff.unit == "liter_day"
-        and tariff.enabled
-        and _as_moscow_timestamp(tariff.valid_from_at) < period_end_at
-        and (
-            tariff.valid_to_at is None
-            or _as_moscow_timestamp(tariff.valid_to_at) > period_start_at
-        )
-        and (tariff.seller_id is None or tariff.seller_id == statement.seller_id)
-    )
-    if not tariffs:
-        raise StorageStatementError("tariff_not_found")
-    if rounding_scopes:
-        combined_raw: RawStorageDraftPricing = {}
-        for peer_statement, peer_measurements in rounding_scopes:
-            if (
-                peer_statement.seller_id != statement.seller_id
-                or peer_statement.period_start != statement.period_start
-                or peer_statement.period_end != statement.period_end
-            ):
-                continue
-            combined_raw.update(
-                await _measurement_pricing_raw(
-                    session,
-                    peer_statement,
-                    peer_measurements,
-                    tariffs,
-                )
-            )
-        combined_pricing = _allocate_storage_pricing(combined_raw)
-        return {
-            measurement.id: combined_pricing[measurement.id]
-            for measurement in measurements
-        }
-    return await _measurement_pricing(session, statement, measurements, tariffs)
-
-
-async def get_storage_draft_pricing_for_statement(
-    session: AsyncSession,
-    statement: StorageStatement,
-    measurements: list[StorageMeasurement],
-) -> StorageDraftPricing:
-    """Цена черновика одного склада с тем же округлением, что и на экране.
-
-    Копейки округляются на уровне селлера и распределяются между всеми его
-    складами. Считать один склад в одиночку — значит показать в печати сумму,
-    отличающуюся от списка на копейку.
-    """
-    peer_statements = list(
-        (
-            await session.scalars(
-                select(StorageStatement).where(
-                    StorageStatement.tenant_id == statement.tenant_id,
-                    StorageStatement.seller_id == statement.seller_id,
-                    StorageStatement.period_start == statement.period_start,
-                    StorageStatement.period_end == statement.period_end,
-                )
-            )
-        ).all()
-    )
-    peer_rows = list(
-        (
-            await session.scalars(
-                select(StorageMeasurement)
-                .where(
-                    StorageMeasurement.tenant_id == statement.tenant_id,
-                    StorageMeasurement.seller_id == statement.seller_id,
-                    StorageMeasurement.period_start == statement.period_start,
-                    StorageMeasurement.period_end == statement.period_end,
-                    StorageMeasurement.status == "calculated",
-                )
-                .order_by(StorageMeasurement.id)
-            )
-        ).all()
-    )
-    rows_by_warehouse: dict[uuid.UUID, list[StorageMeasurement]] = {}
-    for row in peer_rows:
-        rows_by_warehouse.setdefault(row.warehouse_id, []).append(row)
-    scopes = [
-        (peer, rows_by_warehouse[peer.warehouse_id])
-        for peer in peer_statements
-        if peer.warehouse_id in rows_by_warehouse
-    ]
-    return await get_storage_draft_pricing(
-        session,
-        statement,
-        measurements,
-        rounding_scopes=scopes if len(scopes) > 1 else (),
-    )
-
-
-async def reprice_open_storage_drafts(
+async def get_storage_night_charges_batch(
     session: AsyncSession,
     tenant_id: uuid.UUID,
-    valid_from: date,
-    seller_exception: tuple[uuid.UUID, Decimal, date] | None = None,
-    newly_created_tariffs: Sequence[BillingTariffVersionV2] = (),
-) -> list[RepricedStorageDraft]:
-    """Recalculate every open draft intersected by newly added tariff versions.
+    statements: Sequence[StorageStatement],
+    rows_by_statement: dict[uuid.UUID, list[StorageMeasurement]],
+) -> dict[uuid.UUID, dict[uuid.UUID, StorageNightCharge]]:
+    """Ночные начисления за хранение, свёрнутые по товару за период расчёта.
 
-    Draft amounts are deliberately not persisted: they are previews derived from
-    measurements and the current dated tariffs.  Returning the previews from the
-    tariff transaction makes the new values immediately available while keeping
-    fixed statements and their ledger snapshots immutable.
+    Экран хранения не считает деньги сам. Хранение начисляет ночная задача — по
+    строке на пару «склад + товар» за каждые сутки, — и экран показывает ровно
+    её результат. Пока экран считал по-своему, об одних и тех же сутках было две
+    правды: одна на экране, другая в счёте, и какая настоящая, выяснить было
+    нельзя.
+
+    Один запрос на весь список: количество обращений к базе не должно расти по
+    строке ведомости.
     """
-    affected_period = StorageStatement.period_end >= valid_from
-    if seller_exception is not None:
-        seller_id, _, seller_valid_from = seller_exception
-        affected_period = or_(
-            affected_period,
-            and_(
-                StorageStatement.seller_id == seller_id,
-                StorageStatement.period_end >= seller_valid_from,
-            ),
-        )
-    statements = list(
+    charges: dict[uuid.UUID, dict[uuid.UUID, StorageNightCharge]] = {
+        statement.id: {} for statement in statements
+    }
+    # Строка начисления адресуется устойчивым идентификатором «склад + товар»,
+    # поэтому обратный путь от проводки к товару строится из видимых строк.
+    owners: dict[
+        tuple[uuid.UUID | None, uuid.UUID | None, uuid.UUID],
+        tuple[uuid.UUID, uuid.UUID],
+    ] = {}
+    kinds_by_statement: dict[uuid.UUID, set[str]] = {}
+    all_kinds: set[str] = set()
+    source_ids: set[uuid.UUID] = set()
+    for statement in statements:
+        kinds = _storage_day_event_kinds(statement.period_start, statement.period_end)
+        kinds_by_statement[statement.id] = kinds
+        all_kinds |= kinds
+        for row in rows_by_statement.get(statement.id, []):
+            source_id = storage_day_source_id(
+                warehouse_id=statement.warehouse_id,
+                product_id=row.product_id,
+            )
+            owners[(statement.seller_id, statement.warehouse_id, source_id)] = (
+                statement.id,
+                row.product_id,
+            )
+            source_ids.add(source_id)
+    if not source_ids or not all_kinds:
+        return charges
+
+    entries = list(
         (
             await session.scalars(
-                select(StorageStatement)
-                .options(
-                    joinedload(StorageStatement.seller),
-                    joinedload(StorageStatement.warehouse),
-                )
-                .where(
-                    StorageStatement.tenant_id == tenant_id,
-                    StorageStatement.status == "draft",
-                    affected_period,
-                )
-                .order_by(
-                    StorageStatement.period_start,
-                    StorageStatement.seller_id,
-                    StorageStatement.id,
+                select(BillingLedgerEntry).where(
+                    BillingLedgerEntry.tenant_id == tenant_id,
+                    BillingLedgerEntry.service_code == STORAGE_SERVICE_CODE,
+                    BillingLedgerEntry.source_type == STORAGE_DAY_SOURCE_TYPE,
+                    BillingLedgerEntry.entry_type == "charge",
+                    BillingLedgerEntry.source_id.in_(source_ids),
+                    BillingLedgerEntry.event_kind.in_(all_kinds),
                 )
             )
-        )
-        .unique()
-        .all()
+        ).all()
     )
-
-    statement_rows: dict[uuid.UUID, list[StorageMeasurement]] = {}
-    for statement in statements:
-        measurements = list(
-            (
-                await session.scalars(
-                    select(StorageMeasurement)
-                    .options(
-                        joinedload(StorageMeasurement.product),
-                        joinedload(StorageMeasurement.dimension_event),
-                    )
-                    .where(
-                        StorageMeasurement.tenant_id == tenant_id,
-                        StorageMeasurement.seller_id == statement.seller_id,
-                        StorageMeasurement.warehouse_id == statement.warehouse_id,
-                        StorageMeasurement.period_start == statement.period_start,
-                        StorageMeasurement.period_end == statement.period_end,
-                    )
-                    .order_by(StorageMeasurement.product_id)
-                )
-            )
-            .unique()
-            .all()
+    for entry in entries:
+        owner = owners.get((entry.seller_id, entry.warehouse_id, entry.source_id))
+        if owner is None:
+            continue
+        statement_id, product_id = owner
+        if entry.event_kind not in kinds_by_statement[statement_id]:
+            continue
+        current = charges[statement_id].get(product_id)
+        liter_days = (current.liter_days if current is not None else Decimal(0)) + Decimal(
+            entry.quantity
         )
-        statement_rows[statement.id] = measurements
-
-    rounding_scopes_by_seller_period: dict[
-        tuple[uuid.UUID, date, date],
-        list[tuple[StorageStatement, list[StorageMeasurement]]],
-    ] = {}
-    for statement in statements:
-        priceable_rows = [
-            row
-            for row in statement_rows[statement.id]
-            if row.status == "calculated"
-        ]
-        if priceable_rows:
-            key = (
-                statement.seller_id,
-                statement.period_start,
-                statement.period_end,
-            )
-            rounding_scopes_by_seller_period.setdefault(key, []).append(
-                (statement, priceable_rows)
-            )
-
-    repriced: list[RepricedStorageDraft] = []
-    for statement in statements:
-        measurements = statement_rows[statement.id]
-        priceable_rows = [row for row in measurements if row.status == "calculated"]
-        key = (
-            statement.seller_id,
-            statement.period_start,
-            statement.period_end,
+        amount = current.amount_kopecks if current is not None else None
+        if entry.amount is not None:
+            amount = (amount or 0) + int(entry.amount)
+        charges[statement_id][product_id] = StorageNightCharge(
+            liter_days=liter_days,
+            amount_kopecks=amount,
         )
-        pricing = (
-            await get_storage_draft_pricing(
-                session,
-                statement,
-                priceable_rows,
-                newly_created_tariffs,
-                rounding_scopes=rounding_scopes_by_seller_period.get(key, []),
-            )
-            if priceable_rows
-            else {}
-        )
-        repriced.append(
-            RepricedStorageDraft(
-                statement=statement,
-                measurements=measurements,
-                pricing=pricing,
-            )
-        )
-    return repriced
+    return charges
 
 
 async def get_storage_statement_for_print(
@@ -856,13 +267,13 @@ async def create_storage_tariff(
     valid_from: date,
     revision: int,
     seller_exception: tuple[uuid.UUID, Decimal, date] | None = None,
-) -> tuple[
-    BillingTariffVersionV2,
-    BillingTariffVersionV2 | None,
-    list[RepricedStorageDraft],
-    int,
-]:
-    """Save common/seller V2 rates and refresh every affected draft atomically."""
+) -> tuple[BillingTariffVersionV2, BillingTariffVersionV2 | None, int]:
+    """Сохранить общую и индивидуальную ставки хранения одной транзакцией.
+
+    Прошлые расчёты новая ставка не переписывает. Хранение начисляет ночь по
+    ставке, действовавшей в те сутки, и это факт, а не черновик: пересчитать его
+    задним числом значило бы менять уже выставленные деньги.
+    """
     amount = normalize_storage_tariff_amount(amount)
     if seller_exception is not None:
         seller_exception = (
@@ -948,13 +359,6 @@ async def create_storage_tariff(
         seller_tariff = (
             await saved_version(versions[1]) if seller_exception is not None else None
         )
-        repriced_drafts = await reprice_open_storage_drafts(
-            session,
-            tenant_id,
-            valid_from,
-            seller_exception,
-            (common_tariff, *( (seller_tariff,) if seller_tariff is not None else () )),
-        )
         await session.commit()
     except (IntegrityError, BillingTariffMatrixError) as exc:
         await session.rollback()
@@ -967,7 +371,7 @@ async def create_storage_tariff(
     if seller_tariff is not None:
         await session.refresh(seller_tariff)
 
-    return common_tariff, seller_tariff, repriced_drafts, config.revision
+    return common_tariff, seller_tariff, config.revision
 
 
 async def get_storage_ledger_rows(
