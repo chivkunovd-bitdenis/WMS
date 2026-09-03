@@ -593,3 +593,35 @@ async def test_self_content_token_failed_marketplace_check_preserves_existing_ma
 
     assert content_after == "new-content-only-key"
     assert marketplace_after == "working-marketplace-key"
+
+
+@pytest.mark.asyncio
+async def test_legacy_content_only_credentials_still_serve_marketplace_calls(
+    async_client: AsyncClient,
+) -> None:
+    """Старая запись с одним контентным ключом обязана работать на приём заказов.
+
+    Автоопрос берёт селлера в работу, если есть любой из двух ключей, а заказы
+    грузились только по маркетплейс-ключу. У записей, заведённых до правила
+    «один ключ на всё», это поле пустое — и заказы FBS молча не приезжали.
+    """
+    from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
+    from app.services.wildberries_credentials_service import (
+        encrypt_secret,
+        get_decrypted_marketplace_token,
+    )
+
+    _headers, tenant_id, seller_id = await _create_authenticated_seller(async_client)
+    async with SessionLocal() as session:
+        row = await session.get(SellerWildberriesCredentials, seller_id)
+        if row is None:
+            row = SellerWildberriesCredentials(seller_id=seller_id)
+            session.add(row)
+        row.content_token_encrypted = encrypt_secret("legacy-content-key")
+        row.marketplace_token_encrypted = None
+        row.marketplace_scope_ok = None
+        await session.commit()
+
+    async with SessionLocal() as session:
+        token = await get_decrypted_marketplace_token(session, tenant_id, seller_id)
+    assert token == "legacy-content-key"

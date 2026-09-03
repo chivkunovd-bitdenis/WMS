@@ -1166,7 +1166,16 @@ async def _charge_confirmed_order(session: AsyncSession, order: FbsOrder) -> Non
     from app.services.fbs_order_billing_service import record_fbs_order_confirmed
 
     try:
-        await record_fbs_order_confirmed(session, order)
+        # Точка сохранения обязательна. Голого except мало: ошибка на стороне
+        # базы (нарушенное ограничение, отвалившееся соединение) переводит всю
+        # транзакцию PostgreSQL в аварийное состояние, и следующий commit падает
+        # уже сам по себе. Тогда вместе с начислением откатились бы и статус
+        # заказа, и списание товара по «sold», и снятие резерва: WB заказ забрал,
+        # а на складе он остался бы висеть в старой вкладке и искажать остаток.
+        # Savepoint откатывает только начисление, а внешняя транзакция остаётся
+        # живой и довозит статусы по всему батчу.
+        async with session.begin_nested():
+            await record_fbs_order_confirmed(session, order)
     except Exception:
         # Деньги важны, но статусы важнее: если начисление почему-то не легло,
         # проход опроса обязан довезти статусы по всему батчу, а не откатиться

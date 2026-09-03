@@ -208,4 +208,11 @@ async def get_decrypted_marketplace_token(
         return None
     if row.marketplace_token_encrypted:
         return decrypt_secret(row.marketplace_token_encrypted)
+    # Один ключ на всё: при сохранении контентный ключ подставляется и в поле
+    # маркетплейса, но у записей, заведённых до этого правила, оно осталось
+    # пустым. Автоопрос таких селлеров при этом берёт в работу (ему довольно
+    # любого из двух ключей) — и каждый проход завершался
+    # «missing_marketplace_token», то есть заказы FBS молча не приезжали.
+    if row.content_token_encrypted and row.marketplace_scope_ok is not False:
+        return decrypt_secret(row.content_token_encrypted)
     return None
