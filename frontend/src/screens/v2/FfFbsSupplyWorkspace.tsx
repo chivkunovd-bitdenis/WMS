@@ -46,6 +46,7 @@ import { type PackagingTask, type PackagingTaskLine } from '../ff/FfPackagingPag
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
+import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
 import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import {
@@ -1468,6 +1469,20 @@ export function FfFbsSupplyWorkspace({
             <CloseIcon />
           </IconButton>
         </Stack>
+      </Box>
+
+      {/* История поставки нужна на любом этапе, а не только в составе: когда
+          что-то пошло не так, оператор смотрит хронологию там, где стоит. */}
+      <Box sx={{ px: 2, pb: 1 }}>
+        <Button
+          size="small"
+          variant="text"
+          startIcon={<HistoryOutlinedIcon fontSize="small" />}
+          onClick={() => setHistoryOpen(true)}
+          data-testid="fbs-supply-history-open"
+        >
+          История поставки
+        </Button>
       </Box>
 
       <Tabs
