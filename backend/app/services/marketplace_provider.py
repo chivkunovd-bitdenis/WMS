@@ -31,10 +31,6 @@ class MarketplaceProviderError(Exception):
 # Причины, по которым операция Ozon не выполняется у нас, а не в кабинете.
 # Говорить про них «маркетплейс недоступен» — врать оператору: кабинет отвечает.
 _OZON_LOCAL_REFUSALS: dict[str, str] = {
-    "ozon_label_pdf_unsupported": (
-        "Этикетки Ozon приходят в PDF, а печать заказов пока принимает только PNG. "
-        "Печать этикеток Ozon не выполняется."
-    ),
     "ozon_stock_rejected": (
         "Ozon не принял часть остатков: проверьте склад и карточки товаров в кабинете."
     ),
@@ -43,12 +39,6 @@ _OZON_LOCAL_REFUSALS: dict[str, str] = {
     ),
     "ozon_stock_item_invalid": (
         "В остатке нет склада Ozon или идентификатора товара — публиковать нечего."
-    ),
-    "ozon_unload_dispatch_unsupported": (
-        "Передача отгрузки в Ozon не реализована: метода для неё нет в спецификации Ozon."
-    ),
-    "ozon_supply_created_locally": (
-        "Поставка Ozon ведётся у нас; в кабинете вместо неё создаётся перевозка при передаче."
     ),
     "ozon_carriage_id_invalid": ("У поставки Ozon ещё нет номера перевозки — печатать нечего."),
     "transport_error": "Ozon не ответил на запрос.",
@@ -125,31 +115,6 @@ class MarketplaceTransport(Protocol):
         stocks: Sequence[Mapping[str, object]],
     ) -> None: ...
 
-    async def dispatch_unload(
-        self,
-        *,
-        client_id: str,
-        api_key: str,
-        document_id: str,
-    ) -> None: ...
-
-    async def create_supply(
-        self,
-        *,
-        client_id: str,
-        api_key: str,
-        name: str,
-        posting_numbers: Sequence[str],
-    ) -> dict[str, Any]: ...
-
-    async def deliver_supply(
-        self,
-        *,
-        client_id: str,
-        api_key: str,
-        supply_id: str,
-    ) -> None: ...
-
     async def fetch_supply_qr(
         self,
         *,
@@ -164,7 +129,6 @@ class FakeMarketplaceTransport:
     orders: list[dict[str, Any]] = field(default_factory=list)
     statuses: list[dict[str, Any]] = field(default_factory=list)
     order_labels: list[dict[str, Any]] = field(default_factory=list)
-    created_supply_id: str = "ozon-fake-supply"
     supply_qr: bytes = b""
     errors: dict[str, MarketplaceProviderError] = field(default_factory=dict)
     calls: list[tuple[str, str]] = field(default_factory=list)
@@ -226,18 +190,6 @@ class FakeMarketplaceTransport:
         if error := self.errors.get("publish_stocks"):
             raise error
 
-    async def dispatch_unload(
-        self,
-        *,
-        client_id: str,
-        api_key: str,
-        document_id: str,
-    ) -> None:
-        _ = client_id, api_key
-        self.calls.append(("dispatch_unload", document_id))
-        if error := self.errors.get("dispatch_unload"):
-            raise error
-
     async def fetch_order_labels(
         self,
         *,
@@ -250,32 +202,6 @@ class FakeMarketplaceTransport:
         if error := self.errors.get("fetch_order_labels"):
             raise error
         return list(self.order_labels)
-
-    async def create_supply(
-        self,
-        *,
-        client_id: str,
-        api_key: str,
-        name: str,
-        posting_numbers: Sequence[str],
-    ) -> dict[str, Any]:
-        _ = api_key, name, posting_numbers
-        self.calls.append(("create_supply", client_id))
-        if error := self.errors.get("create_supply"):
-            raise error
-        return {"id": self.created_supply_id}
-
-    async def deliver_supply(
-        self,
-        *,
-        client_id: str,
-        api_key: str,
-        supply_id: str,
-    ) -> None:
-        _ = api_key
-        self.calls.append(("deliver_supply", supply_id))
-        if error := self.errors.get("deliver_supply"):
-            raise error
 
     async def fetch_supply_qr(
         self,
@@ -375,24 +301,6 @@ class OzonMarketplaceProvider:
             self._remember_blocked(error)
             raise
 
-    async def dispatch_unload(
-        self,
-        *,
-        client_id: str,
-        api_key: str,
-        document_id: str,
-    ) -> None:
-        self._raise_if_blocked()
-        try:
-            await self.transport.dispatch_unload(
-                client_id=client_id,
-                api_key=api_key,
-                document_id=document_id,
-            )
-        except MarketplaceProviderError as error:
-            self._remember_blocked(error)
-            raise
-
     async def fetch_order_labels(
         self,
         *,
@@ -406,44 +314,6 @@ class OzonMarketplaceProvider:
                 client_id=client_id,
                 api_key=api_key,
                 posting_numbers=posting_numbers,
-            )
-        except MarketplaceProviderError as error:
-            self._remember_blocked(error)
-            raise
-
-    async def create_supply(
-        self,
-        *,
-        client_id: str,
-        api_key: str,
-        name: str,
-        posting_numbers: Sequence[str],
-    ) -> dict[str, Any]:
-        self._raise_if_blocked()
-        try:
-            return await self.transport.create_supply(
-                client_id=client_id,
-                api_key=api_key,
-                name=name,
-                posting_numbers=posting_numbers,
-            )
-        except MarketplaceProviderError as error:
-            self._remember_blocked(error)
-            raise
-
-    async def deliver_supply(
-        self,
-        *,
-        client_id: str,
-        api_key: str,
-        supply_id: str,
-    ) -> None:
-        self._raise_if_blocked()
-        try:
-            await self.transport.deliver_supply(
-                client_id=client_id,
-                api_key=api_key,
-                supply_id=supply_id,
             )
         except MarketplaceProviderError as error:
             self._remember_blocked(error)

@@ -26,6 +26,14 @@
 * **Мутации не повторяются.** Идемпотентных ключей Ozon не документирует ни
   для одной мутации, поэтому повтор — забота вызывающего кода, который знает
   семантику операции. Транспорт делает ровно один запрос.
+* **Здесь нет `create_supply`, `deliver_supply` и `dispatch_unload`.** Они были,
+  вечно отвечали отказом — и ни разу никем не вызывались: ни одного места в коде,
+  которое бы их звало, не существовало. При этом со стороны они читались как
+  «эти куски Ozon не сделаны», хотя передача поставки давно живёт целиком в
+  `ozon_fbs_process_service.handoff_supply` (сборка отправлений, создание
+  перевозки, её состав, подтверждение, штрихкод акта и лист отгрузки), а
+  «передачи отгрузки» у Ozon нет как операции вовсе. Мёртвый метод, который врёт
+  про состояние модуля, хуже отсутствующего.
 """
 
 from __future__ import annotations
@@ -459,52 +467,6 @@ class HttpxOzonMarketplaceTransport:
                     {"failed": failures, "sent": len(batch)},
                     code="ozon_stock_rejected",
                 )
-
-    async def dispatch_unload(
-        self,
-        *,
-        client_id: str,
-        api_key: str,
-        document_id: str,
-    ) -> None:
-        _ = client_id, api_key, document_id
-        raise MarketplaceProviderError(
-            "ozon",
-            None,
-            {},
-            code="ozon_unload_dispatch_unsupported",
-        )
-
-    async def create_supply(
-        self,
-        *,
-        client_id: str,
-        api_key: str,
-        name: str,
-        posting_numbers: Sequence[str],
-    ) -> dict[str, Any]:
-        _ = client_id, api_key, name, posting_numbers
-        raise MarketplaceProviderError(
-            "ozon",
-            None,
-            {},
-            code="ozon_supply_created_locally",
-        )
-
-    async def deliver_supply(
-        self,
-        *,
-        client_id: str,
-        api_key: str,
-        supply_id: str,
-    ) -> None:
-        _ = client_id, api_key, supply_id
-        raise MarketplaceProviderError(
-            "ozon",
-            None,
-            {},
-            code="ozon_supply_created_locally",
-        )
 
     async def fetch_supply_qr(
         self,

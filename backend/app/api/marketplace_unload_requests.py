@@ -651,8 +651,6 @@ def _map_mu_err(exc: MarketplaceUnloadError) -> HTTPException:
         )
     if exc.code == "no_lines":
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="no_lines")
-    if exc.code in {"provider_dispatch_blocked", "provider_dispatch_failed"}:
-        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     if exc.code == "packaging_instructions_required":
         return HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -670,8 +668,6 @@ def _map_pick_err(exc: MarketplaceUnloadPickError) -> HTTPException:
         "open_box_exists",
         "invalid_container_reference",
     ):
-        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
-    if exc.code in {"provider_dispatch_blocked", "provider_dispatch_failed"}:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     if exc.code in (
         "invalid_quantity",

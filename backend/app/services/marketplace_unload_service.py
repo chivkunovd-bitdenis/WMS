@@ -42,10 +42,6 @@ from app.services.document_number_service import (
     assign_document_number_if_missing,
 )
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
-from app.services.marketplace_provider import (
-    MarketplaceProviderError,
-    OzonMarketplaceProvider,
-)
 from app.services.marketplace_unload_status import (
     BILLING_REVERSIBLE_STATUSES as BILLING_REVERSIBLE_STATUSES,
 )
@@ -89,7 +85,6 @@ from app.services.marketplace_unload_status import (
     STATUS_SUBMITTED as STATUS_SUBMITTED,
 )
 from app.services.operation_fact_service import record_marketplace_unload
-from app.services.ozon_provider_factory import build_ozon_provider
 from app.services.wb_mp_warehouse_service import get_cached_mp_warehouse
 
 if TYPE_CHECKING:
@@ -115,19 +110,6 @@ class MarketplaceUnloadAvailableProduct:
 class MarketplaceUnloadAvailability:
     available: int
     uses_free_fbo_pool: bool
-
-
-def _blocked_ozon_unload_provider() -> OzonMarketplaceProvider:
-    """Отгрузку на Ozon завершает провайдер, а не наш локальный оптимизм.
-
-    Прежний фейк отвечал «403, код 7 — кабинет заблокирован». Это утверждение
-    неверно: кабинет отвечает и отдаёт данные. Настоящая причина другая — метода
-    передачи отгрузки на Ozon нет ни в нашей копии спецификации Ozon, ни в коде,
-    поэтому боевой транспорт на этой операции отвечает
-    ``ozon_unload_dispatch_unsupported``. Документ и остатки по-прежнему не
-    меняются, но оператору больше не сообщают выдуманную причину.
-    """
-    return build_ozon_provider(blocked_operation="dispatch_unload")
 
 
 def assert_request_visible(
@@ -1007,7 +989,6 @@ async def complete_unload(
     *,
     acknowledge_discrepancy: bool = False,
     performer_id: uuid.UUID | None = None,
-    ozon_provider: OzonMarketplaceProvider | None = None,
 ) -> MarketplaceUnloadRequest:
     """Single completion op: ship unload; set has_discrepancy when plan ≠ fact."""
     req = await get_request(session, tenant_id, request_id)
@@ -1041,18 +1022,26 @@ async def complete_unload(
             raise MarketplaceUnloadError("distribution_incomplete")
         req.ff_modified = True
 
-    if req.marketplace == "ozon":
-        try:
-            provider = ozon_provider or _blocked_ozon_unload_provider()
-            await provider.dispatch_unload(
-                client_id="",
-                api_key="",
-                document_id=str(req.id),
-            )
-        except MarketplaceProviderError as exc:
-            if exc.is_account_blocked:
-                raise MarketplaceUnloadError("provider_dispatch_blocked") from None
-            raise MarketplaceUnloadError("provider_dispatch_failed") from None
+    # Отгрузка на маркетплейс завершается локально — одинаково для WB и Ozon.
+    #
+    # Здесь стоял вызов `dispatch_unload` через границу провайдера, заведённый
+    # 25.08.2026, когда кабинет Ozon отвечал 403 и проверить было нечем. За ним
+    # никогда не было метода Ozon: у Ozon это не «передача документа», а заявка
+    # на поставку на его склад — отдельная многошаговая схема из черновика
+    # (`/v1/draft/direct/create`), кластера, таймслота (`/v2/draft/timeslot/info`),
+    # пропуска на водителя и машину. Ни одного из этих полей у нашего документа
+    # нет: `MarketplaceUnloadRequest` знает только склад ФФ, селлера, дату и
+    # строки, а колонка `external_supply_id` в коде не заполняется нигде.
+    #
+    # Практическое следствие прежнего кода было хуже, чем отсутствие интеграции:
+    # локальный фейк отвечал «403, код 7», отгрузка Ozon не завершалась никогда,
+    # документ навсегда оставался в `collecting`. Товар физически уезжал, а
+    # списания и начисления не происходило. Причина при этом называлась ложная —
+    # «кабинет Ozon недоступен», хотя кабинет отвечает.
+    #
+    # У Wildberries эта же операция всегда завершалась локально: документ
+    # поставки на складе маркетплейса создаёт селлер в своём кабинете, а ФФ
+    # отвечает за физическую отгрузку. Для Ozon верно ровно то же самое.
 
     req.has_discrepancy = has_discrepancy
     await delete_empty_boxes_for_ship(session, req)
