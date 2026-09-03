@@ -94,7 +94,12 @@ const sectionLabels: Record<string, string> = {
 /** Коды услуг с бэкенда сводим в разделы: `packing` и `packaging` — одно и то же. */
 function sectionKey(serviceCode: string): string {
   if (serviceCode === 'packing' || serviceCode === 'packaging') return 'packing'
-  if (serviceCode === 'fbs_pick' || serviceCode === 'fbs_order') return 'fbs'
+  // Подбор — внутренняя операция склада, тарифа на неё нет. В разделе FBS он
+  // засыпал заказы строками «Поставка …» по одной на каждую подобранную
+  // единицу, и раздел переставал читаться. Считаем по заказам: в FBS только
+  // они, подбор живёт своим разделом.
+  if (serviceCode === 'fbs_pick') return 'picking'
+  if (serviceCode === 'fbs_order') return 'fbs'
   if (serviceCode === 'storage' || serviceCode === 'storage_liter_day') return 'storage'
   if (sectionLabels[serviceCode]) return serviceCode
   return 'other'
