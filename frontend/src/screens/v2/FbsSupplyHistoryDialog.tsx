@@ -22,7 +22,8 @@ export type FbsSupplyHistoryEvent = {
   title: string
   actor: string | null
   details: string | null
-  items: string[]
+  /** Подробности пачки. Может не прийти вовсе — экран обязан это пережить. */
+  items?: string[]
 }
 
 export type FbsSupplyHistory = {
@@ -67,7 +68,10 @@ function formatMoment(value: string): string {
 
 function HistoryRow({ event }: { event: FbsSupplyHistoryEvent }) {
   const [open, setOpen] = useState(false)
-  const hasItems = event.items.length > 0
+  // Отсутствующее поле не имеет права уронить экран: без этой защиты одно
+  // событие без подробностей гасило всю страницу FBS, а не только окно.
+  const items = event.items ?? []
+  const hasItems = items.length > 0
   return (
     <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
       <Typography
@@ -112,7 +116,7 @@ function HistoryRow({ event }: { event: FbsSupplyHistoryEvent }) {
         {hasItems ? (
           <Collapse in={open} unmountOnExit>
             <Stack sx={{ pl: 1, mt: 0.5, borderLeft: 2, borderColor: 'divider' }}>
-              {event.items.map((item, index) => (
+              {items.map((item, index) => (
                 <Typography key={`${item}-${index}`} variant="caption" color="text.secondary">
                   {item}
                 </Typography>

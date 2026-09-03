@@ -409,7 +409,7 @@ async def supply_history(
     events: list[dict[str, Any]] = []
     created = _event(supply.created_at, "created", "Поставка создана")
     if created is not None:
-        events.append(created)
+        events.append({**created, "items": []})
 
     # Заказы в поставке: добавление, снятие, отмена.
     for event in supply_events:
