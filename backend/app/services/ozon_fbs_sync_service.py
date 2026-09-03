@@ -20,13 +20,20 @@ from sqlalchemy.orm import selectinload
 
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
+    FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_DONE,
     FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
     FBS_ORDER_STATUS_IN_DELIVERY,
+    FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
+    FBS_ORDER_STATUS_PACKED,
+    FBS_ORDER_STATUS_SORTED,
     MAPPING_STATUS_MAPPED,
     MAPPING_STATUS_MISSING,
+    MARKING_KIND_IMEI,
+    MARKING_KIND_SGTIN,
+    MARKING_KIND_UIN,
     RESERVE_STATUS_NO_STOCK,
     RESERVE_STATUS_SKIPPED_NO_PRODUCT,
     RESERVE_STATUS_WAREHOUSE_UNMAPPED,
@@ -34,6 +41,7 @@ from app.models.fbs_order import (
     FbsOrderProduct,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.schemas.ozon_fbs_api import OzonPostingV4PostingFbsUnfulfilledListResponsePostingsProducts
 from app.services.fbs_stock_sync_service import (
@@ -45,11 +53,66 @@ from app.services.marketplace_stock_sync_result import SellerStockSyncResult
 from app.services.wb_marketplace_orders_service import _release_reservation, _try_reserve_order
 
 OZON_FBS_DEADLINE_HOURS = 120
-_OZON_NEW_STATUSES = frozenset({"new", "awaiting_packaging", "awaiting_deliver"})
+
+# Ключ в `meta_details_json`, по которому видно: требования по маркировке для
+# этого отправления разобраны. Без него пустое требование неотличимо от
+# неразобранного, и гейт выпуска вынужден гадать — а гадать он не имеет права.
+OZON_REQUIREMENTS_KEY = "ozon_requirements"
+
+# Словарь статусов взят из описания поля `status` в официальной спецификации
+# (`posting.v4.PostingFbsUnfulfilledListResponse.Postings`, `v3FbsPostingDetail`),
+# а не из тестовой фикстуры, как было раньше.
+#
+# Что здесь важно и чего не было:
+#
+# * «Новый» у Ozon ровно один — `awaiting_packaging`: только в нём оператору
+#   есть что делать. Раньше новым считался и `awaiting_deliver`, который
+#   означает «уже собрано, ждёт отгрузки»: собранное отправление показывалось
+#   как новое и его можно было взять в работу второй раз.
+# * `awaiting_approve`, `awaiting_verification`, `awaiting_registration` — это
+#   состояния самого Ozon до и после сборки; брать их в работу нельзя.
+# * `delivered` в перечне Ozon есть, но только у карточки отправления
+#   (`/v3/posting/fbs/get`). В списках его нет: там доставку видно подстатусом
+#   `posting_delivered`/`posting_received`. Раньше мы ждали `delivered`/`done`
+#   на верхнем уровне и заказ Ozon не доходил до «завершён» никогда.
+# * `arbitration` и `client_arbitration` — это спор по доставке, а не отмена.
+#   Считать их отменой опасно: отмена разворачивает отгрузку и снимает резерв.
+_OZON_NEW_STATUSES = frozenset({"new", "awaiting_packaging"})
+_OZON_ASSEMBLED_STATUSES = frozenset({"awaiting_deliver"})
 _OZON_DELIVERY_STATUSES = frozenset({"delivering", "driver_pickup", "sent_by_seller"})
+# «Идёт приёмка» — это Ozon подтвердил, что забрал отправление в пункте приёма.
+# Ближайший аналог вайлдберрисовского `sorted`, и точно так же это момент, когда
+# работа склада по заказу считается сделанной и попадает в счёт.
+_OZON_ACCEPTED_STATUSES = frozenset({"acceptance_in_progress"})
 _OZON_DONE_STATUSES = frozenset({"delivered", "done"})
+_OZON_DONE_SUBSTATUSES = frozenset({"posting_delivered", "posting_received"})
 _OZON_CANCELLED_STATUSES = frozenset(
-    {"cancelled", "canceled", "cancelled_from_split_pending", "client_arbitration"}
+    {"cancelled", "canceled", "cancelled_from_split_pending"}
+)
+
+# Этапы, которые ставит наш собственный процесс. Опрос Ozon не имеет права
+# затирать их своим «отправление ещё не собрано»: заказ, взятый в поставку,
+# иначе выдёргивало бы обратно в «новые» каждые десять минут.
+_LOCAL_WORKFLOW_STATUSES = frozenset(
+    {
+        FBS_ORDER_STATUS_IN_SUPPLY,
+        FBS_ORDER_STATUS_ASSEMBLING,
+        FBS_ORDER_STATUS_PACKED,
+        FBS_ORDER_STATUS_SORTED,
+        FBS_ORDER_STATUS_IN_DELIVERY,
+    }
+)
+
+# Состояния, в которых работа склада по заказу считается сделанной и попадает
+# в счёт. Совпадают с теми, что уже приняты для Wildberries: подтверждение
+# приходит от маркетплейса, а не от нашей кнопки.
+_BILLABLE_STATUSES = frozenset({FBS_ORDER_STATUS_SORTED, FBS_ORDER_STATUS_DONE})
+
+# Требования отправления Ozon (`requirements`) в терминах наших видов маркировки.
+_OZON_REQUIREMENT_KINDS: tuple[tuple[str, str], ...] = (
+    ("products_requiring_mandatory_mark", MARKING_KIND_SGTIN),
+    ("products_requiring_jw_uin", MARKING_KIND_UIN),
+    ("products_requiring_imei", MARKING_KIND_IMEI),
 )
 
 
@@ -61,6 +124,109 @@ def _text(row: dict[str, Any], *keys: str) -> str | None:
         if isinstance(value, int):
             return str(value)
     return None
+
+
+def _nested(row: dict[str, Any], *path: str) -> Any:
+    current: Any = row
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
+def _nested_text(row: dict[str, Any], *path: str) -> str | None:
+    value = _nested(row, *path)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if isinstance(value, int):
+        return str(value)
+    return None
+
+
+def _warehouse_id(row: dict[str, Any]) -> str | None:
+    """Ozon кладёт склад внутрь `delivery_method`, а не на верхний уровень.
+
+    На верхнем уровне отправления поля `warehouse_id` нет вовсе — это видно в
+    схеме `posting.v4.PostingFbsUnfulfilledListResponse.Postings`. Пока мы
+    искали его там, даже правильно заведённая привязка склада не находилась и
+    каждый заказ Ozon получал `warehouse_unmapped`.
+    """
+    nested = _nested_text(row, "delivery_method", "warehouse_id")
+    if nested is not None:
+        return nested
+    return _text(row, "warehouse_id", "warehouseId")
+
+
+def _posting_barcode(row: dict[str, Any]) -> str | None:
+    """Штрихкоды отправления лежат в объекте `barcodes`, а не на верхнем уровне."""
+    for key in ("lower_barcode", "upper_barcode"):
+        value = _nested_text(row, "barcodes", key)
+        if value is not None:
+            return value
+    return _text(row, "barcode")
+
+
+def _money_kopecks(value: Any) -> int | None:
+    """Цена Ozon — строка рублей в объекте `money.postingMoney`.
+
+    В нашей колонке `FbsOrder.price` лежат копейки: у Wildberries цена приходит
+    умноженной на сто (фикстуры бэкенда и эмулятора — 199900 при цене 1999 ₽).
+    Смешать в одной колонке рубли и копейки — тихо испортить данные, поэтому
+    приводим озоновскую цену к тем же копейкам.
+    """
+    if isinstance(value, dict):
+        value = value.get("amount")
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return round(float(value) * 100)
+    if isinstance(value, str) and value.strip():
+        try:
+            return round(float(value.strip().replace(",", ".")) * 100)
+        except ValueError:
+            return None
+    return None
+
+
+def _posting_price_kopecks(row: dict[str, Any]) -> int | None:
+    """Сумма отправления: у Ozon цены нет на верхнем уровне, только по позициям."""
+    total = 0
+    seen = False
+    financial = _nested(row, "financial_data", "products")
+    products = financial if isinstance(financial, list) else row.get("products")
+    if isinstance(products, list):
+        for product in products:
+            if not isinstance(product, dict):
+                continue
+            amount = _money_kopecks(product.get("price"))
+            if amount is None:
+                continue
+            quantity = product.get("quantity")
+            total += amount * (quantity if isinstance(quantity, int) and quantity > 0 else 1)
+            seen = True
+    if seen:
+        return total
+    return _money_kopecks(row.get("price"))
+
+
+def _requirement_kinds(row: dict[str, Any]) -> tuple[list[str], bool]:
+    """Виды маркировки, которые Ozon требует по этому отправлению.
+
+    Второй элемент говорит, ответил ли Ozon про требования вообще: пустой
+    список при «ответил» — это «не требуется», а при «не ответил» — «мы не
+    знаем». Разница принципиальная: гейт выпуска не имеет права трактовать
+    незнание как разрешение.
+    """
+    requirements = row.get("requirements")
+    if not isinstance(requirements, dict):
+        return [], False
+    kinds: list[str] = []
+    for field, kind in _OZON_REQUIREMENT_KINDS:
+        values = requirements.get(field)
+        if isinstance(values, list) and values and kind not in kinds:
+            kinds.append(kind)
+    return kinds, True
 
 
 def _parse_datetime(value: object) -> datetime:
@@ -81,16 +247,23 @@ def _legacy_numeric_order_id(external_order_id: str) -> int:
     return -(int.from_bytes(digest, "big", signed=False) & ((1 << 63) - 1)) or -1
 
 
-def _local_status(raw_status: str | None) -> str:
+def _local_status(raw_status: str | None, raw_substatus: str | None = None) -> str:
     normalized = (raw_status or "").strip().lower()
-    if normalized in _OZON_NEW_STATUSES:
-        return FBS_ORDER_STATUS_NEW
-    if normalized in _OZON_DELIVERY_STATUSES:
-        return FBS_ORDER_STATUS_IN_DELIVERY
-    if normalized in _OZON_DONE_STATUSES:
-        return FBS_ORDER_STATUS_DONE
+    substatus = (raw_substatus or "").strip().lower()
     if normalized in _OZON_CANCELLED_STATUSES:
         return FBS_ORDER_STATUS_CANCELLED
+    if normalized in _OZON_DONE_STATUSES or substatus in _OZON_DONE_SUBSTATUSES:
+        return FBS_ORDER_STATUS_DONE
+    if normalized in _OZON_ACCEPTED_STATUSES:
+        return FBS_ORDER_STATUS_SORTED
+    if normalized in _OZON_DELIVERY_STATUSES:
+        return FBS_ORDER_STATUS_IN_DELIVERY
+    if normalized in _OZON_NEW_STATUSES:
+        return FBS_ORDER_STATUS_NEW
+    # `awaiting_deliver` (уже собрано) и всё остальное — работа маркетплейса,
+    # а не приглашение оператору собрать отправление ещё раз.
+    if normalized in _OZON_ASSEMBLED_STATUSES:
+        return FBS_ORDER_STATUS_EXTERNAL_PROCESSING
     return FBS_ORDER_STATUS_EXTERNAL_PROCESSING
 
 
@@ -105,6 +278,10 @@ async def _credentials(
 def _stock_error_code(error: MarketplaceProviderError) -> str:
     if error.is_account_blocked:
         return "ozon_account_blocked"
+    # Публикация остатков в Ozon выключена решением по проекту, а не сбоем
+    # кабинета: «Ozon временно недоступен» здесь было бы неправдой.
+    if error.code == "ozon_stock_publish_disabled":
+        return error.code
     if error.status_code in {401, 403}:
         return "ozon_auth_failed"
     if error.status_code == 429:
@@ -182,8 +359,13 @@ async def sync_ozon_stocks(
             }
             if link.external_offer_id:
                 stock["offer_id"] = link.external_offer_id
-            if link.external_sku and link.external_sku.isdigit():
-                stock["product_id"] = int(link.external_sku)
+            # `product_id` и `sku` у Ozon — разные числа: живой ответ
+            # `/v4/product/info/stocks` по одной карточке отдаёт
+            # {"product_id": 6204279711, "sku": 5680762790}. Раньше в поле с
+            # именем `product_id` клали SKU, то есть подписывали остаток чужим
+            # идентификатором. Кладём то, что действительно есть в связке.
+            if link.external_product_id and link.external_product_id.isdigit():
+                stock["product_id"] = int(link.external_product_id)
             stocks.append(stock)
 
         result.products_targeted += len(stocks)
@@ -254,7 +436,7 @@ async def _binding_for_row(
     seller_id: uuid.UUID,
     row: dict[str, Any],
 ) -> FbsWarehouseBinding | None:
-    external_warehouse_id = _text(row, "warehouse_id", "warehouseId")
+    external_warehouse_id = _warehouse_id(row)
     if external_warehouse_id is None:
         return None
     stmt = select(FbsWarehouseBinding).where(
@@ -320,15 +502,109 @@ def _position_signature(position: FbsOrderProduct) -> tuple[int | None, int, dic
     return position.ozon_sku, position.quantity, position.provider_data_json
 
 
-async def _apply_status(session: AsyncSession, order: FbsOrder, raw_status: str | None) -> bool:
+def _apply_delivery_method(order: FbsOrder, row: dict[str, Any]) -> None:
+    """Сохранить способ доставки Ozon: без него не создать перевозку.
+
+    Создание перевозки читает `ozon_delivery_method_id` из деталей заказа, но
+    записать этот ключ было некому — грепом по бэкенду находился один читатель
+    и ни одного писателя. Идентификатор приходит в каждом отправлении, в
+    `delivery_method.id`.
+    """
+    delivery_method_id = _nested_text(row, "delivery_method", "id")
+    if delivery_method_id is None or not delivery_method_id.isdigit():
+        return
+    details = dict(order.meta_details_json or {})
+    if details.get("ozon_delivery_method_id") == delivery_method_id:
+        return
+    details["ozon_delivery_method_id"] = delivery_method_id
+    order.meta_details_json = details
+
+
+async def _honest_sign_required_by_catalog(
+    session: AsyncSession,
+    positions: list[FbsOrderProduct],
+    fallback_product_id: uuid.UUID | None,
+) -> bool:
+    """Требует ли «Честный знак» хоть один товар этого отправления.
+
+    Второй источник требования, независимый от Ozon. Он нужен по двум причинам.
+    Во-первых, требование маркетплейса — не единственная правда: маркируемый
+    товар маркируется в любом случае. Во-вторых, серверная проверка готовности
+    к отгрузке смотрит только на «главный» товар заказа, а у Ozon отправление
+    многотоварное: маркируемая вторая позиция мимо неё проезжала.
+
+    Связи тянем явным запросом: `position.product` в асинхронном коде даёт
+    MissingGreenlet и роняет весь проход опроса.
+    """
+    product_ids = {
+        position.product_id for position in positions if position.product_id is not None
+    }
+    if fallback_product_id is not None:
+        product_ids.add(fallback_product_id)
+    if not product_ids:
+        return False
+    flag = await session.scalar(
+        select(Product.id)
+        .where(Product.id.in_(product_ids), Product.requires_honest_sign.is_(True))
+        .limit(1)
+    )
+    return flag is not None
+
+
+def _apply_requirements(order: FbsOrder, kinds: list[str], seen: bool) -> None:
+    """Записать требования маркировки Ozon туда, где их ищет гейт выпуска.
+
+    Раньше `required_meta_json` заполнял ровно один писатель — вайлдберрисовский
+    разбор заказа. У заказа Ozon поле оставалось пустым навсегда, а пустое
+    требование гейт трактовал как «маркировка не нужна». Отправление Ozon с
+    маркируемым товаром считалось готовым к отгрузке без единого кода.
+
+    Отдельно храним признак «требования по этому отправлению разобраны»: пустой
+    список при разобранном отправлении — это «не требуется», а у заказа, которого
+    разбор не касался, — «мы не знаем». Гейт обязан различать эти два случая и
+    не имеет права трактовать незнание как разрешение.
+    """
+    if not seen:
+        return
+    order.required_meta_json = list(kinds)
+    details = dict(order.meta_details_json or {})
+    details[OZON_REQUIREMENTS_KEY] = {"kinds": list(kinds)}
+    order.meta_details_json = details
+
+
+async def _apply_status(
+    session: AsyncSession,
+    order: FbsOrder,
+    raw_status: str | None,
+    raw_substatus: str | None = None,
+) -> bool:
     normalized = (raw_status or "").strip().lower() or None
-    local = _local_status(normalized)
-    changed = order.status != local or order.wb_status != normalized
+    substatus = (raw_substatus or "").strip().lower() or None
+    local = _local_status(normalized, substatus)
+    previous = order.status
+    previous_wb_status = order.wb_status
     order.wb_status = normalized
-    order.supplier_status = "new" if local == FBS_ORDER_STATUS_NEW else normalized
-    order.status = local
-    if local in {FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DONE}:
-        if local == FBS_ORDER_STATUS_CANCELLED:
+    order.supplier_status = (
+        "new" if local == FBS_ORDER_STATUS_NEW else (substatus or normalized)
+    )
+    # Опрос Ozon двигает заказ вперёд и в конечные состояния, но никогда не
+    # тянет назад через наши собственные этапы. Иначе заказ, уже взятый в
+    # поставку, каждые десять минут возвращался бы в «новые», а собранный —
+    # в «ожидает сборки».
+    terminal = {FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DONE}
+    if local in terminal:
+        order.status = local
+    elif local == FBS_ORDER_STATUS_SORTED:
+        if previous not in terminal:
+            order.status = local
+    elif local == FBS_ORDER_STATUS_IN_DELIVERY:
+        if previous not in terminal and previous != FBS_ORDER_STATUS_SORTED:
+            order.status = local
+    elif previous not in _LOCAL_WORKFLOW_STATUSES and previous not in terminal:
+        order.status = local
+    changed = previous != order.status or previous_wb_status != normalized
+    if order.status in terminal:
+        if order.status == FBS_ORDER_STATUS_CANCELLED:
             from app.services.fbs_cancellation_service import (
                 reverse_fbs_shipment_if_needed,
             )
@@ -340,6 +616,25 @@ async def _apply_status(session: AsyncSession, order: FbsOrder, raw_status: str 
             )
         await _release_reservation(session, order)
     return changed
+
+
+async def _charge_confirmed_order(session: AsyncSession, order: FbsOrder) -> None:
+    """Начислить за заказ, который маркетплейс подтвердил как забранный.
+
+    Заказы Ozon не тарифицировались вообще: единственная точка, где появляются
+    деньги за сборку FBS, вызывалась только из вайлдберрисовского обработчика
+    статусов. Селлер мог сдать через фулфилмент сотню заказов Ozon, они
+    уезжали, и в счёт не попадало ни копейки.
+
+    Вызывать только после того, как заказ записан в базу: начисление пишет
+    строки со ссылками на него. Само начисление идемпотентно, повторный проход
+    опроса его не задваивает.
+    """
+    if order.status not in _BILLABLE_STATUSES:
+        return
+    from app.services.fbs_order_billing_service import record_fbs_order_confirmed
+
+    await record_fbs_order_confirmed(session, order)
 
 
 async def sync_ozon_orders(
@@ -370,9 +665,19 @@ async def sync_ozon_orders(
                 )
             )
         ).scalar_one_or_none()
-        raw_status = _text(row, "status", "substatus")
+        raw_status = _text(row, "status")
+        raw_substatus = _text(row, "substatus")
+        if raw_status is None:
+            raw_status = raw_substatus
+        required_kinds, _ = _requirement_kinds(row)
         fallback_product_id = await _product_id_for_row(session, tenant_id, seller_id, row)
         positions = await _posting_products_for_row(session, tenant_id, seller_id, row)
+        if MARKING_KIND_SGTIN not in required_kinds and await _honest_sign_required_by_catalog(
+            session, positions, fallback_product_id
+        ):
+            required_kinds.append(MARKING_KIND_SGTIN)
+        # Строку отправления мы разобрали — значит про требования знаем.
+        requirements_seen = True
         has_positions_payload = isinstance(row.get("products"), list)
         product_id = _primary_product_id(positions, fallback_product_id)
         positions_mapped = _positions_are_mapped(positions, fallback_product_id)
@@ -399,7 +704,12 @@ async def sync_ozon_orders(
                     if position.provider_data_json
                 ]
                 existing.meta_details_json = details
-            statuses_updated += int(await _apply_status(session, existing, raw_status))
+            _apply_delivery_method(existing, row)
+            _apply_requirements(existing, required_kinds, requirements_seen)
+            statuses_updated += int(
+                await _apply_status(session, existing, raw_status, raw_substatus)
+            )
+            await _charge_confirmed_order(session, existing)
             if composition_changed and positions:
                 await session.flush()
                 await _try_reserve_order(session, existing)
@@ -407,7 +717,12 @@ async def sync_ozon_orders(
             continue
 
         binding = await _binding_for_row(session, tenant_id, seller_id, row)
-        created_at = _parse_datetime(row.get("created_at") or row.get("createdAt"))
+        # У отправления Ozon нет поля `created_at`: дата начала обработки живёт
+        # в `in_process_at`. Пока читали `created_at`, дата создания молча
+        # подменялась на «сейчас» у каждого заказа.
+        created_at = _parse_datetime(
+            row.get("in_process_at") or row.get("created_at") or row.get("createdAt")
+        )
         deadline_at = _parse_datetime(row.get("shipment_date") or row.get("shipmentDate"))
         if deadline_at <= created_at:
             deadline_at = created_at + timedelta(hours=OZON_FBS_DEADLINE_HOURS)
@@ -428,8 +743,8 @@ async def sync_ozon_orders(
             wb_warehouse_id=binding.wb_warehouse_id if binding is not None else None,
             wb_article=(positions[0].offer_id if positions else _text(row, "offer_id", "offerId")),
             wb_nm_id=positions[0].ozon_sku if positions else None,
-            wb_barcode=_text(row, "barcode"),
-            price=int(row["price"]) if isinstance(row.get("price"), int) else None,
+            wb_barcode=_posting_barcode(row),
+            price=_posting_price_kopecks(row),
             created_at_wb=created_at,
             deadline_at=deadline_at,
             mapping_status=MAPPING_STATUS_MAPPED if positions_mapped else MAPPING_STATUS_MISSING,
@@ -444,9 +759,13 @@ async def sync_ozon_orders(
                     if position.provider_data_json
                 ]
             }
-        await _apply_status(session, order, raw_status)
+        _apply_delivery_method(order, row)
+        _apply_requirements(order, required_kinds, requirements_seen)
+        await _apply_status(session, order, raw_status, raw_substatus)
         session.add(order)
         await session.flush()
+        # Начисление ссылается на заказ строками, поэтому идёт после записи.
+        await _charge_confirmed_order(session, order)
         await _try_reserve_order(session, order)
         created += 1
         upserted += 1
@@ -500,7 +819,23 @@ async def sync_ozon_order_statuses(
     updated = 0
     for order in orders:
         row = by_external.get(order.external_order_id or "")
-        if row is not None:
-            updated += int(await _apply_status(session, order, _text(row, "status", "substatus")))
+        if row is None:
+            continue
+        # Требование маркировки приходит в той же карточке отправления. Читаем
+        # его и здесь: у заказа, заведённого до появления разбора требований,
+        # оно иначе не появилось бы никогда.
+        required_kinds, requirements_seen = _requirement_kinds(row)
+        _apply_requirements(order, required_kinds, requirements_seen)
+        status_value = _text(row, "status")
+        substatus_value = _text(row, "substatus")
+        updated += int(
+            await _apply_status(
+                session,
+                order,
+                status_value if status_value is not None else substatus_value,
+                substatus_value,
+            )
+        )
+        await _charge_confirmed_order(session, order)
     await session.commit()
     return updated

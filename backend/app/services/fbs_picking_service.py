@@ -1687,6 +1687,23 @@ async def _resolve_product_for_supply(
     if product is not None:
         return product
 
+    if supply.marketplace != "wb":
+        # Запасной поиск по штрихкодам маркетплейса: у товара Ozon собственный
+        # код вида OZN<sku>, которого нет ни в `wb_barcode`, ни в `sku_code`.
+        # Вайлдберрисовскую поставку эта ветка не задевает вовсе.
+        from app.services.ozon_product_import_service import (
+            find_product_ids_by_marketplace_barcode,
+        )
+
+        linked_ids = await find_product_ids_by_marketplace_barcode(
+            session,
+            tenant_id,
+            [product_barcode],
+        )
+        matched = supply_product_ids.intersection(linked_ids)
+        if len(matched) == 1:
+            return await session.get(Product, next(iter(matched)))
+
     order_match = next(
         (o for o in supply.orders if o.wb_barcode == product_barcode and o.product_id is not None),
         None,

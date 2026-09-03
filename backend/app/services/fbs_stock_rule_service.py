@@ -128,6 +128,12 @@ async def _seller_bindings(
         FbsWarehouseBinding.tenant_id == tenant_id,
         FbsWarehouseBinding.seller_id == seller_id,
         FbsWarehouseBinding.is_active.is_(True),
+        # Ползунок раздачи остатка — вайлдберрисовский по построению: он
+        # оперирует числовым `wb_warehouse_id`, а у привязки Ozon это
+        # синтетический номер, которого нет ни в одном кабинете. Без фильтра
+        # сохранение правила ещё и принудительно включало озоновской привязке
+        # публикацию остатков — ту самую, которая по решению проекта запрещена.
+        FbsWarehouseBinding.marketplace == "wb",
     )
     if served_only:
         stmt = stmt.where(FbsWarehouseBinding.served.is_(True))

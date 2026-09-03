@@ -70,6 +70,10 @@ from app.services.ozon_marking_position_service import (
 TResponse = TypeVar("TResponse", bound=BaseModel)
 __all__ = ["OzonFbsProcessError", "handoff_supply", "read_marking_status", "submit_marking"]
 
+# Лист отгрузки по перевозке. Старый путь `/v2/posting/fbs/digital/act/get-pdf`
+# Ozon отключил — живой вызов отвечает «obsolete method cannot be used».
+SHIPPING_LIST_PATH = "/v2/posting/fbs/act/get-pdf"
+
 
 @dataclass(frozen=True)
 class OzonHandoffResult:
@@ -198,6 +202,92 @@ async def _ship_products(session: AsyncSession, order: FbsOrder) -> list[dict[st
     return products
 
 
+# Наши виды маркировки в терминах Ozon. Остальные Ozon в экземплярах не хранит.
+_MARK_TYPES: dict[str, str] = {"sgtin": "mandatory_mark", "uin": "jw_uin", "imei": "imei"}
+
+
+async def _full_exemplar_products(
+    session: AsyncSession,
+    order: FbsOrder,
+    *,
+    current_marking: FbsOrderMarking,
+    current_product_id: int,
+    current_exemplar_id: int,
+    current_mark_type: str,
+) -> list[dict[str, object]]:
+    """Собрать полный набор экземпляров отправления, а не один последний код.
+
+    Спецификация метода `/v6/fbs/posting/product/exemplar/set` требует прямо:
+    «Всегда передавайте полный набор данных по экземплярам и продуктам».
+    Мы же слали ровно один только что отсканированный код, поэтому на
+    отправлении из трёх единиц у Ozon оставался бы только последний из них, а
+    два предыдущих терялись при каждой следующей отправке.
+    """
+    positions = {
+        position.id: position
+        for position in (
+            await session.execute(
+                select(FbsOrderProduct).where(FbsOrderProduct.order_id == order.id)
+            )
+        )
+        .scalars()
+        .all()
+    }
+    markings = list(
+        (
+            await session.execute(
+                select(FbsOrderMarking)
+                .where(FbsOrderMarking.order_id == order.id)
+                .order_by(FbsOrderMarking.created_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    # ключ — (product_id Ozon, exemplar_id); значение — коды этого экземпляра
+    grouped: dict[tuple[int, int], list[dict[str, str]]] = {}
+
+    def _add(product_id: int, exemplar_id: int, value: str, mark_type: str) -> None:
+        marks = grouped.setdefault((product_id, exemplar_id), [])
+        if not any(mark["mark"] == value and mark["mark_type"] == mark_type for mark in marks):
+            marks.append({"mark": value, "mark_type": mark_type})
+
+    for row in markings:
+        if row.id == current_marking.id:
+            continue
+        if row.meta_status in {"rejected", "replacement_required"}:
+            continue
+        mark_type = _MARK_TYPES.get(row.kind)
+        if mark_type is None:
+            continue
+        details = row.meta_details_json if isinstance(row.meta_details_json, dict) else {}
+        exemplar_id = details.get("exemplar_id")
+        if not isinstance(exemplar_id, int):
+            continue
+        position = positions.get(row.order_product_id) if row.order_product_id else None
+        sku = position.ozon_sku if position is not None else None
+        if sku is None:
+            # Экземпляр без позиции нельзя отнести к товару; молча приписать его
+            # к чужому product_id — хуже, чем не отправить.
+            continue
+        _add(int(sku), exemplar_id, row.value, mark_type)
+
+    _add(current_product_id, current_exemplar_id, current_marking.value, current_mark_type)
+
+    products: dict[int, list[dict[str, object]]] = {}
+    for (product_id, exemplar_id), marks in grouped.items():
+        products.setdefault(product_id, []).append(
+            {"exemplar_id": exemplar_id, "marks": marks}
+        )
+    return [
+        {
+            "product_id": product_id,
+            "exemplars": sorted(exemplars, key=lambda item: int(str(item["exemplar_id"]))),
+        }
+        for product_id, exemplars in sorted(products.items())
+    ]
+
+
 async def submit_marking(
     session: AsyncSession,
     *,
@@ -212,7 +302,7 @@ async def submit_marking(
     if not posting_number:
         raise OzonFbsProcessError("ozon_posting_number_missing", "Нет номера отправления Ozon.")
     product_id = await _ozon_product_id(session, order, marking)
-    mark_type = {"sgtin": "mandatory_mark", "uin": "jw_uin", "imei": "imei"}.get(marking.kind)
+    mark_type = _MARK_TYPES.get(marking.kind)
     if mark_type is None:
         return OzonMarkingResult(False, False, "unsupported_mark_type", {})
 
@@ -225,8 +315,17 @@ async def submit_marking(
         response_type=OzonV6FbsPostingProductExemplarCreateOrGetV6Response,
         read=False,
     )
-    product = next((item for item in exemplars.products if item.product_id == product_id), None)
-    ids = [item.exemplar_id for item in product.exemplars if item.exemplar_id] if product else []
+    # `products` — необязательное поле ответа. Пустой ответ (в том числе от
+    # локального фейка) давал здесь `None`, итерация по нему бросала TypeError,
+    # который никто не ловил до самой ручки, и оператор получал 500 вместо
+    # понятной ошибки. Пустой список — это «Ozon не вернул экземпляров».
+    posting_products = exemplars.products or []
+    product = next((item for item in posting_products if item.product_id == product_id), None)
+    ids = (
+        [item.exemplar_id for item in (product.exemplars or []) if item.exemplar_id]
+        if product
+        else []
+    )
     exemplar_id = await choose_exemplar_id(session, marking, ids)
     if exemplar_id is None:
         raise OzonFbsProcessError("ozon_exemplar_missing", "Ozon не вернул экземпляр товара.")
@@ -256,7 +355,9 @@ async def submit_marking(
         response_type=OzonV5FbsPostingProductExemplarValidateV5Response,
         read=False,
     )
-    validated = next((item for item in validation.products if item.product_id == product_id), None)
+    validated = next(
+        (item for item in (validation.products or []) if item.product_id == product_id), None
+    )
     if validated is None or not validated.valid:
         errors: list[str] = []
         if validated is not None:
@@ -277,17 +378,14 @@ async def submit_marking(
     set_request = OzonV6FbsPostingProductExemplarSetV6Request.model_validate(
         {
             "posting_number": posting_number,
-            "products": [
-                {
-                    "product_id": product_id,
-                    "exemplars": [
-                        {
-                            "exemplar_id": exemplar_id,
-                            "marks": [{"mark": marking.value, "mark_type": mark_type}],
-                        }
-                    ],
-                }
-            ],
+            "products": await _full_exemplar_products(
+                session,
+                order,
+                current_marking=marking,
+                current_product_id=product_id,
+                current_exemplar_id=exemplar_id,
+                current_mark_type=mark_type,
+            ),
         }
     )
     await provider.call(
@@ -465,24 +563,66 @@ def _required_country_skus(response: OzonV3GetFbsPostingResponseV3) -> set[str]:
     }
 
 
-def _restriction_summary(response: OzonV1GetRestrictionsResponse) -> list[str]:
+async def _posting_weight_grams(session: AsyncSession, order: FbsOrder) -> float | None:
+    """Вес отправления по позициям: у Ozon вес лежит в товаре отправления."""
+    positions = list(
+        (
+            await session.execute(
+                select(FbsOrderProduct).where(FbsOrderProduct.order_id == order.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not positions:
+        return None
+    total = 0.0
+    seen = False
+    for position in positions:
+        data = position.provider_data_json if isinstance(position.provider_data_json, dict) else {}
+        weight = data.get("weight")
+        if isinstance(weight, (int, float)) and not isinstance(weight, bool):
+            total += float(weight) * max(int(position.quantity or 0), 1)
+            seen = True
+    return total if seen else None
+
+
+def _restriction_violations(
+    response: OzonV1GetRestrictionsResponse,
+    *,
+    weight_grams: float | None,
+    price_rub: float | None,
+) -> list[str]:
+    """Сравнить отправление с лимитами пункта приёма, а не считать лимиты нарушением.
+
+    Метод `/v1/posting/fbs/restrictions` называется «Получить ограничения пункта
+    приёма» и возвращает их всегда: у настоящего пункта в примере спецификации
+    стоят 40 000 г и 500 на 500 на 500 см. Раньше код считал нарушением сам факт
+    наличия любого лимита и валил передачу в 409 — на живом пункте приёма
+    отгрузка не прошла бы никогда.
+
+    Габариты отправления Ozon не сообщает, поэтому по ним сравнивать нечего:
+    проверяем то, что действительно знаем, — вес и стоимость.
+    """
     result = response.result
     if result is None:
         return []
-    labels = (
-        ("max_posting_weight", "максимальный вес"),
-        ("min_posting_weight", "минимальный вес"),
-        ("width", "ширина"),
-        ("length", "длина"),
-        ("height", "высота"),
-        ("max_posting_price", "максимальная стоимость"),
-        ("min_posting_price", "минимальная стоимость"),
-    )
-    return [
-        f"{label}: {value:g}"
-        for field, label in labels
-        if (value := getattr(result, field, None)) is not None
-    ]
+    violations: list[str] = []
+    max_weight = getattr(result, "max_posting_weight", None)
+    min_weight = getattr(result, "min_posting_weight", None)
+    if weight_grams is not None:
+        if isinstance(max_weight, (int, float)) and max_weight > 0 and weight_grams > max_weight:
+            violations.append(f"вес {weight_grams:g} г больше допустимых {max_weight:g} г")
+        if isinstance(min_weight, (int, float)) and weight_grams < min_weight:
+            violations.append(f"вес {weight_grams:g} г меньше допустимых {min_weight:g} г")
+    max_price = getattr(result, "max_posting_price", None)
+    min_price = getattr(result, "min_posting_price", None)
+    if price_rub is not None:
+        if isinstance(max_price, (int, float)) and max_price > 0 and price_rub > max_price:
+            violations.append(f"стоимость {price_rub:g} ₽ больше допустимых {max_price:g} ₽")
+        if isinstance(min_price, (int, float)) and price_rub < min_price:
+            violations.append(f"стоимость {price_rub:g} ₽ меньше допустимых {min_price:g} ₽")
+    return violations
 
 
 async def _set_required_countries(
@@ -610,12 +750,16 @@ async def handoff_supply(
                 "Ozon не вернул ограничения отправления; сборка остановлена.",
                 status_code=409,
             )
-        restriction_summary = _restriction_summary(restrictions)
-        if restriction_summary:
+        violations = _restriction_violations(
+            restrictions,
+            weight_grams=await _posting_weight_grams(session, order),
+            price_rub=(order.price / 100) if order.price is not None else None,
+        )
+        if violations:
             raise OzonFbsProcessError(
                 "ozon_posting_restricted",
-                "Отправление Ozon имеет ограничения ("
-                + ", ".join(restriction_summary)
+                "Отправление Ozon не проходит ограничения пункта приёма ("
+                + ", ".join(violations)
                 + "); проверьте состав в кабинете Ozon до сборки.",
                 status_code=409,
             )
@@ -777,11 +921,17 @@ async def handoff_supply(
         response_type=OzonV2PostingFBSGetBarcodeTextResponse,
         read=True,
     )
+    # Лист отгрузки берём живым методом. `/v2/posting/fbs/digital/act/get-pdf`
+    # Ozon уже отключил: 03.09.2026 живой вызов отвечает
+    # `400 {"code":9,"message":"obsolete method cannot be used"}`, срок
+    # отключения в спецификации был назначен на 22 марта 2026 года. Замена
+    # `/v2/posting/fbs/act/get-pdf` жива и принимает то же тело: с номером
+    # несуществующей перевозки отвечает `404 CARRIAGE_NOT_FOUND`.
     act = await _call(
         provider,
         client_id=client_id,
         api_key=api_key,
-        path="/v2/posting/fbs/digital/act/get-pdf",
+        path=SHIPPING_LIST_PATH,
         request=OzonV2PostingFBSGetDigitalActRequest(
             id=carriage_id,
             doc_type="act_of_acceptance",

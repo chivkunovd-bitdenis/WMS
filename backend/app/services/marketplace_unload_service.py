@@ -43,7 +43,6 @@ from app.services.document_number_service import (
 )
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
 from app.services.marketplace_provider import (
-    FakeMarketplaceTransport,
     MarketplaceProviderError,
     OzonMarketplaceProvider,
 )
@@ -90,6 +89,7 @@ from app.services.marketplace_unload_status import (
     STATUS_SUBMITTED as STATUS_SUBMITTED,
 )
 from app.services.operation_fact_service import record_marketplace_unload
+from app.services.ozon_provider_factory import build_ozon_provider
 from app.services.wb_mp_warehouse_service import get_cached_mp_warehouse
 
 if TYPE_CHECKING:
@@ -118,12 +118,16 @@ class MarketplaceUnloadAvailability:
 
 
 def _blocked_ozon_unload_provider() -> OzonMarketplaceProvider:
-    """Current Ozon account state is a provider response, never a local shipment success."""
-    return OzonMarketplaceProvider(
-        transport=FakeMarketplaceTransport(
-            errors={"dispatch_unload": MarketplaceProviderError("ozon", 403, {"code": 7})}
-        )
-    )
+    """Отгрузку на Ozon завершает провайдер, а не наш локальный оптимизм.
+
+    Прежний фейк отвечал «403, код 7 — кабинет заблокирован». Это утверждение
+    неверно: кабинет отвечает и отдаёт данные. Настоящая причина другая — метода
+    передачи отгрузки на Ozon нет ни в нашей копии спецификации Ozon, ни в коде,
+    поэтому боевой транспорт на этой операции отвечает
+    ``ozon_unload_dispatch_unsupported``. Документ и остатки по-прежнему не
+    меняются, но оператору больше не сообщают выдуманную причину.
+    """
+    return build_ozon_provider(blocked_operation="dispatch_unload")
 
 
 def assert_request_visible(

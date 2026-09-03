@@ -23,7 +23,10 @@ from app.services.marketplace_account_service import (
     MarketplaceAccountService,
     SellerNotFound,
 )
+from app.services.marketplace_provider import MarketplaceProviderError, provider_error_message
 from app.services.ozon_client import OzonValidationResult, validate_ozon_credentials
+from app.services.ozon_product_import_service import import_ozon_product_cards
+from app.services.ozon_provider_factory import build_ozon_provider
 from app.services.seller_staff_permissions_service import PERM_SETTINGS
 
 
@@ -184,6 +187,73 @@ async def test_self_account(
         validation_status=validation_status, error_code=error_code,
     )
     return _error(http_status, code)
+
+
+class OzonSelfSyncProductsOut(BaseModel):
+    """Ровно то, что импорт сделал, без обещаний того, чего он не делает."""
+
+    cards_read: int
+    links_matched: int
+    dimensions_applied: int
+    barcodes_applied: int
+    product_ids_applied: int
+    skipped_manual_dimensions: int
+    skipped_unknown_units: int
+    unmatched_offer_ids: list[str]
+
+
+@router.post("/self/sync-products", response_model=OzonSelfSyncProductsOut)
+async def sync_ozon_products_now(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> OzonSelfSyncProductsOut:
+    """Подтянуть из Ozon габариты, вес, штрихкод и product_id связанных товаров.
+
+    Без этих данных у чисто озоновского товара нет объёма, а значит нет и
+    начисления за хранение: литро-дни считаются нулевыми и строка счёта не
+    создаётся вовсе. У Ozon данные есть по всем карточкам — мы их просто не
+    запрашивали.
+
+    Импорт не заводит товары: связку товара WMS с карточкой Ozon по-прежнему
+    создаёт человек.
+    """
+    seller_id = await _scope(user, session, effective_seller_id)
+    service = MarketplaceAccountService(session)
+    try:
+        client_id, api_key = await service.stored_credentials(user.tenant_id, seller_id)
+    except SellerNotFound:
+        raise HTTPException(status_code=404, detail="seller_not_found") from None
+    except MarketplaceAccountError as exc:
+        return _error(409, exc.code)  # type: ignore[return-value]
+    try:
+        result = await import_ozon_product_cards(
+            session,
+            user.tenant_id,
+            seller_id,
+            build_ozon_provider(),
+            client_id=client_id,
+            api_key=api_key,
+        )
+    except MarketplaceProviderError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_403_FORBIDDEN
+                if exc.is_account_blocked
+                else status.HTTP_502_BAD_GATEWAY
+            ),
+            detail={"code": exc.code, "message": provider_error_message(exc)},
+        ) from None
+    return OzonSelfSyncProductsOut(
+        cards_read=result.cards_read,
+        links_matched=result.links_matched,
+        dimensions_applied=result.dimensions_applied,
+        barcodes_applied=result.barcodes_applied,
+        product_ids_applied=result.product_ids_applied,
+        skipped_manual_dimensions=result.skipped_manual_dimensions,
+        skipped_unknown_units=result.skipped_unknown_units,
+        unmatched_offer_ids=result.unmatched_offer_ids[:50],
+    )
 
 
 @router.delete("/self/account", status_code=status.HTTP_204_NO_CONTENT)

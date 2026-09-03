@@ -21,6 +21,7 @@ from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
 from app.models.marketplace_unload import MarketplaceUnloadRequest
 from app.models.product import Product
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
@@ -204,8 +205,19 @@ async def build_inventory_report(
         filters.append(InventoryMovement.warehouse_id == warehouse_id)
     if search:
         pattern = f"%{search.strip()}%"
+        # Плейсхолдер поиска обещает артикул продавца и SKU, а у товара Ozon
+        # они живут не в вайлдберрисовских полях, а в связке с маркетплейсом.
+        marketplace_match = select(ProductMarketplaceLink.product_id).where(
+            ProductMarketplaceLink.tenant_id == tenant_id,
+            ProductMarketplaceLink.is_active.is_(True),
+            or_(
+                ProductMarketplaceLink.external_sku.ilike(pattern),
+                ProductMarketplaceLink.external_offer_id.ilike(pattern),
+            ),
+        )
         filters.append(or_(Product.name.ilike(pattern), Product.sku_code.ilike(pattern),
-            Product.wb_vendor_code.ilike(pattern), Product.wb_barcode.ilike(pattern)))
+            Product.wb_vendor_code.ilike(pattern), Product.wb_barcode.ilike(pattern),
+            Product.id.in_(marketplace_match)))
     in_qty = func.coalesce(func.sum(case((InventoryMovement.quantity_delta > 0,
         InventoryMovement.quantity_delta), else_=0)), 0)
     out_qty = func.coalesce(func.sum(case((InventoryMovement.quantity_delta < 0,
@@ -787,6 +799,11 @@ async def build_overview(
         freshness_filters.append(FbsWarehouseBinding.seller_id == seller_id)
     if warehouse_id is not None:
         freshness_filters.append(FbsWarehouseBinding.wms_warehouse_id == warehouse_id)
+    # Свежесть считается по задачам импорта Wildberries, поэтому и привязки
+    # берём вайлдберрисовские. Без этого фильтра арендатор с одними озоновскими
+    # привязками всегда получал предупреждение «данные Wildberries устарели» —
+    # про площадку, которой у него нет.
+    freshness_filters.append(FbsWarehouseBinding.marketplace == "wb")
     binding_count = int(
         (await session.scalar(select(func.count()).where(*freshness_filters))) or 0
     )
@@ -973,14 +990,20 @@ async def list_product_movements(
             select(
                 FbsShipmentReversalLedger.shipment_movement_id,
                 FbsOrder.wb_order_id,
+                FbsOrder.external_order_id,
                 FbsOrder.supply_id,
             )
             .join(FbsOrder, FbsOrder.id == FbsShipmentReversalLedger.fbs_order_id)
             .where(FbsShipmentReversalLedger.shipment_movement_id.in_(fbs_movement_ids))
         )
-        for movement_id, wb_order_id, supply_id in fbs_rows:
+        for movement_id, wb_order_id, external_order_id, supply_id in fbs_rows:
             if movement_id is not None:
-                fbs_by_movement[movement_id] = (f"Заказ {wb_order_id}", supply_id)
+                # Настоящий номер отправления лежит в `external_order_id` и
+                # раньше не читался: у заказа Ozon в колонке «Документ»
+                # печаталось отрицательное шестнадцатизначное число —
+                # синтезированный хешем номер, которого нет ни в одном кабинете.
+                number = external_order_id or str(wb_order_id)
+                fbs_by_movement[movement_id] = (f"Заказ {number}", supply_id)
 
     unload_numbers: dict[uuid.UUID, str | None] = {}
     if unload_ids:

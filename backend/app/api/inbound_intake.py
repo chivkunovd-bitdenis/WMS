@@ -49,7 +49,8 @@ from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import volume_liters_from_mm
 from app.services.inbound_intake_box_service import InboundIntakeBoxError
 from app.services.inbound_intake_service import InboundIntakeError
-from app.services.marketplace_provider import FakeMarketplaceTransport, OzonMarketplaceProvider
+from app.services.marketplace_provider import OzonMarketplaceProvider
+from app.services.ozon_provider_factory import build_ozon_provider
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +61,8 @@ router = APIRouter(
 
 
 def _local_ozon_return_provider() -> OzonMarketplaceProvider:
-    """Return processing remains offline until a production transport is approved."""
-    return OzonMarketplaceProvider(transport=FakeMarketplaceTransport())
+    """Боевой транспорт, когда он включён настройкой; иначе прежний локальный фейк."""
+    return build_ozon_provider()
 
 
 async def _refresh_ozon_return_statuses_after_posting(

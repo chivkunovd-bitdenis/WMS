@@ -17,6 +17,10 @@ from app.models.fbs_order import (
     FbsOrderMarking,
 )
 
+# Ключ признака «требования разобраны» живёт рядом с разбором
+# отправления; здесь он только читается.
+OZON_REQUIREMENTS_KEY = "ozon_requirements"
+
 
 def _exemplar_id(marking: FbsOrderMarking) -> int | None:
     details = marking.meta_details_json if isinstance(marking.meta_details_json, dict) else {}
@@ -64,6 +68,21 @@ def current_markings(
     return selected
 
 
+def ozon_requirements_known(order: FbsOrder) -> bool:
+    """Разобраны ли требования по маркировке этого отправления.
+
+    Признак ставит разбор отправления (`ozon_fbs_sync_service`) из двух
+    источников сразу: требований самого Ozon (`requirements`) и флага
+    маркируемости у товаров отправления в нашем каталоге.
+
+    Отличать «требований нет» от «мы их не разбирали» обязательно: раньше оба
+    случая выглядели как пустой `required_meta_json`, и гейт выпускал
+    отправление в обоих — в том числе с маркируемым товаром и без единого кода.
+    """
+    details = order.meta_details_json if isinstance(order.meta_details_json, dict) else {}
+    return isinstance(details.get(OZON_REQUIREMENTS_KEY), dict)
+
+
 def compute_delivery_allowed(order: FbsOrder, markings: list[FbsOrderMarking]) -> bool:
     required = {
         str(kind).strip().lower()
@@ -71,7 +90,10 @@ def compute_delivery_allowed(order: FbsOrder, markings: list[FbsOrderMarking]) -
         if str(kind).strip()
     }
     if not required:
-        return True
+        # Пустое требование — разрешение только у отправления, требования
+        # которого мы действительно разобрали. Пока не разобрали, выпускать
+        # нельзя: это товар и регуляторный учёт, а не косметика экрана.
+        return ozon_requirements_known(order)
     positions = {position.id: position.quantity for position in order.product_positions}
     if not positions or any(quantity <= 0 for quantity in positions.values()):
         return False
@@ -137,7 +159,14 @@ def apply_status(
 
 def delivery_message(order: FbsOrder, markings: list[FbsOrderMarking]) -> str:
     if not order.required_meta_json:
-        return "Ozon: маркировка не требуется."
+        if ozon_requirements_known(order):
+            return "Ozon: маркировка не требуется."
+        # Утверждать «не требуется» мы не вправе: требования по этому
+        # отправлению ещё не разобраны, значит мы просто не знаем.
+        return (
+            "Требования по маркировке этого отправления Ozon ещё не получены — "
+            "обновите заказы Ozon."
+        )
     if compute_delivery_allowed(order, markings):
         return "Ozon: маркировка подтверждена для всех товаров."
     return "Ozon не подтвердил маркировку для всех товаров отправления."

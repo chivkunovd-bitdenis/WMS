@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import logging
 import uuid
-from base64 import b64decode
 from contextlib import suppress
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -80,12 +79,12 @@ from app.services.marketplace_account_service import (
     MarketplaceAccountService,
 )
 from app.services.marketplace_provider import (
-    FakeMarketplaceTransport,
     MarketplaceProviderError,
     OzonMarketplaceProvider,
     provider_error_message,
 )
 from app.services.ozon_fbs_process_service import OzonFbsProcessError, handoff_supply
+from app.services.ozon_provider_factory import build_ozon_provider, ozon_live_api_enabled
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import (
     _apply_wb_status_to_order,
@@ -169,10 +168,6 @@ _DELIVER_BLOCKED_SUPPLY_STATUSES = frozenset(
 logger = logging.getLogger(__name__)
 
 _WB_DISPATCH_PENDING_MESSAGE = "fix them to dispatch items"
-_FAKE_OZON_SUPPLY_QR = b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAE"
-    "hQGAhKmMIQAAAABJRU5ErkJggg=="
-)
 
 
 class FbsShipmentError(Exception):
@@ -1854,6 +1849,11 @@ async def _deliver_ozon_supply(
         local_supply_id=supply.id,
         confirmed_preflight_version=None,
     )
+    # Провайдер приходит из теста или из боевой настройки. Пока живой транспорт
+    # выключен, локальная операция сохраняется, а передача честно не выполняется:
+    # придумывать успех, которого не было, нельзя — товар физически не уехал.
+    if provider is None and ozon_live_api_enabled():
+        provider = build_ozon_provider()
     if provider is None:
         await mark_operation_failed(
             session,
@@ -1864,7 +1864,7 @@ async def _deliver_ozon_supply(
         raise FbsShipmentError(
             "ozon_live_handoff_blocked",
             message=(
-                "Реальная передача в Ozon заблокирована: кабинет недоступен. "
+                "Передача в Ozon выключена настройкой: боевой транспорт Ozon не включён. "
                 "Локальная складская операция сохранена."
             ),
             http_status=503,
@@ -1909,6 +1909,19 @@ async def _deliver_ozon_supply(
     supply.external_supply_id = str(result.carriage_id) if result.carriage_id is not None else None
     supply.document_number = str(result.carriage_id) if result.carriage_id is not None else None
     supply.display_number = result.barcode_text
+    if result.shipping_list_bytes:
+        # Лист отгрузки Ozon приходит в PDF, а хранилище печатных активов
+        # принимает только PNG, поэтому показать его оператору сегодня негде.
+        # Молча выбрасывать документ, за которым ехали в Ozon, нельзя —
+        # пусть его получение хотя бы видно в журнале.
+        logger.info(
+            "ozon shipping list received but not stored: no PDF surface yet",
+            extra={
+                "supply_id": str(supply.id),
+                "carriage_id": result.carriage_id,
+                "bytes": len(result.shipping_list_bytes),
+            },
+        )
     if result.barcode_bytes:
         try:
             await upsert_supply_qr_asset_from_bytes(
@@ -2421,9 +2434,7 @@ async def get_supply_barcode(
             tenant_id,
             supply.seller_id,
         )
-        provider = OzonMarketplaceProvider(
-            transport=FakeMarketplaceTransport(supply_qr=_FAKE_OZON_SUPPLY_QR)
-        )
+        provider = build_ozon_provider()
         png_bytes = await _store_ozon_supply_qr(
             session,
             supply,
@@ -2480,9 +2491,7 @@ async def retry_supply_qr(
         await _store_ozon_supply_qr(
             session,
             supply,
-            OzonMarketplaceProvider(
-                transport=FakeMarketplaceTransport(supply_qr=_FAKE_OZON_SUPPLY_QR)
-            ),
+            build_ozon_provider(),
             client_id=client_id,
             api_key=api_key,
         )

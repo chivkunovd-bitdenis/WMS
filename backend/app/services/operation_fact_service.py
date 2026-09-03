@@ -29,6 +29,23 @@ class OperationFactError(ValueError):
     pass
 
 
+# В системе живут два словаря маркетплейса: приёмка пишет `wildberries`, а
+# заказы и поставки — `wb`. Пять адаптеров фактов писали в одну колонку из обоих,
+# и читателей у неё пока нет — значит это мина под первый же отчёт в разрезе
+# площадок, а не сегодняшняя поломка. Нормализуем на границе записи, пока цена
+# правки нулевая.
+_MARKETPLACE_ALIASES: dict[str, str] = {"wildberries": "wb"}
+
+
+def normalize_marketplace(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if not normalized:
+        return None
+    return _MARKETPLACE_ALIASES.get(normalized, normalized)
+
+
 @dataclass(frozen=True)
 class OperationFactLineInput:
     product_id: uuid.UUID | None
@@ -422,7 +439,7 @@ async def write_operation_fact(
         seller_id=seller_id,
         seller_name_snapshot=seller_name_snapshot,
         warehouse_id=warehouse_id,
-        marketplace=marketplace,
+        marketplace=normalize_marketplace(marketplace),
         document_type=document_type,
         document_id=document_id,
         document_number_snapshot=document_number_snapshot,
