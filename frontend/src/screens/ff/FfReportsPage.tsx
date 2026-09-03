@@ -340,11 +340,12 @@ export function FfReportsPage({ token, onOpenInbound, sellers = [], warehouses =
     setPeriodError(days < 1 ? 'Дата начала не может быть позже даты окончания' : days > 366 ? 'Период не может быть длиннее 366 дней' : '')
   }, [dateFrom, dateTo])
 
+  // Порядок такой, как читают: сколько пришло, сколько ушло, сколько осталось.
+  // «Нетто» убрано — оно не отвечало ни на один вопрос склада.
   const metrics = [
-    { key: 'balance', label: 'Остаток сейчас', value: overview?.current_balance ?? null },
     { key: 'inbound', label: 'Приход за период', value: overview?.in_qty ?? null },
     { key: 'outbound', label: 'Расход за период', value: overview?.out_qty ?? null },
-    { key: 'net', label: 'Нетто за период', value: overview == null ? null : overview.in_qty - overview.out_qty },
+    { key: 'balance', label: 'Остаток сейчас', value: overview?.current_balance ?? null },
   ]
   const hasIntegrityError = rows.some((row) => row.integrity_error)
   const csvDisabledReason = periodError
