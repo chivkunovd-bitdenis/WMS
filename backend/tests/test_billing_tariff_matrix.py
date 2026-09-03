@@ -26,6 +26,7 @@ from app.models.billing import (
 )
 from app.models.operation_fact import OperationFact, OperationFactLine
 from app.models.product import Product
+from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.services.billing_tariff_matrix_service import (
@@ -669,8 +670,45 @@ async def test_matrix_refuses_new_document_rates_but_keeps_reading_old_ones(asyn
             for row in await list_tariff_matrix_versions(session, tenant_id=tenant_id)
         }
         assert stored == {("document", 5000), ("item", 7000)}
+
+        # Пока действует старая ставка «за документ», цену на товар завести
+        # нельзя: штучная цена под подокументной ставкой — бессмыслица.
+        seller = Seller(tenant_id=tenant_id, name="Matrix unit seller")
+        session.add(seller)
+        await session.flush()
+        product = Product(
+            tenant_id=tenant_id,
+            seller_id=seller.id,
+            name="Matrix unit product",
+            sku_code=f"matrix-unit-{tenant_id.hex}",
+        )
+        session.add(product)
+        await session.commit()
+        revision = (await get_tariff_matrix(session, tenant_id=tenant_id)).revision
+        with pytest.raises(
+            BillingTariffMatrixError, match="billing_tariff_matrix_product_requires_item"
+        ):
+            await save_tariff_matrix(
+                session,
+                tenant_id=tenant_id,
+                revision=revision,
+                services=services,
+                versions=[
+                    version(unit="document", valid_to_at=datetime(2026, 9, 1, 9, tzinfo=UTC)),
+                    version(
+                        seller_id=seller.id,
+                        product_id=product.id,
+                        valid_from_at=datetime(2026, 5, 1, 9, tzinfo=UTC),
+                        rate=1500,
+                    ),
+                ],
+            )
+        await session.rollback()
+
         await session.execute(
             delete(BillingTariffVersionV2).where(BillingTariffVersionV2.tenant_id == tenant_id)
         )
+        await session.delete(product)
+        await session.delete(seller)
         await session.delete(tenant)
         await session.commit()
