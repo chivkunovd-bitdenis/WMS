@@ -23,6 +23,7 @@ from app.models.fbs_supply import FbsSupply
 from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT
 from app.services import inventory_service as inv_svc
 from app.services.fbs_shipment_source_service import reversal_source_from_ledger
+from app.services.marketplace_scope import is_wildberries, wrong_marketplace_message
 from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
     _release_reservation,
@@ -233,6 +234,17 @@ async def cancel_order(
 
     if order.status in NON_CANCELLABLE_STATUSES:
         raise FbsCancellationError("order_not_cancellable")
+
+    # Отмена уходит настоящим PATCH в кабинет Wildberries и не смотрит на
+    # маркетплейс заказа. У заказа Ozon `wb_order_id` — синтезированный
+    # отрицательный хеш, и такой запрос ушёл бы в чужой кабинет с заведомо
+    # несуществующим номером. Пока своей отмены для Ozon нет, останавливаемся
+    # здесь: не отменить честнее, чем отменить не там.
+    if not is_wildberries(order):
+        raise FbsCancellationError(
+            "marketplace_not_supported",
+            message=wrong_marketplace_message(order, "Отмена заказа"),
+        )
 
     band = penalty_band_for_order(order.created_at_wb)
     logger.info(

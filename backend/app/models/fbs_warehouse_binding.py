@@ -30,10 +30,15 @@ class FbsWarehouseBinding(Base):
 
     __tablename__ = "fbs_warehouse_bindings"
     __table_args__ = (
+        # Маркетплейс — часть ключа: числовые идентификаторы складов у
+        # Wildberries и у Ozon живут в разных пространствах и совпадают
+        # свободно. Без этого измерения склад Ozon с тем же числом, что у
+        # вайлдберрисовского склада того же продавца, база просто не принимала.
         UniqueConstraint(
             "seller_id",
+            "marketplace",
             "wb_warehouse_id",
-            name="uq_fbs_warehouse_bindings_seller_wb_warehouse",
+            name="uq_fbs_warehouse_bindings_seller_marketplace_wb_warehouse",
         ),
         UniqueConstraint(
             "seller_id",

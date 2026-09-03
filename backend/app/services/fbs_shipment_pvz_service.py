@@ -64,6 +64,7 @@ from app.services.fbs_supply_reconcile_service import (
     request_hash_for_cargo_places,
     request_hash_for_cargo_places_delete,
 )
+from app.services.marketplace_scope import is_wildberries
 from app.services.wildberries_client import (
     WildberriesClientError,
     create_marketplace_supply_trbx,
@@ -137,8 +138,21 @@ def _draft_to_dict(draft: CargoPlaceDraft) -> dict[str, Any]:
 
 
 async def _require_marketplace_token(
-    session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    supply: object | None = None,
 ) -> str:
+    """Токен маркетплейса для операции над грузоместами.
+
+    Здесь же стоит и проверка маркетплейса: каждый вызов к кабинету в этом
+    сервисе идёт следом за получением токена, поэтому одна проверка закрывает
+    все точки сразу. Грузоместа — вайлдберрисовское понятие (`trbx`), у Ozon
+    коробов с отдельным QR нет вовсе; без проверки операция над озоновской
+    поставкой уходила настоящим запросом в чужой вайлдберрисовский кабинет.
+    """
+    if supply is not None and not is_wildberries(supply):
+        raise FbsShipmentPvzError("marketplace_not_supported", http_status=409)
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
         raise FbsShipmentPvzError("seller_not_found")
     token = await get_decrypted_marketplace_token(session, tenant_id, seller_id)
@@ -500,7 +514,7 @@ async def list_cargo_places(
     if supply is None:
         raise FbsShipmentPvzError("supply_not_found")
 
-    token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
+    token = await _require_marketplace_token(session, tenant_id, supply.seller_id, supply)
     try:
         wb_ids = await fetch_marketplace_supply_trbx_list(
             http_client,
@@ -608,7 +622,7 @@ async def create_cargo_places(
         if existing_op.state == WB_OPERATION_STATE_FAILED:
             raise FbsShipmentPvzError(existing_op.error_code or "wb_operation_failed")
 
-    token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
+    token = await _require_marketplace_token(session, tenant_id, supply.seller_id, supply)
     operation = existing_op
     if operation is None:
         # This read is not part of the mutation.  Its snapshot lets a retry
@@ -726,7 +740,7 @@ async def _reconcile_pending_cargo_operation(
     if not isinstance(before_raw, list) or not isinstance(expected_count, int):
         raise FbsShipmentPvzError("wb_pending_confirmation")
 
-    token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
+    token = await _require_marketplace_token(session, tenant_id, supply.seller_id, supply)
     try:
         current_ids = await fetch_marketplace_supply_trbx_list(
             http_client,
@@ -788,7 +802,7 @@ async def _reconcile_pending_cargo_delete_operation(
         raise FbsShipmentPvzError("wb_pending_confirmation")
     requested_ids = _normalize_wb_trbx_ids([str(row) for row in requested_raw])
 
-    token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
+    token = await _require_marketplace_token(session, tenant_id, supply.seller_id, supply)
     try:
         current_ids = await fetch_marketplace_supply_trbx_list(
             http_client,
@@ -918,7 +932,7 @@ async def delete_cargo_places(
     # for a genuinely new delete operation.
     _resolve_trbxes_for_delete(supply, normalized_ids)
 
-    token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
+    token = await _require_marketplace_token(session, tenant_id, supply.seller_id, supply)
     operation = existing_op
     if operation is None:
         operation = await create_pending_cargo_delete_operation(

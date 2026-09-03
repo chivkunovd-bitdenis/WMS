@@ -559,7 +559,7 @@ def _raise_cancellation_http(exc: FbsCancellationError) -> None:
     detail = envelope_from_exc(exc)
     if exc.code == "order_not_found":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
-    if exc.code == "order_not_cancellable":
+    if exc.code in ("order_not_cancellable", "marketplace_not_supported"):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
     if exc.code in ("seller_not_found", "missing_marketplace_token"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)

@@ -33,6 +33,7 @@ from app.models.fbs_packing_box import FbsPackingBox
 from app.models.fbs_print_asset import FbsPrintAsset
 from app.models.fbs_supply import FbsSupply
 from app.models.user import User
+from app.services.marketplace_scope import MARKETPLACE_NAMES, order_display_number
 
 
 class FbsOrderHistoryError(ValueError):
@@ -217,7 +218,13 @@ async def order_history(
         events.append(
             _event(asset.created_at, "print_requested", f"{label}: запрошен")
         )
-        events.append(_event(asset.wb_fetched_at, "print_ready", f"{label}: получен от WB"))
+        events.append(
+            _event(
+                asset.wb_fetched_at,
+                "print_ready",
+                f"{label}: получен{_from_marketplace(order.marketplace)}",
+            )
+        )
         events.append(_event(asset.applied_at, "print_applied", f"{label}: наклеен"))
 
     for order_event in order_events:
@@ -232,7 +239,7 @@ async def order_history(
                 actor=(
                     actors.get(order_event.actor_user_id) if order_event.actor_user_id else None
                 ),
-                details=f"статус в WB: {payload.get('wb_status') or '—'}",
+                details=f"статус у маркетплейса: {payload.get('wb_status') or '—'}",
             )
         )
 
@@ -267,6 +274,7 @@ async def order_history(
     return {
         "order_id": str(order.id),
         "wb_order_id": order.wb_order_id,
+        "order_number": order_display_number(order),
         "status": order.status,
         "wb_status": order.wb_status,
         "supply_id": str(order.supply_id) if order.supply_id else None,
@@ -286,15 +294,24 @@ SUPPLY_STATUS_LABELS: dict[str, str] = {
     "assembling": "сборка",
     "packed": "упакована",
     "in_delivery": "передана в доставку",
-    "done": "принята Wildberries",
+    "done": "принята маркетплейсом",
 }
 
 PRINT_TITLES: dict[str, tuple[str, str]] = {
-    "order_sticker": ("Стикеры заказов запрошены", "Стикеры заказов получены от WB"),
-    "supply_qr": ("QR поставки запрошен", "QR поставки получен от WB"),
-    "cargo_place_qr": ("QR грузомест запрошены", "QR грузомест получены от WB"),
-    "box_qr": ("QR коробов запрошены", "QR коробов получены от WB"),
+    "order_sticker": ("Стикеры заказов запрошены", "Стикеры заказов получены"),
+    "supply_qr": ("QR поставки запрошен", "QR поставки получен"),
+    "cargo_place_qr": ("QR грузомест запрошены", "QR грузомест получены"),
+    "box_qr": ("QR коробов запрошены", "QR коробов получены"),
 }
+
+
+def _from_marketplace(marketplace: str | None) -> str:
+    """Хвост подписи «получен от …».
+
+    История писалась под один маркетплейс, и у поставки Ozon все надписи
+    выходили вайлдберрисовскими: «получен от WB», «принята Wildberries».
+    """
+    return f" от {MARKETPLACE_NAMES.get(marketplace or 'wb', marketplace or 'WB')}"
 
 
 def _bucket(moment: datetime) -> str:
@@ -379,7 +396,7 @@ async def supply_history(
         order.id for order in orders
         if order.supply_id == supply_id or order.supply_id is None
     ]
-    numbers = {order.id: str(order.wb_order_id) for order in orders}
+    numbers = {order.id: order_display_number(order) for order in orders}
 
     picks = (
         list(
@@ -577,6 +594,7 @@ async def supply_history(
             printed[(_bucket(asset.wb_fetched_at), asset.kind, "ready")].append(label)
     for (print_moment, print_kind, stage), print_items in printed.items():
         requested, ready = PRINT_TITLES[print_kind]
+        ready = f"{ready}{_from_marketplace(supply.marketplace)}"
         events.append(
             _grouped_event(
                 datetime.fromisoformat(print_moment),

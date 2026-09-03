@@ -32,6 +32,7 @@ from app.models.fbs_supply import FbsSupply
 from app.models.operation_fact import OperationFact, OperationFactCutover, OperationFactLine
 from app.models.seller import Seller
 from app.services.billing_ledger_service import _resolve_v2_tariff
+from app.services.marketplace_scope import MARKETPLACE_NAMES, order_display_number
 from app.services.storage_measurement_service import (
     MOSCOW,
 )
@@ -371,7 +372,7 @@ async def _operation_entries(
             "result": "reversed" if fact.reversal_of_id else ("not_billable" if not fact.billable_service_code else (finance_result if include_finance else "completed")),
         }
         if fact.document_type == FBS_ORDER_DOCUMENT_TYPE:
-            row["fbs_status_label"] = FBS_STATUS_CONFIRMED_LABEL
+            row["fbs_status_label"] = _confirmed_label(fact.marketplace)
         if include_finance:
             row["rate_kopecks"] = priced[0].rate if priced and len({entry.rate for entry in priced}) == 1 else None
             row["amount_kopecks"] = money
@@ -438,6 +439,23 @@ async def _operation_entries(
 FBS_ORDER_DOCUMENT_TYPE = "fbs_order"
 FBS_STATUS_CONFIRMED_LABEL = "ВБ получил"
 FBS_STATUS_HANDED_LABEL = "Передан ВБ"
+
+
+def _confirmed_label(marketplace: str | None) -> str:
+    """«Маркетплейс забрал заказ» — с именем того маркетплейса, который забрал.
+
+    Подписи были зашиты вайлдберрисовскими константами, и заказ Ozon приезжал в
+    расчёты с надписью «ВБ получил».
+    """
+    if not marketplace or marketplace == "wb":
+        return FBS_STATUS_CONFIRMED_LABEL
+    return f"{MARKETPLACE_NAMES.get(marketplace, marketplace)} получил"
+
+
+def _handed_label(marketplace: str | None) -> str:
+    if not marketplace or marketplace == "wb":
+        return FBS_STATUS_HANDED_LABEL
+    return f"Передан {MARKETPLACE_NAMES.get(marketplace, marketplace)}"
 _FBS_HANDED_STATUSES = (
     FBS_ORDER_STATUS_PACKED,
     FBS_ORDER_STATUS_IN_DELIVERY,
@@ -505,12 +523,12 @@ async def _fbs_handed_entries(
                 "item_quantity": None,
                 "source_type": FBS_ORDER_DOCUMENT_TYPE,
                 "source_id": str(order.id),
-                "document_number": f"Заказ {order.wb_order_id}",
+                "document_number": f"Заказ {order_display_number(order)}",
                 "product_name": None,
                 "sku": None,
                 "source_target": {"kind": "fbs_order", "source_id": str(order.id)},
                 "result": "not_billable",
-                "fbs_status_label": FBS_STATUS_HANDED_LABEL,
+                "fbs_status_label": _handed_label(order.marketplace),
             }
         )
     return rows

@@ -33,6 +33,7 @@ from app.services.billing_ledger_service import (
     product_billing_lines,
     record_operational_charge,
 )
+from app.services.marketplace_scope import order_display_number
 from app.services.operation_fact_service import OperationFactError, line_input, write_operation_fact
 
 logger = logging.getLogger(__name__)
@@ -126,7 +127,10 @@ async def record_fbs_order_confirmed(
             marketplace=order.marketplace,
             document_type="fbs_order",
             document_id=order.id,
-            document_number_snapshot=str(order.wb_order_id),
+            # Номер так, как его называет маркетплейс заказа: у Ozon в
+            # `wb_order_id` лежит синтезированный отрицательный хеш, по которому
+            # заказ не найти ни у нас, ни в кабинете.
+            document_number_snapshot=order_display_number(order),
             occurred_at=moment,
             item_quantity=quantity,
             lines=[
