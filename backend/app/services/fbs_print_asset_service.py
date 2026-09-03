@@ -42,13 +42,15 @@ from app.services.fbs_print_asset_storage import (
     ORDER_STICKER_CONTENT_TYPE,
     ORDER_STICKER_HEIGHT_MM,
     ORDER_STICKER_WIDTH_MM,
+    PDF_CONTENT_TYPE,
     FbsPrintAssetStorageError,
     cargo_qr_relative_path,
     decode_png_payload,
     order_sticker_relative_path,
-    read_png,
+    read_print_file,
     resolve_existing_storage_path,
     save_png,
+    save_print_file,
     sha256_checksum,
     supply_qr_relative_path,
 )
@@ -56,10 +58,15 @@ from app.services.fbs_sticker_code_service import (
     sticker_barcode_from_wb_row,
     sticker_code_from_wb_row,
 )
+from app.services.marketplace_account_service import (
+    MarketplaceAccountError,
+    MarketplaceAccountService,
+)
 from app.services.marketplace_provider import (
     MarketplaceProviderError,
     provider_error_message,
 )
+from app.services.ozon_provider_factory import build_ozon_provider
 from app.services.wildberries_client import (
     WildberriesClientError,
     fetch_marketplace_order_stickers,
@@ -92,25 +99,64 @@ async def fetch_order_label_rows_for_marketplace(
     )
 
 
-async def _ozon_order_label_fetch(
-    external_order_ids: list[str],
-) -> list[dict[str, Any]]:
-    """Этикетку Ozon мы пока не печатаем, и врать об этом нельзя.
+def ozon_label_error_message(code: str, upstream: str) -> str:
+    """Почему этикетки Ozon нет — словами, которые оператору что-то говорят.
+
+    Самый частый случай здесь не поломка, а порядок работы Ozon: этикетка
+    существует только у собранного отправления. Спецификация метода
+    ``/v2/posting/fbs/package-label`` говорит прямо: «Генерирует PDF-файл с
+    этикетками для указанных отправлений в статусе „Ожидает отгрузки“ —
+    `awaiting_deliver`», и там же: «Рекомендуем запрашивать этикетки через
+    45—60 секунд после сборки заказа». До передачи печатать нечего, и это не
+    наша ошибка — это модель Ozon, отличная от вайлдберрисовской, где стикер
+    выдают сразу.
+    """
+    if code in {"ozon_label_400", "ozon_label_409"}:
+        base = (
+            "Ozon выдаёт этикетку только для собранного отправления — "
+            "после передачи поставки, статус «Ожидает отгрузки»."
+        )
+    elif code == "ozon_label_404":
+        base = "Ozon не знает такого отправления."
+    elif code == "ozon_label_empty":
+        base = "Ozon ответил без файла этикетки."
+    else:
+        base = "Ozon не отдал этикетку отправления."
+    return f"{base} {upstream}".strip() if upstream else base
+
+
+def ozon_order_label_fetcher(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+) -> OrderLabelFetch:
+    """Живой запрос этикеток Ozon через ту же границу провайдера, что и всё остальное.
 
     Раньше здесь стояла заглушка: PNG размером один на один пиксель, который
     сохранялся как обычный печатный актив, а заказу проставлялся статус «стикер
     готов». Оператор нажимал «печать» и получал пустой лист, а система считала,
-    что этикетка есть.
+    что этикетка есть. Потом заглушку заменили честным отказом, потому что
+    хранилище печатных активов принимало только PNG, а Ozon отдаёт PDF.
 
-    Ozon по спецификации отдаёт этикетку отправления в PDF
-    (``POST /v2/posting/fbs/package-label`` → ``application/pdf``), а наше
-    хранилище печатных активов принимает только PNG и жёстко проверяет сигнатуру
-    файла (``fbs_print_asset_storage.validate_png_bytes``). Поэтому подставить
-    сюда живой вызов нельзя без переделки хранилища — это отдельная работа, а не
-    строчка. До неё честный ответ ровно один: этикетки нет.
+    Хранилище формат научилось (``fbs_print_asset_storage.save_print_file``),
+    поэтому отказ снят и метод зовётся по-настоящему.
     """
-    _ = external_order_ids
-    raise MarketplaceProviderError("ozon", None, {}, code="ozon_label_pdf_unsupported")
+
+    async def fetch(external_order_ids: list[str]) -> list[dict[str, Any]]:
+        try:
+            client_id, api_key = await MarketplaceAccountService(session).stored_credentials(
+                tenant_id,
+                seller_id,
+            )
+        except MarketplaceAccountError as exc:
+            raise MarketplaceProviderError("ozon", None, {}, code=exc.code) from exc
+        return await build_ozon_provider().fetch_order_labels(
+            client_id=client_id,
+            api_key=api_key,
+            posting_numbers=external_order_ids,
+        )
+
+    return fetch
 
 
 class FbsPrintAssetSupplyError(Exception):
@@ -254,11 +300,19 @@ def _asset_file_present(asset: FbsPrintAsset) -> bool:
         return False
 
 
+def _asset_content_type(asset: FbsPrintAsset) -> str:
+    return asset.content_type or ORDER_STICKER_CONTENT_TYPE
+
+
 def _asset_file_ready(asset: FbsPrintAsset) -> bool:
     if asset.status != PRINT_ASSET_STATUS_READY or not asset.storage_path:
         return False
     try:
-        read_png(asset.storage_path, checksum=asset.checksum)
+        read_print_file(
+            asset.storage_path,
+            checksum=asset.checksum,
+            content_type=_asset_content_type(asset),
+        )
     except FbsPrintAssetStorageError:
         return False
     return True
@@ -283,15 +337,20 @@ def _persist_order_sticker_bytes(
     sticker_code: str | None,
     sticker_barcode: str | None = None,
     fetched_at: datetime,
+    content_type: str = ORDER_STICKER_CONTENT_TYPE,
 ) -> None:
-    rel = order_sticker_relative_path(order.id)
-    save_png(rel, png_bytes)
+    rel = order_sticker_relative_path(order.id, content_type=content_type)
+    save_print_file(rel, png_bytes, content_type=content_type)
     asset.status = PRINT_ASSET_STATUS_READY
-    asset.content_type = ORDER_STICKER_CONTENT_TYPE
+    asset.content_type = content_type
     asset.storage_path = rel
     asset.checksum = sha256_checksum(png_bytes)
-    asset.width_mm = ORDER_STICKER_WIDTH_MM
-    asset.height_mm = ORDER_STICKER_HEIGHT_MM
+    # Размер печатной формы знаем только у вайлдберрисовского PNG: он приходит
+    # готовым стикером 58x40. У PDF Ozon страница своя, и подписывать её нашим
+    # рулоном значило бы соврать фронту, который по этим полям верстает лист.
+    is_image = content_type == ORDER_STICKER_CONTENT_TYPE
+    asset.width_mm = ORDER_STICKER_WIDTH_MM if is_image else None
+    asset.height_mm = ORDER_STICKER_HEIGHT_MM if is_image else None
     asset.wb_fetched_at = fetched_at
     asset.error_code = None
     asset.error_message = None
@@ -632,13 +691,9 @@ async def request_supply_print_batch(
         token: str | None = None
         if marketplace == "wb":
             try:
-                token = await _require_marketplace_token(
-                    session, tenant_id, supply.seller_id
-                )
+                token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
             except FbsPrintAssetSupplyError as exc:
-                raise FbsPrintAssetError(
-                    exc.code, message="Нет доступа к маркетплейсу."
-                ) from exc
+                raise FbsPrintAssetError(exc.code, message="Нет доступа к маркетплейсу.") from exc
 
         async def wb_fetch(external_order_ids: list[str]) -> list[dict[str, Any]]:
             if token is None:
@@ -668,7 +723,7 @@ async def request_supply_print_batch(
                     marketplace,
                     external_order_ids=external_order_ids,
                     wb_fetch=wb_fetch,
-                    ozon_fetch=_ozon_order_label_fetch,
+                    ozon_fetch=ozon_order_label_fetcher(session, tenant_id, supply.seller_id),
                 )
             except WildberriesClientError as exc:
                 suffix = f"_{exc.status_code}" if exc.status_code else ""
@@ -693,11 +748,7 @@ async def request_supply_print_batch(
                         PrintOrderError(
                             order_id=order.id,
                             wb_order_id=int(order.wb_order_id),
-                            code=(
-                                "ozon_account_blocked"
-                                if exc.is_account_blocked
-                                else exc.code
-                            ),
+                            code=("ozon_account_blocked" if exc.is_account_blocked else exc.code),
                             message=message,
                         )
                     )
@@ -723,9 +774,7 @@ async def request_supply_print_batch(
                 )
                 sticker_row = by_external_id.get(external_order_id)
                 if sticker_row is None:
-                    provider_name = (
-                        "Ozon" if marketplace == "ozon" else "Wildberries"
-                    )
+                    provider_name = "Ozon" if marketplace == "ozon" else "Wildberries"
                     result.failed += 1
                     result.order_errors.append(
                         PrintOrderError(
@@ -761,6 +810,15 @@ async def request_supply_print_batch(
                     png_bytes = decode_png_payload(sticker_row.get(payload_key))
                     if png_bytes is not None:
                         break
+                # Формат печатного файла объявляет тот, кто его принёс. У WB это
+                # всегда PNG, у Ozon — PDF; хранилище сверит сигнатуру с этим
+                # объявлением и не даст записать одно под видом другого.
+                row_content_type = sticker_row.get("content_type")
+                content_type = (
+                    PDF_CONTENT_TYPE
+                    if row_content_type == PDF_CONTENT_TYPE
+                    else ORDER_STICKER_CONTENT_TYPE
+                )
                 asset = await _find_order_sticker_asset(session, tenant_id, order.id)
                 if asset is None:
                     asset = FbsPrintAsset(
@@ -772,6 +830,27 @@ async def request_supply_print_batch(
                     )
                     session.add(asset)
                     await session.flush()
+
+                # Отказ по конкретному отправлению маркетплейс объяснил сам —
+                # передаём его причину, а не общее «этикетка не пришла».
+                row_error_code = sticker_row.get("error_code")
+                if isinstance(row_error_code, str) and row_error_code:
+                    message = ozon_label_error_message(
+                        row_error_code,
+                        str(sticker_row.get("error_message") or ""),
+                    )
+                    result.failed += 1
+                    result.order_errors.append(
+                        PrintOrderError(
+                            order_id=order.id,
+                            wb_order_id=int(order.wb_order_id),
+                            code=row_error_code,
+                            message=message,
+                        )
+                    )
+                    _mark_asset_error(asset, code=row_error_code, message=message)
+                    order.sticker_status = STICKER_STATUS_ERROR
+                    continue
 
                 if png_bytes is None:
                     result.failed += 1
@@ -799,6 +878,7 @@ async def request_supply_print_batch(
                         sticker_code=sticker_code,
                         sticker_barcode=sticker_barcode,
                         fetched_at=fetched_at,
+                        content_type=content_type,
                     )
                 except FbsPrintAssetStorageError as exc:
                     result.failed += 1
@@ -868,8 +948,13 @@ async def get_asset_binary_content(
             message="Печатный актив ещё не готов.",
             context={"asset_id": str(asset_id)},
         )
+    content_type = _asset_content_type(asset)
     try:
-        png_bytes = read_png(asset.storage_path, checksum=asset.checksum)
+        png_bytes = read_print_file(
+            asset.storage_path,
+            checksum=asset.checksum,
+            content_type=content_type,
+        )
     except FbsPrintAssetStorageError as exc:
         _mark_asset_error(asset, code=exc.code, message="Файл печати недоступен.")
         if asset.fbs_order_id is not None:
@@ -889,7 +974,6 @@ async def get_asset_binary_content(
             if order is not None and order.sticker_status == STICKER_STATUS_READY:
                 order.sticker_status = STICKER_STATUS_PRINT_OPENED
 
-    content_type = asset.content_type or ORDER_STICKER_CONTENT_TYPE
     _ = user_id
     await session.flush()
     return png_bytes, content_type, asset

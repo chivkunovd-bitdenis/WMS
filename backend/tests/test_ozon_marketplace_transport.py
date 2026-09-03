@@ -25,6 +25,7 @@ from app.services.marketplace_provider import (
     MarketplaceProviderError,
 )
 from app.services.ozon_marketplace_transport import (
+    PACKAGE_LABEL_PATH,
     PRODUCTS_STOCKS_PATH,
     UNFULFILLED_LIST_PATH,
     HttpxOzonMarketplaceTransport,
@@ -387,3 +388,80 @@ def test_factory_keeps_the_blocked_operation_semantics_of_the_local_fake(
     transport = build_ozon_transport(blocked_operation="fetch_orders")
     assert isinstance(transport, FakeMarketplaceTransport)
     assert transport.errors["fetch_orders"].is_account_blocked is True
+
+
+async def test_labels_are_asked_one_posting_at_a_time() -> None:
+    """Спека того же метода: ошибка одного отправления рушит весь пакет.
+
+    «Если хотя бы для одного отправления возникнет ошибка, этикетки не будут
+    подготовлены для всех отправлений в запросе» — поэтому двадцать номеров в
+    одном запросе нам не подходят, спрашиваем по одному.
+    """
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == PACKAGE_LABEL_PATH
+        bodies.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            content=b"%PDF-1.7 label",
+            headers={"Content-Type": "application/pdf"},
+        )
+
+    rows = await _transport(handler).fetch_order_labels(
+        client_id="c",
+        api_key="k",
+        posting_numbers=["0195832-0021-1", "0195832-0021-2"],
+    )
+
+    assert bodies == [
+        {"posting_number": ["0195832-0021-1"]},
+        {"posting_number": ["0195832-0021-2"]},
+    ]
+    assert [row["posting_number"] for row in rows] == ["0195832-0021-1", "0195832-0021-2"]
+    assert base64.b64decode(str(rows[0]["file"])) == b"%PDF-1.7 label"
+    assert rows[0]["content_type"] == "application/pdf"
+
+
+async def test_one_unready_posting_does_not_take_the_others_down() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        posting_number = json.loads(request.content)["posting_number"][0]
+        if posting_number.endswith("-1"):
+            return httpx.Response(
+                400,
+                json={"code": 3, "message": "The next postings aren't ready"},
+            )
+        return httpx.Response(
+            200,
+            content=b"%PDF-1.7 label",
+            headers={"Content-Type": "application/pdf"},
+        )
+
+    rows = await _transport(handler).fetch_order_labels(
+        client_id="c",
+        api_key="k",
+        posting_numbers=["0195832-0021-1", "0195832-0021-2"],
+    )
+
+    assert rows[0]["error_code"] == "ozon_label_400"
+    assert rows[0]["error_message"] == "The next postings aren't ready"
+    assert "file" not in rows[0]
+    assert base64.b64decode(str(rows[1]["file"])) == b"%PDF-1.7 label"
+
+
+async def test_a_blocked_account_stops_the_whole_label_run() -> None:
+    """Заблокированный кабинет — не свойство одного отправления."""
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content)["posting_number"][0])
+        return httpx.Response(403, json={"code": 7, "message": "client is blocked"})
+
+    with pytest.raises(MarketplaceProviderError) as caught:
+        await _transport(handler).fetch_order_labels(
+            client_id="c",
+            api_key="k",
+            posting_numbers=["a", "b"],
+        )
+    assert caught.value.is_account_blocked is True
+    assert seen == ["a"]

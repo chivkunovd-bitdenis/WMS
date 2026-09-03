@@ -57,6 +57,8 @@ UNFULFILLED_LIST_PATH = "/v4/posting/fbs/unfulfilled/list"
 POSTING_GET_PATH = "/v3/posting/fbs/get"
 ACT_BARCODE_PATH = "/v2/posting/fbs/act/get-barcode"
 PRODUCTS_STOCKS_PATH = "/v2/products/stocks"
+PACKAGE_LABEL_PATH = "/v2/posting/fbs/package-label"
+PDF_MEDIA_TYPE = "application/pdf"
 
 # «За один запрос можно изменить наличие для 100 пар товар-склад» — описание
 # метода в официальной спецификации Ozon (swagger.json, ProductAPI_ProductsStocksV2).
@@ -360,13 +362,64 @@ class HttpxOzonMarketplaceTransport:
         api_key: str,
         posting_numbers: Sequence[str],
     ) -> list[dict[str, Any]]:
-        _ = client_id, api_key, posting_numbers
-        raise MarketplaceProviderError(
-            "ozon",
-            None,
-            {},
-            code="ozon_label_pdf_unsupported",
-        )
+        """Одна этикетка — один запрос, потому что этого требует сам Ozon.
+
+        Спецификация метода ``/v2/posting/fbs/package-label`` разрешает до
+        двадцати номеров за раз, но там же предупреждает: «Если хотя бы для
+        одного отправления возникнет ошибка, этикетки не будут подготовлены для
+        всех отправлений в запросе». В поставке из двадцати заказов одно
+        неготовое отправление оставило бы оператора без всех девятнадцати
+        остальных, поэтому спрашиваем по одному.
+
+        Отказ по конкретному отправлению не рушит остальные: он возвращается
+        строкой с ``error_code``. Строка с ошибкой — это не файл и не тишина, и
+        выше по стеку её видно как ошибку именно этого заказа.
+        """
+        rows: list[dict[str, Any]] = []
+        for posting_number in posting_numbers:
+            if not posting_number:
+                continue
+            try:
+                raw = await self.call(
+                    client_id=client_id,
+                    api_key=api_key,
+                    path=PACKAGE_LABEL_PATH,
+                    payload={"posting_number": [posting_number]},
+                )
+            except MarketplaceProviderError as error:
+                if error.is_account_blocked or error.status_code is None:
+                    # Заблокированный кабинет и обрыв связи — это не свойство
+                    # одного отправления, а общий отказ: следующие девятнадцать
+                    # запросов дадут ровно то же самое.
+                    raise
+                rows.append(
+                    {
+                        "posting_number": posting_number,
+                        "error_code": f"ozon_label_{error.status_code}",
+                        "error_message": str(error.payload.get("message") or ""),
+                    }
+                )
+                continue
+            content = raw.get("file_content") if isinstance(raw, dict) else None
+            if not isinstance(content, str) or not content:
+                rows.append(
+                    {
+                        "posting_number": posting_number,
+                        "error_code": "ozon_label_empty",
+                        "error_message": "",
+                    }
+                )
+                continue
+            declared = raw.get("content_type") if isinstance(raw, dict) else None
+            media_type = declared if isinstance(declared, str) and declared else PDF_MEDIA_TYPE
+            rows.append(
+                {
+                    "posting_number": posting_number,
+                    "file": content,
+                    "content_type": media_type,
+                }
+            )
+        return rows
 
     async def publish_stocks(
         self,

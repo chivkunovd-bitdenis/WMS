@@ -21,21 +21,15 @@ from app.schemas.ozon_fbs_api import (
     OzonFbsv4FbsPostingShipV4Request,
     OzonFbsv4FbsPostingShipV4Response,
     OzonPostingBooleanResponse,
-    OzonPostingPostingFBSPackageLabelRequest,
-    OzonPostingPostingFBSPackageLabelResponse,
     OzonPostingv3GetFbsPostingRequest,
     OzonV1CarriageApproveRequest,
     OzonV1CarriageApproveResponse,
     OzonV1CarriageCreateRequest,
     OzonV1CarriageCreateResponse,
-    OzonV1CreateLabelBatchRequest,
-    OzonV1GetLabelBatchRequest,
-    OzonV1GetLabelBatchResponse,
     OzonV1GetRestrictionsRequest,
     OzonV1GetRestrictionsResponse,
     OzonV1SetPostingsRequest,
     OzonV1SetPostingsResponse,
-    OzonV2CreateLabelBatchResponse,
     OzonV2FbsPostingProductCountryListRequest,
     OzonV2FbsPostingProductCountryListResponse,
     OzonV2FbsPostingProductCountrySetRequest,
@@ -74,6 +68,25 @@ __all__ = ["OzonFbsProcessError", "handoff_supply", "read_marking_status", "subm
 # Ozon отключил — живой вызов отвечает «obsolete method cannot be used».
 SHIPPING_LIST_PATH = "/v2/posting/fbs/act/get-pdf"
 
+# Этикетки отправлений передача больше не забирает, и это не потеря, а починка.
+#
+# Забирала она их так: создавала задание `/v2/posting/fbs/package-label/create`,
+# опрашивала `/v1/posting/fbs/package-label/get` три раза с паузами 0,05 + 0,1 +
+# 0,2 секунды и, не дождавшись, роняла всю передачу ошибкой `ozon_label_not_ready`.
+# А спецификация того же метода советует прямо противоположное: «Рекомендуем
+# запрашивать этикетки через 45—60 секунд после сборки заказа». То есть на живом
+# кабинете передача почти всегда падала бы на этикетках — уже после того, как
+# отправления собраны и перевозка подтверждена, то есть откатить нечего.
+#
+# Вдобавок полученный PDF никто не использовал: `label_bytes` возвращался наверх
+# и там выбрасывался. Ездили за документом, роняли из-за него операцию и
+# выкидывали результат.
+#
+# Теперь этикетка живёт там, где ей место, — в конвейере печатных активов
+# (`fbs_print_asset_service`), по одной на заказ, по кнопке оператора и уже
+# после передачи, когда отправление в статусе `awaiting_deliver` и этикетка у
+# Ozon вообще существует.
+
 
 @dataclass(frozen=True)
 class OzonHandoffResult:
@@ -82,7 +95,6 @@ class OzonHandoffResult:
     barcode_bytes: bytes | None
     barcode_text: str | None
     shipping_list_bytes: bytes | None
-    label_bytes: bytes | None
 
 
 @dataclass(frozen=True)
@@ -498,60 +510,6 @@ def _apply_posting_readback(order: FbsOrder, response: OzonV3GetFbsPostingRespon
         )
 
 
-async def _labels(
-    provider: OzonMarketplaceProvider,
-    *,
-    client_id: str,
-    api_key: str,
-    posting_numbers: list[str],
-) -> bytes | None:
-    created = await _call(
-        provider,
-        client_id=client_id,
-        api_key=api_key,
-        path="/v2/posting/fbs/package-label/create",
-        request=OzonV1CreateLabelBatchRequest(posting_number=posting_numbers),
-        response_type=OzonV2CreateLabelBatchResponse,
-        read=False,
-    )
-    tasks = created.result.tasks if created.result is not None else []
-    if not tasks or not tasks[0].task_id:
-        raise OzonFbsProcessError("ozon_label_task_missing", "Ozon не создал этикетки.")
-    label_state: OzonV1GetLabelBatchResponse | None = None
-    for attempt in range(3):
-        label_state = await _call(
-            provider,
-            client_id=client_id,
-            api_key=api_key,
-            path="/v1/posting/fbs/package-label/get",
-            request=OzonV1GetLabelBatchRequest(task_id=tasks[0].task_id),
-            response_type=OzonV1GetLabelBatchResponse,
-            read=True,
-        )
-        state = label_state.result.status if label_state.result is not None else None
-        if state == "completed":
-            break
-        if state == "error":
-            raise OzonFbsProcessError("ozon_label_failed", "Ozon не сформировал этикетки.")
-        if state not in {"pending", "in_progress"}:
-            raise OzonFbsProcessError(
-                "ozon_label_unknown_status", "Неизвестный статус этикеток Ozon."
-            )
-        await asyncio.sleep(0.05 * (2**attempt))
-    else:
-        raise OzonFbsProcessError("ozon_label_not_ready", "Этикетки Ozon ещё не готовы.")
-    file_response = await _call(
-        provider,
-        client_id=client_id,
-        api_key=api_key,
-        path="/v2/posting/fbs/package-label",
-        request=OzonPostingPostingFBSPackageLabelRequest(posting_number=posting_numbers),
-        response_type=OzonPostingPostingFBSPackageLabelResponse,
-        read=True,
-    )
-    return _decode_file(file_response.file_content)
-
-
 def _required_country_skus(response: OzonV3GetFbsPostingResponseV3) -> set[str]:
     result = response.result
     requirements = result.requirements if result is not None else None
@@ -800,12 +758,6 @@ async def handoff_supply(
         if related is not None:
             posting_numbers.extend(related.related_posting_numbers or [])
     posting_numbers = list(dict.fromkeys(posting_numbers))
-    label_bytes = await _labels(
-        provider,
-        client_id=client_id,
-        api_key=api_key,
-        posting_numbers=posting_numbers,
-    )
 
     details = orders[0].meta_details_json or {}
     delivery_method = details.get("ozon_delivery_method_id")
@@ -843,7 +795,7 @@ async def handoff_supply(
                 posting_number=order.external_order_id or "",
             )
             _apply_posting_readback(order, response)
-        return OzonHandoffResult(None, True, None, None, None, label_bytes)
+        return OzonHandoffResult(None, True, None, None, None)
 
     if not carriage.carriage_id:
         raise OzonFbsProcessError("ozon_carriage_missing", "Ozon не создал отгрузку.")
@@ -945,5 +897,4 @@ async def handoff_supply(
         barcode_bytes=_decode_file(barcode.file_content),
         barcode_text=barcode_text.result,
         shipping_list_bytes=_decode_file(act.file_content),
-        label_bytes=label_bytes,
     )

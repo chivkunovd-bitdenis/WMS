@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -176,19 +177,9 @@ async def test_order_label_dispatch_uses_only_selected_marketplace_adapter() -> 
     ozon_fetch.assert_awaited_once_with(["ozon-1"])
 
 
-@pytest.mark.asyncio
-async def test_ozon_order_label_never_marks_a_sticker_ready_without_a_real_label(
+async def _ozon_supply_with_one_order(
     db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Заглушка размером один на один пиксель больше не выдаётся за этикетку.
-
-    Раньше печать этикеток озоновской поставки сохраняла однопиксельный PNG и
-    ставила заказу «стикер готов»: оператор получал пустой лист, а система
-    считала, что этикетка есть. Ozon отдаёт этикетку в PDF, а хранилище
-    печатных активов принимает только PNG, поэтому честный исход один — отказ
-    с внятным текстом и статусом ошибки у заказа.
-    """
+) -> tuple[Tenant, FbsSupply, FbsOrder]:
     tenant = Tenant(name="Ozon print test", slug=f"ozon-print-{uuid.uuid4().hex[:8]}")
     seller = Seller(tenant=tenant, name="Seller")
     warehouse = Warehouse(
@@ -222,10 +213,116 @@ async def test_ozon_order_label_never_marks_a_sticker_ready_without_a_real_label
         deadline_at=now + timedelta(days=1),
     )
     db_session.add_all([tenant, seller, warehouse, supply, order])
+    await db_session.flush()
+    db_session.add(
+        MarketplaceAccount(
+            tenant_id=tenant.id,
+            seller_id=seller.id,
+            marketplace="ozon",
+            account_slot="primary",
+            external_account_id="ozon-client",
+            secret_encrypted=encrypt_secret("ozon-key"),
+            is_active=True,
+            validation_status="valid",
+        )
+    )
     await db_session.commit()
+    return tenant, supply, order
 
+
+@pytest.mark.asyncio
+async def test_ozon_pdf_label_is_stored_and_served_as_a_pdf(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Этикетка Ozon доезжает до оператора документом, а не заглушкой.
+
+    Раньше здесь сохранялся однопиксельный PNG и заказу ставилось «стикер
+    готов»: оператор получал пустой лист. Потом заглушку заменили честным
+    отказом, потому что хранилище принимало только PNG. Теперь хранилище знает
+    формат, и путь работает целиком: PDF от Ozon кладётся на диск как PDF и
+    отдаётся ручкой печати с тем же типом содержимого.
+    """
+    tenant, supply, order = await _ozon_supply_with_one_order(db_session)
     wb_fetch = AsyncMock(side_effect=AssertionError("WB fetch must not run for Ozon"))
     monkeypatch.setattr(print_asset_svc, "fetch_marketplace_order_stickers", wb_fetch)
+    transport = FakeMarketplaceTransport(
+        order_labels=[
+            {
+                "posting_number": "ozon-posting-1",
+                "file": base64.b64encode(b"%PDF-1.7 ozon label").decode("ascii"),
+                "content_type": "application/pdf",
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        print_asset_svc,
+        "build_ozon_provider",
+        lambda **kwargs: OzonMarketplaceProvider(transport=transport),
+    )
+
+    batch = await print_asset_svc.request_supply_print_batch(
+        db_session,
+        tenant.id,
+        supply.id,
+        kind="order_sticker",
+        order_ids=[order.id],
+        retry_missing=False,
+        http_client=AsyncMock(),
+    )
+
+    assert batch.failed == 0
+    assert batch.ready == 1
+    asset = batch.assets[0]
+    assert asset.content_type == "application/pdf"
+    assert asset.storage_path is not None and asset.storage_path.endswith(".pdf")
+    # Рулон 58x40 — свойство вайлдберрисовского PNG. У PDF Ozon страница своя,
+    # и подписывать её нашим размером нельзя: по этим полям верстается лист.
+    assert asset.width_mm is None and asset.height_mm is None
+
+    payload, content_type, _asset = await print_asset_svc.get_asset_binary_content(
+        db_session,
+        tenant.id,
+        asset.id,
+        user_id=uuid.uuid4(),
+    )
+    assert payload == b"%PDF-1.7 ozon label"
+    assert content_type == "application/pdf"
+    wb_fetch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_ozon_label_before_handoff_explains_itself_instead_of_failing_blankly(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Отказ Ozon по одному отправлению — это причина, а не тишина.
+
+    Спецификация `/v2/posting/fbs/package-label`: этикетки выдаются для
+    отправлений в статусе «Ожидает отгрузки» — `awaiting_deliver`. До передачи
+    поставки их нет, и оператор должен прочитать именно это, а не «этикетка не
+    найдена в ответе Ozon».
+    """
+    tenant, supply, order = await _ozon_supply_with_one_order(db_session)
+    monkeypatch.setattr(
+        print_asset_svc,
+        "fetch_marketplace_order_stickers",
+        AsyncMock(side_effect=AssertionError("WB fetch must not run for Ozon")),
+    )
+    transport = FakeMarketplaceTransport(
+        order_labels=[
+            {
+                "posting_number": "ozon-posting-1",
+                "error_code": "ozon_label_400",
+                "error_message": "posting is not ready",
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        print_asset_svc,
+        "build_ozon_provider",
+        lambda **kwargs: OzonMarketplaceProvider(transport=transport),
+    )
 
     batch = await print_asset_svc.request_supply_print_batch(
         db_session,
@@ -239,12 +336,11 @@ async def test_ozon_order_label_never_marks_a_sticker_ready_without_a_real_label
 
     assert batch.ready == 0
     assert batch.failed == 1
-    assert batch.order_errors[0].code == "ozon_label_pdf_unsupported"
-    assert "PDF" in batch.order_errors[0].message
+    assert batch.order_errors[0].code == "ozon_label_400"
+    assert "после передачи" in batch.order_errors[0].message
     await db_session.refresh(order)
     assert order.sticker_status == STICKER_STATUS_ERROR
     assert order.sticker_file is None
-    wb_fetch.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -1453,9 +1549,10 @@ async def test_ozon_supply_handoff_ships_rechecks_and_creates_carriage_without_w
         "/v1/posting/fbs/restrictions",
         "/v4/posting/fbs/ship",
         "/v3/posting/fbs/get",
-        "/v2/posting/fbs/package-label/create",
-        "/v1/posting/fbs/package-label/get",
-        "/v2/posting/fbs/package-label",
+        # Этикеток здесь больше нет намеренно: Ozon советует запрашивать их
+        # через 45—60 секунд после сборки, а передача ждала 0,35 секунды и
+        # роняла всю операцию уже после подтверждённой перевозки. Этикетка
+        # печатается отдельной кнопкой, когда отправление в `awaiting_deliver`.
         "/v1/carriage/create",
         "/v1/carriage/get",
         "/v1/carriage/set-postings",
