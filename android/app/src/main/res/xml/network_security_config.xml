@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <!-- ISRG Root X1: Android 7.0 lacks system trust for Let's Encrypt chain terminus. -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">web-production-9e7c1.up.railway.app</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/isrgrootx1" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>
