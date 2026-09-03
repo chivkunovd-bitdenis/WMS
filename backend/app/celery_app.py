@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from celery import Celery
 from celery.schedules import crontab
 
 from app.core.settings import settings
+
+MOSCOW = ZoneInfo("Europe/Moscow")
 
 _broker = settings.celery_broker_url or "memory://"
 celery_app = Celery(
@@ -38,5 +43,12 @@ celery_app.conf.beat_schedule = {
     "fbs-stock-reconcile": {
         "task": "wms.fbs_stock_reconcile",
         "schedule": float(settings.fbs_stock_reconcile_interval_sec),
+    },
+    # Хранение начисляется за прошедшие сутки, поэтому запуск ровно в полночь по
+    # Москве. Время берём через nowfun, а не через общий timezone приложения:
+    # смена часового пояса всему Celery сдвинула бы и остальные расписания.
+    "billing-storage-daily": {
+        "task": "wms.billing_storage_daily",
+        "schedule": crontab(hour=0, minute=0, nowfun=lambda: datetime.now(MOSCOW)),
     },
 }
