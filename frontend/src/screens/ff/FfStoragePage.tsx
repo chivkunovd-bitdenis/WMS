@@ -19,7 +19,8 @@ type Measurement = {
   quantity_days?: string | null
   volume_liters: string | null
   dimensions_source: string | null
-  liter_days: string
+  // Пусто, пока ночь по этому товару не начисляла: экран показывает прочерк.
+  liter_days: string | null
   rate_snapshot: string | null
   amount: string | null
   status?: 'calculated' | 'missing_dimensions'
@@ -32,13 +33,12 @@ type Statement = {
   warehouse_name: string
   status: 'draft' | 'fixed'
   fixed_at: string | null
-  total_liter_days: string
-  total_amount: string
+  total_liter_days: string | null
+  total_amount: string | null
   problem_count: number
   measurements: Measurement[]
 }
 type StorageResponse = { tariff_configured: boolean; tariff_revision: number; warehouses: { id: string; name: string }[]; statements: Statement[] }
-type TariffCreateResponse = { recalculated_statements: Statement[] }
 type HistoryRow = { id: string; created_at: string; source: string; length_mm: number | null; width_mm: number | null; height_mm: number | null; volume_liters: string | null; author_name: string | null; is_current: boolean }
 type BackgroundJob = { id: string; status: string; error_message?: string | null }
 
@@ -108,21 +108,6 @@ export function buildStorageTariffPayload({
         valid_from: sellerException.validFrom,
       },
     }),
-  }
-}
-
-export function mergeRecalculatedStorageStatements<T extends { id: string }>(current: readonly T[], recalculated: readonly T[]) {
-  const recalculatedById = new Map(recalculated.map((statement) => [statement.id, statement]))
-  return current.map((statement) => recalculatedById.get(statement.id) ?? statement)
-}
-
-export function mergeRecalculatedStorageData<T extends { statements: readonly { id: string }[] }>(
-  current: T,
-  recalculated: readonly T['statements'][number][],
-): T & { statements: T['statements'][number][] } {
-  return {
-    ...current,
-    statements: mergeRecalculatedStorageStatements(current.statements, recalculated),
   }
 }
 
@@ -304,8 +289,10 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
           },
         }),
       })
-      const result = await request('/operations/storage/tariffs', { method: 'POST', body: JSON.stringify(tariffBody) }) as TariffCreateResponse
-      if (!Array.isArray(result?.recalculated_statements)) throw new Error('recalculation_result_missing')
+      // Ставка сохранена — дальше просто перечитываем список. Пересчитанных
+      // ведомостей сервер не возвращает: новая ставка работает с ближайшей ночи
+      // и уже начисленное не переписывает.
+      await request('/operations/storage/tariffs', { method: 'POST', body: JSON.stringify(tariffBody) })
       setRateSellerId('')
       setData(null)
       if (await load()) {
