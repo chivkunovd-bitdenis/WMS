@@ -416,6 +416,10 @@ async def test_ozon_stock_dispatch_uses_binding_pool_with_fake_transport(
         product_id=product.id,
         marketplace="ozon",
         external_offer_id="offer-1",
+        # У Ozon `product_id` и `sku` — разные числа: живой ответ
+        # /v4/product/info/stocks по одной карточке отдаёт
+        # {"product_id": 6204279711, "sku": 5680762790}.
+        external_product_id="6001",
         external_sku="3001",
         is_active=True,
     )
@@ -443,11 +447,13 @@ async def test_ozon_stock_dispatch_uses_binding_pool_with_fake_transport(
     assert result.products_targeted == 1
     assert result.products_confirmed == 1
     assert transport.calls == [("publish_stocks", "ozon-client")]
+    # В поле `product_id` уходит именно product_id Ozon, а не SKU: раньше туда
+    # клали SKU и остаток подписывался чужим идентификатором.
     assert transport.published_stocks == [
         {
             "warehouse_id": 900001,
             "offer_id": "offer-1",
-            "product_id": 3001,
+            "product_id": 6001,
             "stock": 2,
         }
     ]
@@ -1040,17 +1046,25 @@ async def test_ozon_handoff_blocks_when_required_product_country_is_missing(
 
 
 @pytest.mark.asyncio
-async def test_ozon_handoff_blocks_when_posting_has_restrictions(
+async def test_ozon_handoff_blocks_when_posting_exceeds_the_drop_off_limits(
     db_session: AsyncSession,
 ) -> None:
-    """TC-S03-OZON-031: provider restrictions stop assembly before /ship."""
-    tenant, _, _, _, _, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    """TC-S03-OZON-031: превышение лимита пункта приёма останавливает сборку.
+
+    Останавливает именно превышение, а не наличие лимита: метод
+    `/v1/posting/fbs/restrictions` возвращает ограничения пункта приёма всегда,
+    и раньше сам факт их наличия валил передачу в 409 — на живом пункте приёма
+    отгрузка не прошла бы никогда.
+    """
+    tenant, _, _, _, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
     assert supply is not None
+    order.price = 60_000_000  # 600 000 ₽ в копейках
+    await db_session.commit()
     responses = _ozon_handoff_responses()
     responses["/v1/posting/fbs/restrictions"] = {
         "result": {
             "posting_number": "ozon-posting-dispatch",
-            "max_posting_weight": 1000,
+            "max_posting_price": 500000,
         }
     }
     transport = FakeMarketplaceTransport(endpoint_responses=responses)
@@ -1067,10 +1081,48 @@ async def test_ozon_handoff_blocks_when_posting_has_restrictions(
         )
 
     assert caught.value.message == (
-        "Отправление Ozon имеет ограничения (максимальный вес: 1000); "
+        "Отправление Ozon не проходит ограничения пункта приёма "
+        "(стоимость 600000 ₽ больше допустимых 500000 ₽); "
         "проверьте состав в кабинете Ozon до сборки."
     )
     assert all(path != "/v4/posting/fbs/ship" for path, _ in transport.endpoint_calls)
+
+
+@pytest.mark.asyncio
+async def test_ozon_handoff_passes_a_posting_that_fits_the_drop_off_limits(
+    db_session: AsyncSession,
+) -> None:
+    """Обычные лимиты живого пункта приёма передаче не мешают."""
+    tenant, _, _, _, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    assert supply is not None
+    order.price = 250000  # 2500 ₽
+    await db_session.commit()
+    responses = _ozon_handoff_responses()
+    responses["/v1/posting/fbs/restrictions"] = {
+        "result": {
+            "posting_number": "ozon-posting-dispatch",
+            "max_posting_weight": 40000,
+            "min_posting_weight": 0,
+            "width": 500,
+            "height": 500,
+            "length": 500,
+            "max_posting_price": 500000,
+            "min_posting_price": 0,
+        }
+    }
+    transport = FakeMarketplaceTransport(endpoint_responses=responses)
+
+    await shipment_svc.deliver_supply(
+        db_session,
+        tenant.id,
+        supply.id,
+        AsyncMock(),
+        idempotency_key=f"ozon-allowed-{uuid.uuid4()}",
+        actor_user_id=None,
+        ozon_provider=OzonMarketplaceProvider(transport=transport),
+    )
+
+    assert any(path == "/v4/posting/fbs/ship" for path, _ in transport.endpoint_calls)
 
 
 @pytest.mark.asyncio
@@ -1153,6 +1205,10 @@ async def _seed_ozon_supply_case(
         reserve_status=RESERVE_STATUS_RESERVED,
         created_at_wb=now,
         deadline_at=now + timedelta(days=1),
+        # Ozon ответил по требованиям и сказал, что маркировка не нужна. Без
+        # этого признака гейт выпуска честно не знает, нужна она или нет, и
+        # передачу не разрешает — это его новое и намеренное поведение.
+        meta_details_json={"ozon_requirements": {"kinds": []}},
     )
     db_session.add_all([tenant, seller, warehouse, product, order])
     if supply is not None:
@@ -1353,7 +1409,8 @@ def _ozon_handoff_responses(*, substatus: str = "posting_in_carriage") -> dict[s
             "content_type": "image/png",
         },
         "/v2/posting/fbs/act/get-barcode/text": {"result": "OZON-ACT-901"},
-        "/v2/posting/fbs/digital/act/get-pdf": {
+        # Живой метод листа отгрузки: старый `digital/act/get-pdf` Ozon отключил
+        "/v2/posting/fbs/act/get-pdf": {
             "file_content": png,
             "file_name": "shipping-list.pdf",
             "content_type": "application/pdf",
@@ -1407,7 +1464,7 @@ async def test_ozon_supply_handoff_ships_rechecks_and_creates_carriage_without_w
         "/v1/carriage/get",
         "/v2/posting/fbs/act/get-barcode",
         "/v2/posting/fbs/act/get-barcode/text",
-        "/v2/posting/fbs/digital/act/get-pdf",
+        "/v2/posting/fbs/act/get-pdf",
     ]
     wb_deliver.assert_not_awaited()
     wb_qr.assert_not_awaited()

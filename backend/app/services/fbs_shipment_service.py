@@ -1909,6 +1909,19 @@ async def _deliver_ozon_supply(
     supply.external_supply_id = str(result.carriage_id) if result.carriage_id is not None else None
     supply.document_number = str(result.carriage_id) if result.carriage_id is not None else None
     supply.display_number = result.barcode_text
+    if result.shipping_list_bytes:
+        # Лист отгрузки Ozon приходит в PDF, а хранилище печатных активов
+        # принимает только PNG, поэтому показать его оператору сегодня негде.
+        # Молча выбрасывать документ, за которым ехали в Ozon, нельзя —
+        # пусть его получение хотя бы видно в журнале.
+        logger.info(
+            "ozon shipping list received but not stored: no PDF surface yet",
+            extra={
+                "supply_id": str(supply.id),
+                "carriage_id": result.carriage_id,
+                "bytes": len(result.shipping_list_bytes),
+            },
+        )
     if result.barcode_bytes:
         try:
             await upsert_supply_qr_asset_from_bytes(
