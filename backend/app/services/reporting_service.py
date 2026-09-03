@@ -13,6 +13,8 @@ from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.background_job import BackgroundJob
+from app.models.fbs_order import FbsOrder
+from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
@@ -854,6 +856,27 @@ async def list_product_movements(
                 display_number or document_number,
                 str(operation_type),
             )
+    # Списание FBS связано с заказом через журнал списаний: там рядом лежат
+    # fbs_order_id и id движения. Без этого в отчёте у списания FBS пустой
+    # документ — «товар ушёл, а по какому основанию, не написано».
+    fbs_by_movement: dict[uuid.UUID, tuple[str, uuid.UUID | None]] = {}
+    fbs_movement_ids = {
+        row.id for row in rows if row.movement_type in {"fbs_shipment", "fbs_order_pick"}
+    }
+    if fbs_movement_ids:
+        fbs_rows = await session.execute(
+            select(
+                FbsShipmentReversalLedger.shipment_movement_id,
+                FbsOrder.wb_order_id,
+                FbsOrder.supply_id,
+            )
+            .join(FbsOrder, FbsOrder.id == FbsShipmentReversalLedger.fbs_order_id)
+            .where(FbsShipmentReversalLedger.shipment_movement_id.in_(fbs_movement_ids))
+        )
+        for movement_id, wb_order_id, supply_id in fbs_rows:
+            if movement_id is not None:
+                fbs_by_movement[movement_id] = (f"Заказ {wb_order_id}", supply_id)
+
     unload_numbers: dict[uuid.UUID, str | None] = {}
     if unload_ids:
         unload_rows = await session.execute(
@@ -878,6 +901,13 @@ async def list_product_movements(
                 "kind": "inbound",
                 "id": str(request_id),
                 "number": number or "без номера",
+            }
+        elif row.id in fbs_by_movement:
+            number, supply_id = fbs_by_movement[row.id]
+            document = {
+                "kind": "fbs_supply" if supply_id else "fbs_order",
+                "id": str(supply_id) if supply_id else str(row.id),
+                "number": number,
             }
         elif row.marketplace_unload_request_id:
             document = {

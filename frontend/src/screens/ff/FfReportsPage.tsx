@@ -89,7 +89,11 @@ type MovementRow = {
   at: string
   operation: string
   quantity: number
-  document: { kind: 'inbound' | 'marketplace_unload'; id: string; number: string } | null
+  document: {
+    kind: 'inbound' | 'marketplace_unload' | 'fbs_supply' | 'fbs_order'
+    id: string
+    number: string
+  } | null
 }
 type Grouping = 'seller' | 'product' | 'operation'
 
@@ -420,11 +424,14 @@ export function FfReportsPage({ token, onOpenInbound, sellers = [], warehouses =
                 : <DataTable<MovementRow> columns={[
                     { key: 'at', header: 'Когда', width: 190, render: move => <TextCell value={new Date(move.at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} width={160} /> },
                     { key: 'operation', header: 'Движение', width: 260, render: move => <TextCell value={move.operation} /> },
-                    { key: 'document', header: 'Документ', width: 200, render: move => move.document
-                        ? (move.document.kind === 'inbound'
-                            ? <Link component="button" type="button" sx={{ textAlign: 'left' }} onClick={() => onOpenInbound?.(move.document!.id)}>{move.document.number}</Link>
-                            : <Link component={RouterLink} to={`/app/ff/mp-shipments?open_mp=${move.document.id}`} sx={{ textAlign: 'left' }}>{move.document.number}</Link>)
-                        : <TextCell value="—" /> },
+                    { key: 'document', header: 'Документ', width: 200, render: move => {
+                        const doc = move.document
+                        if (!doc) return <TextCell value="—" />
+                        if (doc.kind === 'inbound') return <Link component="button" type="button" sx={{ textAlign: 'left' }} onClick={() => onOpenInbound?.(doc.id)}>{doc.number}</Link>
+                        if (doc.kind === 'marketplace_unload') return <Link component={RouterLink} to={`/app/ff/mp-shipments?open_mp=${doc.id}`} sx={{ textAlign: 'left' }}>{doc.number}</Link>
+                        if (doc.kind === 'fbs_supply') return <Link component={RouterLink} to={`/app/ff/fbs?supply_id=${doc.id}`} sx={{ textAlign: 'left' }}>{doc.number}</Link>
+                        return <TextCell value={doc.number} />
+                      } },
                     { key: 'qty', header: 'Штук', align: 'right', width: 110, render: move => <QtyCell value={move.quantity} /> },
                   ]} rows={movements} getRowKey={move => move.id} loading={movementsLoading} empty={{ title: 'Движений по товару за период нет' }} testId="ff-reports-movements" />,
             }} />,
