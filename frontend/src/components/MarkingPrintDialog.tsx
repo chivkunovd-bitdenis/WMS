@@ -31,7 +31,7 @@ import {
   tapeToLayout,
   type TapeBlock,
 } from '../utils/markingPrintPresets'
-import { resolvePrintTemplate, type PrintLayout } from '../utils/printTemplate'
+import { resolvePrintTemplate, type PrintLabelOptions, type PrintLayout } from '../utils/printTemplate'
 import { labelOptionsFromLayout } from '../utils/printMarkingCodeLabel'
 import type { ProductLabelPrintOptions } from '../utils/productLabelText'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
@@ -229,7 +229,12 @@ type Props = {
   onClose: () => void
 }
 
-export function resolveTapeCounts(nextCz: number, nextWb: number, allowQrOnly: boolean) {
+export function resolveTapeCounts(
+  nextCz: number,
+  nextWb: number,
+  allowQrOnly: boolean,
+  labelOptions?: PrintLabelOptions,
+) {
   const cz = Math.max(0, Math.min(99, Math.floor(nextCz) || 0))
   const wb = Math.max(0, Math.min(99, Math.floor(nextWb) || 0))
   const qrOnly = allowQrOnly && cz === 0 && wb === 0
@@ -239,7 +244,11 @@ export function resolveTapeCounts(nextCz: number, nextWb: number, allowQrOnly: b
     cz: effectiveCz,
     wb,
     tape,
-    layout: qrOnly ? { units: [] } satisfies PrintLayout : tapeToLayout(tape),
+    // Состав этикетки переживает смену количества блоков: он про товар
+    // продавца, а не про раскладку оператора.
+    layout: qrOnly
+      ? ({ units: [], label_options: labelOptions } satisfies PrintLayout)
+      : tapeToLayout(tape, labelOptions),
   }
 }
 
@@ -358,7 +367,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     // здесь законна пустая раскладка ЧЗ/ШК: оператор печатает только QR, а ЧЗ
     // сканирует или печатает позже. Во всех остальных режимах сохраняем прежний
     // минимум — хотя бы один блок ЧЗ.
-    const next = resolveTapeCounts(nextCz, nextWb, includesOrderQr)
+    const next = resolveTapeCounts(nextCz, nextWb, includesOrderQr, layout.label_options)
     setCzQty(next.cz)
     setWbQty(next.wb)
     setTapeOrder(next.tape)
@@ -367,7 +376,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
   const applyTapeOrder = (nextTape: TapeBlock[]) => {
     setTapeOrder(nextTape)
-    setLayout(tapeToLayout(nextTape))
+    // Состав переносим в новый макет: он принадлежит товару продавца, а не
+    // раскладке. Без этого перетаскивание блоков возвращало выключенные поля.
+    setLayout((current) => tapeToLayout(nextTape, current.label_options))
     setCzQty(nextTape.filter((b) => b === 'cz').length)
     setWbQty(nextTape.filter((b) => b === 'label').length)
   }

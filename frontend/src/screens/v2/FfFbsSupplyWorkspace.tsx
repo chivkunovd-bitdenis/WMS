@@ -519,7 +519,15 @@ export function FfFbsSupplyWorkspace({
         idempotency_key: createFbsIdempotencyKey(),
       })
       setWorkspace(next)
-      setStage(visualStage(next.stage))
+      // Добавление заказа — обычное обновление, а не повод вернуть оператора
+      // назад. Сервер отдаёт «подбор», пока новый заказ не подобран, и прямой
+      // setStage перекидывал человека с упаковки или коробов на подбор. Правило
+      // проекта: серверные факты не управляют навигацией в рабочем месте WB.
+      setStage((current) => fbsStageAfterWorkspaceRefresh(
+        next.supply.marketplace,
+        current,
+        visualStage(next.stage),
+      ))
       setAddOrdersOpen(false)
       setAddableSelected(new Set())
       setNotice('Заказы добавлены в поставку.')

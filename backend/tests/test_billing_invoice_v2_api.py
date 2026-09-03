@@ -556,3 +556,61 @@ async def test_selected_operations_invoice_carries_manually_added_lines(
     assert issued.status_code in (200, 201), issued.text
     # Выставленный счёт помнит добавленную строку, а не только начисления.
     assert "Короба" in [line["description"] for line in issued.json()["lines"]]
+
+
+@pytest.mark.asyncio
+async def test_late_evening_utc_operation_belongs_to_the_moscow_day(
+    async_client: AsyncClient,
+) -> None:
+    """Границы периода счёта — московские, как и в отчёте.
+
+    Операция 20 августа в 22:30 UTC — это 21 августа в 01:30 по Москве. Отчёт за
+    21-е её показывал, а счёт отвечал «операция вне периода»: он сравнивал
+    календарную дату исходного времени UTC. Оператор видел деньги, выставить их
+    не мог и объяснения не получал.
+    """
+    suffix = f"invoice-v2-msk-{time.time_ns()}"
+    registered = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Invoice MSK",
+            "slug": suffix,
+            "admin_email": f"{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
+    tenant_id = uuid.UUID((await async_client.get("/auth/me", headers=headers)).json()["tenant_id"])
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Селлер"})
+    seller_id = uuid.UUID(seller.json()["id"])
+    root_id = uuid.uuid4()
+    async with SessionLocal() as session:
+        session.add(
+            BillingLedgerEntry(
+                id=root_id,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                service_code="inbound",
+                source="test",
+                source_type="test",
+                source_id=uuid.uuid4(),
+                event_kind="charge",
+                unit="item",
+                quantity=Decimal("1"),
+                rate=1000,
+                amount=1000,
+                occurred_at=datetime(2026, 8, 20, 22, 30, tzinfo=UTC),
+            )
+        )
+        await session.commit()
+
+    body = {
+        "creation_mode": "selected_operations",
+        "seller_id": str(seller_id),
+        "date_from": "2026-08-21",
+        "date_to": "2026-08-21",
+        "selected_root_ids": [str(root_id)],
+    }
+    preview = await async_client.post("/billing/invoices-v2/preview", headers=headers, json=body)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["total_amount_kopecks"] == 1000

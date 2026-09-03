@@ -7,7 +7,7 @@ import hashlib
 import json
 import re
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -280,13 +280,21 @@ async def _preview_selected_operations(
     )
     if len(roots) != len(root_ids):
         raise BillingInvoiceV2Error("selected_source_not_found")
+    period_start, period_end = moscow_interval(date_from, date_to)
     selected: dict[uuid.UUID, BillingLedgerEntry] = {}
     for root in roots:
         if root.seller_id != seller_id:
             raise BillingInvoiceV2Error("selected_source_not_found")
         if root.entry_type == "reversal" or root.reversal_of_id is not None:
             raise BillingInvoiceV2Error("standalone_reversal")
-        if not date_from <= root.occurred_at.date() <= date_to:
+        # Границы периода — московские, как и во всём отчёте (`moscow_interval`).
+        # Сравнение по календарной дате UTC отвергало операцию, которая по Москве
+        # попадает в выбранный день: 3 сентября 22:30 UTC — это 4 сентября 01:30
+        # по Москве. Оператор видел её в отчёте, а счёт по ней не выставлялся.
+        occurred_at = root.occurred_at
+        if occurred_at.tzinfo is None:
+            occurred_at = occurred_at.replace(tzinfo=UTC)
+        if not period_start <= occurred_at < period_end:
             raise BillingInvoiceV2Error("selected_source_outside_period")
         frontier = {root.id}
         while frontier:

@@ -65,12 +65,19 @@ DEFAULT_LABEL_OPTIONS = LabelOptions()
 class PrintLayout:
     units: list[LayoutUnit]
     label_options: LabelOptions = DEFAULT_LABEL_OPTIONS
+    #: Шаблон заведён панелью состава и лентой не распоряжается. Признак нужен
+    #: именно в макете: по имени такой шаблон не отличить от обычного шаблона
+    #: продавца, у которого лента своя и должна работать.
+    options_only: bool = False
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data: dict[str, Any] = {
             "units": [{"block": u.block, "copies": u.copies} for u in self.units],
             "label_options": self.label_options.to_dict(),
         }
+        if self.options_only:
+            data["options_only"] = True
+        return data
 
 
 @dataclass(frozen=True)
@@ -129,7 +136,11 @@ def parse_layout(raw: dict[str, Any] | str) -> PrintLayout:
         if not isinstance(copies, int) or copies < 1 or copies > 10:
             raise PrintTemplateServiceError("invalid_layout_copies")
         units.append(LayoutUnit(block=block, copies=copies))
-    return PrintLayout(units=units, label_options=_parse_label_options(data.get("label_options")))
+    return PrintLayout(
+        units=units,
+        label_options=_parse_label_options(data.get("label_options")),
+        options_only=data.get("options_only") is True,
+    )
 
 
 def _parse_label_options(raw: Any) -> LabelOptions:
@@ -597,16 +608,21 @@ async def set_seller_label_options(
     if existing is not None:
         current = parse_layout(existing.layout_json)
         existing.layout_json = layout_to_json(
-            PrintLayout(units=current.units, label_options=options)
+            PrintLayout(units=current.units, label_options=options, options_only=True)
         )
         await session.flush()
+        # Без коммита ручка отвечала «сохранено», а следующий запрос читал старое:
+        # провайдер сессии сам ничего не коммитит, а ветка создания коммитит.
+        await session.commit()
         await session.refresh(existing)
         return _row_from_model(existing)
     return await create_print_template(
         session,
         tenant_id,
         name=SELLER_LABEL_TEMPLATE_NAME,
-        layout=PrintLayout(units=SYSTEM_PAIRS_LAYOUT.units, label_options=options),
+        layout=PrintLayout(
+            units=SYSTEM_PAIRS_LAYOUT.units, label_options=options, options_only=True
+        ),
         seller_id=seller_id,
         user_id=None,
         is_default=True,
@@ -713,12 +729,13 @@ async def resolve_default_print_template(
         seller_default = result.scalar_one_or_none()
         if seller_default is not None:
             row = _row_from_model(seller_default)
-            if seller_default.name == SELLER_LABEL_TEMPLATE_NAME:
+            if row.layout.options_only:
                 # Шаблон, заведённый панелью состава, лентой не распоряжается:
                 # он отвечает только за то, что печатать на этикетке ШК. Иначе у
                 # оператора без личной раскладки лента молча становилась «один
-                # ШК», и Честный знак из печати пропадал. Имя здесь — такой же
-                # служебный признак, как у раскладки оператора.
+                # ШК», и Честный знак из печати пропадал. Признак хранится в
+                # самом макете: имя для этого не годится — его может носить
+                # обычный шаблон продавца со своей лентой.
                 return replace(
                     row,
                     layout=PrintLayout(

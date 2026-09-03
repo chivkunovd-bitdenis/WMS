@@ -1,4 +1,4 @@
-import type { PrintLayout, PrintLayoutUnit } from './printTemplate'
+import type { PrintLabelOptions, PrintLayout, PrintLayoutUnit } from './printTemplate'
 
 export type PrintPresetId = 'pairs' | 'label_cz' | 'cz_only' | 'label_only' | 'custom'
 
@@ -90,10 +90,24 @@ export function buildDefaultTape(czCount: number, wbCount: number): TapeBlock[] 
   return [...Array(cz).fill('cz' as const), ...Array(wb).fill('label' as const)]
 }
 
-/** Сжимает соседние одинаковые блоки в layout.units (порядок сохраняется). */
-export function tapeToLayout(tape: TapeBlock[]): PrintLayout {
+/**
+ * Сжимает соседние одинаковые блоки в layout.units (порядок сохраняется).
+ *
+ * Состав этикетки передаётся отдельно и обязан пережить правку ленты: он
+ * принадлежит товару продавца, а лента — привычка оператора. Пока состав здесь
+ * терялся, любое изменение числа блоков или их перетаскивание возвращало
+ * этикетке все поля, включая выключенные продавцом. А системная лента — это два
+ * блока Честного знака, так что оператору, которому нужен ШК ВБ, приходилось
+ * менять количество, и настройка слетала практически всегда.
+ */
+export function tapeToLayout(
+  tape: TapeBlock[],
+  labelOptions?: PrintLabelOptions,
+): PrintLayout {
+  const withOptions = (units: PrintLayoutUnit[]): PrintLayout =>
+    labelOptions ? { units, label_options: labelOptions } : { units }
   if (tape.length < 1) {
-    return { units: [{ block: 'cz', copies: 1 }] }
+    return withOptions([{ block: 'cz', copies: 1 }])
   }
   const units: PrintLayoutUnit[] = []
   for (const block of tape) {
@@ -106,9 +120,9 @@ export function tapeToLayout(tape: TapeBlock[]): PrintLayout {
     }
   }
   if (units.length < 1) {
-    return { units: [{ block: 'cz', copies: 1 }] }
+    return withOptions([{ block: 'cz', copies: 1 }])
   }
-  return { units }
+  return withOptions(units)
 }
 
 export function countTapeBlocksFromTape(tape: TapeBlock[], unitCount: number): number {

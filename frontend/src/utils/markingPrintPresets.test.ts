@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { expandLayoutTape, applyLabelsPerProductToLayout, countTapeBlocks } from './markingPrintPresets'
+import {
+  expandLayoutTape,
+  applyLabelsPerProductToLayout,
+  countTapeBlocks,
+  tapeToLayout,
+} from './markingPrintPresets'
 
 describe('expandLayoutTape', () => {
   it('expands cz×2 + label×1 for two units', () => {
@@ -49,5 +54,31 @@ describe('expandLayoutTape', () => {
       { block: 'cz', copies: 2 },
       { block: 'label', copies: 3 },
     ])
+  })
+})
+
+describe('лента и состав этикетки', () => {
+  it('правка ленты не стирает состав, закреплённый за продавцом', () => {
+    // Состав — свойство товара продавца, лента — привычка оператора. Пока
+    // состав терялся здесь, любое изменение количества блоков возвращало на
+    // этикетку выключенные поля. А системная лента — два блока Честного знака,
+    // поэтому оператору, которому нужен ШК ВБ, приходилось менять количество —
+    // и настройка слетала почти всегда.
+    const options = {
+      include_size: true,
+      include_color: true,
+      include_brand: false,
+      include_composition: false,
+    }
+    const layout = tapeToLayout(['cz', 'label', 'label'], options)
+    expect(layout.units).toEqual([
+      { block: 'cz', copies: 1 },
+      { block: 'label', copies: 2 },
+    ])
+    expect(layout.label_options).toEqual(options)
+  })
+
+  it('без состава макет остаётся прежним — печатаем всё', () => {
+    expect(tapeToLayout(['cz', 'cz'])).toEqual({ units: [{ block: 'cz', copies: 2 }] })
   })
 })

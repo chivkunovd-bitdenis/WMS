@@ -700,15 +700,14 @@ async def test_label_options_do_not_reach_a_seller_without_a_template(
 
 
 @pytest.mark.asyncio
-async def test_old_composition_template_no_longer_hijacks_the_tape(
+async def test_old_seller_template_keeps_its_tape_even_with_the_same_name(
     async_client: AsyncClient,
 ) -> None:
-    """Шаблон состава не отдаёт свою ленту, даже если она записана в него.
+    """Обычный шаблон продавца остаётся хозяином своей ленты.
 
-    Первая версия панели сохраняла шаблон целиком, вместе с лентой «один ШК».
-    Такие строки уже лежат на стенде, и у оператора без личной раскладки из
-    печати пропадал бы Честный знак. Лента шаблона состава игнорируется — берётся
-    системная, а из шаблона остаётся только состав.
+    Признак «этот шаблон только про состав» живёт в самом макете, а не в имени.
+    Имя «Этикетка продавца» может носить и обычный шаблон, заведённый руками до
+    появления настройки состава, — отбирать у него ленту нельзя.
     """
     from app.services.print_template_service import resolve_default_print_template
 
@@ -723,15 +722,7 @@ async def test_old_composition_template_no_longer_hijacks_the_tape(
             "name": "Этикетка продавца",
             "seller_id": str(seller_id),
             "is_default": True,
-            "layout": {
-                "units": [{"block": "label", "copies": 1}],
-                "label_options": {
-                    "include_size": True,
-                    "include_color": True,
-                    "include_brand": False,
-                    "include_composition": True,
-                },
-            },
+            "layout": {"units": [{"block": "label", "copies": 1}]},
         },
     )
     assert created.status_code == 201, created.text
@@ -740,5 +731,102 @@ async def test_old_composition_template_no_longer_hijacks_the_tape(
         row = await resolve_default_print_template(
             session, tenant_id, user_id=None, product_id=None, seller_id=seller_id
         )
+    assert [(u.block, u.copies) for u in row.layout.units] == [("label", 1)]
+    # Состав у него не задан — печатаем всё, как и раньше.
+    assert row.layout.label_options.include_brand is True
+
+
+@pytest.mark.asyncio
+async def test_composition_template_never_owns_the_tape(
+    async_client: AsyncClient,
+) -> None:
+    """Шаблон, заведённый панелью состава, ленту не диктует.
+
+    Иначе у оператора без личной раскладки лента становилась бы «один ШК», и
+    Честный знак пропадал бы из печати.
+    """
+    from app.services.print_template_service import resolve_default_print_template
+
+    token, tenant_id, _user_id, seller_id, _product_id = await _seed_tenant_seller_product(
+        async_client
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+    saved = await async_client.put(
+        "/operations/marking-codes/print-templates/seller-label-options",
+        headers=headers,
+        json={
+            "seller_id": str(seller_id),
+            "label_options": {
+                "include_size": True,
+                "include_color": True,
+                "include_brand": False,
+                "include_composition": True,
+            },
+        },
+    )
+    assert saved.status_code == 200, saved.text
+
+    async with SessionLocal() as session:
+        row = await resolve_default_print_template(
+            session, tenant_id, user_id=None, product_id=None, seller_id=seller_id
+        )
     assert [(u.block, u.copies) for u in row.layout.units] == [("cz", 2)]
     assert row.layout.label_options.include_brand is False
+
+
+@pytest.mark.asyncio
+async def test_second_save_of_label_options_is_persisted(
+    async_client: AsyncClient,
+) -> None:
+    """Повторное сохранение состава доезжает до базы.
+
+    Ветка изменения существующего шаблона только сбрасывала изменения в
+    транзакцию и не коммитила: ручка отвечала «сохранено», а следующий запрос
+    читал прежние галочки.
+    """
+    token, _tenant_id, _user_id, seller_id, _product_id = await _seed_tenant_seller_product(
+        async_client
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+    url = "/operations/marking-codes/print-templates/seller-label-options"
+    first = await async_client.put(
+        url,
+        headers=headers,
+        json={
+            "seller_id": str(seller_id),
+            "label_options": {
+                "include_size": True,
+                "include_color": True,
+                "include_brand": False,
+                "include_composition": True,
+            },
+        },
+    )
+    assert first.status_code == 200, first.text
+    second = await async_client.put(
+        url,
+        headers=headers,
+        json={
+            "seller_id": str(seller_id),
+            "label_options": {
+                "include_size": False,
+                "include_color": False,
+                "include_brand": False,
+                "include_composition": False,
+            },
+        },
+    )
+    assert second.status_code == 200, second.text
+
+    resolved = await async_client.get(
+        f"/operations/marking-codes/print-templates/resolve?seller_id={seller_id}",
+        headers=headers,
+    )
+    assert resolved.status_code == 200, resolved.text
+    options = resolved.json()["layout"]["label_options"]
+    assert options == {
+        "include_size": False,
+        "include_color": False,
+        "include_brand": False,
+        "include_composition": False,
+    }, options
