@@ -78,9 +78,11 @@ OZON_REQUIREMENTS_KEY = "ozon_requirements"
 #   Считать их отменой опасно: отмена разворачивает отгрузку и снимает резерв.
 _OZON_NEW_STATUSES = frozenset({"new", "awaiting_packaging"})
 _OZON_ASSEMBLED_STATUSES = frozenset({"awaiting_deliver"})
-_OZON_DELIVERY_STATUSES = frozenset(
-    {"delivering", "driver_pickup", "sent_by_seller", "acceptance_in_progress"}
-)
+_OZON_DELIVERY_STATUSES = frozenset({"delivering", "driver_pickup", "sent_by_seller"})
+# «Идёт приёмка» — это Ozon подтвердил, что забрал отправление в пункте приёма.
+# Ближайший аналог вайлдберрисовского `sorted`, и точно так же это момент, когда
+# работа склада по заказу считается сделанной и попадает в счёт.
+_OZON_ACCEPTED_STATUSES = frozenset({"acceptance_in_progress"})
 _OZON_DONE_STATUSES = frozenset({"delivered", "done"})
 _OZON_DONE_SUBSTATUSES = frozenset({"posting_delivered", "posting_received"})
 _OZON_CANCELLED_STATUSES = frozenset(
@@ -99,6 +101,11 @@ _LOCAL_WORKFLOW_STATUSES = frozenset(
         FBS_ORDER_STATUS_IN_DELIVERY,
     }
 )
+
+# Состояния, в которых работа склада по заказу считается сделанной и попадает
+# в счёт. Совпадают с теми, что уже приняты для Wildberries: подтверждение
+# приходит от маркетплейса, а не от нашей кнопки.
+_BILLABLE_STATUSES = frozenset({FBS_ORDER_STATUS_SORTED, FBS_ORDER_STATUS_DONE})
 
 # Требования отправления Ozon (`requirements`) в терминах наших видов маркировки.
 _OZON_REQUIREMENT_KINDS: tuple[tuple[str, str], ...] = (
@@ -246,6 +253,8 @@ def _local_status(raw_status: str | None, raw_substatus: str | None = None) -> s
         return FBS_ORDER_STATUS_CANCELLED
     if normalized in _OZON_DONE_STATUSES or substatus in _OZON_DONE_SUBSTATUSES:
         return FBS_ORDER_STATUS_DONE
+    if normalized in _OZON_ACCEPTED_STATUSES:
+        return FBS_ORDER_STATUS_SORTED
     if normalized in _OZON_DELIVERY_STATUSES:
         return FBS_ORDER_STATUS_IN_DELIVERY
     if normalized in _OZON_NEW_STATUSES:
@@ -545,18 +554,19 @@ async def _apply_status(
     # тянет назад через наши собственные этапы. Иначе заказ, уже взятый в
     # поставку, каждые десять минут возвращался бы в «новые», а собранный —
     # в «ожидает сборки».
-    if local in {FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DONE}:
+    terminal = {FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DONE}
+    if local in terminal:
         order.status = local
-    elif local == FBS_ORDER_STATUS_IN_DELIVERY:
-        if previous not in {FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DONE}:
+    elif local == FBS_ORDER_STATUS_SORTED:
+        if previous not in terminal:
             order.status = local
-    elif previous not in _LOCAL_WORKFLOW_STATUSES and previous not in {
-        FBS_ORDER_STATUS_CANCELLED,
-        FBS_ORDER_STATUS_DONE,
-    }:
+    elif local == FBS_ORDER_STATUS_IN_DELIVERY:
+        if previous not in terminal and previous != FBS_ORDER_STATUS_SORTED:
+            order.status = local
+    elif previous not in _LOCAL_WORKFLOW_STATUSES and previous not in terminal:
         order.status = local
     changed = previous != order.status or previous_wb_status != normalized
-    if order.status in {FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DONE}:
+    if order.status in terminal:
         if order.status == FBS_ORDER_STATUS_CANCELLED:
             from app.services.fbs_cancellation_service import (
                 reverse_fbs_shipment_if_needed,
@@ -568,6 +578,16 @@ async def _apply_status(
                 actor_user_id=None,
             )
         await _release_reservation(session, order)
+    if previous != order.status and order.status in _BILLABLE_STATUSES:
+        # Заказы Ozon не тарифицировались вообще: единственная точка, где
+        # появляются деньги за сборку FBS, вызывалась только из
+        # вайлдберрисовского обработчика статусов. Селлер мог сдать через
+        # фулфилмент сотню заказов Ozon, они уезжали, и в счёт не попадало ни
+        # копейки. Начисление идемпотентно: повторный проход опроса его не
+        # задваивает.
+        from app.services.fbs_order_billing_service import record_fbs_order_confirmed
+
+        await record_fbs_order_confirmed(session, order)
     return changed
 
 

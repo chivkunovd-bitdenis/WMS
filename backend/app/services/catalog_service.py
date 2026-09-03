@@ -1059,11 +1059,14 @@ async def _record_dimension_event(
     force_new: bool = False,
 ) -> ProductDimensionEvent:
     existing_event = None
-    if source == "wb":
+    # Импорт карточек маркетплейса повторяется по расписанию и по кнопке.
+    # Дедуп по содержимому нужен обоим импортам одинаково: без него каждая
+    # повторная выгрузка Ozon плодила бы новое событие обмера с теми же числами.
+    if source in {"wb", "ozon"}:
         result = await session.execute(
             select(ProductDimensionEvent).where(
                 ProductDimensionEvent.product_id == product.id,
-                ProductDimensionEvent.source == "wb",
+                ProductDimensionEvent.source == source,
                 ProductDimensionEvent.fingerprint == fingerprint,
             )
         )

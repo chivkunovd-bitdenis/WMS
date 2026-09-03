@@ -632,6 +632,27 @@ async def record_found(
         product_stmt = product_stmt.where(Product.seller_id == count.seller_id)
     products = list((await session.execute(product_stmt)).scalars().all())
     if not products:
+        # Запасной поиск по штрихкодам маркетплейса: у товара Ozon свой код
+        # вида OZN<sku>, которого нет ни в `wb_barcode`, ни в `sku_code`.
+        from app.services.ozon_product_import_service import (
+            find_product_ids_by_marketplace_barcode,
+        )
+
+        product_ids = await find_product_ids_by_marketplace_barcode(
+            session,
+            tenant_id,
+            list(codes),
+            seller_id=count.seller_id,
+        )
+        if product_ids:
+            fallback_stmt = select(Product).where(
+                Product.tenant_id == tenant_id,
+                Product.id.in_(product_ids),
+            )
+            if count.seller_id is not None:
+                fallback_stmt = fallback_stmt.where(Product.seller_id == count.seller_id)
+            products = list((await session.execute(fallback_stmt)).scalars().all())
+    if not products:
         raise InventoryCountError("product_not_found")
     if len(products) > 1:
         raise InventoryCountError("barcode_is_ambiguous")

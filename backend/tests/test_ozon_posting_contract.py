@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal, engine
 from app.models import Base
+from app.models.billing import BillingLedgerEntry
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_DONE,
@@ -317,10 +318,61 @@ async def test_delivery_method_id_is_stored_for_the_future_carriage(
     assert details["ozon_delivery_method_id"] == "21321684811000"
 
 
+async def test_accepted_posting_is_charged_like_a_confirmed_wb_order(
+    db_session: AsyncSession,
+) -> None:
+    """Заказы Ozon не тарифицировались вообще — ни сборка, ни упаковка.
+
+    Единственная точка, где появляются деньги за сборку FBS, вызывалась только
+    из вайлдберрисовского обработчика статусов. Селлер мог сдать через
+    фулфилмент сотню заказов Ozon, они уезжали, и в счёт не попадало ни копейки.
+    Момент начисления — подтверждение самого Ozon («идёт приёмка» в пункте
+    приёма), а не наша кнопка.
+    """
+    ctx = await _seed(db_session)
+    ctx.tenant.billing_enabled_from = date(2020, 1, 1)
+    await db_session.commit()
+    await _sync(db_session, ctx, [posting_row()])
+    await _sync(db_session, ctx, [posting_row(status="acceptance_in_progress")])
+
+    order = await _order(db_session)
+    assert order.status == "sorted"
+    charges = list(
+        (
+            await db_session.execute(
+                select(BillingLedgerEntry).where(
+                    BillingLedgerEntry.source_type == "fbs_order",
+                    BillingLedgerEntry.source_id == order.id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert sorted(entry.service_code for entry in charges) == ["fbs_order", "packing"]
+
+    # Повторный проход опроса не задваивает деньги.
+    await _sync(db_session, ctx, [posting_row(status="acceptance_in_progress")])
+    repeated = list(
+        (
+            await db_session.execute(
+                select(BillingLedgerEntry).where(
+                    BillingLedgerEntry.source_type == "fbs_order",
+                    BillingLedgerEntry.source_id == order.id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(repeated) == len(charges)
+
+
 @pytest.mark.parametrize(
     ("status", "substatus", "expected"),
     [
         ("awaiting_packaging", None, FBS_ORDER_STATUS_NEW),
+        ("acceptance_in_progress", None, "sorted"),
         ("awaiting_deliver", "posting_in_carriage", FBS_ORDER_STATUS_EXTERNAL_PROCESSING),
         ("awaiting_approve", None, FBS_ORDER_STATUS_EXTERNAL_PROCESSING),
         ("awaiting_verification", None, FBS_ORDER_STATUS_EXTERNAL_PROCESSING),
