@@ -17729,11 +17729,6 @@
             "type": "string",
             "title": "Created At"
           },
-          "marketplace_label": {
-            "type": "string",
-            "title": "Marketplace Label",
-            "default": "Wildberries"
-          },
           "seller_id": {
             "anyOf": [
               {
