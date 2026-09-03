@@ -357,13 +357,13 @@ export function FfReportsPage({ token, onOpenInbound, sellers = [], warehouses =
     <ScreenHeader title="Остатки и движения" purpose="Текущий остаток и складские движения за выбранный период." />
     <FilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Название, артикул продавца, SKU, ШК" testId="ff-reports-filters">
       <MoscowDateRangeInput label="Период" startLabel="с" endLabel="по" value={{ start: dateFrom, end: dateTo }} onChange={(value) => { setDateFrom(value.start ?? dateFrom); setDateTo(value.end ?? dateTo) }} maxDays={366} testId="ff-reports-range" />
-      <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', alignSelf: { sm: 'flex-end' }, pb: { sm: 0.25 } }} aria-label="Быстрый период">
+      <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', flexShrink: 0, alignSelf: { sm: 'flex-end' }, pb: { sm: 0.25 } }} aria-label="Быстрый период">
         {([['today', 'Сегодня'], ['seven_days', '7 дней'], ['thirty_days', '30 дней'], ['current_month', 'Этот месяц'], ['previous_month', 'Прошлый месяц']] as const).map(([key, label]) => (
           <SecondaryAction key={key} onClick={() => { const range = sellerQuickRange(key); setDateFrom(range.start); setDateTo(range.end) }}>{label}</SecondaryAction>
         ))}
       </Stack>
-      {warehouses.length > 1 ? <TextField select size="small" label="Склад" value={warehouseId} onChange={event => setWarehouseId(event.target.value)} data-testid="ff-reports-warehouse"><MenuItem value="">Все склады</MenuItem>{warehouses.map(warehouse => <MenuItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</MenuItem>)}</TextField> : null}
-      {sellers.length > 0 ? <TextField select size="small" label="Селлер" value={sellerId} onChange={event => setSellerId(event.target.value)} data-testid="ff-reports-seller"><MenuItem value="">Все селлеры</MenuItem>{sellers.map(seller => <MenuItem key={seller.id} value={seller.id}>{seller.name}</MenuItem>)}</TextField> : null}
+      {warehouses.length > 1 ? <TextField select size="small" label="Склад" sx={{ minWidth: 180 }} value={warehouseId} onChange={event => setWarehouseId(event.target.value)} data-testid="ff-reports-warehouse"><MenuItem value="">Все склады</MenuItem>{warehouses.map(warehouse => <MenuItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</MenuItem>)}</TextField> : null}
+      {sellers.length > 0 ? <TextField select size="small" label="Селлер" sx={{ minWidth: 200 }} value={sellerId} onChange={event => setSellerId(event.target.value)} data-testid="ff-reports-seller"><MenuItem value="">Все селлеры</MenuItem>{sellers.map(seller => <MenuItem key={seller.id} value={seller.id}>{seller.name}</MenuItem>)}</TextField> : null}
     </FilterBar>
     {periodError ? <ErrorNotice testId="ff-reports-period-error">{periodError}</ErrorNotice> : null}
     {summaryError ? <ErrorNotice testId="ff-reports-summary-error">Не удалось загрузить сводку. Повторите попытку. <PrimaryAction onClick={() => void retryOverview()}>Повторить</PrimaryAction></ErrorNotice> : <>

@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
-
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
