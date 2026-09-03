@@ -21,6 +21,10 @@ export type FoundPlace = {
   containerKind: 'pallet' | 'box' | 'cargo_place' | null
   containerId: string | null
   scanId: string
+  /** Документ, в котором сделан скан. Без него недоставленная находка при
+   *  повторе уходила в тот пересчёт, который открыт сейчас: оператор возвращался
+   *  в список, открывал другой черновик — и чужая находка попадала туда. */
+  countId: string
 }
 
 export type FoundQueueDeps<T> = {

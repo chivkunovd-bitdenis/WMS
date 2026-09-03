@@ -227,15 +227,23 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
    * серверная защита от повтора его не узнавала. Теперь повторяем мы сами и тем
    * же идентификатором.
    */
+  // Снимок документа на момент отправки скана. Без него слияние сравнивало
+  // текущее состояние с самим собой, ничего не находило и молча затирало
+  // количества, введённые кладовщиком, пока летел запрос.
+  const sentSnapshotRef = useRef<InventoryCount | null>(null)
   const foundQueueRef = useRef<ReturnType<typeof createFoundQueue<FoundResponse>> | null>(null)
   if (foundQueueRef.current === null) {
     foundQueueRef.current = createFoundQueue<FoundResponse>({
       send: async (place) => {
         const live = countRef.current
         if (!live || live.status !== 'draft') throw new Error('Документ уже закрыт')
+        if (live.id !== place.countId) {
+          throw new Error('Находка относится к другому документу пересчёта')
+        }
         // Кладём на сервер то, что оператор насчитал: автосохранения в экране
         // нет, факт живёт в состоянии React до нажатия «Сохранить».
         await saveCountActuals(token, live, touchedRef.current)
+        sentSnapshotRef.current = live
         return await recordCountFound(token, live.id, place)
       },
       onApplied: (found) => {
@@ -243,7 +251,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
           if (!live) return found.count
           // Пока летел запрос, кладовщик продолжал сканировать. Эти пики есть
           // на экране, но не в том снимке, который мы отправили.
-          return mergeInFlightActuals(found.count, live, live)
+          return mergeInFlightActuals(found.count, sentSnapshotRef.current ?? live, live)
         })
         setNote(found.notice)
       },
@@ -255,10 +263,12 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     })
   }
 
-  function recordFound(place: FoundPlace) {
+  function recordFound(place: Omit<FoundPlace, 'countId'>) {
     if (!count || count.status !== 'draft') return
     setError(null)
-    foundQueueRef.current?.push(place)
+    // Находка принадлежит тому документу, в котором её отсканировали, а не
+    // тому, который открыт в момент повторной отправки.
+    foundQueueRef.current?.push({ ...place, countId: count.id })
   }
 
   async function createContainer(kind: 'pallet' | 'box' | 'cargo_place') {

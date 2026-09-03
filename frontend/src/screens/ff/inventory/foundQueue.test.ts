@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createFoundQueue, type FoundPlace } from './foundQueue'
 
-function place(scanId: string): FoundPlace {
-  return { barcodes: ['x'], cellId: null, containerKind: null, containerId: null, scanId }
+function place(scanId: string, countId = 'count-1'): FoundPlace {
+  return { barcodes: ['x'], cellId: null, containerKind: null, containerId: null, scanId, countId }
 }
 
 const noWait = () => Promise.resolve()
@@ -102,5 +102,14 @@ describe('очередь находок', () => {
 
     expect(Math.max(...seen)).toBeGreaterThanOrEqual(2)
     expect(seen[seen.length - 1]).toBe(0)
+  })
+})
+
+describe('находка помнит свой документ', () => {
+  it('несёт id пересчёта, в котором её отсканировали', () => {
+    // Недоставленная находка при повторе раньше уходила в тот документ, который
+    // открыт сейчас: оператор возвращался в список, открывал другой черновик —
+    // и чужая находка попадала туда.
+    expect(place('scan-1', 'count-7').countId).toBe('count-7')
   })
 })
