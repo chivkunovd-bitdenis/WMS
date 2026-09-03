@@ -274,6 +274,13 @@ async def order_history(
     }
 
 
+CONTAINER_LABELS: dict[str, str] = {
+    "cargo_place": "грузоместа",
+    "box": "короба",
+    "pallet": "палеты",
+    "trbx": "короба поставки",
+}
+
 SUPPLY_STATUS_LABELS: dict[str, str] = {
     "draft": "черновик",
     "assembling": "сборка",
@@ -411,25 +418,19 @@ async def supply_history(
     if created is not None:
         events.append({**created, "items": []})
 
-    # Заказы в поставке: добавление, снятие, отмена.
+    # Заказы в поставке: добавление и снятие идут пачкой в одну секунду, поэтому
+    # склеиваются в одну строку — иначе четыре заказа дают четыре одинаковых.
+    order_moves: dict[tuple[str, str, str | None], list[str]] = defaultdict(list)
     for event in supply_events:
         payload = event.payload_json or {}
         if event.event_type in {"line_added", "line_removed"}:
             order_uuid = payload.get("fbs_order_id")
-            number = numbers.get(uuid.UUID(order_uuid)) if order_uuid else None
-            title = "Заказ добавлен в поставку" if event.event_type == "line_added" else (
-                "Заказ убран из поставки"
-            )
-            events.append(
-                {
-                    "at": event.occurred_at.isoformat(),
-                    "kind": "order",
-                    "title": title if number is None else f"{title}: {number}",
-                    "actor": actors.get(event.actor_user_id) if event.actor_user_id else None,
-                    "details": None,
-                    "items": [],
-                }
-            )
+            number = numbers.get(uuid.UUID(str(order_uuid))) if order_uuid else None
+            move_actor = actors.get(event.actor_user_id) if event.actor_user_id else None
+            key = (_bucket(event.occurred_at), event.event_type, move_actor)
+            # Пустая строка держит место события, у которого номер заказа не
+            # записан: счётчик всё равно должен быть честным.
+            order_moves[key].append(number or "")
         elif event.event_type == "status_changed":
             before = SUPPLY_STATUS_LABELS.get(str(payload.get("from")), payload.get("from") or "—")
             after = SUPPLY_STATUS_LABELS.get(str(payload.get("to")), payload.get("to") or "—")
@@ -444,6 +445,24 @@ async def supply_history(
                 }
             )
 
+    for (move_moment, move_type, move_actor), move_items in order_moves.items():
+        title = (
+            "Заказ добавлен в поставку"
+            if move_type == "line_added"
+            else "Заказ убран из поставки"
+        )
+        named = [item for item in move_items if item]
+        events.append(
+            {
+                "at": datetime.fromisoformat(move_moment).isoformat(),
+                "kind": "order",
+                "title": title if len(move_items) <= 1 else f"{title} ({len(move_items)})",
+                "actor": move_actor,
+                "details": named[0] if len(named) == 1 else None,
+                "items": named if len(named) > 1 else [],
+            }
+        )
+
     for order in orders:
         if order.status == "cancelled":
             row = _event(order.updated_at, "cancelled", f"Заказ отменён: {numbers[order.id]}")
@@ -456,10 +475,9 @@ async def supply_history(
         if pick.picked_at is None:
             continue
         actor = actors.get(pick.picked_by_user_id) if pick.picked_by_user_id else None
+        container = pick.source_container_kind
         where = (
-            f"из тары {pick.source_container_kind}"
-            if pick.source_container_kind
-            else "с ячейки"
+            f"из {CONTAINER_LABELS.get(container, container)}" if container else "с ячейки"
         )
         picked[(_bucket(pick.picked_at), actor, where)].append(
             numbers.get(pick.fbs_order_id, "—")
