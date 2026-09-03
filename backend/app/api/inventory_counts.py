@@ -801,6 +801,52 @@ async def record_inventory_count_found(
     )
 
 
+class InventoryCountManualLineIn(BaseModel):
+    """Добавление товара руками через модалку выбора — кнопка «Добавить товар»."""
+
+    product_id: uuid.UUID
+    quantity: int = Field(ge=1, le=1_000_000_000)
+    # Тот же контракт адреса, что у находки (InventoryCountFoundIn): выделили
+    # тару — адрес из её карточки, выделили ячейку — берём её, ничего не
+    # выделили — зона сортировки. Резолвит сервер, не экран.
+    cell_id: uuid.UUID | None = None
+    container_kind: Literal["pallet", "box", "cargo_place"] | None = None
+    container_id: uuid.UUID | None = None
+
+
+@router.post("/{count_id}/manual-line", response_model=InventoryCountFoundOut)
+async def add_inventory_count_manual_line(
+    count_id: uuid.UUID,
+    body: InventoryCountManualLineIn,
+    user: Annotated[User, Depends(require_inventory_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryCountFoundOut:
+    """Добавляет товар, которого в документе нет, — по каталогу, а не сканом.
+
+    Пара к «/found»: там строку находят по штрихкоду, здесь — оператор ищет
+    товар в модалке выбора (нет штрихкода под рукой, или он стёрт) и вводит
+    количество сразу, а не по одной штуке пиком.
+    """
+    try:
+        result = await service.add_manual_line(
+            session,
+            user.tenant_id,
+            count_id,
+            product_id=body.product_id,
+            quantity=body.quantity,
+            cell_id=body.cell_id,
+            container_kind=body.container_kind,
+            container_id=body.container_id,
+        )
+    except service.InventoryCountError as exc:
+        raise _http_error(exc) from None
+    return InventoryCountFoundOut(
+        count=await _detail_out(session, result.count),
+        expected_quantity=result.expected_quantity,
+        notice=result.notice,
+    )
+
+
 @router.post("/{count_id}/post", response_model=InventoryCountPostOut)
 async def post_inventory_count(
     count_id: uuid.UUID,

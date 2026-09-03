@@ -352,6 +352,43 @@ export async function recordCountFound(
   return { count: toCount(body.count), expectedQuantity: body.expected_quantity, notice: body.notice }
 }
 
+/**
+ * Добавить товар руками — кнопка «Добавить товар».
+ *
+ * Пара к recordCountFound: там строку находят по штрихкоду, здесь оператор
+ * выбрал товар в модалке (штрихкода под рукой нет) и ввёл число сразу.
+ */
+export async function addManualLine(
+  token: string,
+  countId: string,
+  place: {
+    productId: string
+    quantity: number
+    cellId: string | null
+    containerKind: 'pallet' | 'box' | 'cargo_place' | null
+    containerId: string | null
+  },
+): Promise<{ count: InventoryCount; expectedQuantity: number; notice: string }> {
+  const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/manual-line`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
+    body: JSON.stringify({
+      product_id: place.productId,
+      quantity: place.quantity,
+      cell_id: place.cellId,
+      container_kind: place.containerKind,
+      container_id: place.containerId,
+    }),
+  })
+  if (!res.ok) throw new InventoryHttpError(await readApiErrorMessage(res), res.status)
+  const body = (await res.json()) as {
+    count: ApiDetail
+    expected_quantity: number
+    notice: string
+  }
+  return { count: toCount(body.count), expectedQuantity: body.expected_quantity, notice: body.notice }
+}
+
 /** Положить введённый факт. Остатки не трогает: документ остаётся черновиком. */
 export async function saveCountActuals(
   token: string,
