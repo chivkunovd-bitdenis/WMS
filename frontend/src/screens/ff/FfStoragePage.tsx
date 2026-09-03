@@ -319,7 +319,7 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
   }
 
   return <Box data-testid="ff-storage-page" sx={{ minWidth: 0, width: { xs: 'calc(100vw - 48px)', md: 'calc(100vw - 308px)' }, maxWidth: '100%' }}>
-    <ScreenHeader title="Хранение" purpose="Рассчитайте фактическое хранение по селлерам и зафиксируйте месяц для начисления" />
+    <ScreenHeader title="Хранение" purpose="Проверьте фактическое хранение по селлерам и внесите недостающие габариты — начисления считаются каждую ночь" />
     <FilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Селлер, SKU или артикул продавца" testId="storage-filters">
       <DatePicker
         label="Месяц"
