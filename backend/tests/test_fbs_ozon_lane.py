@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.fbs_orders import _run_blocked_ozon_fake
+from app.core.settings import settings
 from app.db.session import SessionLocal, engine
 from app.models import Base
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
@@ -243,6 +244,7 @@ async def test_ozon_pdf_label_is_stored_and_served_as_a_pdf(
     формат, и путь работает целиком: PDF от Ozon кладётся на диск как PDF и
     отдаётся ручкой печати с тем же типом содержимого.
     """
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", True)
     tenant, supply, order = await _ozon_supply_with_one_order(db_session)
     wb_fetch = AsyncMock(side_effect=AssertionError("WB fetch must not run for Ozon"))
     monkeypatch.setattr(print_asset_svc, "fetch_marketplace_order_stickers", wb_fetch)
@@ -303,6 +305,7 @@ async def test_ozon_label_before_handoff_explains_itself_instead_of_failing_blan
     поставки их нет, и оператор должен прочитать именно это, а не «этикетка не
     найдена в ответе Ozon».
     """
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", True)
     tenant, supply, order = await _ozon_supply_with_one_order(db_session)
     monkeypatch.setattr(
         print_asset_svc,
@@ -2288,3 +2291,45 @@ async def test_wb_background_tracking_ignores_ozon_supplies(
     assert result.supplies_synced == 0
     assert result.orders_updated == 0
     forbidden.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_ozon_labels_are_not_requested_while_the_live_transport_is_off(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Выключенный транспорт — это отказ, а не «этикетка не найдена в ответе Ozon».
+
+    На локальном фейке список этикеток пуст, и без явной проверки рубильника
+    оператор прочитал бы, что Ozon чего-то не вернул, — про Ozon, которого никто
+    не спрашивал.
+    """
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", False)
+    tenant, supply, order = await _ozon_supply_with_one_order(db_session)
+    monkeypatch.setattr(
+        print_asset_svc,
+        "fetch_marketplace_order_stickers",
+        AsyncMock(side_effect=AssertionError("WB fetch must not run for Ozon")),
+    )
+    monkeypatch.setattr(
+        print_asset_svc,
+        "build_ozon_provider",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("provider must not be built")),
+    )
+
+    batch = await print_asset_svc.request_supply_print_batch(
+        db_session,
+        tenant.id,
+        supply.id,
+        kind="order_sticker",
+        order_ids=[order.id],
+        retry_missing=False,
+        http_client=AsyncMock(),
+    )
+
+    assert batch.ready == 0
+    assert batch.failed == 1
+    assert batch.order_errors[0].code == "ozon_live_labels_blocked"
+    assert "не включён" in batch.order_errors[0].message
+    await db_session.refresh(order)
+    assert order.sticker_status == STICKER_STATUS_ERROR

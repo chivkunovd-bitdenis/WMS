@@ -66,7 +66,7 @@ from app.services.marketplace_provider import (
     MarketplaceProviderError,
     provider_error_message,
 )
-from app.services.ozon_provider_factory import build_ozon_provider
+from app.services.ozon_provider_factory import build_ozon_provider, ozon_live_api_enabled
 from app.services.wildberries_client import (
     WildberriesClientError,
     fetch_marketplace_order_stickers,
@@ -143,6 +143,11 @@ def ozon_order_label_fetcher(
     """
 
     async def fetch(external_order_ids: list[str]) -> list[dict[str, Any]]:
+        # Рубильник проверяем явно. Иначе на выключенном транспорте вернётся
+        # локальный фейк с пустым списком, и оператор прочитает «этикетка не
+        # найдена в ответе Ozon» про Ozon, которого никто не спрашивал.
+        if not ozon_live_api_enabled():
+            raise MarketplaceProviderError("ozon", None, {}, code="ozon_live_labels_blocked")
         try:
             client_id, api_key = await MarketplaceAccountService(session).stored_credentials(
                 tenant_id,
