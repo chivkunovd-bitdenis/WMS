@@ -318,25 +318,23 @@ CATCH_UP_DAYS = 14
 async def missing_charge_days(
     session: AsyncSession, tenant_id: uuid.UUID, *, until: date, depth: int = CATCH_UP_DAYS
 ) -> list[date]:
-    """Сутки за последние `depth` дней, по которым начислений так и не появилось."""
+    """Сутки, которые ночная задача обязана пересмотреть, — весь догоняемый хвост.
+
+    Раньше сутки считались закрытыми, если по арендатору нашлась хоть одна
+    строка за этот день. Пропуск при этом бывает частичным: у товара не было
+    обмера, и его строка не появилась, а у соседнего появилась — и день
+    выглядел посчитанным. Оператор вносил габариты, но за прошлые сутки не
+    платили уже никогда, потому что никто к ним не возвращался.
+
+    Начисление адресуется складом, товаром и датой, поэтому повторный проход по
+    суткам не создаёт вторую строку — он дописывает только недостающие. Значит
+    честнее пересмотреть весь хвост, чем угадывать по одной строке, полон ли он.
+    """
     first = until - timedelta(days=depth - 1)
-    charged = set(
-        (
-            await session.scalars(
-                select(BillingLedgerEntry.event_kind).where(
-                    BillingLedgerEntry.tenant_id == tenant_id,
-                    BillingLedgerEntry.service_code == STORAGE_SERVICE_CODE,
-                    BillingLedgerEntry.source_type == SOURCE_TYPE,
-                    BillingLedgerEntry.occurred_at >= _day_bounds(first)[0],
-                )
-            )
-        ).all()
-    )
     days: list[date] = []
     current = first
     while current <= until:
-        if storage_day_event_kind(current) not in charged:
-            days.append(current)
+        days.append(current)
         current += timedelta(days=1)
     return days
 

@@ -337,10 +337,48 @@ async def supply_history(
     if supply is None:
         raise FbsOrderHistoryError("fbs_supply_not_found")
 
-    orders = list(
-        (await session.scalars(select(FbsOrder).where(FbsOrder.supply_id == supply_id))).all()
+    # События поставки читаем первыми: в них лежат и заказы, которых в поставке
+    # больше нет. Отменённый заказ отвязывается от поставки, и если брать только
+    # привязанные, его добавление и снятие остаются в истории безымянными.
+    supply_events = list(
+        (
+            await session.scalars(
+                select(DocumentEvent).where(
+                    DocumentEvent.tenant_id == tenant_id,
+                    DocumentEvent.document_type == DOCUMENT_TYPE_FBS_SUPPLY,
+                    DocumentEvent.document_id == supply_id,
+                )
+            )
+        ).all()
     )
-    order_ids = [order.id for order in orders]
+    mentioned_ids: set[uuid.UUID] = set()
+    for event in supply_events:
+        raw_order_id = (event.payload_json or {}).get("fbs_order_id")
+        if raw_order_id is None:
+            continue
+        try:
+            mentioned_ids.add(uuid.UUID(str(raw_order_id)))
+        except ValueError:
+            continue
+
+    order_filter = FbsOrder.supply_id == supply_id
+    if mentioned_ids:
+        order_filter = order_filter | FbsOrder.id.in_(mentioned_ids)
+    orders = list(
+        (
+            await session.scalars(
+                select(FbsOrder).where(FbsOrder.tenant_id == tenant_id, order_filter)
+            )
+        ).all()
+    )
+    # Подбор, упаковку и маркировку показываем только по заказам, которые в
+    # поставке сейчас: заказ, уехавший в другую поставку, унёс туда и свою
+    # работу, и её нельзя приписывать этой. Отвязанные при отмене остаются —
+    # у них поставки нет вовсе, и их работа была сделана здесь.
+    order_ids = [
+        order.id for order in orders
+        if order.supply_id == supply_id or order.supply_id is None
+    ]
     numbers = {order.id: str(order.wb_order_id) for order in orders}
 
     picks = (
@@ -392,17 +430,6 @@ async def supply_history(
         (
             await session.scalars(
                 select(FbsPackingBox).where(FbsPackingBox.supply_id == supply_id)
-            )
-        ).all()
-    )
-    supply_events = list(
-        (
-            await session.scalars(
-                select(DocumentEvent).where(
-                    DocumentEvent.tenant_id == tenant_id,
-                    DocumentEvent.document_type == DOCUMENT_TYPE_FBS_SUPPLY,
-                    DocumentEvent.document_id == supply_id,
-                )
             )
         ).all()
     )
@@ -464,6 +491,11 @@ async def supply_history(
         )
 
     for order in orders:
+        # Заказ, уехавший в другую поставку, отменяли уже не здесь. Отменённый
+        # же отвязывается от поставки совсем — его отмена принадлежит этой
+        # истории, и без него она обрывалась на «заказ убран».
+        if order.supply_id is not None and order.supply_id != supply_id:
+            continue
         if order.status == "cancelled":
             row = _event(order.updated_at, "cancelled", f"Заказ отменён: {numbers[order.id]}")
             if row is not None:

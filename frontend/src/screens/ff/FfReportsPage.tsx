@@ -31,6 +31,10 @@ type ReportWarning =
   | { code: 'reporting_dimensions_legacy'; count: number }
 type Overview = {
   current_balance: number
+  /** Остаток на начало периода. Считается сервером откатом сегодняшнего
+   *  остатка на все движения с начала периода: на прошлом периоде разность
+   *  «остаток − приход + расход» давала цифру, которой на складе не было. */
+  opening_balance?: number
   in_qty: number
   out_qty: number
   comparison: { previous_out_qty: number; change_percent: number | null; change: number }
@@ -89,6 +93,9 @@ type MovementRow = {
   at: string
   operation: string
   quantity: number
+  product_id?: string | null
+  product_name?: string | null
+  sku_code?: string | null
   document: {
     kind: 'inbound' | 'marketplace_unload' | 'fbs_supply' | 'fbs_order'
     id: string
@@ -149,6 +156,9 @@ export function FfReportsPage({ token, onOpenInbound, sellers = [], warehouses =
   const [movements, setMovements] = useState<MovementRow[]>([])
   const [movementsLoading, setMovementsLoading] = useState(false)
   const [movementsError, setMovementsError] = useState(false)
+  const [movementsTruncated, setMovementsTruncated] = useState(false)
+  const [movementsLimit, setMovementsLimit] = useState(0)
+  const [expandedOperation, setExpandedOperation] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const groupingRef = useRef<Grouping>('product')
@@ -233,19 +243,32 @@ export function FfReportsPage({ token, onOpenInbound, sellers = [], warehouses =
     }
   }, [params, token])
 
-  const loadMovements = useCallback(async (productId: string, scopedSellerId: string) => {
+  // Раскрыть можно и товар, и вид движения: в группировке «по видам» третьего
+  // уровня не было вовсе, потому что ручка требовала товар.
+  const loadMovements = useCallback(async (
+    scope: { productId?: string; operation?: string },
+    scopedSellerId: string,
+  ) => {
     setMovementsLoading(true)
     setMovementsError(false)
+    setMovementsTruncated(false)
     try {
       const query = params()
-      query.set('product_id', productId)
+      if (scope.productId) query.set('product_id', scope.productId)
+      if (scope.operation) query.set('operation', scope.operation)
       if (scopedSellerId) query.set('seller_id', scopedSellerId)
       const response = await fetch(apiUrl(`/reports/inventory/movements?${query.toString()}`), {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!response.ok) throw new Error('movements')
-      const payload = (await response.json()) as { rows?: MovementRow[] }
+      const payload = (await response.json()) as {
+        rows?: MovementRow[]
+        truncated?: boolean
+        limit?: number
+      }
       setMovements(payload.rows ?? [])
+      setMovementsTruncated(Boolean(payload.truncated))
+      setMovementsLimit(payload.limit ?? 0)
     } catch {
       setMovementsError(true)
       setMovements([])
@@ -342,11 +365,35 @@ export function FfReportsPage({ token, onOpenInbound, sellers = [], warehouses =
   const metrics = [
     // Остаток на начало показываем явно: без него «приход 50, расход 2,
     // остаток 58» читается как ошибка расчёта, хотя арифметика верна.
-    { key: 'opening', label: 'Было на начало', value: overview == null ? null : overview.current_balance - overview.in_qty + overview.out_qty },
+    { key: 'opening', label: 'Было на начало', value: overview?.opening_balance ?? null },
     { key: 'inbound', label: 'Приход за период', value: overview?.in_qty ?? null },
     { key: 'outbound', label: 'Расход за период', value: overview?.out_qty ?? null },
     { key: 'balance', label: 'Остаток сейчас', value: overview?.current_balance ?? null },
   ]
+  // Одна и та же таблица движений для обоих третьих уровней: по товару и по
+  // виду движения. Во втором случае товар обязателен — в пачке их много.
+  const movementsTable = (options: { showProduct: boolean }) => movementsError
+    ? <ErrorNotice testId="ff-reports-movements-error">Не удалось загрузить движения</ErrorNotice>
+    : <Stack spacing={1}>
+        {movementsTruncated ? <Typography variant="caption" color="text.secondary" data-testid="ff-reports-movements-truncated">
+          Показаны первые {movementsLimit} движений из большего числа. Сузьте период или фильтр, чтобы увидеть остальные.
+        </Typography> : null}
+        <DataTable<MovementRow> columns={[
+          { key: 'at', header: 'Когда', width: 190, render: move => <TextCell value={new Date(move.at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} width={160} /> },
+          ...(options.showProduct ? [{ key: 'product', header: 'Товар', width: 260, render: (move: MovementRow) => <TextCell value={move.product_name ?? '—'} width={250} /> }] : []),
+          { key: 'operation', header: 'Движение', width: 260, render: (move: MovementRow) => <TextCell value={move.operation} /> },
+          { key: 'document', header: 'Документ', width: 200, render: (move: MovementRow) => {
+              const doc = move.document
+              if (!doc) return <TextCell value="—" />
+              if (doc.kind === 'inbound') return <Link component="button" type="button" sx={{ textAlign: 'left' }} onClick={() => onOpenInbound?.(doc.id)}>{doc.number}</Link>
+              if (doc.kind === 'marketplace_unload') return <Link component={RouterLink} to={`/app/ff/mp-shipments?open_mp=${doc.id}`} sx={{ textAlign: 'left' }}>{doc.number}</Link>
+              if (doc.kind === 'fbs_supply') return <Link component={RouterLink} to={`/app/ff/fbs?supply_id=${doc.id}`} sx={{ textAlign: 'left' }}>{doc.number}</Link>
+              return <TextCell value={doc.number} />
+            } },
+          { key: 'qty', header: 'Штук', align: 'right', width: 110, render: (move: MovementRow) => <QtyCell value={move.quantity} /> },
+        ]} rows={movements} getRowKey={move => move.id} loading={movementsLoading} empty={{ title: 'Движений за период нет' }} testId="ff-reports-movements" />
+      </Stack>
+
   const hasIntegrityError = rows.some((row) => row.integrity_error)
   const csvDisabledReason = periodError
     || (csvLoading ? 'Файл формируется' : '')
@@ -403,7 +450,17 @@ export function FfReportsPage({ token, onOpenInbound, sellers = [], warehouses =
               { key: 'operation', header: 'Движение', width: 320, render: op => <TextCell value={op.operation} width={310} /> },
               { key: 'in', header: 'Приход', align: 'right', width: 110, render: op => <QtyCell value={op.in_qty} /> },
               { key: 'out', header: 'Расход', align: 'right', width: 110, render: op => <QtyCell value={op.out_qty} /> },
-            ]} rows={sellerOperations} getRowKey={op => op.operation} loading={sellerDetailLoading} empty={{ title: 'Движений за период нет' }} testId="ff-reports-seller-operations" />
+            ]} rows={sellerOperations} getRowKey={op => op.operation} loading={sellerDetailLoading} empty={{ title: 'Движений за период нет' }} testId="ff-reports-seller-operations" expand={{
+              isExpanded: op => expandedOperation === op.operation,
+              label: op => `Показать движения: ${op.operation}`,
+              onToggle: op => {
+                if (expandedOperation === op.operation) { setExpandedOperation(null); return }
+                setExpandedOperation(op.operation)
+                setMovements([])
+                void loadMovements({ operation: op.operation }, row.seller_id)
+              },
+              render: () => movementsTable({ showProduct: true }),
+            }} />
           : <DataTable<Row> columns={[
               { key: 'product', header: 'Товар', width: 320, render: product => <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', minWidth: 0 }}><ProductPhotoThumb src={product.photo_url} alt={product.product_name} size={40} previewSize={280} testId={`ff-reports-photo-${product.product_id}`} /><Stack sx={{ minWidth: 0 }}><Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{product.product_name}</Typography><Typography variant="caption" color="text.secondary" noWrap>{[product.sku_code, product.wb_vendor_code].filter(Boolean).join(' · ')}</Typography></Stack></Stack> },
               { key: 'barcode', header: 'ШК', width: 150, render: product => <TextCell value={product.wb_barcode ?? '—'} width={140} /> },
@@ -417,23 +474,9 @@ export function FfReportsPage({ token, onOpenInbound, sellers = [], warehouses =
                 if (expandedProduct === product.product_id) { setExpandedProduct(null); return }
                 setExpandedProduct(product.product_id)
                 setMovements([])
-                void loadMovements(product.product_id, row.seller_id)
+                void loadMovements({ productId: product.product_id }, row.seller_id)
               },
-              render: () => movementsError
-                ? <ErrorNotice testId="ff-reports-movements-error">Не удалось загрузить движения товара</ErrorNotice>
-                : <DataTable<MovementRow> columns={[
-                    { key: 'at', header: 'Когда', width: 190, render: move => <TextCell value={new Date(move.at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} width={160} /> },
-                    { key: 'operation', header: 'Движение', width: 260, render: move => <TextCell value={move.operation} /> },
-                    { key: 'document', header: 'Документ', width: 200, render: move => {
-                        const doc = move.document
-                        if (!doc) return <TextCell value="—" />
-                        if (doc.kind === 'inbound') return <Link component="button" type="button" sx={{ textAlign: 'left' }} onClick={() => onOpenInbound?.(doc.id)}>{doc.number}</Link>
-                        if (doc.kind === 'marketplace_unload') return <Link component={RouterLink} to={`/app/ff/mp-shipments?open_mp=${doc.id}`} sx={{ textAlign: 'left' }}>{doc.number}</Link>
-                        if (doc.kind === 'fbs_supply') return <Link component={RouterLink} to={`/app/ff/fbs?supply_id=${doc.id}`} sx={{ textAlign: 'left' }}>{doc.number}</Link>
-                        return <TextCell value={doc.number} />
-                      } },
-                    { key: 'qty', header: 'Штук', align: 'right', width: 110, render: move => <QtyCell value={move.quantity} /> },
-                  ]} rows={movements} getRowKey={move => move.id} loading={movementsLoading} empty={{ title: 'Движений по товару за период нет' }} testId="ff-reports-movements" />,
+              render: () => movementsTable({ showProduct: false }),
             }} />,
     }} />
 

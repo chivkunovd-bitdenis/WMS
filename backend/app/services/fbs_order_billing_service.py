@@ -60,6 +60,25 @@ async def _positions(session: AsyncSession, order: FbsOrder) -> list[tuple[uuid.
     return [(order.product_id, 1)]
 
 
+def order_work_moment(order: FbsOrder) -> datetime:
+    """Когда склад сделал работу по заказу, а не когда мы об этом узнали.
+
+    Раньше здесь стоял момент обработки, и это тихо ломало деньги: опрос
+    статусов приносит подтверждения WB пачками, в том числе по заказам
+    двухнедельной давности, — и вся плата за две недели падала одним днём. На
+    боевой базе так получилось 1577 записей «Империи ФФ», все датированные
+    одним числом.
+
+    Порядок источников: когда упаковали, иначе когда подобрали, иначе когда
+    заказ появился у маркетплейса. Первые два — сама работа склада, третий
+    заполнен всегда и отличается от неё на день-два.
+    """
+    for moment in (order.packed_at, order.picked_at, order.created_at_wb):
+        if moment is not None:
+            return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
+    return datetime.now(UTC)
+
+
 async def record_fbs_order_confirmed(
     session: AsyncSession,
     order: FbsOrder,
@@ -71,7 +90,7 @@ async def record_fbs_order_confirmed(
         return
     if order.seller_id is None:
         return
-    moment = occurred_at or datetime.now(UTC)
+    moment = occurred_at or order_work_moment(order)
     positions = await _positions(session, order)
     quantity = sum(count for _, count in positions)
 

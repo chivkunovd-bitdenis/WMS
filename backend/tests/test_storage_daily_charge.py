@@ -264,7 +264,96 @@ async def test_missed_night_is_charged_on_the_next_run(async_client: AsyncClient
     async with SessionLocal() as session:
         assert await charge_storage_day(session, tenant_id, day=before) == 1
 
+    # Посчитанные сутки остаются в списке пересмотра: по одной строке нельзя
+    # понять, все ли товары за них посчитаны. Второй проход по ним ничего не
+    # задваивает — строка адресуется складом, товаром и датой.
     async with SessionLocal() as session:
         pending_after = await missing_charge_days(session, tenant_id, until=yesterday)
-    assert before not in pending_after
-    assert yesterday in pending_after
+    assert before in pending_after and yesterday in pending_after
+
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=before) == 0
+    assert len([row for row in await _storage_entries(tenant_id)]) == 1
+
+
+@pytest.mark.asyncio
+async def test_product_measured_later_is_charged_for_the_days_it_was_missed(
+    async_client: AsyncClient,
+) -> None:
+    """Товар без обмера не теряет прошлые сутки: обмер внесли — ночь их добрала.
+
+    Раньше сутки считались закрытыми по первой же строке арендатора. Товар,
+    пропущенный из-за отсутствующих габаритов, не пересчитывался никогда, хотя
+    лежал на складе и место занимал.
+    """
+    tenant_id, seller_id, _product_id = await _seed(async_client)
+    yesterday = previous_moscow_day()
+    day = yesterday - timedelta(days=3)
+    long_before = datetime.combine(day - timedelta(days=10), datetime.min.time(), MOSCOW)
+
+    async with SessionLocal() as session:
+        warehouse_id = await session.scalar(
+            select(Warehouse.id).where(Warehouse.tenant_id == tenant_id)
+        )
+        assert warehouse_id is not None
+        # Второй товар лежит рядом с первым, но обмера у него нет.
+        unmeasured = Product(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            name="Unmeasured product",
+            sku_code=f"NODIM-{uuid.uuid4().hex[:8]}",
+            dimensions_source="manual",
+        )
+        session.add(unmeasured)
+        await session.flush()
+        location = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+        session.add(
+            InventoryMovement(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                warehouse_id=warehouse_id,
+                storage_location_id=location.id,
+                product_id=unmeasured.id,
+                quantity_delta=1,
+                movement_type="storage_daily_test",
+                created_at=long_before,
+            )
+        )
+        await session.commit()
+        unmeasured_id = unmeasured.id
+
+    # Ночь считает эти сутки: посчитан только товар с обмером.
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=day) == 1
+
+    # Оператор вносит габариты задним числом.
+    async with SessionLocal() as session:
+        session.add(
+            ProductDimensionEvent(
+                tenant_id=tenant_id,
+                product_id=unmeasured_id,
+                source="manual",
+                observed_at=long_before,
+                volume_liters=Decimal("2"),
+                applied=True,
+                fingerprint=f"manual-late-{uuid.uuid4().hex[:8]}",
+            )
+        )
+        product = await session.get(Product, unmeasured_id)
+        assert product is not None
+        product.volume_liters = 2
+        await session.commit()
+
+    async with SessionLocal() as session:
+        pending = await missing_charge_days(session, tenant_id, until=yesterday)
+    assert day in pending
+
+    # Следующая ночь дописывает пропущенный товар и не трогает уже посчитанный.
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=day) == 1
+    charged_products = {
+        row.source_id
+        for row in await _storage_entries(tenant_id)
+        if row.event_kind == f"storage_day:{day.isoformat()}"
+    }
+    assert len(charged_products) == 2

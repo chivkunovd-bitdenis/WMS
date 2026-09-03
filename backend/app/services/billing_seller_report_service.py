@@ -21,7 +21,6 @@ from app.models.billing import (
     BillingInvoiceV2Source,
     BillingLedgerEntry,
     BillingLedgerLine,
-    BillingTariffVersionV2,
 )
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
@@ -212,7 +211,12 @@ async def _live_price(
 async def _operation_entries(
     session: AsyncSession,
     *, tenant_id: uuid.UUID, start: datetime, end: datetime, seller_id: uuid.UUID | None, include_finance: bool,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], set[tuple[str, uuid.UUID]]]:
+    """Строки расчётов по фактам операций и деньги, начисленные по их документам.
+
+    Вторым значением возвращается набор документов, которые уже показаны здесь:
+    по ним начисления не должны второй раз приезжать старой веткой отчёта.
+    """
     cutover = await _cutover(session)
     facts_query = select(OperationFact).where(
         OperationFact.tenant_id == tenant_id, OperationFact.seller_id.is_not(None),
@@ -224,16 +228,25 @@ async def _operation_entries(
         facts_query = facts_query.where(OperationFact.seller_id == seller_id)
     facts = list((await session.scalars(facts_query.order_by(OperationFact.occurred_at.desc(), OperationFact.id.desc()))).all())
     fact_ids = {fact.id for fact in facts}
-    pricing: dict[uuid.UUID, list[BillingLedgerEntry]] = defaultdict(list)
-    if fact_ids:
-        rows = await session.execute(
-            select(OperationFactLine.operation_fact_id, BillingLedgerEntry)
-            .join(BillingLedgerLine, BillingLedgerLine.operation_fact_line_id == OperationFactLine.id)
-            .join(BillingLedgerEntry, BillingLedgerEntry.id == BillingLedgerLine.ledger_entry_id)
-            .where(BillingLedgerEntry.tenant_id == tenant_id, OperationFactLine.operation_fact_id.in_(fact_ids))
-        )
-        for fact_id, entry in rows:
-            pricing[fact_id].append(entry)
+    # Деньги ищем по документу, а не по строке операции. Раньше начисление
+    # связывалось с фактом через `operation_fact_line_id`, но это поле не
+    # заполняет ни один боевой путь — оно всегда пустое. Соединение по нему не
+    # находило ничего: суммы в отчёте считались на лету, а в счёт не попадала ни
+    # одна операция, потому что у строки не было id начисления. Документ же у
+    # факта и у начисления один и тот же: `document_type`/`document_id` против
+    # `source_type`/`source_id`.
+    charges: dict[tuple[str, uuid.UUID], list[BillingLedgerEntry]] = defaultdict(list)
+    if facts:
+        document_ids = {fact.document_id for fact in facts}
+        for entry in (
+            await session.scalars(
+                select(BillingLedgerEntry).where(
+                    BillingLedgerEntry.tenant_id == tenant_id,
+                    BillingLedgerEntry.source_id.in_(document_ids),
+                )
+            )
+        ).all():
+            charges[(entry.source_type, entry.source_id)].append(entry)
     fact_lines: dict[uuid.UUID, list[OperationFactLine]] = defaultdict(list)
     if fact_ids:
         lines = await session.scalars(
@@ -292,8 +305,22 @@ async def _operation_entries(
                 supply_names[supply_row[0]] = f"Поставка {label}"
 
     result: list[dict[str, Any]] = []
+    covered: set[tuple[str, uuid.UUID]] = set()
+    consumed: set[uuid.UUID] = set()
+    by_document: dict[tuple[str, uuid.UUID], dict[str, Any]] = {}
     for fact in facts:
-        priced = pricing.get(fact.id, [])
+        document = (fact.document_type, fact.document_id)
+        covered.add(document)
+        # Сторно берёт себе строку сторно, обычный факт — строку начисления:
+        # у отменённого документа в журнале лежат обе, и без разбора по типу
+        # запись сторно приписалась бы исходной операции.
+        wanted_entry_type = "reversal" if fact.reversal_of_id else "charge"
+        priced = [
+            entry for entry in charges[document]
+            if entry.service_code == fact.billable_service_code
+            and entry.entry_type == wanted_entry_type
+        ]
+        consumed.update(entry.id for entry in priced)
         money = sum(_amount(entry.amount) for entry in priced) if priced else None
         product_lines = fact_lines[fact.id]
         product_names = [line.product_name_snapshot for line in product_lines if line.product_name_snapshot]
@@ -323,6 +350,10 @@ async def _operation_entries(
             row["amount_kopecks"] = money
             row["unit"] = priced[0].unit if priced else None
             row["invoice_history"] = {"state": "unknown"}
+            if len(priced) == 1:
+                # Id начисления — это то, чем операцию кладут в счёт. Без него
+                # галочка выбора остаётся выключенной, даже когда деньги есть.
+                row["billing_ledger_entry_id"] = str(priced[0].id)
             if money is None and not fact.reversal_of_id:
                 single_product = (
                     product_lines[0].product_id if len(product_lines) == 1 else None
@@ -339,7 +370,39 @@ async def _operation_entries(
                     # выбрать: галочка объяснит причину сама.
                     row["priced_live"] = True
         result.append(row)
-    return result
+        by_document[document] = row
+
+    # Упаковка своего факта не пишет: она начисляется по тому же документу, что
+    # и отгрузка или заказ FBS. Без отдельной строки эти деньги не видел никто —
+    # ни отчёт, ни счёт. Строку собираем из начисления, а имя документа,
+    # товары и переход берём у факта, к которому оно относится.
+    for document, document_charges in charges.items():
+        host = by_document.get(document)
+        if host is None:
+            continue
+        for entry in document_charges:
+            if entry.id in consumed or entry.seller_id is None:
+                continue
+            consumed.add(entry.id)
+            extra: dict[str, Any] = {
+                **host,
+                "id": f"billing_entry:{entry.id}",
+                "occurred_at": _as_moscow(entry.occurred_at).isoformat(),
+                "service_code": entry.service_code,
+                "item_quantity": int(entry.quantity) if entry.unit == "item" else None,
+                "result": "reversed" if entry.entry_type == "reversal" else "completed",
+            }
+            if include_finance:
+                extra["rate_kopecks"] = entry.rate
+                extra["amount_kopecks"] = entry.amount
+                extra["unit"] = entry.unit
+                extra["billing_ledger_entry_id"] = str(entry.id)
+                extra["invoice_history"] = {"state": "unknown"}
+                extra.pop("priced_live", None)
+                if entry.amount is None:
+                    extra["result"] = "unpriced"
+            result.append(extra)
+    return result, covered
 
 
 
@@ -380,12 +443,33 @@ async def _fbs_handed_entries(
             )
         ).all()
     )
+    # Поставка, в которой заказ уехал: по ней открывается история. Без неё
+    # номер заказа в расчётах рисовался ссылкой, но нажатие ничего не делало —
+    # у строки просто не было, куда вести.
+    supplies: dict[uuid.UUID, tuple[uuid.UUID, str]] = {}
+    supply_ids = {order.supply_id for order in orders if order.supply_id is not None}
+    if supply_ids:
+        for supply_row in await session.execute(
+            select(
+                FbsSupply.id, FbsSupply.display_number, FbsSupply.wb_supply_id, FbsSupply.name
+            ).where(FbsSupply.id.in_(supply_ids))
+        ):
+            label = next(
+                (str(value).strip() for value in supply_row[1:] if str(value or "").strip()),
+                None,
+            )
+            if label is not None:
+                supplies[supply_row[0]] = (supply_row[0], label)
     rows: list[dict[str, Any]] = []
     for order in orders:
+        supply = supplies.get(order.supply_id) if order.supply_id is not None else None
         rows.append(
             {
                 "id": f"fbs_order:{order.id}",
                 "kind": "fbs_order_handed",
+                "supply": (
+                    {"id": str(supply[0]), "number": supply[1]} if supply is not None else None
+                ),
                 "seller_id": str(order.seller_id),
                 "seller_name": "",
                 "occurred_at": _as_moscow(order.updated_at).isoformat(),
@@ -406,6 +490,7 @@ async def _fbs_handed_entries(
 async def _legacy_entries(
     session: AsyncSession,
     *, tenant_id: uuid.UUID, start: datetime, end: datetime, seller_id: uuid.UUID | None, include_finance: bool,
+    exclude_documents: set[tuple[str, uuid.UUID]] | None = None,
 ) -> list[dict[str, Any]]:
     cutover = await _cutover(session)
     query = select(BillingLedgerEntry, Seller.name).outerjoin(Seller, Seller.id == BillingLedgerEntry.seller_id).where(
@@ -426,7 +511,14 @@ async def _legacy_entries(
         )).all():
             line_snapshots[line.ledger_entry_id].append(line.product_snapshot)
     result: list[dict[str, Any]] = []
+    skip = exclude_documents or set()
     for entry, seller_name in rows:
+        # Документ, у которого есть факт операции, уже показан строкой факта
+        # вместе со своими деньгами. Здесь он дал бы вторую строку и удвоил
+        # сумму — в средах, где точка отсечки не проставлена, это как раз и
+        # происходило бы после перехода на поиск денег по документу.
+        if (entry.source_type, entry.source_id) in skip:
+            continue
         snapshots = line_snapshots[entry.id]
         product_names = [str(snapshot[key]) for snapshot in snapshots for key in ("name", "product_name", "product_name_snapshot") if snapshot.get(key)]
         skus = [str(snapshot[key]) for snapshot in snapshots for key in ("sku", "sku_code", "sku_snapshot") if snapshot.get(key)]
@@ -506,62 +598,6 @@ async def _invoice_history(session: AsyncSession, *, tenant_id: uuid.UUID, selle
     return {"state": "known", "count": count}
 
 
-async def _storage_matrix_rates(
-    session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID
-) -> list[BillingTariffVersionV2]:
-    """Ставки хранения из общей матрицы: свои у селлера и общие.
-
-    Старые складские тарифы (`BillingTariffVersion` с `storage_liter_day`) здесь
-    больше не читаются: владелец 27.08.2026 решил, что все тарифы задаются в
-    Настройках, а привязка к складу отключается. Строки остаются в базе как
-    история начислений и на расчёт не влияют.
-    """
-    rows = await session.scalars(
-        select(BillingTariffVersionV2).where(
-            BillingTariffVersionV2.tenant_id == tenant_id,
-            BillingTariffVersionV2.service_code == "storage",
-            BillingTariffVersionV2.employee_user_id.is_(None),
-            BillingTariffVersionV2.product_id.is_(None),
-            BillingTariffVersionV2.enabled.is_(True),
-            (BillingTariffVersionV2.seller_id == seller_id)
-            | BillingTariffVersionV2.seller_id.is_(None),
-        )
-    )
-    return list(rows.all())
-
-
-def storage_tariff_for_day(
-    rates: list[BillingTariffVersionV2], day: date
-) -> BillingTariffVersionV2 | None:
-    """Ставка на конкретный день: своя у селлера бьёт общую независимо от дат.
-
-    Внутри одного уровня точности решает дата: побеждает последняя версия,
-    начавшаяся не позже конца этого дня.
-    """
-    day_end = datetime.combine(day, time.max, MOSCOW)
-    day_start = datetime.combine(day, time.min, MOSCOW)
-    best: tuple[int, datetime] | None = None
-    best_row: BillingTariffVersionV2 | None = None
-    for row in rates:
-        started = _as_moscow(row.valid_from_at)
-        if started > day_end:
-            continue
-        if row.valid_to_at is not None and _as_moscow(row.valid_to_at) <= day_start:
-            continue
-        specificity = 0 if row.seller_id is not None else 1
-        candidate = (specificity, started)
-        if best is None or (specificity, -started.timestamp()) < (best[0], -best[1].timestamp()):
-            best = candidate
-            best_row = row
-    return best_row
-
-
-def _storage_rate_for_day(rates: list[BillingTariffVersionV2], day: date) -> int | None:
-    """Compatibility wrapper for the report's integer amount calculation."""
-    tariff = storage_tariff_for_day(rates, day)
-    return tariff.rate if tariff is not None else None
-
-
 async def _storage_row(
     session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID, date_from: date, date_to: date, start: datetime, end: datetime, include_finance: bool,
 ) -> dict[str, Any]:
@@ -609,17 +645,30 @@ async def build_seller_report(
     session: AsyncSession, *, tenant_id: uuid.UUID, date_from: date, date_to: date, include_finance: bool, seller_id: uuid.UUID | None = None, search: str | None = None,
 ) -> dict[str, Any]:
     start, end = moscow_interval(date_from, date_to)
-    entries = await _operation_entries(session, tenant_id=tenant_id, start=start, end=end, seller_id=seller_id, include_finance=include_finance)
-    entries.extend(await _legacy_entries(session, tenant_id=tenant_id, start=start, end=end, seller_id=seller_id, include_finance=include_finance))
+    entries, covered = await _operation_entries(session, tenant_id=tenant_id, start=start, end=end, seller_id=seller_id, include_finance=include_finance)
+    entries.extend(await _legacy_entries(session, tenant_id=tenant_id, start=start, end=end, seller_id=seller_id, include_finance=include_finance, exclude_documents=covered))
     entries.sort(key=lambda row: (row["occurred_at"], row["kind"], row["id"]), reverse=True)
-    if include_finance:
-        for row in entries:
-            if row["kind"] == "legacy_billing":
-                row["invoice_history"] = await _invoice_history(session, tenant_id=tenant_id, seller_id=uuid.UUID(row["seller_id"]), entry_id=row["billing_ledger_entry_id"])
     sellers = list((await session.scalars(select(Seller).where(Seller.tenant_id == tenant_id).order_by(Seller.name))).all())
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for entry in entries:
         grouped[entry["seller_id"]].append(entry)
+    # Селлер, у которого за период не было ни одной операции, но было хранение,
+    # обязан остаться в сводке: хранение — такая же услуга, и без строки в
+    # таблице до неё не добраться, потому что раскрывашка живёт внутри строки.
+    storage_sellers = set(
+        (
+            await session.scalars(
+                select(BillingLedgerEntry.seller_id).where(
+                    BillingLedgerEntry.tenant_id == tenant_id,
+                    BillingLedgerEntry.service_code == "storage",
+                    BillingLedgerEntry.entry_type == "charge",
+                    BillingLedgerEntry.occurred_at >= start,
+                    BillingLedgerEntry.occurred_at < end,
+                    BillingLedgerEntry.seller_id.is_not(None),
+                )
+            )
+        ).all()
+    )
     rows: list[dict[str, Any]] = []
     for seller in sellers:
         if seller_id is not None and seller.id != seller_id:
@@ -627,7 +676,7 @@ async def build_seller_report(
         if search and search.lower() not in seller.name.lower():
             continue
         seller_entries = grouped[str(seller.id)]
-        if not seller_entries:
+        if not seller_entries and seller.id not in storage_sellers:
             continue
         total = _totals(seller_entries, include_finance=include_finance)
         rows.append({"seller_id": str(seller.id), "seller_name": seller.name, **total, "details_target": f"/api/billing/seller-report/sellers/{seller.id}/details"})
@@ -724,6 +773,17 @@ async def seller_details(
         except (KeyError, StopIteration):
             raise SellerReportError("invalid_cursor") from None
     page = entries[offset:offset + limit]
+    if include_finance:
+        # Историю счетов спрашиваем только по видимой странице. Раньше она
+        # считалась по каждой строке за весь период — отдельным запросом на
+        # строку, и то же самое повторялось на экране сводки, где её никто не
+        # показывает.
+        for row in page:
+            entry_id = row.get("billing_ledger_entry_id")
+            if entry_id:
+                row["invoice_history"] = await _invoice_history(
+                    session, tenant_id=tenant_id, seller_id=seller_id, entry_id=str(entry_id)
+                )
     next_cursor = None
     if offset + limit < len(entries):
         tail = page[-1]

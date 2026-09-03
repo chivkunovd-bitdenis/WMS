@@ -52,7 +52,6 @@ export type StorageReportRow = {
   liter_days: number
   status: 'calculated' | 'missing_dimensions' | 'negative_stock'
   amount_kopecks?: number
-  calculation_token: string
 }
 
 export type SellerReportDetails = {
@@ -340,12 +339,17 @@ export function FfBillingSellerDetails({
             )
           }
           if (target?.kind === 'fbs_order') {
+            // Без поставки открывать нечего: отдельного экрана заказа в системе
+            // нет, история живёт на поставке. Ссылка, которая ничего не делает,
+            // хуже обычного текста — по ней жмут и решают, что сломалось.
+            const supply = row.entry.supply
+            if (!supply) return withStatus(<TextCell value={title} />)
             return withStatus(
               <Link
                 component="button"
                 type="button"
                 sx={{ textAlign: 'left' }}
-                onClick={() => row.entry.supply && onOpenFbsOrder(row.entry.supply.id)}
+                onClick={() => onOpenFbsOrder(supply.id)}
               >
                 {title}
               </Link>,

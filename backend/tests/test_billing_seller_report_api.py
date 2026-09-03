@@ -226,6 +226,12 @@ async def test_finance_operation_fact_explicitly_nulls_unpriced_and_mixed_rates(
         cutover = OperationFactCutover(id=1, occurred_at=datetime(2026, 8, 20, tzinfo=UTC))
         unpriced_fact_id, mixed_fact_id = uuid.uuid4(), uuid.uuid4()
         unpriced_line_id, mixed_line_id = uuid.uuid4(), uuid.uuid4()
+        # Деньги находятся по документу операции, поэтому у начисления и у факта
+        # он должен быть один. Смешанные ставки живой код записывает одной
+        # строкой с пустой ставкой и посчитанной суммой: у строк начисления
+        # ставки разные, и общей у документа просто нет.
+        mixed_document_id = uuid.uuid4()
+        mixed_entry_id = uuid.uuid4()
         session.add_all([
             cutover,
             OperationFact(
@@ -237,19 +243,18 @@ async def test_finance_operation_fact_explicitly_nulls_unpriced_and_mixed_rates(
             OperationFact(
                 id=mixed_fact_id, tenant_id=user.tenant_id, operation_code="mixed-operation", billable_service_code="inbound",
                 source_kind="test", source_event_id=uuid.uuid4(), seller_id=seller_id, seller_name_snapshot="Селлер",
-                document_type="inbound_intake", document_id=uuid.uuid4(), source="system", occurred_at=occurred_at, item_quantity=1,
+                document_type="inbound_intake", document_id=mixed_document_id, source="system", occurred_at=occurred_at, item_quantity=1,
             ),
             OperationFactLine(id=mixed_line_id, tenant_id=user.tenant_id, operation_fact_id=mixed_fact_id, product_id=None, sku_snapshot=None, product_name_snapshot=None, item_quantity=1),
+            BillingLedgerEntry(
+                id=mixed_entry_id, tenant_id=user.tenant_id, seller_id=seller_id, service_code="inbound", source="test",
+                source_type="inbound_intake", source_id=mixed_document_id, unit="item", quantity=2, rate=None, amount=300,
+                occurred_at=occurred_at,
+            ),
         ])
         for rate in (100, 200):
-            entry_id = uuid.uuid4()
-            session.add(BillingLedgerEntry(
-                id=entry_id, tenant_id=user.tenant_id, seller_id=seller_id, service_code="inbound", source="test",
-                source_type="inbound_intake", source_id=uuid.uuid4(), unit="item", quantity=1, rate=rate, amount=rate,
-                occurred_at=occurred_at,
-            ))
             session.add(BillingLedgerLine(
-                tenant_id=user.tenant_id, ledger_entry_id=entry_id, operation_fact_line_id=mixed_line_id, product_id=None,
+                tenant_id=user.tenant_id, ledger_entry_id=mixed_entry_id, operation_fact_line_id=None, product_id=None,
                 product_snapshot={}, physical_quantity=Decimal("1"), billing_quantity=Decimal("1"), billing_unit="item",
                 tariff_snapshot={}, rate=rate, amount=rate,
             ))
@@ -264,3 +269,98 @@ async def test_finance_operation_fact_explicitly_nulls_unpriced_and_mixed_rates(
     assert by_id[f"operation_fact:{unpriced_fact_id}"]["rate_kopecks"] is None
     assert by_id[f"operation_fact:{mixed_fact_id}"]["result"] == "completed"
     assert by_id[f"operation_fact:{mixed_fact_id}"]["rate_kopecks"] is None
+    assert by_id[f"operation_fact:{mixed_fact_id}"]["amount_kopecks"] == 300
+    # Начисление найдено по документу — операцию можно положить в счёт.
+    assert by_id[f"operation_fact:{mixed_fact_id}"]["billing_ledger_entry_id"] == str(mixed_entry_id)
+
+
+@pytest.mark.asyncio
+async def test_packing_charge_is_visible_and_can_be_invoiced(async_client) -> None:
+    """Упаковка своего факта не пишет, но её деньги обязаны быть видны.
+
+    Начисление за упаковку идёт по тому же документу, что и отгрузка. Раньше
+    отчёт искал деньги через связь со строкой операции, которую не заполняет ни
+    один боевой путь, — и упаковку не видел никто: ни экран, ни счёт.
+    """
+    headers, seller_id, email = await _admin(async_client)
+    occurred_at = datetime(2026, 8, 20, 12, tzinfo=UTC)
+    document_id = uuid.uuid4()
+    async with SessionLocal() as session:
+        user = await session.scalar(select(User).where(User.email == email))
+        assert user is not None
+        fact_id, outbound_id, packing_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        session.add_all([
+            OperationFactCutover(id=1, occurred_at=datetime(2026, 8, 1, tzinfo=UTC)),
+            OperationFact(
+                id=fact_id, tenant_id=user.tenant_id, operation_code="marketplace_outbound_completed",
+                billable_service_code="marketplace_outbound", source_kind="marketplace_unload_request",
+                source_event_id=uuid.uuid4(), seller_id=seller_id, seller_name_snapshot="Селлер",
+                document_type="marketplace_unload", document_id=document_id, source="system",
+                occurred_at=occurred_at, item_quantity=4,
+            ),
+            OperationFactLine(
+                tenant_id=user.tenant_id, operation_fact_id=fact_id, product_id=None,
+                sku_snapshot=None, product_name_snapshot=None, item_quantity=4,
+            ),
+            BillingLedgerEntry(
+                id=outbound_id, tenant_id=user.tenant_id, seller_id=seller_id,
+                service_code="marketplace_outbound", source="marketplace_unload",
+                source_type="marketplace_unload", source_id=document_id, unit="item",
+                quantity=4, rate=100, amount=400, occurred_at=occurred_at,
+            ),
+            BillingLedgerEntry(
+                id=packing_id, tenant_id=user.tenant_id, seller_id=seller_id,
+                service_code="packing", source="marketplace_unload",
+                source_type="marketplace_unload", source_id=document_id, unit="item",
+                quantity=4, rate=50, amount=200, occurred_at=occurred_at,
+            ),
+        ])
+        await session.commit()
+
+    params = "date_from=2026-08-20&date_to=2026-08-20&include_finance=true"
+    details = await async_client.get(
+        f"/billing/seller-report/sellers/{seller_id}/details?{params}", headers=headers
+    )
+    assert details.status_code == 200, details.text
+    entries = {entry["service_code"]: entry for entry in details.json()["entries"]}
+
+    assert entries["marketplace_outbound"]["amount_kopecks"] == 400
+    assert entries["marketplace_outbound"]["billing_ledger_entry_id"] == str(outbound_id)
+    # Отдельная строка упаковки: сумма и своя услуга, а не молчаливая прибавка
+    # к отгрузке.
+    assert entries["packing"]["amount_kopecks"] == 200
+    assert entries["packing"]["billing_ledger_entry_id"] == str(packing_id)
+    assert entries["packing"]["source_id"] == str(document_id)
+
+
+@pytest.mark.asyncio
+async def test_seller_with_storage_only_stays_in_the_summary(async_client) -> None:
+    """Селлер, у которого за период было только хранение, не должен исчезать.
+
+    Сводка строилась из операций, а хранение читалось лишь при раскрытии
+    строки: строки не было — и до хранения было не добраться.
+    """
+    headers, seller_id, email = await _admin(async_client)
+    async with SessionLocal() as session:
+        user = await session.scalar(select(User).where(User.email == email))
+        assert user is not None
+        session.add(BillingLedgerEntry(
+            tenant_id=user.tenant_id, seller_id=seller_id, service_code="storage",
+            source="storage_daily", source_type="storage_day", source_id=uuid.uuid4(),
+            unit="liter_day", quantity=Decimal("12.5"), rate=200, amount=2500,
+            occurred_at=datetime(2026, 8, 20, 20, tzinfo=UTC),
+        ))
+        await session.commit()
+
+    params = "date_from=2026-08-20&date_to=2026-08-20&include_finance=true"
+    summary = await async_client.get(f"/billing/seller-report/summary?{params}", headers=headers)
+    assert summary.status_code == 200, summary.text
+    assert [row["seller_id"] for row in summary.json()["rows"]] == [str(seller_id)]
+
+    details = await async_client.get(
+        f"/billing/seller-report/sellers/{seller_id}/details?{params}", headers=headers
+    )
+    assert details.status_code == 200, details.text
+    storage_row = details.json()["storage_row"]
+    assert storage_row["liter_days"] == 12.5
+    assert storage_row["amount_kopecks"] == 2500

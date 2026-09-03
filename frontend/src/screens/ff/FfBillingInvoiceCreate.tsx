@@ -116,7 +116,7 @@ export function FfBillingInvoiceCreate({
   dateFrom,
   dateTo,
   selectedRootIds,
-  storageToken,
+  includeStorage,
   onIssued,
 }: {
   token: string
@@ -127,7 +127,10 @@ export function FfBillingInvoiceCreate({
   dateFrom: string
   dateTo: string
   selectedRootIds: string[]
-  storageToken: string | null
+  /** Класть ли в счёт хранение за период. Раньше сюда приходил подписанный
+   *  токен расчёта, но бэкенд его больше не выдаёт: хранение берётся из ночных
+   *  начислений. Пока фронт ждал токен, галочка не доезжала до запроса вовсе. */
+  includeStorage: boolean
   onIssued: () => void
 }) {
   const [manualOpen, setManualOpen] = useState(false)
@@ -139,7 +142,7 @@ export function FfBillingInvoiceCreate({
   const [error, setError] = useState<string | null>(null)
   const [idempotencyKey, setIdempotencyKey] = useState('')
 
-  const hasSelection = selectedRootIds.length > 0 || Boolean(storageToken)
+  const hasSelection = selectedRootIds.length > 0 || includeStorage
   const previewSellerName =
     sellers.find((seller) => seller.id === preview?.seller_id)?.name ?? sellerName
 
@@ -164,7 +167,7 @@ export function FfBillingInvoiceCreate({
     date_from: dateFrom,
     date_to: dateTo,
     selected_root_ids: selectedRootIds,
-    ...(storageToken ? { include_storage: true } : {}),
+    ...(includeStorage ? { include_storage: true } : {}),
   })
 
   const manualBody = () => ({

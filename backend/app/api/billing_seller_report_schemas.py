@@ -85,6 +85,8 @@ class SellerReportFinancialOperationFactEntryOut(SellerReportEntryBaseOut):
     amount_kopecks: int | None
     unit: str | None
     invoice_history: dict[str, Any]
+    # Начисление по документу операции. Есть — операцию можно положить в счёт.
+    billing_ledger_entry_id: str | None = None
 
 
 class SellerReportFinancialHandedFbsEntryOut(SellerReportEntryBaseOut):
