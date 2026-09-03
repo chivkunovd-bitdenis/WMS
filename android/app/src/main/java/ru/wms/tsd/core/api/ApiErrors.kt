@@ -4,6 +4,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import retrofit2.Response
 
 /**
@@ -66,7 +67,14 @@ fun <T> Response<T>.readableError(): String {
         val el = lenientJson.parseToJsonElement(raw).jsonObject["detail"] ?: return@runCatching null
         when {
             el is kotlinx.serialization.json.JsonPrimitive -> el.jsonPrimitive.content
-            else -> el.jsonArray.firstOrNull()?.jsonObject?.get("msg")?.jsonPrimitive?.content
+            el is kotlinx.serialization.json.JsonArray ->
+                el.jsonArray.firstOrNull()?.jsonObject?.get("msg")?.jsonPrimitive?.contentOrNull
+            el is kotlinx.serialization.json.JsonObject -> {
+                val obj = el.jsonObject
+                obj["message"]?.jsonPrimitive?.contentOrNull
+                    ?: obj["code"]?.jsonPrimitive?.contentOrNull
+            }
+            else -> null
         }
     }.getOrNull() ?: return "Ошибка сервера (HTTP ${code()})"
     return ERROR_CODES_RU[detail] ?: detail

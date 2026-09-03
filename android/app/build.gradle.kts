@@ -13,8 +13,8 @@ android {
         applicationId = "ru.wms.tsd"
         minSdk = 24
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.1.4-atol7"
+        versionCode = 6
+        versionName = "0.2.0-fbs"
         buildConfigField(
             "String",
             "DEFAULT_API_BASE_URL",

@@ -19,6 +19,8 @@ import org.junit.Before
 import org.junit.Test
 import retrofit2.Response
 import ru.wms.tsd.core.api.ApiProvider
+import ru.wms.tsd.core.api.fbs.FbsApi
+import ru.wms.tsd.core.api.fbs.FbsWorklistResponse
 import ru.wms.tsd.core.api.generated.apis.OperationsApi
 import ru.wms.tsd.core.api.generated.models.InboundIntakeRequestSummaryOut
 import ru.wms.tsd.core.api.generated.models.MarketplaceUnloadRequestSummaryOut
@@ -33,14 +35,19 @@ class HomeViewModelTest {
 
     private lateinit var ops: OperationsApi
     private lateinit var api: ApiProvider
+    private lateinit var fbs: FbsApi
 
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         ops = mockk()
+        fbs = mockk()
         api = mockk {
             every { operations() } returns ops
+            every { fbs() } returns fbs
         }
+        coEvery { fbs.worklist(any(), any(), any()) } returns
+            Response.success(FbsWorklistResponse(emptyList(), "2026-09-04T00:00:00Z"))
     }
 
     @After

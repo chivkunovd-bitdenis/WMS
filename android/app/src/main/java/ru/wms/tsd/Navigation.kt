@@ -21,6 +21,11 @@ import androidx.navigation.navArgument
 import ru.wms.tsd.core.auth.AuthSession
 import ru.wms.tsd.features.home.HomeScreen
 import ru.wms.tsd.features.home.HomeSection
+import ru.wms.tsd.features.fbs.FbsHandoffScreen
+import ru.wms.tsd.features.fbs.FbsPackingScreen
+import ru.wms.tsd.features.fbs.FbsPickingScreen
+import ru.wms.tsd.features.fbs.FbsSupplyListScreen
+import ru.wms.tsd.features.fbs.FbsWorkspaceScreen
 import ru.wms.tsd.features.inbound.InboundBoxesScreen
 import ru.wms.tsd.features.inbound.InboundListScreen
 import ru.wms.tsd.features.inbound.InboundReceivingScreen
@@ -151,6 +156,39 @@ fun AppNavHost(
                 requestId = requestId,
                 onBack = { navController.popBackStack() },
             )
+        }
+
+        composable("fbs") {
+            FbsSupplyListScreen(
+                onBack = { navController.popBackStack() },
+                onOpenSupply = { navController.navigate("fbs/$it") },
+            )
+        }
+
+        composable("fbs/{supplyId}") { backStackEntry ->
+            val supplyId = backStackEntry.arguments?.getString("supplyId") ?: return@composable
+            FbsWorkspaceScreen(
+                supplyId = supplyId,
+                onBack = { navController.popBackStack() },
+                onPicking = { navController.navigate("fbs/$supplyId/picking") },
+                onPacking = { navController.navigate("fbs/$supplyId/packing") },
+                onHandoff = { navController.navigate("fbs/$supplyId/handoff") },
+            )
+        }
+
+        composable("fbs/{supplyId}/picking") { backStackEntry ->
+            val supplyId = backStackEntry.arguments?.getString("supplyId") ?: return@composable
+            FbsPickingScreen(supplyId = supplyId, onBack = { navController.popBackStack() })
+        }
+
+        composable("fbs/{supplyId}/packing") { backStackEntry ->
+            val supplyId = backStackEntry.arguments?.getString("supplyId") ?: return@composable
+            FbsPackingScreen(supplyId = supplyId, onBack = { navController.popBackStack() })
+        }
+
+        composable("fbs/{supplyId}/handoff") { backStackEntry ->
+            val supplyId = backStackEntry.arguments?.getString("supplyId") ?: return@composable
+            FbsHandoffScreen(supplyId = supplyId, onBack = { navController.popBackStack() })
         }
     }
 }

@@ -5,6 +5,7 @@ import ru.wms.tsd.BuildConfig
 import ru.wms.tsd.core.api.generated.apis.OperationsApi
 import ru.wms.tsd.core.api.generated.apis.WarehousesApi
 import ru.wms.tsd.core.api.generated.infrastructure.ApiClient
+import ru.wms.tsd.core.api.fbs.FbsApi
 import ru.wms.tsd.core.auth.AuthManager
 import ru.wms.tsd.core.auth.AuthStore
 
@@ -22,6 +23,7 @@ class ApiProvider(
     private var cachedClient: ApiClient? = null
     private var cachedOperations: OperationsApi? = null
     private var cachedWarehouses: WarehousesApi? = null
+    private var cachedFbs: FbsApi? = null
 
     private fun baseUrl(): String {
         return normalizeBaseUrl(authStore.getBaseUrl() ?: BuildConfig.DEFAULT_API_BASE_URL)
@@ -49,6 +51,7 @@ class ApiProvider(
         cachedClient = client
         cachedOperations = null
         cachedWarehouses = null
+        cachedFbs = null
         return client
     }
 
@@ -60,5 +63,10 @@ class ApiProvider(
     fun warehouses(): WarehousesApi {
         val client = client()
         return cachedWarehouses ?: client.createService(WarehousesApi::class.java).also { cachedWarehouses = it }
+    }
+
+    fun fbs(): FbsApi {
+        val client = client()
+        return cachedFbs ?: client.createService(FbsApi::class.java).also { cachedFbs = it }
     }
 }

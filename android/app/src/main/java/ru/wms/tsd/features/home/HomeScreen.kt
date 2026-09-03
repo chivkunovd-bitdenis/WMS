@@ -8,11 +8,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Input
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.MoveToInbox
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Surface
@@ -47,6 +49,7 @@ data class HomeCounts(
     val inbound: Int? = null,
     val sorting: Int? = null,
     val outbound: Int? = null,
+    val fbs: Int? = null,
 )
 
 class HomeViewModel(private val api: ApiProvider) : ViewModel() {
@@ -79,6 +82,14 @@ class HomeViewModel(private val api: ApiProvider) : ViewModel() {
                     }
                 }
                 .onFailure { }
+
+            runCatching { api.fbs().worklist(statusGroup = "active") }
+                .onSuccess { resp ->
+                    if (resp.isSuccessful) {
+                        _counts.value = _counts.value.copy(fbs = resp.body()?.items?.size ?: 0)
+                    }
+                }
+                .onFailure { }
         }
     }
 
@@ -89,7 +100,7 @@ class HomeViewModel(private val api: ApiProvider) : ViewModel() {
 }
 
 /**
- * Главный экран A2: три гигантские плитки-кнопки и инфо сотрудника внизу.
+ * Главный экран A2: четыре крупные плитки 2×2 и инфо сотрудника внизу.
  */
 @Composable
 fun HomeScreen(
@@ -110,27 +121,33 @@ fun HomeScreen(
             .padding(WmsDimens.SpacingUnit * 2),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        // Три плитки
+        // Сетка 2×2: четыре раздела помещаются на экране 360×640 без прокрутки.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
             verticalArrangement = Arrangement.spacedBy(WmsDimens.SpacingUnit),
         ) {
-            HomeSection.values().forEach { section ->
-                val count = when (section) {
-                    HomeSection.INBOUND -> counts.inbound
-                    HomeSection.SORTING -> counts.sorting
-                    HomeSection.OUTBOUND -> counts.outbound
+            HomeSection.values().toList().chunked(2).forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(WmsDimens.SpacingUnit),
+                ) {
+                    row.forEach { section ->
+                        val count = when (section) {
+                            HomeSection.INBOUND -> counts.inbound
+                            HomeSection.SORTING -> counts.sorting
+                            HomeSection.OUTBOUND -> counts.outbound
+                            HomeSection.FBS -> counts.fbs
+                        }
+                        SectionTile(
+                            section = section,
+                            count = count,
+                            onClick = { onSectionClick(section) },
+                            modifier = Modifier.fillMaxSize().weight(1f),
+                        )
+                    }
                 }
-                SectionTile(
-                    section = section,
-                    count = count,
-                    onClick = { onSectionClick(section) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                )
             }
         }
 
@@ -193,12 +210,12 @@ private fun SectionTile(
                     androidx.compose.material3.Icon(
                         imageVector = section.icon,
                         contentDescription = section.label,
-                        modifier = Modifier.fillMaxWidth(0.2f),
+                        modifier = Modifier.size(36.dp),
                         tint = WmsColors.Primary,
                     )
                     Text(
                         text = section.label,
-                        fontSize = 28.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = WmsColors.TextPrimary,
                         textAlign = TextAlign.Center,
@@ -234,4 +251,5 @@ enum class HomeSection(
     INBOUND("Приёмка", Icons.AutoMirrored.Default.Input, "inbound"),
     SORTING("Сортировка", Icons.Default.MoveToInbox, "sorting"),
     OUTBOUND("Отгрузка", Icons.Default.LocalShipping, "outbound"),
+    FBS("WB FBS", Icons.Default.Storefront, "fbs"),
 }
