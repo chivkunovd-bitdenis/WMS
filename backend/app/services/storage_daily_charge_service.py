@@ -305,8 +305,46 @@ async def refresh_storage_drafts(
     await session.commit()
 
 
+# Сколько суток назад задача готова догонять пропуски. Хранение — деньги: если
+# ночь не отработала (упал воркер, лежал сервер, выкатка затянулась), сутки
+# нельзя терять молча. Ограничение нужно, чтобы первый запуск в новом
+# окружении не начал считать всю историю склада.
+CATCH_UP_DAYS = 14
+
+
+async def missing_charge_days(
+    session: AsyncSession, tenant_id: uuid.UUID, *, until: date, depth: int = CATCH_UP_DAYS
+) -> list[date]:
+    """Сутки за последние `depth` дней, по которым начислений так и не появилось."""
+    first = until - timedelta(days=depth - 1)
+    charged = set(
+        (
+            await session.scalars(
+                select(BillingLedgerEntry.event_kind).where(
+                    BillingLedgerEntry.tenant_id == tenant_id,
+                    BillingLedgerEntry.service_code == STORAGE_SERVICE_CODE,
+                    BillingLedgerEntry.source_type == SOURCE_TYPE,
+                    BillingLedgerEntry.occurred_at >= _day_bounds(first)[0],
+                )
+            )
+        ).all()
+    )
+    days: list[date] = []
+    current = first
+    while current <= until:
+        if _event_kind(current) not in charged:
+            days.append(current)
+        current += timedelta(days=1)
+    return days
+
+
 async def run_daily_storage_charge_all_tenants(*, day: date | None = None) -> int:
-    """Ночной проход по всем арендаторам. Сбой одного не отменяет остальных."""
+    """Ночной проход по всем арендаторам. Сбой одного не отменяет остальных.
+
+    Проход не ограничивается вчерашним днём: он добирает все сутки за две
+    недели, по которым начислений нет. Иначе одна пропущенная ночь означала бы,
+    что за те сутки не заплатят никогда — повторно их никто не посчитает.
+    """
     charged_day = day or previous_moscow_day()
     async with SessionLocal() as session:
         tenant_ids = list((await session.scalars(select(Tenant.id))).all())
@@ -316,12 +354,24 @@ async def run_daily_storage_charge_all_tenants(*, day: date | None = None) -> in
         # это витрина для оператора, и её падение не должно стоить начислений.
         async with SessionLocal() as session:
             try:
-                total += await charge_storage_day(session, tenant_id, day=charged_day)
+                pending = (
+                    [charged_day]
+                    if day is not None
+                    else await missing_charge_days(session, tenant_id, until=charged_day)
+                )
             except Exception:
                 await session.rollback()
-                logger.exception(
-                    "daily storage charge failed: tenant=%s day=%s", tenant_id, charged_day
-                )
+                logger.exception("storage catch-up scan failed: tenant=%s", tenant_id)
+                pending = [charged_day]
+        for pending_day in pending:
+            async with SessionLocal() as session:
+                try:
+                    total += await charge_storage_day(session, tenant_id, day=pending_day)
+                except Exception:
+                    await session.rollback()
+                    logger.exception(
+                        "daily storage charge failed: tenant=%s day=%s", tenant_id, pending_day
+                    )
         async with SessionLocal() as session:
             try:
                 await refresh_storage_drafts(session, tenant_id, day=charged_day)

@@ -22,6 +22,7 @@ from app.models.warehouse import Warehouse
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.storage_daily_charge_service import (
     charge_storage_day,
+    missing_charge_days,
     previous_moscow_day,
 )
 from app.services.storage_measurement_service import MOSCOW
@@ -212,3 +213,58 @@ async def test_tenant_without_billing_start_date_is_not_charged(
 
     assert created == 0
     assert await _storage_entries(tenant_id) == []
+
+
+@pytest.mark.asyncio
+async def test_report_takes_storage_from_the_nightly_charges(
+    async_client: AsyncClient,
+) -> None:
+    """Отчёт показывает то, что записала ночь, а не считает литро-дни заново.
+
+    Раньше экран пересчитывал хранение по движениям при каждом открытии, а
+    ночные начисления не читал никто. Две правды об одних и тех же сутках —
+    спор, в котором нельзя победить: источник должен быть один.
+    """
+    from app.services.billing_seller_report_service import _storage_row, moscow_interval
+
+    tenant_id, seller_id, _product_id = await _seed(async_client)
+    day = previous_moscow_day()
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=day) == 1
+
+    start, end = moscow_interval(day, day)
+    async with SessionLocal() as session:
+        row = await _storage_row(
+            session, tenant_id=tenant_id, seller_id=seller_id,
+            date_from=day, date_to=day, start=start, end=end, include_finance=True,
+        )
+
+    assert row["liter_days"] == pytest.approx(1.0)
+    assert row["amount_kopecks"] == 200
+    assert row["status"] == "calculated"
+    # Подписанного токена больше нет: цену даёт начисление, а не подпись запроса.
+    assert "calculation_token" not in row
+
+
+@pytest.mark.asyncio
+async def test_missed_night_is_charged_on_the_next_run(async_client: AsyncClient) -> None:
+    """Пропущенная ночь не теряется: следующий проход добирает её сам.
+
+    Хранение — деньги. Если воркер лежал или выкатка затянулась, за те сутки
+    иначе не заплатят никогда: повторно их никто не посчитает.
+    """
+    tenant_id, _seller_id, _product_id = await _seed(async_client)
+    yesterday = previous_moscow_day()
+    before = yesterday - timedelta(days=2)
+
+    async with SessionLocal() as session:
+        pending = await missing_charge_days(session, tenant_id, until=yesterday)
+    assert before in pending and yesterday in pending
+
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=before) == 1
+
+    async with SessionLocal() as session:
+        pending_after = await missing_charge_days(session, tenant_id, until=yesterday)
+    assert before not in pending_after
+    assert yesterday in pending_after

@@ -164,7 +164,7 @@ export function FfBillingInvoiceCreate({
     date_from: dateFrom,
     date_to: dateTo,
     selected_root_ids: selectedRootIds,
-    ...(storageToken ? { storage_calculation_token: storageToken } : {}),
+    ...(storageToken ? { include_storage: true } : {}),
   })
 
   const manualBody = () => ({

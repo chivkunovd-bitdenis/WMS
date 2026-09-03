@@ -27,7 +27,8 @@ class SelectedOperationsInvoiceV2DraftIn(BaseModel):
     # Пустой список допустим, когда выбрана только строка хранения. Отказ на
     # «не выбрано вообще ничего» даёт сервис: он видит обе части сразу.
     selected_root_ids: list[uuid.UUID] = Field(default_factory=list, max_length=100)
-    storage_calculation_token: str | None = Field(default=None, max_length=4096)
+    # Хранение берётся из ночных начислений за период, пересчёта больше нет.
+    include_storage: bool = False
 
 
 InvoiceV2DraftRequest = Annotated[

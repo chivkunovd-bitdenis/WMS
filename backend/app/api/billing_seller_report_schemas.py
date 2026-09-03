@@ -110,7 +110,6 @@ class SellerReportStorageOut(BaseModel):
     date_to: str
     liter_days: float
     status: Literal["calculated", "missing_dimensions", "negative_stock"]
-    calculation_token: str
 
 
 class SellerReportFinancialStorageOut(SellerReportStorageOut):

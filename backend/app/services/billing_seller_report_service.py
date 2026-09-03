@@ -9,10 +9,9 @@ import json
 import uuid
 from collections import defaultdict
 from datetime import UTC, date, datetime, time, timedelta
-from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, cast
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
@@ -31,17 +30,11 @@ from app.models.fbs_order import (
     FbsOrder,
 )
 from app.models.fbs_supply import FbsSupply
-from app.models.inventory_movement import InventoryMovement
 from app.models.operation_fact import OperationFact, OperationFactCutover, OperationFactLine
-from app.models.product import Product
-from app.models.product_dimension_event import ProductDimensionEvent
 from app.models.seller import Seller
-from app.models.warehouse import Warehouse
 from app.services.billing_ledger_service import _resolve_v2_tariff
 from app.services.storage_measurement_service import (
     MOSCOW,
-    StorageMeasurementError,
-    interval_liter_days,
 )
 
 
@@ -89,38 +82,6 @@ def _token(payload: dict[str, Any]) -> str:
     key = hmac.new(settings.jwt_secret_key.encode(), b"wms:seller-storage:v1", hashlib.sha256).digest()
     signature = hmac.new(key, message, hashlib.sha256).hexdigest()
     return base64.urlsafe_b64encode(json.dumps({**signed, "signature": signature}, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).decode().rstrip("=")
-
-
-async def verify_storage_calculation_token(
-    session: AsyncSession,
-    *,
-    tenant_id: uuid.UUID,
-    seller_id: uuid.UUID,
-    date_from: date,
-    date_to: date,
-    token: str,
-) -> int:
-    """Recompute the signed Wave 3 interval; a token is never a trusted price."""
-    try:
-        decoded = json.loads(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)))
-        payload = decoded["payload"]
-        if not isinstance(payload, dict) or _token(payload) != token:
-            raise ValueError
-        if payload.get("tenant_id") != str(tenant_id) or payload.get("seller_id") != str(seller_id):
-            raise ValueError
-        if payload.get("date_from") != date_from.isoformat() or payload.get("date_to") != date_to.isoformat():
-            raise ValueError
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
-        raise SellerReportError("storage_calculation_stale") from None
-    start, end = moscow_interval(date_from, date_to)
-    current = await _storage_row(session, tenant_id=tenant_id, seller_id=seller_id, date_from=date_from, date_to=date_to, start=start, end=end, include_finance=True)
-    # Причины разделены намеренно: «нет габаритов» чинит каталог, «расчёт
-    # устарел» чинит перезагрузка отчёта. Общий текст заставлял бы гадать.
-    if current["status"] == "missing_dimensions":
-        raise SellerReportError("storage_missing_dimensions")
-    if current["status"] != "calculated" or current["calculation_token"] != token:
-        raise SellerReportError("storage_calculation_stale")
-    return int(current["amount_kopecks"])
 
 
 def _signed_cursor(payload: dict[str, Any]) -> str:
@@ -604,66 +565,43 @@ def _storage_rate_for_day(rates: list[BillingTariffVersionV2], day: date) -> int
 async def _storage_row(
     session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID, date_from: date, date_to: date, start: datetime, end: datetime, include_finance: bool,
 ) -> dict[str, Any]:
-    warehouse_ids = set((await session.scalars(select(Warehouse.id).where(Warehouse.tenant_id == tenant_id, Warehouse.is_operational.is_(True)))).all())
-    movements = list((await session.scalars(select(InventoryMovement).where(
-        InventoryMovement.tenant_id == tenant_id, InventoryMovement.seller_id == seller_id,
-        InventoryMovement.warehouse_id.in_(warehouse_ids or {uuid.UUID(int=0)}), InventoryMovement.created_at < end,
-    ).order_by(InventoryMovement.created_at, InventoryMovement.id))).all())
-    product_ids = {movement.product_id for movement in movements}
-    products = {product.id: product for product in (await session.scalars(select(Product).where(Product.tenant_id == tenant_id, Product.id.in_(product_ids or {uuid.UUID(int=0)})))).all()}
-    events_by_product: dict[uuid.UUID, list[ProductDimensionEvent]] = defaultdict(list)
-    if product_ids:
-        for event in (await session.scalars(select(ProductDimensionEvent).where(ProductDimensionEvent.tenant_id == tenant_id, ProductDimensionEvent.product_id.in_(product_ids)).order_by(ProductDimensionEvent.observed_at, ProductDimensionEvent.id))).all():
-            events_by_product[event.product_id].append(event)
-    grouped: dict[uuid.UUID, list[InventoryMovement]] = defaultdict(list)
-    for movement in movements:
-        grouped[movement.product_id].append(movement)
-    liter_days = Decimal(0)
-    missing = False
-    fingerprint_sources: list[dict[str, Any]] = []
-    # Восстановленный по движениям остаток может уйти в минус — например, если
-    # списание пришло раньше прихода. Раньше это роняло весь экран селлера
-    # пятисоткой: оператор не видел ни документов, ни причины. Хранение в таком
-    # случае действительно посчитать нельзя, но всё остальное показать можно.
-    broken = False
-    for product_id, product_movements in grouped.items():
-        product = products.get(product_id)
-        if product is None:
-            continue
-        try:
-            calculated, product_missing = interval_liter_days(product_movements, events_by_product[product_id], legacy_volume_liters=product.volume_liters, start=start, end=end)
-        except StorageMeasurementError:
-            broken = True
-            break
-        liter_days += calculated
-        missing = missing or product_missing
-        fingerprint_sources.append({"product": str(product_id), "moves": [(str(m.id), _as_moscow(m.created_at).isoformat(), m.quantity_delta) for m in product_movements], "dimensions": [(str(e.id), _as_moscow(e.observed_at).isoformat(), str(e.volume_liters)) for e in events_by_product[product_id]]})
-    tariff_rows = await _storage_matrix_rates(session, tenant_id=tenant_id, seller_id=seller_id)
-    amount = 0
-    if not missing and not broken:
-        for offset in range((date_to - date_from).days + 1):
-            day = date_from + timedelta(days=offset)
-            daily_liters = Decimal(0)
-            day_start = datetime.combine(day, time.min, MOSCOW)
-            day_end = day_start + timedelta(days=1)
-            for product_id, product_movements in grouped.items():
-                product = products.get(product_id)
-                if product:
-                    try:
-                        value, absent = interval_liter_days(product_movements, events_by_product[product_id], legacy_volume_liters=product.volume_liters, start=max(start, day_start), end=min(end, day_end))
-                    except StorageMeasurementError:
-                        broken = True
-                        break
-                    if absent:
-                        missing = True
-                    daily_liters += value
-            rate = _storage_rate_for_day(tariff_rows, day)
-            if rate is not None:
-                amount += int((daily_liters * Decimal(rate)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-    payload = {"tenant_id": str(tenant_id), "seller_id": str(seller_id), "date_from": date_from.isoformat(), "date_to": date_to.isoformat(), "liter_days": str(liter_days), "amount_kopecks": None if missing else amount, "sources": fingerprint_sources, "tariffs": [(str(t.id), _as_moscow(t.valid_from_at).isoformat(), _as_moscow(t.valid_to_at).isoformat() if t.valid_to_at else None, t.rate, str(t.seller_id) if t.seller_id else None) for t in tariff_rows]}
-    row: dict[str, Any] = {"kind": "storage", "date_from": date_from.isoformat(), "date_to": date_to.isoformat(), "liter_days": float(liter_days), "status": "negative_stock" if broken else ("missing_dimensions" if missing else "calculated"), "calculation_token": _token(payload)}
-    if include_finance and not missing and not broken:
-        row["amount_kopecks"] = amount
+    """Хранение за период — сумма ночных начислений, а не пересчёт на лету.
+
+    Раньше экран пересчитывал литро-дни по движениям при каждом открытии, а
+    ночная задача писала свои. Две цифры об одном и том же расходились бы при
+    первом же расхождении формул, и никто бы не понял, какая настоящая.
+    Источник один: что ночь записала, то экран и счёт и показывают.
+    """
+    rows = list(
+        (
+            await session.execute(
+                select(
+                    func.coalesce(func.sum(BillingLedgerEntry.quantity), 0),
+                    func.coalesce(func.sum(BillingLedgerEntry.amount), 0),
+                ).where(
+                    BillingLedgerEntry.tenant_id == tenant_id,
+                    BillingLedgerEntry.seller_id == seller_id,
+                    BillingLedgerEntry.service_code == "storage",
+                    BillingLedgerEntry.entry_type == "charge",
+                    BillingLedgerEntry.occurred_at >= start,
+                    BillingLedgerEntry.occurred_at < end,
+                )
+            )
+        ).all()
+    )
+    quantity, amount_sum = rows[0]
+    liter_days = float(quantity or 0)
+    row: dict[str, Any] = {
+        "kind": "storage",
+        "date_from": date_from.isoformat(),
+        "date_to": date_to.isoformat(),
+        "liter_days": liter_days,
+        "status": "calculated",
+    }
+    if include_finance:
+        # Сутки без ставки дают ноль — это видно и в отчёте, и в счёте, и не
+        # мешает выставить счёт за то, что посчитано.
+        row["amount_kopecks"] = int(amount_sum or 0)
     return row
 
 

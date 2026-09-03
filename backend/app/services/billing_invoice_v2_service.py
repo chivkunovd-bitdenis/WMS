@@ -25,10 +25,7 @@ from app.models.billing import (
     BillingProfile,
 )
 from app.models.seller import Seller
-from app.services.billing_seller_report_service import (
-    SellerReportError,
-    verify_storage_calculation_token,
-)
+from app.services.billing_seller_report_service import moscow_interval
 from app.services.document_number_service import DOC_TYPE_INVOICE, next_document_number
 
 DECIMAL_RE = re.compile(r"^-?\d+(\.\d{1,2})?$")
@@ -176,43 +173,51 @@ async def _storage_line(
     seller_id: uuid.UUID,
     date_from: date,
     date_to: date,
-    token: Any,
+    include_storage: bool,
     sort_order: int,
 ) -> dict[str, Any] | None:
-    """Пересчитать хранение на сервере и превратить его в одну строку счёта.
+    """Собрать строку хранения из ночных начислений.
 
-    Токен из запроса — только заявка «я видел вот этот расчёт», а не цена.
-    Сумма всегда берётся из свежего серверного пересчёта; расходится хоть в
-    копейке, хоть по границам периода или селлеру — счёт не сохраняется.
-    Пересчёт повторяется и при сохранении, поэтому расчёт, устаревший между
-    предпросмотром и кнопкой «Сохранить», тоже будет отклонён.
+    Раньше счёт пересчитывал хранение сам и сверял результат с подписанным
+    токеном из отчёта. Это был второй источник цифры: ночная задача писала
+    начисления, а счёт их не читал. Две правды об одних и тех же сутках рано
+    или поздно разошлись бы, и разобраться, какая настоящая, было бы нельзя.
+    Теперь источник один — то, что записала ночь.
     """
-    if token in (None, ""):
+    if not include_storage:
         return None
-    try:
-        amount_kopecks = await verify_storage_calculation_token(
-            session,
-            tenant_id=tenant_id,
-            seller_id=seller_id,
-            date_from=date_from,
-            date_to=date_to,
-            token=str(token),
-        )
-    except SellerReportError as exc:
-        # Сюда же приходит хранение без габаритов: у него статус не
-        # `calculated`, поэтому верификатор отказывает, а не молча берёт ноль.
-        raise BillingInvoiceV2Error(str(exc)) from exc
+    start, end = moscow_interval(date_from, date_to)
+    entries = list(
+        (
+            await session.scalars(
+                select(BillingLedgerEntry).where(
+                    BillingLedgerEntry.tenant_id == tenant_id,
+                    BillingLedgerEntry.seller_id == seller_id,
+                    BillingLedgerEntry.service_code == "storage",
+                    BillingLedgerEntry.entry_type == "charge",
+                    BillingLedgerEntry.occurred_at >= start,
+                    BillingLedgerEntry.occurred_at < end,
+                )
+            )
+        ).all()
+    )
+    if not entries:
+        return None
+    # Сутки без заданной ставки идут в счёт нулём, а не отказом: отчёт и счёт
+    # показывают одно и то же, а разбираться с незаведённым тарифом — работа
+    # человека, а не повод не дать выставить счёт.
     return {
         "id": uuid.uuid4(),
         "description": STORAGE_LINE_DESCRIPTION,
         "unit_price_kopecks": None,
-        "total_amount_kopecks": amount_kopecks,
+        "total_amount_kopecks": sum(int(entry.amount or 0) for entry in entries),
         "sort_order": sort_order,
         "sources": [
             {
-                "storage_calculation_token": str(token),
-                "signed_amount_kopecks_snapshot": amount_kopecks,
+                "billing_ledger_entry_id": entry.id,
+                "signed_amount_kopecks_snapshot": int(entry.amount or 0),
             }
+            for entry in entries
         ],
     }
 
@@ -294,7 +299,7 @@ async def _preview_selected_operations(
         seller_id=seller_id,
         date_from=date_from,
         date_to=date_to,
-        token=request.get("storage_calculation_token"),
+        include_storage=bool(request.get("include_storage")),
         sort_order=len(lines),
     )
     if storage_line is not None:
