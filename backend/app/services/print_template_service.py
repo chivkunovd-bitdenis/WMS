@@ -712,6 +712,20 @@ async def resolve_default_print_template(
         result = await session.execute(stmt)
         seller_default = result.scalar_one_or_none()
         if seller_default is not None:
-            return _row_from_model(seller_default)
+            row = _row_from_model(seller_default)
+            if seller_default.name == SELLER_LABEL_TEMPLATE_NAME:
+                # Шаблон, заведённый панелью состава, лентой не распоряжается:
+                # он отвечает только за то, что печатать на этикетке ШК. Иначе у
+                # оператора без личной раскладки лента молча становилась «один
+                # ШК», и Честный знак из печати пропадал. Имя здесь — такой же
+                # служебный признак, как у раскладки оператора.
+                return replace(
+                    row,
+                    layout=PrintLayout(
+                        units=SYSTEM_PAIRS_LAYOUT.units,
+                        label_options=row.layout.label_options,
+                    ),
+                )
+            return row
 
     return system_pairs_template(tenant_id)

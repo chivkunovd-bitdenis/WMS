@@ -697,3 +697,48 @@ async def test_label_options_do_not_reach_a_seller_without_a_template(
     assert other.layout.label_options.include_composition is True
     assert other.layout.label_options.include_size is True
     assert other.layout.label_options.include_color is True
+
+
+@pytest.mark.asyncio
+async def test_old_composition_template_no_longer_hijacks_the_tape(
+    async_client: AsyncClient,
+) -> None:
+    """Шаблон состава не отдаёт свою ленту, даже если она записана в него.
+
+    Первая версия панели сохраняла шаблон целиком, вместе с лентой «один ШК».
+    Такие строки уже лежат на стенде, и у оператора без личной раскладки из
+    печати пропадал бы Честный знак. Лента шаблона состава игнорируется — берётся
+    системная, а из шаблона остаётся только состав.
+    """
+    from app.services.print_template_service import resolve_default_print_template
+
+    token, tenant_id, _user_id, seller_id, _product_id = await _seed_tenant_seller_product(
+        async_client
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+    created = await async_client.post(
+        "/operations/marking-codes/print-templates",
+        headers=headers,
+        json={
+            "name": "Этикетка продавца",
+            "seller_id": str(seller_id),
+            "is_default": True,
+            "layout": {
+                "units": [{"block": "label", "copies": 1}],
+                "label_options": {
+                    "include_size": True,
+                    "include_color": True,
+                    "include_brand": False,
+                    "include_composition": True,
+                },
+            },
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    async with SessionLocal() as session:
+        row = await resolve_default_print_template(
+            session, tenant_id, user_id=None, product_id=None, seller_id=seller_id
+        )
+    assert [(u.block, u.copies) for u in row.layout.units] == [("cz", 2)]
+    assert row.layout.label_options.include_brand is False
