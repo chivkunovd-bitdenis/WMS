@@ -33,11 +33,11 @@ from app.services.storage_measurement_service import (
 from app.services.storage_statement_service import (
     StorageStatementError,
     create_storage_tariff,
-    fix_storage_statement,
-    get_fixed_storage_statement,
     get_storage_draft_pricing_batch,
+    get_storage_draft_pricing_for_statement,
     get_storage_ledger_rows,
     get_storage_ledger_rows_batch,
+    get_storage_statement_for_print,
     normalize_storage_tariff_amount,
 )
 
@@ -547,6 +547,10 @@ async def create_tariff(
     )
 
 
+# Пересчёт черновиков — не ручная операция и не деньги: он только обновляет
+# витрину экрана хранения. Кнопки «Сформировать за месяц» больше нет — экран
+# дёргает пересчёт сам после внесения обмера, а по ночам это делает задача
+# начисления. Деньги за хранение пишет только она.
 @router.post(
     "/measurements/rebuild", response_model=StorageRebuildOut, status_code=status.HTTP_202_ACCEPTED
 )
@@ -591,48 +595,6 @@ async def rebuild_storage(
     return StorageRebuildOut(id=str(job.id), status=job.status)
 
 
-@router.post("/statements/{statement_id}/fix", response_model=StorageStatementOut)
-async def fix_statement(
-    statement_id: uuid.UUID,
-    user: Annotated[User, Depends(require_storage_access)],
-    session: Annotated[AsyncSession, Depends(get_db)],
-) -> StorageStatementOut:
-    if user.role != "fulfillment_admin":
-        raise HTTPException(status_code=403, detail="forbidden")
-    tenant_id = user.tenant_id
-    try:
-        statement = await fix_storage_statement(session, tenant_id, statement_id)
-        statement, rows = await get_fixed_storage_statement(session, tenant_id, statement_id)
-    except StorageStatementError as exc:
-        code = str(exc)
-        raise HTTPException(
-            status_code=(
-                409
-                if code
-                in {
-                    "already_fixed",
-                    "missing_dimensions",
-                    "not_editable",
-                    "period_not_closed",
-                    "tariff_not_found",
-                }
-                else 422
-                if code
-                in {
-                    "ledger_quantity_out_of_range",
-                    "ledger_rate_out_of_range",
-                    "ledger_amount_out_of_range",
-                }
-                else 404
-            ),
-            detail=code,
-        ) from exc
-    out = _statement_out(statement, rows)
-    ledger = await get_storage_ledger_rows(session, tenant_id, statement_id)
-    _apply_ledger_snapshot(out, rows, ledger)
-    return out
-
-
 @router.get("/statements/{statement_id}/print", response_model=StorageStatementOut)
 async def print_statement(
     statement_id: uuid.UUID,
@@ -640,12 +602,29 @@ async def print_statement(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> StorageStatementOut:
     try:
-        statement, rows = await get_fixed_storage_statement(session, user.tenant_id, statement_id)
+        statement, rows = await get_storage_statement_for_print(
+            session, user.tenant_id, statement_id
+        )
         if user.role == "fulfillment_seller" and user.seller_id != statement.seller_id:
             raise StorageStatementError("not_found")
     except StorageStatementError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     out = _statement_out(statement, rows)
-    ledger = await get_storage_ledger_rows(session, user.tenant_id, statement.id)
-    _apply_ledger_snapshot(out, rows, ledger)
+    if statement.status == "fixed":
+        # Документ, зафиксированный до перехода на ночное начисление, печатается
+        # ровно теми цифрами, которые тогда ушли в проводки.
+        ledger = await get_storage_ledger_rows(session, user.tenant_id, statement.id)
+        _apply_ledger_snapshot(out, rows, ledger)
+        return out
+    priceable_rows = [row for row in rows if row.status == "calculated"]
+    if priceable_rows:
+        try:
+            pricing = await get_storage_draft_pricing_for_statement(
+                session, statement, priceable_rows
+            )
+        except StorageStatementError:
+            # Ставки на этот период нет — печатаем литро-дни без денег, а не
+            # отказываем в печати: обмеры и объёмы оператору всё равно нужны.
+            return out
+        _apply_draft_pricing(out, rows, pricing)
     return out

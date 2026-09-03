@@ -44,6 +44,7 @@ from app.services.storage_measurement_service import (
     MOSCOW,
     StorageMeasurementError,
     interval_liter_days,
+    rebuild_storage_measurements,
 )
 
 logger = logging.getLogger(__name__)
@@ -285,6 +286,25 @@ async def charge_storage_day(
     return created
 
 
+async def refresh_storage_drafts(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    day: date,
+) -> None:
+    """Пересобрать черновики расчёта хранения, которые смотрит оператор.
+
+    Раньше их пересобирала кнопка «Сформировать за месяц». Кнопки больше нет,
+    но экран хранения нужен: по нему вносят обмеры габаритов и печатают расчёт.
+    Поэтому черновики обновляются той же ночью — за сутки, которые посчитали, и
+    за текущий месяц, если это уже другой месяц.
+    """
+    months = {day.replace(day=1), datetime.now(MOSCOW).date().replace(day=1)}
+    for period_start in sorted(months):
+        await rebuild_storage_measurements(session, tenant_id, period_start=period_start)
+    await session.commit()
+
+
 async def run_daily_storage_charge_all_tenants(*, day: date | None = None) -> int:
     """Ночной проход по всем арендаторам. Сбой одного не отменяет остальных."""
     charged_day = day or previous_moscow_day()
@@ -292,6 +312,8 @@ async def run_daily_storage_charge_all_tenants(*, day: date | None = None) -> in
         tenant_ids = list((await session.scalars(select(Tenant.id))).all())
     total = 0
     for tenant_id in tenant_ids:
+        # Деньги идут первыми и в своей транзакции: пересборка черновиков —
+        # это витрина для оператора, и её падение не должно стоить начислений.
         async with SessionLocal() as session:
             try:
                 total += await charge_storage_day(session, tenant_id, day=charged_day)
@@ -299,5 +321,13 @@ async def run_daily_storage_charge_all_tenants(*, day: date | None = None) -> in
                 await session.rollback()
                 logger.exception(
                     "daily storage charge failed: tenant=%s day=%s", tenant_id, charged_day
+                )
+        async with SessionLocal() as session:
+            try:
+                await refresh_storage_drafts(session, tenant_id, day=charged_day)
+            except Exception:
+                await session.rollback()
+                logger.exception(
+                    "storage draft refresh failed: tenant=%s day=%s", tenant_id, charged_day
                 )
     return total

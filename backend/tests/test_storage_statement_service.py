@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import calendar
 import time
 import uuid
@@ -11,11 +10,11 @@ from typing import cast
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from app.api.storage import _apply_draft_pricing, _print_measurements, _rate_snapshot
 from app.db.session import SessionLocal
-from app.models.billing import BillingLedgerEntry, BillingTariffVersion, BillingTariffVersionV2
+from app.models.billing import BillingTariffVersion, BillingTariffVersionV2
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
@@ -359,62 +358,33 @@ async def _seed_storage_statement(
 
 
 @pytest.mark.asyncio
-async def test_concurrent_fix_publishes_one_immutable_ledger_and_repeatable_print(
+async def test_draft_calculation_prints_and_lists_the_same_numbers(
     async_client: AsyncClient,
 ) -> None:
+    """Печать работает без фиксации и совпадает со списком.
+
+    Фиксация расчёта убрана: деньги за хранение пишет ночная задача, а не
+    человек. Печать при этом осталась нужна — она показывает текущий расчёт
+    ровно теми же цифрами, что и таблица на экране.
+    """
     headers, statement_id, measurement_id = await _seed_storage_statement(async_client)
     assert measurement_id is not None
 
-    first, second = await asyncio.gather(
-        async_client.post(f"/operations/storage/statements/{statement_id}/fix", headers=headers),
-        async_client.post(f"/operations/storage/statements/{statement_id}/fix", headers=headers),
-    )
-
-    assert {first.status_code, second.status_code} == {200}, (first.text, second.text)
-    async with SessionLocal() as session:
-        count = await session.scalar(
-            select(func.count(BillingLedgerEntry.id)).where(
-                BillingLedgerEntry.source_type == "storage_measurement",
-                BillingLedgerEntry.source_id == measurement_id,
-            )
-        )
-        assert count == 1
-
-    first_print = await async_client.get(
+    printed = await async_client.get(
         f"/operations/storage/statements/{statement_id}/print", headers=headers
     )
-    async with SessionLocal() as session:
-        measurement = await session.get(StorageMeasurement, measurement_id)
-        assert measurement is not None
-        product = await session.get(Product, measurement.product_id)
-        old_event = await session.get(ProductDimensionEvent, measurement.dimension_event_id)
-        assert product is not None and old_event is not None
-        old_event.applied = False
-        product.volume_liters = 99
-        session.add(
-            ProductDimensionEvent(
-                tenant_id=measurement.tenant_id,
-                product_id=measurement.product_id,
-                source="manual",
-                observed_at=datetime.now(MOSCOW),
-                volume_liters=Decimal("99"),
-                applied=True,
-                fingerprint=f"manual-after-fix-{time.time_ns()}",
-            )
-        )
-        await session.commit()
-    second_print = await async_client.get(
-        f"/operations/storage/statements/{statement_id}/print", headers=headers
-    )
-    assert first_print.status_code == second_print.status_code == 200
-    assert first_print.json() == second_print.json()
-    payload = first_print.json()
-    assert payload["status"] == "fixed"
-    assert payload["fixed_at"]
+    assert printed.status_code == 200, printed.text
+    payload = printed.json()
+    assert payload["status"] == "draft"
     assert payload["measurements"][0]["rate_snapshot"] == "2.00"
     assert payload["measurements"][0]["liter_days"] == payload["total_liter_days"]
-    assert payload["measurements"][0]["service_code"] == "storage"
-    assert payload["measurements"][0]["unit"] == "liter_day"
+
+    # Ручная фиксация больше не существует как операция.
+    removed = await async_client.post(
+        f"/operations/storage/statements/{statement_id}/fix", headers=headers
+    )
+    assert removed.status_code == 404
+
     period_start = date.fromisoformat(payload["period_start"])
     listed = await async_client.get(
         "/operations/storage/statements",
@@ -447,99 +417,6 @@ async def test_concurrent_fix_publishes_one_immutable_ledger_and_repeatable_prin
     )
     assert without_tariff.status_code == 200
     assert without_tariff.json()["tariff_configured"] is True
-
-    async with SessionLocal() as session:
-        statement = await session.get(StorageStatement, statement_id)
-        assert statement is not None
-        session.add(
-            BillingTariffVersion(
-                tenant_id=statement.tenant_id,
-                seller_id=statement.seller_id,
-                warehouse_id=second_warehouse_id,
-                service_code="storage_liter_day",
-                unit="liter_day",
-                amount=700,
-                valid_from=period_start,
-            )
-        )
-        await session.commit()
-    personal_only = await async_client.get(
-        "/operations/storage/statements",
-        headers=headers,
-        params={
-            "year": period_start.year,
-            "month": period_start.month,
-            "warehouse_id": second_warehouse_id,
-        },
-    )
-    assert personal_only.status_code == 200
-    assert personal_only.json()["tariff_configured"] is True
-
-
-@pytest.mark.asyncio
-async def test_problem_current_month_and_zero_statement_fix_rules(
-    async_client: AsyncClient,
-) -> None:
-    problem_headers, problem_id, _ = await _seed_storage_statement(
-        async_client, status="missing_dimensions"
-    )
-    problem = await async_client.post(
-        f"/operations/storage/statements/{problem_id}/fix", headers=problem_headers
-    )
-    assert problem.status_code == 409
-    assert problem.json()["detail"] == "missing_dimensions"
-
-    current_headers, current_id, _ = await _seed_storage_statement(async_client, current_month=True)
-    current = await async_client.post(
-        f"/operations/storage/statements/{current_id}/fix", headers=current_headers
-    )
-    assert current.status_code == 409
-    assert current.json()["detail"] == "period_not_closed"
-
-    zero_headers, zero_id, _ = await _seed_storage_statement(async_client, zero=True)
-    zero = await async_client.post(
-        f"/operations/storage/statements/{zero_id}/fix", headers=zero_headers
-    )
-    assert zero.status_code == 200, zero.text
-    assert zero.json()["measurements"] == []
-    assert zero.json()["total_amount"] == "0.00"
-    async with SessionLocal() as session:
-        ledger = await session.scalar(
-            select(BillingLedgerEntry).where(BillingLedgerEntry.source_id == zero_id)
-        )
-        assert ledger is not None
-    assert ledger.quantity == 0
-    assert ledger.amount == 0
-
-    no_tariff_headers, no_tariff_id, _ = await _seed_storage_statement(
-        async_client, with_tariff=False
-    )
-    unrelated_warehouse = await async_client.post(
-        "/warehouses",
-        headers=no_tariff_headers,
-        json={"name": "Unrelated storage", "code": f"unrelated-{time.time_ns()}"},
-    )
-    assert unrelated_warehouse.status_code == 200, unrelated_warehouse.text
-    async with SessionLocal() as session:
-        statement = await session.get(StorageStatement, no_tariff_id)
-        assert statement is not None
-        session.add(
-            BillingTariffVersion(
-                tenant_id=statement.tenant_id,
-                seller_id=None,
-                warehouse_id=uuid.UUID(unrelated_warehouse.json()["id"]),
-                service_code="storage_liter_day",
-                unit="liter_day",
-                amount=900,
-                valid_from=statement.period_start,
-            )
-        )
-        await session.commit()
-    no_tariff = await async_client.post(
-        f"/operations/storage/statements/{no_tariff_id}/fix", headers=no_tariff_headers
-    )
-    assert no_tariff.status_code == 409
-    assert no_tariff.json()["detail"] == "tariff_not_found"
 
 
 @pytest.mark.asyncio
@@ -611,51 +488,3 @@ async def test_statement_uses_the_same_seller_override_as_the_invoice_report(
     assert {tariff.rate for _, _, tariff in pricing.values()} == {300}
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("quantity", "amount", "detail"),
-    [
-        (Decimal("10000000000"), Decimal("1"), "ledger_quantity_out_of_range"),
-        (Decimal("0.1"), Decimal("10000000"), "ledger_rate_out_of_range"),
-        (Decimal("10000000"), Decimal("30000000"), "ledger_amount_out_of_range"),
-    ],
-)
-async def test_fix_rejects_unrepresentable_ledger_values_without_partial_state(
-    async_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-    quantity: Decimal,
-    amount: Decimal,
-    detail: str,
-) -> None:
-    headers, statement_id, measurement_id = await _seed_storage_statement(async_client)
-    assert measurement_id is not None
-
-    async def invalid_pricing(
-        _session: object,
-        _statement: StorageStatement,
-        measurements: list[StorageMeasurement],
-        tariffs: list[BillingTariffVersionV2],
-    ) -> dict[uuid.UUID, tuple[Decimal, Decimal, BillingTariffVersionV2]]:
-        assert [row.id for row in measurements] == [measurement_id]
-        return {measurement_id: (quantity, amount, tariffs[0])}
-
-    monkeypatch.setattr(storage_statement_service, "_measurement_pricing", invalid_pricing)
-
-    response = await async_client.post(
-        f"/operations/storage/statements/{statement_id}/fix",
-        headers=headers,
-    )
-
-    assert response.status_code == 422, response.text
-    assert response.json()["detail"] == detail
-    async with SessionLocal() as session:
-        statement = await session.get(StorageStatement, statement_id)
-        assert statement is not None
-        assert statement.status == "draft"
-        ledger_count = await session.scalar(
-            select(func.count(BillingLedgerEntry.id)).where(
-                BillingLedgerEntry.source_type == "storage_measurement",
-                BillingLedgerEntry.source_id == measurement_id,
-            )
-        )
-    assert ledger_count == 0

@@ -135,6 +135,10 @@ async def main() -> None:
                 tenant_id=fact.tenant_id,
                 source_type=fact.document_type,
                 source_id=fact.document_id,
+                # У одного документа теперь бывает несколько начислений: сама
+                # операция и упаковка по ней. Без услуги в отборе скрипт нашёл
+                # бы чужую строку и решил, что документ уже оплачен.
+                service_code=service,
             )
             if existing is not None:
                 existed += 1

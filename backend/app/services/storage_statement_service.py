@@ -8,7 +8,6 @@ from decimal import (
     ROUND_FLOOR,
     ROUND_HALF_UP,
     Decimal,
-    DecimalException,
     InvalidOperation,
 )
 from itertools import pairwise
@@ -37,7 +36,6 @@ from app.services.billing_tariff_matrix_service import (
     get_tariff_matrix,
     save_tariff_matrix,
 )
-from app.services.operation_fact_service import record_storage_fixed
 from app.services.staff_packaging_billing_service import rub_to_kopecks
 from app.services.storage_measurement_service import (
     MOSCOW,
@@ -92,13 +90,6 @@ def normalize_storage_ledger_quantity(quantity: Decimal) -> Decimal:
     if normalized < 0:
         raise StorageStatementError("ledger_quantity_out_of_range")
     return normalized
-
-
-def _storage_ledger_integer(value: Decimal, field: str) -> int:
-    try:
-        return postgres_integer(value, field=field)
-    except BillingLedgerError as exc:
-        raise StorageStatementError(f"{field}_out_of_range") from exc
 
 
 StorageDraftPricing = dict[
@@ -618,6 +609,60 @@ async def get_storage_draft_pricing(
     return await _measurement_pricing(session, statement, measurements, tariffs)
 
 
+async def get_storage_draft_pricing_for_statement(
+    session: AsyncSession,
+    statement: StorageStatement,
+    measurements: list[StorageMeasurement],
+) -> StorageDraftPricing:
+    """Цена черновика одного склада с тем же округлением, что и на экране.
+
+    Копейки округляются на уровне селлера и распределяются между всеми его
+    складами. Считать один склад в одиночку — значит показать в печати сумму,
+    отличающуюся от списка на копейку.
+    """
+    peer_statements = list(
+        (
+            await session.scalars(
+                select(StorageStatement).where(
+                    StorageStatement.tenant_id == statement.tenant_id,
+                    StorageStatement.seller_id == statement.seller_id,
+                    StorageStatement.period_start == statement.period_start,
+                    StorageStatement.period_end == statement.period_end,
+                )
+            )
+        ).all()
+    )
+    peer_rows = list(
+        (
+            await session.scalars(
+                select(StorageMeasurement)
+                .where(
+                    StorageMeasurement.tenant_id == statement.tenant_id,
+                    StorageMeasurement.seller_id == statement.seller_id,
+                    StorageMeasurement.period_start == statement.period_start,
+                    StorageMeasurement.period_end == statement.period_end,
+                    StorageMeasurement.status == "calculated",
+                )
+                .order_by(StorageMeasurement.id)
+            )
+        ).all()
+    )
+    rows_by_warehouse: dict[uuid.UUID, list[StorageMeasurement]] = {}
+    for row in peer_rows:
+        rows_by_warehouse.setdefault(row.warehouse_id, []).append(row)
+    scopes = [
+        (peer, rows_by_warehouse[peer.warehouse_id])
+        for peer in peer_statements
+        if peer.warehouse_id in rows_by_warehouse
+    ]
+    return await get_storage_draft_pricing(
+        session,
+        statement,
+        measurements,
+        rounding_scopes=scopes if len(scopes) > 1 else (),
+    )
+
+
 async def reprice_open_storage_drafts(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -741,265 +786,29 @@ async def reprice_open_storage_drafts(
     return repriced
 
 
-async def fix_storage_statement(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    statement_id: uuid.UUID,
-) -> StorageStatement:
-    """Fix one clean draft and publish its ledger rows in the same transaction."""
-    statement = await session.scalar(
-        select(StorageStatement)
-        .options(joinedload(StorageStatement.seller))
-        .where(StorageStatement.id == statement_id, StorageStatement.tenant_id == tenant_id)
-        .with_for_update()
-    )
-    if statement is None:
-        raise StorageStatementError("not_found")
-    if statement.status == "fixed":
-        return statement
-    if statement.status != "draft":
-        raise StorageStatementError("not_editable")
-    current_month = datetime.now(MOSCOW).date().replace(day=1)
-    if statement.period_start >= current_month:
-        raise StorageStatementError("period_not_closed")
-
-    peer_measurements = list(
-        (
-            await session.scalars(
-                select(StorageMeasurement)
-                .where(StorageMeasurement.tenant_id == tenant_id)
-                .where(StorageMeasurement.seller_id == statement.seller_id)
-                .where(StorageMeasurement.period_start == statement.period_start)
-                .where(StorageMeasurement.period_end == statement.period_end)
-                .order_by(StorageMeasurement.warehouse_id, StorageMeasurement.id)
-            )
-        ).all()
-    )
-    measurements = [
-        row
-        for row in peer_measurements
-        if row.warehouse_id == statement.warehouse_id
-    ]
-    # Копейки округляются на уровне продавца и дня, а потом распределяются между
-    # всеми его складами. Поэтому фиксировать один склад можно только после того,
-    # как рассчитаны габариты на остальных складах того же периода: иначе позднее
-    # исправление соседа перераспределит копейку, уже опубликованную проводкой.
-    if any(row.status != "calculated" for row in peer_measurements):
-        raise StorageStatementError("missing_dimensions")
-
-    # Load every shared tariff intersecting the month.  Pricing below applies
-    # each version only from its valid_from date and prefers seller overrides.
-    period_start_at = datetime.combine(statement.period_start, time.min, MOSCOW)
-    period_end_at = calculation_end_exclusive(statement.period_start, statement.period_end)
-    tariffs = list(
-        (
-            await session.scalars(
-                select(BillingTariffVersionV2)
-                .where(BillingTariffVersionV2.tenant_id == tenant_id)
-                .where(BillingTariffVersionV2.service_code == "storage")
-                .where(BillingTariffVersionV2.unit == "liter_day")
-                .where(BillingTariffVersionV2.enabled.is_(True))
-                .where(BillingTariffVersionV2.employee_user_id.is_(None))
-                .where(BillingTariffVersionV2.product_id.is_(None))
-                .where(BillingTariffVersionV2.valid_from_at < period_end_at)
-                .where(
-                    or_(
-                        BillingTariffVersionV2.valid_to_at.is_(None),
-                        BillingTariffVersionV2.valid_to_at > period_start_at,
-                    )
-                )
-                .where(
-                    or_(
-                        BillingTariffVersionV2.seller_id.is_(None),
-                        BillingTariffVersionV2.seller_id == statement.seller_id,
-                    )
-                )
-                .order_by(BillingTariffVersionV2.valid_from_at, BillingTariffVersionV2.id)
-            )
-        ).all()
-    )
-    if not tariffs:
-        raise StorageStatementError("tariff_not_found")
-    peer_statements = list(
-        (
-            await session.scalars(
-                select(StorageStatement).where(
-                    StorageStatement.tenant_id == tenant_id,
-                    StorageStatement.seller_id == statement.seller_id,
-                    StorageStatement.period_start == statement.period_start,
-                    StorageStatement.period_end == statement.period_end,
-                )
-            )
-        ).all()
-    )
-    peer_rows_by_warehouse: dict[uuid.UUID, list[StorageMeasurement]] = {}
-    for peer_measurement in peer_measurements:
-        peer_rows_by_warehouse.setdefault(
-            peer_measurement.warehouse_id, []
-        ).append(peer_measurement)
-    priced_peer_scopes: list[
-        tuple[StorageStatement, list[StorageMeasurement]]
-    ] = []
-    for peer_statement in peer_statements:
-        peer_rows = peer_rows_by_warehouse.get(peer_statement.warehouse_id, [])
-        if peer_rows:
-            priced_peer_scopes.append((peer_statement, peer_rows))
-
-    if len(priced_peer_scopes) == 1:
-        pricing = await _measurement_pricing(
-            session,
-            statement,
-            measurements,
-            tariffs,
-        )
-    else:
-        combined_raw: RawStorageDraftPricing = {}
-        for peer_statement, peer_rows in priced_peer_scopes:
-            combined_raw.update(
-                await _measurement_pricing_raw(
-                    session,
-                    peer_statement,
-                    peer_rows,
-                    tariffs,
-                )
-            )
-        combined_pricing = _allocate_storage_pricing(combined_raw)
-        pricing = {
-            measurement.id: combined_pricing[measurement.id]
-            for measurement in measurements
-        }
-
-    source_ids = _statement_source_ids(statement, measurements)
-    existing_rows = list(
-        (
-            await session.scalars(
-                select(BillingLedgerEntry).where(
-                    BillingLedgerEntry.tenant_id == tenant_id,
-                    BillingLedgerEntry.source_type == "storage_measurement",
-                    BillingLedgerEntry.service_code == "storage",
-                    BillingLedgerEntry.source_id.in_(source_ids),
-                )
-            )
-        ).all()
-    )
-    existing_ids = {row.source_id for row in existing_rows}
-    pending_entries: list[BillingLedgerEntry] = []
-    for measurement in measurements:
-        if measurement.id in existing_ids:
-            continue
-        charged_quantity, amount, tariff = pricing[measurement.id]
-        quantity_value = normalize_storage_ledger_quantity(charged_quantity)
-        amount_value = _storage_ledger_integer(
-            amount * Decimal(100),
-            "ledger_amount",
-        )
-        try:
-            effective_rate = (
-                (amount / charged_quantity).quantize(Decimal("0.000000000001"))
-                if charged_quantity
-                else Decimal(0)
-            )
-        except DecimalException as exc:
-            raise StorageStatementError("ledger_rate_out_of_range") from exc
-        rate_value = _storage_ledger_integer(
-            effective_rate * Decimal(100),
-            "ledger_rate",
-        )
-        pending_entries.append(
-            BillingLedgerEntry(
-                tenant_id=tenant_id,
-                seller_id=statement.seller_id,
-                warehouse_id=statement.warehouse_id,
-                tariff_version_v2_id=tariff.id,
-                service_code="storage",
-                unit="liter_day",
-                source="storage_statement",
-                source_type="storage_measurement",
-                source_id=measurement.id,
-                event_kind="storage_fixed",
-                quantity=quantity_value,
-                rate=rate_value,
-                amount=amount_value,
-                occurred_at=datetime.now(UTC),
-            )
-        )
-    if not measurements and statement.id not in existing_ids:
-        # A zero statement still has one auditable ledger publication.
-        zero_tariff = _tariff_for_day(tariffs, statement.period_end) or max(
-            tariffs,
-            key=lambda item: (item.seller_id is not None, item.valid_from_at, str(item.id)),
-        )
-        pending_entries.append(
-            BillingLedgerEntry(
-                tenant_id=tenant_id,
-                seller_id=statement.seller_id,
-                warehouse_id=statement.warehouse_id,
-                tariff_version_v2_id=zero_tariff.id,
-                service_code="storage",
-                unit="liter_day",
-                source="storage_statement",
-                source_type="storage_measurement",
-                source_id=statement.id,
-                event_kind="storage_fixed",
-                quantity=normalize_storage_ledger_quantity(Decimal(0)),
-                rate=_storage_ledger_integer(
-                    Decimal(zero_tariff.rate),
-                    "ledger_rate",
-                ),
-                amount=_storage_ledger_integer(Decimal(0), "ledger_amount"),
-                occurred_at=datetime.now(UTC),
-            )
-        )
-    # Validate the complete publication before attaching a row or mutating the
-    # statement. An overflow in a later SKU therefore leaves no partial state.
-    occurred_at = datetime.now(UTC)
-    for measurement in measurements:
-        await record_storage_fixed(
-            session,
-            statement=statement,
-            source_event_id=measurement.id,
-            occurred_at=occurred_at,
-        )
-    if not measurements:
-        await record_storage_fixed(
-            session,
-            statement=statement,
-            source_event_id=statement.id,
-            occurred_at=occurred_at,
-        )
-    session.add_all(pending_entries)
-    statement.status = "fixed"
-    statement.fixed_at = occurred_at
-    try:
-        await session.commit()
-    except IntegrityError as exc:
-        await session.rollback()
-        existing = await session.scalar(
-            select(StorageStatement).where(StorageStatement.id == statement_id)
-        )
-        if existing is not None and existing.status == "fixed":
-            return existing
-        raise StorageStatementError("already_fixed") from exc
-    await session.refresh(statement)
-    return statement
-
-
-async def get_fixed_storage_statement(
+async def get_storage_statement_for_print(
     session: AsyncSession, tenant_id: uuid.UUID, statement_id: uuid.UUID
 ) -> tuple[StorageStatement, list[StorageMeasurement]]:
+    """Расчёт хранения для просмотра и печати — в любом состоянии документа.
+
+    Раньше печать требовала зафиксированного документа: пока человек не нажал
+    «Зафиксировать», распечатать было нечего. Фиксации больше нет — деньги
+    пишет ночная задача, — поэтому печатаем текущий расчёт. У документов,
+    зафиксированных до перехода, строки по-прежнему восстанавливаются из
+    проводок: напечатанное однажды не должно поменяться задним числом.
+    """
     statement = await session.scalar(
         select(StorageStatement)
         .options(joinedload(StorageStatement.seller), joinedload(StorageStatement.warehouse))
         .where(
             StorageStatement.id == statement_id,
             StorageStatement.tenant_id == tenant_id,
-            StorageStatement.status == "fixed",
         )
     )
     if statement is None:
         raise StorageStatementError("not_found")
     # Reconstruct only this document's source measurements.  A seller may have
-    # several fixed months, so a broad seller ledger query is incorrect.
+    # several months, so a broad seller ledger query is incorrect.
     measurements = list(
         (
             await session.scalars(
@@ -1017,6 +826,8 @@ async def get_fixed_storage_statement(
             )
         ).all()
     )
+    if statement.status != "fixed":
+        return statement, measurements
     source_ids = _statement_source_ids(statement, measurements)
     ledger_rows = list(
         (
@@ -1035,6 +846,7 @@ async def get_fixed_storage_statement(
     )
     by_id = {row.id: row for row in measurements}
     return statement, [by_id[row.source_id] for row in ledger_rows if row.source_id in by_id]
+
 
 
 async def create_storage_tariff(
