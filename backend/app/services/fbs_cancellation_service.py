@@ -33,7 +33,11 @@ from app.services.marketplace_scope import (
     is_wildberries,
     wrong_marketplace_message,
 )
-from app.services.ozon_fbs_process_service import OzonFbsProcessError, cancel_posting
+from app.services.ozon_fbs_process_service import (
+    CANCEL_REASON_OUT_OF_STOCK,
+    OzonFbsProcessError,
+    cancel_posting,
+)
 from app.services.ozon_provider_factory import build_ozon_provider, ozon_live_api_enabled
 from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
@@ -257,10 +261,26 @@ async def _finish_local_cancellation(
     await session.flush()
 
 
+# Отметка в `meta_details_json` заказа о том, что в кабинете Ozon отмена уже
+# состоялась. Она и есть журнал сверки: отмена у Ozon необратима («восстановить
+# заказ не получится»), а локальная часть — сторнирование, отцепление от
+# поставки, снятие резерва — может упасть после неё. Без отметки повтор ушёл бы
+# в кабинет второй раз, а без повтора WMS навсегда считал бы заказ активным.
+OZON_CANCELLATION_KEY = "ozon_cancellation"
+
+
+def ozon_cancelled_externally(order: FbsOrder) -> bool:
+    details = order.meta_details_json or {}
+    return isinstance(details.get(OZON_CANCELLATION_KEY), dict)
+
+
 async def _cancel_ozon_order(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     order: FbsOrder,
+    *,
+    reason_id: int | None,
+    reason_message: str | None,
 ) -> None:
     """Отменить отправление в кабинете Ozon — до того, как отменим у себя.
 
@@ -268,10 +288,19 @@ async def _cancel_ozon_order(
     локально, а Ozon откажет, покупатель останется с активным заказом, которого
     на складе уже нет.
 
+    Сразу после ответа Ozon факт отмены коммитится отдельно. Иначе он живёт
+    только внутри открытой транзакции запроса, и падение локальной части
+    стирает его вместе с ней: в кабинете заказ отменён, у нас активен, и найти
+    расхождение нечем.
+
     Рубильник боевого транспорта проверяется явно. Без него выключенный Ozon
     отдал бы локальный фейк, тот вернул бы пустой ответ, и оператор получил бы
     «Ozon не подтвердил отмену» вместо честного «боевой транспорт не включён».
     """
+    if ozon_cancelled_externally(order):
+        # Кабинет уже отменил заказ в прошлой попытке; повторять необратимую
+        # мутацию нельзя, доделываем только локальную часть.
+        return
     if not ozon_live_api_enabled():
         raise FbsCancellationError(
             "ozon_live_cancel_blocked",
@@ -287,12 +316,15 @@ async def _cancel_ozon_order(
         )
     except MarketplaceAccountError as exc:
         raise FbsCancellationError(exc.code, message="Нет доступа к кабинету Ozon.") from exc
+    effective_reason = CANCEL_REASON_OUT_OF_STOCK if reason_id is None else reason_id
     try:
         await cancel_posting(
             build_ozon_provider(),
             client_id=client_id,
             api_key=api_key,
             posting_number=order.external_order_id or "",
+            reason_id=effective_reason,
+            reason_message=reason_message,
         )
     except OzonFbsProcessError as exc:
         raise FbsCancellationError(exc.code, message=exc.message) from exc
@@ -302,6 +334,28 @@ async def _cancel_ozon_order(
             message=provider_error_message(exc),
             retryable=exc.status_code in {429, 500, 502, 503, 504},
         ) from exc
+    details = dict(order.meta_details_json or {})
+    details[OZON_CANCELLATION_KEY] = {
+        "cancelled_at": datetime.now(UTC).isoformat(),
+        "reason_id": effective_reason,
+        "reason_message": (reason_message or "").strip() or None,
+        "posting_number": order.external_order_id,
+    }
+    order.meta_details_json = details
+    await session.commit()
+
+
+async def _lock_order(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order_id: uuid.UUID,
+) -> FbsOrder | None:
+    stmt = (
+        select(FbsOrder)
+        .where(FbsOrder.id == order_id, FbsOrder.tenant_id == tenant_id)
+        .with_for_update()
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
 
 
 async def cancel_order(
@@ -311,14 +365,18 @@ async def cancel_order(
     http_client: httpx.AsyncClient,
     *,
     actor_user_id: uuid.UUID | None,
+    reason_id: int | None = None,
+    reason_message: str | None = None,
 ) -> FbsOrder:
-    stmt = (
-        select(FbsOrder)
-        .where(FbsOrder.id == order_id, FbsOrder.tenant_id == tenant_id)
-        .with_for_update()
-    )
-    res = await session.execute(stmt)
-    order = res.scalar_one_or_none()
+    """Отменить FBS-заказ в кабинете маркетплейса и у себя.
+
+    `reason_id`/`reason_message` относятся только к Ozon: у него причина —
+    обязательное поле метода отмены, и подходящих причин у отправления обычно
+    несколько. Без параметра оставалась бы одна зашитая — «товар закончился», и
+    упакованный заказ с браком уезжал бы в кабинет под чужой причиной. У WB
+    метод отмены причину не принимает вовсе, поэтому там аргумент не участвует.
+    """
+    order = await _lock_order(session, tenant_id, order_id)
     if order is None:
         raise FbsCancellationError("order_not_found")
 
@@ -336,7 +394,23 @@ async def cancel_order(
     # там.
     if not is_wildberries(order):
         if getattr(order, "marketplace", None) == MARKETPLACE_OZON:
-            await _cancel_ozon_order(session, tenant_id, order)
+            await _cancel_ozon_order(
+                session,
+                tenant_id,
+                order,
+                reason_id=reason_id,
+                reason_message=reason_message,
+            )
+            # Отметка об отмене в кабинете коммитится, а коммит снимает замок с
+            # заказа. Берём его заново и перепроверяем: параллельная попытка
+            # могла за это время доделать локальную часть, и повторять
+            # сторнирование поверх неё нельзя.
+            relocked = await _lock_order(session, tenant_id, order_id)
+            if relocked is None:
+                raise FbsCancellationError("order_not_found")
+            order = relocked
+            if order.status == FBS_ORDER_STATUS_CANCELLED:
+                return order
             await _finish_local_cancellation(
                 session,
                 tenant_id,

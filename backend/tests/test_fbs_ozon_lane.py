@@ -23,6 +23,7 @@ from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
     CHECK_STATUS_ERROR,
     CHECK_STATUS_OK,
+    FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_PACKED,
     MAPPING_STATUS_MAPPED,
     META_STATUS_ACCEPTED,
@@ -55,6 +56,7 @@ from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
+from app.services import fbs_cancellation_service as cancellation_svc
 from app.services import fbs_kiz_service as kiz_svc
 from app.services import fbs_marking_service as marking_svc
 from app.services import fbs_packing_box_service as box_svc
@@ -1893,6 +1895,129 @@ async def test_ozon_handoff_after_approved_carriage_does_not_approve_twice(
     assert "/v2/posting/fbs/act/get-barcode" in paths
     assert delivered.status == FBS_SUPPLY_STATUS_IN_DELIVERY
     assert delivered.external_supply_id == "901"
+
+
+def _ozon_cancel_transport() -> FakeMarketplaceTransport:
+    return FakeMarketplaceTransport(
+        endpoint_responses={
+            "/v1/posting/fbs/cancel-reason": {
+                "result": [
+                    {
+                        "posting_number": "ozon-posting-dispatch",
+                        "reasons": [
+                            {"id": 352, "title": "нет товара", "type_id": "seller"},
+                            {"id": 402, "title": "другое", "type_id": "seller"},
+                        ],
+                    }
+                ]
+            },
+            "/v2/posting/fbs/cancel": {"result": True},
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_ozon_cancellation_is_journalled_before_the_local_part(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ozon отменил, локальная часть упала — повтор не отменяет в кабинете второй раз.
+
+    Отмена у Ozon необратима, а локальное сторнирование может упасть после неё.
+    Без отметки об отмене WMS считал бы заказ активным, а повтор ушёл бы в
+    кабинет ещё раз.
+    """
+    tenant, _, _, _, order, _ = await _seed_ozon_supply_case(db_session, packed=False)
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", True)
+    transport = _ozon_cancel_transport()
+    monkeypatch.setattr(
+        cancellation_svc,
+        "build_ozon_provider",
+        lambda: OzonMarketplaceProvider(transport=transport),
+    )
+
+    async def _boom(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("локальная часть отмены упала")
+
+    monkeypatch.setattr(cancellation_svc, "_release_reservation", _boom)
+
+    with pytest.raises(RuntimeError):
+        await cancellation_svc.cancel_order(
+            db_session,
+            tenant.id,
+            order.id,
+            AsyncMock(),
+            actor_user_id=None,
+        )
+
+    async with SessionLocal() as reader:
+        stored = await reader.get(FbsOrder, order.id)
+        assert stored is not None
+        assert stored.status != FBS_ORDER_STATUS_CANCELLED
+        journal = (stored.meta_details_json or {})["ozon_cancellation"]
+        assert journal["reason_id"] == 352
+        assert journal["posting_number"] == "ozon-posting-dispatch"
+
+    monkeypatch.undo()
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", True)
+    retry_transport = _ozon_cancel_transport()
+    monkeypatch.setattr(
+        cancellation_svc,
+        "build_ozon_provider",
+        lambda: OzonMarketplaceProvider(transport=retry_transport),
+    )
+
+    cancelled = await cancellation_svc.cancel_order(
+        db_session,
+        tenant.id,
+        order.id,
+        AsyncMock(),
+        actor_user_id=None,
+    )
+    await db_session.commit()
+
+    assert cancelled.status == FBS_ORDER_STATUS_CANCELLED
+    assert retry_transport.endpoint_calls == []
+
+
+@pytest.mark.asyncio
+async def test_ozon_cancellation_reason_comes_from_the_caller(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Причина — параметр, а не зашитое «товар закончился».
+
+    Упакованный заказ с браком отменяется по своей причине; раньше в кабинет
+    всегда уезжала 352, и в отчётах продавца брак выглядел как нехватка товара.
+    """
+    tenant, _, _, _, order, _ = await _seed_ozon_supply_case(db_session, packed=False)
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", True)
+    transport = _ozon_cancel_transport()
+    monkeypatch.setattr(
+        cancellation_svc,
+        "build_ozon_provider",
+        lambda: OzonMarketplaceProvider(transport=transport),
+    )
+
+    await cancellation_svc.cancel_order(
+        db_session,
+        tenant.id,
+        order.id,
+        AsyncMock(),
+        actor_user_id=None,
+        reason_id=402,
+        reason_message="Брак упаковки",
+    )
+    await db_session.commit()
+
+    cancel_payload = next(
+        payload for path, payload in transport.endpoint_calls if path == "/v2/posting/fbs/cancel"
+    )
+    assert cancel_payload == {
+        "posting_number": "ozon-posting-dispatch",
+        "cancel_reason_id": 402,
+        "cancel_reason_message": "Брак упаковки",
+    }
 
 
 @pytest.mark.asyncio
