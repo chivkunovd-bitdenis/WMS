@@ -582,3 +582,95 @@ def test_postgresql_0113_isolated_upgrade_downgrade_reupgrade() -> None:
             )
             conn.execute(text(f"DROP DATABASE IF EXISTS {database_name}"))
         admin.dispose()
+
+
+@pytest.mark.asyncio
+async def test_matrix_refuses_new_document_rates_but_keeps_reading_old_ones(async_client) -> None:
+    """«За документ» больше не заводят, но своя история не должна ломать экран.
+
+    Склад принимает и отгружает штуки, а не бумажки: ставка за документ врала
+    тем сильнее, чем крупнее документ. Выбор убран. При этом экран присылает
+    обратно весь список версий, включая давние, — и арендатор, у которого
+    когда-то была ставка «за документ», обязан по-прежнему сохранять матрицу.
+    """
+    from app.db.session import SessionLocal
+
+    tenant_id = uuid.uuid4()
+    legacy_start = datetime(2026, 1, 1, 9, 0, tzinfo=UTC)
+    services = dict.fromkeys(MATRIX_SERVICE_CODES, False)
+    services["inbound"] = True
+
+    def version(**patch: object) -> dict[str, object]:
+        return {
+            "seller_id": None,
+            "product_id": None,
+            "employee_user_id": None,
+            "service_code": "inbound",
+            "unit": "item",
+            "enabled": True,
+            "rate": 5000,
+            "valid_from_at": legacy_start,
+            "valid_to_at": None,
+            **patch,
+        }
+
+    async with SessionLocal() as session:
+        tenant = Tenant(id=tenant_id, name="Matrix unit", slug=f"matrix-unit-{tenant_id.hex}")
+        session.add(tenant)
+        await session.flush()
+        await ensure_disabled_tariff_matrix(session, tenant=tenant)
+        # Историческая ставка «за документ» кладётся мимо сохранения: через него
+        # такую больше не завести, а прочитать её надо уметь.
+        session.add(
+            BillingTariffVersionV2(
+                tenant_id=tenant_id,
+                seller_id=None,
+                product_id=None,
+                employee_user_id=None,
+                service_code="inbound",
+                unit="document",
+                enabled=True,
+                rate=5000,
+                valid_from_at=legacy_start,
+                valid_to_at=None,
+            )
+        )
+        await session.commit()
+        revision = (await get_tariff_matrix(session, tenant_id=tenant_id)).revision
+
+        with pytest.raises(BillingTariffMatrixError, match="billing_tariff_matrix_unit_invalid"):
+            await save_tariff_matrix(
+                session,
+                tenant_id=tenant_id,
+                revision=revision,
+                services=services,
+                versions=[
+                    version(unit="document", valid_from_at=datetime(2026, 9, 1, 9, tzinfo=UTC))
+                ],
+            )
+        await session.rollback()
+
+        # Тот же экран, ничего не поменяв в старой версии, добавляет новую
+        # ставку за штуку — и сохранение проходит.
+        await save_tariff_matrix(
+            session,
+            tenant_id=tenant_id,
+            revision=revision,
+            services=services,
+            versions=[
+                version(unit="document"),
+                version(valid_from_at=datetime(2026, 9, 1, 9, tzinfo=UTC), rate=7000),
+            ],
+        )
+        await session.commit()
+
+        stored = {
+            (row.unit, row.rate)
+            for row in await list_tariff_matrix_versions(session, tenant_id=tenant_id)
+        }
+        assert stored == {("document", 5000), ("item", 7000)}
+        await session.execute(
+            delete(BillingTariffVersionV2).where(BillingTariffVersionV2.tenant_id == tenant_id)
+        )
+        await session.delete(tenant)
+        await session.commit()
