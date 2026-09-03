@@ -33,6 +33,10 @@ import { printContainerContents } from './printContainerContents'
 import { randomId } from '../../../utils/randomId'
 import { InventoryTree } from './InventoryTree'
 import {
+  WbProductPickerDialog,
+  type WbProductPickerCatalogRow,
+} from '../../../components/WbProductPickerDialog'
+import {
   EMPTY_FILTERS,
   buildRows,
   collapseAllKeys,
@@ -67,6 +71,35 @@ function plural(n: number, one: string, few: string, many: string): string {
   return `${n} ${many}`
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Товар в документе можно добавить в несколько мест (см. record_found): не
+// прячем от повторного выбора ни один товар, даже если строка по нему уже есть.
+const NO_DISABLED_PRODUCTS = new Set<string>()
+
+type ManualAddPlacement = {
+  cellId: string | null
+  containerKind: 'pallet' | 'box' | 'cargo_place' | null
+  containerId: string | null
+}
+
+/**
+ * Куда положить товар, добавленный руками, — из строки, на которой стоит
+ * выделение (задача 2). Постановка прямо описывает только короб (п. 6) и
+ * «выделения не было» (п. 7); ячейку ведём тем же путём, что и находка со
+ * сканера с открытой ячейкой без тары — иначе выбрать ячейку в задаче 2 было
+ * бы нечем воспользоваться в задаче 3.
+ */
+export function selectionPlacement(row: InvRow | null): ManualAddPlacement {
+  if (!row || row.kind === 'product') return { cellId: null, containerKind: null, containerId: null }
+  if (row.kind === 'cell') {
+    // Служебные строки вида «Без ячеек» — не настоящий адрес склада, для них
+    // ведём себя так же, как без выделения: находка уйдёт в зону сортировки.
+    return { cellId: UUID_RE.test(row.id) ? row.id : null, containerKind: null, containerId: null }
+  }
+  return { cellId: null, containerKind: row.kind, containerId: row.id }
+}
+
 type Props = {
   count: InventoryCount
   loading: boolean
@@ -99,6 +132,26 @@ type Props = {
     containerId: string | null
     scanId: string
   }) => void
+  /**
+   * Каталог товаров для модалки «Добавить товар». null — ещё грузится или не
+   * удалось загрузить; экран в обоих случаях просто открывает пустую модалку,
+   * а не прячет кнопку — иначе непонятно, почему её нет.
+   */
+  productCatalog?: WbProductPickerCatalogRow[] | null
+  catalogLoading?: boolean
+  /**
+   * Добавить товар руками — по каталогу, а не сканом (задача владельца
+   * 03.09.2026). Второй аргумент — куда класть: адрес выводит сервер по тому
+   * же контракту, что и находка (см. inventoryCountApi.addManualLine).
+   */
+  onAddProduct?: (
+    selections: Record<string, number>,
+    placement: {
+      cellId: string | null
+      containerKind: 'pallet' | 'box' | 'cargo_place' | null
+      containerId: string | null
+    },
+  ) => void | Promise<void>
   onBack: () => void
 }
 
@@ -115,6 +168,9 @@ export function FfInventoryCountScreen({
   pendingFound = 0,
   onCreateContainer,
   onFound,
+  productCatalog = null,
+  catalogLoading = false,
+  onAddProduct,
   onBack,
 }: Props) {
   const [filters, setFilters] = useState<InvFilters>(EMPTY_FILTERS)
@@ -123,6 +179,11 @@ export function FfInventoryCountScreen({
   const [openPlace, setOpenPlace] = useState<ScanOpenPlace>(NOTHING_OPEN)
   const [scanNote, setScanNote] = useState<{ text: string; tone: ScanTone } | null>(null)
   const [scanFocus, setScanFocus] = useState<{ key: string; request: number } | null>(null)
+  // Место, на котором оператор сейчас стоит: ячейка или короб. Держится, пока
+  // не выберут другое — в отличие от scanFocus, который гаснет со следующим
+  // сканом. «Добавить товар» кладёт находку сюда.
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
   // Переспрос перед проведением.
   //
   // 02.09.2026 кладовщик нажал «Провести» посреди пересчёта, случайно. Документ
@@ -208,6 +269,17 @@ export function FfInventoryCountScreen({
       return next
     })
   }
+
+  // Повторный клик по уже выбранной строке снимает выделение: иначе после
+  // «набрал этот короб» некуда вернуться к строке без адреса.
+  function handleSelectRow(row: InvRow) {
+    setSelectedKey((current) => (current === row.key ? null : row.key))
+  }
+
+  // Строка, которая сейчас выбрана местом работы. Ищем в живых rows, а не
+  // верим одному ключу: тара могла уйти из дерева (например, документ
+  // перечитали), и тогда выделение честно считается снятым.
+  const selectedRow = rows.find((row) => row.key === selectedKey) ?? null
 
   function handleActual(row: InvRow, value: number | null) {
     onChange(setActual(count, row.id, value), row.id)
@@ -298,7 +370,25 @@ export function FfInventoryCountScreen({
           >
             Создать грузоместо
           </SecondaryAction>
+          <SecondaryAction
+            onClick={() => setPickerOpen(true)}
+            disabledReason={
+              readOnly
+                ? 'Документ уже проведён'
+                : onAddProduct
+                  ? undefined
+                  : 'Добавление товара недоступно'
+            }
+            data-testid="inv-add-product-button"
+          >
+            Добавить товар
+          </SecondaryAction>
         </ActionGroup>
+        {selectedRow ? (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            {`Место работы: ${selectedRow.title}. Добавленный товар ляжет сюда.`}
+          </Typography>
+        ) : null}
       </Box>
 
       {/* Свободная строка про причину: «пересорт», «после потопа», «считали вдвоём».
@@ -420,6 +510,8 @@ export function FfInventoryCountScreen({
         loading={loading}
         readOnly={readOnly}
         highlightedKey={scanFocus?.key}
+        selectedKey={selectedKey}
+        onSelect={readOnly ? undefined : handleSelectRow}
         empty={{
           title: 'В документе нет строк',
           hint: 'Либо отбор ничего не нашёл, либо документ наполнен пустым местом.',
@@ -502,6 +594,24 @@ export function FfInventoryCountScreen({
           Актуальный остаток на складе будет изменён.
         </Typography>
       </AppDialog>
+
+      <WbProductPickerDialog
+        open={pickerOpen}
+        busy={loading}
+        catalogLoading={catalogLoading}
+        catalog={productCatalog}
+        disabledProductIds={NO_DISABLED_PRODUCTS}
+        testIdPrefix="inv-add-product"
+        variant="ff"
+        qtyColumnLabel="Кол-во"
+        applyLabel="Добавить в документ"
+        emptyMessage="В каталоге нет товаров по этому поиску."
+        onClose={() => setPickerOpen(false)}
+        onApply={async (selections) => {
+          await onAddProduct?.(selections, selectionPlacement(selectedRow))
+          setPickerOpen(false)
+        }}
+      />
     </Box>
   )
 }

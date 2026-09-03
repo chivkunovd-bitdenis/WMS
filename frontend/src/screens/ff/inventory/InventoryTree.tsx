@@ -6,7 +6,7 @@ import LayersOutlined from '@mui/icons-material/LayersOutlined'
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
 import ListAltOutlined from '@mui/icons-material/ListAltOutlined'
 import WidgetsOutlined from '@mui/icons-material/WidgetsOutlined'
-import { useState, type ReactNode } from 'react'
+import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import { DataTable, IconAction, NumberInput, QtyCell, StatusChip, TextCell } from '../../../ui-kit'
 import type { Column } from '../../../ui-kit'
 import { ProductPhotoThumb } from '../../../components/ProductPhotoThumb'
@@ -118,6 +118,21 @@ type Props = {
   readOnly: boolean
   highlightedKey?: string | null
   /**
+   * Строка, на которой оператор сейчас стоит: ячейка или короб.
+   *
+   * Держится, пока не выберут другое место — в отличие от `highlightedKey`,
+   * который гаснет со следующим сканом. Нужна, чтобы «Добавить товар» знала,
+   * куда класть.
+   */
+  selectedKey?: string | null
+  /**
+   * Встать на ячейку или тару. У товара выбора места нет — класть некуда.
+   *
+   * Повторный клик по уже выбранной строке снимает выделение: иначе после
+   * «набрал этот короб» некуда вернуться к строке без адреса.
+   */
+  onSelect?: (row: InvRow) => void
+  /**
    * Печать описи содержимого тары — листа, который клеят на короб.
    *
    * Экран отдаёт его сам, а не дерево: содержимое собирается из документа
@@ -134,6 +149,8 @@ export function InventoryTree({
   loading,
   readOnly,
   highlightedKey,
+  selectedKey,
+  onSelect,
   empty,
   onToggle,
   onActual,
@@ -144,7 +161,32 @@ export function InventoryTree({
     {
       key: 'content',
       header: 'Содержимое',
-      render: (row) => (
+      render: (row) => {
+        // Встать местом работы можно только на ячейку или тару — у товара
+        // адреса нет, класть в него нечего.
+        const selectable = row.kind !== 'product' && Boolean(onSelect)
+        const selectSx = selectable
+          ? {
+              cursor: 'pointer',
+              userSelect: 'none' as const,
+              '&:hover': { textDecoration: 'underline' },
+            }
+          : null
+        function selectHandlers() {
+          if (!selectable || !onSelect) return {}
+          return {
+            role: 'button' as const,
+            tabIndex: 0,
+            onClick: () => onSelect(row),
+            onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                onSelect(row)
+              }
+            },
+          }
+        }
+        return (
         <Stack
           direction="row"
           spacing={1}
@@ -167,7 +209,11 @@ export function InventoryTree({
               </IconAction>
             ) : null}
           </Box>
-          <Box sx={{ width: 30, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <Box
+            sx={{ width: 30, display: 'flex', justifyContent: 'center', alignItems: 'center', ...selectSx }}
+            data-testid={selectable ? `inv-select-${row.key}` : undefined}
+            {...selectHandlers()}
+          >
             {row.kind === 'product' ? (
               <ProductPhotoThumb src={row.photoUrl} alt={row.title} size={28} />
             ) : (
@@ -202,8 +248,13 @@ export function InventoryTree({
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
+              ...selectSx,
             }}
-            title={row.title}
+            // Второй тултип поверх нативного title() тут не нужен: одной строки
+            // «встать сюда» в заголовке достаточно, а второй всплывающий блок
+            // рядом с уже привычной подсказкой названия только мешает.
+            title={selectable ? `${row.title} — нажмите, чтобы встать сюда` : row.title}
+            {...selectHandlers()}
           >
             {row.title}
           </Typography>
@@ -216,7 +267,8 @@ export function InventoryTree({
             />
           ) : null}
         </Stack>
-      ),
+        )
+      },
     },
     {
       key: 'seller',
@@ -334,6 +386,7 @@ export function InventoryTree({
             empty={empty}
             fixedLayout
             highlightedKey={highlightedKey}
+            selectedKey={selectedKey}
             hasDiscrepancy={hasDiscrepancy}
             isComplete={isComplete}
           />

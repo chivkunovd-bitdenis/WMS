@@ -180,3 +180,45 @@ class InventoryCountFoundScan(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
+
+
+class InventoryCountCreatedContainer(Base):
+    """Тара, заведённая прямо в документе пересчёта — исключение из прунинга.
+
+    Карта склада отдаёт всю тару склада, и `_prune_empty_containers` в
+    `app/api/inventory_counts.py` выбрасывает из дерева документа ту, в
+    которой по документу ничего не лежит — иначе документ распухает сотнями
+    строк «0 из 0» чужой тары (см. докстринг там же). Но короб, который
+    оператор только что создал прямо в ЭТОМ документе, пуст по определению —
+    и общее правило вышвыривало его сразу же, хотя человеку нужно видеть,
+    куда класть товар. Эта таблица — точечный список исключений на пару
+    (документ, тара), а не отключение прунинга.
+    """
+
+    __tablename__ = "inventory_count_created_containers"
+    __table_args__ = (
+        UniqueConstraint(
+            "count_id",
+            "container_kind",
+            "container_id",
+            name="uq_inventory_count_created_container",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False, index=True
+    )
+    count_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("inventory_counts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    container_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    container_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
