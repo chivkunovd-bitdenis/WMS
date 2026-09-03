@@ -205,7 +205,6 @@ type OutboundSummaryRow = {
   goods_qty_total?: number
   planned_shipment_date?: string | null
   created_at?: string
-  marketplace_label?: string
   seller_id?: string | null
   seller_name?: string | null
 }
