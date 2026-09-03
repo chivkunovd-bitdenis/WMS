@@ -8,7 +8,6 @@ from types import SimpleNamespace
 import pytest
 
 from app.models.billing import BillingLedgerEntry
-from app.services import billing_seller_report_service
 from app.services.billing_seller_report_service import _token, build_seller_report
 from app.services.storage_measurement_service import MOSCOW, interval_liter_days
 
