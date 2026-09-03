@@ -743,3 +743,120 @@ async def test_wb_stock_sync_does_not_publish_ozon_binding(
         )
 
     assert rows == []
+
+
+# --- Ozon ---------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ozon_warehouse_binding_can_be_created_and_found_by_a_posting(
+    async_client: AsyncClient,
+) -> None:
+    """Привязку склада Ozon раньше было неоткуда взять.
+
+    Модель по умолчанию ставила `wb`, три места создания маркетплейс не
+    передавали, а у ручки такого поля не было вовсе. Каждый заказ Ozon из-за
+    этого гарантированно получал «склад не привязан» и не резервировался.
+
+    Идентификатор склада взят живой: `/v2/warehouse/list` на кабинете
+    «ИП Горячкина Т.И.» 03.09.2026 отдал склад `1020005028840530` «мой склад».
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    warehouse_id = await _create_warehouse(async_client, headers, suffix, "ozon")
+    ozon_warehouse_id = 1020005028840530
+
+    created = await async_client.put(
+        _bindings_url(seller_id, ozon_warehouse_id),
+        headers=headers,
+        json={
+            "wms_warehouse_id": warehouse_id,
+            "stock_sync_enabled": False,
+            "marketplace": "ozon",
+        },
+    )
+    assert created.status_code == 200, created.text
+    body = created.json()
+    assert body["marketplace"] == "ozon"
+    # Внешний идентификатор подставляется из пути: именно по нему привязка
+    # находится при разборе отправления.
+    assert body["external_warehouse_id"] == str(ozon_warehouse_id)
+    assert body["wb_warehouse_id"] == ozon_warehouse_id
+
+    listed = await async_client.get(_bindings_url(seller_id), headers=headers)
+    assert listed.status_code == 200, listed.text
+    assert [row["marketplace"] for row in listed.json()] == ["ozon"]
+
+
+@pytest.mark.asyncio
+async def test_binding_marketplace_defaults_to_wb_and_keeps_external_id_empty(
+    async_client: AsyncClient,
+) -> None:
+    """Вайлдберрисовский путь не меняется ни на шаг: то же тело, тот же результат."""
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    warehouse_id = await _create_warehouse(async_client, headers, suffix, "wb")
+
+    created = await async_client.put(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+        json={"wms_warehouse_id": warehouse_id, "stock_sync_enabled": True},
+    )
+    assert created.status_code == 200, created.text
+    assert created.json()["marketplace"] == "wb"
+    assert created.json()["external_warehouse_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_unknown_marketplace_is_refused_with_a_readable_error(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    warehouse_id = await _create_warehouse(async_client, headers, suffix, "x")
+
+    refused = await async_client.put(
+        _bindings_url(seller_id, 501002),
+        headers=headers,
+        json={
+            "wms_warehouse_id": warehouse_id,
+            "stock_sync_enabled": False,
+            "marketplace": "avito",
+        },
+    )
+    assert refused.status_code == 422, refused.text
+
+
+@pytest.mark.asyncio
+async def test_ozon_binding_is_addressed_separately_from_the_wb_one(
+    async_client: AsyncClient,
+) -> None:
+    """Одна ручка на два маркетплейса не должна их путать."""
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wh_wb = await _create_warehouse(async_client, headers, suffix, "wbwh")
+    wh_ozon = await _create_warehouse(async_client, headers, suffix, "ozwh")
+
+    wb = await async_client.put(
+        _bindings_url(seller_id, 501003),
+        headers=headers,
+        json={"wms_warehouse_id": wh_wb, "stock_sync_enabled": True},
+    )
+    assert wb.status_code == 200, wb.text
+    ozon = await async_client.put(
+        _bindings_url(seller_id, 1020005028840530),
+        headers=headers,
+        json={
+            "wms_warehouse_id": wh_ozon,
+            "stock_sync_enabled": False,
+            "marketplace": "ozon",
+        },
+    )
+    assert ozon.status_code == 200, ozon.text
+
+    listed = await async_client.get(_bindings_url(seller_id), headers=headers)
+    rows = {row["marketplace"]: row for row in listed.json()}
+    assert set(rows) == {"wb", "ozon"}
+    assert rows["wb"]["wms_warehouse_id"] == wh_wb
+    assert rows["ozon"]["wms_warehouse_id"] == wh_ozon
+    assert rows["ozon"]["stock_sync_enabled"] is False

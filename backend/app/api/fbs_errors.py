@@ -141,6 +141,7 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     # "Склады и привязки" / "Синхронизация остатков" sections.
     "binding_not_found": "Привязка склада не найдена.",
     "invalid_wb_warehouse_id": "Некорректный ID склада WB.",
+    "unsupported_marketplace": "Привязка складов поддерживается только для Wildberries и Ozon.",
     "wms_warehouse_already_bound": "WMS-склад уже привязан.",
     "wb_warehouse_already_bound": "Этот WB-склад уже привязан к другому складу WMS.",
     "active_fbs_reservations": "Есть активные FBS-резервы.",
