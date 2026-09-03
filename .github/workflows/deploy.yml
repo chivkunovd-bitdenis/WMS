@@ -24,6 +24,15 @@ jobs:
           command_timeout: 30m
           script: |
             set -euo pipefail
+            # Тот же обход протокола v2, что и в самом скрипте. Здесь он нужен
+            # отдельно: скрипт на сервере обновляется только успешным fetch'ем,
+            # то есть починить его собой он не может. Конфиг передаём
+            # переменными окружения — на сервере ничего не меняем.
+            export GIT_CONFIG_COUNT=2
+            export GIT_CONFIG_KEY_0=protocol.version
+            export GIT_CONFIG_VALUE_0=1
+            export GIT_CONFIG_KEY_1=http.version
+            export GIT_CONFIG_VALUE_1=HTTP/1.1
             cd "${WMS_REPO_DIR:-/opt/wms}"
             ./scripts/deploy/prod-update.sh
 
@@ -33,7 +42,17 @@ jobs:
           HOST="${{ secrets.DEPLOY_SSH_HOST }}"
           PORT="${{ secrets.DEPLOY_HTTP_PORT || '8088' }}"
           for path in "/" "/seller/" "/api/health"; do
-            code=$(curl -fsS -o /dev/null -w "%{http_code}" "http://${HOST}:${PORT}${path}" || echo "000")
+            code="000"
+            for attempt in $(seq 1 10); do
+              code=$(curl -sS -o /dev/null -w "%{http_code}" "http://${HOST}:${PORT}${path}" || true)
+              if [ "${code}" = "200" ]; then
+                break
+              fi
+              echo "${path} -> ${code:-000} (attempt ${attempt}/10)"
+              if [ "${attempt}" -lt 10 ]; then
+                sleep 3
+              fi
+            done
             echo "${path} -> ${code}"
             test "${code}" = "200"
           done
