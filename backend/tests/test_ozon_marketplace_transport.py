@@ -25,6 +25,7 @@ from app.services.marketplace_provider import (
     MarketplaceProviderError,
 )
 from app.services.ozon_marketplace_transport import (
+    PRODUCTS_STOCKS_PATH,
     UNFULFILLED_LIST_PATH,
     HttpxOzonMarketplaceTransport,
 )
@@ -212,19 +213,162 @@ async def test_supply_qr_refuses_a_placeholder_supply_id() -> None:
     assert caught.value.code == "ozon_carriage_id_invalid"
 
 
-async def test_publishing_stocks_stays_refused_by_the_live_transport() -> None:
-    """Решение из ТЗ: «Публикация остатков FBS запрещена в любом случае»."""
+async def test_stocks_go_out_signed_by_product_id_without_the_removed_quant_size() -> None:
+    """Ровно один идентификатор в позиции — это требование самой спецификации.
 
-    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover - must not run
-        raise AssertionError("stock publishing must never reach the network")
+    «Если запрос содержит оба параметра — `offer_id` и `product_id`, изменения
+    применятся к товару с `offer_id`. Для избежания неоднозначности используйте
+    только один из параметров». Плюс `quant_size` Ozon удалил из запроса
+    26.06.2025, хотя в `required` схемы он до сих пор висит.
+    """
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == PRODUCTS_STOCKS_PATH
+        bodies.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "result": [
+                    {
+                        "offer_id": "OZ1",
+                        "product_id": 6204279711,
+                        "warehouse_id": 1020005028840530,
+                        "updated": True,
+                        "errors": [],
+                    }
+                ]
+            },
+        )
+
+    await _transport(handler).publish_stocks(
+        client_id="c",
+        api_key="k",
+        stocks=[
+            {
+                "offer_id": "OZ1",
+                "product_id": 6204279711,
+                "stock": 7,
+                "warehouse_id": 1020005028840530,
+            }
+        ],
+    )
+
+    assert bodies == [
+        {"stocks": [{"warehouse_id": 1020005028840530, "stock": 7, "product_id": 6204279711}]}
+    ]
+
+
+async def test_stocks_fall_back_to_the_seller_article_when_there_is_no_product_id() -> None:
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json={"result": [{"offer_id": "OZ1", "updated": True}]})
+
+    await _transport(handler).publish_stocks(
+        client_id="c",
+        api_key="k",
+        stocks=[{"offer_id": " OZ1 ", "stock": 0, "warehouse_id": "1020005028840530"}],
+    )
+
+    assert bodies[0]["stocks"] == [
+        {"warehouse_id": 1020005028840530, "stock": 0, "offer_id": "OZ1"}
+    ]
+
+
+async def test_stocks_are_split_into_batches_of_the_hundred_ozon_allows() -> None:
+    """Живой кабинет сам назвал границу: «between 1 and 100 items, inclusive»."""
+    sizes: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        sizes.append(len(body["stocks"]))
+        rows = [{"product_id": item["product_id"], "updated": True} for item in body["stocks"]]
+        return httpx.Response(200, json={"result": rows})
+
+    await _transport(handler).publish_stocks(
+        client_id="c",
+        api_key="k",
+        stocks=[{"product_id": index + 1, "stock": 1, "warehouse_id": 42} for index in range(250)],
+    )
+
+    assert sizes == [100, 100, 50]
+
+
+async def test_a_rejected_stock_row_is_an_error_and_carries_ozons_own_code() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "result": [
+                    {"product_id": 1, "warehouse_id": 42, "updated": True, "errors": []},
+                    {
+                        "product_id": 2,
+                        "warehouse_id": 42,
+                        "updated": False,
+                        "errors": [
+                            {
+                                "code": "PRODUCT_IS_ARCHIVED",
+                                "message": "Товар в архиве.",
+                            }
+                        ],
+                    },
+                ]
+            },
+        )
 
     with pytest.raises(MarketplaceProviderError) as caught:
         await _transport(handler).publish_stocks(
             client_id="c",
             api_key="k",
-            stocks=[{"offer_id": "OZ1", "stock": 3}],
+            stocks=[
+                {"product_id": 1, "stock": 1, "warehouse_id": 42},
+                {"product_id": 2, "stock": 1, "warehouse_id": 42},
+            ],
         )
-    assert caught.value.code == "ozon_stock_publish_disabled"
+    assert caught.value.code == "ozon_stock_rejected"
+    failed = caught.value.payload["failed"]
+    assert isinstance(failed, list)
+    assert failed[0]["product_id"] == 2
+    assert failed[0]["codes"] == ["PRODUCT_IS_ARCHIVED"]
+
+
+async def test_an_answer_without_result_rows_is_not_treated_as_a_confirmation() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"result": []})
+
+    with pytest.raises(MarketplaceProviderError) as caught:
+        await _transport(handler).publish_stocks(
+            client_id="c",
+            api_key="k",
+            stocks=[{"product_id": 1, "stock": 1, "warehouse_id": 42}],
+        )
+    assert caught.value.code == "ozon_stock_unconfirmed"
+
+
+async def test_a_stock_without_warehouse_or_identifier_never_reaches_the_network() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover - must not run
+        raise AssertionError("an invalid stock row must not be sent")
+
+    for row, reason in (
+        ({"product_id": 1, "stock": 1}, "warehouse_id"),
+        ({"product_id": 1, "warehouse_id": 42}, "stock"),
+        ({"stock": 1, "warehouse_id": 42}, "identifier"),
+    ):
+        with pytest.raises(MarketplaceProviderError) as caught:
+            await _transport(handler).publish_stocks(client_id="c", api_key="k", stocks=[row])
+        assert caught.value.code == "ozon_stock_item_invalid"
+        assert caught.value.payload["reason"] == reason
+
+
+async def test_publishing_an_empty_list_makes_no_request_at_all() -> None:
+    """Ozon отвечает на пустой список 400; спрашивать его об этом незачем."""
+
+    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover - must not run
+        raise AssertionError("an empty publish must not reach the network")
+
+    await _transport(handler).publish_stocks(client_id="c", api_key="k", stocks=[])
 
 
 def test_factory_keeps_the_local_fake_until_the_setting_is_switched_on(

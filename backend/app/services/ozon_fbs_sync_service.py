@@ -86,9 +86,7 @@ _OZON_DELIVERY_STATUSES = frozenset({"delivering", "driver_pickup", "sent_by_sel
 _OZON_ACCEPTED_STATUSES = frozenset({"acceptance_in_progress"})
 _OZON_DONE_STATUSES = frozenset({"delivered", "done"})
 _OZON_DONE_SUBSTATUSES = frozenset({"posting_delivered", "posting_received"})
-_OZON_CANCELLED_STATUSES = frozenset(
-    {"cancelled", "canceled", "cancelled_from_split_pending"}
-)
+_OZON_CANCELLED_STATUSES = frozenset({"cancelled", "canceled", "cancelled_from_split_pending"})
 
 # Этапы, которые ставит наш собственный процесс. Опрос Ozon не имеет права
 # затирать их своим «отправление ещё не собрано»: заказ, взятый в поставку,
@@ -278,9 +276,15 @@ async def _credentials(
 def _stock_error_code(error: MarketplaceProviderError) -> str:
     if error.is_account_blocked:
         return "ozon_account_blocked"
-    # Публикация остатков в Ozon выключена решением по проекту, а не сбоем
-    # кабинета: «Ozon временно недоступен» здесь было бы неправдой.
-    if error.code == "ozon_stock_publish_disabled":
+    # Отказ по самим остаткам — не сбой кабинета: Ozon ответил и назвал причину
+    # по каждой паре товар-склад. Писать сюда «Ozon временно недоступен» значит
+    # спрятать от оператора настоящую причину («товар в архиве», «склад не
+    # найден», «слишком часто обновляли»).
+    if error.code in {
+        "ozon_stock_rejected",
+        "ozon_stock_unconfirmed",
+        "ozon_stock_item_invalid",
+    }:
         return error.code
     if error.status_code in {401, 403}:
         return "ozon_auth_failed"
@@ -536,9 +540,7 @@ async def _honest_sign_required_by_catalog(
     Связи тянем явным запросом: `position.product` в асинхронном коде даёт
     MissingGreenlet и роняет весь проход опроса.
     """
-    product_ids = {
-        position.product_id for position in positions if position.product_id is not None
-    }
+    product_ids = {position.product_id for position in positions if position.product_id is not None}
     if fallback_product_id is not None:
         product_ids.add(fallback_product_id)
     if not product_ids:
@@ -584,9 +586,7 @@ async def _apply_status(
     previous = order.status
     previous_wb_status = order.wb_status
     order.wb_status = normalized
-    order.supplier_status = (
-        "new" if local == FBS_ORDER_STATUS_NEW else (substatus or normalized)
-    )
+    order.supplier_status = "new" if local == FBS_ORDER_STATUS_NEW else (substatus or normalized)
     # Опрос Ozon двигает заказ вперёд и в конечные состояния, но никогда не
     # тянет назад через наши собственные этапы. Иначе заказ, уже взятый в
     # поставку, каждые десять минут возвращался бы в «новые», а собранный —

@@ -14,10 +14,15 @@
   на котором это можно разрешить, в кабинете нет. Поэтому транспорт принимает
   оба варианта и отдаёт наверх один: словарь с base64 в ``file_content``. Кто
   бы из двух ни оказался прав, разбор выше по стеку не меняется.
-* **Публикация остатков запрещена.** Это решение из ТЗ
-  (``tasks/ozon-integration-20260825/FBS-PROCESS.md``, раздел 9): «Публикация
-  остатков FBS запрещена в любом случае». Метода публикации нет ни в нашей
-  копии спецификации, ни в коде, и витрину покупателя мы вслепую не трогаем.
+* **Публикация остатков включена и идёт методом ``/v2/products/stocks``.**
+  Запрет из ТЗ от 25.08.2026 («Публикация остатков FBS запрещена в любом
+  случае») был решением того дня, когда кабинет отвечал 403 и проверить метод
+  было нечем. 03.09.2026 кабинет открылся, и владелец снял запрет: без
+  публикации остатков Ozon не знает, сколько у нас товара, и продавать по FBS
+  нельзя вообще. Метод живой: боевой ключ на пустом списке отвечает
+  ``400 Request validation error: invalid ProductsStocksRequest.Stocks: value
+  must contain between 1 and 100 items, inclusive``, а кандидат
+  ``/v1/product/import/stocks`` мёртв (``404 page not found``).
 * **Мутации не повторяются.** Идемпотентных ключей Ozon не документирует ни
   для одной мутации, поэтому повтор — забота вызывающего кода, который знает
   семантику операции. Транспорт делает ровно один запрос.
@@ -51,6 +56,14 @@ CUTOFF_WINDOW_FUTURE_DAYS = 30
 UNFULFILLED_LIST_PATH = "/v4/posting/fbs/unfulfilled/list"
 POSTING_GET_PATH = "/v3/posting/fbs/get"
 ACT_BARCODE_PATH = "/v2/posting/fbs/act/get-barcode"
+PRODUCTS_STOCKS_PATH = "/v2/products/stocks"
+
+# «За один запрос можно изменить наличие для 100 пар товар-склад» — описание
+# метода в официальной спецификации Ozon (swagger.json, ProductAPI_ProductsStocksV2).
+# Живой кабинет подтверждает границу сам: на пустом списке отвечает «value must
+# contain between 1 and 100 items, inclusive». В JSON-схеме `maxItems` не
+# объявлен, поэтому пакетируем здесь, а не надеемся на валидатор.
+STOCK_BATCH_SIZE = 100
 
 _JSON_MEDIA_TYPES = frozenset({"application/json", "text/json", "application/problem+json"})
 
@@ -93,6 +106,101 @@ def _binary_envelope(response: httpx.Response) -> dict[str, object]:
         "file_content": base64.b64encode(response.content).decode("ascii"),
         "content_type": _media_type(response) or "application/octet-stream",
     }
+
+
+def _positive_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if isinstance(value, str) and value.strip().isdigit():
+        parsed = int(value.strip())
+        return parsed if parsed > 0 else None
+    return None
+
+
+def _stock_item(stock: Mapping[str, object]) -> dict[str, object]:
+    """Один элемент `stocks` в форме, которую ждёт `/v2/products/stocks`.
+
+    Три решения, каждое — из официальной спецификации Ozon, а не из удобства:
+
+    * **Идентификатор ровно один.** Описание метода: «Если запрос содержит оба
+      параметра — `offer_id` и `product_id`, изменения применятся к товару с
+      `offer_id`. Для избежания неоднозначности используйте только один из
+      параметров». Отправлять оба — это молча отдать решение Ozon; берём
+      `product_id`, потому что это его собственный идентификатор карточки, и
+      только при его отсутствии падаем на артикул продавца.
+    * **`quant_size` не отправляется.** Он стоит в `required` схемы, но в
+      `properties` его нет, а раздел «Обновления» спецификации объясняет почему:
+      16.06.2025 параметр помечен устаревшим, 26.06.2025 «Удалили параметры
+      `stocks.quant_size` из запроса и `result.quant_size` из ответа метода».
+      Запись в `required` — мусор, оставшийся после удаления.
+    * **`sku` не участвует.** В схеме метода такого поля нет вовсе: у Ozon `sku`
+      и `product_id` — разные числа (живой `/v4/product/info/stocks` отдаёт по
+      одной карточке `product_id: 6204279711` и `sku: 5680762790`).
+    """
+    warehouse_id = _positive_int(stock.get("warehouse_id"))
+    if warehouse_id is None:
+        raise MarketplaceProviderError(
+            "ozon",
+            None,
+            {"reason": "warehouse_id"},
+            code="ozon_stock_item_invalid",
+        )
+    raw_stock = stock.get("stock")
+    if isinstance(raw_stock, bool) or not isinstance(raw_stock, int) or raw_stock < 0:
+        raise MarketplaceProviderError(
+            "ozon",
+            None,
+            {"reason": "stock"},
+            code="ozon_stock_item_invalid",
+        )
+    item: dict[str, object] = {"warehouse_id": warehouse_id, "stock": raw_stock}
+    product_id = _positive_int(stock.get("product_id"))
+    offer_id = stock.get("offer_id")
+    if product_id is not None:
+        item["product_id"] = product_id
+    elif isinstance(offer_id, str) and offer_id.strip():
+        item["offer_id"] = offer_id.strip()
+    else:
+        raise MarketplaceProviderError(
+            "ozon",
+            None,
+            {"reason": "identifier"},
+            code="ozon_stock_item_invalid",
+        )
+    return item
+
+
+def _stock_failures(rows: Sequence[object]) -> list[dict[str, object]]:
+    """Строки ответа, которые Ozon не обновил: `updated=false` плюс его же коды."""
+    failures: list[dict[str, object]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if row.get("updated") is True:
+            continue
+        errors = row.get("errors")
+        codes = [
+            str(error.get("code") or "")
+            for error in (errors if isinstance(errors, list) else [])
+            if isinstance(error, dict)
+        ]
+        messages = [
+            str(error.get("message") or "")
+            for error in (errors if isinstance(errors, list) else [])
+            if isinstance(error, dict)
+        ]
+        failures.append(
+            {
+                "offer_id": row.get("offer_id"),
+                "product_id": row.get("product_id"),
+                "warehouse_id": row.get("warehouse_id"),
+                "codes": [code for code in codes if code],
+                "messages": [message for message in messages if message],
+            }
+        )
+    return failures
 
 
 class HttpxOzonMarketplaceTransport:
@@ -267,13 +375,37 @@ class HttpxOzonMarketplaceTransport:
         api_key: str,
         stocks: Sequence[Mapping[str, object]],
     ) -> None:
-        _ = client_id, api_key, stocks
-        raise MarketplaceProviderError(
-            "ozon",
-            None,
-            {},
-            code="ozon_stock_publish_disabled",
-        )
+        """Publish stock per product-warehouse pair, batched to Ozon's own limit of 100."""
+        items = [_stock_item(stock) for stock in stocks]
+        if not items:
+            return
+        for start in range(0, len(items), STOCK_BATCH_SIZE):
+            batch = items[start : start + STOCK_BATCH_SIZE]
+            raw = await self.call(
+                client_id=client_id,
+                api_key=api_key,
+                path=PRODUCTS_STOCKS_PATH,
+                payload={"stocks": batch},
+            )
+            rows = raw.get("result") if isinstance(raw, dict) else None
+            if not isinstance(rows, list) or not rows:
+                # 200 без единой строки результата — это не подтверждение. Считать
+                # его успехом значит покрасить привязку в «опубликовано», когда
+                # Ozon про наш остаток ничего не сказал.
+                raise MarketplaceProviderError(
+                    "ozon",
+                    None,
+                    {"sent": len(batch)},
+                    code="ozon_stock_unconfirmed",
+                )
+            failures = _stock_failures(rows)
+            if failures:
+                raise MarketplaceProviderError(
+                    "ozon",
+                    None,
+                    {"failed": failures, "sent": len(batch)},
+                    code="ozon_stock_rejected",
+                )
 
     async def dispatch_unload(
         self,
