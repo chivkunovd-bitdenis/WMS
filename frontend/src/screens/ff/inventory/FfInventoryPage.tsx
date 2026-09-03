@@ -20,6 +20,7 @@ import {
   type ApiSummary,
   recordCountFound,
   saveCountActuals,
+  createCountContainer,
   InventoryHttpError,
 } from './inventoryCountApi'
 
@@ -229,8 +230,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
 
   async function createContainer(kind: 'pallet' | 'box' | 'cargo_place') {
     if (!count || count.status !== 'draft') return
-    const warehouseId = count.warehouseId
-    if (!warehouseId) {
+    if (!count.warehouseId) {
       setError('Не удалось определить склад документа')
       return
     }
@@ -238,13 +238,10 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(apiUrl(`/warehouses/${warehouseId}/sorting-objects`), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
-        body: JSON.stringify({ kind }),
-      })
-      if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      await open(count.id)
+      // Ручка документа, а не общая /warehouses/{id}/sorting-objects: она же
+      // запоминает тару за документом, чтобы прунинг пустой тары не выбросил
+      // её из дерева сразу после создания (см. inventoryCountApi).
+      setCount(await createCountContainer(token, count.id, kind))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось создать тару')
     } finally {

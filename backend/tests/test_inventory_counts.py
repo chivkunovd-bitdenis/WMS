@@ -1022,6 +1022,112 @@ async def test_inventory_count_drops_empty_containers_but_keeps_them_scannable(
 
 
 @pytest.mark.asyncio
+async def test_inventory_count_create_container_keeps_it_visible_but_not_other_empty_boxes(
+    async_client: AsyncClient,
+) -> None:
+    # Кнопка «Создать короб» была мертва: тара создавалась на складе, но
+    # прунинг тут же выбрасывал её из дерева документа — она пуста по
+    # определению, оператор только что её завёл. Ручка
+    # POST /operations/inventory-counts/{id}/containers должна и создать
+    # тару, и удержать её в дереве, но не отключать прунинг для чужой пустой
+    # тары склада (см. test_inventory_count_drops_empty_containers_...).
+    setup = await _tenant(async_client, "NewBox")
+    product = await _product(async_client, setup, name="Товар в коробе")
+    pallet_id, box_id, _cargo_place_id, empty_box_id = await _containers(setup)
+    await _balance(
+        setup,
+        product,
+        3,
+        location_id=setup.location_id,
+        container_kind="box",
+        container_id=box_id,
+    )
+
+    count = await _create_all(async_client, setup)
+
+    response = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/containers",
+        headers=setup.headers,
+        json={"kind": "box"},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    def container_ids(nodes: list[dict[str, object]]) -> set[str]:
+        found: set[str] = set()
+        for node in nodes:
+            if node["kind"] == "product":
+                continue
+            found.add(str(node["id"]))
+            found |= container_ids(node["children"])  # type: ignore[arg-type]
+        return found
+
+    in_tree: set[str] = set()
+    for cell in body["cells"]:
+        in_tree |= container_ids(cell["children"])  # type: ignore[arg-type]
+
+    # Новый короб виден в дереве документа сразу после создания. Короб с
+    # товаром и его палета (родитель, у которого теперь есть непустой
+    # ребёнок) остаются в дереве по обычному правилу «не пусто — не трогаем».
+    created_ids = in_tree - {str(box_id), str(pallet_id)}
+    assert len(created_ids) == 1, in_tree
+    created_id = next(iter(created_ids))
+    assert created_id != str(empty_box_id)
+
+    # ...а старая пустая тара склада, не заведённая через эту ручку,
+    # по-прежнему выброшена из дерева: общее правило прунинга не отключилось.
+    assert str(empty_box_id) not in in_tree
+    scannable_ids = {item["id"] for item in body["scannable_containers"]}
+    assert str(empty_box_id) in scannable_ids
+    assert created_id not in scannable_ids
+
+    # Исключение привязано к документу, а не только к разовому ответу ручки:
+    # обычное переоткрытие документа отдаёт тот же результат.
+    reopened = await async_client.get(
+        f"/operations/inventory-counts/{count['id']}", headers=setup.headers
+    )
+    assert reopened.status_code == 200, reopened.text
+    reopened_tree: set[str] = set()
+    for cell in reopened.json()["cells"]:
+        reopened_tree |= container_ids(cell["children"])  # type: ignore[arg-type]
+    assert created_id in reopened_tree
+    assert str(empty_box_id) not in reopened_tree
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_create_container_rejects_posted_document(
+    async_client: AsyncClient,
+) -> None:
+    # Пересчёт проведён — дерево уже история движений, заводить в него тару
+    # незачем и небезопасно. Как и правка строк (save_actuals), создание
+    # тары должно быть заперто статусом документа на сервере, а не только
+    # проверкой на экране.
+    setup = await _tenant(async_client, "PostedNoBox")
+    product = await _product(async_client, setup, name="Товар для проводки")
+    await _balance(setup, product, 2)
+    count = await _create_all(async_client, setup)
+    line = count["lines"][0]
+    saved = await async_client.put(
+        f"/operations/inventory-counts/{count['id']}/lines",
+        headers=setup.headers,
+        json={"lines": [{"line_id": line["id"], "actual_quantity": 2}]},
+    )
+    assert saved.status_code == 200, saved.text
+    posted = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/post", headers=setup.headers
+    )
+    assert posted.status_code == 200, posted.text
+
+    response = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/containers",
+        headers=setup.headers,
+        json={"kind": "box"},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "not_editable"
+
+
+@pytest.mark.asyncio
 async def test_inventory_count_records_found_into_container_dropped_as_empty(
     async_client: AsyncClient,
 ) -> None:

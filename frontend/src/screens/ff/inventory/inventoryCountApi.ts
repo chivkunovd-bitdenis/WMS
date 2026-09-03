@@ -276,6 +276,28 @@ export async function createObjectCount(
 }
 
 /**
+ * Завести тару прямо в документе: кнопка «Создать короб/палету/грузоместо».
+ *
+ * Отдельная ручка, а не общая `/warehouses/{id}/sorting-objects` — та создаёт
+ * тару на складе, но не запоминает её за документом, и прунинг пустой тары
+ * (см. backend `_prune_empty_containers`) тут же выбрасывал её из дерева:
+ * оператор только что завёл короб и не видел, куда класть товар.
+ */
+export async function createCountContainer(
+  token: string,
+  countId: string,
+  kind: 'pallet' | 'box' | 'cargo_place',
+): Promise<InventoryCount> {
+  const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/containers`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
+    body: JSON.stringify({ kind }),
+  })
+  if (!res.ok) throw new Error(await readApiErrorMessage(res))
+  return toCount((await res.json()) as ApiDetail)
+}
+
+/**
  * Записать находку: товар лежит там, где по учёту его нет.
  *
  * Строку заводит сервер, а не экран: документ и его строки живут на сервере, и

@@ -369,6 +369,7 @@ def _prune_empty_containers(
     nodes: list[CountProductNodeOut | CountContainerNodeOut],
     cell_of: dict[str, str | None],
     dropped: list[CountScannableContainerOut],
+    protected: set[tuple[str, str]],
 ) -> list[CountProductNodeOut | CountContainerNodeOut]:
     """Убрать из дерева тару, в которой по документу ничего не лежит.
 
@@ -378,6 +379,11 @@ def _prune_empty_containers(
     вырастал до сорока тысяч пикселей, и найти в нём свой короб глазами было
     нельзя. Выброшенная тара не пропадает — она уезжает в `scannable_containers`
     и по-прежнему открывается сканом, чтобы записать в неё находку.
+
+    Исключение — тара из `protected` (пары «вид, id»): она заведена прямо в
+    этом документе кнопкой «Создать короб» и пуста по определению. Оператор
+    её только что создал и должен видеть, куда класть товар, поэтому общее
+    правило для неё не действует.
     """
 
     kept: list[CountProductNodeOut | CountContainerNodeOut] = []
@@ -385,8 +391,8 @@ def _prune_empty_containers(
         if isinstance(node, CountProductNodeOut):
             kept.append(node)
             continue
-        node.children = _prune_empty_containers(node.children, cell_of, dropped)
-        if node.children:
+        node.children = _prune_empty_containers(node.children, cell_of, dropped, protected)
+        if node.children or (node.kind, node.id) in protected:
             kept.append(node)
             continue
         dropped.append(
@@ -522,15 +528,17 @@ async def _detail_out(
             )
         )
     # Тара без строк документа уезжает из дерева в список сканируемой: пикнуть
-    # её по-прежнему можно, а пустой строкой она документ не раздувает.
+    # её по-прежнему можно, а пустой строкой она документ не раздувает. Тара,
+    # заведённая прямо в этом документе, — исключение, см. _prune_empty_containers.
+    created_container_ids = await service.created_container_ids(session, count.id)
     scannable_containers: list[CountScannableContainerOut] = []
     if unassigned is not None:
         unassigned.children = _prune_empty_containers(
-            unassigned.children, cell_of_container, scannable_containers
+            unassigned.children, cell_of_container, scannable_containers, created_container_ids
         )
     for cell in cells_by_id.values():
         cell.children = _prune_empty_containers(
-            cell.children, cell_of_container, scannable_containers
+            cell.children, cell_of_container, scannable_containers, created_container_ids
         )
 
     if address_storage:
@@ -715,6 +723,35 @@ async def save_inventory_count_lines(
             user.tenant_id,
             count_id,
             [(line.line_id, line.actual_quantity) for line in body.lines],
+        )
+    except service.InventoryCountError as exc:
+        raise _http_error(exc) from None
+    return await _detail_out(session, count)
+
+
+class InventoryCountContainerCreateIn(BaseModel):
+    kind: Literal["pallet", "box", "cargo_place"]
+
+
+@router.post("/{count_id}/containers", response_model=InventoryCountDetailOut)
+async def create_inventory_count_container(
+    count_id: uuid.UUID,
+    body: InventoryCountContainerCreateIn,
+    user: Annotated[User, Depends(require_inventory_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryCountDetailOut:
+    """Завести тару прямо в документе — кнопка «Создать короб/палету/грузоместо».
+
+    В отличие от общей ручки `/warehouses/{id}/sorting-objects`, эта ещё и
+    запоминает тару за документом, чтобы прунинг пустой тары её не выбросил
+    (см. `service.create_document_container`).
+    """
+    try:
+        count = await service.create_document_container(
+            session,
+            user.tenant_id,
+            count_id,
+            kind=body.kind,
         )
     except service.InventoryCountError as exc:
         raise _http_error(exc) from None

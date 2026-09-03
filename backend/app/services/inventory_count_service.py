@@ -18,6 +18,7 @@ from app.models.inbound_intake import (
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_count import (
     InventoryCount,
+    InventoryCountCreatedContainer,
     InventoryCountFoundScan,
     InventoryCountLine,
 )
@@ -29,7 +30,7 @@ from app.models.seller_wildberries_imported_card import SellerWildberriesImporte
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
-from app.services import inventory_service, tenant_settings_service
+from app.services import inventory_service, tenant_settings_service, warehouse_map_service
 from app.services.inventory_container_service import ContainerKind
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
@@ -502,6 +503,73 @@ async def save_actuals(
     loaded = await get_count(session, tenant_id, count.id)
     assert loaded is not None
     return loaded
+
+
+async def create_document_container(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    count_id: uuid.UUID,
+    *,
+    kind: ContainerKind,
+) -> InventoryCount:
+    """Завести пустую тару прямо в документе пересчёта.
+
+    Тара создаётся на складе документа как обычная тара (`sorting-objects`),
+    но дополнительно запоминается за этим документом — иначе прунинг пустой
+    тары в API (`_prune_empty_containers`) выбросит её из дерева сразу же:
+    она пуста по определению, оператор только что её завёл. Общее правило
+    прунинга не трогаем, здесь только точечное исключение для этой пары
+    (документ, тара).
+    """
+    result = await session.execute(
+        select(InventoryCount)
+        .where(
+            InventoryCount.id == count_id,
+            InventoryCount.tenant_id == tenant_id,
+        )
+        .with_for_update()
+    )
+    count = result.scalar_one_or_none()
+    if count is None:
+        raise InventoryCountError("not_found")
+    if count.status != STATUS_DRAFT:
+        raise InventoryCountError("not_editable")
+    if count.warehouse_id is None:
+        raise InventoryCountError("warehouse_not_found")
+    try:
+        created = await warehouse_map_service.create_sorting_object(
+            session,
+            tenant_id,
+            count.warehouse_id,
+            kind=kind,
+        )
+    except warehouse_map_service.WarehouseMapError as exc:
+        raise InventoryCountError(exc.code) from exc
+    session.add(
+        InventoryCountCreatedContainer(
+            tenant_id=tenant_id,
+            count_id=count_id,
+            container_kind=kind,
+            container_id=uuid.UUID(str(created["id"])),
+        )
+    )
+    await session.commit()
+    loaded = await get_count(session, tenant_id, count_id)
+    assert loaded is not None
+    return loaded
+
+
+async def created_container_ids(
+    session: AsyncSession,
+    count_id: uuid.UUID,
+) -> set[tuple[str, str]]:
+    """Тара, заведённая прямо в этом документе — исключения из прунинга."""
+    rows = await session.scalars(
+        select(InventoryCountCreatedContainer).where(
+            InventoryCountCreatedContainer.count_id == count_id
+        )
+    )
+    return {(row.container_kind, str(row.container_id)) for row in rows.all()}
 
 
 @dataclass(frozen=True)
