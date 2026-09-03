@@ -747,7 +747,13 @@ def _fbs_order_change_rows(
                 actor=actor,
                 qty=qty_after or qty_before,
                 product_id=order.product_id,
-                payload_json={"qty_before": qty_before, "qty_after": qty_after},
+                # Без ссылки на заказ событие поставки не привязать к нему:
+                # история одного заказа показывала добавления всех остальных.
+                payload_json={
+                    "qty_before": qty_before,
+                    "qty_after": qty_after,
+                    "fbs_order_id": str(order.id),
+                },
             )
         )
     return rows

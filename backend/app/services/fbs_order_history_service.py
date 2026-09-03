@@ -43,6 +43,12 @@ PRINT_KIND_LABELS: dict[str, str] = {
     "box_qr": "QR короба",
 }
 
+SUPPLY_EVENT_LABELS: dict[str, str] = {
+    "line_added": "Заказ добавлен в поставку",
+    "line_removed": "Заказ убран из поставки",
+    "status_changed": "Статус поставки изменён",
+}
+
 MARKING_KIND_LABELS: dict[str, str] = {
     "sgtin": "Честный знак",
     "uin": "УИН",
@@ -229,15 +235,27 @@ async def order_history(
 
     for supply_event in supply_events:
         payload = supply_event.payload_json or {}
+        # Строчные события поставки касаются конкретного заказа. Пока ссылки на
+        # заказ в них не было, историю одного заказа засыпало добавлениями всех
+        # соседей по поставке — по таким записям ничего не восстановишь. Чужие
+        # и неатрибутированные строки пропускаем, а не выдаём за свои.
+        if supply_event.event_type in {"line_added", "line_removed"} and payload.get(
+            "fbs_order_id"
+        ) != str(order_id):
+            continue
+        title = SUPPLY_EVENT_LABELS.get(supply_event.event_type, supply_event.event_type)
+        details = None
+        if supply_event.event_type == "status_changed":
+            details = f"{payload.get('from') or '—'} → {payload.get('to') or '—'}"
         events.append(
             _event(
                 supply_event.occurred_at,
                 "supply",
-                f"Поставка: {supply_event.event_type}",
+                title,
                 actor=(
                     actors.get(supply_event.actor_user_id) if supply_event.actor_user_id else None
                 ),
-                details=", ".join(f"{key}: {value}" for key, value in payload.items()) or None,
+                details=details,
             )
         )
 
