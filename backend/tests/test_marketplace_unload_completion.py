@@ -26,11 +26,6 @@ from app.db.session import SessionLocal
 from app.models.billing import BillingLedgerEntry, BillingRunIssue
 from app.services import marketplace_unload_service as unload_svc
 from app.services.billing_ledger_service import BillingLedgerError
-from app.services.marketplace_provider import (
-    FakeMarketplaceTransport,
-    MarketplaceProviderError,
-    OzonMarketplaceProvider,
-)
 from app.services.marketplace_unload_service import (
     MarketplaceUnloadError,
     complete_unload,
@@ -246,71 +241,37 @@ async def test_complete_unload_without_discrepancy(
 
 
 @pytest.mark.asyncio
-async def test_ozon_complete_dispatches_via_fake_before_local_shipped(
+async def test_ozon_unload_completes_locally_exactly_like_wildberries(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Отгрузка на Ozon завершается у нас, а не «передаётся» несуществующим методом.
+
+    До 03.09.2026 здесь стоял вызов `dispatch_unload` через границу провайдера,
+    заведённый в день, когда кабинет Ozon отвечал 403. Метода Ozon за ним не было
+    никогда: у Ozon это не передача документа, а заявка на поставку на его склад —
+    отдельная схема из черновика, кластера, таймслота и пропуска на водителя, ни
+    одного поля которой у нашего документа нет. На практике это означало, что
+    отгрузка Ozon не завершалась никогда: локальный фейк отвечал «403, код 7»,
+    документ навсегда оставался в `collecting`, товар физически уезжал, а списания
+    и начисления не происходило.
+
+    У Wildberries эта же операция всегда завершалась локально: документ поставки
+    на складе маркетплейса создаёт селлер в своём кабинете, ФФ отвечает за
+    физическую отгрузку. Для Ozon верно ровно то же самое.
+    """
     h, mid, loc_id = await _confirmed_unload_with_stock(
         async_client, monkeypatch, plan_qty=2, marketplace="ozon"
     )
     await _collect_qty_via_scan(async_client, h, mid, loc_id=loc_id, qty=2)
     tenant_id = uuid.UUID((await async_client.get("/auth/me", headers=h)).json()["tenant_id"])
-    transport = FakeMarketplaceTransport()
-    provider = OzonMarketplaceProvider(transport=transport)
 
     async with SessionLocal() as session:
-        completed = await complete_unload(
-            session,
-            tenant_id,
-            mid,
-            ozon_provider=provider,
-        )
-
-    assert completed.status == "shipped"
-    assert transport.calls == [("dispatch_unload", str(mid))]
-
-
-@pytest.mark.asyncio
-async def test_ozon_complete_blocked_keeps_document_open_and_stock_intact(
-    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    h, mid, loc_id = await _confirmed_unload_with_stock(
-        async_client, monkeypatch, plan_qty=2, marketplace="ozon"
-    )
-    await _collect_qty_via_scan(async_client, h, mid, loc_id=loc_id, qty=2)
-    tenant_id = uuid.UUID((await async_client.get("/auth/me", headers=h)).json()["tenant_id"])
-    transport = FakeMarketplaceTransport(
-        errors={"dispatch_unload": MarketplaceProviderError("ozon", 403, {"code": 7})}
-    )
-    provider = OzonMarketplaceProvider(transport=transport)
-
-    async with SessionLocal() as session:
-        with pytest.raises(MarketplaceUnloadError) as exc:
-            await complete_unload(session, tenant_id, mid, ozon_provider=provider)
-        assert exc.value.code == "provider_dispatch_blocked"
+        completed = await complete_unload(session, tenant_id, mid)
+        assert completed.status == "shipped"
+        assert completed.has_discrepancy is False
         current = await get_request(session, tenant_id, mid)
         assert current is not None
-        assert current.status == "collecting"
-
-    assert transport.calls == [("dispatch_unload", str(mid))]
-
-
-@pytest.mark.asyncio
-async def test_ozon_complete_uses_blocked_provider_in_normal_composition(
-    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    h, mid, loc_id = await _confirmed_unload_with_stock(
-        async_client, monkeypatch, plan_qty=1, marketplace="ozon"
-    )
-    await _collect_qty_via_scan(async_client, h, mid, loc_id=loc_id, qty=1)
-    tenant_id = uuid.UUID((await async_client.get("/auth/me", headers=h)).json()["tenant_id"])
-
-    async with SessionLocal() as session:
-        with pytest.raises(MarketplaceUnloadError) as exc:
-            await complete_unload(session, tenant_id, mid)
-        assert exc.value.code == "provider_dispatch_blocked"
-        current = await get_request(session, tenant_id, mid)
-        assert current is not None
-        assert current.status == "collecting"
+        assert current.status == "shipped"
 
 
 @pytest.mark.asyncio

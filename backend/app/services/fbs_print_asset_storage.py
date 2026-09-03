@@ -1,4 +1,17 @@
-"""Safe on-disk storage for FBS print assets (PNG); paths never exposed in API."""
+"""Safe on-disk storage for FBS print assets; paths never exposed in API.
+
+Хранилище знает два формата, и это не прихоть. Wildberries отдаёт стикер заказа
+и QR картинкой (PNG), а Ozon отдаёт этикетку отправления и лист отгрузки
+документом (`application/pdf`) — так объявлено у всех трёх печатных методов Ozon
+в его официальной спецификации. Пока проверка была жёстко привязана к сигнатуре
+PNG, этикетку Ozon сохранить было нельзя вовсе: она отваливалась на
+`invalid_content_type` ещё до диска.
+
+Проверка формата не ослаблена, а стала точной: тип объявляется при записи и
+сверяется с сигнатурой файла. PNG по-прежнему обязан начинаться с ``\\x89PNG``,
+PDF — с ``%PDF-``. Путь WB не меняется ни на шаг: ``save_png``/``read_png``
+остались на месте и продолжают требовать PNG.
+"""
 
 from __future__ import annotations
 
@@ -11,9 +24,22 @@ from pathlib import Path
 from app.core.settings import settings
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+PDF_MAGIC = b"%PDF-"
 ORDER_STICKER_WIDTH_MM = 58
 ORDER_STICKER_HEIGHT_MM = 40
 ORDER_STICKER_CONTENT_TYPE = "image/png"
+PDF_CONTENT_TYPE = "application/pdf"
+
+# Сигнатура и расширение на каждый формат, который хранилище умеет принимать.
+# Список закрытый: формат, которого здесь нет, на диск не попадёт.
+_CONTENT_TYPE_MAGIC: dict[str, bytes] = {
+    ORDER_STICKER_CONTENT_TYPE: PNG_MAGIC,
+    PDF_CONTENT_TYPE: PDF_MAGIC,
+}
+_CONTENT_TYPE_SUFFIX: dict[str, str] = {
+    ORDER_STICKER_CONTENT_TYPE: ".png",
+    PDF_CONTENT_TYPE: ".pdf",
+}
 
 PRINT_ASSET_SUBDIR_ORDER_STICKER = "fbs-print-assets/order-stickers"
 PRINT_ASSET_SUBDIR_CARGO_QR = "fbs-print-assets/cargo-place-qr"
@@ -76,8 +102,26 @@ def resolve_existing_storage_path(rel: str) -> Path:
     raise FbsPrintAssetStorageError("invalid_storage_path")
 
 
-def order_sticker_relative_path(order_id: uuid.UUID) -> str:
-    return f"{PRINT_ASSET_SUBDIR_ORDER_STICKER}/{order_id}.png"
+def _suffix_for(content_type: str) -> str:
+    suffix = _CONTENT_TYPE_SUFFIX.get(content_type)
+    if suffix is None:
+        raise FbsPrintAssetStorageError("invalid_content_type")
+    return suffix
+
+
+def order_sticker_relative_path(
+    order_id: uuid.UUID,
+    *,
+    content_type: str = ORDER_STICKER_CONTENT_TYPE,
+) -> str:
+    """Расширение — по формату: у стикера WB это `.png`, у этикетки Ozon `.pdf`.
+
+    Заказ хранит ровно один стикер, поэтому имя файла завязано на его id. Если
+    формат меняется (заказ переехал на другой маркетплейс — на практике не
+    бывает), старый файл остаётся сиротой на диске, но актив показывает тот
+    путь, который записан последним, и рассинхрона не возникает.
+    """
+    return f"{PRINT_ASSET_SUBDIR_ORDER_STICKER}/{order_id}{_suffix_for(content_type)}"
 
 
 def cargo_qr_relative_path(trbx_id: uuid.UUID) -> str:
@@ -114,11 +158,21 @@ def decode_png_payload(raw: object) -> bytes | None:
     return payload if payload else None
 
 
-def validate_png_bytes(png_bytes: bytes) -> None:
-    if not png_bytes:
+def validate_print_bytes(
+    payload: bytes,
+    *,
+    content_type: str = ORDER_STICKER_CONTENT_TYPE,
+) -> None:
+    """Файл должен быть непустым и быть тем форматом, которым его объявили."""
+    if not payload:
         raise FbsPrintAssetStorageError("empty_content")
-    if not png_bytes.startswith(PNG_MAGIC):
+    magic = _CONTENT_TYPE_MAGIC.get(content_type)
+    if magic is None or not payload.startswith(magic):
         raise FbsPrintAssetStorageError("invalid_content_type")
+
+
+def validate_png_bytes(png_bytes: bytes) -> None:
+    validate_print_bytes(png_bytes, content_type=ORDER_STICKER_CONTENT_TYPE)
 
 
 def sha256_checksum(png_bytes: bytes) -> str:
@@ -134,8 +188,13 @@ def verify_checksum(png_bytes: bytes, checksum: str | None) -> None:
         raise FbsPrintAssetStorageError("checksum_mismatch")
 
 
-def save_png(relative_path: str, png_bytes: bytes) -> str:
-    validate_png_bytes(png_bytes)
+def save_print_file(
+    relative_path: str,
+    payload: bytes,
+    *,
+    content_type: str = ORDER_STICKER_CONTENT_TYPE,
+) -> str:
+    validate_print_bytes(payload, content_type=content_type)
     normalized = relative_path.replace("\\", "/")
     parts = normalized.split("/")
     if len(parts) < 2:
@@ -143,15 +202,32 @@ def save_png(relative_path: str, png_bytes: bytes) -> str:
     subdir = "/".join(parts[:-1])
     target = validate_relative_storage_path(normalized, subdir=subdir)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(png_bytes)
-    return relative_path.replace("\\", "/")
+    target.write_bytes(payload)
+    return normalized
 
 
-def read_png(relative_path: str, *, checksum: str | None = None) -> bytes:
+def read_print_file(
+    relative_path: str,
+    *,
+    checksum: str | None = None,
+    content_type: str = ORDER_STICKER_CONTENT_TYPE,
+) -> bytes:
     target = resolve_existing_storage_path(relative_path)
     if not target.is_file():
         raise FbsPrintAssetStorageError("file_missing")
-    png_bytes = target.read_bytes()
-    validate_png_bytes(png_bytes)
-    verify_checksum(png_bytes, checksum)
-    return png_bytes
+    payload = target.read_bytes()
+    validate_print_bytes(payload, content_type=content_type)
+    verify_checksum(payload, checksum)
+    return payload
+
+
+def save_png(relative_path: str, png_bytes: bytes) -> str:
+    return save_print_file(relative_path, png_bytes, content_type=ORDER_STICKER_CONTENT_TYPE)
+
+
+def read_png(relative_path: str, *, checksum: str | None = None) -> bytes:
+    return read_print_file(
+        relative_path,
+        checksum=checksum,
+        content_type=ORDER_STICKER_CONTENT_TYPE,
+    )

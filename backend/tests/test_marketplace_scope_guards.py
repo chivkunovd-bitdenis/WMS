@@ -41,9 +41,21 @@ def test_message_names_the_marketplace_and_the_operation() -> None:
     assert "чужой кабинет" in message
 
 
+def _stub_session(order: object) -> object:
+    class _Result:
+        def scalar_one_or_none(self) -> object:
+            return order
+
+    class _Session:
+        async def execute(self, *_args: object, **_kwargs: object) -> _Result:
+            return _Result()
+
+    return _Session()
+
+
 @pytest.mark.asyncio
-async def test_cancel_refuses_an_ozon_order_before_touching_wildberries() -> None:
-    """Отмена озоновского заказа обязана останавливаться до вызова к WB."""
+async def test_cancel_refuses_an_unknown_marketplace_before_touching_wildberries() -> None:
+    """Заказ маркетплейса, которого мы не умеем, останавливается до вызова к WB."""
     from app.models.fbs_order import FbsOrder
     from app.services.fbs_cancellation_service import FbsCancellationError, cancel_order
 
@@ -51,28 +63,56 @@ async def test_cancel_refuses_an_ozon_order_before_touching_wildberries() -> Non
         id=uuid.uuid4(),
         tenant_id=uuid.uuid4(),
         seller_id=uuid.uuid4(),
-        marketplace="ozon",
+        marketplace="yandex",
         wb_order_id=-4823094820938,
         status="new",
     )
 
-    class _Result:
-        def scalar_one_or_none(self) -> FbsOrder:
-            return order
-
-    class _Session:
-        async def execute(self, *_args: object, **_kwargs: object) -> _Result:
-            return _Result()
-
     with pytest.raises(FbsCancellationError) as exc:
         await cancel_order(
-            _Session(),  # type: ignore[arg-type]
+            _stub_session(order),  # type: ignore[arg-type]
             order.tenant_id,
             order.id,
             None,  # type: ignore[arg-type]
             actor_user_id=None,
         )
     assert exc.value.code == "marketplace_not_supported"
+
+
+@pytest.mark.asyncio
+async def test_cancel_of_an_ozon_order_never_runs_on_the_local_fake(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Выключенный боевой транспорт — это отказ, а не «Ozon не подтвердил отмену».
+
+    На локальном фейке ответ пустой, `result` не `true`, и оператор увидел бы
+    сообщение про Ozon, который на самом деле ничего не отвечал. Отмена
+    необратима, поэтому в таком состоянии её просто нельзя начинать.
+    """
+    from app.core.settings import settings
+    from app.models.fbs_order import FbsOrder
+    from app.services.fbs_cancellation_service import FbsCancellationError, cancel_order
+
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", False)
+    order = FbsOrder(
+        id=uuid.uuid4(),
+        tenant_id=uuid.uuid4(),
+        seller_id=uuid.uuid4(),
+        marketplace="ozon",
+        external_order_id="12345-0001-1",
+        wb_order_id=-4823094820938,
+        status="new",
+    )
+
+    with pytest.raises(FbsCancellationError) as exc:
+        await cancel_order(
+            _stub_session(order),  # type: ignore[arg-type]
+            order.tenant_id,
+            order.id,
+            None,  # type: ignore[arg-type]
+            actor_user_id=None,
+        )
+    assert exc.value.code == "ozon_live_cancel_blocked"
 
 
 def test_ozon_order_shows_its_own_number_not_the_synthetic_hash() -> None:

@@ -21,21 +21,18 @@ from app.schemas.ozon_fbs_api import (
     OzonFbsv4FbsPostingShipV4Request,
     OzonFbsv4FbsPostingShipV4Response,
     OzonPostingBooleanResponse,
-    OzonPostingPostingFBSPackageLabelRequest,
-    OzonPostingPostingFBSPackageLabelResponse,
+    OzonPostingCancelFbsPostingRequest,
+    OzonPostingCancelReasonRequest,
+    OzonPostingCancelReasonResponse,
     OzonPostingv3GetFbsPostingRequest,
     OzonV1CarriageApproveRequest,
     OzonV1CarriageApproveResponse,
     OzonV1CarriageCreateRequest,
     OzonV1CarriageCreateResponse,
-    OzonV1CreateLabelBatchRequest,
-    OzonV1GetLabelBatchRequest,
-    OzonV1GetLabelBatchResponse,
     OzonV1GetRestrictionsRequest,
     OzonV1GetRestrictionsResponse,
     OzonV1SetPostingsRequest,
     OzonV1SetPostingsResponse,
-    OzonV2CreateLabelBatchResponse,
     OzonV2FbsPostingProductCountryListRequest,
     OzonV2FbsPostingProductCountryListResponse,
     OzonV2FbsPostingProductCountrySetRequest,
@@ -68,11 +65,36 @@ from app.services.ozon_marking_position_service import (
 )
 
 TResponse = TypeVar("TResponse", bound=BaseModel)
-__all__ = ["OzonFbsProcessError", "handoff_supply", "read_marking_status", "submit_marking"]
+__all__ = [
+    "OzonFbsProcessError",
+    "cancel_posting",
+    "handoff_supply",
+    "read_marking_status",
+    "submit_marking",
+]
 
 # Лист отгрузки по перевозке. Старый путь `/v2/posting/fbs/digital/act/get-pdf`
 # Ozon отключил — живой вызов отвечает «obsolete method cannot be used».
 SHIPPING_LIST_PATH = "/v2/posting/fbs/act/get-pdf"
+
+# Этикетки отправлений передача больше не забирает, и это не потеря, а починка.
+#
+# Забирала она их так: создавала задание `/v2/posting/fbs/package-label/create`,
+# опрашивала `/v1/posting/fbs/package-label/get` три раза с паузами 0,05 + 0,1 +
+# 0,2 секунды и, не дождавшись, роняла всю передачу ошибкой `ozon_label_not_ready`.
+# А спецификация того же метода советует прямо противоположное: «Рекомендуем
+# запрашивать этикетки через 45—60 секунд после сборки заказа». То есть на живом
+# кабинете передача почти всегда падала бы на этикетках — уже после того, как
+# отправления собраны и перевозка подтверждена, то есть откатить нечего.
+#
+# Вдобавок полученный PDF никто не использовал: `label_bytes` возвращался наверх
+# и там выбрасывался. Ездили за документом, роняли из-за него операцию и
+# выкидывали результат.
+#
+# Теперь этикетка живёт там, где ей место, — в конвейере печатных активов
+# (`fbs_print_asset_service`), по одной на заказ, по кнопке оператора и уже
+# после передачи, когда отправление в статусе `awaiting_deliver` и этикетка у
+# Ozon вообще существует.
 
 
 @dataclass(frozen=True)
@@ -82,7 +104,6 @@ class OzonHandoffResult:
     barcode_bytes: bytes | None
     barcode_text: str | None
     shipping_list_bytes: bytes | None
-    label_bytes: bytes | None
 
 
 @dataclass(frozen=True)
@@ -444,6 +465,133 @@ async def read_marking_status(
     )
 
 
+# Отмена отправления. Метод и его форма взяты из официальной спецификации Ozon
+# (`PostingAPI_CancelFbsPosting`), а не выведены по аналогии: в нашей копии
+# спецификации FBS его не было, поэтому оба пути добавлены в неё дословно и
+# модели пересобраны генератором.
+CANCEL_PATH = "/v2/posting/fbs/cancel"
+CANCEL_REASON_PATH = "/v1/posting/fbs/cancel-reason"
+
+# «Товар закончился на складе продавца». Ровно та причина, по которой отменяет
+# фулфилмент: он не может собрать отправление, потому что товара нет. Официальный
+# FAQ Ozon по FBS говорит то же самое — «Отменяйте заказ, только если товара нет
+# в наличии». Причину не угадываем вслепую: перед отменой спрашиваем у Ozon
+# список причин для этого отправления и сверяемся с ним.
+CANCEL_REASON_OUT_OF_STOCK = 352
+# Причина «другое (вина продавца)»; спецификация требует при ней текст.
+CANCEL_REASON_OTHER = 402
+# Отменять от лица продавца имеет право только продавцовская причина: у Ozon
+# рядом лежат причины покупателя (`type_id == "buyer"`), и подставить их нельзя.
+CANCEL_INITIATOR_SELLER = "seller"
+
+
+async def _seller_cancel_reasons(
+    provider: OzonMarketplaceProvider,
+    *,
+    client_id: str,
+    api_key: str,
+    posting_number: str,
+) -> set[int]:
+    """Причины отмены, которые Ozon разрешает этому отправлению прямо сейчас.
+
+    Список зависит от состояния отправления: четыре причины из семи английская
+    версия спецификации помечает как доступные только в статусах доставки. Плюс
+    у метода отмены есть собственная частая ошибка `HAS_INCORRECT_CANCEL_REASON`
+    — «Указан неправильный идентификатор отмены заказа». Проще спросить, чем
+    получить отказ уже на мутации.
+    """
+    response = await _call(
+        provider,
+        client_id=client_id,
+        api_key=api_key,
+        path=CANCEL_REASON_PATH,
+        request=OzonPostingCancelReasonRequest(related_posting_numbers=[posting_number]),
+        response_type=OzonPostingCancelReasonResponse,
+        read=True,
+    )
+    allowed: set[int] = set()
+    for row in response.result or []:
+        if row.posting_number and row.posting_number != posting_number:
+            continue
+        for reason in row.reasons or []:
+            if reason.id and reason.type_id == CANCEL_INITIATOR_SELLER:
+                allowed.add(int(reason.id))
+    return allowed
+
+
+async def cancel_posting(
+    provider: OzonMarketplaceProvider,
+    *,
+    client_id: str,
+    api_key: str,
+    posting_number: str,
+    reason_id: int = CANCEL_REASON_OUT_OF_STOCK,
+    reason_message: str | None = None,
+) -> None:
+    """Отменить отправление Ozon и убедиться, что он это подтвердил.
+
+    Обратного хода у операции нет: «Статус отправления изменится на Отменено —
+    после этого восстановить заказ не получится» (База знаний Ozon). Поэтому
+    сначала спрашиваем разрешённые причины и отказываемся, если нашей среди них
+    нет, и только потом отменяем.
+    """
+    if not posting_number:
+        raise OzonFbsProcessError("ozon_posting_number_missing", "Нет номера отправления Ozon.")
+    if reason_id == CANCEL_REASON_OTHER and not (reason_message or "").strip():
+        # Требование спецификации, которое её же `required` не ловит: «Если
+        # значение параметра `cancel_reason_id` — 402, заполните поле
+        # `cancel_reason_message`».
+        raise OzonFbsProcessError(
+            "ozon_cancel_reason_message_required",
+            "Для причины «другое» Ozon требует пояснение.",
+            status_code=409,
+        )
+
+    allowed = await _seller_cancel_reasons(
+        provider,
+        client_id=client_id,
+        api_key=api_key,
+        posting_number=posting_number,
+    )
+    if allowed and reason_id not in allowed:
+        raise OzonFbsProcessError(
+            "ozon_cancel_reason_unavailable",
+            "Ozon не разрешает эту причину отмены для отправления.",
+            status_code=409,
+        )
+    if not allowed:
+        # Пустой список — это не «можно любую»: это «Ozon не назвал ни одной
+        # причины, доступной продавцу», то есть отменять нельзя. Отправить
+        # мутацию наугад дороже, чем остановиться.
+        raise OzonFbsProcessError(
+            "ozon_cancel_not_available",
+            "Ozon не предлагает ни одной причины отмены — отправление отменить нельзя.",
+            status_code=409,
+        )
+
+    values: dict[str, object] = {
+        "posting_number": posting_number,
+        "cancel_reason_id": reason_id,
+    }
+    if reason_message and reason_message.strip():
+        values["cancel_reason_message"] = reason_message.strip()
+    confirmed = await _call(
+        provider,
+        client_id=client_id,
+        api_key=api_key,
+        path=CANCEL_PATH,
+        request=OzonPostingCancelFbsPostingRequest.model_validate(values),
+        response_type=OzonPostingBooleanResponse,
+        read=False,
+    )
+    if confirmed.result is not True:
+        raise OzonFbsProcessError(
+            "ozon_cancel_unconfirmed",
+            "Ozon не подтвердил отмену отправления.",
+            status_code=502,
+        )
+
+
 async def _posting_readback(
     provider: OzonMarketplaceProvider,
     *,
@@ -496,60 +644,6 @@ def _apply_posting_readback(order: FbsOrder, response: OzonV3GetFbsPostingRespon
             f"Ozon не подтвердил сборку: {result.status or 'неизвестный статус'}.",
             status_code=409,
         )
-
-
-async def _labels(
-    provider: OzonMarketplaceProvider,
-    *,
-    client_id: str,
-    api_key: str,
-    posting_numbers: list[str],
-) -> bytes | None:
-    created = await _call(
-        provider,
-        client_id=client_id,
-        api_key=api_key,
-        path="/v2/posting/fbs/package-label/create",
-        request=OzonV1CreateLabelBatchRequest(posting_number=posting_numbers),
-        response_type=OzonV2CreateLabelBatchResponse,
-        read=False,
-    )
-    tasks = created.result.tasks if created.result is not None else []
-    if not tasks or not tasks[0].task_id:
-        raise OzonFbsProcessError("ozon_label_task_missing", "Ozon не создал этикетки.")
-    label_state: OzonV1GetLabelBatchResponse | None = None
-    for attempt in range(3):
-        label_state = await _call(
-            provider,
-            client_id=client_id,
-            api_key=api_key,
-            path="/v1/posting/fbs/package-label/get",
-            request=OzonV1GetLabelBatchRequest(task_id=tasks[0].task_id),
-            response_type=OzonV1GetLabelBatchResponse,
-            read=True,
-        )
-        state = label_state.result.status if label_state.result is not None else None
-        if state == "completed":
-            break
-        if state == "error":
-            raise OzonFbsProcessError("ozon_label_failed", "Ozon не сформировал этикетки.")
-        if state not in {"pending", "in_progress"}:
-            raise OzonFbsProcessError(
-                "ozon_label_unknown_status", "Неизвестный статус этикеток Ozon."
-            )
-        await asyncio.sleep(0.05 * (2**attempt))
-    else:
-        raise OzonFbsProcessError("ozon_label_not_ready", "Этикетки Ozon ещё не готовы.")
-    file_response = await _call(
-        provider,
-        client_id=client_id,
-        api_key=api_key,
-        path="/v2/posting/fbs/package-label",
-        request=OzonPostingPostingFBSPackageLabelRequest(posting_number=posting_numbers),
-        response_type=OzonPostingPostingFBSPackageLabelResponse,
-        read=True,
-    )
-    return _decode_file(file_response.file_content)
 
 
 def _required_country_skus(response: OzonV3GetFbsPostingResponseV3) -> set[str]:
@@ -800,12 +894,6 @@ async def handoff_supply(
         if related is not None:
             posting_numbers.extend(related.related_posting_numbers or [])
     posting_numbers = list(dict.fromkeys(posting_numbers))
-    label_bytes = await _labels(
-        provider,
-        client_id=client_id,
-        api_key=api_key,
-        posting_numbers=posting_numbers,
-    )
 
     details = orders[0].meta_details_json or {}
     delivery_method = details.get("ozon_delivery_method_id")
@@ -843,7 +931,7 @@ async def handoff_supply(
                 posting_number=order.external_order_id or "",
             )
             _apply_posting_readback(order, response)
-        return OzonHandoffResult(None, True, None, None, None, label_bytes)
+        return OzonHandoffResult(None, True, None, None, None)
 
     if not carriage.carriage_id:
         raise OzonFbsProcessError("ozon_carriage_missing", "Ozon не создал отгрузку.")
@@ -945,5 +1033,4 @@ async def handoff_supply(
         barcode_bytes=_decode_file(barcode.file_content),
         barcode_text=barcode_text.result,
         shipping_list_bytes=_decode_file(act.file_content),
-        label_bytes=label_bytes,
     )

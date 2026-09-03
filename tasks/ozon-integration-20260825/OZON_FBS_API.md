@@ -3,14 +3,14 @@
 Источник: [https://docs.ozon.ru/api/seller/swagger.json](https://docs.ozon.ru/api/seller/swagger.json) (локальный снимок `OZON_FBS_OPENAPI.json`).
 Дата снимка: **25.08.2026**.
 OpenAPI: `3.0.0`; title: `Документация Ozon Seller API`; version: `2.1`.
-SHA-256 входного JSON: `a1f802b5a1255166144ceecb10713ac850d69427c4ab266296a57e5288ee30a9`.
+SHA-256 входного JSON: `b31282086acccf22f7a292c4060882e7f825b8d241a58215b2e6363e4a441eb2`.
 
 Этот файл генерируется командой `python3 scripts/generate_ozon_fbs_api_md.py`. Проверка соответствия JSON: `python3 scripts/generate_ozon_fbs_api_md.py --check`.
 
 ## Состав
 
-- Методов: **24**.
-- Транзитивно достижимых схем: **160** из **160** компонентов.
+- Методов: **26**.
+- Транзитивно достижимых схем: **165** из **165** компонентов.
 - В снимке `Client-Id` и `Api-Key` перечислены ссылками в параметрах 21 метода. Их определения (`components.parameters`) в самом JSON отсутствуют, поэтому тип и requiredness не добавлены от себя.
 - В трёх методах параметры вовсе не перечислены в источнике: `CarriageGet`, `PostingAPI_ListCountryProductFbsPostingV2`, `PostingAPI_SetCountryProductFbsPostingV2`.
 - `Required: нет` означает необязательное поле. `Nullable: нет` означает, что `nullable: true` в исходной схеме отсутствует.
@@ -129,6 +129,37 @@ SHA-256 входного JSON: `a1f802b5a1255166144ceecb10713ac850d69427c4ab2662
 | Status | Описание | Content / schema |
 | --- | --- | --- |
 | `200` | Информация об отправлении | `application/json`: [`v1SetPostingsResponse`](#schema-v1setpostingsresponse) |
+| `400` | Неверный параметр | `application/json`: [`rpcStatus`](#schema-rpcstatus) |
+| `403` | Доступ запрещён | `application/json`: [`rpcStatus`](#schema-rpcstatus) |
+| `404` | Ответ не найден | `application/json`: [`rpcStatus`](#schema-rpcstatus) |
+| `409` | Конфликт запроса | `application/json`: [`rpcStatus`](#schema-rpcstatus) |
+| `500` | Внутренняя ошибка сервера | `application/json`: [`rpcStatus`](#schema-rpcstatus) |
+
+### PostingAPI_GetPostingFbsCancelReasonV1
+
+- HTTP: `POST /v1/posting/fbs/cancel-reason`
+- operationId: `PostingAPI_GetPostingFbsCancelReasonV1`
+- Summary: Причины отмены отправления
+- Description: Возвращает список причин отмены для конкретных отправлений.
+- Tags: `FBS`
+
+#### Параметры
+
+| Где | Имя | Обязательный | Тип | Nullable | Описание |
+| --- | --- | --- | --- | --- | --- |
+| header | `Client-Id` | не указано | unspecified | нет | Исходная ссылка #/components/parameters/Client-Id не разрешается: components.parameters отсутствует в снимке. |
+| header | `Api-Key` | не указано | unspecified | нет | Исходная ссылка #/components/parameters/Api-Key не разрешается: components.parameters отсутствует в снимке. |
+
+#### Request body
+
+Обязательный: **да**.
+- `application/json`: [`postingCancelReasonRequest`](#schema-postingcancelreasonrequest)
+
+#### Responses
+
+| Status | Описание | Content / schema |
+| --- | --- | --- |
+| `200` | Причины отмены отправлений | `application/json`: [`postingCancelReasonResponse`](#schema-postingcancelreasonresponse) |
 | `400` | Неверный параметр | `application/json`: [`rpcStatus`](#schema-rpcstatus) |
 | `403` | Доступ запрещён | `application/json`: [`rpcStatus`](#schema-rpcstatus) |
 | `404` | Ответ не найден | `application/json`: [`rpcStatus`](#schema-rpcstatus) |
@@ -280,6 +311,37 @@ SHA-256 входного JSON: `a1f802b5a1255166144ceecb10713ac850d69427c4ab2662
 | Status | Описание | Content / schema |
 | --- | --- | --- |
 | `200` | Отправление передано к отгрузке | `application/json`: [`postingBooleanResponse`](#schema-postingbooleanresponse) |
+| `400` | Неверный параметр | `application/json`: [`rpcStatus`](#schema-rpcstatus) |
+| `403` | Доступ запрещён | `application/json`: [`rpcStatus`](#schema-rpcstatus) |
+| `404` | Ответ не найден | `application/json`: [`rpcStatus`](#schema-rpcstatus) |
+| `409` | Конфликт запроса | `application/json`: [`rpcStatus`](#schema-rpcstatus) |
+| `500` | Внутренняя ошибка сервера | `application/json`: [`rpcStatus`](#schema-rpcstatus) |
+
+### PostingAPI_CancelFbsPosting
+
+- HTTP: `POST /v2/posting/fbs/cancel`
+- operationId: `PostingAPI_CancelFbsPosting`
+- Summary: Отменить отправление
+- Description: Меняет статус отправления на `cancelled`.<br><br>Перед началом работы проверьте причины отмены для конкретного отправления методом [/v1/posting/fbs/cancel-reason](#operation/PostingAPI_GetPostingFbsCancelReasonV1).<br><br>Условно-доставленные отправления отменить нельзя.<br><br>Если значение параметра `cancel_reason_id` — 402, заполните поле `cancel_reason_message`.<br>
+- Tags: `FBS`
+
+#### Параметры
+
+| Где | Имя | Обязательный | Тип | Nullable | Описание |
+| --- | --- | --- | --- | --- | --- |
+| header | `Client-Id` | не указано | unspecified | нет | Исходная ссылка #/components/parameters/Client-Id не разрешается: components.parameters отсутствует в снимке. |
+| header | `Api-Key` | не указано | unspecified | нет | Исходная ссылка #/components/parameters/Api-Key не разрешается: components.parameters отсутствует в снимке. |
+
+#### Request body
+
+Обязательный: **да**.
+- `application/json`: [`postingCancelFbsPostingRequest`](#schema-postingcancelfbspostingrequest)
+
+#### Responses
+
+| Status | Описание | Content / schema |
+| --- | --- | --- |
+| `200` | Отправление отменено | `application/json`: [`postingBooleanResponse`](#schema-postingbooleanresponse) |
 | `400` | Неверный параметр | `application/json`: [`rpcStatus`](#schema-rpcstatus) |
 | `403` | Доступ запрещён | `application/json`: [`rpcStatus`](#schema-rpcstatus) |
 | `404` | Ответ не найден | `application/json`: [`rpcStatus`](#schema-rpcstatus) |
@@ -2392,6 +2454,50 @@ SHA-256 входного JSON: `a1f802b5a1255166144ceecb10713ac850d69427c4ab2662
 | --- | --- | --- | --- | --- | --- |
 | `result` | нет | `boolean` | нет | — | Результат обработки запроса. `true`, если запрос выполнился без ошибок. |
 
+### postingCancelFbsPostingRequest
+
+<a id="schema-postingcancelfbspostingrequest"></a>
+
+- Тип: `object`
+- Nullable: **нет**
+- Ограничения: —
+
+#### Поля
+
+| Поле | Required | Тип / вложенная ссылка | Nullable | Ограничения и enum | Description |
+| --- | --- | --- | --- | --- | --- |
+| `cancel_reason_id` | да | `integer` | нет | format=`"int64"` | Идентификатор причины отмены отправления. |
+| `cancel_reason_message` | нет | `string` | нет | — | Дополнительная информация по отмене. Если `cancel_reason_id = 402`, параметр обязательный. |
+| `posting_number` | да | `string` | нет | — | Идентификатор отправления. |
+
+### postingCancelReasonRequest
+
+<a id="schema-postingcancelreasonrequest"></a>
+
+- Тип: `object`
+- Nullable: **нет**
+- Ограничения: —
+
+#### Поля
+
+| Поле | Required | Тип / вложенная ссылка | Nullable | Ограничения и enum | Description |
+| --- | --- | --- | --- | --- | --- |
+| `related_posting_numbers` | да | array&lt;`string`&gt; | нет | — | Номера отправлений. |
+
+### postingCancelReasonResponse
+
+<a id="schema-postingcancelreasonresponse"></a>
+
+- Тип: `object`
+- Nullable: **нет**
+- Ограничения: —
+
+#### Поля
+
+| Поле | Required | Тип / вложенная ссылка | Nullable | Ограничения и enum | Description |
+| --- | --- | --- | --- | --- | --- |
+| `result` | нет | array&lt;[`relatedPostingCancelReason`](#schema-relatedpostingcancelreason)&gt; | нет | — | Результат запроса. |
+
 ### postingPostingFBSPackageLabelRequest
 
 <a id="schema-postingpostingfbspackagelabelrequest"></a>
@@ -2518,6 +2624,37 @@ SHA-256 входного JSON: `a1f802b5a1255166144ceecb10713ac850d69427c4ab2662
 | --- | --- | --- | --- | --- | --- |
 | `typeUrl` | нет | `string` | нет | — | Тип протокола передачи данных. |
 | `value` | нет | `string` | нет | format=`"byte"` | Значение ошибки. |
+
+### relatedPostingCancelReason
+
+<a id="schema-relatedpostingcancelreason"></a>
+
+- Тип: `object`
+- Nullable: **нет**
+- Ограничения: —
+
+#### Поля
+
+| Поле | Required | Тип / вложенная ссылка | Nullable | Ограничения и enum | Description |
+| --- | --- | --- | --- | --- | --- |
+| `posting_number` | нет | `string` | нет | — | Номер отправления. |
+| `reasons` | нет | array&lt;[`relatedPostingCancelReasons`](#schema-relatedpostingcancelreasons)&gt; | нет | — | Информация о причинах отмены. |
+
+### relatedPostingCancelReasons
+
+<a id="schema-relatedpostingcancelreasons"></a>
+
+- Тип: `object`
+- Nullable: **нет**
+- Ограничения: —
+
+#### Поля
+
+| Поле | Required | Тип / вложенная ссылка | Nullable | Ограничения и enum | Description |
+| --- | --- | --- | --- | --- | --- |
+| `id` | нет | `integer` | нет | format=`"int64"` | Идентификатор причины отмены:<br>- `352` — товар закончился на складе продавца. <br>- `400` — остался только бракованный товар.<br>- `401` — продавец отклонил арбитраж.<br>- `402` — другое (вина продавца).<br>- `665` — покупатель не забрал заказ.<br>- `666` — возврат из службы доставки: нет доставки в указанный регион.<br>- `667` — заказ утерян службой доставки.<br> |
+| `title` | нет | `string` | нет | — | Описание причины отмены. |
+| `type_id` | нет | `string` | нет | — | Инициатор отмены отправления: <br>  - `buyer` — покупатель,<br>  - `seller` — продавец.<br> |
 
 ### rpcStatus
 
