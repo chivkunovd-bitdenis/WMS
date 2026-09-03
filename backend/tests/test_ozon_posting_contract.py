@@ -39,6 +39,7 @@ from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
+from app.services import fbs_warehouse_binding_service as binding_svc
 from app.services import ozon_fbs_marking_gate_service as gate_svc
 from app.services import ozon_fbs_sync_service as sync_svc
 from app.services.marketplace_provider import FakeMarketplaceTransport, OzonMarketplaceProvider
@@ -177,6 +178,32 @@ async def test_warehouse_is_read_from_delivery_method_not_from_the_top_level(
     находилась и каждый заказ Ozon получал `warehouse_unmapped`.
     """
     ctx = await _seed(db_session)
+    await _sync(db_session, ctx, [posting_row()])
+
+    order = await _order(db_session)
+    assert order.warehouse_id == ctx.warehouse.id
+    assert order.reserve_status != RESERVE_STATUS_WAREHOUSE_UNMAPPED
+
+
+async def test_binding_created_through_the_normal_path_matches_a_real_posting(
+    db_session: AsyncSession,
+) -> None:
+    """Две половины должны сойтись: как привязку заводят и как её потом ищут.
+
+    Привязку создаём тем же путём, что и оператор, — через сервис, а не руками
+    в базе, — и проверяем, что разбор отправления её находит.
+    """
+    ctx = await _seed(db_session, with_binding=False)
+    await binding_svc.upsert_binding(
+        db_session,
+        ctx.tenant.id,
+        ctx.seller.id,
+        OZON_WAREHOUSE_ID,
+        wms_warehouse_id=ctx.warehouse.id,
+        stock_sync_enabled=False,
+        marketplace="ozon",
+    )
+
     await _sync(db_session, ctx, [posting_row()])
 
     order = await _order(db_session)
