@@ -64,6 +64,27 @@ class Settings(BaseSettings):
             "real warehouse names while all mutating FBS calls remain on the emulator."
         ),
     )
+    ozon_seller_api_base: str = Field(
+        default="https://api-seller.ozon.ru",
+        validation_alias=AliasChoices("WMS_OZON_SELLER_API_BASE", "OZON_SELLER_API_BASE"),
+        description="Ozon Seller API host (override in tests/mocks), same idea as the WB hosts.",
+    )
+    ozon_live_api_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("WMS_OZON_LIVE_API", "OZON_LIVE_API_ENABLED"),
+        description=(
+            "Switch every Ozon provider from the in-process fake to the real HTTP transport. "
+            "Off by default: until a tenant actually connects an Ozon account, no process "
+            "should be able to reach the marketplace by accident."
+        ),
+    )
+    ozon_api_timeout_sec: float = Field(
+        default=30.0,
+        gt=0.0,
+        le=120.0,
+        validation_alias=AliasChoices("WMS_OZON_API_TIMEOUT_SEC", "OZON_API_TIMEOUT_SEC"),
+        description="HTTP timeout for one Ozon Seller API call.",
+    )
     wms_secrets_fernet_key: str | None = Field(
         default=None,
         description="Optional Fernet key (urlsafe base64) for integration tokens. "

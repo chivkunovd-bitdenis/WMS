@@ -26,13 +26,13 @@ from app.models.fbs_order import (
     META_STATUS_ACCEPTED,
     META_STATUS_REJECTED,
     RESERVE_STATUS_RESERVED,
+    STICKER_STATUS_ERROR,
     FbsOrder,
     FbsOrderMarking,
     FbsOrderProduct,
     FbsOrderProductReservation,
 )
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
-from app.models.fbs_print_asset import PRINT_ASSET_STATUS_READY
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_PVZ,
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
@@ -177,10 +177,18 @@ async def test_order_label_dispatch_uses_only_selected_marketplace_adapter() -> 
 
 
 @pytest.mark.asyncio
-async def test_ozon_order_label_fake_creates_ready_asset_without_wb_fetch(
+async def test_ozon_order_label_never_marks_a_sticker_ready_without_a_real_label(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Заглушка размером один на один пиксель больше не выдаётся за этикетку.
+
+    Раньше печать этикеток озоновской поставки сохраняла однопиксельный PNG и
+    ставила заказу «стикер готов»: оператор получал пустой лист, а система
+    считала, что этикетка есть. Ozon отдаёт этикетку в PDF, а хранилище
+    печатных активов принимает только PNG, поэтому честный исход один — отказ
+    с внятным текстом и статусом ошибки у заказа.
+    """
     tenant = Tenant(name="Ozon print test", slug=f"ozon-print-{uuid.uuid4().hex[:8]}")
     seller = Seller(tenant=tenant, name="Seller")
     warehouse = Warehouse(
@@ -229,10 +237,13 @@ async def test_ozon_order_label_fake_creates_ready_asset_without_wb_fetch(
         http_client=AsyncMock(),
     )
 
-    assert batch.ready == 1
-    assert batch.failed == 0
-    assert batch.assets[0].status == PRINT_ASSET_STATUS_READY
-    assert batch.assets[0].storage_path
+    assert batch.ready == 0
+    assert batch.failed == 1
+    assert batch.order_errors[0].code == "ozon_label_pdf_unsupported"
+    assert "PDF" in batch.order_errors[0].message
+    await db_session.refresh(order)
+    assert order.sticker_status == STICKER_STATUS_ERROR
+    assert order.sticker_file is None
     wb_fetch.assert_not_awaited()
 
 
@@ -1298,8 +1309,16 @@ def test_ozon_without_distribution_does_not_require_physical_boxes() -> None:
     assert all(item["code"] != "cargo_places_required" for item in pvz_blockers)
 
 
+# Однопиксельный PNG: минимальный корректный файл, чтобы хранилище печатных
+# активов приняло штрихкод перевозки. В боевом коде такой заглушки больше нет.
+_ONE_PIXEL_PNG_BASE64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAE"
+    "hQGAhKmMIQAAAABJRU5ErkJggg=="
+)
+
+
 def _ozon_handoff_responses(*, substatus: str = "posting_in_carriage") -> dict[str, object]:
-    png = print_asset_svc._FAKE_OZON_LABEL_PNG_BASE64
+    png = _ONE_PIXEL_PNG_BASE64
     return {
         "/v1/posting/fbs/restrictions": {"result": {"posting_number": "ozon-posting-dispatch"}},
         "/v4/posting/fbs/ship": {"result": ["ozon-posting-dispatch"]},

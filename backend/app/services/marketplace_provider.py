@@ -28,10 +28,33 @@ class MarketplaceProviderError(Exception):
         )
 
 
+# Причины, по которым операция Ozon не выполняется у нас, а не в кабинете.
+# Говорить про них «маркетплейс недоступен» — врать оператору: кабинет отвечает.
+_OZON_LOCAL_REFUSALS: dict[str, str] = {
+    "ozon_label_pdf_unsupported": (
+        "Этикетки Ozon приходят в PDF, а печать заказов пока принимает только PNG. "
+        "Печать этикеток Ozon не выполняется."
+    ),
+    "ozon_stock_publish_disabled": (
+        "Публикация остатков в Ozon выключена решением по проекту и в кабинет не уходит."
+    ),
+    "ozon_unload_dispatch_unsupported": (
+        "Передача отгрузки в Ozon не реализована: метода для неё нет в спецификации Ozon."
+    ),
+    "ozon_supply_created_locally": (
+        "Поставка Ozon ведётся у нас; в кабинете вместо неё создаётся перевозка при передаче."
+    ),
+    "ozon_carriage_id_invalid": ("У поставки Ozon ещё нет номера перевозки — печатать нечего."),
+    "transport_error": "Ozon не ответил на запрос.",
+}
+
+
 def provider_error_message(error: MarketplaceProviderError) -> str:
     if error.is_account_blocked:
         return "Кабинет Ozon заблокирован. Обратитесь в поддержку Ozon."
     if error.marketplace == "ozon":
+        if (local := _OZON_LOCAL_REFUSALS.get(error.code)) is not None:
+            return local
         if error.status_code in {401, 403}:
             return "Ozon отклонил данные подключения."
         if error.status_code == 429:

@@ -34,11 +34,11 @@ from app.services.fbs_cancelled_after_pack_service import fetch_cancelled_after_
 from app.services.fbs_order_history_service import FbsOrderHistoryError, order_history
 from app.services.fbs_worklist_service import fetch_worklist_page
 from app.services.marketplace_provider import (
-    FakeMarketplaceTransport,
     MarketplaceProviderError,
-    OzonMarketplaceProvider,
     provider_error_message,
 )
+from app.services.ozon_fbs_sync_service import sync_ozon_order_statuses, sync_ozon_orders
+from app.services.ozon_provider_factory import build_ozon_provider, ozon_live_api_enabled
 from app.services.wb_marketplace_orders_service import list_orders
 
 router = APIRouter(
@@ -222,10 +222,8 @@ async def get_fbs_cancelled_after_pack(
 
 
 async def _run_blocked_ozon_fake() -> None:
-    error = MarketplaceProviderError("ozon", 403, {"code": 7})
-    provider = OzonMarketplaceProvider(
-        transport=FakeMarketplaceTransport(errors={"fetch_orders": error})
-    )
+    """Локальный отказ, пока боевой транспорт Ozon выключен настройкой."""
+    provider = build_ozon_provider(blocked_operation="fetch_orders")
     try:
         await provider.fetch_orders(client_id="fake", api_key="fake")
     except MarketplaceProviderError as exc:
@@ -234,6 +232,14 @@ async def _run_blocked_ozon_fake() -> None:
             "ozon_account_blocked",
             message=provider_error_message(exc),
         )
+
+
+def _raise_ozon_provider_http(exc: MarketplaceProviderError) -> None:
+    raise_fbs_http(
+        status.HTTP_403_FORBIDDEN if exc.is_account_blocked else status.HTTP_502_BAD_GATEWAY,
+        "ozon_account_blocked" if exc.is_account_blocked else exc.code,
+        message=provider_error_message(exc),
+    )
 
 
 class FbsWorklistSellerOut(BaseModel):
@@ -448,8 +454,21 @@ async def start_fbs_orders_sync(
     if body.marketplace == "ozon":
         if not await _active_ozon_account_exists(session, user.tenant_id, body.seller_id):
             return FbsOrderSyncOut(id="", status="skipped")
-        await _run_blocked_ozon_fake()
-        return FbsOrderSyncOut(id="", status="skipped")
+        if not ozon_live_api_enabled():
+            await _run_blocked_ozon_fake()
+            return FbsOrderSyncOut(id="", status="skipped")
+        async with httpx.AsyncClient() as http_client:
+            try:
+                await sync_ozon_orders(
+                    session,
+                    user.tenant_id,
+                    body.seller_id,
+                    build_ozon_provider(),
+                    http_client,
+                )
+            except MarketplaceProviderError as exc:
+                _raise_ozon_provider_http(exc)
+        return FbsOrderSyncOut(id="", status="done")
     payload: dict[str, Any] = {"seller_id": str(body.seller_id)}
     job = await job_svc.create_pending_job(
         session,
@@ -602,8 +621,21 @@ async def sync_fbs_order_statuses(
     if body.marketplace == "ozon":
         if not await _active_ozon_account_exists(session, user.tenant_id, body.seller_id):
             return FbsOrderSyncStatusesOut(statuses_updated=0)
-        await _run_blocked_ozon_fake()
-        return FbsOrderSyncStatusesOut(statuses_updated=0)
+        if not ozon_live_api_enabled():
+            await _run_blocked_ozon_fake()
+            return FbsOrderSyncStatusesOut(statuses_updated=0)
+        async with httpx.AsyncClient() as http_client:
+            try:
+                ozon_updated = await sync_ozon_order_statuses(
+                    session,
+                    user.tenant_id,
+                    body.seller_id,
+                    build_ozon_provider(),
+                    http_client,
+                )
+            except MarketplaceProviderError as exc:
+                _raise_ozon_provider_http(exc)
+        return FbsOrderSyncStatusesOut(statuses_updated=ozon_updated)
     async with httpx.AsyncClient() as http_client:
         try:
             updated = await sync_seller_order_statuses(

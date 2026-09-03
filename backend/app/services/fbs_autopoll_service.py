@@ -28,7 +28,6 @@ from app.services.fbs_stock_sync_service import FbsStockSyncError, sync_binding_
 from app.services.fbs_tracking_service import FbsTrackingError, sync_in_delivery_supplies
 from app.services.fbs_warehouse_binding_service import is_auto_fbs_wms_warehouse
 from app.services.marketplace_provider import (
-    FakeMarketplaceTransport,
     MarketplaceBackoff,
     MarketplaceProviderError,
     OzonMarketplaceProvider,
@@ -41,6 +40,7 @@ from app.services.ozon_fbs_sync_service import (
     sync_ozon_orders,
     sync_ozon_stocks,
 )
+from app.services.ozon_provider_factory import build_ozon_provider
 from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
     sync_seller_orders,
@@ -100,12 +100,8 @@ def _record_provider_backoff(error: MarketplaceProviderError) -> None:
 
 
 def _blocked_ozon_provider(operation: str) -> OzonMarketplaceProvider:
-    """Current-account fake: no live Ozon call is made while code 7 is confirmed."""
-    return OzonMarketplaceProvider(
-        transport=FakeMarketplaceTransport(
-            errors={operation: MarketplaceProviderError("ozon", 403, {"code": 7})}
-        )
-    )
+    """Боевой транспорт, когда он включён настройкой; иначе прежний локальный отказ."""
+    return build_ozon_provider(blocked_operation=operation)
 
 
 async def list_sellers_with_marketplace_token(

@@ -57,9 +57,7 @@ from app.services.fbs_sticker_code_service import (
     sticker_code_from_wb_row,
 )
 from app.services.marketplace_provider import (
-    FakeMarketplaceTransport,
     MarketplaceProviderError,
-    OzonMarketplaceProvider,
     provider_error_message,
 )
 from app.services.wildberries_client import (
@@ -94,32 +92,25 @@ async def fetch_order_label_rows_for_marketplace(
     )
 
 
-_FAKE_OZON_LABEL_PNG_BASE64 = (
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAE"
-    "hQGAhKmMIQAAAABJRU5ErkJggg=="
-)
-
-
-async def _fake_ozon_order_label_fetch(
+async def _ozon_order_label_fetch(
     external_order_ids: list[str],
 ) -> list[dict[str, Any]]:
-    provider = OzonMarketplaceProvider(
-        transport=FakeMarketplaceTransport(
-            order_labels=[
-                {
-                    "posting_number": external_order_id,
-                    "file": _FAKE_OZON_LABEL_PNG_BASE64,
-                    "barcode": external_order_id,
-                }
-                for external_order_id in external_order_ids
-            ]
-        )
-    )
-    return await provider.fetch_order_labels(
-        client_id="fake",
-        api_key="fake",
-        posting_numbers=external_order_ids,
-    )
+    """Этикетку Ozon мы пока не печатаем, и врать об этом нельзя.
+
+    Раньше здесь стояла заглушка: PNG размером один на один пиксель, который
+    сохранялся как обычный печатный актив, а заказу проставлялся статус «стикер
+    готов». Оператор нажимал «печать» и получал пустой лист, а система считала,
+    что этикетка есть.
+
+    Ozon по спецификации отдаёт этикетку отправления в PDF
+    (``POST /v2/posting/fbs/package-label`` → ``application/pdf``), а наше
+    хранилище печатных активов принимает только PNG и жёстко проверяет сигнатуру
+    файла (``fbs_print_asset_storage.validate_png_bytes``). Поэтому подставить
+    сюда живой вызов нельзя без переделки хранилища — это отдельная работа, а не
+    строчка. До неё честный ответ ровно один: этикетки нет.
+    """
+    _ = external_order_ids
+    raise MarketplaceProviderError("ozon", None, {}, code="ozon_label_pdf_unsupported")
 
 
 class FbsPrintAssetSupplyError(Exception):
@@ -677,7 +668,7 @@ async def request_supply_print_batch(
                     marketplace,
                     external_order_ids=external_order_ids,
                     wb_fetch=wb_fetch,
-                    ozon_fetch=_fake_ozon_order_label_fetch,
+                    ozon_fetch=_ozon_order_label_fetch,
                 )
             except WildberriesClientError as exc:
                 suffix = f"_{exc.status_code}" if exc.status_code else ""
