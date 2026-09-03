@@ -14,10 +14,11 @@
 from __future__ import annotations
 
 import uuid
+from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import false, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.document_event import (
@@ -28,7 +29,9 @@ from app.models.document_event import (
 from app.models.fbs_order import FbsOrder, FbsOrderMarking
 from app.models.fbs_order_pick import FbsOrderPick
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
+from app.models.fbs_packing_box import FbsPackingBox
 from app.models.fbs_print_asset import FbsPrintAsset
+from app.models.fbs_supply import FbsSupply
 from app.models.user import User
 
 
@@ -268,4 +271,286 @@ async def order_history(
         "wb_status": order.wb_status,
         "supply_id": str(order.supply_id) if order.supply_id else None,
         "events": timeline,
+    }
+
+
+SUPPLY_STATUS_LABELS: dict[str, str] = {
+    "draft": "черновик",
+    "assembling": "сборка",
+    "packed": "упакована",
+    "in_delivery": "передана в доставку",
+    "done": "принята Wildberries",
+}
+
+PRINT_TITLES: dict[str, tuple[str, str]] = {
+    "order_sticker": ("Стикеры заказов запрошены", "Стикеры заказов получены от WB"),
+    "supply_qr": ("QR поставки запрошен", "QR поставки получен от WB"),
+    "cargo_place_qr": ("QR грузомест запрошены", "QR грузомест получены от WB"),
+    "box_qr": ("QR коробов запрошены", "QR коробов получены от WB"),
+}
+
+
+def _bucket(moment: datetime) -> str:
+    """Ключ склейки: одно действие оператора рождает пачку записей в одну секунду."""
+    return moment.replace(microsecond=0).isoformat()
+
+
+def _grouped_event(
+    at: datetime,
+    kind: str,
+    title: str,
+    items: list[str],
+    *,
+    actor: str | None = None,
+) -> dict[str, Any]:
+    """Одна строка вместо пачки одинаковых: подробности прячутся внутрь строки."""
+    return {
+        "at": at.isoformat(),
+        "kind": kind,
+        "title": title if len(items) <= 1 else f"{title} ({len(items)})",
+        "actor": actor,
+        "details": items[0] if len(items) == 1 else None,
+        "items": items if len(items) > 1 else [],
+    }
+
+
+async def supply_history(
+    session: AsyncSession, *, tenant_id: uuid.UUID, supply_id: uuid.UUID
+) -> dict[str, Any]:
+    """Хронология поставки: что с ней и её заказами происходило, по часам.
+
+    История операционная, а не денежная: по ней восстанавливают, кто собрал,
+    что печатал, какие короба завёл и когда поставка уехала. Однотипные записи
+    склеиваются в одну строку — иначе печать сорока стикеров превращает историю
+    в сорок одинаковых строк, по которым ничего не найдёшь.
+    """
+    supply = await session.scalar(
+        select(FbsSupply).where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)
+    )
+    if supply is None:
+        raise FbsOrderHistoryError("fbs_supply_not_found")
+
+    orders = list(
+        (await session.scalars(select(FbsOrder).where(FbsOrder.supply_id == supply_id))).all()
+    )
+    order_ids = [order.id for order in orders]
+    numbers = {order.id: str(order.wb_order_id) for order in orders}
+
+    picks = (
+        list(
+            (
+                await session.scalars(
+                    select(FbsOrderPick).where(FbsOrderPick.fbs_order_id.in_(order_ids))
+                )
+            ).all()
+        )
+        if order_ids
+        else []
+    )
+    packings = (
+        list(
+            (
+                await session.scalars(
+                    select(FbsPackagingFulfillment).where(
+                        FbsPackagingFulfillment.fbs_order_id.in_(order_ids)
+                    )
+                )
+            ).all()
+        )
+        if order_ids
+        else []
+    )
+    markings = (
+        list(
+            (
+                await session.scalars(
+                    select(FbsOrderMarking).where(FbsOrderMarking.order_id.in_(order_ids))
+                )
+            ).all()
+        )
+        if order_ids
+        else []
+    )
+    prints = list(
+        (
+            await session.scalars(
+                select(FbsPrintAsset).where(
+                    (FbsPrintAsset.fbs_supply_id == supply_id)
+                    | (FbsPrintAsset.fbs_order_id.in_(order_ids) if order_ids else false())
+                )
+            )
+        ).all()
+    )
+    boxes = list(
+        (
+            await session.scalars(
+                select(FbsPackingBox).where(FbsPackingBox.supply_id == supply_id)
+            )
+        ).all()
+    )
+    supply_events = list(
+        (
+            await session.scalars(
+                select(DocumentEvent).where(
+                    DocumentEvent.tenant_id == tenant_id,
+                    DocumentEvent.document_type == DOCUMENT_TYPE_FBS_SUPPLY,
+                    DocumentEvent.document_id == supply_id,
+                )
+            )
+        ).all()
+    )
+    actors = await _actor_names(
+        session,
+        {pick.picked_by_user_id for pick in picks if pick.picked_by_user_id}
+        | {row.fulfilled_by_user_id for row in packings if row.fulfilled_by_user_id}
+        | {row.actor_user_id for row in supply_events if row.actor_user_id},
+    )
+
+    events: list[dict[str, Any]] = []
+    created = _event(supply.created_at, "created", "Поставка создана")
+    if created is not None:
+        events.append(created)
+
+    # Заказы в поставке: добавление, снятие, отмена.
+    for event in supply_events:
+        payload = event.payload_json or {}
+        if event.event_type in {"line_added", "line_removed"}:
+            order_uuid = payload.get("fbs_order_id")
+            number = numbers.get(uuid.UUID(order_uuid)) if order_uuid else None
+            title = "Заказ добавлен в поставку" if event.event_type == "line_added" else (
+                "Заказ убран из поставки"
+            )
+            events.append(
+                {
+                    "at": event.occurred_at.isoformat(),
+                    "kind": "order",
+                    "title": title if number is None else f"{title}: {number}",
+                    "actor": actors.get(event.actor_user_id) if event.actor_user_id else None,
+                    "details": None,
+                    "items": [],
+                }
+            )
+        elif event.event_type == "status_changed":
+            before = SUPPLY_STATUS_LABELS.get(str(payload.get("from")), payload.get("from") or "—")
+            after = SUPPLY_STATUS_LABELS.get(str(payload.get("to")), payload.get("to") or "—")
+            events.append(
+                {
+                    "at": event.occurred_at.isoformat(),
+                    "kind": "status",
+                    "title": f"Поставка: {before} → {after}",
+                    "actor": actors.get(event.actor_user_id) if event.actor_user_id else None,
+                    "details": None,
+                    "items": [],
+                }
+            )
+
+    for order in orders:
+        if order.status == "cancelled":
+            row = _event(order.updated_at, "cancelled", f"Заказ отменён: {numbers[order.id]}")
+            if row is not None:
+                events.append({**row, "items": []})
+
+    # Подбор: важна тара, из которой взяли товар.
+    picked: dict[tuple[str, str | None, str | None], list[str]] = defaultdict(list)
+    for pick in picks:
+        if pick.picked_at is None:
+            continue
+        actor = actors.get(pick.picked_by_user_id) if pick.picked_by_user_id else None
+        where = (
+            f"из тары {pick.source_container_kind}"
+            if pick.source_container_kind
+            else "с ячейки"
+        )
+        picked[(_bucket(pick.picked_at), actor, where)].append(
+            numbers.get(pick.fbs_order_id, "—")
+        )
+    for (pick_moment, pick_actor, pick_where), pick_items in picked.items():
+        events.append(
+            _grouped_event(
+                datetime.fromisoformat(pick_moment),
+                "pick",
+                f"Товар подобран {pick_where}",
+                pick_items,
+                actor=pick_actor,
+            )
+        )
+
+    packed: dict[tuple[str, str | None], list[str]] = defaultdict(list)
+    for packing in packings:
+        if packing.fulfilled_at is None:
+            continue
+        actor = (
+            actors.get(packing.fulfilled_by_user_id) if packing.fulfilled_by_user_id else None
+        )
+        packed[(_bucket(packing.fulfilled_at), actor)].append(
+            numbers.get(packing.fbs_order_id, "—")
+        )
+    for (pack_moment, pack_actor), pack_items in packed.items():
+        events.append(
+            _grouped_event(
+                datetime.fromisoformat(pack_moment),
+                "packed",
+                "Заказ упакован",
+                pack_items,
+                actor=pack_actor,
+            )
+        )
+
+    # Честные знаки: номера прячем внутрь строки, иначе их сотни.
+    marked: dict[tuple[str, str], list[str]] = defaultdict(list)
+    for marking in markings:
+        mark_at = getattr(marking, "created_at", None)
+        if mark_at is None:
+            continue
+        marked[(_bucket(mark_at), MARKING_KIND_LABELS.get(marking.kind, marking.kind))].append(
+            marking.value
+        )
+    for (mark_moment, mark_label), mark_items in marked.items():
+        events.append(
+            _grouped_event(
+                datetime.fromisoformat(mark_moment),
+                "marking",
+                f"Внесены коды: {mark_label}",
+                mark_items,
+            )
+        )
+
+    printed: dict[tuple[str, str, str], list[str]] = defaultdict(list)
+    for asset in prints:
+        titles = PRINT_TITLES.get(asset.kind)
+        if titles is None:
+            continue
+        label = numbers.get(asset.fbs_order_id, "") if asset.fbs_order_id else ""
+        if asset.created_at is not None:
+            printed[(_bucket(asset.created_at), asset.kind, "requested")].append(label)
+        if asset.wb_fetched_at is not None:
+            printed[(_bucket(asset.wb_fetched_at), asset.kind, "ready")].append(label)
+    for (print_moment, print_kind, stage), print_items in printed.items():
+        requested, ready = PRINT_TITLES[print_kind]
+        events.append(
+            _grouped_event(
+                datetime.fromisoformat(print_moment),
+                "print",
+                requested if stage == "requested" else ready,
+                [item for item in print_items if item],
+            )
+        )
+
+    boxed: dict[str, list[str]] = defaultdict(list)
+    for box in boxes:
+        boxed[_bucket(box.created_at)].append(f"№{box.box_number}")
+    for box_moment, box_items in boxed.items():
+        events.append(
+            _grouped_event(
+                datetime.fromisoformat(box_moment), "box", "Короб добавлен", box_items
+            )
+        )
+
+    events.sort(key=lambda row: row["at"])
+    return {
+        "supply_id": str(supply.id),
+        "supply_number": supply.display_number or supply.wb_supply_id or supply.name,
+        "status": supply.status,
+        "order_count": len(orders),
+        "events": events,
     }

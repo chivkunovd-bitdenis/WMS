@@ -285,6 +285,30 @@ async def _operation_entries(
     # события, и у фактов, созданных до того, как витрина научилась брать
     # отображаемый номер, там пусто — в расчётах строка выходила «Документ без
     # номера». Достраиваем на чтении, чтобы починились и уже накопленные записи.
+    # Поставка заказа FBS: по ней открывается и карточка поставки, и её история.
+    # Отдельного экрана заказа в системе нет, поэтому «документ» заказа — это
+    # поставка, в которой он уехал.
+    order_supplies: dict[uuid.UUID, tuple[uuid.UUID, str]] = {}
+    fbs_order_ids = {
+        fact.document_id for fact in facts if fact.document_type == FBS_ORDER_DOCUMENT_TYPE
+    }
+    if fbs_order_ids:
+        supply_rows = await session.execute(
+            select(
+                FbsOrder.id, FbsSupply.id, FbsSupply.display_number,
+                FbsSupply.wb_supply_id, FbsSupply.name,
+            )
+            .join(FbsSupply, FbsSupply.id == FbsOrder.supply_id)
+            .where(FbsOrder.id.in_(fbs_order_ids))
+        )
+        for supply_row in supply_rows:
+            label = next(
+                (str(value).strip() for value in supply_row[2:] if str(value or "").strip()),
+                None,
+            )
+            if label is not None:
+                order_supplies[supply_row[0]] = (supply_row[1], label)
+
     supply_names: dict[uuid.UUID, str] = {}
     supply_ids = {
         fact.document_id
@@ -323,6 +347,12 @@ async def _operation_entries(
             "product_name": ", ".join(dict.fromkeys(product_names)) or None,
             "sku": ", ".join(dict.fromkeys(skus)) or None,
             "source_target": _source_target(fact.document_type, fact.document_id),
+            "supply": (
+                {"id": str(order_supplies[fact.document_id][0]),
+                 "number": order_supplies[fact.document_id][1]}
+                if fact.document_id in order_supplies
+                else None
+            ),
             "result": "reversed" if fact.reversal_of_id else ("not_billable" if not fact.billable_service_code else (finance_result if include_finance else "completed")),
         }
         if fact.document_type == FBS_ORDER_DOCUMENT_TYPE:

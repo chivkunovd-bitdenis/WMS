@@ -23,6 +23,8 @@ export type SellerReportEntry = {
   item_quantity: number | null
   source_type: string
   source_id: string
+  /** Поставка заказа FBS: номер для колонки и id для перехода. */
+  supply?: { id: string; number: string } | null
   source_target:
     | { kind: 'inbound'; source_id: string }
     | { kind: 'route'; to: string }
@@ -233,7 +235,7 @@ export function FfBillingSellerDetails({
   onToggleStorage: (checked: boolean) => void
   onLoadMore: (cursor: string) => void
   onOpenInbound: (id: string) => void
-  onOpenFbsOrder: (id: string) => void
+  onOpenFbsOrder: (supplyId: string) => void
 }) {
   const [openSections, setOpenSections] = useState<string[]>([])
   const sections = buildSections(details)
@@ -343,7 +345,7 @@ export function FfBillingSellerDetails({
                 component="button"
                 type="button"
                 sx={{ textAlign: 'left' }}
-                onClick={() => onOpenFbsOrder(target.source_id)}
+                onClick={() => row.entry.supply && onOpenFbsOrder(row.entry.supply.id)}
               >
                 {title}
               </Link>,
@@ -363,6 +365,27 @@ export function FfBillingSellerDetails({
                 status ? undefined : 'Первоисточник недоступен или не поддерживает переход'
               }
             />,
+          )
+        },
+      },
+      {
+        key: 'supply',
+        header: 'Поставка',
+        width: 190,
+        // Отдельного экрана заказа в системе нет: смотреть его идут в поставку.
+        // Поэтому у заказа два перехода — номер открывает историю, а эта
+        // колонка ведёт в саму карточку поставки.
+        render: (row: DocumentRow) => {
+          const supply = row.kind === 'document' ? row.entry.supply : null
+          if (!supply) return <TextCell value="—" />
+          return (
+            <Link
+              component={RouterLink}
+              to={`/app/ff/fbs?supply_id=${supply.id}`}
+              sx={{ textAlign: 'left' }}
+            >
+              {supply.number}
+            </Link>
           )
         },
       },

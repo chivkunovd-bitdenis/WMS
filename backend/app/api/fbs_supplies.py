@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
@@ -27,6 +27,7 @@ from app.services import fbs_shipment_pvz_service as pvz_svc
 from app.services import fbs_shipment_service as shipment_svc
 from app.services import fbs_supply_service as supply_svc
 from app.services import tenant_settings_service as tenant_settings_svc
+from app.services.fbs_order_history_service import FbsOrderHistoryError, supply_history
 from app.services.fbs_print_asset_service import (
     FbsPrintAssetError,
     map_print_asset,
@@ -2335,3 +2336,21 @@ async def get_fbs_supply_barcode(
     await session.commit()
     media_type = "image/png" if type == "png" else "image/svg+xml"
     return Response(content=png_bytes, media_type=media_type)
+
+
+@router.get("/{supply_id}/history")
+async def get_fbs_supply_history(
+    supply_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """Хронология поставки: заказы, подбор, упаковка, коды, печать, короба.
+
+    Однотипные записи склеены: печать сорока стикеров — одна строка, а номера
+    прячутся внутрь неё. Собирается из уже существующих записей, поэтому
+    работает и по старым поставкам.
+    """
+    try:
+        return await supply_history(session, tenant_id=user.tenant_id, supply_id=supply_id)
+    except FbsOrderHistoryError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

@@ -62,6 +62,8 @@ class SellerReportEntryBaseOut(BaseModel):
     source_type: str
     source_id: str
     source_target: dict[str, str] | None
+    # Поставка заказа FBS: номер для колонки и id для перехода в карточку.
+    supply: dict[str, str] | None = None
     document_number: str | None
     product_name: str | None
     sku: str | None
