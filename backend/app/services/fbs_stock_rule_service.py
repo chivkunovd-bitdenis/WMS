@@ -528,11 +528,25 @@ async def set_rule_for_products(
     else:
         validate_rule(rule, served_warehouse_count=len(served))
 
-    # The catalogue rule is the product-level source of truth, but ``served`` is
-    # still the ownership boundary. Only bindings already active and served by
-    # this fulfilment may be enabled for publication.
+    # Обслуживание склада — граница «наш он или чужой», и включать публикацию
+    # можно только по нашим. Но включать её РАЗОМ ПО ВСЕМ обслуживаемым нельзя:
+    # оператор настраивает один товар, а флаг переключается на весь кабинет
+    # продавца. 04.09.2026 на этом и споткнулись — сохранение правила по Фэшн
+    # включило публикацию по складу `1865709`, которого в кабинете WB давно нет,
+    # и он начал отвечать 404 на каждом обходе.
+    #
+    # Поэтому включаем только те склады, которые правило действительно называет.
+    # Галка «одинаково по всем складам» — единственное исключение: она про все
+    # обслуживаемые по своему смыслу, там перечисления просто нет.
+    if rule.units_mode:
+        addressed = set(rule.units_by_warehouse)
+    elif rule.same_everywhere:
+        addressed = {int(binding.wb_warehouse_id) for binding in served}
+    else:
+        addressed = set(rule.by_warehouse)
     for binding in served:
-        binding.stock_sync_enabled = True
+        if int(binding.wb_warehouse_id) in addressed:
+            binding.stock_sync_enabled = True
 
     binding_by_wb = {int(binding.wb_warehouse_id): binding for binding in bindings}
     # Отметка и время списания квоты берутся из ОДНОГО источника — часов
