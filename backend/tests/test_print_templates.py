@@ -5,10 +5,21 @@ import uuid
 import pytest
 from httpx import AsyncClient
 
+from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.print_template import LAYOUT_BLOCK_CZ, LAYOUT_BLOCK_LABEL, USER_LAST_LAYOUT_NAME
 from app.services import print_template_service as pt_svc
 from app.services.tokens import decode_access_token
+
+
+@pytest.fixture(autouse=True)
+def _label_template_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Состав этикетки настраивается только при включённом рубильнике сборки.
+
+    В боевой сборке он выключен, и печать идёт ровно как до появления функции —
+    это проверяет отдельный тест ниже.
+    """
+    monkeypatch.setattr(settings, "label_template_enabled", True)
 
 
 async def _seed_tenant_seller_product(
@@ -830,3 +841,71 @@ async def test_second_save_of_label_options_is_persisted(
         "include_brand": False,
         "include_composition": False,
     }, options
+
+
+@pytest.mark.asyncio
+async def test_label_template_switch_off_keeps_the_old_printing(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """С выключенным рубильником состав этикетки не влияет ни на что.
+
+    Это и есть боевая сборка «без макетов печати»: настроить нельзя, а уже
+    сохранённая настройка не применяется — печатаются все непустые поля, ровно
+    как до появления функции.
+    """
+    from app.services.print_template_service import resolve_default_print_template
+
+    token, tenant_id, _user_id, seller_id, _product_id = await _seed_tenant_seller_product(
+        async_client
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+    url = "/operations/marking-codes/print-templates/seller-label-options"
+    saved = await async_client.put(
+        url,
+        headers=headers,
+        json={
+            "seller_id": str(seller_id),
+            "label_options": {
+                "include_size": False,
+                "include_color": False,
+                "include_brand": False,
+                "include_composition": False,
+            },
+        },
+    )
+    assert saved.status_code == 200, saved.text
+
+    monkeypatch.setattr(settings, "label_template_enabled", False)
+
+    # Настроить больше нельзя: ручки для клиента просто нет.
+    blocked = await async_client.put(
+        url,
+        headers=headers,
+        json={
+            "seller_id": str(seller_id),
+            "label_options": {
+                "include_size": True,
+                "include_color": True,
+                "include_brand": True,
+                "include_composition": True,
+            },
+        },
+    )
+    assert blocked.status_code == 404, blocked.text
+
+    # И уже сохранённое не применяется — печатаем всё, как раньше.
+    async with SessionLocal() as session:
+        await pt_svc.save_user_last_print_layout(
+            session,
+            tenant_id,
+            _user_id,
+            {"units": [{"block": "cz", "copies": 2}]},
+        )
+        row = await resolve_default_print_template(
+            session, tenant_id, user_id=_user_id, product_id=None, seller_id=seller_id
+        )
+    assert row.layout.label_options.include_size is True
+    assert row.layout.label_options.include_color is True
+    assert row.layout.label_options.include_brand is True
+    assert row.layout.label_options.include_composition is True

@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_fulfillment_admin
+from app.core.settings import settings
 from app.db.session import get_db
 from app.models.user import User
 from app.services.tenant_settings_service import (
@@ -22,6 +23,9 @@ class TenantSettingsOut(BaseModel):
     address_storage_enabled: bool
     separate_marking_print_enabled: bool
     fbs_shipment_cutoff_time: str | None = None
+    #: Настройка состава этикетки. Это рубильник сборки, а не настройка
+    #: арендатора: менять его из интерфейса нельзя, экран только прячет панель.
+    label_template_enabled: bool = False
 
 
 class TenantSettingsPatch(BaseModel):
@@ -42,7 +46,7 @@ async def read_tenant_settings(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="tenant_not_found",
         ) from None
-    return TenantSettingsOut(**data)
+    return TenantSettingsOut(**data, label_template_enabled=settings.label_template_enabled)
 
 
 @router.patch("/settings", response_model=TenantSettingsOut)
@@ -76,4 +80,4 @@ async def patch_tenant_settings(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="tenant_not_found",
         ) from None
-    return TenantSettingsOut(**data)
+    return TenantSettingsOut(**data, label_template_enabled=settings.label_template_enabled)

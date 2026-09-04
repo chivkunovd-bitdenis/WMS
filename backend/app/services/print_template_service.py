@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.settings import settings
 from app.models.print_template import (
     LAYOUT_BLOCK_CZ,
     LAYOUT_BLOCKS,
@@ -592,6 +593,10 @@ async def set_seller_label_options(
     заводим с лентой системного умолчания — той же, что действует, когда за
     продавцом не настроено ничего.
     """
+    if not settings.label_template_enabled:
+        # Рубильник выключен — состав этикетки не настраивается вовсе, чтобы в
+        # боевой сборке не могло появиться ни одной строки, влияющей на печать.
+        raise PrintTemplateServiceError("label_template_disabled")
     await _validate_scope(session, tenant_id, seller_id=seller_id, product_id=None)
     stmt = (
         select(PrintTemplate)
@@ -650,8 +655,12 @@ async def resolve_default_print_template(
             # для продавца А, оператор унесёт его состав на продавца Б.
             # Поэтому ленту берём из раскладки оператора, а состав — из
             # шаблона, закреплённого за продавцом или товаром.
-            scoped = await _scoped_label_options(
-                session, tenant_id, product_id=product_id, seller_id=seller_id
+            scoped = (
+                await _scoped_label_options(
+                    session, tenant_id, product_id=product_id, seller_id=seller_id
+                )
+                if settings.label_template_enabled
+                else None
             )
             row = _row_from_model(user_last)
             if scoped is None:
@@ -729,7 +738,7 @@ async def resolve_default_print_template(
         seller_default = result.scalar_one_or_none()
         if seller_default is not None:
             row = _row_from_model(seller_default)
-            if row.layout.options_only:
+            if settings.label_template_enabled and row.layout.options_only:
                 # Шаблон, заведённый панелью состава, лентой не распоряжается:
                 # он отвечает только за то, что печатать на этикетке ШК. Иначе у
                 # оператора без личной раскладки лента молча становилась «один

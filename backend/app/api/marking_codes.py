@@ -407,6 +407,9 @@ def _http_from_pt_error(exc: pt_svc.PrintTemplateServiceError) -> HTTPException:
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     if code in ("template_not_found", "product_not_found"):
         status_code = status.HTTP_404_NOT_FOUND
+    if code == "label_template_disabled":
+        # Функция выключена рубильником сборки — ручки для клиента просто нет.
+        status_code = status.HTTP_404_NOT_FOUND
     return HTTPException(status_code=status_code, detail=code)
 
 

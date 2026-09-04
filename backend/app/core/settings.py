@@ -69,6 +69,16 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("WMS_OZON_SELLER_API_BASE", "OZON_SELLER_API_BASE"),
         description="Ozon Seller API host (override in tests/mocks), same idea as the WB hosts.",
     )
+    label_template_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("WMS_LABEL_TEMPLATE", "LABEL_TEMPLATE_ENABLED"),
+        description=(
+            "Switch on the seller-scoped label composition (what to print on the WB barcode "
+            "label). Off by default: with it off the print path behaves exactly as it did "
+            "before the feature — every non-empty field is printed and nothing can be "
+            "configured, so a production build cannot change a single printed label."
+        ),
+    )
     ozon_live_api_enabled: bool = Field(
         default=False,
         validation_alias=AliasChoices("WMS_OZON_LIVE_API", "OZON_LIVE_API_ENABLED"),

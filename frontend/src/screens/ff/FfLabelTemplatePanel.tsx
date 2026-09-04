@@ -33,6 +33,10 @@ export function FfLabelTemplatePanel({ token }: { token: string }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  // Рубильник сборки. Пока он выключен, состав этикетки не настраивается вовсе
+  // и панели нет: боевая сборка не должна иметь ни одной возможности повлиять
+  // на то, что печатается сегодня.
+  const [enabled, setEnabled] = useState<boolean | null>(null)
 
   // Ответ на прошлого продавца не должен записываться в галочки нового.
   // Переключились с А на Б, ответ А пришёл позже — и оператор сохранил бы
@@ -54,6 +58,7 @@ export function FfLabelTemplatePanel({ token }: { token: string }) {
   }, [token])
 
   useEffect(() => {
+    if (enabled !== true) return
     void (async () => {
       try {
         const response = await fetch(apiUrl('/sellers'), {
@@ -65,6 +70,26 @@ export function FfLabelTemplatePanel({ token }: { token: string }) {
       } catch {
         // Список продавцов не загрузился — панель просто останется пустой,
         // ронять весь экран настроек из-за неё нельзя.
+      }
+    })()
+  }, [token, enabled])
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const response = await fetch(apiUrl('/tenant/settings'), {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!response.ok) {
+          setEnabled(false)
+          return
+        }
+        const data = (await response.json()) as { label_template_enabled?: boolean }
+        setEnabled(data.label_template_enabled === true)
+      } catch {
+        // Не смогли спросить — считаем выключенным. Показать панель, которой
+        // сервер не даст сохранить, хуже, чем не показать ничего.
+        setEnabled(false)
       }
     })()
   }, [token])
@@ -97,6 +122,10 @@ export function FfLabelTemplatePanel({ token }: { token: string }) {
     } finally {
       setBusy(false)
     }
+  }
+
+  if (enabled !== true) {
+    return null
   }
 
   return (
