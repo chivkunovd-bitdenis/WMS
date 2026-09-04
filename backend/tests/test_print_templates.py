@@ -894,7 +894,16 @@ async def test_label_template_switch_off_keeps_the_old_printing(
     )
     assert blocked.status_code == 404, blocked.text
 
-    # И уже сохранённое не применяется — печатаем всё, как раньше.
+    # И уже сохранённое не применяется — печатаем всё, как раньше. Проверяем оба
+    # пути разбора: и когда у оператора есть личная раскладка, и когда её нет и
+    # шаблон продавца возвращается целиком.
+    async with SessionLocal() as session:
+        without_operator_layout = await resolve_default_print_template(
+            session, tenant_id, user_id=None, product_id=None, seller_id=seller_id
+        )
+    assert without_operator_layout.layout.label_options.include_brand is True
+    assert without_operator_layout.layout.label_options.include_composition is True
+
     async with SessionLocal() as session:
         await pt_svc.save_user_last_print_layout(
             session,

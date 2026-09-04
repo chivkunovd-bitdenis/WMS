@@ -642,6 +642,31 @@ async def resolve_default_print_template(
     product_id: uuid.UUID | None = None,
     seller_id: uuid.UUID | None = None,
 ) -> PrintTemplateRow:
+    """Какой макет печати применить: лента плюс состав этикетки.
+
+    Рубильник сборки выключен — состав не участвует вовсе. Возвращаем полный
+    набор полей, каким он был до появления функции, что бы ни лежало в базе:
+    боевая сборка не имеет права изменить ни одной напечатанной этикетки, даже
+    если настройка успела где-то сохраниться.
+    """
+    row = await _resolve_default_print_template(
+        session, tenant_id, user_id=user_id, product_id=product_id, seller_id=seller_id
+    )
+    if settings.label_template_enabled:
+        return row
+    return replace(
+        row, layout=PrintLayout(units=row.layout.units, label_options=DEFAULT_LABEL_OPTIONS)
+    )
+
+
+async def _resolve_default_print_template(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    user_id: uuid.UUID | None = None,
+    product_id: uuid.UUID | None = None,
+    seller_id: uuid.UUID | None = None,
+) -> PrintTemplateRow:
     if user_id is not None:
         user_last = await _find_user_last_layout(session, tenant_id, user_id)
         if user_last is not None:
