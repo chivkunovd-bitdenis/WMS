@@ -27,6 +27,7 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_PACKED,
     FbsOrder,
+    FbsOrderProduct,
 )
 from app.models.fbs_supply import FbsSupply
 from app.models.operation_fact import OperationFact, OperationFactCutover, OperationFactLine
@@ -492,6 +493,20 @@ async def _fbs_handed_entries(
     # Поставка, в которой заказ уехал: по ней открывается история. Без неё
     # номер заказа в расчётах рисовался ссылкой, но нажатие ничего не делало —
     # у строки просто не было, куда вести.
+    # Сколько штук в заказе. Строка без количества читается как «ноль штук
+    # передано», хотя заказ уехал целиком: у Wildberries это одна единица, у
+    # Ozon в отправлении может быть несколько позиций.
+    units: dict[uuid.UUID, int] = {}
+    if orders:
+        for order_id, quantity in (
+            await session.execute(
+                select(FbsOrderProduct.order_id, func.sum(FbsOrderProduct.quantity))
+                .where(FbsOrderProduct.order_id.in_([order.id for order in orders]))
+                .group_by(FbsOrderProduct.order_id)
+            )
+        ).all():
+            units[order_id] = int(quantity or 0)
+
     supplies: dict[uuid.UUID, tuple[uuid.UUID, str]] = {}
     supply_ids = {order.supply_id for order in orders if order.supply_id is not None}
     if supply_ids:
@@ -520,7 +535,7 @@ async def _fbs_handed_entries(
                 "seller_name": "",
                 "occurred_at": _as_moscow(order.updated_at).isoformat(),
                 "service_code": FBS_ORDER_DOCUMENT_TYPE,
-                "item_quantity": None,
+                "item_quantity": units.get(order.id) or 1,
                 "source_type": FBS_ORDER_DOCUMENT_TYPE,
                 "source_id": str(order.id),
                 "document_number": f"Заказ {order_display_number(order)}",

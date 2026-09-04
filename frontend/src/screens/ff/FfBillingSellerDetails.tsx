@@ -79,14 +79,13 @@ type DocumentRow =
   | { kind: 'storagePeriod'; id: 'storage-period'; storage: StorageReportRow }
 
 /** Порядок разделов — по ходу работы склада, а не по алфавиту. */
-const SECTION_ORDER = ['inbound', 'packing', 'fbs', 'marketplace_outbound', 'picking', 'return', 'other']
+const SECTION_ORDER = ['inbound', 'packing', 'fbs', 'marketplace_outbound', 'return', 'other']
 
 const sectionLabels: Record<string, string> = {
   inbound: 'Приёмка',
   packing: 'Упаковка',
   fbs: 'FBS',
   marketplace_outbound: 'Отгрузка',
-  picking: 'Подбор',
   return: 'Возврат',
   storage: 'Хранение',
   other: 'Прочие услуги',
@@ -95,12 +94,7 @@ const sectionLabels: Record<string, string> = {
 /** Коды услуг с бэкенда сводим в разделы: `packing` и `packaging` — одно и то же. */
 function sectionKey(serviceCode: string): string {
   if (serviceCode === 'packing' || serviceCode === 'packaging') return 'packing'
-  // Подбор — внутренняя операция склада, тарифа на неё нет. В разделе FBS он
-  // засыпал заказы строками «Поставка …» по одной на каждую подобранную
-  // единицу, и раздел переставал читаться. Считаем по заказам: в FBS только
-  // они, подбор живёт своим разделом.
-  if (serviceCode === 'fbs_pick') return 'picking'
-  if (serviceCode === 'fbs_order') return 'fbs'
+  if (serviceCode === 'fbs_pick' || serviceCode === 'fbs_order') return 'fbs'
   if (serviceCode === 'storage' || serviceCode === 'storage_liter_day') return 'storage'
   if (sectionLabels[serviceCode]) return serviceCode
   return 'other'
@@ -143,7 +137,14 @@ export function selectionReason(entry: SellerReportEntry): string | undefined {
 }
 
 /** Почему хранение нельзя выбрать в счёт. */
-function storageReason(status: StorageReportRow['status']): string | undefined {
+function storageReason(row: StorageReportRow): string | undefined {
+  // За период ничего не начислено — выставлять нечего. Раньше галка оставалась
+  // живой при нуле, а «Выставить счёт» отвечал «Выберите операции»: человек
+  // выбрал строку и получал отказ без объяснения.
+  if (!(row.liter_days > 0) && !(row.amount_kopecks ?? 0)) {
+    return 'За период хранение не начислено — выставлять нечего'
+  }
+  const status = row.status
   if (status === 'missing_dimensions') return 'Нет габаритов у товара — хранение в счёт не включить'
   if (status === 'negative_stock') {
     return 'Остаток по движениям уходит в минус — хранение по этому селлеру не считается, пока движения не выправят'
@@ -259,7 +260,7 @@ export function FfBillingSellerDetails({
                     hideLabel
                     checked={storageSelected}
                     onChange={onToggleStorage}
-                    disabledReason={storageReason(row.storage.status)}
+                    disabledReason={storageReason(row.storage)}
                     testId="billing-pick-storage"
                   />
                 ) : (
@@ -464,7 +465,7 @@ export function FfBillingSellerDetails({
                     hideLabel
                     checked={storageSelected}
                     onChange={onToggleStorage}
-                    disabledReason={storageReason(row.storage.status)}
+                    disabledReason={storageReason(row.storage)}
                     testId="billing-pick-section-storage"
                   />
                 )
