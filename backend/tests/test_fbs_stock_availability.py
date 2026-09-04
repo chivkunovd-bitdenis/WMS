@@ -199,7 +199,7 @@ async def test_fbo_reserve_reduces_fbs_publish(async_client: AsyncClient) -> Non
     Раньше этот тест назывался ``test_fbo_reserve_does_not_reduce_fbs_publish``
     и закреплял противоположное поведение. Постановка (TC-NEW-FBS-STOCK-005 в
     ``tasks/fbs-stock-sync/CURSOR_HANDOFF.md``) требует только
-    ``max(0, sum − reserves)`` и про исключение ФБО-резерва не говорит.
+    ``max(0, sum - reserves)`` и про исключение ФБО-резерва не говорит.
     """
     _headers, seller_id, warehouse_id, product_id, storage_loc_id = (
         await _setup_tenant_product(async_client)
