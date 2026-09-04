@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
+from datetime import datetime
 
 import pytest
 import pytest_asyncio
@@ -482,6 +483,12 @@ async def _allocate(
     )
 
 
+def _yesterday() -> datetime:
+    from datetime import UTC, datetime, timedelta
+
+    return datetime.now(UTC) - timedelta(days=1)
+
+
 async def _place_order(
     session: AsyncSession,
     seed: _Seed,
@@ -489,13 +496,13 @@ async def _place_order(
     *,
     status: str = "new",
     shipped: bool = False,
+    created_at: datetime | None = None,
 ) -> None:
-    """Заказ, съевший единицу квоты этого склада — как это делает импорт."""
+    """Заказ этого склада WB — ровно то, что создаёт импорт из Wildberries."""
     from datetime import UTC, datetime
 
     from app.models.fbs_order import FbsOrder
     from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
-    from app.models.fbs_stock_pool_debit import FbsStockPoolDebit
 
     now = datetime.now(UTC)
     order = FbsOrder(
@@ -511,30 +518,10 @@ async def _place_order(
         reserve_status="reserved",
         status=status,
     )
+    order.created_at = created_at if created_at is not None else now
     session.add(order)
     await session.flush()
 
-    binding = next(
-        one for one in seed.bindings if one.wb_warehouse_id == wb_warehouse_id
-    )
-    pool = (
-        await session.execute(
-            select(FbsBindingStockPool).where(
-                FbsBindingStockPool.binding_id == binding.id,
-                FbsBindingStockPool.product_id == seed.product.id,
-            )
-        )
-    ).scalar_one()
-    session.add(
-        FbsStockPoolDebit(
-            tenant_id=seed.tenant.id,
-            pool_id=pool.id,
-            order_id=order.id,
-            quantity_debited=1,
-            quantity_shortfall=0,
-            created_at=now,
-        )
-    )
     if shipped:
         session.add(
             FbsShipmentReversalLedger(
@@ -567,27 +554,19 @@ async def test_units_mode_publishes_numbers_as_given(db_session: AsyncSession) -
 
 
 @pytest.mark.asyncio
-async def test_orders_do_not_touch_the_number_operator_set(
+async def test_units_quota_is_eaten_only_by_its_own_warehouse(
     db_session: AsyncSession,
 ) -> None:
-    """Заказ не уменьшает число оператора — оно потолок, а не счётчик.
-
-    Три поколения кода подряд пытались вести рядом со складом второе число и
-    уменьшать его событиями: `stock_directions.is_fbs` с consume/restore,
-    `fbs_binding_stock_pools.quantity` с вычитанием на импорте и журнал
-    `fbs_stock_pool_debits`. Все три разошлись с реальностью, последний — за
-    четыре часа: полный обход истории принёс августовские заказы, журнал принял
-    их за продажи, и 335 штук перестали предлагаться покупателям.
-    """
     # Дано: по 200 на каждый склад, и два заказа пришли с ПЕРВОГО склада.
     seed = await _units_seed(db_session)
     await _allocate(db_session, seed, {501001: 200, 501002: 200})
     await _place_order(db_session, seed, 501001)
     await _place_order(db_session, seed, 501001)
 
-    # Тогда: числа по складам не тронуты — их меняет только оператор.
+    # Тогда: у первого склада осталось 198, у второго по-прежнему 200.
+    # Соседний склад в чужое число залезть не может.
     view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
-    assert view.units_remaining_by_warehouse[501001] == 200
+    assert view.units_remaining_by_warehouse[501001] == 198
     assert view.units_remaining_by_warehouse[501002] == 200
 
 
@@ -600,8 +579,45 @@ async def test_cancelled_before_handover_returns_quota(
     await _allocate(db_session, seed, {501001: 200, 501002: 0})
     await _place_order(db_session, seed, 501001, status="cancelled")
 
-    # Тогда: число оператора не тронуто. Возвращать нечего, потому что никто
-    # ничего и не вычитал — публикация идёт от остатка, а он не уменьшался.
+    # Тогда: число вернулось само, без отдельного события. Отменённый до
+    # передачи заказ товар не унёс, значит и число не потратил.
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert view.units_remaining_by_warehouse[501001] == 200
+
+
+@pytest.mark.asyncio
+async def test_cancelled_after_handover_keeps_quota_spent(
+    db_session: AsyncSession,
+) -> None:
+    # Дано: заказ отменился уже ПОСЛЕ передачи — списание проведено, товар уехал.
+    seed = await _units_seed(db_session)
+    await _allocate(db_session, seed, {501001: 200, 501002: 0})
+    await _place_order(db_session, seed, 501001, status="cancelled", shipped=True)
+
+    # Тогда: число остаётся потраченным. Возврат в остаток — отдельным
+    # документом, то же правило, что и для физического остатка
+    # (OWN-2026-08-31-06).
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert view.units_remaining_by_warehouse[501001] == 199
+
+
+@pytest.mark.asyncio
+async def test_old_orders_do_not_eat_a_freshly_set_number(
+    db_session: AsyncSession,
+) -> None:
+    """Заказ старше числа его не трогает — сторожевой тест против 04.09.2026.
+
+    В тот день шестичасовой обход истории за 30 дней принёс заказы за 26-28
+    августа, журнал расхода записал их как свежие продажи, и по трём продавцам
+    335 штук перестали предлагаться покупателям. Отсчёт идёт от даты ЗАКАЗА, а
+    не от даты, когда мы что-то о нём записали.
+    """
+    # Дано: заказ пришёл вчера, а число оператор задал сегодня.
+    seed = await _units_seed(db_session)
+    await _place_order(db_session, seed, 501001, created_at=_yesterday())
+    await _allocate(db_session, seed, {501001: 200, 501002: 0})
+
+    # Тогда: число целое. Августовский заказ съесть сегодняшнее не может.
     view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
     assert view.units_remaining_by_warehouse[501001] == 200
 

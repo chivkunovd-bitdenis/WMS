@@ -16,10 +16,12 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
+from app.models.fbs_order import FBS_ORDER_STATUS_CANCELLED, FbsOrder
+from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.services import stock_direction_service
@@ -266,7 +268,7 @@ def split_amounts(
     free_stock: int,
     bindings: list[FbsWarehouseBinding],
     *,
-    units_shipped: dict[uuid.UUID, int] | None = None,
+    units_spent: dict[uuid.UUID, int] | None = None,
 ) -> dict[uuid.UUID, int]:
     """Разложить свободный остаток по складам WB: binding_id -> сколько штук.
 
@@ -296,7 +298,7 @@ def split_amounts(
             share = max(
                 0,
                 int(rule.units_by_warehouse.get(int(binding.wb_warehouse_id), 0))
-                - int((units_shipped or {}).get(binding.id, 0)),
+                - int((units_spent or {}).get(binding.id, 0)),
             )
         elif rule.same_everywhere:
             share = amount_from_percent(free_stock, rule.percent)
@@ -313,7 +315,7 @@ def split_amounts(
 def _units_by_wb(
     rule: FbsRule,
     bindings: list[FbsWarehouseBinding],
-    units_shipped: dict[uuid.UUID, int],
+    units_spent: dict[uuid.UUID, int],
 ) -> dict[int, int]:
     """Сколько ещё осталось отдать в каждый склад WB — для полей окна настройки.
 
@@ -324,51 +326,65 @@ def _units_by_wb(
         int(binding.wb_warehouse_id): max(
             0,
             int(rule.units_by_warehouse.get(int(binding.wb_warehouse_id), 0))
-            - int(units_shipped.get(binding.id, 0)),
+            - int(units_spent.get(binding.id, 0)),
         )
         for binding in bindings
         if int(binding.wb_warehouse_id) in rule.units_by_warehouse
     }
 
 
-async def _shipped_units_by_binding(
+async def _spent_units_by_binding(
     session: AsyncSession,
     product_id: uuid.UUID,
     pool_rows: dict[uuid.UUID, FbsBindingStockPool],
     bindings: list[FbsWarehouseBinding],
 ) -> dict[uuid.UUID, int]:
-    """Сколько штук мы отгрузили с каждого склада WB после того, как задали число.
+    """Сколько из заданного числа уже потрачено по каждому складу WB.
 
-    Считается по факту отгрузки, и только по нему: берутся строки журнала
-    передачи с **проставленным движением списания** — то есть те, где товар
-    физически ушёл со склада при передаче поставки в Wildberries. Заказ, по
-    которому мы ничего не отгружали, здесь не появится, сколько бы раз WB его ни
-    прислал: он не тратит ни товар, ни число.
+    Тратит заказ, и ровно один раз, на какой бы стадии он ни был: пришёл — занял
+    штуку бронью, отгрузили — унёс её со склада. Поэтому при передаче поставки
+    публикуемое число не прыгает: заказ как занимал единицу, так и занимает.
 
-    Отдельного счётчика и журнала расхода для этого не нужно — всё уже лежит в
-    журнале передачи, который ведётся с самого начала. Попытка завести рядом
-    второе число трижды кончалась тем, что оно расходилось с реальностью; в
-    последний раз — за четыре часа, см. второе главное правило в CLAUDE.md.
+    Условий два, и оба — про сам заказ, а не про наши записи о нём:
+
+    * **заказ появился после того, как оператор задал число.** Отсчёт именно от
+      даты заказа. Считать от даты нашей записи нельзя: 04.09.2026 на этом и
+      сгорели — шестичасовой обход истории создал записи расхода сегодня, а
+      заказы под ними были за 26-28 августа, и 335 штук перестали предлагаться
+      покупателям;
+    * **заказ не отменён — либо отменён, но товар по нему уже уехал.** Отмена до
+      передачи возвращает штуку на полку, значит и число не тратит. Отмена после
+      передачи товар не возвращает (`OWN-2026-08-31-06`), значит и число
+      остаётся потраченным.
+
+    Новой сущности для этого не нужно: и заказы, и факт отгрузки уже лежат в
+    базе. Заводить рядом отдельный счётчик пробовали трижды, и все три раза он
+    расходился с реальностью — см. второе главное правило в CLAUDE.md.
     """
-    binding_by_wb = {int(row.wb_warehouse_id): row.id for row in bindings}
+    shipped = (
+        select(FbsShipmentReversalLedger.id)
+        .where(
+            FbsShipmentReversalLedger.fbs_order_id == FbsOrder.id,
+            FbsShipmentReversalLedger.shipment_movement_id.is_not(None),
+        )
+        .exists()
+    )
     result: dict[uuid.UUID, int] = {}
     for binding in bindings:
         pool = pool_rows.get(binding.id)
         if pool is None or pool.allocated_at is None:
             continue
-        shipped = await session.scalar(
-            select(func.coalesce(func.sum(FbsShipmentReversalLedger.quantity), 0))
-            .join(FbsOrder, FbsOrder.id == FbsShipmentReversalLedger.fbs_order_id)
+        spent = await session.scalar(
+            select(func.count())
+            .select_from(FbsOrder)
             .where(
-                FbsShipmentReversalLedger.product_id == product_id,
-                FbsShipmentReversalLedger.shipment_movement_id.is_not(None),
-                FbsShipmentReversalLedger.written_off_at.is_not(None),
-                FbsShipmentReversalLedger.written_off_at >= pool.allocated_at,
+                FbsOrder.product_id == product_id,
                 FbsOrder.wb_warehouse_id == binding.wb_warehouse_id,
+                FbsOrder.created_at >= pool.allocated_at,
+                or_(FbsOrder.status != FBS_ORDER_STATUS_CANCELLED, shipped),
             )
         )
-        result[binding.id] = int(shipped or 0)
-    _ = binding_by_wb
+        result[binding.id] = int(spent or 0)
     return result
 
 
@@ -394,14 +410,17 @@ async def get_rule_view(
     on_hand, reserved, free = await _free_stock_for_bindings(
         session, tenant_id, product_id, bindings
     )
-    amounts = split_amounts(rule, free, served)
+    units_spent = await _spent_units_by_binding(
+        session, product_id, pool_rows, bindings
+    )
+    amounts = split_amounts(rule, free, served, units_spent=units_spent)
     return FbsRuleView(
         rule=rule,
         on_hand=on_hand,
         reserved=reserved,
         free_stock=free,
         published_now=sum(amounts.values()),
-        units_remaining_by_warehouse=_units_by_wb(rule),
+        units_remaining_by_warehouse=_units_by_wb(rule, bindings, units_spent),
     )
 
 
@@ -499,14 +518,19 @@ async def get_rule_views(
             pool_rows = pools_by_product[product.id]
             rule = rule_from_product(product, pool_rows, bindings)
             on_hand, reserved, free = stock_by_product[product.id]
-            amounts = split_amounts(rule, free, served)
+            units_spent = await _spent_units_by_binding(
+                session, product.id, pool_rows, bindings
+            )
+            amounts = split_amounts(rule, free, served, units_spent=units_spent)
             views[product.id] = FbsRuleView(
                 rule=rule,
                 on_hand=on_hand,
                 reserved=reserved,
                 free_stock=free,
                 published_now=sum(amounts.values()),
-                units_remaining_by_warehouse=_units_by_wb(rule),
+                units_remaining_by_warehouse=_units_by_wb(
+                    rule, bindings, units_spent
+                ),
             )
     return views
 
@@ -721,6 +745,11 @@ async def publish_amounts_for_binding(
         )
         rule = rule_from_product(product, pool_rows, seller_bindings)
         free = breakdown[product.id].free if product.id in breakdown else 0
-        split = split_amounts(rule, free, seller_bindings)
+        units_spent = await _spent_units_by_binding(
+            session, product.id, pool_rows, seller_bindings
+        )
+        split = split_amounts(
+            rule, free, seller_bindings, units_spent=units_spent
+        )
         amounts[product.id] = split.get(binding.id, 0)
     return amounts
