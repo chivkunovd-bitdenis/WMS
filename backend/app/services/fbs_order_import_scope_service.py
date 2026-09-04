@@ -30,7 +30,6 @@ async def import_wb_order_rows(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     rows: list[dict[str, Any]],
-    pool_debit_totals: dict[str, int],
     stats: FbsOrderImportStats,
 ) -> None:
     """Импортировать только заказы явно обслуживаемых WB-складов."""
@@ -64,7 +63,6 @@ async def import_wb_order_rows(
             tenant_id,
             seller_id,
             row,
-            pool_debit_totals=pool_debit_totals,
             preserve_unmapped_warehouse=False,
         )
         stats.upserted += 1

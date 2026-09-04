@@ -26,7 +26,6 @@ from app.models.fbs_order import (
     FbsOrder,
     FbsOrderReservation,
 )
-from app.models.fbs_stock_pool_debit import FbsStockPoolDebit
 from app.models.fbs_supply import FBS_SUPPLY_SOURCE_WB, FbsSupply
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
@@ -2404,24 +2403,20 @@ async def test_fbs_order_wb_warehouse_remap_conflict_on_resync(
 
 # TC-NEW-FBS-POOL-DEBIT-001
 @pytest.mark.asyncio
-async def test_fbs_order_intake_debits_stock_pool_idempotently(
+async def test_fbs_order_intake_does_not_touch_operator_number(
     async_client: AsyncClient,
 ) -> None:
-    """Заказ пришёл — квота склада WB уменьшилась на количество заказа.
+    """Заказ пришёл — число, заданное оператором, не тронуто. Совсем.
 
-    Тот же заказ прилетает от WB повторно на каждом автоопросе и по клику
-    кнопки "Синхронизировать" -- второго списания быть не должно.
-    Идемпотентность держит UNIQUE(order_id) в fbs_stock_pool_debits: строка
-    ставится один раз при первом появлении заказа и блокирует повтор и в
-    приложении (проверка перед списанием), и на уровне БД (гонки конкурентных
-    синков).
+    Сторожевой тест против ошибки, сделанной трижды: завести рядом со складом
+    второе число и уменьшать его событиями. Последняя попытка — журнал
+    `fbs_stock_pool_debits` — прожила четыре часа: шестичасовой полный обход
+    истории принёс заказы за август, журнал принял их за свежие продажи, и по
+    трём продавцам 335 штук перестали предлагаться покупателям.
 
-    Важное изменение 04.09.2026: само поле `fbs_binding_stock_pools.quantity`
-    заказом больше НЕ уменьшается — это «сколько выделил оператор», и меняет его
-    только оператор. Расход считается по этому же журналу
-    (`fbs_stock_units_service.remaining_units`), поэтому отмена заказа возвращает
-    квоту сама, без отдельного события, которое можно потерять. Проверяем обе
-    величины: выделенное осталось прежним, остаток уменьшился.
+    Правило: число оператора — потолок, а не счётчик. Уезжает
+    `min(число, свободный остаток)`, и всё уменьшение приходит со стороны склада,
+    где оно и происходит по-настоящему: отгрузка, инвентаризация, брак.
     """
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, wms_warehouse_id = await _setup_seller_with_token(
@@ -2483,32 +2478,7 @@ async def test_fbs_order_intake_debits_stock_pool_idempotently(
                 )
             ).scalar_one()
 
-    async def _remaining_units() -> int:
-        from app.services.fbs_stock_units_service import remaining_units
-
-        async with SessionLocal() as session:
-            pool = (
-                await session.execute(
-                    select(FbsBindingStockPool).where(
-                        FbsBindingStockPool.binding_id == binding_id,
-                        FbsBindingStockPool.product_id == product_id,
-                    )
-                )
-            ).scalar_one()
-            return await remaining_units(session, pool)
-
-    async def _debit_rows_for_order(order_id: uuid.UUID) -> int:
-        async with SessionLocal() as session:
-            return (
-                await session.execute(
-                    select(func.count())
-                    .select_from(FbsStockPoolDebit)
-                    .where(FbsStockPoolDebit.order_id == order_id)
-                )
-            ).scalar_one()
-
     assert await _pool_quantity() == 3
-    assert await _remaining_units() == 3
 
     seller_uuid = uuid.UUID(seller_id)
     wb_row = _wb_order_row(
@@ -2527,14 +2497,11 @@ async def test_fbs_order_intake_debits_stock_pool_idempotently(
         order_id = order.id
     assert created is True
 
-    # Заказ пришёл -- остаток квоты уменьшился на его количество (один заказ =
-    # одна единица), а выделенное оператором осталось прежним.
+    # Заказ пришёл -- число оператора не тронуто.
     assert await _pool_quantity() == 3
-    assert await _remaining_units() == 2
-    assert await _debit_rows_for_order(order_id) == 1
 
-    # WB присылает тот же заказ повторно (автоопрос + ручная кнопка видят его
-    # снова и снова) -- пул не должен списаться второй раз.
+    # WB присылает тот же заказ повторно (автоопрос, ручная кнопка, обход
+    # истории за 30 дней) -- по-прежнему ничего не вычитается.
     async with SessionLocal() as session:
         order2, created2 = await upsert_order_from_wb_row(
             session, tenant_id, seller_uuid, wb_row
@@ -2543,5 +2510,3 @@ async def test_fbs_order_intake_debits_stock_pool_idempotently(
     assert created2 is False
     assert order2.id == order_id
     assert await _pool_quantity() == 3
-    assert await _remaining_units() == 2
-    assert await _debit_rows_for_order(order_id) == 1

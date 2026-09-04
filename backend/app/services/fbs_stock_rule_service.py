@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
-from app.services import fbs_stock_units_service, stock_direction_service
+from app.services import stock_direction_service
 from app.services.fbs_stock_availability_service import fbs_stock_breakdown_by_product
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
 
@@ -59,9 +59,8 @@ class FbsRule:
     # складу WB. Доля при этом не стирается — переключил галку обратно, и работает
     # прежний процент.
     units_mode: bool = False
-    # Ключ — склад в кабинете WB, значение — сколько штук ВЫДЕЛЕНО оператором.
-    # Это не остаток: сколько от квоты ещё осталось, считает
-    # ``fbs_stock_units_service`` по журналу списаний.
+    # Ключ — склад в кабинете WB, значение — сколько штук задал оператор.
+    # Это потолок, а не счётчик: он не уменьшается ничем, кроме руки оператора.
     units_by_warehouse: dict[int, int] = field(default_factory=dict)
 
 
@@ -74,10 +73,9 @@ class FbsRuleView:
     reserved: int
     free_stock: int
     published_now: int
-    # Сколько от квоты осталось по каждому складу WB — только в режиме штук.
-    # Именно это число подставляется в поле ввода, когда оператор открывает окно:
-    # он правит числа, глядя на сегодняшний расклад, а не на тот, что был при
-    # первой настройке.
+    # Числа по складам WB — только в режиме штук. Именно они подставляются в
+    # поля ввода, когда оператор открывает окно. Это то, что он сам задал:
+    # число не расходуется, поэтому «остатка» у него нет.
     units_remaining_by_warehouse: dict[int, int] = field(default_factory=dict)
 
 
@@ -267,8 +265,6 @@ def split_amounts(
     rule: FbsRule,
     free_stock: int,
     bindings: list[FbsWarehouseBinding],
-    *,
-    units_remaining: dict[uuid.UUID, int] | None = None,
 ) -> dict[uuid.UUID, int]:
     """Разложить свободный остаток по складам WB: binding_id -> сколько штук.
 
@@ -278,11 +274,16 @@ def split_amounts(
     порядку, каждому не больше того, что ещё осталось, — переполнение отрезается
     у последнего склада, а не размазывается молча по всем.
 
-    В режиме штук вместо доли берётся остаток квоты склада (``units_remaining``,
-    посчитанный по журналу списаний), но обрезка по свободному остатку остаётся
-    ровно та же. Она и есть последняя защита: остаток мог просесть не из-за
-    ФБС-заказов — уехала отгрузка на маркетплейс, прошла инвентаризация, — и
-    тогда сумма квот больше того, что лежит. Отдаём то, что есть.
+    В режиме штук вместо доли берётся число, которое задал оператор, — как есть,
+    без вычитаний. Это потолок, а не счётчик: он не уменьшается ни заказом, ни
+    статусом от WB, ни обходом истории, и меняет его только оператор. Всё
+    уменьшение приходит с той стороны, с которой и должно, — от свободного
+    остатка, который живёт движениями по складу.
+
+    Обрезка по свободному остатку — единственная и последняя защита: остаток мог
+    просесть не из-за ФБС-заказов (уехала отгрузка на маркетплейс, прошла
+    инвентаризация, списали брак), и тогда сумма чисел больше того, что лежит.
+    Отдаём то, что есть.
     """
     amounts: dict[uuid.UUID, int] = {}
     if not rule.publish:
@@ -290,7 +291,9 @@ def split_amounts(
     remaining = max(free_stock, 0)
     for binding in bindings:
         if rule.units_mode:
-            share = max(0, int((units_remaining or {}).get(binding.id, 0)))
+            share = max(
+                0, int(rule.units_by_warehouse.get(int(binding.wb_warehouse_id), 0))
+            )
         elif rule.same_everywhere:
             share = amount_from_percent(free_stock, rule.percent)
         else:
@@ -303,16 +306,14 @@ def split_amounts(
     return amounts
 
 
-def _units_remaining_by_wb(
-    bindings: list[FbsWarehouseBinding],
-    units_remaining: dict[uuid.UUID, int],
-) -> dict[int, int]:
-    """Перевести остаток квоты с внутреннего id привязки на номер склада WB."""
-    return {
-        int(binding.wb_warehouse_id): units_remaining[binding.id]
-        for binding in bindings
-        if binding.id in units_remaining
-    }
+def _units_by_wb(rule: FbsRule) -> dict[int, int]:
+    """Числа по складам WB для окна настройки — ровно то, что задал оператор.
+
+    Отдельного «остатка» у них нет и быть не должно: число не расходуется.
+    Сколько из него реально уедет, видно в ``published_now`` — там уже учтена
+    обрезка по свободному остатку.
+    """
+    return dict(rule.units_by_warehouse)
 
 
 async def get_rule_view(
@@ -337,17 +338,14 @@ async def get_rule_view(
     on_hand, reserved, free = await _free_stock_for_bindings(
         session, tenant_id, product_id, bindings
     )
-    units_remaining = await fbs_stock_units_service.remaining_units_by_binding(
-        session, pool_rows
-    )
-    amounts = split_amounts(rule, free, served, units_remaining=units_remaining)
+    amounts = split_amounts(rule, free, served)
     return FbsRuleView(
         rule=rule,
         on_hand=on_hand,
         reserved=reserved,
         free_stock=free,
         published_now=sum(amounts.values()),
-        units_remaining_by_warehouse=_units_remaining_by_wb(bindings, units_remaining),
+        units_remaining_by_warehouse=_units_by_wb(rule),
     )
 
 
@@ -445,19 +443,14 @@ async def get_rule_views(
             pool_rows = pools_by_product[product.id]
             rule = rule_from_product(product, pool_rows, bindings)
             on_hand, reserved, free = stock_by_product[product.id]
-            units_remaining = await fbs_stock_units_service.remaining_units_by_binding(
-                session, pool_rows
-            )
-            amounts = split_amounts(rule, free, served, units_remaining=units_remaining)
+            amounts = split_amounts(rule, free, served)
             views[product.id] = FbsRuleView(
                 rule=rule,
                 on_hand=on_hand,
                 reserved=reserved,
                 free_stock=free,
                 published_now=sum(amounts.values()),
-                units_remaining_by_warehouse=_units_remaining_by_wb(
-                    bindings, units_remaining
-                ),
+                units_remaining_by_warehouse=_units_by_wb(rule),
             )
     return views
 
@@ -672,11 +665,6 @@ async def publish_amounts_for_binding(
         )
         rule = rule_from_product(product, pool_rows, seller_bindings)
         free = breakdown[product.id].free if product.id in breakdown else 0
-        units_remaining = await fbs_stock_units_service.remaining_units_by_binding(
-            session, pool_rows
-        )
-        split = split_amounts(
-            rule, free, seller_bindings, units_remaining=units_remaining
-        )
+        split = split_amounts(rule, free, seller_bindings)
         amounts[product.id] = split.get(binding.id, 0)
     return amounts

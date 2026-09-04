@@ -567,19 +567,27 @@ async def test_units_mode_publishes_numbers_as_given(db_session: AsyncSession) -
 
 
 @pytest.mark.asyncio
-async def test_units_quota_is_eaten_only_by_its_own_warehouse(
+async def test_orders_do_not_touch_the_number_operator_set(
     db_session: AsyncSession,
 ) -> None:
+    """Заказ не уменьшает число оператора — оно потолок, а не счётчик.
+
+    Три поколения кода подряд пытались вести рядом со складом второе число и
+    уменьшать его событиями: `stock_directions.is_fbs` с consume/restore,
+    `fbs_binding_stock_pools.quantity` с вычитанием на импорте и журнал
+    `fbs_stock_pool_debits`. Все три разошлись с реальностью, последний — за
+    четыре часа: полный обход истории принёс августовские заказы, журнал принял
+    их за продажи, и 335 штук перестали предлагаться покупателям.
+    """
     # Дано: по 200 на каждый склад, и два заказа пришли с ПЕРВОГО склада.
     seed = await _units_seed(db_session)
     await _allocate(db_session, seed, {501001: 200, 501002: 200})
     await _place_order(db_session, seed, 501001)
     await _place_order(db_session, seed, 501001)
 
-    # Тогда: у первого склада осталось 198, у второго по-прежнему 200.
-    # Соседний склад в чужую квоту залезть не может — в этом весь смысл режима.
+    # Тогда: числа по складам не тронуты — их меняет только оператор.
     view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
-    assert view.units_remaining_by_warehouse[501001] == 198
+    assert view.units_remaining_by_warehouse[501001] == 200
     assert view.units_remaining_by_warehouse[501002] == 200
 
 
@@ -592,25 +600,40 @@ async def test_cancelled_before_handover_returns_quota(
     await _allocate(db_session, seed, {501001: 200, 501002: 0})
     await _place_order(db_session, seed, 501001, status="cancelled")
 
-    # Тогда: квота вернулась сама, без отдельного события. Именно ради этого
-    # остаток считается по журналу, а не хранимым счётчиком.
+    # Тогда: число оператора не тронуто. Возвращать нечего, потому что никто
+    # ничего и не вычитал — публикация идёт от остатка, а он не уменьшался.
     view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
     assert view.units_remaining_by_warehouse[501001] == 200
 
 
 @pytest.mark.asyncio
-async def test_cancelled_after_handover_keeps_quota_spent(
+async def test_published_follows_stock_not_a_counter(
     db_session: AsyncSession,
 ) -> None:
-    # Дано: заказ отменился уже ПОСЛЕ передачи — списание проведено, товар уехал.
-    seed = await _units_seed(db_session)
-    await _allocate(db_session, seed, {501001: 200, 501002: 0})
-    await _place_order(db_session, seed, 501001, status="cancelled", shipped=True)
+    """Уезжает `min(число оператора, свободный остаток)` — и ничего больше.
 
-    # Тогда: квота остаётся съеденной. Возврат в остаток — отдельным документом,
-    # то же правило, что и для физического остатка (OWN-2026-08-31-06).
+    Всё уменьшение приходит со стороны склада: отгрузили, списали брак, прошла
+    инвентаризация — остаток просел, публикация просела следом. Считать
+    отдельно, «сколько уже продано», не нужно и нельзя.
+    """
+    # Дано: на складе 150, оператор раздал все 150 на первый склад, а потом
+    # остаток просел до 120 — неважно почему: отгрузка, брак, инвентаризация.
+    seed = await _units_seed(db_session, on_hand=150)
+    await _allocate(db_session, seed, {501001: 150, 501002: 0})
+    balance = (
+        await db_session.execute(
+            select(InventoryBalance).where(
+                InventoryBalance.product_id == seed.product.id
+            )
+        )
+    ).scalar_one()
+    balance.quantity = 120
+    await db_session.commit()
+
+    # Тогда: уедет 120 — столько, сколько лежит. Число оператора цело.
     view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
-    assert view.units_remaining_by_warehouse[501001] == 199
+    assert view.units_remaining_by_warehouse[501001] == 150
+    assert view.published_now == 120
 
 
 @pytest.mark.asyncio

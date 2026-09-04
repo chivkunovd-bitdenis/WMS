@@ -384,8 +384,9 @@ function FbsStockDialogBody({
                       : undefined
                   }
                   helperText={
-                    `Сейчас по этому складу осталось ${(rule.unitsByWarehouse[warehouse.id] ?? 0).toLocaleString('ru-RU')} шт` +
-                    ' — число расходуется заказами этого склада и само не растёт'
+                    `Сейчас по этому складу задано ${(rule.unitsByWarehouse[warehouse.id] ?? 0).toLocaleString('ru-RU')} шт` +
+                    ' — это потолок: заказы его не уменьшают, в кабинет уедет' +
+                    ' столько или свободный остаток, если его меньше'
                   }
                   testId={`fbs-stock-units-${warehouse.id}`}
                 />
