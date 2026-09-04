@@ -31,6 +31,9 @@ export type ApiRule = {
   same_everywhere: boolean
   percent: number
   by_warehouse: Record<string, number>
+  units_mode: boolean
+  units_by_warehouse: Record<string, number>
+  units_remaining_by_warehouse: Record<string, number>
   free_stock: number
   on_hand: number
   reserved: number
@@ -76,6 +79,11 @@ export function toRule(productId: string, rule: ApiRule | undefined): FbsRule {
     sameEverywhere: rule?.same_everywhere ?? true,
     percent: rule?.percent ?? 0,
     byWarehouse: rule?.by_warehouse ?? {},
+    unitsMode: rule?.units_mode ?? false,
+    // В поля ввода подставляется ОСТАТОК квоты, а не то, что когда-то выделили:
+    // оператор правит числа, глядя на сегодняшний расклад. Сохранение запишет
+    // введённое как новое выделение и сдвинет точку отсчёта расхода.
+    unitsByWarehouse: rule?.units_remaining_by_warehouse ?? {},
   }
 }
 

@@ -184,7 +184,10 @@ async def _load_seller_products(
     stmt = select(Product).where(
         Product.tenant_id == tenant_id,
         Product.seller_id == seller_id,
-        Product.fbs_percent.is_not(None),
+        # Товар в режиме штук доли не имеет вовсе — отбор только по `fbs_percent`
+        # его бы молча выбросил из публикации, и оператор увидел бы «включили, а
+        # ничего не уехало».
+        or_(Product.fbs_percent.is_not(None), Product.fbs_units_mode.is_(True)),
     )
     res = await session.execute(stmt)
     return list(res.scalars().all())

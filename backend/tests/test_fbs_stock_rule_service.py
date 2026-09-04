@@ -444,3 +444,203 @@ async def test_product_without_rule_ignores_old_stored_number(
     )
     # Тогда товар не попадает в публикацию: старое абсолютное число больше не источник.
     assert quantities == {}
+
+
+# --- Режим «остаток по штукам» -------------------------------------------
+#
+# TC-NEW-FBS-UNITS-001: числа по складам публикуются как есть, без доли.
+# TC-NEW-FBS-UNITS-002: заказ съедает квоту только своего склада.
+# TC-NEW-FBS-UNITS-003: отмена до передачи возвращает квоту.
+# TC-NEW-FBS-UNITS-004: отмена после передачи квоту не возвращает.
+# TC-NEW-FBS-UNITS-005: сумма больше свободного остатка не сохраняется.
+# TC-NEW-FBS-UNITS-006: приёмка квоту не поднимает.
+
+
+async def _units_seed(session: AsyncSession, *, on_hand: int = 1000) -> _Seed:
+    seed = await _seed(
+        session, on_hand=on_hand, wb_warehouse_ids=(501001, 501002)
+    )
+    seed.product.fbs_units_mode = True
+    await session.commit()
+    return seed
+
+
+async def _allocate(
+    session: AsyncSession, seed: _Seed, amounts: dict[int, int]
+) -> None:
+    await set_rule_for_products(
+        session,
+        seed.tenant.id,
+        [seed.product.id],
+        FbsRule(
+            publish=True,
+            same_everywhere=False,
+            percent=0,
+            units_mode=True,
+            units_by_warehouse=amounts,
+        ),
+    )
+
+
+async def _place_order(
+    session: AsyncSession,
+    seed: _Seed,
+    wb_warehouse_id: int,
+    *,
+    status: str = "new",
+    shipped: bool = False,
+) -> None:
+    """Заказ, съевший единицу квоты этого склада — как это делает импорт."""
+    from datetime import UTC, datetime
+
+    from app.models.fbs_order import FbsOrder
+    from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
+    from app.models.fbs_stock_pool_debit import FbsStockPoolDebit
+
+    now = datetime.now(UTC)
+    order = FbsOrder(
+        id=uuid.uuid4(),
+        tenant_id=seed.tenant.id,
+        seller_id=seed.seller.id,
+        product_id=seed.product.id,
+        wb_order_id=int(uuid.uuid4().int % 10**12),
+        wb_warehouse_id=wb_warehouse_id,
+        created_at_wb=now,
+        deadline_at=now,
+        mapping_status="mapped",
+        reserve_status="reserved",
+        status=status,
+    )
+    session.add(order)
+    await session.flush()
+
+    binding = next(
+        one for one in seed.bindings if one.wb_warehouse_id == wb_warehouse_id
+    )
+    pool = (
+        await session.execute(
+            select(FbsBindingStockPool).where(
+                FbsBindingStockPool.binding_id == binding.id,
+                FbsBindingStockPool.product_id == seed.product.id,
+            )
+        )
+    ).scalar_one()
+    session.add(
+        FbsStockPoolDebit(
+            tenant_id=seed.tenant.id,
+            pool_id=pool.id,
+            order_id=order.id,
+            quantity_debited=1,
+            quantity_shortfall=0,
+            created_at=now,
+        )
+    )
+    if shipped:
+        session.add(
+            FbsShipmentReversalLedger(
+                tenant_id=seed.tenant.id,
+                fbs_order_id=order.id,
+                product_id=seed.product.id,
+                storage_location_id=uuid.uuid4(),
+                quantity=1,
+                shipment_movement_id=uuid.uuid4(),
+            )
+        )
+    await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_units_mode_publishes_numbers_as_given(db_session: AsyncSession) -> None:
+    # Дано: свободно 1000, оператор раздал 200 и 300 по двум складам WB.
+    seed = await _units_seed(db_session)
+    await _allocate(db_session, seed, {501001: 200, 501002: 300})
+
+    # Когда считаем, что уедет. Тогда: ровно заданные числа, доля не участвует.
+    amounts = await _resolve_publish_quantities(
+        db_session, seed.bindings[0], [seed.product]
+    )
+    assert amounts[seed.product.id] == 200
+    amounts = await _resolve_publish_quantities(
+        db_session, seed.bindings[1], [seed.product]
+    )
+    assert amounts[seed.product.id] == 300
+
+
+@pytest.mark.asyncio
+async def test_units_quota_is_eaten_only_by_its_own_warehouse(
+    db_session: AsyncSession,
+) -> None:
+    # Дано: по 200 на каждый склад, и два заказа пришли с ПЕРВОГО склада.
+    seed = await _units_seed(db_session)
+    await _allocate(db_session, seed, {501001: 200, 501002: 200})
+    await _place_order(db_session, seed, 501001)
+    await _place_order(db_session, seed, 501001)
+
+    # Тогда: у первого склада осталось 198, у второго по-прежнему 200.
+    # Соседний склад в чужую квоту залезть не может — в этом весь смысл режима.
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert view.units_remaining_by_warehouse[501001] == 198
+    assert view.units_remaining_by_warehouse[501002] == 200
+
+
+@pytest.mark.asyncio
+async def test_cancelled_before_handover_returns_quota(
+    db_session: AsyncSession,
+) -> None:
+    # Дано: заказ пришёл и отменился ДО передачи поставки — товар не уезжал.
+    seed = await _units_seed(db_session)
+    await _allocate(db_session, seed, {501001: 200, 501002: 0})
+    await _place_order(db_session, seed, 501001, status="cancelled")
+
+    # Тогда: квота вернулась сама, без отдельного события. Именно ради этого
+    # остаток считается по журналу, а не хранимым счётчиком.
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert view.units_remaining_by_warehouse[501001] == 200
+
+
+@pytest.mark.asyncio
+async def test_cancelled_after_handover_keeps_quota_spent(
+    db_session: AsyncSession,
+) -> None:
+    # Дано: заказ отменился уже ПОСЛЕ передачи — списание проведено, товар уехал.
+    seed = await _units_seed(db_session)
+    await _allocate(db_session, seed, {501001: 200, 501002: 0})
+    await _place_order(db_session, seed, 501001, status="cancelled", shipped=True)
+
+    # Тогда: квота остаётся съеденной. Возврат в остаток — отдельным документом,
+    # то же правило, что и для физического остатка (OWN-2026-08-31-06).
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert view.units_remaining_by_warehouse[501001] == 199
+
+
+@pytest.mark.asyncio
+async def test_units_sum_over_free_stock_is_rejected(db_session: AsyncSession) -> None:
+    # Дано: свободно 1000, а оператор пытается раздать 600 и 600.
+    seed = await _units_seed(db_session)
+    with pytest.raises(FbsStockRuleError) as exc:
+        await _allocate(db_session, seed, {501001: 600, 501002: 600})
+    # Тогда: отказ. Склады делят один и тот же физический остаток.
+    assert exc.value.code == "units_sum_exceeded"
+
+
+@pytest.mark.asyncio
+async def test_receiving_does_not_raise_units_quota(db_session: AsyncSession) -> None:
+    # Дано: раздали по 20, потом приехала приёмка — свободный остаток вырос.
+    seed = await _units_seed(db_session, on_hand=100)
+    await _allocate(db_session, seed, {501001: 20, 501002: 20})
+    balance = (
+        await db_session.execute(
+            select(InventoryBalance).where(
+                InventoryBalance.product_id == seed.product.id
+            )
+        )
+    ).scalar_one()
+    balance.quantity = 1100
+    await db_session.commit()
+
+    # Тогда: свободный остаток новый, а числа по складам прежние — сами они не
+    # растут, поднимать их оператор должен руками. Это и есть разница с долей.
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert view.free_stock == 1100
+    assert view.units_remaining_by_warehouse[501001] == 20
+    assert view.published_now == 40

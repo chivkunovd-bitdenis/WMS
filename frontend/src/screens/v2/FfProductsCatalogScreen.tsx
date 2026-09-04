@@ -1920,6 +1920,12 @@ export function FfProductsCatalogScreen({
                         same_everywhere: rule.sameEverywhere,
                         percent: rule.percent,
                         by_warehouse: rule.byWarehouse,
+                        units_mode: rule.unitsMode,
+                        // Что оператор видел в поле, то и записывается как новое
+                        // выделение: сервер сдвинет точку отсчёта расхода на
+                        // «сейчас», и съеденное до этой секунды уже учтено в том,
+                        // что было показано.
+                        units_by_warehouse: rule.unitsByWarehouse,
                       },
                     }),
                   })

@@ -55,6 +55,18 @@ export type FbsRule = {
   sameEverywhere: boolean
   percent: number
   byWarehouse: Record<string, number>
+  /**
+   * Режим «остаток по штукам»: доля не применяется, числа задаются руками по
+   * каждому складу WB. Нужен там, где у продавца согласована разбивка по
+   * направлениям в конкретных числах, а в сетку кратных десяти процентов она
+   * не ложится.
+   */
+  unitsMode: boolean
+  /**
+   * Штуки по складам WB. При чтении сюда кладётся ОСТАТОК квоты (сколько ещё
+   * можно отдать), при сохранении это становится новым выделением.
+   */
+  unitsByWarehouse: Record<string, number>
 }
 
 export const SELLERS: Seller[] = [
@@ -112,9 +124,9 @@ export const PRODUCTS: Product[] = [
 ]
 
 export const INITIAL_RULES: FbsRule[] = [
-  { productId: 'p1', publish: true, sameEverywhere: true, percent: 50, byWarehouse: {} },
-  { productId: 'p4', publish: true, sameEverywhere: false, percent: 0, byWarehouse: { 'w-city-1': 30 } },
-  { productId: 'p5', publish: false, sameEverywhere: true, percent: 20, byWarehouse: {} },
+  { productId: 'p1', publish: true, sameEverywhere: true, percent: 50, byWarehouse: {}, unitsMode: false, unitsByWarehouse: {} },
+  { productId: 'p4', publish: true, sameEverywhere: false, percent: 0, byWarehouse: { 'w-city-1': 30 }, unitsMode: false, unitsByWarehouse: {} },
+  { productId: 'p5', publish: false, sameEverywhere: true, percent: 20, byWarehouse: {}, unitsMode: false, unitsByWarehouse: {} },
 ]
 
 /** Свободный остаток на конкретном складе: из него и считается доля этого склада. */
@@ -165,6 +177,8 @@ export function ruleFor(rules: FbsRule[], productId: string): FbsRule {
       sameEverywhere: true,
       percent: 0,
       byWarehouse: {},
+      unitsMode: false,
+      unitsByWarehouse: {},
     }
   )
 }
@@ -198,8 +212,15 @@ export function splitAmounts(
   }
   let remaining = Math.max(freeStockQty, 0)
   for (const warehouse of served) {
-    const percent = rule.sameEverywhere ? rule.percent : (rule.byWarehouse[warehouse.id] ?? 0)
-    const amount = Math.min(amountFromPercent(freeStockQty, percent), remaining)
+    // В режиме штук доля не участвует вовсе: берётся заданное число, но обрезка
+    // по свободному остатку остаётся — столько товара может просто не быть.
+    const share = rule.unitsMode
+      ? Math.max(0, rule.unitsByWarehouse[warehouse.id] ?? 0)
+      : amountFromPercent(
+          freeStockQty,
+          rule.sameEverywhere ? rule.percent : (rule.byWarehouse[warehouse.id] ?? 0),
+        )
+    const amount = Math.min(share, remaining)
     amounts[warehouse.id] = amount
     remaining -= amount
   }
@@ -224,6 +245,11 @@ export function publishedQty(product: Product, rule: FbsRule, seller: Seller): n
  * умножается на их количество: 50% на четырёх складах Фэшн — это 200%, и сервер
  * такое правило не примет.
  */
+/** Сколько штук распределено по обслуживаемым складам. */
+export function totalUnits(rule: FbsRule, served: SellerWarehouse[]): number {
+  return served.reduce((sum, one) => sum + (rule.unitsByWarehouse[one.id] ?? 0), 0)
+}
+
 export function totalPercent(rule: FbsRule, servedCount: number): number {
   if (rule.sameEverywhere) return rule.percent * Math.max(servedCount, 1)
   return Object.values(rule.byWarehouse).reduce((sum, one) => sum + one, 0)

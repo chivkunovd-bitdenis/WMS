@@ -99,6 +99,15 @@ class Product(Base):
     fbs_same_everywhere: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
     )
+    # Режим «остаток по штукам». Доля хороша, когда остаток дышит: приехала партия
+    # — в кабинете стало больше само. Но у продавца бывает согласованная разбивка
+    # по направлениям в конкретных числах, и в сетку кратных десяти процентов она
+    # не ложится. В этом режиме оператор задаёт числа руками по каждому складу WB,
+    # квота расходуется заказами этого склада и сама не растёт: приехала новая
+    # партия — числа остались прежними, пока оператор их не поднимет.
+    fbs_units_mode: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -223,22 +223,15 @@ async def configure_fbs_seller_warehouse(
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsSellerWarehouseOut:
-    # Что было включено ДО правки: снятие галки «обслуживаем» обязано отправить в
-    # кабинет финальный ноль, иначе привязка выпадает из всех обходов публикации
-    # и последнее положительное число остаётся у продавца в WB навсегда — то есть
-    # фулфилмент продолжает обещать товар, которого не отдаёт. Раньше ноль умела
-    # слать только соседняя ручка `/warehouse-bindings/`, которую этот экран не
-    # вызывает.
-    try:
-        previous = await binding_svc.get_binding(
-            session, user.tenant_id, seller_id, wb_warehouse_id
-        )
-    except binding_svc.FbsWarehouseBindingError:
-        previous = None
-    was_published = bool(
-        previous is not None and previous.is_active and previous.stock_sync_enabled
-    )
-
+    # Ноль здесь НЕ отправляется, и это решение владельца (OWN-17,
+    # docs/TASK_FBS_STOCK_PUBLICATION_2026-08-31_RU.md): «не обслуживаем этот
+    # склад» означает, что склад чужой, и наших чисел там быть не должно. Мы
+    # просто перестаём слать, а что стоит в кабинете — не наше дело; выставить
+    # туда ноль значило бы обнулить остаток чужого фулфилмента.
+    #
+    # Финальный ноль — это другое действие: «склад наш, но по этому товару больше
+    # не публикуем». Оно живёт на тумблере `stock_sync_enabled` в соседней ручке
+    # `/warehouse-bindings/` и там работает.
     try:
         row = await binding_svc.configure_seller_warehouse(
             session,
@@ -250,13 +243,6 @@ async def configure_fbs_seller_warehouse(
         )
     except binding_svc.FbsWarehouseBindingError as exc:
         _raise_from_binding_service(exc)
-
-    if was_published and row is not None and not row.stock_sync_enabled:
-        row.last_sync_status = STOCK_SYNC_STATUS_PENDING
-        row.last_error_code = None
-        await session.commit()
-        await session.refresh(row)
-        schedule_explicit_zero_publish(user.tenant_id, seller_id, row.id)
 
     return FbsSellerWarehouseOut(
         id=wb_warehouse_id,

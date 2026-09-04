@@ -5,6 +5,7 @@ import {
   AppDialog,
   CheckboxInput,
   ErrorNotice,
+  NumberInput,
   PercentSlider,
   PrimaryAction,
   SecondaryAction,
@@ -20,6 +21,7 @@ import {
   servedWarehouses,
   splitAmounts,
   totalPercent,
+  totalUnits,
   type FbsRule,
   type Product,
   type Seller,
@@ -142,7 +144,12 @@ function FbsStockDialogBody({
   // КАЖДОМУ складу, поэтому 50% на четырёх складах — это 200%, и сохранение
   // отобьётся. Раньше окно про это не знало и узнавало от сервера уже отказом.
   const percentSum = totalPercent(draft, served.length)
-  const overAllocated = draft.publish && percentSum > 100
+  // В режиме штук ограничение то же самое, только в единицах: склады делят один
+  // и тот же физический остаток, поэтому в сумме больше свободного не раздать.
+  const unitsSum = totalUnits(draft, served)
+  const overAllocated = draft.publish && (
+    draft.unitsMode ? unitsSum > base : percentSum > 100
+  )
   // Раскладка по складам — то же самое, что уедет в WB, склад за складом.
   // Считается по каждому товару отдельно и складывается, а не по сумме остатков:
   // округление вниз происходит у каждого товара своё, и на сервере точно так же.
@@ -170,7 +177,9 @@ function FbsStockDialogBody({
             onClick={() => onSave(draft)}
             disabledReason={
               overAllocated
-                ? `В сумме по складам получается ${percentSum}% свободного остатка, а он у складов общий`
+                ? draft.unitsMode
+                  ? `По складам распределено ${unitsSum} шт, а свободно только ${base}`
+                  : `В сумме по складам получается ${percentSum}% свободного остатка, а он у складов общий`
                 : undefined
             }
             data-testid="fbs-stock-save"
@@ -217,16 +226,47 @@ function FbsStockDialogBody({
           testId="fbs-stock-publish"
         />
 
+        {/* Режим. Доля хороша, когда остаток дышит: приехала партия — в кабинете
+            стало больше само. Но если с продавцом согласована разбивка по
+            направлениям в конкретных числах, в сетку кратных десяти процентов
+            она не ложится, и тогда числа задаются руками. Квота при этом сама
+            не растёт: приехала новая партия — числа прежние, пока их не
+            поднимут. */}
+        <CheckboxInput
+          label="Остаток по штукам"
+          checked={draft.unitsMode}
+          onChange={(unitsMode) => setDraft((one) => ({ ...one, unitsMode }))}
+          helperText={
+            draft.unitsMode
+              ? 'Доля отключена. Числа по складам не растут сами при приёмке — поднимайте руками'
+              : 'Включите, чтобы задать количество по каждому складу числом, а не долей'
+          }
+          disabledReason={
+            noneServed ? 'Сначала выберите хотя бы один склад Wildberries' : undefined
+          }
+          testId="fbs-stock-units-mode"
+        />
+
+        {draft.unitsMode ? (
+          <Typography variant="body2" color="text.secondary" data-testid="fbs-stock-units-total">
+            Распределено {unitsSum.toLocaleString('ru-RU')} из{' '}
+            {base.toLocaleString('ru-RU')} свободных
+            {overAllocated ? ' — это больше, чем есть на складе' : ''}
+          </Typography>
+        ) : null}
+
         <PercentSlider
           label="Доля свободного остатка"
           value={draft.percent}
           onChange={(percent) => setDraft((one) => ({ ...one, percent }))}
           base={base}
-          disabled={noneServed || (!single && !draft.sameEverywhere)}
+          disabled={noneServed || draft.unitsMode || (!single && !draft.sameEverywhere)}
           disabledReason={
             noneServed
               ? 'Сначала выберите хотя бы один склад Wildberries'
-              : 'Сейчас доля задаётся по каждому складу отдельно'
+              : draft.unitsMode
+                ? 'Включён остаток по штукам — количество задаётся числом под каждым складом'
+                : 'Сейчас доля задаётся по каждому складу отдельно'
           }
           testId="fbs-stock-percent"
         />
@@ -238,6 +278,9 @@ function FbsStockDialogBody({
               label="Одинаково по всем складам"
               checked={draft.sameEverywhere}
               onChange={(sameEverywhere) => setDraft((one) => ({ ...one, sameEverywhere }))}
+              disabledReason={
+                draft.unitsMode ? 'Включён остаток по штукам' : undefined
+              }
               // Доля применяется к каждому складу отдельно, а не делится между
               // ними. Из старой подписи это не читалось, и оператор, поставив
               // «половину» на два склада, отдавал в WB весь остаток.
@@ -249,9 +292,9 @@ function FbsStockDialogBody({
 
         {overAllocated ? (
           <ErrorNotice testId="fbs-stock-over">
-            В сумме по складам получается {percentSum}% свободного остатка, а он у складов
-            общий: товар лежит у нас один, а склады Wildberries — это направления отгрузки.
-            Больше 100% раздать нельзя, сервер такое правило не примет.
+            {draft.unitsMode
+              ? `По складам распределено ${unitsSum.toLocaleString('ru-RU')} шт, а свободно только ${base.toLocaleString('ru-RU')}. Товар лежит у нас один, а склады Wildberries — это направления отгрузки: больше, чем есть, раздать нельзя.`
+              : `В сумме по складам получается ${percentSum}% свободного остатка, а он у складов общий: товар лежит у нас один, а склады Wildberries — это направления отгрузки. Больше 100% раздать нельзя, сервер такое правило не примет.`}
           </ErrorNotice>
         ) : null}
 
@@ -318,7 +361,36 @@ function FbsStockDialogBody({
                   />
                 </Box>
               </Stack>
-              {warehouse.fbsEnabled && !single ? (
+              {warehouse.fbsEnabled && draft.unitsMode ? (
+                // Поле вместо ползунка. Максимум намеренно НЕ ставится: оператор
+                // должен иметь возможность набрать больше и увидеть красное, а не
+                // упереться в молча не принимающееся поле.
+                <NumberInput
+                  label="Отгрузить на этот склад, шт"
+                  value={draft.unitsByWarehouse[warehouse.id] ?? 0}
+                  onChange={(value) =>
+                    setDraft((one) => ({
+                      ...one,
+                      unitsByWarehouse: {
+                        ...one.unitsByWarehouse,
+                        [warehouse.id]: Math.max(0, value ?? 0),
+                      },
+                    }))
+                  }
+                  min={0}
+                  error={
+                    overAllocated
+                      ? `В сумме ${unitsSum} шт при свободных ${base}`
+                      : undefined
+                  }
+                  helperText={
+                    `Сейчас по этому складу осталось ${(rule.unitsByWarehouse[warehouse.id] ?? 0).toLocaleString('ru-RU')} шт` +
+                    ' — число расходуется заказами этого склада и само не растёт'
+                  }
+                  testId={`fbs-stock-units-${warehouse.id}`}
+                />
+              ) : null}
+              {warehouse.fbsEnabled && !single && !draft.unitsMode ? (
                 <PercentSlider
                   label="Доля на этот склад"
                   value={
@@ -337,7 +409,7 @@ function FbsStockDialogBody({
                   testId={`fbs-stock-percent-${warehouse.id}`}
                 />
               ) : null}
-              {warehouse.fbsEnabled && !single && draft.publish ? (
+              {warehouse.fbsEnabled && (draft.unitsMode || !single) && draft.publish ? (
                 <Typography
                   variant="body2"
                   color="text.secondary"

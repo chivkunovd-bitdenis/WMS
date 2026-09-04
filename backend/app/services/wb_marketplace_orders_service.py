@@ -757,9 +757,16 @@ async def _debit_stock_pool_once(
             return empty
 
         requested = 1  # один заказ WB marketplace = одна физическая единица
-        debited = min(requested, pool_row.quantity)
+        # `quantity` — это ВЫДЕЛЕНО оператором, а не счётчик: он его не трогает.
+        # Сколько квоты осталось, считается по этому же журналу. Так отмена заказа
+        # возвращает квоту сама, без отдельного события, которое можно потерять;
+        # старый пул уменьшал `quantity` прямо здесь и при отмене не возвращал
+        # ничего, из-за чего число разъезжалось с реальностью навсегда.
+        from app.services import fbs_stock_units_service
+
+        remaining = await fbs_stock_units_service.remaining_units(session, pool_row)
+        debited = min(requested, remaining)
         shortfall = requested - debited
-        pool_row.quantity -= debited
         session.add(
             FbsStockPoolDebit(
                 tenant_id=tenant_id,
@@ -767,6 +774,11 @@ async def _debit_stock_pool_once(
                 order_id=order.id,
                 quantity_debited=debited,
                 quantity_shortfall=shortfall,
+                # Время проставляется явно, а не серверным умолчанием: расход
+                # квоты сравнивается с `allocated_at`, и оба конца должны идти
+                # от одних часов, иначе сравнение зависит от того, чьё время
+                # опережает — приложения или базы.
+                created_at=datetime.now(UTC),
             )
         )
         await session.flush()

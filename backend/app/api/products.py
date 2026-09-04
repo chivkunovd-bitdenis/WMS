@@ -356,6 +356,10 @@ class ProductFbsRuleBody(BaseModel):
     # Ключ — идентификатор склада в кабинете WB (он приходит числом, но в JSON
     # ключи объекта всегда строки).
     by_warehouse: dict[str, int] = Field(default_factory=dict)
+    # Режим «остаток по штукам»: доля не применяется, числа задаются по складам.
+    units_mode: bool = False
+    # Сколько штук выделено на каждый склад WB. Ключ — тот же номер склада.
+    units_by_warehouse: dict[str, int] = Field(default_factory=dict)
 
 
 class ProductFbsRuleOut(ProductFbsRuleBody):
@@ -369,6 +373,9 @@ class ProductFbsRuleOut(ProductFbsRuleBody):
     on_hand: int
     reserved: int
     published_now: int
+    # Сколько от квоты каждого склада ещё осталось. Именно это подставляется в
+    # поля ввода: оператор правит числа, глядя на сегодняшний расклад.
+    units_remaining_by_warehouse: dict[str, int] = Field(default_factory=dict)
 
 
 FBS_RULE_BULK_READ_MAX_PRODUCTS = 200
@@ -1466,6 +1473,10 @@ def _rule_from_body(body: ProductFbsRuleBody) -> FbsRule:
         same_everywhere=body.same_everywhere,
         percent=body.percent,
         by_warehouse={int(key): value for key, value in body.by_warehouse.items()},
+        units_mode=body.units_mode,
+        units_by_warehouse={
+            int(key): value for key, value in body.units_by_warehouse.items()
+        },
     )
 
 
@@ -1478,10 +1489,18 @@ def _rule_view_out(
         same_everywhere=view.rule.same_everywhere,
         percent=view.rule.percent,
         by_warehouse={str(key): value for key, value in view.rule.by_warehouse.items()},
+        units_mode=view.rule.units_mode,
+        units_by_warehouse={
+            str(key): value for key, value in view.rule.units_by_warehouse.items()
+        },
         free_stock=view.free_stock,
         on_hand=view.on_hand,
         reserved=view.reserved,
         published_now=view.published_now,
+        units_remaining_by_warehouse={
+            str(key): value
+            for key, value in view.units_remaining_by_warehouse.items()
+        },
     )
 
 
@@ -1525,10 +1544,18 @@ async def get_product_fbs_rule(
         same_everywhere=view.rule.same_everywhere,
         percent=view.rule.percent,
         by_warehouse={str(key): value for key, value in view.rule.by_warehouse.items()},
+        units_mode=view.rule.units_mode,
+        units_by_warehouse={
+            str(key): value for key, value in view.rule.units_by_warehouse.items()
+        },
         free_stock=view.free_stock,
         on_hand=view.on_hand,
         reserved=view.reserved,
         published_now=view.published_now,
+        units_remaining_by_warehouse={
+            str(key): value
+            for key, value in view.units_remaining_by_warehouse.items()
+        },
     )
 
 
