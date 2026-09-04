@@ -131,7 +131,7 @@ def _wb_order_row(*, order_id: int, article: str) -> dict[str, Any]:
 
 # TC-NEW-FBS-WRITEOFF-SOLD-001 — sold-заказ в обход упаковки списывается ровно один раз
 @pytest.mark.asyncio
-async def test_write_off_sold_order_that_skipped_packaging_happens_once(
+async def test_sold_status_without_our_handover_does_not_touch_stock(
     async_client: AsyncClient,
 ) -> None:
     """Дефект 1: заказ подобран из точной исходной ячейки, но так и не был
@@ -243,16 +243,11 @@ async def test_write_off_sold_order_that_skipped_packaging_happens_once(
                 )
             ).scalars()
         )
-        assert len(ledgers) == 1
-        assert ledgers[0].quantity == 1
-        assert ledgers[0].source_warehouse_id == source_warehouse_id
-        assert ledgers[0].storage_location_id == source_location_id
-        assert ledgers[0].source_mode == "manual_pick"
-        assert ledgers[0].container_kind is None
-        assert ledgers[0].container_id is None
-        assert ledgers[0].shortage_quantity == 0
-        assert ledgers[0].negative_quantity == 0
-        assert ledgers[0].reversed_at is None
+        # Статус «продан» склад не трогает: со склада снимаем только то, что
+        # передали сами. Иначе заказ чужого склада того же кабинета уносит наш
+        # остаток — на бою так ушло 374 штуки товара, который к нам не приезжал.
+        assert ledgers == []
+        assert source_warehouse_id is not None
 
         write_off_count = await session.scalar(
             select(func.count(InventoryMovement.id)).where(
@@ -261,7 +256,7 @@ async def test_write_off_sold_order_that_skipped_packaging_happens_once(
                 InventoryMovement.movement_type == MOVEMENT_TYPE_FBS_SHIPMENT,
             )
         )
-        assert write_off_count == 1
+        assert write_off_count == 0
 
         balance = await session.scalar(
             select(InventoryBalance).where(
@@ -273,7 +268,9 @@ async def test_write_off_sold_order_that_skipped_packaging_happens_once(
             )
         )
         assert balance is not None
-        assert int(balance.quantity) == 0
+        # Штука, снятая подбором, лежит в зоне сортировки: мы её не передавали,
+        # значит и со склада не снимали.
+        assert int(balance.quantity) == 1
 
     # Второй обход синка статусов с тем же статусом — второго списания быть не должно.
     async with SessionLocal() as session:
@@ -294,22 +291,7 @@ async def test_write_off_sold_order_that_skipped_packaging_happens_once(
                 )
             ).scalars()
         )
-        assert len(ledgers) == 1, "повторный обход не должен создавать вторую запись"
-
-        # Ограничение (негатив): запись без ссылки на движение читается сверочным
-        # скриптом reconcile_fbs_unlinked_shipments как «списания не было», и он
-        # списывает товар второй раз. Ссылка обязана быть проставлена сразу.
-        write_off_movement_id = await session.scalar(
-            select(InventoryMovement.id).where(
-                InventoryMovement.tenant_id == tenant_id,
-                InventoryMovement.product_id == product_id,
-                InventoryMovement.movement_type == MOVEMENT_TYPE_FBS_SHIPMENT,
-            )
-        )
-        assert ledgers[0].shipment_movement_id is not None, (
-            "без ссылки на движение сверочный скрипт спишет товар повторно"
-        )
-        assert ledgers[0].shipment_movement_id == write_off_movement_id
+        assert ledgers == [], "повторный обход тоже не создаёт списания"
 
         write_off_count = await session.scalar(
             select(func.count(InventoryMovement.id)).where(
@@ -318,7 +300,7 @@ async def test_write_off_sold_order_that_skipped_packaging_happens_once(
                 InventoryMovement.movement_type == MOVEMENT_TYPE_FBS_SHIPMENT,
             )
         )
-        assert write_off_count == 1, "повторный обход не должен списывать второй раз"
+        assert write_off_count == 0, "статус не имеет права трогать склад"
 
         balance = await session.scalar(
             select(InventoryBalance).where(
@@ -330,7 +312,7 @@ async def test_write_off_sold_order_that_skipped_packaging_happens_once(
             )
         )
         assert balance is not None
-        assert int(balance.quantity) == 0
+        assert int(balance.quantity) == 1
 
 
 async def _seed_order_with_existing_write_off(

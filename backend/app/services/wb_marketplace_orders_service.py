@@ -990,101 +990,6 @@ async def upsert_order_from_wb_row(
     return order, True
 
 
-async def _write_off_sold_order(session: AsyncSession, order: FbsOrder) -> None:
-    """Снять со склада штуку по выкупленному заказу, если её ещё не списали.
-
-    Списание в системе жило в одном месте — в завершении упаковки поставки.
-    Заказ, который упаковку миновал (закрылся статусом от Wildberries, уехал
-    напрямую, оператор пропустил шаг), уходил физически, а в остатке висел
-    вечно. Это учёт товара, поэтому дыру закрываем на самом факте продажи.
-
-    Повторное списание невозможно: журнал `fbs_shipment_reversal_ledger`
-    хранит запись на заказ, и она же проверяется первой.
-    """
-    from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
-    from app.services import fbs_shipment_source_service as source_svc
-    from app.services import inventory_service as inv_svc
-
-    if order.product_id is None or order.warehouse_id is None:
-        return
-
-    already = await session.scalar(
-        select(FbsShipmentReversalLedger.id).where(
-            FbsShipmentReversalLedger.tenant_id == order.tenant_id,
-            FbsShipmentReversalLedger.fbs_order_id == order.id,
-        )
-    )
-    if already is not None:
-        return
-
-    plan = await source_svc.plan_fbs_shipment_sources(
-        session,
-        tenant_id=order.tenant_id,
-        supply_warehouse_id=order.warehouse_id,
-        requests=[
-            source_svc.FbsShipmentSourceRequest(
-                fbs_order_id=order.id,
-                product_id=order.product_id,
-                quantity=1,
-            )
-        ],
-    )
-    resolution = plan.resolutions[0]
-
-    try:
-        movement = await inv_svc.apply_fbs_supply_write_off(
-            session,
-            tenant_id=order.tenant_id,
-            product_id=order.product_id,
-            storage_location_id=resolution.storage_location_id,
-            quantity=1,
-            # Списание инициировал не человек, а обход статусов от WB:
-            # заказ закрыт как проданный в обход упаковки.
-            actor_user_id=None,
-            allow_negative=True,
-            container_kind=resolution.container_kind,
-            container_id=resolution.container_id,
-        )
-    except ValueError as exc:
-        # Остатка в ячейке нет — не роняем синхронизацию статусов из-за одного
-        # заказа. Записи в журнал не делаем: попытка повторится на следующем
-        # обходе, когда остаток появится.
-        logger.warning(
-            "fbs write-off on sold skipped (%s): tenant=%s order=%s product=%s location=%s",
-            exc,
-            order.tenant_id,
-            order.id,
-            order.product_id,
-            resolution.storage_location_id,
-        )
-        return
-
-    # Запись в журнал — тот же, которым живёт списание при упаковке. Ссылку на
-    # движение сохранять ОБЯЗАТЕЛЬНО. Прежде здесь стоял комментарий, что колонки
-    # для неё нет, и id движения выбрасывался, — колонка есть всегда была. Из-за
-    # этого запись выглядела как «списания не было»: сверочный скрипт
-    # reconcile_fbs_unlinked_shipments ищет ровно такие строки (shipment_movement_id
-    # IS NULL) и списывает по ним товар повторно.
-    session.add(
-        FbsShipmentReversalLedger(
-            tenant_id=order.tenant_id,
-            fbs_order_id=order.id,
-            product_id=order.product_id,
-            storage_location_id=resolution.storage_location_id,
-            source_warehouse_id=resolution.source_warehouse_id,
-            container_kind=resolution.container_kind,
-            container_id=resolution.container_id,
-            source_mode=resolution.source_mode,
-            quantity=1,
-            shortage_quantity=resolution.shortage_quantity,
-            negative_quantity=resolution.negative_quantity,
-            shipment_movement_id=movement.id,
-            written_off_at=datetime.now(UTC),
-        )
-    )
-    await session.flush()
-
-
 async def _apply_wb_status_to_order(
     session: AsyncSession,
     order: FbsOrder,
@@ -1132,10 +1037,8 @@ async def _apply_wb_status_to_order(
         return
     if normalized_wb == "sold":
         order.status = FBS_ORDER_STATUS_DONE
-        # Товар уехал покупателю — значит его надо снять со склада. Раньше
-        # списание жило только внутри упаковки поставки, и заказ, который её
-        # миновал, уходил физически, а в учёте оставался навсегда.
-        await _write_off_sold_order(session, order)
+        # Склад здесь не трогаем ничем. Остаток снимает только наша передача
+        # поставки маркетплейсу — правило владельца OWN-20.
         # Выкуплен: резерв больше не нужен (иначе available навсегда занижен).
         await _release_reservation(session, order)
         await _charge_confirmed_order(session, order)
