@@ -510,6 +510,10 @@ async def _place_order(
         mapping_status="mapped",
         reserve_status="reserved",
         status=status,
+        # Явно, тем же источником времени, что и `allocated_at`: расход квоты
+        # считается по моменту появления заказа, а серверное умолчание на SQLite
+        # пишет наивное время и сравнение ломается.
+        created_at=now,
     )
     session.add(order)
     await session.flush()
@@ -644,3 +648,69 @@ async def test_receiving_does_not_raise_units_quota(db_session: AsyncSession) ->
     assert view.free_stock == 1100
     assert view.units_remaining_by_warehouse[501001] == 20
     assert view.published_now == 40
+
+
+# TC-NEW-FBS-UNITS-007: полный обход истории не съедает свежую квоту.
+@pytest.mark.asyncio
+async def test_history_sweep_does_not_eat_fresh_quota(db_session: AsyncSession) -> None:
+    """Августовский заказ, впервые увиденный сегодня, квоту не трогает.
+
+    Полный обход истории заказов идёт раз в шесть часов и видит впервые в том
+    числе старые заказы: строка журнала списания по ним создаётся СЕГОДНЯ. Если
+    считать расход по времени строки, такой обход спишет свежую квоту как
+    сегодняшние продажи. 04.09.2026 это и случилось на бою: обход в 12:30 съел
+    у ООО Фэшн десять из пятнадцати единиц московской квоты по `F907-3/37`,
+    и продавец увидел в кабинете 5 вместо 15.
+
+    Поэтому отсчёт идёт по моменту появления ЗАКАЗА, а не строки журнала.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from app.models.fbs_order import FbsOrder
+    from app.models.fbs_stock_pool_debit import FbsStockPoolDebit
+
+    seed = await _units_seed(db_session)
+    await _allocate(db_session, seed, {501001: 200, 501002: 0})
+
+    now = datetime.now(UTC)
+    davno = now - timedelta(days=8)
+    order = FbsOrder(
+        id=uuid.uuid4(),
+        tenant_id=seed.tenant.id,
+        seller_id=seed.seller.id,
+        product_id=seed.product.id,
+        wb_order_id=int(uuid.uuid4().int % 10**12),
+        wb_warehouse_id=501001,
+        created_at_wb=davno,
+        deadline_at=davno,
+        mapping_status="mapped",
+        reserve_status="reserved",
+        status="new",
+        created_at=davno,
+    )
+    db_session.add(order)
+    await db_session.flush()
+    binding = next(one for one in seed.bindings if one.wb_warehouse_id == 501001)
+    pool = (
+        await db_session.execute(
+            select(FbsBindingStockPool).where(
+                FbsBindingStockPool.binding_id == binding.id,
+                FbsBindingStockPool.product_id == seed.product.id,
+            )
+        )
+    ).scalar_one()
+    # Строка журнала создаётся СЕЙЧАС — так её и пишет полный обход истории.
+    db_session.add(
+        FbsStockPoolDebit(
+            tenant_id=seed.tenant.id,
+            pool_id=pool.id,
+            order_id=order.id,
+            quantity_debited=1,
+            quantity_shortfall=0,
+            created_at=now,
+        )
+    )
+    await db_session.commit()
+
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert view.units_remaining_by_warehouse[501001] == 200

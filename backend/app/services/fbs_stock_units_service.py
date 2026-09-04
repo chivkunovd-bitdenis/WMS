@@ -68,7 +68,14 @@ def _consumed_stmt(pool: FbsBindingStockPool) -> Select[tuple[int]]:
         .join(FbsOrder, FbsOrder.id == FbsStockPoolDebit.order_id)
         .where(
             FbsStockPoolDebit.pool_id == pool.id,
-            FbsStockPoolDebit.created_at >= _allocated_since(pool),
+            # Отсчёт по моменту появления ЗАКАЗА, а не строки журнала. Строка
+            # пишется тогда, когда заказ впервые попался обработчику, а полный
+            # обход истории (раз в шесть часов) видит впервые и августовские
+            # заказы — их строки получают сегодняшнее время. С фильтром по
+            # журналу они съедали бы свежую квоту как сегодняшние продажи.
+            # 04.09.2026 это и случилось: обход в 12:30 съел у ООО Фэшн по
+            # F907-3/37 десять единиц московской квоты из пятнадцати.
+            FbsOrder.created_at >= _allocated_since(pool),
             # Отменённый заказ квоту не держит — если товар не уехал. Уехал
             # (списание проведено) — держит, возврат оформляется документом.
             or_(FbsOrder.status != FBS_ORDER_STATUS_CANCELLED, shipped),
