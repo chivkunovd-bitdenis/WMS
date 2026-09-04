@@ -181,12 +181,22 @@ async def fbs_stock_breakdown_by_product(
     """
     if not product_ids:
         return {}
-    from app.services.marketplace_unload_service import _outbound_reserved_by_product
+    from app.services.marketplace_unload_service import (
+        _mp_reserved_by_product,
+        _outbound_reserved_by_product,
+    )
 
     on_hand_map = await _storage_and_sorting_on_hand_by_product(
         session, tenant_id, warehouse_id, product_ids
     )
     outbound_map = await _outbound_reserved_by_product(
+        session, tenant_id, warehouse_id, product_ids
+    )
+    # Отгрузка на маркетплейс (ФБО) держит товар в коробах под свою поставку.
+    # Без этого слагаемого одна и та же штука одновременно уложена в короб и
+    # предложена покупателю в ФБС — то есть продана дважды. Описание функции
+    # обещало этот вычет с самого начала, а кода не было.
+    mp_map = await _mp_reserved_by_product(
         session, tenant_id, warehouse_id, product_ids
     )
     fbs_map = await fbs_reserved_by_product(
@@ -211,6 +221,7 @@ async def fbs_stock_breakdown_by_product(
         on_hand = storage + sorting
         reserved = (
             int(outbound_map.get(pid, 0))
+            + int(mp_map.get(pid, 0))
             + reserved_by_directions
             + int(fbs_map.get(pid, 0))
         )

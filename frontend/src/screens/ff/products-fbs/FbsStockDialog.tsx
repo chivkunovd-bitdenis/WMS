@@ -18,6 +18,8 @@ import {
   publishedQty,
   reservedTotal,
   servedWarehouses,
+  splitAmounts,
+  totalPercent,
   type FbsRule,
   type Product,
   type Seller,
@@ -136,6 +138,21 @@ function FbsStockDialogBody({
     0,
   )
   const unbound = served.filter((one) => one.boundTo === null)
+  // Сумма долей так, как её считает сервер. При галке «одинаково» доля идёт
+  // КАЖДОМУ складу, поэтому 50% на четырёх складах — это 200%, и сохранение
+  // отобьётся. Раньше окно про это не знало и узнавало от сервера уже отказом.
+  const percentSum = totalPercent(draft, served.length)
+  const overAllocated = draft.publish && percentSum > 100
+  // Раскладка по складам — то же самое, что уедет в WB, склад за складом.
+  // Считается по каждому товару отдельно и складывается, а не по сумме остатков:
+  // округление вниз происходит у каждого товара своё, и на сервере точно так же.
+  const perWarehouse = products.reduce<Record<string, number>>((acc, product) => {
+    const split = splitAmounts(draft, freeStock(product), served)
+    for (const [warehouseId, amount] of Object.entries(split)) {
+      acc[warehouseId] = (acc[warehouseId] ?? 0) + amount
+    }
+    return acc
+  }, {})
 
   return (
     <AppDialog
@@ -149,7 +166,15 @@ function FbsStockDialogBody({
           <SecondaryAction onClick={onClose} data-testid="fbs-stock-cancel">
             Отмена
           </SecondaryAction>
-          <PrimaryAction onClick={() => onSave(draft)} data-testid="fbs-stock-save">
+          <PrimaryAction
+            onClick={() => onSave(draft)}
+            disabledReason={
+              overAllocated
+                ? `В сумме по складам получается ${percentSum}% свободного остатка, а он у складов общий`
+                : undefined
+            }
+            data-testid="fbs-stock-save"
+          >
             Сохранить
           </PrimaryAction>
         </ActionGroup>
@@ -213,11 +238,22 @@ function FbsStockDialogBody({
               label="Одинаково по всем складам"
               checked={draft.sameEverywhere}
               onChange={(sameEverywhere) => setDraft((one) => ({ ...one, sameEverywhere }))}
-              helperText="Выключите, чтобы задать свою долю каждому складу"
+              // Доля применяется к каждому складу отдельно, а не делится между
+              // ними. Из старой подписи это не читалось, и оператор, поставив
+              // «половину» на два склада, отдавал в WB весь остаток.
+              helperText={`Доля уйдёт на КАЖДЫЙ из ${served.length} складов — в сумме ${percentSum}%. Выключите, чтобы задать свою долю каждому`}
               testId="fbs-stock-same"
             />
           </>
         )}
+
+        {overAllocated ? (
+          <ErrorNotice testId="fbs-stock-over">
+            В сумме по складам получается {percentSum}% свободного остатка, а он у складов
+            общий: товар лежит у нас один, а склады Wildberries — это направления отгрузки.
+            Больше 100% раздать нельзя, сервер такое правило не примет.
+          </ErrorNotice>
+        ) : null}
 
         {single || draft.sameEverywhere ? null : (
           <Typography variant="body2" color="text.secondary" data-testid="fbs-stock-rest">
@@ -300,6 +336,16 @@ function FbsStockDialogBody({
                   disabledReason="Включено «одинаково по всем складам»"
                   testId={`fbs-stock-percent-${warehouse.id}`}
                 />
+              ) : null}
+              {warehouse.fbsEnabled && !single && draft.publish ? (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  data-testid={`fbs-stock-amount-${warehouse.id}`}
+                >
+                  На этот склад уйдёт{' '}
+                  {(perWarehouse[warehouse.id] ?? 0).toLocaleString('ru-RU')} шт
+                </Typography>
               ) : null}
             </Stack>
           ))}

@@ -140,9 +140,17 @@ export function reservedTotal(product: Product): number {
   return Object.values(product.stock).reduce((sum, at) => sum + at.reserved, 0)
 }
 
-/** Склады, которые мы обслуживаем по FBS. Только они участвуют в раздаче остатка. */
+/** Склады, которые мы обслуживаем по FBS. Только они участвуют в раздаче остатка.
+ *
+ * Порядок — по возрастанию номера склада WB, ровно как на сервере
+ * (`_seller_bindings` сортирует по `wb_warehouse_id`). От порядка зависит, кому
+ * не хватит остатка при переборе, поэтому окно должно перебирать так же.
+ */
 export function servedWarehouses(seller: Seller): SellerWarehouse[] {
-  return seller.warehouses.filter((one) => one.fbsEnabled)
+  return seller.warehouses
+    .filter((one) => one.fbsEnabled)
+    .slice()
+    .sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0))
 }
 
 export function sellerById(id: string): Seller {
@@ -161,20 +169,62 @@ export function ruleFor(rules: FbsRule[], productId: string): FbsRule {
   )
 }
 
+/** Сколько уйдёт на один склад WB — та же формула, что на сервере. */
+export function amountFromPercent(freeStockQty: number, percent: number): number {
+  if (freeStockQty <= 0 || percent <= 0) return 0
+  return Math.floor((freeStockQty * percent) / 100)
+}
+
+/** Раскладка свободного остатка по обслуживаемым складам: id склада WB -> штуки.
+ *
+ * Повторяет `split_amounts` из `fbs_stock_rule_service.py` шаг в шаг: доля
+ * считается КАЖДОМУ складу отдельно и округляется вниз у каждого, а не один раз
+ * у суммы; переполнение отрезается у последнего склада по порядку.
+ *
+ * Раньше окно считало иначе, и числа расходились с тем, что реально уезжало в
+ * Wildberries: при двух складах и галке «одинаково» с долей 50% окно обещало
+ * половину остатка, а уезжал весь (50% + 50%); при долях 50/20/30 на 201
+ * свободной штуке окно писало 201, а уезжало 200.
+ */
+export function splitAmounts(
+  rule: FbsRule,
+  freeStockQty: number,
+  served: SellerWarehouse[],
+): Record<string, number> {
+  const amounts: Record<string, number> = {}
+  if (!rule.publish) {
+    for (const warehouse of served) amounts[warehouse.id] = 0
+    return amounts
+  }
+  let remaining = Math.max(freeStockQty, 0)
+  for (const warehouse of served) {
+    const percent = rule.sameEverywhere ? rule.percent : (rule.byWarehouse[warehouse.id] ?? 0)
+    const amount = Math.min(amountFromPercent(freeStockQty, percent), remaining)
+    amounts[warehouse.id] = amount
+    remaining -= amount
+  }
+  return amounts
+}
+
 /** Сколько уйдёт в Wildberries по этому правилу прямо сейчас. */
 export function publishedQty(product: Product, rule: FbsRule, seller: Seller): number {
   if (!rule.publish) return 0
   // Остаток уходит только на обслуживаемые склады. Если не выбран ни один,
   // отправлять некуда, и показывать посчитанное по проценту число нельзя:
   // оператор решит, что товар выставлен, а в кабинет не уйдёт ничего.
-  if (servedWarehouses(seller).length === 0) return 0
-  const base = freeStock(product)
-  if (rule.sameEverywhere) return Math.floor((base * rule.percent) / 100)
-  // Доли складов делят один и тот же свободный остаток, поэтому суммируются
-  // проценты, а не посчитанные по отдельности количества.
-  const percent = Math.min(
-    100,
-    seller.warehouses.reduce((sum, warehouse) => sum + (rule.byWarehouse[warehouse.id] ?? 0), 0),
-  )
-  return Math.floor((base * percent) / 100)
+  const served = servedWarehouses(seller)
+  if (served.length === 0) return 0
+  const amounts = splitAmounts(rule, freeStock(product), served)
+  return Object.values(amounts).reduce((sum, one) => sum + one, 0)
+}
+
+/** Сумма долей так, как её проверяет сервер (`validate_rule`).
+ *
+ * При галке «одинаково» доля применяется к КАЖДОМУ складу, поэтому в сумме она
+ * умножается на их количество: 50% на четырёх складах Фэшн — это 200%, и сервер
+ * такое правило не примет.
+ */
+export function totalPercent(rule: FbsRule, servedCount: number): number {
+  if (rule.sameEverywhere) return rule.percent * Math.max(servedCount, 1)
+  return Object.values(rule.byWarehouse).reduce((sum, one) => sum + one, 0)
 }

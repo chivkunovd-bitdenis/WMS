@@ -187,8 +187,20 @@ async def test_fbs_availability_without_direction_uses_physical_stock(
 
 # TC-NEW-FBS-STOCK-005
 @pytest.mark.asyncio
-async def test_fbo_reserve_does_not_reduce_fbs_publish(async_client: AsyncClient) -> None:
-    """MarketplaceUnloadReservation must not change FBS availability."""
+async def test_fbo_reserve_reduces_fbs_publish(async_client: AsyncClient) -> None:
+    """MarketplaceUnloadReservation must reduce FBS availability.
+
+    Товар, уложенный в короб под отгрузку на маркетплейс, физически ещё у нас,
+    но он уже обещан ФБО. Если ФБС продолжит предлагать его покупателям, одна и
+    та же штука будет продана дважды. Обратная сторона уже сделана: экран
+    доступного для отгрузки вычитает резервы ФБС (`_load_available_products`),
+    так что асимметрия была именно дырой, а не решением.
+
+    Раньше этот тест назывался ``test_fbo_reserve_does_not_reduce_fbs_publish``
+    и закреплял противоположное поведение. Постановка (TC-NEW-FBS-STOCK-005 в
+    ``tasks/fbs-stock-sync/CURSOR_HANDOFF.md``) требует только
+    ``max(0, sum − reserves)`` и про исключение ФБО-резерва не говорит.
+    """
     _headers, seller_id, warehouse_id, product_id, storage_loc_id = (
         await _setup_tenant_product(async_client)
     )
@@ -263,9 +275,10 @@ async def test_fbo_reserve_does_not_reduce_fbs_publish(async_client: AsyncClient
         )
 
     # on_hand 10 (storage) + 5 (sorting) = 15, minus a 6-unit reserve
-    # direction = 9. The marketplace-unload reservation must not touch it.
+    # direction = 9. The 99-unit marketplace-unload reservation eats the rest,
+    # and the clamp keeps the result at zero instead of going negative.
     assert before_mp == 9
-    assert after_mp == 9
+    assert after_mp == 0
 
 
 # TC-NEW-FBS-STOCK-007
