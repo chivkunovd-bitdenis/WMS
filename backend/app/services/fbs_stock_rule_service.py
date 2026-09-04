@@ -265,6 +265,8 @@ def split_amounts(
     rule: FbsRule,
     free_stock: int,
     bindings: list[FbsWarehouseBinding],
+    *,
+    units_shipped: dict[uuid.UUID, int] | None = None,
 ) -> dict[uuid.UUID, int]:
     """Разложить свободный остаток по складам WB: binding_id -> сколько штук.
 
@@ -274,11 +276,11 @@ def split_amounts(
     порядку, каждому не больше того, что ещё осталось, — переполнение отрезается
     у последнего склада, а не размазывается молча по всем.
 
-    В режиме штук вместо доли берётся число, которое задал оператор, — как есть,
-    без вычитаний. Это потолок, а не счётчик: он не уменьшается ни заказом, ни
-    статусом от WB, ни обходом истории, и меняет его только оператор. Всё
-    уменьшение приходит с той стороны, с которой и должно, — от свободного
-    остатка, который живёт движениями по складу.
+    В режиме штук берётся число, которое задал оператор, минус то, что мы с
+    этого склада WB уже отгрузили после того, как число задали. Уменьшает его
+    ровно одно событие — **наша проведённая передача поставки**. Ни импорт
+    заказа, ни статус от WB, ни обход истории к нему не прикасаются: заказ, по
+    которому мы ничего не отгружали, товар не тратит, он лежит на полке.
 
     Обрезка по свободному остатку — единственная и последняя защита: остаток мог
     просесть не из-за ФБС-заказов (уехала отгрузка на маркетплейс, прошла
@@ -292,7 +294,9 @@ def split_amounts(
     for binding in bindings:
         if rule.units_mode:
             share = max(
-                0, int(rule.units_by_warehouse.get(int(binding.wb_warehouse_id), 0))
+                0,
+                int(rule.units_by_warehouse.get(int(binding.wb_warehouse_id), 0))
+                - int((units_shipped or {}).get(binding.id, 0)),
             )
         elif rule.same_everywhere:
             share = amount_from_percent(free_stock, rule.percent)
@@ -306,14 +310,66 @@ def split_amounts(
     return amounts
 
 
-def _units_by_wb(rule: FbsRule) -> dict[int, int]:
-    """Числа по складам WB для окна настройки — ровно то, что задал оператор.
+def _units_by_wb(
+    rule: FbsRule,
+    bindings: list[FbsWarehouseBinding],
+    units_shipped: dict[uuid.UUID, int],
+) -> dict[int, int]:
+    """Сколько ещё осталось отдать в каждый склад WB — для полей окна настройки.
 
-    Отдельного «остатка» у них нет и быть не должно: число не расходуется.
-    Сколько из него реально уедет, видно в ``published_now`` — там уже учтена
-    обрезка по свободному остатку.
+    Это заданное число минус то, что мы уже отгрузили с этого склада. Оператор
+    открывает окно и видит сегодняшний расклад, а не тот, что был при настройке.
     """
-    return dict(rule.units_by_warehouse)
+    return {
+        int(binding.wb_warehouse_id): max(
+            0,
+            int(rule.units_by_warehouse.get(int(binding.wb_warehouse_id), 0))
+            - int(units_shipped.get(binding.id, 0)),
+        )
+        for binding in bindings
+        if int(binding.wb_warehouse_id) in rule.units_by_warehouse
+    }
+
+
+async def _shipped_units_by_binding(
+    session: AsyncSession,
+    product_id: uuid.UUID,
+    pool_rows: dict[uuid.UUID, FbsBindingStockPool],
+    bindings: list[FbsWarehouseBinding],
+) -> dict[uuid.UUID, int]:
+    """Сколько штук мы отгрузили с каждого склада WB после того, как задали число.
+
+    Считается по факту отгрузки, и только по нему: берутся строки журнала
+    передачи с **проставленным движением списания** — то есть те, где товар
+    физически ушёл со склада при передаче поставки в Wildberries. Заказ, по
+    которому мы ничего не отгружали, здесь не появится, сколько бы раз WB его ни
+    прислал: он не тратит ни товар, ни число.
+
+    Отдельного счётчика и журнала расхода для этого не нужно — всё уже лежит в
+    журнале передачи, который ведётся с самого начала. Попытка завести рядом
+    второе число трижды кончалась тем, что оно расходилось с реальностью; в
+    последний раз — за четыре часа, см. второе главное правило в CLAUDE.md.
+    """
+    binding_by_wb = {int(row.wb_warehouse_id): row.id for row in bindings}
+    result: dict[uuid.UUID, int] = {}
+    for binding in bindings:
+        pool = pool_rows.get(binding.id)
+        if pool is None or pool.allocated_at is None:
+            continue
+        shipped = await session.scalar(
+            select(func.coalesce(func.sum(FbsShipmentReversalLedger.quantity), 0))
+            .join(FbsOrder, FbsOrder.id == FbsShipmentReversalLedger.fbs_order_id)
+            .where(
+                FbsShipmentReversalLedger.product_id == product_id,
+                FbsShipmentReversalLedger.shipment_movement_id.is_not(None),
+                FbsShipmentReversalLedger.written_off_at.is_not(None),
+                FbsShipmentReversalLedger.written_off_at >= pool.allocated_at,
+                FbsOrder.wb_warehouse_id == binding.wb_warehouse_id,
+            )
+        )
+        result[binding.id] = int(shipped or 0)
+    _ = binding_by_wb
+    return result
 
 
 async def get_rule_view(
