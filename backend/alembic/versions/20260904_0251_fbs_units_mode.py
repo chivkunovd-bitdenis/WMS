@@ -12,7 +12,7 @@
   остаток считается выводом из журнала ``fbs_stock_pool_debits``.
 
 Revision ID: 20260904_0251
-Revises: 20260903_0250
+Revises: 20260902_0248
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260904_0251"
-down_revision: str | Sequence[str] | None = "20260903_0250"
+down_revision: str | Sequence[str] | None = "20260902_0248"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
