@@ -80,6 +80,40 @@ async def _main() -> None:
             )
             role_logins[role_name] = {"email": email, "password": role_password}
 
+        # A short login is deliberately included for typing on a handheld scanner
+        # or a small emulator keyboard.  The tenant prefix keeps repeated fresh
+        # demo databases independent without relying on a global fixed account.
+        mobile_email = f"mobile-{seed.tenant_id.hex[:8]}@example.com"
+        mobile_account = await _require(
+            await api.post(
+                "/auth/staff-accounts",
+                headers=headers,
+                json={"email": mobile_email},
+            ),
+            expected=(201,),
+        )
+        await _require(
+            await api.patch(
+                f"/auth/staff-accounts/{mobile_account['id']}/permissions",
+                headers=headers,
+                json={
+                    "settings": False,
+                    "mp_shipments": False,
+                    "reception": False,
+                    "cells": False,
+                    "inventory": False,
+                    "packaging": True,
+                },
+            )
+        )
+        await _require(
+            await api.post(
+                "/auth/set-initial-password",
+                json={"email": mobile_email, "password": "mobile123"},
+            )
+        )
+        role_logins["mobile"] = {"email": mobile_email, "password": "mobile123"}
+
         seller_email = f"fbs-e2e-seller-{seed.tenant_id}@example.com"
         await _require(
             await api.post(
@@ -177,6 +211,40 @@ async def _main() -> None:
                     )
                 item["wms_order_id"] = row["id"]
 
+        # The browser flow starts from loose orders, while the mobile client starts
+        # from the supply worklist.  Create two independent, untouched supplies so
+        # an operator can complete the whole scanner-first flow and still has a
+        # clean second attempt available without reseeding the database.
+        mobile_supplies: list[dict[str, Any]] = []
+        for index, item in enumerate(created["warehouse_sc"], start=1):
+            workspace = await _require(
+                await api.post(
+                    "/operations/fbs-supplies/from-orders",
+                    headers=headers,
+                    json={
+                        "name": f"Мобильная демо-поставка {index}",
+                        "order_ids": [item["wms_order_id"]],
+                        "planned_delivery_type": "warehouse_sc",
+                        "idempotency_key": f"mobile-demo-{seed.tenant_id}-{index}",
+                    },
+                ),
+                expected=(201,),
+            )
+            mobile_order = workspace["orders"][0]
+            mobile_supplies.append(
+                {
+                    "supply_id": workspace["supply"]["id"],
+                    "name": workspace["supply"]["name"],
+                    "status": workspace["supply"]["status"],
+                    "location_code": seed.storage_location_code,
+                    "product_barcode": item["barcode"],
+                    "order_sticker": mobile_order["sticker"]["code"],
+                    "order_scan": mobile_order["sticker"]["code"]
+                    or str(item["wb_order_id"]),
+                    "wb_order_id": item["wb_order_id"],
+                }
+            )
+
         result = {
             "api_base": API_BASE,
             "emulator_base": EMULATOR_BASE,
@@ -190,6 +258,19 @@ async def _main() -> None:
             "login": {"email": seed.admin_email, "password": seed.admin_password},
             "role_logins": role_logins,
             "orders": created,
+            "mobile_demo": {
+                "base_url": "http://10.0.2.2:18080/",
+                "login": role_logins["mobile"],
+                "instructions": [
+                    "Откройте WB FBS и выберите демо-поставку.",
+                    "Нажмите «Начать работу».",
+                    "В подборе отсканируйте location_code, затем product_barcode.",
+                    "В упаковке отсканируйте order_scan.",
+                    "В передаче создайте короб, выберите его и снова отсканируйте order_scan.",
+                    "Проверьте поставку и подтвердите передачу в локальный WB-эмулятор.",
+                ],
+                "supplies": mobile_supplies,
+            },
             "stock_sync": stock_sync,
             "order_sync": order_sync,
         }
