@@ -348,13 +348,21 @@ async def configure_seller_warehouse(
     *,
     served: bool | None,
     wms_warehouse_id: uuid.UUID | None,
+    marketplace: str = MARKETPLACE_WB,
 ) -> FbsWarehouseBinding | None:
     """Настроить сопоставление и обслуживание внешнего склада независимо.
 
     ``wms_warehouse_id`` меняет только сопоставление, а ``served`` — только
     решение обслуживать склад. Если ``served`` не передан, новая
     привязка создаётся выключенной, а у существующей галка не меняется.
+
+    ``marketplace`` — площадка склада. Без него привязка искалась только среди
+    вайлдберрисовских, и нажатие по озоновской строке не находило её, а заводило
+    рядом склад-двойник на Wildberries. Умолчание `wb`: все существующие вызовы
+    приходят оттуда, и их поведение не меняется ни на шаг.
     """
+    if marketplace not in SUPPORTED_BINDING_MARKETPLACES:
+        raise FbsWarehouseBindingError("unsupported_marketplace")
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
         raise FbsWarehouseBindingError("seller_not_found")
     if wb_warehouse_id <= 0:
@@ -371,7 +379,12 @@ async def configure_seller_warehouse(
         raise FbsWarehouseBindingError("warehouse_not_found")
 
     existing = await _get_binding_row(
-        session, tenant_id, seller_id, wb_warehouse_id, for_update=True
+        session,
+        tenant_id,
+        seller_id,
+        wb_warehouse_id,
+        marketplace=marketplace,
+        for_update=True,
     )
     if existing is None:
         if wms_warehouse_id is None:
@@ -381,6 +394,15 @@ async def configure_seller_warehouse(
         existing = FbsWarehouseBinding(
             tenant_id=tenant_id,
             seller_id=seller_id,
+            marketplace=marketplace,
+            # Внешний идентификатор — то, по чему привязку находит разбор
+            # отправления Ozon. Он производный: у оператора в руках ровно один
+            # номер склада, второго значения взять неоткуда. У вайлдберрисовской
+            # привязки поле исторически пустое, её ключ — числовой
+            # `wb_warehouse_id`; не заполняем, чтобы не менять прежний путь.
+            external_warehouse_id=(
+                str(wb_warehouse_id) if marketplace != MARKETPLACE_WB else None
+            ),
             wb_warehouse_id=wb_warehouse_id,
             wms_warehouse_id=wms_warehouse_id,
             is_active=True,

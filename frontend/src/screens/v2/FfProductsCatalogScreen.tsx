@@ -274,6 +274,10 @@ export function FfProductsCatalogScreen({
     products: FbsProduct[]
     seller: FbsSeller
     rule: FbsRuleModel
+    // Почему не приехал справочник складов Ozon. Показывается внутри
+    // озоновского блока модалки, поэтому у продавца без озоновских складов
+    // блока нет и текста тоже — его окно остаётся прежним.
+    ozonWarehousesError?: string | null
   } | null>(null)
   const [fbsDialogError, setFbsDialogError] = useState<string | null>(null)
 
@@ -637,7 +641,7 @@ export function FfProductsCatalogScreen({
       return
     }
     try {
-      const [rulesRes, whRes, bindingsRes] = await Promise.all([
+      const [rulesRes, whRes, bindingsRes, ozonWhRes] = await Promise.all([
         fetch(apiUrl('/products/fbs-rule/bulk'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
@@ -647,6 +651,9 @@ export function FfProductsCatalogScreen({
           headers: { ...authHeaders(token) },
         }),
         fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/warehouse-bindings`), {
+          headers: { ...authHeaders(token) },
+        }),
+        fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/ozon-warehouses`), {
           headers: { ...authHeaders(token) },
         }),
       ])
@@ -674,6 +681,34 @@ export function FfProductsCatalogScreen({
       const warehouseLoadError = whRes.ok
         ? null
         : fbsWarehousesLoadError(whRes.status, await readApiErrorMessage(whRes))
+
+      // Справочник складов Ozon (WMS-362). До него озоновские строки брались
+      // только из сохранённых привязок: склад, которого ещё не заводили, вообще
+      // не показывался, а заведённый подписывался техническим «Склад Ozon
+      // <номер>». Отсюда приезжают настоящие названия кабинета и все склады.
+      type OzonWarehouseRow = {
+        warehouse_id: number
+        name: string
+        served: boolean
+        wms_warehouse_id: string | null
+      }
+      let ozonWarehousesError: string | null = null
+      if (ozonWhRes.ok) {
+        for (const one of (await ozonWhRes.json()) as OzonWarehouseRow[]) {
+          whRows.push({
+            wb_warehouse_id: one.warehouse_id,
+            name: one.name,
+            wms_warehouse_id: one.wms_warehouse_id,
+            served: one.served,
+            marketplace: 'ozon',
+          })
+        }
+      } else {
+        // Отказ штатный: боевые запросы к Ozon выключаются настройкой. Сервер
+        // отвечает человеческим текстом, его и показываем — молчаливая пустота
+        // читалась бы как «складов у продавца нет».
+        ozonWarehousesError = await readApiErrorMessage(ozonWhRes)
+      }
 
       // Если WB временно не отдал список, не прячем уже сохранённые привязки:
       // оператор всё равно должен видеть внешний ID и выбранный WMS-склад.
@@ -740,7 +775,7 @@ export function FfProductsCatalogScreen({
         ),
       )
       const rule: FbsRuleModel = toFbsRule(chosen[0]!.id, ruleById.get(chosen[0]!.id))
-      setFbsDialog({ products, seller, rule })
+      setFbsDialog({ products, seller, rule, ozonWarehousesError })
       if (warehouseLoadError) setFbsDialogError(warehouseLoadError)
     } catch (e) {
       setFbsDialogError(e instanceof Error ? e.message : 'Не удалось открыть настройку остатка')
@@ -758,6 +793,11 @@ export function FfProductsCatalogScreen({
     ) => {
       if (!fbsDialog) return
       setFbsDialogError(null)
+      // Площадка склада. Без неё сервер искал бы привязку среди
+      // вайлдберрисовских и на озоновской строке завёл бы вместо неё
+      // склад-двойник на Wildberries.
+      const marketplace =
+        fbsDialog.seller.warehouses.find((one) => one.id === wbWarehouseId)?.marketplace ?? 'wb'
       try {
         const res = await fetch(
           apiUrl(`/fbs-sellers/${fbsDialog.seller.id}/warehouses/${wbWarehouseId}`),
@@ -767,6 +807,7 @@ export function FfProductsCatalogScreen({
             body: JSON.stringify({
               ...(next.served === undefined ? {} : { served: next.served }),
               wms_warehouse_id: next.wmsWarehouseId,
+              marketplace,
             }),
           },
         )
@@ -2046,6 +2087,7 @@ export function FfProductsCatalogScreen({
             seller={fbsDialog.seller}
             rule={fbsDialog.rule}
             saveError={fbsDialogError}
+            ozonWarehousesError={fbsDialog.ozonWarehousesError ?? null}
             onClose={() => {
               setFbsDialog(null)
               setFbsDialogError(null)

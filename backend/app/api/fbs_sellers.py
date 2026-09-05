@@ -138,6 +138,9 @@ class FbsWarehouseBindingUpsert(BaseModel):
 class FbsSellerWarehouseConfigure(BaseModel):
     served: bool | None = None
     wms_warehouse_id: uuid.UUID | None = None
+    # Площадка склада. Умолчание `wb` — все прежние вызовы приходят оттуда и
+    # ничего не присылают, их поведение остаётся прежним.
+    marketplace: Literal["wb", "ozon"] = "wb"
 
 
 def _binding_out(row: FbsWarehouseBinding, allocated_pool_total: int = 0) -> FbsWarehouseBindingOut:
@@ -294,6 +297,7 @@ async def configure_fbs_seller_warehouse(
             wb_warehouse_id,
             served=body.served,
             wms_warehouse_id=body.wms_warehouse_id,
+            marketplace=body.marketplace,
         )
     except binding_svc.FbsWarehouseBindingError as exc:
         _raise_from_binding_service(exc)

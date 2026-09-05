@@ -869,6 +869,65 @@ async def test_ozon_binding_is_addressed_separately_from_the_wb_one(
     assert rows["ozon"]["stock_sync_enabled"] is False
 
 
+@pytest.mark.asyncio
+async def test_configure_seller_warehouse_takes_the_marketplace_and_makes_no_wb_twin(
+    async_client: AsyncClient,
+) -> None:
+    """Включение склада из модалки квоты не должно заводить склад-двойник на WB.
+
+    Ручка настройки склада продавца искала привязку одним номером и всегда
+    среди вайлдберрисовских. Нажатие по озоновской строке не находило
+    озоновскую привязку и заводило рядом новую — с маркетплейсом `wb` из
+    умолчания модели. Это и был блокер включения озоновского склада.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wh_wb = await _create_warehouse(async_client, headers, suffix, "wbwh")
+    wh_ozon = await _create_warehouse(async_client, headers, suffix, "ozwh")
+    ozon_warehouse_id = 1020005028840530
+
+    # Вайлдберрисовский вызов маркетплейс не присылает — как и весь прежний фронт.
+    wb = await async_client.put(
+        f"/fbs-sellers/{seller_id}/warehouses/507000",
+        headers=headers,
+        json={"served": True, "wms_warehouse_id": wh_wb},
+    )
+    assert wb.status_code == 200, wb.text
+
+    ozon = await async_client.put(
+        f"/fbs-sellers/{seller_id}/warehouses/{ozon_warehouse_id}",
+        headers=headers,
+        json={"served": True, "wms_warehouse_id": wh_ozon, "marketplace": "ozon"},
+    )
+    assert ozon.status_code == 200, ozon.text
+    assert ozon.json()["served"] is True
+    assert ozon.json()["wms_warehouse_id"] == wh_ozon
+
+    listed = await async_client.get(_bindings_url(seller_id), headers=headers)
+    assert listed.status_code == 200, listed.text
+    rows = {row["marketplace"]: row for row in listed.json()}
+    # Ровно две строки, по одной на площадку: двойника на Wildberries нет.
+    assert len(listed.json()) == 2
+    assert rows["wb"]["wb_warehouse_id"] == 507000
+    assert rows["wb"]["wms_warehouse_id"] == wh_wb
+    assert rows["wb"]["external_warehouse_id"] is None
+    assert rows["ozon"]["wb_warehouse_id"] == ozon_warehouse_id
+    assert rows["ozon"]["wms_warehouse_id"] == wh_ozon
+    # По этому значению привязку находит разбор отправления Ozon.
+    assert rows["ozon"]["external_warehouse_id"] == str(ozon_warehouse_id)
+
+    # Повторный вызов правит ту же строку, а не заводит вторую.
+    again = await async_client.put(
+        f"/fbs-sellers/{seller_id}/warehouses/{ozon_warehouse_id}",
+        headers=headers,
+        json={"served": False, "wms_warehouse_id": wh_ozon, "marketplace": "ozon"},
+    )
+    assert again.status_code == 200, again.text
+    assert again.json()["served"] is False
+    repeated = await async_client.get(_bindings_url(seller_id), headers=headers)
+    assert len(repeated.json()) == 2
+
+
 # --- Справочник складов Ozon (WMS-362) ----------------------------------
 
 

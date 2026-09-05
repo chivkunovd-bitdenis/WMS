@@ -49,6 +49,7 @@ export function FbsStockDialog({
   onBind,
   onServedChange,
   saveError,
+  ozonWarehousesError,
 }: {
   open: boolean
   /** Один товар или несколько — модалка одна и та же. */
@@ -62,6 +63,8 @@ export function FbsStockDialog({
   onServedChange?: (warehouseId: string, served: boolean) => void
   /** Отказ сервера. Показываем прямо здесь: окно с введённым не закрываем. */
   saveError?: string | null
+  /** Почему не приехал справочник складов Ozon — текст в озоновском блоке. */
+  ozonWarehousesError?: string | null
 }) {
   if (!open) return null
   return (
@@ -74,6 +77,7 @@ export function FbsStockDialog({
       onBind={onBind}
       onServedChange={onServedChange}
       saveError={saveError}
+      ozonWarehousesError={ozonWarehousesError}
     />
   )
 }
@@ -87,6 +91,7 @@ function FbsStockDialogBody({
   onBind,
   onServedChange,
   saveError,
+  ozonWarehousesError,
 }: {
   products: Product[]
   seller: Seller
@@ -96,6 +101,7 @@ function FbsStockDialogBody({
   onBind: (warehouseId: string, wbWarehouseId: string) => void
   onServedChange?: (warehouseId: string, served: boolean) => void
   saveError?: string | null
+  ozonWarehousesError?: string | null
 }) {
   // Склады делят между собой ОДИН свободный остаток, а не имеют каждый свой.
   // Товар лежит у нас, а склады продавца в кабинете WB — это направления, куда
@@ -374,6 +380,19 @@ function FbsStockDialogBody({
                   ) : null}
                 </Stack>
               ) : null}
+              {/* Справочник кабинета не ответил. Причина нужна здесь, иначе
+                  список складов Ozon выглядит просто коротким, и оператор идёт
+                  искать несуществующую проблему у продавца. Уже сопоставленные
+                  склады при этом остаются на месте — они взяты из привязок. */}
+              {group.marketplace === 'ozon' && ozonWarehousesError ? (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  data-testid="fbs-stock-ozon-directory-error"
+                >
+                  {ozonWarehousesError}
+                </Typography>
+              ) : null}
               {group.warehouses.map((warehouse) => (
             <Stack key={warehouse.id} spacing={1}>
               <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -389,16 +408,9 @@ function FbsStockDialogBody({
                   disabledReason={
                     !onServedChange
                       ? 'Настройка доступна из каталога'
-                      : // Ручка настройки склада продавца адресует привязку одним
-                        // номером и всегда ищет её среди вайлдберрисовских. Нажатие
-                        // здесь по складу Ozon завело бы вместо него склад-двойник
-                        // на Wildberries. До тех пор, пока ручка не научится
-                        // маркетплейсу, галку по Ozon не даём трогать.
-                        warehouseMarketplace(warehouse) !== 'wb'
-                        ? 'Склад Ozon включается в карточке продавца: эта ручка умеет только склады Wildberries'
-                        : warehouse.boundTo === null && !warehouse.fbsEnabled
-                          ? 'Сначала выберите склад WMS'
-                          : undefined
+                      : warehouse.boundTo === null && !warehouse.fbsEnabled
+                        ? 'Сначала выберите склад WMS'
+                        : undefined
                   }
                   testId={`fbs-stock-served-${warehouse.id}`}
                 />
@@ -425,10 +437,7 @@ function FbsStockDialogBody({
                     onChange={(value) => onBind(warehouse.id, value)}
                     options={seller.wbWarehouses.map((one) => ({ value: one.id, label: one.name }))}
                     emptyLabel="не сопоставлен"
-                    disabled={
-                      warehouseMarketplace(warehouse) !== 'wb' ||
-                      (!warehouse.fbsEnabled && warehouse.boundTo !== null)
-                    }
+                    disabled={!warehouse.fbsEnabled && warehouse.boundTo !== null}
                     testId={`fbs-stock-bind-${warehouse.id}`}
                   />
                 </Box>
