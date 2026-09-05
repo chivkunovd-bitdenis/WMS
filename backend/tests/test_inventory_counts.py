@@ -13,13 +13,14 @@ from app.models.inbound_intake import (
     InboundIntakeRequest,
 )
 from app.models.inventory_balance import InventoryBalance
-from app.models.inventory_count import InventoryCountLine
+from app.models.inventory_count import InventoryCountCreatedContainer, InventoryCountLine
 from app.models.inventory_movement import InventoryMovement
 from app.models.pallet import Pallet
 from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.storage_location import StorageLocation
 from app.models.warehouse_box import WarehouseBox
+from app.services import inventory_count_service
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
     UNASSIGNED_LABEL,
@@ -1093,6 +1094,55 @@ async def test_inventory_count_create_container_keeps_it_visible_but_not_other_e
         reopened_tree |= container_ids(cell["children"])  # type: ignore[arg-type]
     assert created_id in reopened_tree
     assert str(empty_box_id) not in reopened_tree
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["box", "cargo_place", "pallet"])
+async def test_inventory_count_container_and_document_link_commit_together(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch, kind: str,
+) -> None:
+    """WMS-375/A29: retry after a failed link must not leave an extra container."""
+    setup = await _tenant(async_client, "AtomicContainer")
+    product = await _product(async_client, setup, name="Synthetic count product")
+    await _balance(setup, product, 3)
+    count = await _create_all(async_client, setup)
+    url = f"/operations/inventory-counts/{count['id']}/containers"
+    real_create = inventory_count_service.warehouse_map_service.create_sorting_object
+
+    async def fail_before_document_link(*args, **kwargs):
+        await real_create(*args, **kwargs)
+        raise RuntimeError("injected failure before document link")
+
+    monkeypatch.setattr(
+        inventory_count_service.warehouse_map_service,
+        "create_sorting_object", fail_before_document_link,
+    )
+    with pytest.raises(RuntimeError, match="injected failure"):
+        await async_client.post(url, headers=setup.headers, json={"kind": kind})
+    async with SessionLocal() as session:
+        assert await session.scalar(select(func.count()).select_from(WarehouseBox)) == 0
+        assert await session.scalar(select(func.count()).select_from(Pallet)) == 0
+        assert await session.scalar(
+            select(func.count()).select_from(InventoryCountCreatedContainer)
+        ) == 0
+        assert await session.scalar(select(func.sum(InventoryBalance.quantity))) == 3
+        assert await session.scalar(select(func.count()).select_from(InventoryMovement)) == 0
+
+    monkeypatch.setattr(
+        inventory_count_service.warehouse_map_service, "create_sorting_object", real_create,
+    )
+    retry = await async_client.post(url, headers=setup.headers, json={"kind": kind})
+    assert retry.status_code == 200, retry.text
+    async with SessionLocal() as session:
+        boxes = await session.scalar(select(func.count()).select_from(WarehouseBox))
+        pallets = await session.scalar(select(func.count()).select_from(Pallet))
+        assert (boxes, pallets) == ((0, 1) if kind == "pallet" else (1, 0))
+        links = list((await session.scalars(select(InventoryCountCreatedContainer))).all())
+        assert len(links) == 1
+        assert links[0].count_id == uuid.UUID(str(count["id"]))
+        assert links[0].container_kind == kind
+        model = Pallet if kind == "pallet" else WarehouseBox
+        assert await session.get(model, links[0].container_id) is not None
 
 
 @pytest.mark.asyncio

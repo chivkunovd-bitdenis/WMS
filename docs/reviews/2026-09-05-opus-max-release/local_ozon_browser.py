@@ -163,6 +163,7 @@ from app.models.fbs_supply import FbsSupply
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.user import User
 from app.services.passwords import hash_password
 from test_fbs_ozon_lane import (
@@ -205,6 +206,12 @@ async def seed():
         await session.flush()
         order.meta_details_json = {"ozon_requirements": {"kinds": []}}
         for index, (item, quantity) in enumerate([(product, 2), (second, 1)]):
+            session.add(ProductMarketplaceLink(
+                tenant_id=tenant.id, seller_id=seller.id, product_id=item.id,
+                marketplace="ozon", external_product_id=str(3001 + index),
+                external_sku=str(3001 + index), external_offer_id=item.sku_code,
+                external_barcodes=[], is_active=True,
+            ))
             session.add(
                 FbsOrderProduct(
                     order_id=order.id,

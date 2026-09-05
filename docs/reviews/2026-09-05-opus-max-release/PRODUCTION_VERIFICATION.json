@@ -1,0 +1,23 @@
+{
+  "deployed_sha": "9b34f3f7f99ed025ef07a59fe698682290836344",
+  "backend_sources": {
+    "api": {
+      "source_files_checked": 260,
+      "mismatches": []
+    },
+    "celery_worker": {
+      "source_files_checked": 260,
+      "mismatches": []
+    },
+    "celery_beat": {
+      "source_files_checked": 260,
+      "mismatches": []
+    }
+  },
+  "health": {
+    "http": 200,
+    "body": "{\"status\":\"ok\"}"
+  },
+  "frontend_http_matches_running_container": true,
+  "frontend_index_sha256": "cb89e0e98ff5a082598df96322cc664d31605bc89e404cb4371078ed02af3816"
+}
