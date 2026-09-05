@@ -738,9 +738,23 @@ async def sync_ozon_orders(
     seller_id: uuid.UUID,
     provider: OzonMarketplaceProvider,
     _http_client: httpx.AsyncClient,
+    *,
+    selected_posting_numbers: frozenset[str] | None = None,
 ) -> dict[str, int]:
+    """Import automatic scope, or explicitly selected postings from served warehouses.
+
+    An explicit selection authorizes intake without stock publication; it does
+    not enable publication or change the automatic polling scope (WMS-373).
+    """
     client_id, api_key = await _credentials(session, tenant_id, seller_id)
-    rows = await provider.fetch_orders(client_id=client_id, api_key=api_key)
+    if selected_posting_numbers is None:
+        rows = await provider.fetch_orders(client_id=client_id, api_key=api_key)
+    else:
+        rows = await provider.fetch_statuses(
+            client_id=client_id,
+            api_key=api_key,
+            order_ids=sorted(selected_posting_numbers),
+        )
     upserted = 0
     created = 0
     statuses_updated = 0
@@ -748,6 +762,21 @@ async def sync_ozon_orders(
         external_order_id = _text(row, "posting_number", "order_id", "id")
         if external_order_id is None:
             continue
+        if selected_posting_numbers is not None:
+            if external_order_id not in selected_posting_numbers:
+                continue
+            # v3 posting details use a scalar price, while the normal v4 list
+            # uses a money object. Keep the existing validated intake path.
+            row = dict(row)
+            if isinstance(row.get("products"), list):
+                products = []
+                for raw_product in row["products"]:
+                    product = dict(raw_product)
+                    price = product.get("price")
+                    if isinstance(price, (str, int, float)):
+                        product["price"] = {"amount": str(price)}
+                    products.append(product)
+                row["products"] = products
         existing = (
             await session.execute(
                 select(FbsOrder)
@@ -768,7 +797,12 @@ async def sync_ozon_orders(
         fallback_product_id = await _product_id_for_row(session, tenant_id, seller_id, row)
         positions = await _posting_products_for_row(session, tenant_id, seller_id, row)
         binding = await _binding_for_row(session, tenant_id, seller_id, row)
-        if not await _stock_is_published_for_row(session, binding, positions, fallback_product_id):
+        if selected_posting_numbers is not None:
+            if binding is None or not binding.served:
+                continue
+        elif not await _stock_is_published_for_row(
+            session, binding, positions, fallback_product_id
+        ):
             continue
         if MARKING_KIND_SGTIN not in required_kinds and await _honest_sign_required_by_catalog(
             session, positions, fallback_product_id

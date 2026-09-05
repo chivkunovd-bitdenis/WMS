@@ -156,6 +156,49 @@ async def _order(db_session: AsyncSession) -> FbsOrder:
     ).scalar_one()
 
 
+@pytest.mark.parametrize("served", [True, False])
+async def test_explicit_posting_intake_without_publication_keeps_warehouse_scope(
+    db_session: AsyncSession,
+    served: bool,
+) -> None:
+    """WMS-373: a named order can enter without publishing any stock."""
+    ctx = await _seed(db_session)
+    ctx.product.fbs_stock_sync_enabled = False
+    binding = (await db_session.execute(select(FbsWarehouseBinding))).scalar_one()
+    binding.served = served
+    await db_session.commit()
+    row = posting_row()
+    row["products"][0]["price"] = "1250.0000"  # /v3/posting/fbs/get shape
+    row["products"][0]["quantity"] = 3
+    extra_row = dict(row, posting_number="not-selected")
+    transport = FakeMarketplaceTransport(statuses=[row, extra_row])
+    provider = OzonMarketplaceProvider(transport=transport)
+
+    for attempt in range(2):
+        result = await sync_svc.sync_ozon_orders(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            provider,
+            AsyncMock(),
+            selected_posting_numbers=frozenset({POSTING_NUMBER}),
+        )
+        assert result["orders_created"] == int(served and attempt == 0)
+    orders = list((await db_session.scalars(select(FbsOrder))).all())
+    assert len(orders) == int(served)
+    assert transport.calls == [("fetch_statuses", "client-id")] * 2
+    assert transport.published_stocks == []
+    await db_session.refresh(ctx.product)
+    assert ctx.product.fbs_stock_sync_enabled is False
+    if served:
+        order = orders[0]
+        await db_session.refresh(order, attribute_names=["product_positions"])
+        assert order.external_order_id == POSTING_NUMBER
+        assert order.warehouse_id == ctx.warehouse.id
+        assert order.product_positions[0].quantity == 3
+        assert order.product_positions[0].product_id == ctx.product.id
+
+
 async def test_warehouse_is_read_from_delivery_method_not_from_the_top_level(
     db_session: AsyncSession,
 ) -> None:
