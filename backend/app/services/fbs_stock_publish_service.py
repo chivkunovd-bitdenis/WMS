@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
+from app.services.marketplace_seller_lock_service import marketplace_seller_lock
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,20 @@ async def publish_seller_stocks_now(
     async with httpx.AsyncClient() as http_client:
         for target in targets:
             try:
-                async with SessionLocal() as session:
+                async with (
+                    SessionLocal() as session,
+                    AsyncSession(bind=session.bind) as lock_session,
+                    marketplace_seller_lock(
+                        lock_session, target.seller_id, target.marketplace,
+                        wait_timeout_sec=30,
+                    ) as acquired,
+                ):
+                    if not acquired:
+                        logger.warning(
+                            "fbs stock publish deferred: seller=%s marketplace=%s busy",
+                            seller_id, target.marketplace,
+                        )
+                        continue
                     result = await sync_marketplace_stocks_for_target(
                         session,
                         target,

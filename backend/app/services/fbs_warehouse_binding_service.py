@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import TypedDict
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +14,7 @@ from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import FBS_ORDER_STATUS_NEW, FbsOrder, FbsOrderReservation
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
 from app.models.warehouse import Warehouse
 from app.services.catalog_service import get_warehouse
@@ -256,6 +258,111 @@ async def upsert_binding(
     marketplace: str = MARKETPLACE_WB,
     external_warehouse_id: str | None = None,
 ) -> FbsWarehouseBinding:
+    if marketplace != MARKETPLACE_OZON:
+        return await _upsert_binding(
+            session, tenant_id, seller_id, wb_warehouse_id,
+            wms_warehouse_id=wms_warehouse_id, stock_sync_enabled=stock_sync_enabled,
+            marketplace=marketplace, external_warehouse_id=external_warehouse_id,
+        )
+    from app.services.marketplace_seller_lock_service import marketplace_seller_lock
+
+    # The business transaction commits below; keep the publication lock on its
+    # own connection until the old target is cleared and the new choice is saved.
+    async with (
+        AsyncSession(bind=session.bind) as lock_session,
+        marketplace_seller_lock(
+            lock_session, seller_id, MARKETPLACE_OZON, wait_timeout_sec=30,
+        ) as acquired,
+    ):
+        if not acquired:
+            raise FbsWarehouseBindingError(
+                "ozon_stock_cleanup_failed",
+                message="Обновление остатков Ozon ещё выполняется. Повторите изменение склада.",
+            )
+        return await _upsert_binding(
+            session, tenant_id, seller_id, wb_warehouse_id,
+            wms_warehouse_id=wms_warehouse_id, stock_sync_enabled=stock_sync_enabled,
+            marketplace=marketplace, external_warehouse_id=external_warehouse_id,
+        )
+
+
+async def _clear_previous_ozon_stock(
+    session: AsyncSession, binding: FbsWarehouseBinding,
+) -> None:
+    """Clear the known own target before its address/publication flag is lost."""
+    from app.services.marketplace_account_service import (
+        MarketplaceAccountError,
+        MarketplaceAccountService,
+    )
+    from app.services.marketplace_provider import MarketplaceProviderError
+    from app.services.ozon_provider_factory import build_ozon_provider
+
+    external_id = binding.external_warehouse_id or str(binding.wb_warehouse_id)
+    if not external_id.isdigit() or int(external_id) <= 0:
+        raise FbsWarehouseBindingError("invalid_wb_warehouse_id")
+    links = list((await session.scalars(
+        select(ProductMarketplaceLink).join(
+            Product, and_(
+                Product.id == ProductMarketplaceLink.product_id,
+                Product.tenant_id == binding.tenant_id,
+                Product.seller_id == binding.seller_id,
+            ),
+        ).where(
+            ProductMarketplaceLink.tenant_id == binding.tenant_id,
+            ProductMarketplaceLink.seller_id == binding.seller_id,
+            ProductMarketplaceLink.marketplace == MARKETPLACE_OZON,
+            ProductMarketplaceLink.is_active.is_(True),
+            or_(Product.fbs_percent.is_not(None), Product.fbs_units_mode.is_(True)),
+        )
+    )).all())
+    stocks: list[dict[str, object]] = []
+    for link in links:
+        stock: dict[str, object] = {"warehouse_id": int(external_id), "stock": 0}
+        if link.external_offer_id:
+            stock["offer_id"] = link.external_offer_id
+        if link.external_product_id and link.external_product_id.isdigit():
+            stock["product_id"] = int(link.external_product_id)
+        if "offer_id" in stock or "product_id" in stock:
+            stocks.append(stock)
+    if not stocks:
+        return
+    try:
+        client_id, api_key = await MarketplaceAccountService(session).stored_credentials(
+            binding.tenant_id, binding.seller_id,
+        )
+        confirmed = await build_ozon_provider(blocked_operation="publish_stocks").publish_stocks(
+            client_id=client_id, api_key=api_key, stocks=stocks,
+        )
+    except (MarketplaceAccountError, MarketplaceProviderError) as exc:
+        raise FbsWarehouseBindingError(
+            "ozon_stock_cleanup_failed",
+            context={"marketplace_error": exc.code},
+            message=("Ozon не подтвердил обнуление прежнего склада. "
+                     "Настройки не изменены; повторите попытку."),
+        ) from exc
+    if confirmed != len(stocks):
+        raise FbsWarehouseBindingError(
+            "ozon_stock_cleanup_failed",
+            message=("Ozon подтвердил не все нулевые остатки. "
+                     "Настройки не изменены; повторите попытку."),
+        )
+
+    binding.last_sync_status = "confirmed"
+    binding.last_error_code = None
+    binding.last_sync_at = datetime.now(UTC)
+
+
+async def _upsert_binding(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    wb_warehouse_id: int,
+    *,
+    wms_warehouse_id: uuid.UUID,
+    stock_sync_enabled: bool,
+    marketplace: str = MARKETPLACE_WB,
+    external_warehouse_id: str | None = None,
+) -> FbsWarehouseBinding:
     """Сопоставить склад маркетплейса со складом WMS.
 
     Привязку Ozon раньше было неоткуда взять: модель по умолчанию ставила `wb`,
@@ -278,6 +385,8 @@ async def upsert_binding(
         raise FbsWarehouseBindingError("warehouse_not_found")
 
     external_id = (external_warehouse_id or "").strip() or str(wb_warehouse_id)
+    if marketplace == MARKETPLACE_OZON and (not external_id.isdigit() or int(external_id) <= 0):
+        raise FbsWarehouseBindingError("invalid_wb_warehouse_id")
     existing = await _get_binding_row(
         session,
         tenant_id,
@@ -288,14 +397,27 @@ async def upsert_binding(
     )
     if existing is not None:
         old_wms = existing.wms_warehouse_id
-        if old_wms != wms_warehouse_id:
-            if await _has_active_fbs_reservations(session, tenant_id, seller_id, old_wms):
-                raise FbsWarehouseBindingError("active_fbs_reservations")
-            existing.wms_warehouse_id = wms_warehouse_id
+        if old_wms != wms_warehouse_id and await _has_active_fbs_reservations(
+            session, tenant_id, seller_id, old_wms,
+        ):
+            raise FbsWarehouseBindingError("active_fbs_reservations")
+        if (
+            marketplace == MARKETPLACE_OZON
+            and existing.is_active and existing.served and existing.stock_sync_enabled
+            and (not stock_sync_enabled or existing.external_warehouse_id != external_id)
+        ):
+            await _clear_previous_ozon_stock(session, existing)
+        existing.wms_warehouse_id = wms_warehouse_id
         existing.stock_sync_enabled = stock_sync_enabled
         existing.is_active = True
         if marketplace != MARKETPLACE_WB and existing.external_warehouse_id != external_id:
             existing.external_warehouse_id = external_id
+        if marketplace == MARKETPLACE_OZON and existing.served and stock_sync_enabled:
+            from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
+
+            existing.last_sync_status = "pending"
+            existing.last_error_code = None
+            schedule_seller_stock_publish(session, tenant_id, seller_id)
         await session.commit()
         await session.refresh(existing)
         return existing

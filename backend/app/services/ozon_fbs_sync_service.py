@@ -304,9 +304,11 @@ def _stock_error_code(error: MarketplaceProviderError) -> str:
     return "ozon_unavailable"
 
 
-def _confirmed_from_error(error: MarketplaceProviderError, *, sent: int) -> int:
+def _confirmed_from_error(
+    error: MarketplaceProviderError, *, sent: int, field: str = "confirmed"
+) -> int:
     """Сколько строк Ozon успел подтвердить до отказа публикации."""
-    raw = error.payload.get("confirmed")
+    raw = error.payload.get(field)
     if isinstance(raw, bool) or not isinstance(raw, int):
         return 0
     return max(0, min(raw, sent))
@@ -328,6 +330,7 @@ async def sync_ozon_stocks(
                     FbsWarehouseBinding.seller_id == seller_id,
                     FbsWarehouseBinding.marketplace == "ozon",
                     FbsWarehouseBinding.is_active.is_(True),
+                    FbsWarehouseBinding.served.is_(True),
                     FbsWarehouseBinding.stock_sync_enabled.is_(True),
                 )
                 .order_by(FbsWarehouseBinding.external_warehouse_id)
@@ -377,12 +380,23 @@ async def sync_ozon_stocks(
         stocks: list[dict[str, object]] = []
         missing_links = 0
         for product, link in rows:
-            if link is None or (not link.external_offer_id and not link.external_sku):
+            # Missing means no publication instruction; an explicit zero is a
+            # different instruction and must still reach Ozon (WMS-375).
+            if product.id not in amounts:
+                continue
+            if link is None or (
+                not (link.external_offer_id and link.external_offer_id.strip())
+                and not (
+                    link.external_product_id
+                    and link.external_product_id.isdigit()
+                    and int(link.external_product_id) > 0
+                )
+            ):
                 missing_links += 1
                 continue
             stock: dict[str, object] = {
                 "warehouse_id": int(binding.external_warehouse_id),
-                "stock": amounts.get(product.id, 0),
+                "stock": amounts[product.id],
             }
             if link.external_offer_id:
                 stock["offer_id"] = link.external_offer_id
@@ -396,7 +410,7 @@ async def sync_ozon_stocks(
             stocks.append(stock)
 
         result.products_targeted += len(stocks)
-        result.products_zeroed += sum(stock.get("stock") == 0 for stock in stocks)
+        zeroes_targeted = sum(stock.get("stock") == 0 for stock in stocks)
         if missing_links:
             result.errors += missing_links
             result.binding_errors += 1
@@ -422,15 +436,28 @@ async def sync_ozon_stocks(
             # которых в кабинете нет.
             confirmed = _confirmed_from_error(error, sent=len(stocks))
             result.products_confirmed += confirmed
+            result.products_zeroed += _confirmed_from_error(
+                error, sent=min(confirmed, zeroes_targeted), field="confirmed_zeroed"
+            )
             result.errors += len(stocks) - confirmed
-            result.binding_errors += 1
+            if not missing_links:
+                result.binding_errors += 1
             binding.last_sync_status = "error"
             binding.last_error_code = _stock_error_code(error)
         else:
+            confirmed = max(0, min(confirmed, len(stocks)))
             result.products_confirmed += confirmed
-            if not missing_links:
+            if confirmed != len(stocks):
+                result.errors += len(stocks) - confirmed
+                if not missing_links:
+                    result.binding_errors += 1
+                binding.last_sync_status = "error"
+                binding.last_error_code = "ozon_stock_unconfirmed"
+            elif not missing_links:
                 binding.last_sync_status = "confirmed"
                 binding.last_error_code = None
+            if confirmed == len(stocks):
+                result.products_zeroed += zeroes_targeted
         binding.last_sync_at = datetime.now(tz=UTC)
 
     await session.commit()

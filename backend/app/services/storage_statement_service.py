@@ -11,7 +11,7 @@ from decimal import (
 )
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -171,7 +171,9 @@ async def get_storage_night_charges_batch(
                     BillingLedgerEntry.source_type == STORAGE_DAY_SOURCE_TYPE,
                     BillingLedgerEntry.entry_type == "charge",
                     BillingLedgerEntry.source_id.in_(source_ids),
-                    BillingLedgerEntry.event_kind.in_(all_kinds),
+                    func.substr(
+                        BillingLedgerEntry.event_kind, 1, len(storage_day_event_kind(date.min))
+                    ).in_(all_kinds),
                 )
             )
         ).all()
@@ -181,7 +183,7 @@ async def get_storage_night_charges_batch(
         if owner is None:
             continue
         statement_id, product_id = owner
-        if entry.event_kind not in kinds_by_statement[statement_id]:
+        if entry.event_kind.split(":topup", 1)[0] not in kinds_by_statement[statement_id]:
             continue
         current = charges[statement_id].get(product_id)
         liter_days = (current.liter_days if current is not None else Decimal(0)) + Decimal(
