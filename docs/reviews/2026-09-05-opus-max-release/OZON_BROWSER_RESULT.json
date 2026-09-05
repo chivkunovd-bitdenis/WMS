@@ -1,0 +1,178 @@
+{
+  "evidence": {
+    "manifest": {
+      "supply_id": "91387217-2e98-4aec-a883-3ee146ae0583",
+      "tenant_id": "3c48743a-e613-4186-86fe-d37fdc9d2eb5",
+      "order_id": "f1cc69b4-a7a1-428e-9f35-4155eb989ff2",
+      "box_ids": [
+        "84dfc715-8e76-415d-b615-f076bd6d3476",
+        "11415304-7d31-43ff-b44f-909e427e084d"
+      ],
+      "product_ids": [
+        "222585d3-e0a4-42f7-a1d2-403d7fdc7085",
+        "01979052-b5f1-4ae6-912c-bdaea62464af"
+      ],
+      "api": "http://127.0.0.1:18081",
+      "login": "ozon-browser@example.com"
+    },
+    "provider": {
+      "shipped": true,
+      "approved": true,
+      "calls": [
+        {
+          "path": "/v3/posting/fbs/get",
+          "payload": {
+            "posting_number": "ozon-posting-dispatch",
+            "with": {
+              "related_postings": true
+            }
+          }
+        },
+        {
+          "path": "/v1/posting/fbs/restrictions",
+          "payload": {
+            "posting_number": "ozon-posting-dispatch"
+          }
+        },
+        {
+          "path": "/v4/posting/fbs/ship",
+          "payload": {
+            "packages": [
+              {
+                "products": [
+                  {
+                    "product_id": 3001,
+                    "quantity": 2
+                  }
+                ]
+              },
+              {
+                "products": [
+                  {
+                    "product_id": 3002,
+                    "quantity": 1
+                  }
+                ]
+              }
+            ],
+            "posting_number": "ozon-posting-dispatch",
+            "with": {
+              "additional_data": true
+            }
+          }
+        },
+        {
+          "path": "fetch_order_labels",
+          "payload": {
+            "posting_numbers": [
+              "LOCAL-OZON-375-1",
+              "LOCAL-OZON-375-2"
+            ]
+          }
+        },
+        {
+          "path": "/v3/posting/fbs/get",
+          "payload": {
+            "posting_number": "LOCAL-OZON-375-1",
+            "with": {
+              "related_postings": true
+            }
+          }
+        },
+        {
+          "path": "/v3/posting/fbs/get",
+          "payload": {
+            "posting_number": "LOCAL-OZON-375-2",
+            "with": {
+              "related_postings": true
+            }
+          }
+        },
+        {
+          "path": "/v1/carriage/create",
+          "payload": {
+            "departure_date": "2026-09-05T22:15:10.368679+00:00"
+          }
+        },
+        {
+          "path": "/v1/carriage/get",
+          "payload": {
+            "carriage_id": 901
+          }
+        },
+        {
+          "path": "/v1/carriage/approve",
+          "payload": {
+            "carriage_id": 901
+          }
+        },
+        {
+          "path": "/v1/carriage/get",
+          "payload": {
+            "carriage_id": 901
+          }
+        },
+        {
+          "path": "/v2/posting/fbs/act/get-barcode",
+          "payload": {
+            "id": 901
+          }
+        },
+        {
+          "path": "/v2/posting/fbs/act/get-barcode/text",
+          "payload": {
+            "id": 901
+          }
+        },
+        {
+          "path": "/v2/posting/fbs/act/get-pdf",
+          "payload": {
+            "id": 901,
+            "doc_type": "act_of_acceptance"
+          }
+        }
+      ]
+    },
+    "supplies": [
+      {
+        "id": "91387217-2e98-4aec-a883-3ee146ae0583",
+        "status": "in_delivery",
+        "external_supply_id": "901"
+      }
+    ],
+    "balances": [
+      {
+        "product_id": "222585d3-e0a4-42f7-a1d2-403d7fdc7085",
+        "quantity": 0,
+        "quantity_packed": 0,
+        "quantity_unpacked": 0
+      },
+      {
+        "product_id": "01979052-b5f1-4ae6-912c-bdaea62464af",
+        "quantity": -1,
+        "quantity_packed": 0,
+        "quantity_unpacked": -1
+      }
+    ],
+    "movements": [
+      {
+        "id": "564ef68b-82cf-406e-8be3-4582f2a1a22e",
+        "product_id": "222585d3-e0a4-42f7-a1d2-403d7fdc7085",
+        "quantity_delta": -2
+      },
+      {
+        "id": "18f7c888-79e7-457f-98aa-5efc01bab1d2",
+        "product_id": "01979052-b5f1-4ae6-912c-bdaea62464af",
+        "quantity_delta": -1
+      }
+    ]
+  },
+  "repeat_checks": {
+    "same_key_repeat_http": 200,
+    "repeat_status": "in_delivery",
+    "new_key_after_delivery_http": 409,
+    "provider_calls_unchanged": true,
+    "movements_unchanged": true,
+    "balances_unchanged": true
+  }
+}
