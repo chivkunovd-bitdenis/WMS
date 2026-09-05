@@ -125,6 +125,13 @@ export type ApiSummary = {
 export type PostResult = {
   posted_lines: number
   changed_balance_count: number
+  stock_write_off?: {
+    product_id: string
+    product_name: string
+    marketplace: string | null
+    warehouse_id: string | null
+    quantity: number
+  }[]
 }
 
 function toProduct(node: ApiProduct): ProductNode {
@@ -372,7 +379,16 @@ export async function postCount(
 
 /** Человеческое сообщение о том, что дало проведение. */
 export function postResultNote(result: PostResult): string {
-  return result.changed_balance_count > 0
+  const summary = result.changed_balance_count > 0
     ? `Проведено движений: ${result.posted_lines}. По ${result.changed_balance_count} строкам остаток успел измениться — посчитано от нового.`
     : `Проведено движений: ${result.posted_lines}.`
+  const writeOff = result.stock_write_off ?? []
+  if (!writeOff.some((row) => row.marketplace !== null)) return summary
+  const details = writeOff.map((row) => {
+    const source = row.marketplace
+      ? `ФБС ${row.marketplace.toUpperCase()}, склад ${row.warehouse_id}`
+      : 'основной свободный остаток'
+    return `${row.product_name}: ${source} — ${row.quantity} шт.`
+  })
+  return `${summary} Недостача затронула выделение ФБС. ${details.join(' ')}`
 }

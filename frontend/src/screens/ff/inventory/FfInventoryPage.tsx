@@ -152,9 +152,9 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         posted_lines: number
         changed_balance_count: number
       }
-      setNote(postResultNote(result))
       await open(count.id)
       await loadList()
+      setNote(postResultNote(result))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось провести')
     } finally {

@@ -83,6 +83,7 @@ class PostResult:
     posted_lines: int
     unchanged_lines: int
     changed_balances: list[ChangedBalance]
+    stock_deductions: list[inventory_service.StockDeduction]
 
 
 def _product_category_column() -> Any | None:
@@ -940,6 +941,7 @@ async def post_count(
     for product_id in sorted({line.product_id for line in entered_lines}, key=str):
         await inventory_service.lock_stock_product(session, tenant_id, product_id)
 
+    stock_deductions: list[inventory_service.StockDeduction] = []
     changed_balances: list[ChangedBalance] = []
     posted_lines = 0
     for line in entered_lines:
@@ -976,6 +978,7 @@ async def post_count(
                 quantity_delta=delta,
                 movement_type=MOVEMENT_TYPE_INVENTORY_COUNT,
                 inventory_count_line_id=line.id,
+                stock_deductions=stock_deductions,
                 actor_user_id=user_id,
                 container_kind=cast(ContainerKind | None, line.container_kind),
                 container_id=line.container_id,
@@ -998,6 +1001,7 @@ async def post_count(
         posted_lines=posted_lines,
         unchanged_lines=len(entered_lines) - posted_lines,
         changed_balances=changed_balances,
+        stock_deductions=stock_deductions,
     )
 
 

@@ -54,6 +54,8 @@ from app.services.sorting_location_service import SORTING_LOCATION_CODE
 OUTBOUND_RESERVE_STATUSES = ("draft", "submitted")
 RESERVATION_ERROR = "insufficient_available"
 DeductPrefer = Literal["packed", "unpacked"]
+# Только результат проведения для ответа оператору, не отдельный учёт.
+StockDeduction = tuple[uuid.UUID, uuid.UUID | None, int]
 
 
 async def lock_stock_product(
@@ -268,10 +270,10 @@ async def _deduct_inventory_from_fbs(
     product: Product,
     warehouse_id: uuid.UUID,
     shortage: int,
-) -> None:
+) -> list[StockDeduction]:
     """Недостача: сначала обычный свободный остаток, затем доступное ФБС."""
     if not product.fbs_units_mode:
-        return
+        return [(product.id, None, shortage)]
     from app.services.fbs_stock_availability_service import fbs_stock_breakdown_by_product
 
     pools = list(
@@ -290,18 +292,22 @@ async def _deduct_inventory_from_fbs(
         ).all()
     )
     if not pools:
-        return
+        return [(product.id, None, shortage)]
     stock = (
         await fbs_stock_breakdown_by_product(session, product.tenant_id, warehouse_id, [product.id])
     )[product.id]
     ordinary_free = max(0, stock.free - sum(p.quantity for p in pools))
+    deductions: list[StockDeduction] = [(product.id, None, min(shortage, ordinary_free))]
     remaining = max(0, shortage - ordinary_free)
     for pool in pools:
         take = min(remaining, pool.quantity)
+        if take:
+            deductions.append((product.id, pool.binding_id, take))
         pool.quantity -= take
         remaining -= take
         if remaining == 0:
             break
+    return deductions
 
 
 async def _physical_on_hand(
@@ -786,6 +792,7 @@ async def record_movement_and_adjust_balance(
     container_kind: ContainerKind | None = None,
     container_id: uuid.UUID | None = None,
     _exact_source: bool = False,
+    stock_deductions: list[StockDeduction] | None = None,
 ) -> InventoryMovement:
     """Запись в журнал и изменение остатка (delta может быть отрицательным)."""
     if quantity_delta == 0:
@@ -891,6 +898,7 @@ async def record_movement_and_adjust_balance(
                     container_kind=cast(ContainerKind | None, raw_kind),
                     container_id=source.container_id,
                     _exact_source=True,
+                    stock_deductions=stock_deductions,
                 )
             )
         if remaining > 0:
@@ -911,6 +919,7 @@ async def record_movement_and_adjust_balance(
                     actor_user_id=actor_user_id,
                     deduct_prefer=deduct_prefer,
                     _exact_source=True,
+                    stock_deductions=stock_deductions,
                 )
             )
         if not movements:
@@ -918,7 +927,11 @@ async def record_movement_and_adjust_balance(
         return movements[0]
 
     if movement_type == MOVEMENT_TYPE_INVENTORY_COUNT and quantity_delta < 0:
-        await _deduct_inventory_from_fbs(session, prod, loc.warehouse_id, -quantity_delta)
+        deductions = await _deduct_inventory_from_fbs(
+            session, prod, loc.warehouse_id, -quantity_delta
+        )
+        if stock_deductions is not None:
+            stock_deductions.extend(deductions)
 
     movement_values: dict[str, object] = dict(
         tenant_id=tenant_id,

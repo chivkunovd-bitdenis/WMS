@@ -7,11 +7,14 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, model_validator
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_ff_permission
 from app.db.session import get_db
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inventory_count import InventoryCount, InventoryCountLine
+from app.models.product import Product
 from app.models.user import User
 from app.services import inventory_count_service as service
 from app.services import tenant_settings_service, warehouse_map_service
@@ -224,6 +227,14 @@ class ChangedBalanceOut(BaseModel):
     current_quantity: int
 
 
+class InventoryStockWriteOffOut(BaseModel):
+    product_id: str
+    product_name: str
+    marketplace: str | None = None
+    warehouse_id: str | None = None
+    quantity: int
+
+
 class InventoryCountPostOut(BaseModel):
     id: str
     status: str
@@ -231,6 +242,7 @@ class InventoryCountPostOut(BaseModel):
     unchanged_lines: int
     changed_balance_count: int
     changed_balances: list[ChangedBalanceOut]
+    stock_write_off: list[InventoryStockWriteOffOut] = Field(default_factory=list)
 
 
 def _number(count: InventoryCount) -> str:
@@ -791,6 +803,46 @@ async def post_inventory_count(
         )
         for item in result.changed_balances
     ]
+    totals: dict[tuple[uuid.UUID, uuid.UUID | None], int] = defaultdict(int)
+    for product_id, binding_id, quantity in result.stock_deductions:
+        totals[(product_id, binding_id)] += quantity
+    products = {
+        p.id: p.name
+        for p in (
+            await session.scalars(
+                select(Product).where(
+                    Product.tenant_id == user.tenant_id, Product.id.in_({pid for pid, _ in totals})
+                )
+            )
+        ).all()
+    }
+    bindings = {
+        b.id: b
+        for b in (
+            await session.scalars(
+                select(FbsWarehouseBinding).where(
+                    FbsWarehouseBinding.tenant_id == user.tenant_id,
+                    FbsWarehouseBinding.id.in_({bid for _, bid in totals if bid is not None}),
+                )
+            )
+        ).all()
+    }
+    write_off = []
+    for (product_id, binding_id), quantity in totals.items():
+        if quantity <= 0:
+            continue
+        binding = bindings.get(binding_id) if binding_id is not None else None
+        write_off.append(
+            InventoryStockWriteOffOut(
+                product_id=str(product_id),
+                product_name=products.get(product_id, str(product_id)),
+                marketplace=binding.marketplace if binding is not None else None,
+                warehouse_id=(binding.external_warehouse_id or str(binding.wb_warehouse_id))
+                if binding is not None
+                else None,
+                quantity=quantity,
+            )
+        )
     return InventoryCountPostOut(
         id=str(result.count.id),
         status=result.count.status,
@@ -798,6 +850,7 @@ async def post_inventory_count(
         unchanged_lines=result.unchanged_lines,
         changed_balance_count=len(changed),
         changed_balances=changed,
+        stock_write_off=write_off,
     )
 
 
