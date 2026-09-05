@@ -126,6 +126,7 @@ class OzonHandoffProgress:
     shipped_postings: list[str] = field(default_factory=list)
     posting_numbers: list[str] = field(default_factory=list)
     carriage_id: int | None = None
+    carriage_create_started: bool = False
     carriage_postings_set: bool = False
     carriage_approved: bool = False
     used_fallback: bool = False
@@ -135,6 +136,7 @@ class OzonHandoffProgress:
             "shipped_postings": list(self.shipped_postings),
             "posting_numbers": list(self.posting_numbers),
             "carriage_id": self.carriage_id,
+            "carriage_create_started": self.carriage_create_started,
             "carriage_postings_set": self.carriage_postings_set,
             "carriage_approved": self.carriage_approved,
             "used_fallback": self.used_fallback,
@@ -159,6 +161,7 @@ class OzonHandoffProgress:
                 if isinstance(carriage_id, int) and not isinstance(carriage_id, bool)
                 else None
             ),
+            carriage_create_started=raw.get("carriage_create_started") is True,
             carriage_postings_set=raw.get("carriage_postings_set") is True,
             carriage_approved=raw.get("carriage_approved") is True,
             used_fallback=raw.get("used_fallback") is True,
@@ -181,6 +184,7 @@ class OzonHandoffProgress:
                 self.posting_numbers.append(posting)
         if other.carriage_id is not None:
             self.carriage_id = other.carriage_id
+        self.carriage_create_started = self.carriage_create_started or other.carriage_create_started
         self.carriage_postings_set = self.carriage_postings_set or other.carriage_postings_set
         self.carriage_approved = self.carriage_approved or other.carriage_approved
         self.used_fallback = self.used_fallback or other.used_fallback
@@ -1064,12 +1068,21 @@ async def handoff_supply(
             save=_save,
         )
 
+    if state.carriage_create_started:
+        raise OzonFbsProcessError(
+            "ozon_carriage_unconfirmed",
+            "Запрос создания отгрузки отправлен, но Ozon не вернул её номер. "
+            "Проверьте результат в кабинете Ozon: повторный запрос не отправлен.",
+            status_code=409,
+        )
     details = orders[0].meta_details_json or {}
     delivery_method = details.get("ozon_delivery_method_id")
     create_values: dict[str, object] = {"departure_date": datetime.now(UTC).isoformat()}
     if str(delivery_method).isdigit():
         create_values["delivery_method_id"] = int(str(delivery_method))
     create_request = OzonV1CarriageCreateRequest.model_validate(create_values)
+    state.carriage_create_started = True
+    await _save()
     try:
         carriage = await _call(
             provider,
@@ -1082,6 +1095,9 @@ async def handoff_supply(
         )
     except MarketplaceProviderError as exc:
         if exc.status_code not in {404, 409}:
+            if exc.status_code in {400, 401, 403, 422, 429}:
+                state.carriage_create_started = False
+                await _save()
             raise
         await _call(
             provider,
@@ -1139,7 +1155,7 @@ async def _finish_carriage_handoff(
         raise OzonFbsProcessError("ozon_carriage_missing", "Ozon не создал отгрузку.")
     get_request = OzonCarriageCarriageGetRequest(carriage_id=carriage_id)
     if not state.carriage_approved:
-        await _call(
+        current = await _call(
             provider,
             client_id=client_id,
             api_key=api_key,
@@ -1148,15 +1164,18 @@ async def _finish_carriage_handoff(
             response_type=OzonCarriageCarriageGetResponse,
             read=True,
         )
-        await _call(
-            provider,
-            client_id=client_id,
-            api_key=api_key,
-            path="/v1/carriage/approve",
-            request=OzonV1CarriageApproveRequest.model_validate({"carriage_id": carriage_id}),
-            response_type=OzonV1CarriageApproveResponse,
-            read=False,
-        )
+        # Approve may have succeeded immediately before the worker died.
+        # The external fact takes precedence over the last local checkpoint.
+        if current.status not in {"sended", "received", "closed"}:
+            await _call(
+                provider,
+                client_id=client_id,
+                api_key=api_key,
+                path="/v1/carriage/approve",
+                request=OzonV1CarriageApproveRequest.model_validate({"carriage_id": carriage_id}),
+                response_type=OzonV1CarriageApproveResponse,
+                read=False,
+            )
         state.carriage_approved = True
         await save()
     confirmed = await _call(

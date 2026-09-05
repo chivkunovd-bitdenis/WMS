@@ -55,11 +55,12 @@ export function ProductBarcodePrintButton({
       })
   }
 
+  const hasOzon = meta.marketplace_bindings?.some((binding) => binding.marketplace === 'ozon') ?? false
   const tooltip = onMarkingPrint || unifiedPrint
-    ? 'Печать ЧЗ и ШК ВБ'
+    ? hasOzon ? 'Печать ЧЗ и ШК товара' : 'Печать ЧЗ и ШК ВБ'
     : printable
       ? 'Печать этикетки 58×40'
-      : 'Нет баркода WB — синхронизируйте карточки'
+      : hasOzon ? 'Нет штрихкода товара — синхронизируйте карточки' : 'Нет баркода WB — синхронизируйте карточки'
 
   if (!onMarkingPrint && !unifiedPrint) {
     return null

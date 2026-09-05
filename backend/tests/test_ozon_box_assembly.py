@@ -157,6 +157,9 @@ async def test_qr_sends_every_box_and_repeat_never_ships_again(db_session: Async
             )
             == order.id
         )
+        transport.endpoint_responses["/v3/posting/fbs/get"] = {
+            "result": {"posting_number": "POSTING", "status": "awaiting_deliver"}
+        }
     calls = [payload for path, payload in transport.endpoint_calls if path.endswith("/ship")]
     assert calls == [
         {
@@ -344,3 +347,31 @@ async def test_handoff_revalidates_the_complete_position_set(db_session: AsyncSe
             api_key="k",
         )
     assert transport.endpoint_calls == []
+
+
+async def test_confirmed_ship_failure_unfreezes_contents_and_allows_retry(
+    db_session: AsyncSession,
+) -> None:
+    order, supply, boxes = await _seed(db_session)
+    transport = _transport()
+    provider = OzonMarketplaceProvider(transport=transport)
+    args = (db_session, order.tenant_id, supply.id, boxes[0].id)
+    await assemble_box_order(*args, provider=provider, credentials=("c", "k"))
+    transport.endpoint_responses["/v3/posting/fbs/get"] = {
+        "result": {
+            "posting_number": "POSTING", "status": "awaiting_packaging",
+            "substatus": "ship_failed",
+        }
+    }
+    with pytest.raises(OzonFbsProcessError, match="ozon_ship_failed"):
+        await assemble_box_order(*args, provider=provider, credentials=("c", "k"))
+    await db_session.refresh(order)
+    assert "ozon_assembly" not in (order.meta_details_json or {})
+    assert order.supplier_status == "ship_failed"
+    assert len([p for p, _ in transport.endpoint_calls if p.endswith("/ship")]) == 1
+    # A new operator action can now retry the rejected assembly.
+    transport.endpoint_responses["/v3/posting/fbs/get"] = {
+        "result": {"posting_number": "POSTING", "status": "awaiting_packaging"}
+    }
+    await assemble_box_order(*args, provider=provider, credentials=("c", "k"))
+    assert len([p for p, _ in transport.endpoint_calls if p.endswith("/ship")]) == 2

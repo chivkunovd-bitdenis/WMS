@@ -116,6 +116,14 @@ class ProductCreate(BaseModel):
     requires_honest_sign: bool = False
 
 
+class MarketplaceProductBindingOut(BaseModel):
+    marketplace: str
+    external_product_id: str | None = None
+    external_offer_id: str | None = None
+    external_sku: str | None = None
+    external_barcodes: list[str] = Field(default_factory=list)
+
+
 class SellerWbCatalogOut(BaseModel):
     """Product row for seller UI: WB subject, first photo, barcodes (ШК) from card JSON."""
 
@@ -130,6 +138,7 @@ class SellerWbCatalogOut(BaseModel):
     ozon_connected: bool = False
     wb_subject_name: str | None = None
     wb_primary_image_url: str | None = None
+    marketplace_bindings: list[MarketplaceProductBindingOut] = Field(default_factory=list)
     wb_barcodes: list[str]
     wb_primary_barcode: str | None = None
     wb_size: str | None = None
@@ -159,6 +168,7 @@ class FfCatalogOut(BaseModel):
     ozon_offer_id: str | None = None
     wb_subject_name: str | None = None
     wb_primary_image_url: str | None = None
+    marketplace_bindings: list[MarketplaceProductBindingOut] = Field(default_factory=list)
     wb_barcodes: list[str]
     wb_primary_barcode: str | None = None
     wb_size: str | None = None

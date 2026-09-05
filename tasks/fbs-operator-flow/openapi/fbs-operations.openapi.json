@@ -12047,6 +12047,13 @@
             ],
             "title": "Wb Primary Image Url"
           },
+          "marketplace_bindings": {
+            "items": {
+              "$ref": "#/components/schemas/MarketplaceProductBindingOut"
+            },
+            "type": "array",
+            "title": "Marketplace Bindings"
+          },
           "wb_barcodes": {
             "items": {
               "type": "string"
@@ -15861,6 +15868,59 @@
           "amount"
         ],
         "title": "ManualInvoiceV2LineIn"
+      },
+      "MarketplaceProductBindingOut": {
+        "properties": {
+          "marketplace": {
+            "type": "string",
+            "title": "Marketplace"
+          },
+          "external_product_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Product Id"
+          },
+          "external_offer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Offer Id"
+          },
+          "external_sku": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Sku"
+          },
+          "external_barcodes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "External Barcodes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "marketplace"
+        ],
+        "title": "MarketplaceProductBindingOut"
       },
       "MarketplaceUnloadAttachBoxBody": {
         "properties": {
@@ -24683,6 +24743,13 @@
               }
             ],
             "title": "Wb Primary Image Url"
+          },
+          "marketplace_bindings": {
+            "items": {
+              "$ref": "#/components/schemas/MarketplaceProductBindingOut"
+            },
+            "type": "array",
+            "title": "Marketplace Bindings"
           },
           "wb_barcodes": {
             "items": {

@@ -1088,3 +1088,30 @@ async def test_rule_refuses_when_two_marketplaces_share_a_warehouse_number(
         )
     assert collision.value.code == "warehouse_id_collision"
     assert collision.value.context == {"wb_warehouse_ids": [501001]}
+
+
+@pytest.mark.parametrize("free,expected", [(0, [0, 0]), (10, [8, 2]), (20, [8, 8])])
+def test_units_publication_caps_combined_marketplaces_after_outbound(free, expected) -> None:
+    """Outbound reserves/movements must not leave stale allocated units publishable."""
+    bindings = [
+        FbsWarehouseBinding(
+            id=uuid.uuid4(),
+            tenant_id=uuid.uuid4(),
+            seller_id=uuid.uuid4(),
+            wb_warehouse_id=index,
+            wms_warehouse_id=uuid.uuid4(),
+            marketplace=market,
+        )
+        for index, market in ((1, "wildberries"), (2, "ozon"))
+    ]
+    rule = FbsRule(
+        publish=True,
+        same_everywhere=False,
+        percent=0,
+        by_warehouse={},
+        units_mode=True,
+        units_by_warehouse={1: 8, 2: 8},
+    )
+    amounts = split_amounts(rule, free, bindings)
+    assert [amounts[binding.id] for binding in bindings] == expected
+    assert rule.units_by_warehouse == {1: 8, 2: 8}

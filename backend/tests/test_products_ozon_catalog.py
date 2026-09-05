@@ -813,3 +813,57 @@ async def test_merge_survives_dimension_history_on_both_cards(async_client: Asyn
     )
     assert history.status_code == 200, history.text
     assert len(history.json()) == 1
+
+
+@pytest.mark.asyncio
+async def test_catalog_print_exposes_imported_ozon_codes_without_replacing_wb(
+    async_client: AsyncClient,
+) -> None:
+    """The live print dialog receives actual codes through both catalog routes."""
+    from app.models.product import Product
+
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, f"print-{suffix}")
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Print seller"})
+    assert seller.status_code == 201, seller.text
+    products = []
+    for kind in ("ozon", "both", "missing"):
+        products.append(
+            await _create_product(
+                async_client,
+                headers,
+                name=kind,
+                sku_code=f"PRINT-{kind}-{suffix}",
+                seller_id=seller.json()["id"],
+                ozon_sku=f"{kind}-{suffix}",
+            )
+        )
+    async with SessionLocal() as session:
+        for index, product in enumerate(products):
+            product_id = uuid.UUID(str(product["id"]))
+            link = await session.scalar(
+                select(ProductMarketplaceLink).where(
+                    ProductMarketplaceLink.product_id == product_id,
+                    ProductMarketplaceLink.marketplace == "ozon",
+                )
+            )
+            assert link is not None
+            link.external_barcodes = ["OZN1234567890", "OZN1234567891"] if index < 2 else []
+            if index == 1:
+                row = await session.get(Product, product_id)
+                assert row is not None
+                row.wb_barcode = "4601234567890"
+        await session.commit()
+    for endpoint in ("/products/ff-catalog-page", "/products/linked-wb-catalog"):
+        response = await async_client.get(endpoint, headers=headers, params={"search": "PRINT-"})
+        assert response.status_code == 200, response.text
+        body = response.json()
+        rows = {r["name"]: r for r in (body["items"] if isinstance(body, dict) else body)}
+        assert rows["ozon"]["wb_barcodes"] == []
+        assert rows["both"]["wb_primary_barcode"] == "4601234567890"
+        for kind in ("ozon", "both"):
+            assert rows[kind]["marketplace_bindings"][0]["external_barcodes"] == [
+                "OZN1234567890",
+                "OZN1234567891",
+            ]
+        assert rows["missing"]["marketplace_bindings"][0]["external_barcodes"] == []

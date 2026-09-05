@@ -106,7 +106,12 @@ async def test_ozon_without_fulfillment_snapshots_stock_before_handoff_and_write
         return await original_handoff(*args, **kwargs)
 
     monkeypatch.setattr(shipment_svc, "handoff_supply", inspect_before_external)
-    transport = FakeMarketplaceTransport(endpoint_responses=_ozon_handoff_responses())
+    transport = FakeMarketplaceTransport(
+        endpoint_responses=_ozon_handoff_responses(),
+        endpoint_response_queues={
+            "/v1/carriage/get": [{"carriage_id": 901, "status": "new"}]
+        },
+    )
     key = f"no-receipt-{uuid.uuid4()}"
     for _ in range(2):
         result = await shipment_svc.deliver_supply(

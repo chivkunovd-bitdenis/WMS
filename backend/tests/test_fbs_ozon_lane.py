@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import uuid
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -78,6 +78,11 @@ from app.services.fbs_autopoll_service import (
     sync_marking_statuses_for_assembling_supplies,
 )
 from app.services.fbs_print_asset_service import fetch_order_label_rows_for_marketplace
+from app.services.fbs_supply_reconcile_service import (
+    create_pending_deliver_operation,
+    list_deliver_operations_for_supply,
+    request_hash_for_deliver,
+)
 from app.services.fbs_supply_validator_service import (
     SupplyPreflightResult,
     SupplyPreflightSummary,
@@ -1696,7 +1701,12 @@ async def test_ozon_supply_handoff_ships_rechecks_and_creates_carriage_without_w
     monkeypatch.setattr(shipment_svc, "deliver_marketplace_supply", wb_deliver)
     monkeypatch.setattr(shipment_svc, "fetch_marketplace_supply_barcode", wb_qr)
     monkeypatch.setattr(shipment_svc, "_sync_supply_orders_from_wb", wb_sync)
-    transport = FakeMarketplaceTransport(endpoint_responses=_ozon_handoff_responses())
+    transport = FakeMarketplaceTransport(
+        endpoint_responses=_ozon_handoff_responses(),
+        endpoint_response_queues={
+            "/v1/carriage/get": [{"carriage_id": 901, "status": "new"}]
+        },
+    )
 
     delivered = await shipment_svc.deliver_supply(
         db_session,
@@ -3140,3 +3150,104 @@ def test_existing_supply_never_accepts_an_order_of_another_marketplace() -> None
     assert ozon_into_wb.code == "different_marketplace"
     assert wb_into_ozon is not None
     assert wb_into_ozon.code == "different_marketplace"
+
+
+@pytest.mark.parametrize("retry_key", ["ozon-crashed", "ozon-fresh-key"])
+@pytest.mark.parametrize("carriage_id", [None, 901])
+async def test_ozon_pending_after_worker_exit_resumes_without_repeating_approve(
+    db_session: AsyncSession, retry_key: str, carriage_id: int | None,
+) -> None:
+    tenant, _, _, product, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    assert supply is not None
+    await _seed_ready_for_handoff(db_session, order, supply, product)
+    operation = await create_pending_deliver_operation(
+        db_session, tenant_id=tenant.id, seller_id=supply.seller_id,
+        idempotency_key="ozon-crashed",
+        request_hash=request_hash_for_deliver(
+            supply_id=supply.id, confirmed_preflight_version=None,
+        ),
+        local_supply_id=supply.id, confirmed_preflight_version=None,
+    )
+    operation.request_summary_json = {
+        **(operation.request_summary_json or {}),
+        "ozon_handoff_progress": {"carriage_id": carriage_id, "carriage_approved": False},
+    }
+    await db_session.commit()
+    # The first worker is gone; only its persisted pending operation remains.
+    transport = FakeMarketplaceTransport(endpoint_responses=_ozon_handoff_responses())
+    delivered = await shipment_svc.deliver_supply(
+        db_session, tenant.id, supply.id, AsyncMock(),
+        idempotency_key=retry_key, actor_user_id=None,
+        ozon_provider=OzonMarketplaceProvider(transport=transport),
+    )
+    paths = [path for path, _ in transport.endpoint_calls]
+    assert delivered.status == FBS_SUPPLY_STATUS_IN_DELIVERY
+    assert paths.count("/v1/carriage/create") == (1 if carriage_id is None else 0)
+    # External readback is already sended, even if the approve checkpoint was lost.
+    assert "/v1/carriage/approve" not in paths
+    assert "/v4/posting/fbs/ship" not in paths
+    await db_session.refresh(operation)
+    assert operation.state == "confirmed"
+    attempts = await list_deliver_operations_for_supply(
+        db_session, tenant_id=tenant.id, seller_id=supply.seller_id, local_supply_id=supply.id,
+    )
+    assert len(attempts) == 1
+
+
+async def test_ozon_lost_create_response_never_creates_a_second_carriage(
+    db_session: AsyncSession,
+) -> None:
+    tenant, _, _, product, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    assert supply is not None
+    await _seed_ready_for_handoff(db_session, order, supply, product)
+    transport = FakeMarketplaceTransport(
+        endpoint_responses=_ozon_handoff_responses(),
+        errors={"/v1/carriage/create": MarketplaceProviderError("ozon", 503, {})},
+    )
+    with pytest.raises(shipment_svc.FbsShipmentError):
+        await shipment_svc.deliver_supply(
+            db_session, tenant.id, supply.id, AsyncMock(),
+            idempotency_key="ozon-lost-create", actor_user_id=None,
+            ozon_provider=OzonMarketplaceProvider(transport=transport),
+        )
+    operation = await _ozon_deliver_operation("ozon-lost-create")
+    assert operation.request_summary_json is not None
+    assert operation.request_summary_json["ozon_handoff_progress"]["carriage_create_started"]
+    transport.errors.clear()
+    with pytest.raises(shipment_svc.FbsShipmentError, match="ozon_carriage_unconfirmed"):
+        await shipment_svc.deliver_supply(
+            db_session, tenant.id, supply.id, AsyncMock(),
+            idempotency_key="ozon-lost-create-retry", actor_user_id=None,
+            ozon_provider=OzonMarketplaceProvider(transport=transport),
+        )
+    assert sum(path == "/v1/carriage/create" for path, _ in transport.endpoint_calls) == 1
+    assert all(path != "/v1/carriage/approve" for path, _ in transport.endpoint_calls)
+    assert supply.status != FBS_SUPPLY_STATUS_IN_DELIVERY
+
+
+async def test_ozon_live_owner_blocks_retry_before_external_calls(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from contextlib import asynccontextmanager
+
+    tenant, _, _, product, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    assert supply is not None
+    await _seed_ready_for_handoff(db_session, order, supply, product)
+
+    @asynccontextmanager
+    async def occupied(
+        lock_session: AsyncSession, seller_id: uuid.UUID, marketplace: str,
+    ) -> AsyncIterator[bool]:
+        assert lock_session is not db_session  # checkpoints cannot release the ownership lock
+        assert seller_id == supply.seller_id and marketplace == "ozon"
+        yield False
+
+    monkeypatch.setattr(shipment_svc, "marketplace_seller_lock", occupied)
+    transport = FakeMarketplaceTransport(endpoint_responses=_ozon_handoff_responses())
+    with pytest.raises(shipment_svc.FbsShipmentError, match="operation_in_progress"):
+        await shipment_svc.deliver_supply(
+            db_session, tenant.id, supply.id, AsyncMock(),
+            idempotency_key="ozon-concurrent-retry", actor_user_id=None,
+            ozon_provider=OzonMarketplaceProvider(transport=transport),
+        )
+    assert transport.endpoint_calls == []

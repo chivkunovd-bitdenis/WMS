@@ -161,8 +161,6 @@ async def assemble_box_order(
         )
     assembly = (order.meta_details_json or {}).get(ASSEMBLY_KEY)
     packages = await order_packages(session, order)
-    if isinstance(assembly, dict) and len(assembly.get("posting_numbers") or []) == len(packages):
-        return order.id
     if provider is None:
         if not ozon_live_api_enabled():
             raise OzonFbsProcessError(
@@ -185,13 +183,28 @@ async def assemble_box_order(
         posting_number=posting_number,
     )
     result = posting.result
+    if result is not None and result.substatus == "ship_failed" and isinstance(assembly, dict):
+        # HTTP 200 from /ship is only acknowledgement. Ozon explicitly permits
+        # correction/reassembly after this terminal failure (Seller API contract).
+        details = dict(order.meta_details_json or {})
+        details.pop(ASSEMBLY_KEY, None)
+        order.meta_details_json = details
+        await _invalidate_old_label(session, order)
+        try:
+            _apply_posting_readback(order, posting, require_shipped=False)
+        except OzonFbsProcessError:
+            await session.commit()
+            raise
     if (
         result is not None
         and result.status in _SHIPPED_STATUSES
         and result.substatus != "ship_failed"
     ):
         related = result.related_postings
-        numbers = list(
+        saved_numbers = list(dict.fromkeys(assembly.get("posting_numbers") or [])) if isinstance(
+            assembly, dict
+        ) else []
+        numbers = saved_numbers if len(saved_numbers) == len(packages) else list(
             dict.fromkeys((related.related_posting_numbers or []) if related is not None else [])
         )
         if len(packages) == 1 and not numbers:
@@ -204,6 +217,9 @@ async def assemble_box_order(
                 status_code=409,
             )
         _apply_posting_readback(order, posting, require_shipped=False)
+        if len(saved_numbers) == len(packages):
+            await session.commit()
+            return order.id
         order.meta_details_json = {
             **(order.meta_details_json or {}),
             ASSEMBLY_KEY: {

@@ -271,23 +271,22 @@ def split_amounts(
     free_stock: int,
     bindings: list[FbsWarehouseBinding],
 ) -> dict[uuid.UUID, int]:
-    """Штуки уже выделены; проценты вычисляются от свободного остатка."""
+    """Публикация любых правил ограничена общим фактическим свободным остатком."""
     if not rule.publish:
         return {binding.id: 0 for binding in bindings}
-    if rule.units_mode:
-        return {
-            binding.id: max(0, rule.units_by_warehouse.get(int(binding.wb_warehouse_id), 0))
-            for binding in bindings
-        }
     remaining = max(free_stock, 0)
     amounts: dict[uuid.UUID, int] = {}
     for binding in bindings:
-        percent = (
-            rule.percent
-            if rule.same_everywhere
-            else rule.by_warehouse.get(int(binding.wb_warehouse_id), 0)
-        )
-        amount = min(amount_from_percent(free_stock, percent), remaining)
+        if rule.units_mode:
+            share = max(0, rule.units_by_warehouse.get(int(binding.wb_warehouse_id), 0))
+        else:
+            percent = (
+                rule.percent
+                if rule.same_everywhere
+                else rule.by_warehouse.get(int(binding.wb_warehouse_id), 0)
+            )
+            share = amount_from_percent(free_stock, percent)
+        amount = min(share, remaining)
         amounts[binding.id] = amount
         remaining -= amount
     return amounts
@@ -611,9 +610,7 @@ async def set_rule_for_products(
     governed_bindings = select(FbsWarehouseBinding.id).where(
         FbsWarehouseBinding.tenant_id == tenant_id,
         FbsWarehouseBinding.seller_id == seller_id,
-        FbsWarehouseBinding.marketplace.in_(
-            sorted({binding.marketplace for binding in bindings})
-        ),
+        FbsWarehouseBinding.marketplace.in_(sorted({binding.marketplace for binding in bindings})),
     )
     for product in products:
         product.fbs_stock_sync_enabled = rule.publish

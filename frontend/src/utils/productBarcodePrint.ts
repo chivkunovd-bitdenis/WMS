@@ -44,7 +44,7 @@ export function resolveManualWbLabelCount(labelCount: number, doubleBarcode = fa
 }
 
 export function displayMetaToProductLabel(meta: ProductLineDisplayMeta): ProductThermalLabelData {
-  const barcode = resolveProductPrimaryBarcode(meta) ?? meta.sku_code
+  const barcode = resolveProductPrimaryBarcode(meta)
   return {
     product_name: meta.product_name,
     sku_code: meta.sku_code,

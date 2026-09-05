@@ -88,6 +88,7 @@ from app.services.marketplace_provider import (
     OzonMarketplaceProvider,
     provider_error_message,
 )
+from app.services.marketplace_seller_lock_service import marketplace_seller_lock
 from app.services.ozon_fbs_process_service import (
     OzonFbsProcessError,
     OzonHandoffProgress,
@@ -1852,6 +1853,47 @@ async def _deliver_ozon_supply(
     provider: OzonMarketplaceProvider | None,
     actor_user_id: uuid.UUID | None,
 ) -> FbsSupply:
+    supply = await _get_supply_read(session, tenant_id, supply_id)
+    if supply is None:
+        raise FbsShipmentError("supply_not_found")
+    # Keep the advisory lock on its own connection: checkpoints commit the
+    # business session and release its transaction/connection. A dead worker
+    # releases this lock automatically, so persisted PENDING is resumable.
+    async with (
+        AsyncSession(bind=session.bind) as lock_session,
+        marketplace_seller_lock(lock_session, supply.seller_id, "ozon") as acquired,
+    ):
+        if not acquired:
+            raise FbsShipmentError(
+                "operation_in_progress",
+                message="Передача в Ozon уже выполняется.",
+                retryable=True,
+                http_status=503,
+            )
+        if existing is not None:
+            await session.refresh(existing)
+        await session.refresh(supply)
+        return await _deliver_ozon_supply_locked(
+            session, tenant_id, supply_id,
+            idempotency_key=idempotency_key,
+            request_hash=request_hash,
+            existing=existing,
+            provider=provider,
+            actor_user_id=actor_user_id,
+        )
+
+
+async def _deliver_ozon_supply_locked(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    idempotency_key: str,
+    request_hash: str,
+    existing: Any,
+    provider: OzonMarketplaceProvider | None,
+    actor_user_id: uuid.UUID | None,
+) -> FbsSupply:
     supply = await _get_supply_for_update(
         session,
         tenant_id,
@@ -1873,17 +1915,6 @@ async def _deliver_ozon_supply(
             raise FbsShipmentError("idempotency_key_reused", http_status=409)
         if existing.state == WB_OPERATION_STATE_CONFIRMED:
             return supply
-        if existing.state != WB_OPERATION_STATE_FAILED:
-            raise FbsShipmentError(
-                "operation_in_progress",
-                message="Передача в Ozon уже выполняется.",
-                retryable=True,
-                http_status=503,
-            )
-        # Отказавшая попытка больше не тупик. Раньше повтор запрещался как
-        # «слепой» — и был им: что успело уехать в кабинет, нигде не
-        # записывалось. Теперь у каждой попытки есть сохранённый снимок
-        # сделанного, и повтор продолжает с места обрыва, а не начинает заново.
 
     if supply.status in _DELIVER_BLOCKED_SUPPLY_STATUSES:
         raise FbsShipmentError("supply_bad_status", http_status=409)
@@ -1913,12 +1944,11 @@ async def _deliver_ozon_supply(
                 WB_OPERATION_STATE_PENDING,
                 WB_OPERATION_STATE_PENDING_CONFIRMATION,
             }:
-                raise FbsShipmentError(
-                    "operation_in_progress",
-                    message="Передача этой поставки в Ozon уже выполняется.",
-                    retryable=True,
-                    http_status=503,
-                )
+                # No live owner holds the advisory lock. Reuse the original
+                # operation even when the browser supplied a fresh retry key.
+                if attempt.request_hash and attempt.request_hash != request_hash:
+                    raise FbsShipmentError("idempotency_key_reused", http_status=409)
+                existing = attempt
         progress.absorb(
             OzonHandoffProgress.from_json(
                 (attempt.request_summary_json or {}).get(OZON_HANDOFF_PROGRESS_KEY)

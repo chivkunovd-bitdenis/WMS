@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { catalogRowToDisplayMeta } from '../types/wbProductCatalog'
 
-import { resolveManualWbLabelCount, resolvePackUnits, resolveWbBarcodeLabelCount } from './productBarcodePrint'
+import { displayMetaToProductLabel, resolveManualWbLabelCount, resolvePackUnits, resolveWbBarcodeLabelCount } from './productBarcodePrint'
 
 describe('resolvePackUnits', () => {
   it('reads explicit pack_units token from packaging instructions', () => {
@@ -31,5 +32,22 @@ describe('resolveManualWbLabelCount', () => {
   it('doubles count when print-double checkbox is on', () => {
     expect(resolveManualWbLabelCount(2, true)).toBe(4)
     expect(resolveManualWbLabelCount(3, true)).toBe(6)
+  })
+})
+
+
+describe('Ozon product label data', () => {
+  it('passes the real imported barcode to the common product-label renderer', () => {
+    const meta = catalogRowToDisplayMeta({ name: 'Ozon product', sku_code: 'internal-sku', marketplace_bindings: [
+      { marketplace: 'ozon', external_sku: '123', external_barcodes: ['OZN-actual-code'] },
+    ] })
+    expect(displayMetaToProductLabel(meta).barcode).toBe('OZN-actual-code')
+  })
+
+  it('keeps missing imported barcodes empty instead of falling back to SKU', () => {
+    const meta = catalogRowToDisplayMeta({ name: 'Ozon product', sku_code: 'internal-sku', marketplace_bindings: [
+      { marketplace: 'ozon', external_sku: '123', external_barcodes: [] },
+    ] })
+    expect(displayMetaToProductLabel(meta).barcode).toBe('')
   })
 })
