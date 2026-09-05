@@ -29,31 +29,25 @@ async def fbs_reserved_by_product(
 ) -> dict[uuid.UUID, int]:
     if not product_ids:
         return {}
-    legacy_stmt = (
-        select(
-            FbsOrderReservation.product_id.label("product_id"),
-            FbsOrderReservation.quantity.label("quantity"),
-        )
-        .where(
-            FbsOrderReservation.tenant_id == tenant_id,
-            FbsOrderReservation.warehouse_id == warehouse_id,
-            FbsOrderReservation.product_id.in_(product_ids),
-        )
+    legacy_stmt = select(
+        FbsOrderReservation.product_id.label("product_id"),
+        FbsOrderReservation.quantity.label("quantity"),
+    ).where(
+        FbsOrderReservation.tenant_id == tenant_id,
+        FbsOrderReservation.warehouse_id == warehouse_id,
+        FbsOrderReservation.product_id.in_(product_ids),
     )
     if exclude_fbs_order_ids:
         legacy_stmt = legacy_stmt.where(
             FbsOrderReservation.fbs_order_id.notin_(exclude_fbs_order_ids)
         )
-    positions_stmt = (
-        select(
-            FbsOrderProductReservation.product_id.label("product_id"),
-            FbsOrderProductReservation.quantity.label("quantity"),
-        )
-        .where(
-            FbsOrderProductReservation.tenant_id == tenant_id,
-            FbsOrderProductReservation.warehouse_id == warehouse_id,
-            FbsOrderProductReservation.product_id.in_(product_ids),
-        )
+    positions_stmt = select(
+        FbsOrderProductReservation.product_id.label("product_id"),
+        FbsOrderProductReservation.quantity.label("quantity"),
+    ).where(
+        FbsOrderProductReservation.tenant_id == tenant_id,
+        FbsOrderProductReservation.warehouse_id == warehouse_id,
+        FbsOrderProductReservation.product_id.in_(product_ids),
     )
     if exclude_fbs_order_ids:
         from app.models.fbs_order import FbsOrderProduct
@@ -68,9 +62,34 @@ async def fbs_reserved_by_product(
         func.coalesce(func.sum(combined.c.quantity), 0),
     ).group_by(combined.c.product_id)
     return {
-        product_id: int(quantity)
-        for product_id, quantity in (await session.execute(stmt)).all()
+        product_id: int(quantity) for product_id, quantity in (await session.execute(stmt)).all()
     }
+
+
+async def fbs_allocated_available_by_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, int]:
+    """Выделенные свободные штуки; резервы заказов считаются отдельно ровно один раз."""
+    from app.models.fbs_binding_stock_pool import FbsBindingStockPool
+    from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+    from app.models.product import Product
+
+    rows = await session.execute(
+        select(FbsBindingStockPool.product_id, func.sum(FbsBindingStockPool.quantity))
+        .join(FbsWarehouseBinding, FbsWarehouseBinding.id == FbsBindingStockPool.binding_id)
+        .join(Product, Product.id == FbsBindingStockPool.product_id)
+        .where(
+            FbsBindingStockPool.tenant_id == tenant_id,
+            FbsBindingStockPool.product_id.in_(product_ids),
+            FbsWarehouseBinding.wms_warehouse_id == warehouse_id,
+            Product.fbs_units_mode.is_(True),
+        )
+        .group_by(FbsBindingStockPool.product_id)
+    )
+    return {pid: int(quantity or 0) for pid, quantity in rows}
 
 
 async def fbs_reserved_qty_for_product(
@@ -196,9 +215,7 @@ async def fbs_stock_breakdown_by_product(
     # Без этого слагаемого одна и та же штука одновременно уложена в короб и
     # предложена покупателю в ФБС — то есть продана дважды. Описание функции
     # обещало этот вычет с самого начала, а кода не было.
-    mp_map = await _mp_reserved_by_product(
-        session, tenant_id, warehouse_id, product_ids
-    )
+    mp_map = await _mp_reserved_by_product(session, tenant_id, warehouse_id, product_ids)
     fbs_map = await fbs_reserved_by_product(
         session,
         tenant_id,
@@ -207,9 +224,7 @@ async def fbs_stock_breakdown_by_product(
         exclude_fbs_order_ids=exclude_fbs_order_ids,
     )
     direction_map = (
-        await stock_direction_service.direction_totals_by_product(
-            session, tenant_id, product_ids
-        )
+        await stock_direction_service.direction_totals_by_product(session, tenant_id, product_ids)
         if include_global_direction_reserve
         else {}
     )

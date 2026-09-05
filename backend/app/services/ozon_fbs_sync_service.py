@@ -18,7 +18,6 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_DONE,
@@ -34,6 +33,7 @@ from app.models.fbs_order import (
     FbsOrderProduct,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.schemas.ozon_fbs_api import OzonPostingV4PostingFbsUnfulfilledListResponsePostingsProducts
 from app.services.fbs_stock_sync_service import (
@@ -154,31 +154,35 @@ async def sync_ozon_stocks(
         rows = list(
             (
                 await session.execute(
-                    select(FbsBindingStockPool, ProductMarketplaceLink)
+                    select(Product, ProductMarketplaceLink)
                     .outerjoin(
                         ProductMarketplaceLink,
                         and_(
                             ProductMarketplaceLink.tenant_id == tenant_id,
                             ProductMarketplaceLink.seller_id == seller_id,
-                            ProductMarketplaceLink.product_id == FbsBindingStockPool.product_id,
+                            ProductMarketplaceLink.product_id == Product.id,
                             ProductMarketplaceLink.marketplace == "ozon",
                             ProductMarketplaceLink.is_active.is_(True),
                         ),
                     )
-                    .where(FbsBindingStockPool.binding_id == binding.id)
-                    .order_by(FbsBindingStockPool.product_id)
+                    .where(Product.tenant_id == tenant_id, Product.seller_id == seller_id)
+                    .order_by(Product.id)
                 )
             ).all()
         )
+        from app.services.fbs_stock_rule_service import publish_amounts_for_binding
+
+        products = [product for product, _ in rows]
+        amounts = await publish_amounts_for_binding(session, binding, products)
         stocks: list[dict[str, object]] = []
         missing_links = 0
-        for pool, link in rows:
+        for product, link in rows:
             if link is None or (not link.external_offer_id and not link.external_sku):
                 missing_links += 1
                 continue
             stock: dict[str, object] = {
                 "warehouse_id": int(binding.external_warehouse_id),
-                "stock": max(int(pool.quantity), 0),
+                "stock": amounts.get(product.id, 0),
             }
             if link.external_offer_id:
                 stock["offer_id"] = link.external_offer_id

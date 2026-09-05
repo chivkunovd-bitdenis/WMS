@@ -255,9 +255,7 @@ async def upsert_binding(
     if existing is not None:
         old_wms = existing.wms_warehouse_id
         if old_wms != wms_warehouse_id:
-            if await _has_active_fbs_reservations(
-                session, tenant_id, seller_id, old_wms
-            ):
+            if await _has_active_fbs_reservations(session, tenant_id, seller_id, old_wms):
                 raise FbsWarehouseBindingError("active_fbs_reservations")
             existing.wms_warehouse_id = wms_warehouse_id
         existing.stock_sync_enabled = stock_sync_enabled
@@ -378,14 +376,10 @@ async def disable_binding(
 ) -> FbsWarehouseBinding:
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
         raise FbsWarehouseBindingError("seller_not_found")
-    row = await _get_binding_row(
-        session, tenant_id, seller_id, wb_warehouse_id, for_update=True
-    )
+    row = await _get_binding_row(session, tenant_id, seller_id, wb_warehouse_id, for_update=True)
     if row is None:
         raise FbsWarehouseBindingError("binding_not_found")
-    if await _has_active_fbs_reservations(
-        session, tenant_id, seller_id, row.wms_warehouse_id
-    ):
+    if await _has_active_fbs_reservations(session, tenant_id, seller_id, row.wms_warehouse_id):
         raise FbsWarehouseBindingError("active_fbs_reservations")
     row.is_active = False
     await session.commit()
@@ -422,6 +416,32 @@ async def set_binding_stock_pool_quantity(
     product = await session.get(Product, product_id)
     if product is None or product.tenant_id != tenant_id or product.seller_id != seller_id:
         raise FbsWarehouseBindingError("product_not_found")
+
+    if product.fbs_units_mode:
+        from dataclasses import replace
+
+        from app.services.fbs_stock_rule_service import get_rule_view, set_rule_for_products
+        from app.services.inventory_service import lock_stock_product
+
+        await lock_stock_product(session, tenant_id, product_id)
+        view = await get_rule_view(session, tenant_id, product_id)
+        amounts = dict(view.rule.units_by_warehouse)
+        amounts[int(binding.wb_warehouse_id)] = quantity
+        await set_rule_for_products(
+            session,
+            tenant_id,
+            [product_id],
+            replace(view.rule, units_by_warehouse=amounts),
+            updated_by=updated_by,
+        )
+        pool = await session.scalar(
+            select(FbsBindingStockPool).where(
+                FbsBindingStockPool.binding_id == binding_id,
+                FbsBindingStockPool.product_id == product_id,
+            )
+        )
+        assert pool is not None
+        return pool
 
     limit = int(product.fbs_stock_limit) if product.fbs_stock_limit is not None else 0
 

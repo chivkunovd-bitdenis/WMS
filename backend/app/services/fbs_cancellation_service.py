@@ -18,11 +18,6 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_SORTED,
     FbsOrder,
 )
-from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
-from app.models.fbs_supply import FbsSupply
-from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT
-from app.services import inventory_service as inv_svc
-from app.services.fbs_shipment_source_service import reversal_source_from_ledger
 from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
     _release_reservation,
@@ -81,117 +76,13 @@ async def reverse_fbs_shipment_if_needed(
     actor_user_id: uuid.UUID | None = None,
     skip_if_supplier_complete: bool = True,
 ) -> bool:
-    """Reverse one packed physical unit exactly once; caller owns the order lock.
+    """Отмена не приходует товар: после проведения нужен документ возврата.
 
-    `skip_if_supplier_complete` — параметр, а не жёстко зашитая проверка внутри,
-    потому что у функции два вызывающих (ручная отмена оператором и обработка
-    статусов от WB) и им может понадобиться разное поведение в будущем. Сейчас
-    оба вызова используют безопасное значение по умолчанию: если поставка уже
-    передана WB (`FbsSupply.delivered_at` заполнен) либо WB ещё сообщает
-    `supplier_status == "complete"`, возвращать штуку на склад нельзя, иначе
-    остаток завышается на товар, которого на складе нет.
+    Оставлена совместимая точка вызова для обработчиков WB/Ozon. До проведения
+    физического движения нет, освобождение существующего резерва выполняется
+    общей операцией остатков.
     """
-    stmt = (
-        select(FbsShipmentReversalLedger)
-        .where(
-            FbsShipmentReversalLedger.tenant_id == order.tenant_id,
-            FbsShipmentReversalLedger.fbs_order_id == order.id,
-        )
-        .with_for_update()
-    )
-    ledger = (await session.execute(stmt)).scalar_one_or_none()
-    if (
-        ledger is None
-        or ledger.shipment_movement_id is None
-        or ledger.reversed_at is not None
-    ):
-        return False
-
-    # Факт передачи поставки — надёжный признак того, что товар физически
-    # покинул склад. `order.supplier_status` для этого недостаточен: WB после
-    # передачи меняет его на `cancel`/`confirm`, и проверка только на
-    # `complete` перестаёт срабатывать.
-    supply_delivered = False
-    if order.wb_supply_id:
-        supply = (
-            await session.execute(
-                select(FbsSupply).where(
-                    FbsSupply.tenant_id == order.tenant_id,
-                    FbsSupply.wb_supply_id == order.wb_supply_id,
-                )
-            )
-        ).scalar_one_or_none()
-        supply_delivered = supply is not None and supply.delivered_at is not None
-
-    supplier_status = (order.supplier_status or "").strip().lower()
-    already_handed_over = (
-        supply_delivered or supplier_status == SUPPLIER_STATUS_COMPLETE
-    )
-    if skip_if_supplier_complete and already_handed_over:
-        # Посылка уже у WB — трогать склад нельзя. Помечаем запись журнала
-        # обработанной без движения по складу (reversal_movement_id остаётся
-        # пустым), иначе она будет пытаться вернуться на каждом следующем
-        # обходе синка статусов.
-        logger.warning(
-            "fbs_reversal_skipped_after_handover order=%s supply=%s "
-            "delivered=%s status=%s",
-            order.wb_order_id,
-            order.wb_supply_id,
-            supply_delivered,
-            supplier_status,
-        )
-        ledger.reversed_at = datetime.now(UTC)
-        await session.flush()
-        return False
-
-    from app.services import stock_direction_service
-
-    positions = list(ledger.ozon_positions_json or [])
-    if not positions:
-        source = reversal_source_from_ledger(ledger)
-        positions = [
-            {
-                "product_id": str(source.product_id),
-                "storage_location_id": str(source.storage_location_id),
-                "container_kind": source.container_kind,
-                "container_id": (
-                    str(source.container_id) if source.container_id is not None else None
-                ),
-                "quantity": source.quantity,
-            }
-        ]
-    reversal_movement = None
-    for position in positions:
-        product_id = uuid.UUID(str(position["product_id"]))
-        storage_location_id = uuid.UUID(str(position["storage_location_id"]))
-        container_kind = position.get("container_kind")
-        container_id_raw = position.get("container_id")
-        container_id = uuid.UUID(str(container_id_raw)) if container_id_raw else None
-        quantity = int(str(position["quantity"]))
-        movement = await inv_svc.record_movement_and_adjust_balance(
-            session,
-            tenant_id=order.tenant_id,
-            product_id=product_id,
-            storage_location_id=storage_location_id,
-            quantity_delta=quantity,
-            movement_type=MOVEMENT_TYPE_FBS_SHIPMENT,
-            actor_user_id=actor_user_id,
-            container_kind=container_kind,  # type: ignore[arg-type]
-            container_id=container_id,
-        )
-        if reversal_movement is None:
-            reversal_movement = movement
-        await stock_direction_service.restore_fbs_pool(
-            session,
-            order.tenant_id,
-            product_id,
-            quantity,
-        )
-    ledger.reversed_at = datetime.now(UTC)
-    await session.flush()
-    ledger.reversal_movement_id = reversal_movement.id if reversal_movement is not None else None
-    await session.flush()
-    return True
+    return False
 
 
 def penalty_band_for_order(created_at_wb: datetime) -> str:

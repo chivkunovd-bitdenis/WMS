@@ -188,6 +188,7 @@ async def write_off_order(
     for (product_id, storage_location_id), quantity in grouped.items():
         movement = await inv_svc.apply_fbs_supply_write_off(
             session,
+            fbs_order_id=order.id,
             tenant_id=tenant_id,
             product_id=product_id,
             storage_location_id=storage_location_id,

@@ -24,9 +24,6 @@ from app.models.fbs_order import (
     MAPPING_STATUS_MAPPED,
     MAPPING_STATUS_MISSING,
     RESERVE_STATUS_NO_STOCK,
-    RESERVE_STATUS_NOT_PUBLISHED,
-    RESERVE_STATUS_RELEASED,
-    RESERVE_STATUS_RESERVED,
     RESERVE_STATUS_SKIPPED_NO_PRODUCT,
     RESERVE_STATUS_WAREHOUSE_UNMAPPED,
     FbsOrder,
@@ -47,7 +44,6 @@ from app.models.warehouse import Warehouse
 from app.services.fbs_marking_service import apply_wb_meta_requirements_to_order
 from app.services.fbs_order_import_scope_service import FbsOrderImportStats, import_wb_order_rows
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
-from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
 from app.services.fbs_supply_composition_service import (
     link_order_to_wb_supply_if_compatible,
 )
@@ -477,37 +473,6 @@ async def _order_has_reservation(session: AsyncSession, order_id: uuid.UUID) -> 
     ) is not None
 
 
-async def _lock_product_for_fbs_reserve(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    product_id: uuid.UUID,
-) -> Product | None:
-    stmt = (
-        select(Product)
-        .where(Product.id == product_id, Product.tenant_id == tenant_id)
-        .with_for_update()
-    )
-    return (await session.execute(stmt)).scalar_one_or_none()
-
-
-async def _lock_fbs_reservations_for_product(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    warehouse_id: uuid.UUID,
-    product_id: uuid.UUID,
-) -> None:
-    stmt = (
-        select(FbsOrderReservation.id)
-        .where(
-            FbsOrderReservation.tenant_id == tenant_id,
-            FbsOrderReservation.warehouse_id == warehouse_id,
-            FbsOrderReservation.product_id == product_id,
-        )
-        .with_for_update()
-    )
-    await session.execute(stmt)
-
-
 async def _try_reserve_order(
     session: AsyncSession,
     order: FbsOrder,
@@ -523,139 +488,15 @@ async def _try_reserve_order(
         and order.supplier_status.strip().lower() != FBS_ORDER_STATUS_NEW
     ):
         return
-    positions = list(
-        (await session.execute(select(FbsOrderProduct).where(FbsOrderProduct.order_id == order.id)))
-        .scalars()
-        .all()
-    )
-    if order.marketplace == "ozon" and positions:
-        if order.warehouse_id is None:
-            order.reserve_status = RESERVE_STATUS_WAREHOUSE_UNMAPPED
-            return
-        if any(position.product_id is None or position.quantity < 1 for position in positions):
-            order.reserve_status = RESERVE_STATUS_SKIPPED_NO_PRODUCT
-            return
-        if await _order_has_reservation(session, order.id):
-            return
-        required_by_product: dict[uuid.UUID, int] = {}
-        for position in positions:
-            assert position.product_id is not None
-            required_by_product[position.product_id] = (
-                required_by_product.get(position.product_id, 0) + position.quantity
-            )
-        for product_id, quantity in required_by_product.items():
-            await _lock_product_for_fbs_reserve(session, order.tenant_id, product_id)
-            await _lock_fbs_reservations_for_product(
-                session, order.tenant_id, order.warehouse_id, product_id
-            )
-            available = await available_qty_for_fbs_reserve(
-                session,
-                order.tenant_id,
-                order.warehouse_id,
-                product_id,
-                exclude_order_id=order.id,
-            )
-            if available < quantity:
-                order.reserve_status = RESERVE_STATUS_NO_STOCK
-                return
-        async with session.begin_nested():
-            for position in positions:
-                assert position.product_id is not None
-                session.add(
-                    FbsOrderProductReservation(
-                        tenant_id=order.tenant_id,
-                        order_product_id=position.id,
-                        product_id=position.product_id,
-                        warehouse_id=order.warehouse_id,
-                        quantity=position.quantity,
-                    )
-                )
-                position.reserved_quantity = position.quantity
-            order.reserve_status = RESERVE_STATUS_RESERVED
-            await session.flush()
-        schedule_seller_stock_publish(session, order.tenant_id, order.seller_id)
-        return
-    if order.product_id is None:
-        order.reserve_status = RESERVE_STATUS_SKIPPED_NO_PRODUCT
-        return
-    if order.warehouse_id is None:
-        order.reserve_status = RESERVE_STATUS_WAREHOUSE_UNMAPPED
-        return
-    if await _order_has_reservation(session, order.id):
-        return
-    product = await _lock_product_for_fbs_reserve(
-        session, order.tenant_id, order.product_id
-    )
-    if (
-        product is None
-        or not product.fbs_stock_sync_enabled
-        or product.fbs_percent is None
-    ):
-        order.reserve_status = RESERVE_STATUS_NOT_PUBLISHED
-        return
-    await _lock_fbs_reservations_for_product(
-        session, order.tenant_id, order.warehouse_id, order.product_id
-    )
-    available = await available_qty_for_fbs_reserve(
-        session,
-        order.tenant_id,
-        order.warehouse_id,
-        order.product_id,
-        exclude_order_id=order.id,
-    )
-    if available < 1:
-        order.reserve_status = RESERVE_STATUS_NO_STOCK
-        return
-    try:
-        async with session.begin_nested():
-            session.add(
-                FbsOrderReservation(
-                    tenant_id=order.tenant_id,
-                    fbs_order_id=order.id,
-                    product_id=order.product_id,
-                    warehouse_id=order.warehouse_id,
-                    quantity=1,
-                )
-            )
-            order.reserve_status = RESERVE_STATUS_RESERVED
-            await session.flush()
-    except IntegrityError:
-        order.reserve_status = RESERVE_STATUS_NO_STOCK
-        return
-    # Резерв под ФБС-заказ уменьшает доступное — кабинет должен увидеть новую цифру.
-    schedule_seller_stock_publish(session, order.tenant_id, order.seller_id)
+    from app.services.inventory_service import update_fbs_order_reservation
+
+    await update_fbs_order_reservation(session, order, reserve=True)
 
 
 async def _release_reservation(session: AsyncSession, order: FbsOrder) -> None:
-    stmt = select(FbsOrderReservation).where(FbsOrderReservation.fbs_order_id == order.id)
-    res = await session.execute(stmt)
-    reservation = res.scalar_one_or_none()
-    position_reservations = list(
-        (
-            await session.execute(
-                select(FbsOrderProductReservation)
-                .join(
-                    FbsOrderProduct,
-                    FbsOrderProduct.id == FbsOrderProductReservation.order_product_id,
-                )
-                .where(FbsOrderProduct.order_id == order.id)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    if reservation is None and not position_reservations:
-        return
-    if reservation is not None:
-        await session.delete(reservation)
-    for position_reservation in position_reservations:
-        position = await session.get(FbsOrderProduct, position_reservation.order_product_id)
-        if position is not None:
-            position.reserved_quantity = 0
-        await session.delete(position_reservation)
-    order.reserve_status = RESERVE_STATUS_RELEASED
-    # Снятый резерв возвращает товар в доступное — публикуем увеличенную цифру.
-    schedule_seller_stock_publish(session, order.tenant_id, order.seller_id)
+    from app.services.inventory_service import update_fbs_order_reservation
+
+    await update_fbs_order_reservation(session, order, reserve=False)
 
 
 async def _move_new_order_to_external_processing(
@@ -1466,11 +1307,7 @@ async def link_confirmed_orders_to_wb_supplies(
                 supplies_created += 1
 
             current_orders = list(
-                (
-                    await session.execute(
-                        select(FbsOrder).where(FbsOrder.supply_id == supply.id)
-                    )
-                )
+                (await session.execute(select(FbsOrder).where(FbsOrder.supply_id == supply.id)))
                 .scalars()
                 .all()
             )
@@ -1588,9 +1425,7 @@ async def sync_seller_orders(
     status_sync_error: str | None = None
     supply_link_result: dict[str, Any] = {}
 
-    await import_wb_order_rows(
-        session, tenant_id, seller_id, new_rows, import_stats
-    )
+    await import_wb_order_rows(session, tenant_id, seller_id, new_rows, import_stats)
     if import_stats.received:
         await session.commit()
 
@@ -1633,9 +1468,7 @@ async def sync_seller_orders(
 
             if not page_rows:
                 break
-            await import_wb_order_rows(
-                session, tenant_id, seller_id, page_rows, import_stats
-            )
+            await import_wb_order_rows(session, tenant_id, seller_id, page_rows, import_stats)
             await session.commit()
             if next_token is None:
                 break

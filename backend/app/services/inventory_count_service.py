@@ -937,6 +937,9 @@ async def post_count(
     if not entered_lines:
         raise InventoryCountError("empty_count")
 
+    for product_id in sorted({line.product_id for line in entered_lines}, key=str):
+        await inventory_service.lock_stock_product(session, tenant_id, product_id)
+
     changed_balances: list[ChangedBalance] = []
     posted_lines = 0
     for line in entered_lines:

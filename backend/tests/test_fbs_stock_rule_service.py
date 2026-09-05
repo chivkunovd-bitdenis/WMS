@@ -120,10 +120,9 @@ async def _seed(
         storage_location_id=location.id,
         product_id=seed.product.id,
         quantity=on_hand,
+        quantity_unpacked=on_hand,
     )
-    session.add_all(
-        [seed.tenant, seed.seller, seed.warehouse, seed.product, location, balance]
-    )
+    session.add_all([seed.tenant, seed.seller, seed.warehouse, seed.product, location, balance])
     session.add_all(seed.bindings)
     await session.commit()
     return seed
@@ -383,9 +382,7 @@ async def test_publish_takes_number_from_rule(db_session: AsyncSession) -> None:
         [seed.product.id],
         FbsRule(publish=True, same_everywhere=True, percent=30, by_warehouse={}),
     )
-    amounts = await publish_amounts_for_binding(
-        db_session, seed.bindings[0], [seed.product]
-    )
+    amounts = await publish_amounts_for_binding(db_session, seed.bindings[0], [seed.product])
     # Ожидаемо: публикация берёт 126, а не сохранённое когда-то число.
     assert amounts == {seed.product.id: 126}
 
@@ -440,9 +437,7 @@ async def test_product_without_rule_ignores_old_stored_number(
     )
     await db_session.commit()
     # Когда публикация собирает числа.
-    quantities = await _resolve_publish_quantities(
-        db_session, seed.bindings[0], [seed.product]
-    )
+    quantities = await _resolve_publish_quantities(db_session, seed.bindings[0], [seed.product])
     # Тогда товар не попадает в публикацию: старое абсолютное число больше не источник.
     assert quantities == {}
 
@@ -458,17 +453,13 @@ async def test_product_without_rule_ignores_old_stored_number(
 
 
 async def _units_seed(session: AsyncSession, *, on_hand: int = 1000) -> _Seed:
-    seed = await _seed(
-        session, on_hand=on_hand, wb_warehouse_ids=(501001, 501002)
-    )
+    seed = await _seed(session, on_hand=on_hand, wb_warehouse_ids=(501001, 501002))
     seed.product.fbs_units_mode = True
     await session.commit()
     return seed
 
 
-async def _allocate(
-    session: AsyncSession, seed: _Seed, amounts: dict[int, int]
-) -> None:
+async def _allocate(session: AsyncSession, seed: _Seed, amounts: dict[int, int]) -> None:
     await set_rule_for_products(
         session,
         seed.tenant.id,
@@ -512,6 +503,7 @@ async def _place_order(
         product_id=seed.product.id,
         wb_order_id=int(uuid.uuid4().int % 10**12),
         wb_warehouse_id=wb_warehouse_id,
+        warehouse_id=seed.warehouse.id,
         created_at_wb=now,
         deadline_at=now,
         mapping_status="mapped",
@@ -522,6 +514,9 @@ async def _place_order(
     session.add(order)
     await session.flush()
 
+    from app.services.inventory_service import update_fbs_order_reservation
+
+    await update_fbs_order_reservation(session, order, reserve=True)
     if shipped:
         session.add(
             FbsShipmentReversalLedger(
@@ -533,6 +528,8 @@ async def _place_order(
                 shipment_movement_id=uuid.uuid4(),
             )
         )
+    if status == "cancelled" or shipped:
+        await update_fbs_order_reservation(session, order, reserve=False)
     await session.commit()
 
 
@@ -543,13 +540,9 @@ async def test_units_mode_publishes_numbers_as_given(db_session: AsyncSession) -
     await _allocate(db_session, seed, {501001: 200, 501002: 300})
 
     # Когда считаем, что уедет. Тогда: ровно заданные числа, доля не участвует.
-    amounts = await _resolve_publish_quantities(
-        db_session, seed.bindings[0], [seed.product]
-    )
+    amounts = await _resolve_publish_quantities(db_session, seed.bindings[0], [seed.product])
     assert amounts[seed.product.id] == 200
-    amounts = await _resolve_publish_quantities(
-        db_session, seed.bindings[1], [seed.product]
-    )
+    amounts = await _resolve_publish_quantities(db_session, seed.bindings[1], [seed.product])
     assert amounts[seed.product.id] == 300
 
 
@@ -623,33 +616,35 @@ async def test_old_orders_do_not_eat_a_freshly_set_number(
 
 
 @pytest.mark.asyncio
-async def test_published_follows_stock_not_a_counter(
+async def test_inventory_deducts_allocation_and_receiving_does_not_restore_it(
     db_session: AsyncSession,
 ) -> None:
-    """Уезжает `min(число оператора, свободный остаток)` — и ничего больше.
+    from app.models.inventory_movement import (
+        MOVEMENT_TYPE_INBOUND_INTAKE,
+        MOVEMENT_TYPE_INVENTORY_COUNT,
+    )
+    from app.services.inventory_service import record_movement_and_adjust_balance
 
-    Всё уменьшение приходит со стороны склада: отгрузили, списали брак, прошла
-    инвентаризация — остаток просел, публикация просела следом. Считать
-    отдельно, «сколько уже продано», не нужно и нельзя.
-    """
-    # Дано: на складе 150, оператор раздал все 150 на первый склад, а потом
-    # остаток просел до 120 — неважно почему: отгрузка, брак, инвентаризация.
     seed = await _units_seed(db_session, on_hand=150)
     await _allocate(db_session, seed, {501001: 150, 501002: 0})
-    balance = (
-        await db_session.execute(
-            select(InventoryBalance).where(
-                InventoryBalance.product_id == seed.product.id
-            )
+    balance = await db_session.scalar(
+        select(InventoryBalance).where(InventoryBalance.product_id == seed.product.id)
+    )
+    assert balance is not None
+    for delta, kind in [(-30, MOVEMENT_TYPE_INVENTORY_COUNT), (30, MOVEMENT_TYPE_INBOUND_INTAKE)]:
+        await record_movement_and_adjust_balance(
+            db_session,
+            tenant_id=seed.tenant.id,
+            product_id=seed.product.id,
+            storage_location_id=balance.storage_location_id,
+            quantity_delta=delta,
+            movement_type=kind,
+            actor_user_id=None,
         )
-    ).scalar_one()
-    balance.quantity = 120
-    await db_session.commit()
-
-    # Тогда: уедет 120 — столько, сколько лежит. Число оператора цело.
-    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
-    assert view.units_remaining_by_warehouse[501001] == 150
-    assert view.published_now == 120
+        await db_session.commit()
+        view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+        assert view.units_remaining_by_warehouse[501001] == 120
+        assert view.published_now == 120
 
 
 @pytest.mark.asyncio
@@ -669,9 +664,7 @@ async def test_receiving_does_not_raise_units_quota(db_session: AsyncSession) ->
     await _allocate(db_session, seed, {501001: 20, 501002: 20})
     balance = (
         await db_session.execute(
-            select(InventoryBalance).where(
-                InventoryBalance.product_id == seed.product.id
-            )
+            select(InventoryBalance).where(InventoryBalance.product_id == seed.product.id)
         )
     ).scalar_one()
     balance.quantity = 1100
@@ -683,3 +676,224 @@ async def test_receiving_does_not_raise_units_quota(db_session: AsyncSession) ->
     assert view.free_stock == 1100
     assert view.units_remaining_by_warehouse[501001] == 20
     assert view.published_now == 40
+
+
+@pytest.mark.asyncio
+async def test_zero_edit_cancel_and_repeated_events_preserve_reserve(
+    db_session: AsyncSession,
+) -> None:
+    from app.models.fbs_order import FbsOrder
+    from app.services.inventory_service import update_fbs_order_reservation
+    from app.services.marketplace_unload_service import _available_product_qty_in_warehouse
+
+    seed = await _units_seed(db_session, on_hand=400)
+    await _allocate(db_session, seed, {501001: 100, 501002: 200})
+    await _place_order(db_session, seed, 501002)
+    order = (await db_session.scalars(select(FbsOrder))).one()
+    await update_fbs_order_reservation(db_session, order, reserve=True)
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert view.units_remaining_by_warehouse == {501001: 100, 501002: 199}
+    assert (
+        await _available_product_qty_in_warehouse(
+            db_session, seed.tenant.id, seed.warehouse.id, seed.product.id
+        )
+        == 100
+    )
+    await _allocate(db_session, seed, {501001: 100, 501002: 0})
+    await update_fbs_order_reservation(db_session, order, reserve=False)
+    await update_fbs_order_reservation(db_session, order, reserve=False)
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert view.units_remaining_by_warehouse == {501001: 100, 501002: 1}
+    assert view.on_hand == 400
+    assert view.reserved == 0
+
+
+@pytest.mark.asyncio
+async def test_inventory_uses_ordinary_stock_then_fbs(db_session: AsyncSession) -> None:
+    from app.models.inventory_movement import MOVEMENT_TYPE_INVENTORY_COUNT
+    from app.services.inventory_service import record_movement_and_adjust_balance
+    from app.services.marketplace_unload_service import _available_product_qty_in_warehouse
+
+    seed = await _units_seed(db_session, on_hand=400)
+    await _allocate(db_session, seed, {501001: 100, 501002: 200})
+    await _place_order(db_session, seed, 501002)
+    location_id = await db_session.scalar(
+        select(InventoryBalance.storage_location_id).where(
+            InventoryBalance.product_id == seed.product.id
+        )
+    )
+    assert location_id is not None
+    for delta, physical, available in [(-20, 380, 299), (-130, 250, 249)]:
+        await record_movement_and_adjust_balance(
+            db_session,
+            tenant_id=seed.tenant.id,
+            product_id=seed.product.id,
+            storage_location_id=location_id,
+            quantity_delta=delta,
+            movement_type=MOVEMENT_TYPE_INVENTORY_COUNT,
+            actor_user_id=None,
+        )
+        await db_session.commit()
+        view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+        assert view.on_hand == physical
+        assert view.published_now == available
+        assert view.reserved == 1
+    assert (
+        await _available_product_qty_in_warehouse(
+            db_session, seed.tenant.id, seed.warehouse.id, seed.product.id
+        )
+        == 0
+    )
+
+
+@pytest.mark.asyncio
+async def test_switching_modes_preserves_reserves(db_session: AsyncSession) -> None:
+    from app.models.fbs_order import FbsOrder
+    from app.services.inventory_service import update_fbs_order_reservation
+
+    seed = await _units_seed(db_session, on_hand=400)
+    await _allocate(db_session, seed, {501001: 100, 501002: 200})
+    await _place_order(db_session, seed, 501002)
+    await set_rule_for_products(
+        db_session,
+        seed.tenant.id,
+        [seed.product.id],
+        FbsRule(
+            publish=True,
+            same_everywhere=False,
+            percent=0,
+            by_warehouse={501001: 20, 501002: 30},
+        ),
+    )
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert view.reserved == 1
+    assert view.published_now == 79 + 119
+    await _allocate(db_session, seed, {501001: 0, 501002: 0})
+    order = (await db_session.scalars(select(FbsOrder))).one()
+    await update_fbs_order_reservation(db_session, order, reserve=False)
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert view.units_remaining_by_warehouse[501002] == 1
+
+
+@pytest.mark.asyncio
+async def test_ozon_reserves_product_quantities_atomically(db_session: AsyncSession) -> None:
+    from datetime import UTC, datetime
+
+    from app.models.fbs_order import FbsOrder, FbsOrderProduct
+    from app.services.inventory_service import update_fbs_order_reservation
+
+    seed = await _units_seed(db_session, on_hand=400)
+    seed.bindings[1].marketplace = "ozon"
+    seed.bindings[1].external_warehouse_id = "555"
+    await _allocate(db_session, seed, {501001: 100, 501002: 200})
+    second = Product(
+        tenant_id=seed.tenant.id,
+        seller_id=seed.seller.id,
+        sku_code="second",
+        name="Trousers",
+        fbs_units_mode=True,
+    )
+    db_session.add(second)
+    await db_session.flush()
+    pool = FbsBindingStockPool(
+        tenant_id=seed.tenant.id, binding_id=seed.bindings[1].id, product_id=second.id, quantity=0
+    )
+    now = datetime.now(UTC)
+    order = FbsOrder(
+        tenant_id=seed.tenant.id,
+        seller_id=seed.seller.id,
+        product_id=seed.product.id,
+        marketplace="ozon",
+        external_order_id="ozon-3",
+        mapping_status="mapped",
+        reserve_status="no_stock",
+        wb_order_id=-123,
+        wb_warehouse_id=501002,
+        warehouse_id=seed.warehouse.id,
+        created_at_wb=now,
+        deadline_at=now,
+        status="new",
+    )
+    db_session.add_all([pool, order])
+    await db_session.flush()
+    db_session.add_all(
+        [
+            FbsOrderProduct(
+                order_id=order.id,
+                product_id=seed.product.id,
+                ozon_sku=123,
+                position_index=0,
+                quantity=2,
+            ),
+            FbsOrderProduct(
+                order_id=order.id,
+                product_id=second.id,
+                ozon_sku=456,
+                position_index=1,
+                quantity=1,
+            ),
+        ]
+    )
+    await db_session.flush()
+    await update_fbs_order_reservation(db_session, order, reserve=True)
+    assert order.reserve_status == "no_stock"
+    assert (await get_rule_view(db_session, seed.tenant.id, seed.product.id)).published_now == 300
+    pool.quantity = 1
+    await update_fbs_order_reservation(db_session, order, reserve=True)
+    await update_fbs_order_reservation(db_session, order, reserve=True)
+    assert order.reserve_status == "reserved"
+    assert pool.quantity == 0
+    assert (await get_rule_view(db_session, seed.tenant.id, seed.product.id)).published_now == 298
+    await update_fbs_order_reservation(db_session, order, reserve=False)
+    await update_fbs_order_reservation(db_session, order, reserve=False)
+    assert pool.quantity == 1
+    assert (await get_rule_view(db_session, seed.tenant.id, seed.product.id)).published_now == 300
+
+
+@pytest.mark.asyncio
+async def test_available_stock_migration_keeps_current_remainder(db_session: AsyncSession) -> None:
+    import importlib.util
+    from pathlib import Path
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from sqlalchemy import text
+    from sqlalchemy.orm import Session
+
+    seed = await _units_seed(db_session, on_hand=400)
+    await _allocate(db_session, seed, {501001: 200, 501002: 200})
+    await _place_order(db_session, seed, 501001)
+    await _place_order(db_session, seed, 501001)
+    await db_session.execute(
+        text("ALTER TABLE fbs_binding_stock_pools ADD COLUMN allocated_at DATETIME")
+    )
+    await db_session.execute(
+        text(
+            "UPDATE fbs_binding_stock_pools SET quantity = 200, "
+            "allocated_at = '2000-01-01 00:00:00'"
+        )
+    )
+
+    def migrate(session: Session) -> None:
+        path = (
+            Path(__file__).resolve().parents[1]
+            / "alembic/versions/20260905_0252_fbs_available_stock.py"
+        )
+        spec = importlib.util.spec_from_file_location("fbs_available_migration", path)
+        assert spec is not None and spec.loader is not None
+        migration = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(migration)
+        with Operations.context(MigrationContext.configure(session.connection())):
+            migration.upgrade()
+
+    await db_session.run_sync(migrate)
+    db_session.expire_all()
+    quantities = (
+        await db_session.execute(
+            text(
+                "SELECT b.wb_warehouse_id, p.quantity FROM fbs_binding_stock_pools p "
+                "JOIN fbs_warehouse_bindings b ON b.id = p.binding_id ORDER BY b.wb_warehouse_id"
+            )
+        )
+    ).all()
+    assert quantities == [(501001, 198), (501002, 200)]

@@ -1360,6 +1360,7 @@ async def _write_off_delivered_orders_once(
                 async with session.begin_nested():
                     movement = await inventory_svc.apply_fbs_supply_write_off(
                         session,
+                        fbs_order_id=order.id,
                         tenant_id=supply.tenant_id,
                         product_id=ledger.product_id,
                         storage_location_id=ledger.storage_location_id,
@@ -1374,6 +1375,7 @@ async def _write_off_delivered_orders_once(
                     raise
                 movement = await inventory_svc.apply_fbs_supply_write_off(
                     session,
+                    fbs_order_id=order.id,
                     tenant_id=supply.tenant_id,
                     product_id=ledger.product_id,
                     storage_location_id=ledger.storage_location_id,

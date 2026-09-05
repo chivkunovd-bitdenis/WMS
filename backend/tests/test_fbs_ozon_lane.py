@@ -363,8 +363,14 @@ async def test_ozon_autopoll_positive_fake_upserts_shared_order_and_status(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "units_mode, publish, expected", [(True, True, 2), (True, False, 0), (False, True, 10)]
+)
 async def test_ozon_stock_dispatch_uses_binding_pool_with_fake_transport(
     db_session: AsyncSession,
+    units_mode: bool,
+    publish: bool,
+    expected: int,
 ) -> None:
     """TC-S04-OZON-030: the shared action dispatches Ozon stock only to a fake provider."""
     tenant = Tenant(name="Ozon stock dispatch", slug=f"ozon-stock-{uuid.uuid4().hex[:8]}")
@@ -410,14 +416,32 @@ async def test_ozon_stock_dispatch_uses_binding_pool_with_fake_transport(
     )
     db_session.add_all([account, binding, link])
     await db_session.flush()
+    pool = FbsBindingStockPool(
+        tenant_id=tenant.id,
+        binding_id=binding.id,
+        product_id=product.id,
+        quantity=2,
+    )
+    if units_mode:
+        db_session.add(pool)
+    location = StorageLocation(
+        tenant_id=tenant.id, warehouse_id=warehouse.id, code="stock", barcode="stock"
+    )
+    db_session.add(location)
+    await db_session.flush()
     db_session.add(
-        FbsBindingStockPool(
+        InventoryBalance(
             tenant_id=tenant.id,
-            binding_id=binding.id,
             product_id=product.id,
-            quantity=2,
+            storage_location_id=location.id,
+            quantity=20,
+            quantity_unpacked=20,
         )
     )
+    product.fbs_units_mode = units_mode
+    product.fbs_stock_sync_enabled = publish
+    product.fbs_percent = 50
+    product.fbs_same_everywhere = True
     await db_session.commit()
     transport = FakeMarketplaceTransport()
 
@@ -437,7 +461,7 @@ async def test_ozon_stock_dispatch_uses_binding_pool_with_fake_transport(
             "warehouse_id": 900001,
             "offer_id": "offer-1",
             "product_id": 3001,
-            "stock": 2,
+            "stock": expected,
         }
     ]
 
@@ -1725,9 +1749,7 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
             actor_user_id=None,
         )
     assert incomplete.can_deliver is False
-    assert any(
-        check.code == "marking_not_allowed" and not check.ok for check in incomplete.checks
-    )
+    assert any(check.code == "marking_not_allowed" and not check.ok for check in incomplete.checks)
 
     markings[0].order_product_id = first_position_id
     first_details = dict(markings[0].meta_details_json or {})
@@ -1742,9 +1764,7 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
             actor_user_id=None,
         )
     assert blocked.can_deliver is False
-    assert any(
-        check.code == "marking_not_allowed" and not check.ok for check in blocked.checks
-    )
+    assert any(check.code == "marking_not_allowed" and not check.ok for check in blocked.checks)
     wb_token.assert_not_awaited()
     wb_delete.assert_not_awaited()
 

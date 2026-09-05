@@ -472,24 +472,41 @@ async def _available_product_availability_in_warehouse(
         product_id,
         exclude_request_id=exclude_request_id,
     )
-    from app.services.fbs_stock_availability_service import fbs_reserved_qty_for_product
+    from app.services.fbs_stock_availability_service import (
+        fbs_allocated_available_by_product,
+        fbs_reserved_qty_for_product,
+    )
 
     reserved_fbs = await fbs_reserved_qty_for_product(session, tenant_id, warehouse_id, product_id)
+    allocated_fbs = (
+        await fbs_allocated_available_by_product(session, tenant_id, warehouse_id, [product_id])
+    ).get(product_id, 0)
     directions = await stock_direction_service.direction_totals_by_product(
         session, tenant_id, [product_id]
     )
     direction_total = directions.get(product_id)
     if direction_total is not None and direction_total.has_any:
+        product = await session.get(Product, product_id)
+        unit_reserve = reserved_fbs if product is not None and product.fbs_units_mode else 0
         return MarketplaceUnloadAvailability(
             available=on_hand
             + sorting_on_hand
             - direction_total.total
             - reserved_outbound
-            - reserved_mp,
+            - reserved_mp
+            - unit_reserve
+            - allocated_fbs,
             uses_free_fbo_pool=True,
         )
     return MarketplaceUnloadAvailability(
-        available=on_hand + sorting_on_hand - reserved_outbound - reserved_mp - reserved_fbs,
+        available=(
+            on_hand
+            + sorting_on_hand
+            - reserved_outbound
+            - reserved_mp
+            - reserved_fbs
+            - allocated_fbs
+        ),
         uses_free_fbo_pool=False,
     )
 
@@ -505,6 +522,7 @@ async def _assert_available_for_unload_quantity(
     product_name: str | None = None,
     sku_code: str | None = None,
 ) -> None:
+    await inventory_service.lock_stock_product(session, tenant_id, product_id)
     availability = await _available_product_availability_in_warehouse(
         session,
         tenant_id,
@@ -594,9 +612,24 @@ async def list_available_products(
         product_ids,
         exclude_request_id=exclude_request_id,
     )
-    from app.services.fbs_stock_availability_service import fbs_reserved_by_product
+    from app.services.fbs_stock_availability_service import (
+        fbs_allocated_available_by_product,
+        fbs_reserved_by_product,
+    )
 
     fbs_reserved = await fbs_reserved_by_product(session, tenant_id, warehouse_id, product_ids)
+    allocated_fbs = await fbs_allocated_available_by_product(
+        session, tenant_id, warehouse_id, product_ids
+    )
+    units_products = set(
+        (
+            await session.scalars(
+                select(Product.id).where(
+                    Product.id.in_(product_ids), Product.fbs_units_mode.is_(True)
+                )
+            )
+        ).all()
+    )
     direction_totals = await stock_direction_service.direction_totals_by_product(
         session, tenant_id, product_ids
     )
@@ -610,12 +643,14 @@ async def list_available_products(
                 quantity_total
                 - (
                     direction_totals[product_id].total
+                    + (int(fbs_reserved.get(product_id, 0)) if product_id in units_products else 0)
                     if direction_totals.get(product_id) is not None
                     and direction_totals[product_id].has_any
                     else int(fbs_reserved.get(product_id, 0))
                 )
                 - outbound_reserved.get(product_id, 0)
-                - mp_reserved.get(product_id, 0),
+                - mp_reserved.get(product_id, 0)
+                - allocated_fbs.get(product_id, 0),
             ),
         )
         for product_id, sku_code, product_name, quantity_total in stock_rows
@@ -1078,7 +1113,8 @@ async def complete_unload(
             performer_id=performer_id,
             lines=product_billing_lines(
                 (product_id, Decimal(quantity), {"marketplace_unload_request_id": str(req.id)})
-                for product_id, quantity in distributed.items() if quantity
+                for product_id, quantity in distributed.items()
+                if quantity
             ),
         )
     except BillingLedgerError:
