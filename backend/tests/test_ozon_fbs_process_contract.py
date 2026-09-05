@@ -18,11 +18,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import SessionLocal, engine
-from app.models import Base
 from app.models.fbs_order import (
     MAPPING_STATUS_MAPPED,
     RESERVE_STATUS_RESERVED,
@@ -42,18 +39,10 @@ from app.models.warehouse import Warehouse
 from app.schemas.ozon_fbs_api import OzonV1GetRestrictionsResponse
 from app.services import ozon_fbs_process_service as process_svc
 from app.services.marketplace_provider import FakeMarketplaceTransport, OzonMarketplaceProvider
+from tests.test_ozon_box_assembly import seed_boxes
 
 SKU = 5680762790
 POSTING_NUMBER = "0195832-0021-1"
-
-
-@pytest_asyncio.fixture()
-async def db_session() -> AsyncSession:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
-    async with SessionLocal() as session:
-        yield session
 
 
 async def _seed_order(db_session: AsyncSession) -> tuple[FbsOrder, FbsOrderProduct]:
@@ -179,9 +168,7 @@ async def test_exemplar_set_carries_every_code_of_the_posting_not_only_the_last(
     assert products[0]["product_id"] == SKU
     exemplar_ids = sorted(item["exemplar_id"] for item in products[0]["exemplars"])
     assert exemplar_ids == [81, 82, 83]
-    marks = sorted(
-        mark["mark"] for item in products[0]["exemplars"] for mark in item["marks"]
-    )
+    marks = sorted(mark["mark"] for item in products[0]["exemplars"] for mark in item["marks"])
     assert marks == [
         "0104601234567890211111",
         "0104601234567890212222",
@@ -275,9 +262,7 @@ def test_restrictions_of_a_real_drop_off_point_are_limits_not_violations() -> No
             }
         }
     )
-    assert (
-        process_svc._restriction_violations(response, weight_grams=300.0, price_rub=2500.0) == []
-    )
+    assert process_svc._restriction_violations(response, weight_grams=300.0, price_rub=2500.0) == []
 
 
 def test_restrictions_still_stop_a_posting_that_really_exceeds_them() -> None:
@@ -314,6 +299,7 @@ async def test_handoff_asks_for_the_shipping_list_by_the_live_path(
     db_session: AsyncSession,
 ) -> None:
     order, _ = await _seed_order(db_session)
+    order.meta_details_json = {"ozon_assembly": {"posting_numbers": [POSTING_NUMBER]}}
     supply = FbsSupply(
         tenant_id=order.tenant_id,
         seller_id=order.seller_id,
@@ -325,6 +311,9 @@ async def test_handoff_asks_for_the_shipping_list_by_the_live_path(
         delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
     )
     db_session.add(supply)
+    await db_session.flush()
+    order.supply_id = supply.id
+    await seed_boxes(db_session, order, supply)
     await db_session.commit()
 
     png = (
@@ -360,6 +349,7 @@ async def test_handoff_asks_for_the_shipping_list_by_the_live_path(
         }
     )
 
+    order.meta_details_json = {"ozon_assembly": {"posting_numbers": [POSTING_NUMBER]}}
     result = await process_svc.handoff_supply(
         db_session,
         supply=supply,
@@ -372,5 +362,7 @@ async def test_handoff_asks_for_the_shipping_list_by_the_live_path(
     called = [path for path, _ in transport.endpoint_calls]
     assert "/v2/posting/fbs/act/get-pdf" in called
     assert "/v2/posting/fbs/digital/act/get-pdf" not in called
+    assert "/v4/posting/fbs/ship" not in called
+    assert "/v1/carriage/set-postings" not in called
     assert result.shipping_list_bytes is not None
     assert result.carriage_id == 901

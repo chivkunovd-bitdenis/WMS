@@ -279,6 +279,7 @@ async def resolve_fbs_shipment_sources(
     tenant_id: uuid.UUID,
     supply_warehouse_id: uuid.UUID,
     requests: Sequence[FbsShipmentSourceRequest],
+    initial_consumption: dict[_ConsumptionKey, int] | None = None,
 ) -> FbsShipmentSourcePlan:
     """Resolve sources without changing inventory balances or reserving locations."""
 
@@ -296,7 +297,7 @@ async def resolve_fbs_shipment_sources(
         supply_warehouse_id,
     )
     sorting_location: StorageLocation | None = None
-    consumption: dict[_ConsumptionKey, int] = {}
+    consumption: dict[_ConsumptionKey, int] = dict(initial_consumption or {})
     resolutions: list[FbsShipmentSourceResolution] = []
 
     for item in normalized:
@@ -408,6 +409,7 @@ async def plan_fbs_shipment_sources(
     tenant_id: uuid.UUID,
     supply_warehouse_id: uuid.UUID,
     requests: Sequence[FbsShipmentSourceRequest],
+    initial_consumption: dict[_ConsumptionKey, int] | None = None,
 ) -> FbsShipmentSourcePlan:
     """Public planning alias kept separate from the later write-off integration."""
 
@@ -416,6 +418,7 @@ async def plan_fbs_shipment_sources(
         tenant_id=tenant_id,
         supply_warehouse_id=supply_warehouse_id,
         requests=requests,
+        initial_consumption=initial_consumption,
     )
 
 

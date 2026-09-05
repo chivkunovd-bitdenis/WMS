@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
-import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import SessionLocal, engine
-from app.models import Base
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_PACKED,
@@ -28,17 +24,6 @@ from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
 from app.services import fbs_supply_composition_service as composition_service
-
-
-@pytest_asyncio.fixture
-async def db_session() -> AsyncIterator[AsyncSession]:
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
-        await connection.run_sync(Base.metadata.create_all)
-    async with SessionLocal() as session:
-        yield session
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
 
 
 def _order(

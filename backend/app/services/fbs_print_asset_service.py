@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import base64
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+import fitz
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -125,6 +127,41 @@ def ozon_label_error_message(code: str, upstream: str) -> str:
     return f"{base} {upstream}".strip() if upstream else base
 
 
+def combine_ozon_order_labels(
+    external_id: str,
+    posting_numbers: list[str],
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Keep all split posting labels in the existing single order PDF asset."""
+    by_number = {str(row.get("posting_number")): row for row in rows}
+    selected: list[dict[str, Any]] = []
+    for number in posting_numbers:
+        row = by_number.get(number)
+        if row is None:
+            return {"posting_number": external_id, "error_code": "ozon_label_empty"}
+        if row.get("error_code"):
+            return {**row, "posting_number": external_id}
+        selected.append(row)
+    if len(selected) == 1:
+        return {**selected[0], "posting_number": external_id}
+    try:
+        with fitz.open() as combined:
+            for row in selected:
+                payload = decode_png_payload(row.get("file"))
+                if payload is None or row.get("content_type") != PDF_CONTENT_TYPE:
+                    raise ValueError("missing PDF label")
+                with fitz.open(stream=payload, filetype="pdf") as document:
+                    combined.insert_pdf(document)
+            content = combined.tobytes()
+    except (ValueError, RuntimeError):
+        return {"posting_number": external_id, "error_code": "ozon_label_invalid_pdf"}
+    return {
+        "posting_number": external_id,
+        "file": base64.b64encode(content).decode("ascii"),
+        "content_type": PDF_CONTENT_TYPE,
+    }
+
+
 def ozon_order_label_fetcher(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -155,11 +192,37 @@ def ozon_order_label_fetcher(
             )
         except MarketplaceAccountError as exc:
             raise MarketplaceProviderError("ozon", None, {}, code=exc.code) from exc
-        return await build_ozon_provider().fetch_order_labels(
-            client_id=client_id,
-            api_key=api_key,
-            posting_numbers=external_order_ids,
+        orders = list(
+            (
+                await session.scalars(
+                    select(FbsOrder).where(
+                        FbsOrder.tenant_id == tenant_id,
+                        FbsOrder.seller_id == seller_id,
+                        FbsOrder.marketplace == "ozon",
+                        FbsOrder.external_order_id.in_(external_order_ids),
+                    )
+                )
+            ).all()
         )
+        by_external_id = {order.external_order_id: order for order in orders}
+        provider = build_ozon_provider()
+        output: list[dict[str, Any]] = []
+        for external_id in external_order_ids:
+            order = by_external_id.get(external_id)
+            assembly = (order.meta_details_json or {}).get("ozon_assembly") if order else None
+            numbers = assembly.get("posting_numbers") if isinstance(assembly, dict) else None
+            posting_numbers = (
+                [number for number in numbers if isinstance(number, str) and number]
+                if isinstance(numbers, list)
+                else []
+            ) or [external_id]
+            rows = await provider.fetch_order_labels(
+                client_id=client_id,
+                api_key=api_key,
+                posting_numbers=posting_numbers,
+            )
+            output.append(combine_ozon_order_labels(external_id, posting_numbers, rows))
+        return output
 
     return fetch
 
@@ -224,8 +287,10 @@ def map_print_asset(asset: FbsPrintAsset) -> dict[str, Any]:
     # 1756 PNG, а карточки остались готовыми — экран обещал печать, а запрос за
     # картинкой отвечал 404. Считаем готовым только то, что реально лежит на диске.
     file_ready = _asset_file_present(asset)
-    status = asset.status if file_ready or asset.status != PRINT_ASSET_STATUS_READY else (
-        PRINT_ASSET_STATUS_ERROR
+    status = (
+        asset.status
+        if file_ready or asset.status != PRINT_ASSET_STATUS_READY
+        else (PRINT_ASSET_STATUS_ERROR)
     )
     url = print_asset_content_url(asset.id) if file_ready else None
     error_code = asset.error_code or (None if file_ready else "file_missing")
@@ -243,11 +308,7 @@ def map_print_asset(asset: FbsPrintAsset) -> dict[str, Any]:
         "download_url": url,
         "checksum": asset.checksum,
         "applied_at": asset.applied_at.isoformat() if asset.applied_at else None,
-        "error": (
-            {"code": error_code, "message": error_message}
-            if error_code
-            else None
-        ),
+        "error": ({"code": error_code, "message": error_message} if error_code else None),
     }
 
 

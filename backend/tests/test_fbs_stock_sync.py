@@ -12,18 +12,15 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
-from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
-import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import SessionLocal, engine
-from app.models import Base
+from app.db.session import SessionLocal
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_stock_sync_item import (
     STOCK_SYNC_STATUS_CONFIRMED,
@@ -54,20 +51,6 @@ from app.services.fbs_stock_sync_service import (
 from app.services.integration_fernet import encrypt_secret
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 from app.services.wildberries_client import MarketplaceStockAmount
-
-
-@pytest_asyncio.fixture
-async def db_session() -> AsyncIterator[AsyncSession]:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    async with SessionLocal() as session:
-        yield session
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
 
 
 @dataclass
@@ -776,11 +759,7 @@ async def test_sync_publishes_rule_amounts_per_binding(
     assert [[entry.amount for entry in batch] for batch in transport.put_calls] == [[12], [8]]
 
     rows = list(
-        (
-            await db_session.execute(
-                select(FbsStockSyncItem).where(FbsStockSyncItem.chrt_id == 1211)
-            )
-        )
+        (await db_session.execute(select(FbsStockSyncItem).where(FbsStockSyncItem.chrt_id == 1211)))
         .scalars()
         .all()
     )

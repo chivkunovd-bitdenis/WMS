@@ -19,8 +19,6 @@ from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.schemas.ozon_fbs_api import (
     OzonCarriageCarriageGetRequest,
     OzonCarriageCarriageGetResponse,
-    OzonFbsv4FbsPostingShipV4Request,
-    OzonFbsv4FbsPostingShipV4Response,
     OzonPostingBooleanResponse,
     OzonPostingCancelFbsPostingRequest,
     OzonPostingCancelReasonRequest,
@@ -32,8 +30,6 @@ from app.schemas.ozon_fbs_api import (
     OzonV1CarriageCreateResponse,
     OzonV1GetRestrictionsRequest,
     OzonV1GetRestrictionsResponse,
-    OzonV1SetPostingsRequest,
-    OzonV1SetPostingsResponse,
     OzonV2FbsPostingProductCountryListRequest,
     OzonV2FbsPostingProductCountryListResponse,
     OzonV2FbsPostingProductCountrySetRequest,
@@ -95,10 +91,8 @@ SHIPPING_LIST_PATH = "/v2/posting/fbs/act/get-pdf"
 # и там выбрасывался. Ездили за документом, роняли из-за него операцию и
 # выкидывали результат.
 #
-# Теперь этикетка живёт там, где ей место, — в конвейере печатных активов
-# (`fbs_print_asset_service`), по одной на заказ, по кнопке оператора и уже
-# после передачи, когда отправление в статусе `awaiting_deliver` и этикетка у
-# Ozon вообще существует.
+# Этикетки получает конвейер печатных активов после сборки кнопкой QR.
+# Один PDF заказа содержит этикетки всех отправлений, полученных из его коробов.
 
 
 @dataclass(frozen=True)
@@ -158,9 +152,7 @@ class OzonHandoffProgress:
             return cls()
         carriage_id = raw.get("carriage_id")
         return cls(
-            shipped_postings=[
-                value for value in _str_list(raw.get("shipped_postings")) if value
-            ],
+            shipped_postings=[value for value in _str_list(raw.get("shipped_postings")) if value],
             posting_numbers=[value for value in _str_list(raw.get("posting_numbers")) if value],
             carriage_id=(
                 int(carriage_id)
@@ -396,9 +388,7 @@ async def _full_exemplar_products(
 
     products: dict[int, list[dict[str, object]]] = {}
     for (product_id, exemplar_id), marks in grouped.items():
-        products.setdefault(product_id, []).append(
-            {"exemplar_id": exemplar_id, "marks": marks}
-        )
+        products.setdefault(product_id, []).append({"exemplar_id": exemplar_id, "marks": marks})
     return [
         {
             "product_id": product_id,
@@ -778,11 +768,7 @@ def _required_country_skus(response: OzonV3GetFbsPostingResponseV3) -> set[str]:
 async def _posting_weight_grams(session: AsyncSession, order: FbsOrder) -> float | None:
     """Вес отправления по позициям: у Ozon вес лежит в товаре отправления."""
     positions = list(
-        (
-            await session.execute(
-                select(FbsOrderProduct).where(FbsOrderProduct.order_id == order.id)
-            )
-        )
+        (await session.execute(select(FbsOrderProduct).where(FbsOrderProduct.order_id == order.id)))
         .scalars()
         .all()
     )
@@ -927,6 +913,56 @@ async def _set_required_countries(
         )
 
 
+async def prepare_order_assembly(
+    session: AsyncSession,
+    order: FbsOrder,
+    provider: OzonMarketplaceProvider,
+    *,
+    client_id: str,
+    api_key: str,
+    posting: OzonV3GetFbsPostingResponseV3,
+) -> None:
+    """Проверить обязательные требования Ozon перед кнопкой сборки."""
+    posting_number = order.external_order_id or ""
+    restrictions = await _call(
+        provider,
+        client_id=client_id,
+        api_key=api_key,
+        path="/v1/posting/fbs/restrictions",
+        request=OzonV1GetRestrictionsRequest(posting_number=posting_number),
+        response_type=OzonV1GetRestrictionsResponse,
+        read=True,
+    )
+    if restrictions.result is None:
+        raise OzonFbsProcessError(
+            "ozon_restrictions_missing",
+            "Ozon не вернул ограничения отправления; сборка остановлена.",
+            status_code=409,
+        )
+    violations = _restriction_violations(
+        restrictions,
+        weight_grams=await _posting_weight_grams(session, order),
+        price_rub=(order.price / 100) if order.price is not None else None,
+    )
+    if violations:
+        raise OzonFbsProcessError(
+            "ozon_posting_restricted",
+            "Отправление Ozon не проходит ограничения пункта приёма ("
+            + ", ".join(violations)
+            + "); проверьте состав в кабинете Ozon до сборки.",
+            status_code=409,
+        )
+    await _set_required_countries(
+        session,
+        order,
+        provider,
+        client_id=client_id,
+        api_key=api_key,
+        posting_number=posting_number,
+        posting=posting,
+    )
+
+
 async def handoff_supply(
     session: AsyncSession,
     *,
@@ -946,110 +982,60 @@ async def handoff_supply(
     боевой путь (`fbs_shipment_service._deliver_ozon_supply`) передаёт оба, и
     без них повтор после обрыва отправил бы уже собранное отправление заново.
     """
+    # Imported at the operation boundary: assembly itself uses the API helpers above.
+    from app.services.ozon_box_assembly_service import order_packages
+
     state = progress if progress is not None else OzonHandoffProgress()
 
     async def _save() -> None:
         if checkpoint is not None:
             await checkpoint(state)
 
+    # Validate every order before any external call. A partial /ship response must
+    # never turn into a whole-order write-off through the handoff button.
+    confirmed_numbers: list[list[str]] = []
     for order in orders:
         posting_number = order.external_order_id or ""
-        if not posting_number:
-            raise OzonFbsProcessError("ozon_posting_number_missing", "Нет номера отправления Ozon.")
-        if posting_number in state.shipped_postings:
-            # Отправление собрано в прошлой попытке. Второй `/ship` по нему —
-            # это повторная мутация в кабинете, поэтому только перечитываем
-            # карточку, чтобы локальные поля отражали настоящее состояние.
+        assembly = (order.meta_details_json or {}).get("ozon_assembly")
+        numbers = _str_list(assembly.get("posting_numbers")) if isinstance(assembly, dict) else []
+        if not numbers and posting_number not in state.shipped_postings:
+            raise OzonFbsProcessError(
+                "ozon_order_not_assembled",
+                "Сначала нажмите QR на коробе заказа: Ozon должен подтвердить сборку.",
+                status_code=409,
+            )
+        if isinstance(assembly, dict):
+            packages = await order_packages(session, order)
+            if (
+                len(numbers) != len(packages)
+                or len(set(numbers)) != len(numbers)
+                or any(not number for number in numbers)
+            ):
+                raise OzonFbsProcessError(
+                    "ozon_assembly_unconfirmed",
+                    "Ozon не подтвердил все упаковки заказа. Повторите QR для проверки сборки.",
+                    status_code=409,
+                )
+        confirmed_numbers.append(numbers or [posting_number])
+    for order, numbers in zip(orders, confirmed_numbers, strict=True):
+        posting_number = order.external_order_id or ""
+        for number in numbers:
             _apply_posting_readback(
                 order,
                 await _posting_readback(
                     provider,
                     client_id=client_id,
                     api_key=api_key,
-                    posting_number=posting_number,
+                    posting_number=number,
                 ),
                 require_shipped=False,
             )
-            continue
-        posting = await _posting_readback(
-            provider,
-            client_id=client_id,
-            api_key=api_key,
-            posting_number=posting_number,
-        )
-        restrictions = await _call(
-            provider,
-            client_id=client_id,
-            api_key=api_key,
-            path="/v1/posting/fbs/restrictions",
-            request=OzonV1GetRestrictionsRequest(posting_number=posting_number),
-            response_type=OzonV1GetRestrictionsResponse,
-            read=True,
-        )
-        if restrictions.result is None:
-            raise OzonFbsProcessError(
-                "ozon_restrictions_missing",
-                "Ozon не вернул ограничения отправления; сборка остановлена.",
-                status_code=409,
-            )
-        violations = _restriction_violations(
-            restrictions,
-            weight_grams=await _posting_weight_grams(session, order),
-            price_rub=(order.price / 100) if order.price is not None else None,
-        )
-        if violations:
-            raise OzonFbsProcessError(
-                "ozon_posting_restricted",
-                "Отправление Ozon не проходит ограничения пункта приёма ("
-                + ", ".join(violations)
-                + "); проверьте состав в кабинете Ozon до сборки.",
-                status_code=409,
-            )
-        await _set_required_countries(
-            session,
-            order,
-            provider,
-            client_id=client_id,
-            api_key=api_key,
-            posting_number=posting_number,
-            posting=posting,
-        )
-        products = await _ship_products(session, order)
-        await _call(
-            provider,
-            client_id=client_id,
-            api_key=api_key,
-            path="/v4/posting/fbs/ship",
-            request=OzonFbsv4FbsPostingShipV4Request.model_validate(
-                {
-                    "posting_number": posting_number,
-                    "packages": [{"products": products}],
-                    "with": {"additional_data": True},
-                }
-            ),
-            response_type=OzonFbsv4FbsPostingShipV4Response,
-            read=False,
-        )
-        # Точка невозврата: отправление в кабинете уже собрано. Снимок
-        # сохраняется до перечитывания карточки, потому что перечитывание
-        # умеет падать (`ship_failed`, обрыв связи), а факт сборки от этого
-        # никуда не денется.
-        state.shipped_postings.append(posting_number)
-        if posting_number not in state.posting_numbers:
-            state.posting_numbers.append(posting_number)
-        await _save()
-        readback = await _posting_readback(
-            provider,
-            client_id=client_id,
-            api_key=api_key,
-            posting_number=posting_number,
-        )
-        _apply_posting_readback(order, readback)
-        related = readback.result.related_postings if readback.result is not None else None
-        for number in (related.related_posting_numbers or []) if related is not None else []:
-            if number and number not in state.posting_numbers:
+        if posting_number not in state.shipped_postings:
+            state.shipped_postings.append(posting_number)
+        for number in numbers:
+            if number not in state.posting_numbers:
                 state.posting_numbers.append(number)
-        await _save()
+    await _save()
     posting_numbers = list(dict.fromkeys(state.posting_numbers))
 
     if state.used_fallback:
@@ -1152,34 +1138,6 @@ async def _finish_carriage_handoff(
     if carriage_id is None:
         raise OzonFbsProcessError("ozon_carriage_missing", "Ozon не создал отгрузку.")
     get_request = OzonCarriageCarriageGetRequest(carriage_id=carriage_id)
-    if not state.carriage_postings_set:
-        await _call(
-            provider,
-            client_id=client_id,
-            api_key=api_key,
-            path="/v1/carriage/get",
-            request=get_request,
-            response_type=OzonCarriageCarriageGetResponse,
-            read=True,
-        )
-        set_result = await _call(
-            provider,
-            client_id=client_id,
-            api_key=api_key,
-            path="/v1/carriage/set-postings",
-            request=OzonV1SetPostingsRequest(
-                carriage_id=carriage_id,
-                posting_numbers=posting_numbers,
-            ),
-            response_type=OzonV1SetPostingsResponse,
-            read=False,
-        )
-        if any(not row.result for row in set_result.result):
-            raise OzonFbsProcessError(
-                "ozon_carriage_postings_failed", "Ozon не добавил все отправления в отгрузку."
-            )
-        state.carriage_postings_set = True
-        await save()
     if not state.carriage_approved:
         await _call(
             provider,

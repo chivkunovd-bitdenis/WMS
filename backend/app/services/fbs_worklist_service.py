@@ -398,14 +398,8 @@ async def _load_worklist_context(
     products = await _load_products(session, tenant_id, product_ids)
     cards = await _load_imported_cards(session, tenant_id, seller_nm_pairs)
     availability = await _load_availability_by_warehouse_product(session, tenant_id, orders)
-    address_enabled = await tenant_settings_svc.is_address_storage_enabled(
-        session, tenant_id
-    )
-    locations = (
-        await _load_location_balances(session, tenant_id, orders)
-        if address_enabled
-        else {}
-    )
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(session, tenant_id)
+    locations = await _load_location_balances(session, tenant_id, orders) if address_enabled else {}
     markings = await _load_markings(session, order_ids)
     picks = await _load_active_picks(session, tenant_id, order_ids)
     sticker_assets = await _load_sticker_assets(session, tenant_id, order_ids)
@@ -796,11 +790,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     sticker_url = print_asset_content_url(sticker_asset.id) if sticker_asset is not None else None
     applied_at = order.sticker_applied_at or (sticker_asset.applied_at if sticker_asset else None)
     pick_location = None
-    if (
-        ctx["address_storage_enabled"]
-        and pick_row
-        and pick_row.source_storage_location is not None
-    ):
+    if ctx["address_storage_enabled"] and pick_row and pick_row.source_storage_location is not None:
         pick_location = pick_row.source_storage_location.code
     picked_at = order.picked_at or (pick_row.picked_at if pick_row else None)
     return {
@@ -854,6 +844,8 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         },
         "positions": [
             {
+                "id": str(position.id),
+                "image_url": ctx["ozon_photos"].get(position.product_id),
                 "product_id": str(position.product_id) if position.product_id else None,
                 "name": (
                     ctx["products"][position.product_id].name

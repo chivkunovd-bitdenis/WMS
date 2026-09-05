@@ -224,6 +224,8 @@ export type FbsWorklistOrder = {
     has_packaging_instructions?: boolean
   }
   positions: Array<{
+    id?: string | null
+    image_url?: string | null
     product_id: string | null
     name: string
     seller_article: string | null
@@ -412,6 +414,8 @@ export type FbsPackingBox = {
   box_number: number
   barcode: string
   assigned_order_ids: string[]
+  assigned_order_product_ids?: string[]
+  ozon_assembled?: boolean
   trbx_id: string | null
   wb_trbx_id: string | null
   qr_asset: FbsPrintAsset | null
@@ -796,10 +800,11 @@ export async function assignFbsPackingBoxOrders(
   supplyId: string,
   boxId: string,
   order_ids: string[],
+  order_product_ids?: string[],
 ): Promise<FbsWorkspace> {
   return jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes/${boxId}/orders`), {
-      method: 'POST', headers: jsonHeaders(token, ah), body: JSON.stringify({ order_ids }),
+      method: 'POST', headers: jsonHeaders(token, ah), body: JSON.stringify({ order_ids, ...(order_product_ids ? { order_product_ids } : {}) }),
     }),
   )
 }
@@ -810,9 +815,11 @@ export async function removeFbsPackingBoxOrder(
   supplyId: string,
   boxId: string,
   orderId: string,
+  orderProductId?: string,
 ): Promise<FbsWorkspace> {
+  const query = orderProductId ? `?${new URLSearchParams({ order_product_id: orderProductId })}` : ''
   return jsonOrThrow<FbsWorkspace>(
-    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes/${boxId}/orders/${orderId}`), {
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes/${boxId}/orders/${orderId}${query}`), {
       method: 'DELETE', headers: { ...ah(token) },
     }),
   )

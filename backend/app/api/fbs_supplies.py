@@ -26,6 +26,7 @@ from app.services import fbs_picking_service as picking_svc
 from app.services import fbs_shipment_pvz_service as pvz_svc
 from app.services import fbs_shipment_service as shipment_svc
 from app.services import fbs_supply_service as supply_svc
+from app.services import ozon_box_assembly_service as ozon_assembly_svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.fbs_order_history_service import FbsOrderHistoryError, supply_history
 from app.services.fbs_print_asset_service import (
@@ -35,6 +36,9 @@ from app.services.fbs_print_asset_service import (
 )
 from app.services.fbs_tracking_service import FbsTrackingError, sync_supply_tracking
 from app.services.fbs_workspace_service import FbsWorkspaceError, get_supply_workspace
+from app.services.marketplace_account_service import MarketplaceAccountError
+from app.services.marketplace_provider import MarketplaceProviderError, provider_error_message
+from app.services.ozon_fbs_errors import OzonFbsProcessError
 
 router = APIRouter(prefix="/operations/fbs-supplies", tags=["operations"])
 
@@ -513,7 +517,8 @@ class FbsPackingBoxCreateBody(BaseModel):
 
 
 class FbsPackingBoxAssignOrdersBody(BaseModel):
-    order_ids: list[uuid.UUID] = Field(min_length=1, max_length=100)
+    order_ids: list[uuid.UUID] = Field(default_factory=list, max_length=100)
+    order_product_ids: list[uuid.UUID] = Field(default_factory=list, max_length=100)
 
 
 class FbsPackingBoxDeleteBody(BaseModel):
@@ -525,6 +530,8 @@ class FbsPackingBoxOut(BaseModel):
     box_number: int
     barcode: str
     assigned_order_ids: list[str]
+    assigned_order_product_ids: list[str] = Field(default_factory=list)
+    ozon_assembled: bool = False
     trbx_id: str | None
     wb_trbx_id: str | None
     qr_asset: FbsWorkspacePrintAssetOut | None
@@ -809,6 +816,8 @@ def _raise_from_packing_box_service(exc: packing_box_svc.FbsPackingBoxError) -> 
         "order_already_in_box",
         "boxes_already_distributed",
         "box_create_rejected_by_wb",
+        "ozon_box_multiple_orders",
+        "ozon_order_already_assembled",
     }:
         raise_fbs_http(
             status.HTTP_409_CONFLICT,
@@ -821,6 +830,9 @@ def _raise_from_packing_box_service(exc: packing_box_svc.FbsPackingBoxError) -> 
         "empty_order_set",
         "missing_idempotency_key",
         "box_without_distribution",
+        "ozon_box_distribution_required",
+        "ozon_order_positions_required",
+        "order_positions_not_supported",
     }:
         raise_fbs_http(status.HTTP_400_BAD_REQUEST, exc.code)
     if exc.code in {"supply_not_editable", "box_cargo_place_unresolved"}:
@@ -1209,9 +1221,7 @@ async def get_fbs_supply_pick_options(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[FbsPickOptionProductOut]:
     try:
-        options = await picking_svc.get_pick_options(
-            session, user.tenant_id, supply_id
-        )
+        options = await picking_svc.get_pick_options(session, user.tenant_id, supply_id)
     except picking_svc.FbsPickingError as exc:
         _raise_from_picking(exc)
     return [
@@ -1285,9 +1295,7 @@ async def scan_fbs_supply_pick(
     return FbsPickScanOut(
         kind=result.kind,
         storage_location_id=(
-            str(result.storage_location_id)
-            if result.storage_location_id is not None
-            else None
+            str(result.storage_location_id) if result.storage_location_id is not None else None
         ),
         location_code=result.location_code,
         product_id=str(result.product_id) if result.product_id is not None else None,
@@ -1296,9 +1304,7 @@ async def scan_fbs_supply_pick(
         picked_qty=result.picked_qty,
         allocation_quantity=result.allocation_quantity,
         container_kind=result.container_kind,
-        container_id=(
-            str(result.container_id) if result.container_id is not None else None
-        ),
+        container_id=(str(result.container_id) if result.container_id is not None else None),
         container_code=result.container_code,
     )
 
@@ -1330,17 +1336,13 @@ async def set_fbs_supply_pick_quantity(
     except picking_svc.FbsPickingError as exc:
         _raise_from_picking(exc)
     await session.commit()
-    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(
-        session, user.tenant_id
-    )
+    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(session, user.tenant_id)
     return FbsPickAllocationOut(
         id=str(result.id),
         product_id=str(body.product_id),
         sku_code=result.product.sku_code,
         product_name=result.product.name,
-        storage_location_id=(
-            str(result.storage_location_id) if reveal_storage else None
-        ),
+        storage_location_id=(str(result.storage_location_id) if reveal_storage else None),
         location_code=result.location_code if reveal_storage else None,
         quantity=result.quantity,
     )
@@ -1621,6 +1623,7 @@ async def assign_orders_to_fbs_packing_box(
             box_id,
             body.order_ids,
             actor_user_id=user.id,
+            order_product_ids=body.order_product_ids,
         )
     except packing_box_svc.FbsPackingBoxError as exc:
         _raise_from_packing_box_service(exc)
@@ -1639,9 +1642,17 @@ async def remove_order_from_fbs_packing_box(
     order_id: uuid.UUID,
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    order_product_id: uuid.UUID | None = None,
 ) -> FbsWorkspaceOut:
     try:
-        await packing_box_svc.remove_order(session, user.tenant_id, supply_id, box_id, order_id)
+        await packing_box_svc.remove_order(
+            session,
+            user.tenant_id,
+            supply_id,
+            box_id,
+            order_id,
+            order_product_id=order_product_id,
+        )
     except packing_box_svc.FbsPackingBoxError as exc:
         _raise_from_packing_box_service(exc)
     await session.commit()
@@ -1706,13 +1717,44 @@ async def retry_fbs_packing_box_qr(
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsWorkspaceOut:
+    supply = await session.scalar(
+        select(FbsSupply).where(
+            FbsSupply.id == supply_id,
+            FbsSupply.tenant_id == user.tenant_id,
+        )
+    )
     async with httpx.AsyncClient() as http_client:
         try:
-            await packing_box_svc.retry_box_qr(
-                session, user.tenant_id, supply_id, box_id, http_client
-            )
+            if supply is not None and supply.marketplace == "ozon":
+                order_id = await ozon_assembly_svc.assemble_box_order(
+                    session,
+                    user.tenant_id,
+                    supply_id,
+                    box_id,
+                )
+                await request_supply_print_batch(
+                    session,
+                    user.tenant_id,
+                    supply_id,
+                    kind="order_sticker",
+                    order_ids=[order_id],
+                    retry_missing=True,
+                    http_client=http_client,
+                )
+            else:
+                await packing_box_svc.retry_box_qr(
+                    session, user.tenant_id, supply_id, box_id, http_client
+                )
         except packing_box_svc.FbsPackingBoxError as exc:
             _raise_from_packing_box_service(exc)
+        except OzonFbsProcessError as exc:
+            raise_fbs_http(exc.status_code or 502, exc.code, message=exc.message)
+        except MarketplaceAccountError as exc:
+            raise_fbs_http(409, exc.code, message="Нет подключения к Ozon.")
+        except MarketplaceProviderError as exc:
+            raise_fbs_http(exc.status_code or 502, exc.code, message=provider_error_message(exc))
+        except FbsPrintAssetError as exc:
+            raise_fbs_http(409, exc.code, message=exc.message)
     await session.commit()
     return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
 

@@ -336,6 +336,8 @@ class FbsWorklistBlockerOut(BaseModel):
 
 
 class FbsWorklistPositionOut(BaseModel):
+    id: str
+    image_url: str | None = None
     product_id: str | None
     name: str
     seller_article: str | None

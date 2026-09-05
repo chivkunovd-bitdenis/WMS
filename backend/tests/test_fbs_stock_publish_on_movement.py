@@ -262,3 +262,41 @@ def test_picking_service_allows_sorting_zone() -> None:
         "в подборе снова появился запрет на зону сортировки — "
         "он противоречит формуле доступного"
     )
+
+
+def test_drain_removes_finished_task_even_when_its_done_callback_has_not_run() -> None:
+    """A real subprocess deadline also stops a busy loop that never yields asyncio."""
+    import subprocess
+    import sys
+    import textwrap
+    from pathlib import Path
+
+    script = textwrap.dedent("""
+        import asyncio
+        from app.services import fbs_stock_publish_service as service
+
+        async def finished():
+            return None
+
+        async def check():
+            task = asyncio.create_task(finished())
+            await task
+            assert task.done()
+            service._BACKGROUND_TASKS.add(task)
+            await service.drain_background_stock_publish_tasks()
+            assert not service._BACKGROUND_TASKS
+
+        asyncio.run(check())
+    """)
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        pytest.fail("Stock-publish drain spins forever with a finished task still in its set")
+    assert result.returncode == 0, result.stderr

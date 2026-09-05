@@ -17,8 +17,8 @@ export function mixedMarketplaceSelectionMessage(marketplaces: FbsMarketplace[])
     : null
 }
 
-export function fbsBoxOperationsDisabled(marketplace: FbsMarketplace): boolean {
-  return marketplace === 'ozon'
+export function fbsBoxOperationsDisabled(_marketplace: FbsMarketplace): boolean {
+  return false
 }
 
 export function fbsBoxEditingDisabled(
@@ -26,6 +26,13 @@ export function fbsBoxEditingDisabled(
   deliveryConfirmed: boolean,
 ): boolean {
   return fbsBoxOperationsDisabled(marketplace) || deliveryConfirmed
+}
+
+export function fbsUnassignedPositionQuantity(
+  positions: Array<{ id?: string | null; quantity: number }>,
+  assignedPositionIds: Set<string>,
+): number {
+  return positions.reduce((sum, position) => sum + (position.id && assignedPositionIds.has(position.id) ? 0 : position.quantity), 0)
 }
 
 export function fbsOrdersAvailableForBox<T extends { id: string }>(

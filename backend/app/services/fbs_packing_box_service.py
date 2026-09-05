@@ -14,7 +14,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.fbs_order import PACK_STATUS_PACKED, FbsOrder
+from app.models.fbs_order import PACK_STATUS_PACKED, FbsOrder, FbsOrderProduct
 from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_DONE,
@@ -65,12 +65,12 @@ async def get_delivery_box_readiness(
     )
     supply = await _get_supply(session, tenant_id, supply_id)
     without_distribution = await _supply_without_distribution(session, supply)
-    # Для WB принадлежность коробу считается по составу поставки, без чтения
-    # pack_status: упаковка — только факт в БД. Ozon сохраняет свой контракт.
+    # Раскладка доступна до сборки: WB требует целый заказ,
+    # Ozon — все неделимые позиции заказа.
     assignment_required_order_ids = {
         order.id
         for order in orders
-        if supply.marketplace == "wb" or order.pack_status == PACK_STATUS_PACKED
+        if supply.marketplace in {"wb", "ozon"} or order.pack_status == PACK_STATUS_PACKED
     }
     if not assignment_required_order_ids or without_distribution:
         return DeliveryBoxReadiness(bool(boxes), without_distribution, frozenset())
@@ -87,12 +87,40 @@ async def get_delivery_box_readiness(
             )
         ).all()
     )
+    if supply.marketplace == "ozon":
+        assigned_positions = set(
+            (
+                await session.scalars(
+                    select(FbsPackingBoxItem.order_product_id)
+                    .join(FbsPackingBox, FbsPackingBox.id == FbsPackingBoxItem.box_id)
+                    .where(
+                        FbsPackingBoxItem.tenant_id == tenant_id,
+                        FbsPackingBox.supply_id == supply_id,
+                    )
+                )
+            ).all()
+        )
+        positions = list(
+            (
+                await session.scalars(
+                    select(FbsOrderProduct).where(
+                        FbsOrderProduct.order_id.in_(assignment_required_order_ids)
+                    )
+                )
+            ).all()
+        )
+        positions_by_order: dict[uuid.UUID, set[uuid.UUID]] = {}
+        for position in positions:
+            positions_by_order.setdefault(position.order_id, set()).add(position.id)
+        assigned_order_ids = {
+            order_id
+            for order_id, position_ids in positions_by_order.items()
+            if position_ids <= assigned_positions
+        }
     return DeliveryBoxReadiness(
         has_physical_boxes=bool(boxes),
         without_distribution=without_distribution,
-        unassigned_packed_order_ids=frozenset(
-            assignment_required_order_ids - assigned_order_ids
-        ),
+        unassigned_packed_order_ids=frozenset(assignment_required_order_ids - assigned_order_ids),
     )
 
 
@@ -111,8 +139,8 @@ async def create_boxes(
         raise FbsPackingBoxError("missing_idempotency_key")
     supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
     _assert_supply_mutable(supply)
-    if supply.marketplace == "ozon":
-        raise FbsPackingBoxError("ozon_boxes_managed_automatically")
+    if supply.marketplace == "ozon" and without_distribution:
+        raise FbsPackingBoxError("ozon_box_distribution_required")
     # The mode now belongs to the supply.  Keep the complete API idempotency
     # key on every newly created box; a client key is never a mode marker.
     stored_key = idempotency_key.strip()
@@ -123,9 +151,7 @@ async def create_boxes(
         supply.seller_id,
         stored_key,
     )
-    wb_operation_key = await _cargo_operation_key_for_retry(
-        session, supply.seller_id, stored_key
-    )
+    wb_operation_key = await _cargo_operation_key_for_retry(session, supply.seller_id, stored_key)
     created_box_ids: list[uuid.UUID] = []
     created_warehouse_box_ids: list[uuid.UUID] = []
     enabled_without_distribution_now = False
@@ -175,6 +201,9 @@ async def create_boxes(
         await session.flush()
         created_box_ids = [box.id for box in boxes]
         created_warehouse_box_ids = [box.warehouse_box_id for box in boxes]
+
+    if supply.marketplace == "ozon":
+        return await _load_boxes(session, tenant_id, supply_id)
 
     # A cargo place is registered with WB for every box, regardless of
     # delivery_type (see module docstring).
@@ -252,10 +281,8 @@ async def set_boxes_without_distribution(
     """Change the supply mode while no order is assigned to its boxes."""
     supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
     _assert_supply_mutable(supply)
-    if supply.marketplace == "ozon":
-        if enabled and supply.boxes_without_distribution_at is not None:
-            return True
-        raise FbsPackingBoxError("ozon_boxes_managed_automatically")
+    if supply.marketplace == "ozon" and enabled:
+        raise FbsPackingBoxError("ozon_box_distribution_required")
 
     assigned_count = await session.scalar(
         select(func.count(FbsPackingBoxItem.id))
@@ -290,12 +317,22 @@ async def assign_orders(
     order_ids: list[uuid.UUID],
     *,
     actor_user_id: uuid.UUID | None,
+    order_product_ids: list[uuid.UUID] | None = None,
 ) -> None:
     supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
     _assert_supply_mutable(supply)
     box = await _get_box(session, tenant_id, supply_id, box_id)
     if await _supply_without_distribution(session, supply):
         raise FbsPackingBoxError("box_without_distribution")
+    if supply.marketplace == "ozon":
+        if order_ids:
+            raise FbsPackingBoxError("ozon_order_positions_required")
+        await _assign_ozon_positions(
+            session, tenant_id, supply_id, box, order_product_ids or [], actor_user_id
+        )
+        return
+    if order_product_ids:
+        raise FbsPackingBoxError("order_positions_not_supported")
     if not order_ids:
         raise FbsPackingBoxError("empty_order_set")
     unique_ids = list(dict.fromkeys(order_ids))
@@ -334,25 +371,106 @@ async def assign_orders(
             )
 
 
+async def _assert_ozon_orders_mutable(
+    session: AsyncSession, tenant_id: uuid.UUID, order_ids: list[uuid.UUID]
+) -> None:
+    orders = list(
+        (
+            await session.scalars(
+                select(FbsOrder).where(FbsOrder.tenant_id == tenant_id, FbsOrder.id.in_(order_ids))
+            )
+        ).all()
+    )
+    if any((order.meta_details_json or {}).get("ozon_assembly") for order in orders):
+        raise FbsPackingBoxError("ozon_order_already_assembled")
+
+
+async def _assign_ozon_positions(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    box: FbsPackingBox,
+    position_ids: list[uuid.UUID],
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    if not position_ids:
+        raise FbsPackingBoxError("empty_order_set")
+    unique_ids = set(position_ids)
+    positions = list(
+        (
+            await session.scalars(
+                select(FbsOrderProduct)
+                .join(FbsOrder, FbsOrder.id == FbsOrderProduct.order_id)
+                .where(
+                    FbsOrder.tenant_id == tenant_id,
+                    FbsOrder.supply_id == supply_id,
+                    FbsOrderProduct.id.in_(unique_ids),
+                )
+            )
+        ).all()
+    )
+    if len(positions) != len(unique_ids):
+        raise FbsPackingBoxError("order_not_in_supply")
+    order_ids = {position.order_id for position in positions}
+    if len(order_ids | {item.fbs_order_id for item in box.items}) != 1:
+        raise FbsPackingBoxError("ozon_box_multiple_orders")
+    await _assert_ozon_orders_mutable(session, tenant_id, list(order_ids))
+    assigned = list(
+        (
+            await session.scalars(
+                select(FbsPackingBoxItem).where(
+                    FbsPackingBoxItem.tenant_id == tenant_id,
+                    FbsPackingBoxItem.order_product_id.in_(unique_ids),
+                )
+            )
+        ).all()
+    )
+    if any(item.box_id != box.id for item in assigned):
+        raise FbsPackingBoxError("order_already_in_box")
+    assigned_ids = {item.order_product_id for item in assigned}
+    for position in positions:
+        if position.id not in assigned_ids:
+            session.add(
+                FbsPackingBoxItem(
+                    tenant_id=tenant_id,
+                    box_id=box.id,
+                    fbs_order_id=position.order_id,
+                    order_product_id=position.id,
+                    assigned_by_user_id=actor_user_id,
+                )
+            )
+    await session.flush()
+    session.expire(box, ["items"])
+
+
 async def remove_order(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
     box_id: uuid.UUID,
     order_id: uuid.UUID,
+    *,
+    order_product_id: uuid.UUID | None = None,
 ) -> None:
-    await _get_box(session, tenant_id, supply_id, box_id)
-    result = await session.execute(
-        select(FbsPackingBoxItem).where(
-            FbsPackingBoxItem.tenant_id == tenant_id,
-            FbsPackingBoxItem.box_id == box_id,
-            FbsPackingBoxItem.fbs_order_id == order_id,
-        )
+    supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
+    _assert_supply_mutable(supply)
+    box = await _get_box(session, tenant_id, supply_id, box_id)
+    if supply.marketplace == "ozon":
+        await _assert_ozon_orders_mutable(session, tenant_id, [order_id])
+    statement = select(FbsPackingBoxItem).where(
+        FbsPackingBoxItem.tenant_id == tenant_id,
+        FbsPackingBoxItem.box_id == box_id,
+        FbsPackingBoxItem.fbs_order_id == order_id,
     )
-    item = result.scalar_one_or_none()
-    if item is None:
+    if order_product_id is not None:
+        statement = statement.where(FbsPackingBoxItem.order_product_id == order_product_id)
+    items = list((await session.scalars(statement)).all())
+    if not items:
         raise FbsPackingBoxError("box_assignment_not_found")
-    await session.delete(item)
+    for item in items:
+        await session.delete(item)
+    await session.flush()
+    session.expire(box, ["items"])
 
 
 async def clear_box(
@@ -366,10 +484,14 @@ async def clear_box(
     Idempotent on an already-empty box.  Forbidden once the supply has been
     handed to WB — box membership must not change after that point.
     """
-    supply = await _get_supply(session, tenant_id, supply_id)
+    supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
     if supply.status in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}:
         raise FbsPackingBoxError("supply_already_delivered")
     box = await _get_box(session, tenant_id, supply_id, box_id)
+    if supply.marketplace == "ozon":
+        await _assert_ozon_orders_mutable(
+            session, tenant_id, list({item.fbs_order_id for item in box.items})
+        )
     await session.execute(
         delete(FbsPackingBoxItem).where(
             FbsPackingBoxItem.tenant_id == tenant_id,
@@ -444,7 +566,10 @@ async def get_boxes_for_workspace(
             "id": str(box.id),
             "box_number": box.box_number,
             "barcode": box.warehouse_box.internal_barcode,
-            "assigned_order_ids": [str(item.fbs_order_id) for item in box.items],
+            "assigned_order_ids": list(dict.fromkeys(str(item.fbs_order_id) for item in box.items)),
+            "assigned_order_product_ids": [
+                str(item.order_product_id) for item in box.items if item.order_product_id
+            ],
             "trbx_id": str(box.trbx_id) if box.trbx_id else None,
             "wb_trbx_id": box.trbx.wb_trbx_id if box.trbx else None,
             "qr_asset": None,
@@ -459,7 +584,7 @@ async def get_boxes_for_workspace(
 
 async def _supply_without_distribution(session: AsyncSession, supply: FbsSupply) -> bool:
     _ = session
-    return supply.boxes_without_distribution_at is not None
+    return supply.marketplace != "ozon" and supply.boxes_without_distribution_at is not None
 
 
 async def _link_or_create_cargo_places(

@@ -17,12 +17,9 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import SessionLocal, engine
-from app.models import Base
 from app.models.billing import BillingLedgerEntry
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_ASSEMBLING,
@@ -47,15 +44,6 @@ from app.services.wildberries_credentials_service import encrypt_secret
 
 OZON_WAREHOUSE_ID = 1020005028840530  # живой склад кабинета, /v2/warehouse/list
 POSTING_NUMBER = "0195832-0021-1"
-
-
-@pytest_asyncio.fixture()
-async def db_session() -> AsyncSession:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
-    async with SessionLocal() as session:
-        yield session
 
 
 def posting_row(
@@ -106,9 +94,7 @@ def posting_row(
 async def _seed(db_session: AsyncSession, *, with_binding: bool = True) -> SimpleNamespace:
     tenant = Tenant(name="Ozon contract", slug=f"ozon-contract-{uuid.uuid4().hex[:8]}")
     seller = Seller(tenant=tenant, name="Seller")
-    warehouse = Warehouse(
-        tenant=tenant, name="FBS", code=f"ozon-contract-{uuid.uuid4().hex[:8]}"
-    )
+    warehouse = Warehouse(tenant=tenant, name="FBS", code=f"ozon-contract-{uuid.uuid4().hex[:8]}")
     product = Product(
         tenant=tenant,
         seller=seller,
@@ -154,16 +140,12 @@ async def _seed(db_session: AsyncSession, *, with_binding: bool = True) -> Simpl
             )
         )
     await db_session.commit()
-    return SimpleNamespace(
-        tenant=tenant, seller=seller, warehouse=warehouse, product=product
-    )
+    return SimpleNamespace(tenant=tenant, seller=seller, warehouse=warehouse, product=product)
 
 
 async def _sync(db_session: AsyncSession, ctx: SimpleNamespace, rows: list[dict[str, Any]]) -> None:
     provider = OzonMarketplaceProvider(transport=FakeMarketplaceTransport(orders=rows))
-    await sync_svc.sync_ozon_orders(
-        db_session, ctx.tenant.id, ctx.seller.id, provider, AsyncMock()
-    )
+    await sync_svc.sync_ozon_orders(db_session, ctx.tenant.id, ctx.seller.id, provider, AsyncMock())
 
 
 async def _order(db_session: AsyncSession) -> FbsOrder:
@@ -447,3 +429,113 @@ def test_status_dictionary_matches_the_official_list(
     status: str, substatus: str | None, expected: str
 ) -> None:
     assert sync_svc._local_status(status, substatus) == expected
+
+
+@pytest.mark.asyncio
+async def test_repeat_sync_metadata_preserves_position_and_box_assignment(
+    db_session: AsyncSession,
+) -> None:
+    from app.models.fbs_packing_box import FbsPackingBoxItem
+    from app.models.fbs_supply import FbsSupply
+    from app.services import fbs_packing_box_service as box_svc
+
+    ctx = await _seed(db_session)
+    await _sync(db_session, ctx, [posting_row()])
+    order = await _order(db_session)
+    await db_session.refresh(order, attribute_names=["product_positions"])
+    position_id = order.product_positions[0].id
+    supply = FbsSupply(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        warehouse_id=ctx.warehouse.id,
+        marketplace="ozon",
+        wb_supply_id="sync-position-box",
+        delivery_type="warehouse_sc",
+        name="Ozon sync",
+    )
+    db_session.add(supply)
+    await db_session.flush()
+    order.supply_id = supply.id
+    boxes = await box_svc.create_boxes(
+        db_session,
+        ctx.tenant.id,
+        supply.id,
+        1,
+        "metadata",
+        actor_user_id=None,
+    )
+    await box_svc.assign_orders(
+        db_session,
+        ctx.tenant.id,
+        supply.id,
+        boxes[0].id,
+        [],
+        actor_user_id=None,
+        order_product_ids=[position_id],
+    )
+    await db_session.commit()
+
+    changed = posting_row()
+    changed["products"][0]["name"] = "Новое название очков"
+    changed["products"][0]["weight"] = 120
+    changed["products"][0]["price"] = {"amount": "1350.00", "currency": "RUB"}
+    await _sync(db_session, ctx, [changed])
+    await db_session.refresh(order, attribute_names=["product_positions"])
+    position = order.product_positions[0]
+    assert position.id == position_id
+    assert position.quantity == 2
+    assert position.name == "Новое название очков"
+    assignment = await db_session.scalar(
+        select(FbsPackingBoxItem).where(
+            FbsPackingBoxItem.order_product_id == position_id,
+        )
+    )
+    assert assignment is not None and assignment.box_id == boxes[0].id
+
+
+@pytest.mark.asyncio
+async def test_repeat_sync_after_assembly_preserves_original_composition(
+    db_session: AsyncSession,
+) -> None:
+    ctx = await _seed(db_session)
+    await _sync(db_session, ctx, [posting_row()])
+    order = await _order(db_session)
+    await db_session.refresh(order, attribute_names=["product_positions"])
+    original = order.product_positions[0]
+    original_id = original.id
+    order.meta_details_json = {
+        **(order.meta_details_json or {}),
+        "ozon_assembly": {
+            "posting_numbers": [POSTING_NUMBER, "0195832-0021-2"],
+        },
+    }
+    await db_session.commit()
+    split_readback = posting_row(status="awaiting_deliver")
+    split_readback["products"][0]["quantity"] = 1
+    await _sync(db_session, ctx, [split_readback])
+    await db_session.refresh(order, attribute_names=["product_positions"])
+    assert [(position.id, position.quantity) for position in order.product_positions] == [
+        (original_id, 2),
+    ]
+
+
+def test_repeat_sync_reordered_metadata_matches_the_product_not_the_index() -> None:
+    from app.models.fbs_order import FbsOrderProduct
+
+    first = FbsOrderProduct(
+        id=uuid.uuid4(), ozon_sku=1, offer_id="first", quantity=2, position_index=0, name="First"
+    )
+    second = FbsOrderProduct(
+        id=uuid.uuid4(), ozon_sku=2, offer_id="second", quantity=3, position_index=1, name="Second"
+    )
+    incoming = [
+        FbsOrderProduct(
+            ozon_sku=2, offer_id="second", quantity=3, position_index=0, name="Second updated"
+        ),
+        FbsOrderProduct(
+            ozon_sku=1, offer_id="first", quantity=2, position_index=1, name="First updated"
+        ),
+    ]
+    sync_svc._update_position_metadata([first, second], incoming)
+    assert (first.name, first.position_index) == ("First updated", 0)
+    assert (second.name, second.position_index) == ("Second updated", 1)

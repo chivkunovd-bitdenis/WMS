@@ -38,8 +38,8 @@ describe('Ozon FBS UI boundaries', () => {
     expect(mixedMarketplaceSelectionMessage(['ozon', 'ozon'])).toBeNull()
   })
 
-  it('disables every box operation for Ozon, including removing an order', () => {
-    expect(fbsBoxOperationsDisabled('ozon')).toBe(true)
+  it('allows box operations for both marketplaces', () => {
+    expect(fbsBoxOperationsDisabled('ozon')).toBe(false)
     expect(fbsBoxOperationsDisabled('wb')).toBe(false)
   })
 })

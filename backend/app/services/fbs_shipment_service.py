@@ -39,7 +39,6 @@ from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
     FBS_SUPPLY_STATUS_DONE,
     FBS_SUPPLY_STATUS_IN_DELIVERY,
-    FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
 from app.models.fbs_wb_operation import (
@@ -58,6 +57,9 @@ from app.services import fbs_supply_composition_service as composition_svc
 from app.services import inventory_service as inventory_svc
 from app.services.fbs_ozon_packaging_service import (
     OzonPackagingError,
+)
+from app.services.fbs_ozon_packaging_service import (
+    prepare_shipment_sources as prepare_ozon_shipment_sources,
 )
 from app.services.fbs_ozon_packaging_service import (
     write_off_order as write_off_ozon_order,
@@ -202,9 +204,7 @@ def _meta_validation_message(exc: WildberriesBusinessError) -> tuple[str, bool]:
         for value in [exc.message, *(item.reason for item in exc.meta_validation)]
         if isinstance(value, str) and value.strip()
     ]
-    dispatch_pending = any(
-        _WB_DISPATCH_PENDING_MESSAGE in value.lower() for value in raw_messages
-    )
+    dispatch_pending = any(_WB_DISPATCH_PENDING_MESSAGE in value.lower() for value in raw_messages)
 
     details: list[str] = []
     for item in exc.meta_validation:
@@ -234,9 +234,7 @@ def _meta_validation_message(exc: WildberriesBusinessError) -> tuple[str, bool]:
     # рассасывается.
     if details:
         head = (
-            "Wildberries не принял поставку и просит исправить заказы: "
-            if dispatch_pending
-            else ""
+            "Wildberries не принял поставку и просит исправить заказы: " if dispatch_pending else ""
         )
         # Повтор остаётся доступным сознательно. Оператор чинит названное —
         # перебивает код Честного знака на упаковке — и жмёт «Повторить» тут же,
@@ -619,11 +617,9 @@ def _build_delivery_checks(
     # Требование самого Wildberries, записанное в required_meta_json заказа, этим
     # флагом не отменяется: такой заказ по-прежнему не уедет, и это правильно.
     honest_sign_skipped = supply.honest_sign_skipped_at is not None
-    # Уровень «мягких» проверок: у Wildberries это предупреждение (решение
-    # владельца 01.09.2026), у остальных маркетплейсов поведение не меняется —
-    # у Ozon свой контракт и отдельно подтверждённых требований владельца по
-    # нему нет.
-    soft = CHECK_WARNING if supply.marketplace == "wb" else CHECK_BLOCKER
+    # Складской прогресс остаётся предупреждением для обеих площадок.
+    # Требование Ozon собрать отправления проверяется отдельно по ответу /ship.
+    soft = CHECK_WARNING
     checks: list[DeliveryCheck] = []
 
     if supply.status in _DELIVER_BLOCKED_SUPPLY_STATUSES:
@@ -631,15 +627,6 @@ def _build_delivery_checks(
             DeliveryCheck(
                 code="supply_bad_status",
                 message="Поставка уже передана или закрыта.",
-                ok=False,
-                severity=CHECK_BLOCKER,
-            )
-        )
-    elif supply.marketplace == "ozon" and supply.status != FBS_SUPPLY_STATUS_PACKED:
-        checks.append(
-            DeliveryCheck(
-                code="packaging_required",
-                message="Упаковка поставки не завершена.",
                 ok=False,
                 severity=CHECK_BLOCKER,
             )
@@ -701,19 +688,6 @@ def _build_delivery_checks(
         )
 
     for order in orders:
-        if supply.marketplace == "ozon" and (
-            order.status in _PACKAGING_PENDING_ORDER_STATUSES
-            or order.status not in _DELIVER_READY_ORDER_STATUSES
-        ):
-            checks.append(
-                DeliveryCheck(
-                    code="packaging_required",
-                    message="Заказ ещё не упакован.",
-                    ok=False,
-                    severity=CHECK_BLOCKER,
-                    order_id=order.id,
-                )
-            )
         if order.status in _TERMINAL_ORDER_STATUSES:
             checks.append(
                 DeliveryCheck(
@@ -778,8 +752,7 @@ def _build_delivery_checks(
                 DeliveryCheck(
                     code="marking_required",
                     message=(
-                        "Честный знак не нанесён. "
-                        "Передаче не мешает, нанести можно и после неё."
+                        "Честный знак не нанесён. Передаче не мешает, нанести можно и после неё."
                     ),
                     ok=False,
                     severity=soft,
@@ -865,9 +838,7 @@ def _build_delivery_checks(
             checks.append(
                 DeliveryCheck(
                     code="packed_order_unassigned",
-                    message=(
-                        "Заказ не разложен по физическим коробам. Передаче не мешает."
-                    ),
+                    message=("Заказ не разложен по физическим коробам. Передаче не мешает."),
                     ok=False,
                     severity=soft,
                     order_id=order_id,
@@ -989,9 +960,7 @@ async def _actual_wb_orders_and_source_plan(
         actor_user_id=actor_user_id,
     )
     orders = [
-        order
-        for order in composition.active_orders
-        if order.status not in _TERMINAL_ORDER_STATUSES
+        order for order in composition.active_orders if order.status not in _TERMINAL_ORDER_STATUSES
     ]
     # ⛔ Раньше здесь падало 409 на первом же заказе без сопоставленного товара,
     # причём ДО того, как соберётся список проверок. То есть вся защита от
@@ -1263,13 +1232,16 @@ async def _write_off_delivered_orders_once(
 
     for order in active_orders:
         ledger = existing_ledgers.get(order.id)
-        if ledger is None and order.marketplace == "ozon" and order.product_positions:
+        if order.marketplace == "ozon" and (
+            ledger is None or (ledger.shipment_movement_id is None and ledger.ozon_positions_json)
+        ):
             try:
                 ledger = await write_off_ozon_order(
                     session,
                     tenant_id=supply.tenant_id,
                     order=order,
                     actor_user_id=actor_user_id,
+                    ledger=ledger,
                 )
             except OzonPackagingError as exc:
                 raise FbsShipmentError(str(exc), http_status=409) from exc
@@ -1342,8 +1314,7 @@ async def _write_off_delivered_orders_once(
             ledger.written_off_at = datetime.now(UTC)
         if ledger.shipment_movement_id is None:
             staged_source = (
-                ledger.source_mode is not None
-                and ledger.source_warehouse_id is not None
+                ledger.source_mode is not None and ledger.source_warehouse_id is not None
             )
             if not staged_source and resolution is None:
                 raise FbsShipmentError("fbs_shipment_source_missing", http_status=409)
@@ -1534,9 +1505,7 @@ async def _load_checkpointed_wb_delivery(
         snapshot_orders: list[FbsOrder] = []
         snapshot_resolutions: list[source_svc.FbsShipmentSourceResolution] = []
         try:
-            supply_warehouse_id = uuid.UUID(
-                str(checkpoint_source_plan["supply_warehouse_id"])
-            )
+            supply_warehouse_id = uuid.UUID(str(checkpoint_source_plan["supply_warehouse_id"]))
             for raw in raw_resolutions:
                 if not isinstance(raw, dict):
                     raise ValueError("invalid checkpoint row")
@@ -1554,9 +1523,7 @@ async def _load_checkpointed_wb_delivery(
                         storage_location_id=uuid.UUID(str(raw["storage_location_id"])),
                         container_kind=cast(ContainerKind | None, raw.get("container_kind")),
                         container_id=(
-                            uuid.UUID(str(raw["container_id"]))
-                            if raw.get("container_id")
-                            else None
+                            uuid.UUID(str(raw["container_id"])) if raw.get("container_id") else None
                         ),
                         source_mode=cast(source_svc.FbsShipmentSourceMode, raw["source_mode"]),
                         positive_quantity=int(raw["positive_quantity"]),
@@ -1565,9 +1532,7 @@ async def _load_checkpointed_wb_delivery(
                     )
                 )
         except (KeyError, TypeError, ValueError):
-            raise FbsShipmentError(
-                "fbs_shipment_checkpoint_incomplete", http_status=409
-            ) from None
+            raise FbsShipmentError("fbs_shipment_checkpoint_incomplete", http_status=409) from None
         # Уехало всё, что лежало в поставке и не отменено, — включая заказы без
         # сопоставленного товара, по которым списывать нечего. Раньше сюда
         # попадали только строки плана списания, и несопоставленный заказ
@@ -1698,9 +1663,7 @@ async def _persist_confirmed_delivery(
         # Ozon still uses its packaging write-off ledger.  Keep the established
         # atomic order here: its idempotent retry path returns an already
         # confirmed operation and does not replay unfinished local stock work.
-        await _apply_local_delivered(
-            session, supply, orders, actor_user_id, source_plan, operation
-        )
+        await _apply_local_delivered(session, supply, orders, actor_user_id, source_plan, operation)
         await mark_deliver_operation_confirmed(
             session,
             operation,
@@ -1728,9 +1691,7 @@ async def _persist_confirmed_delivery(
         local_supply_id=supply.id,
     )
     await session.commit()
-    await _apply_local_delivered(
-        session, supply, orders, actor_user_id, source_plan, operation
-    )
+    await _apply_local_delivered(session, supply, orders, actor_user_id, source_plan, operation)
     # The optional QR fetch happens after this second checkpoint as well.
     await session.commit()
 
@@ -1963,6 +1924,12 @@ async def _deliver_ozon_supply(
                 (attempt.request_summary_json or {}).get(OZON_HANDOFF_PROGRESS_KEY)
             )
         )
+    try:
+        await prepare_ozon_shipment_sources(
+            session, tenant_id=tenant_id, warehouse_id=supply.warehouse_id, orders=orders,
+        )
+    except OzonPackagingError as exc:
+        raise FbsShipmentError(str(exc), http_status=409) from exc
     if existing is not None:
         operation = existing
         operation.state = WB_OPERATION_STATE_PENDING
@@ -2151,10 +2118,7 @@ async def deliver_supply(
             provider=ozon_provider,
             actor_user_id=actor_user_id,
         )
-    if (
-        existing_by_key is not None
-        and existing_by_key.state == WB_OPERATION_STATE_FAILED
-    ):
+    if existing_by_key is not None and existing_by_key.state == WB_OPERATION_STATE_FAILED:
         # A closed client key has no authority over a newer supply-scoped
         # attempt. Reject it before resolving the active operation, otherwise
         # a stale tab could fail or reconcile another key's durable journal.
@@ -2268,9 +2232,7 @@ async def deliver_supply(
                     http_status=504,
                 )
             if reconcile_state == WB_OPERATION_STATE_CONFIRMED:
-                checkpointed = await _load_checkpointed_wb_delivery(
-                    session, supply, existing
-                )
+                checkpointed = await _load_checkpointed_wb_delivery(session, supply, existing)
                 if checkpointed is None:
                     orders, _, source_plan = await _actual_wb_orders_and_source_plan(
                         session,
@@ -2356,9 +2318,7 @@ async def deliver_supply(
         seller_id=supply.seller_id,
         local_supply_id=supply.id,
     )
-    if raced_operation is not None and (
-        existing is None or raced_operation.id != existing.id
-    ):
+    if raced_operation is not None and (existing is None or raced_operation.id != existing.id):
         await session.rollback()
         return await deliver_supply(
             session,
@@ -2399,13 +2359,9 @@ async def deliver_supply(
         )
     else:
         token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
-        checkpointed = await _load_checkpointed_wb_delivery(
-            session, supply, operation
-        )
+        checkpointed = await _load_checkpointed_wb_delivery(session, supply, operation)
         if checkpointed is None:
-            raise FbsShipmentError(
-                "fbs_shipment_checkpoint_incomplete", http_status=409
-            )
+            raise FbsShipmentError("fbs_shipment_checkpoint_incomplete", http_status=409)
         orders, source_plan = checkpointed
 
     # Сначала сохраняем операцию и точный план источников, затем выполняем
@@ -2443,9 +2399,7 @@ async def deliver_supply(
     if operation.state == WB_OPERATION_STATE_CONFIRMED:
         checkpointed = await _load_checkpointed_wb_delivery(session, supply, operation)
         if checkpointed is None:
-            raise FbsShipmentError(
-                "fbs_shipment_checkpoint_incomplete", http_status=409
-            )
+            raise FbsShipmentError("fbs_shipment_checkpoint_incomplete", http_status=409)
         orders, source_plan = checkpointed
         await _persist_confirmed_delivery(
             session, supply, orders, operation, actor_user_id, source_plan

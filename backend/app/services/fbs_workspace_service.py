@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +28,7 @@ from app.models.fbs_order import (
 )
 from app.models.fbs_print_asset import (
     PRINT_ASSET_KIND_CARGO_PLACE_QR,
+    PRINT_ASSET_KIND_ORDER_STICKER,
     PRINT_ASSET_KIND_SUPPLY_QR,
     PRINT_ASSET_STATUS_READY,
     FbsPrintAsset,
@@ -113,7 +114,7 @@ async def get_supply_workspace(
     unassigned_packed_order_ids = (
         set()
         if boxes_without_distribution
-        else _unassigned_order_ids(supply, orders, boxes)
+        else _unassigned_order_ids(supply, orders, boxes, worklist_items)
     )
     stage = _compute_stage(
         supply,
@@ -344,9 +345,7 @@ def _compute_progress(
             if positions
             else int(order.pick_status == PICK_STATUS_PICKED)
         )
-        packed += (
-            units if order.pack_status == PACK_STATUS_PACKED else 0
-        )
+        packed += units if order.pack_status == PACK_STATUS_PACKED else 0
         if _metadata_ready(order):
             metadata_ready += units
         if order.sticker_status in {
@@ -410,14 +409,8 @@ def _compute_stage(
     # упирался в стену. Восстанавливать тот хвост нельзя ни напрямую, ни под
     # другим именем — целостность самой передачи проверяется на её границе.
     #
-    # Порядок проверок — порядок работы: сначала незакрытый подбор, потом уже
-    # заведённые короба, потом упаковка. Проверка коробов стояла первой, пока
-    # правило было только для WB, где `without_distribution` включает оператор
-    # вручную. У Ozon этот признак ставится в момент создания поставки
-    # (`fbs_supply_service`: у Ozon распределения по коробам нет вовсе), поэтому
-    # первой же строкой оператора уносило на «Короба» — на вкладку с алертом
-    # «правила грузомест не подтверждены» и погашенными кнопками, ещё до того,
-    # как он подобрал хоть одну единицу.
+    # Незакрытый подбор определяет начальную вкладку; созданные короба
+    # открывают рабочую поверхность раскладки. Вкладки доступны независимо.
     if progress.picked < progress.total:
         return "picking"
     if has_physical_boxes or without_distribution:
@@ -453,7 +446,21 @@ def _unassigned_order_ids(
     supply: FbsSupply,
     orders: list[FbsOrder],
     boxes: list[dict[str, object]],
+    worklist_items: list[dict[str, Any]] | None = None,
 ) -> set[uuid.UUID]:
+    if supply.marketplace == "ozon":
+        assigned_positions = {
+            str(position_id)
+            for box in boxes
+            for position_id in cast(list[str], box.get("assigned_order_product_ids", []))
+        }
+        complete_orders = {
+            uuid.UUID(str(item["id"]))
+            for item in worklist_items or []
+            if item.get("positions")
+            and all(str(position["id"]) in assigned_positions for position in item["positions"])
+        }
+        return {order.id for order in orders if order.id not in complete_orders}
     assigned: set[uuid.UUID] = set()
     for box in boxes:
         raw_order_ids = box["assigned_order_ids"]
@@ -501,6 +508,48 @@ async def _build_boxes(
     boxes = await get_boxes_for_workspace(session, tenant_id, supply_id)
     trbx_ids = [uuid.UUID(str(box["trbx_id"])) for box in boxes if box["trbx_id"]]
     if not trbx_ids:
+        order_ids = {
+            uuid.UUID(str(order_id))
+            for box in boxes
+            for order_id in cast(list[str], box["assigned_order_ids"])
+        }
+        if not order_ids:
+            return boxes
+        orders = list(
+            (
+                await session.scalars(
+                    select(FbsOrder).where(
+                        FbsOrder.tenant_id == tenant_id,
+                        FbsOrder.id.in_(order_ids),
+                        FbsOrder.marketplace == "ozon",
+                    )
+                )
+            ).all()
+        )
+        assembled = {
+            str(order.id): bool((order.meta_details_json or {}).get("ozon_assembly"))
+            for order in orders
+        }
+        ozon_assets = list(
+            (
+                await session.scalars(
+                    select(FbsPrintAsset)
+                    .where(
+                        FbsPrintAsset.tenant_id == tenant_id,
+                        FbsPrintAsset.fbs_order_id.in_([order.id for order in orders]),
+                        FbsPrintAsset.kind == PRINT_ASSET_KIND_ORDER_STICKER,
+                        FbsPrintAsset.status == PRINT_ASSET_STATUS_READY,
+                    )
+                    .order_by(FbsPrintAsset.created_at)
+                )
+            ).all()
+        )
+        assets_by_order = {str(asset.fbs_order_id): asset for asset in ozon_assets}
+        for box in boxes:
+            assigned = cast(list[str], box["assigned_order_ids"])
+            if assigned:
+                box["ozon_assembled"] = assembled.get(assigned[0], False)
+                box["qr_asset"] = _map_print_asset(assets_by_order.get(assigned[0]))
         return boxes
     result = await session.execute(
         select(FbsPrintAsset).where(

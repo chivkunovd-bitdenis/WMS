@@ -13,15 +13,13 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-import pytest_asyncio
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.fbs_orders import _run_blocked_ozon_fake
 from app.core.settings import settings
-from app.db.session import SessionLocal, engine
-from app.models import Base
+from app.db.session import SessionLocal
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
     CHECK_STATUS_ERROR,
@@ -96,19 +94,11 @@ from app.services.marketplace_provider import (
     OzonMarketplaceProvider,
     provider_error_message,
 )
+from app.services.ozon_box_assembly_service import assemble_box_order
+from app.services.ozon_fbs_errors import OzonFbsProcessError
 from app.services.ozon_fbs_process_service import submit_marking
 from tests.inventory_actor_helpers import resolve_test_actor_user_id
-
-
-@pytest_asyncio.fixture
-async def db_session() -> AsyncSession:
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
-        await connection.run_sync(Base.metadata.create_all)
-    async with SessionLocal() as session:
-        yield session
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
+from tests.test_ozon_box_assembly import seed_boxes
 
 
 @pytest.mark.asyncio
@@ -1040,10 +1030,80 @@ async def _seed_physical_ozon_packaging(
     await session.commit()
 
 
+async def _seed_ready_for_handoff(
+    session: AsyncSession,
+    order: FbsOrder,
+    supply: FbsSupply,
+    product: Product,
+) -> None:
+    session.add(
+        FbsOrderProduct(
+            order_id=order.id,
+            product_id=product.id,
+            ozon_sku=3001,
+            quantity=1,
+            offer_id="offer-1",
+            name="Product",
+            position_index=0,
+        )
+    )
+    await session.commit()
+    await seed_boxes(session, order, supply)
+    await _seed_physical_ozon_packaging(session, order, supply, [(product, 1)])
+
+
+async def _assemble_test_order(
+    session: AsyncSession,
+    order: FbsOrder,
+    supply: FbsSupply,
+    transport: FakeMarketplaceTransport,
+) -> None:
+    details = dict(order.meta_details_json or {})
+    details.pop("ozon_assembly", None)
+    order.meta_details_json = details
+    positions = list(
+        (
+            await session.scalars(
+                select(FbsOrderProduct).where(
+                    FbsOrderProduct.order_id == order.id,
+                )
+            )
+        ).all()
+    )
+    if not positions:
+        session.add(
+            FbsOrderProduct(
+                order_id=order.id,
+                product_id=order.product_id,
+                ozon_sku=3001,
+                quantity=1,
+                offer_id="offer-1",
+                name="Product",
+                position_index=0,
+            )
+        )
+    await session.commit()
+    boxes = await seed_boxes(session, order, supply)
+    transport.endpoint_responses["/v4/posting/fbs/ship"] = {
+        "result": [f"{order.external_order_id}-{index}" for index in range(len(boxes))]
+    }
+    response = transport.endpoint_responses.get("/v3/posting/fbs/get")
+    if isinstance(response, dict):
+        response["result"]["status"] = "awaiting_packaging"
+    await assemble_box_order(
+        session,
+        order.tenant_id,
+        supply.id,
+        boxes[0].id,
+        provider=OzonMarketplaceProvider(transport=transport),
+        credentials=("c", "k"),
+    )
+
+
 @pytest.mark.asyncio
 async def test_ozon_ship_keeps_quantity_above_one(db_session: AsyncSession) -> None:
     """TC-S03-OZON-023: /ship receives quantity from the imported Ozon composition."""
-    tenant, _, _, product, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    _tenant, _, _, product, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
     assert supply is not None
     db_session.add(
         FbsOrderProduct(
@@ -1061,15 +1121,7 @@ async def test_ozon_ship_keeps_quantity_above_one(db_session: AsyncSession) -> N
     await _seed_physical_ozon_packaging(db_session, order, supply, [(product, 2)])
     transport = FakeMarketplaceTransport(endpoint_responses=_ozon_handoff_responses())
 
-    await shipment_svc.deliver_supply(
-        db_session,
-        tenant.id,
-        supply.id,
-        AsyncMock(),
-        idempotency_key=f"ozon-quantity-{uuid.uuid4()}",
-        actor_user_id=None,
-        ozon_provider=OzonMarketplaceProvider(transport=transport),
-    )
+    await _assemble_test_order(db_session, order, supply, transport)
 
     ship_payload = next(
         payload for path, payload in transport.endpoint_calls if path == "/v4/posting/fbs/ship"
@@ -1125,26 +1177,14 @@ async def test_ozon_multi_position_ship_keeps_complete_posting_composition(
     )
     transport = FakeMarketplaceTransport(endpoint_responses=_ozon_handoff_responses())
 
-    await shipment_svc.deliver_supply(
-        db_session,
-        tenant.id,
-        supply.id,
-        AsyncMock(),
-        idempotency_key=f"ozon-partial-{uuid.uuid4()}",
-        actor_user_id=None,
-        ozon_provider=OzonMarketplaceProvider(transport=transport),
-    )
+    await _assemble_test_order(db_session, order, supply, transport)
 
     ship_payload = next(
         payload for path, payload in transport.endpoint_calls if path == "/v4/posting/fbs/ship"
     )
     assert ship_payload["packages"] == [
-        {
-            "products": [
-                {"product_id": 3001, "quantity": 1},
-                {"product_id": 3002, "quantity": 3},
-            ]
-        }
+        {"products": [{"product_id": 3001, "quantity": 1}]},
+        {"products": [{"product_id": 3002, "quantity": 3}]},
     ]
 
 
@@ -1153,7 +1193,7 @@ async def test_ozon_handoff_sets_required_product_country_before_ship(
     db_session: AsyncSession,
 ) -> None:
     """TC-S03-OZON-028: a required country is set and read back before /ship."""
-    tenant, _, _, product, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    _tenant, _, _, product, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
     assert supply is not None
     product.country_of_origin_iso_code = "RU"
     db_session.add(
@@ -1185,14 +1225,14 @@ async def test_ozon_handoff_sets_required_product_country_before_ship(
                 {
                     "result": {
                         "posting_number": order.external_order_id,
-                        "status": "awaiting_deliver",
+                        "status": "awaiting_packaging",
                         "requirements": {"products_requiring_country": ["3001"]},
                     }
                 },
                 {
                     "result": {
                         "posting_number": order.external_order_id,
-                        "status": "awaiting_deliver",
+                        "status": "awaiting_packaging",
                         "requirements": {"products_requiring_country": []},
                     }
                 },
@@ -1201,15 +1241,7 @@ async def test_ozon_handoff_sets_required_product_country_before_ship(
         },
     )
 
-    await shipment_svc.deliver_supply(
-        db_session,
-        tenant.id,
-        supply.id,
-        AsyncMock(),
-        idempotency_key=f"ozon-country-{uuid.uuid4()}",
-        actor_user_id=None,
-        ozon_provider=OzonMarketplaceProvider(transport=transport),
-    )
+    await _assemble_test_order(db_session, order, supply, transport)
 
     paths = [path for path, _ in transport.endpoint_calls]
     assert (
@@ -1234,7 +1266,7 @@ async def test_ozon_handoff_blocks_when_required_product_country_is_missing(
     db_session: AsyncSession,
 ) -> None:
     """TC-S03-OZON-029: missing catalog country is explicit and /ship is not called."""
-    tenant, _, _, product, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    _tenant, _, _, product, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
     assert supply is not None
     db_session.add(
         FbsOrderProduct(
@@ -1260,7 +1292,7 @@ async def test_ozon_handoff_blocks_when_required_product_country_is_missing(
                 {
                     "result": {
                         "posting_number": order.external_order_id,
-                        "status": "awaiting_deliver",
+                        "status": "awaiting_packaging",
                         "requirements": {"products_requiring_country": ["3001"]},
                     }
                 }
@@ -1268,16 +1300,8 @@ async def test_ozon_handoff_blocks_when_required_product_country_is_missing(
         },
     )
 
-    with pytest.raises(shipment_svc.FbsShipmentError, match="ozon_country_required") as caught:
-        await shipment_svc.deliver_supply(
-            db_session,
-            tenant.id,
-            supply.id,
-            AsyncMock(),
-            idempotency_key=f"ozon-country-missing-{uuid.uuid4()}",
-            actor_user_id=None,
-            ozon_provider=OzonMarketplaceProvider(transport=transport),
-        )
+    with pytest.raises(OzonFbsProcessError, match="ozon_country_required") as caught:
+        await _assemble_test_order(db_session, order, supply, transport)
 
     assert caught.value.message == "Для Ozon SKU 3001 укажите страну изготовления в каталоге."
     assert all(path != "/v4/posting/fbs/ship" for path, _ in transport.endpoint_calls)
@@ -1294,7 +1318,7 @@ async def test_ozon_handoff_blocks_when_posting_exceeds_the_drop_off_limits(
     и раньше сам факт их наличия валил передачу в 409 — на живом пункте приёма
     отгрузка не прошла бы никогда.
     """
-    tenant, _, _, _, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    _tenant, _, _, _, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
     assert supply is not None
     order.price = 60_000_000  # 600 000 ₽ в копейках
     await db_session.commit()
@@ -1307,16 +1331,8 @@ async def test_ozon_handoff_blocks_when_posting_exceeds_the_drop_off_limits(
     }
     transport = FakeMarketplaceTransport(endpoint_responses=responses)
 
-    with pytest.raises(shipment_svc.FbsShipmentError, match="ozon_posting_restricted") as caught:
-        await shipment_svc.deliver_supply(
-            db_session,
-            tenant.id,
-            supply.id,
-            AsyncMock(),
-            idempotency_key=f"ozon-restricted-{uuid.uuid4()}",
-            actor_user_id=None,
-            ozon_provider=OzonMarketplaceProvider(transport=transport),
-        )
+    with pytest.raises(OzonFbsProcessError, match="ozon_posting_restricted") as caught:
+        await _assemble_test_order(db_session, order, supply, transport)
 
     assert caught.value.message == (
         "Отправление Ozon не проходит ограничения пункта приёма "
@@ -1331,7 +1347,7 @@ async def test_ozon_handoff_passes_a_posting_that_fits_the_drop_off_limits(
     db_session: AsyncSession,
 ) -> None:
     """Обычные лимиты живого пункта приёма передаче не мешают."""
-    tenant, _, _, _, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    _tenant, _, _, _, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
     assert supply is not None
     order.price = 250000  # 2500 ₽
     await db_session.commit()
@@ -1350,15 +1366,7 @@ async def test_ozon_handoff_passes_a_posting_that_fits_the_drop_off_limits(
     }
     transport = FakeMarketplaceTransport(endpoint_responses=responses)
 
-    await shipment_svc.deliver_supply(
-        db_session,
-        tenant.id,
-        supply.id,
-        AsyncMock(),
-        idempotency_key=f"ozon-allowed-{uuid.uuid4()}",
-        actor_user_id=None,
-        ozon_provider=OzonMarketplaceProvider(transport=transport),
-    )
+    await _assemble_test_order(db_session, order, supply, transport)
 
     assert any(path == "/v4/posting/fbs/ship" for path, _ in transport.endpoint_calls)
 
@@ -1446,7 +1454,10 @@ async def _seed_ozon_supply_case(
         # Ozon ответил по требованиям и сказал, что маркировка не нужна. Без
         # этого признака гейт выпуска честно не знает, нужна она или нет, и
         # передачу не разрешает — это его новое и намеренное поведение.
-        meta_details_json={"ozon_requirements": {"kinds": []}},
+        meta_details_json={
+            "ozon_requirements": {"kinds": []},
+            **({"ozon_assembly": {"posting_numbers": ["ozon-posting-dispatch"]}} if packed else {}),
+        },
     )
     db_session.add_all([tenant, seller, warehouse, product, order])
     if supply is not None:
@@ -1516,31 +1527,36 @@ async def test_ozon_supply_creation_never_calls_wb(
     assert transport.calls == []
     assert str(workspace["supply"]["wb_supply_id"]).startswith("PENDING-")
     assert workspace["supply"]["external_supply_id"] is None
-    assert workspace["supply"]["boxes_without_distribution"] is True
+    assert workspace["supply"]["boxes_without_distribution"] is False
     wb_create.assert_not_awaited()
     wb_add.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_ozon_boxes_mode_is_automatic_and_cannot_be_disabled(
+async def test_ozon_boxes_are_local_and_require_distribution(
     db_session: AsyncSession,
 ) -> None:
     tenant, _, _, _, _, supply = await _seed_ozon_supply_case(db_session, packed=True)
     assert supply is not None
-    supply.boxes_without_distribution_at = datetime.now(UTC)
-    await db_session.commit()
-
-    with pytest.raises(box_svc.FbsPackingBoxError, match="ozon_boxes_managed_automatically"):
-        await box_svc.create_boxes(
+    boxes = await box_svc.create_boxes(
+        db_session,
+        tenant.id,
+        supply.id,
+        1,
+        "ozon-box",
+        actor_user_id=None,
+    )
+    assert len(boxes) == 1
+    assert boxes[0].trbx_id is None
+    with pytest.raises(box_svc.FbsPackingBoxError, match="ozon_box_distribution_required"):
+        await box_svc.set_boxes_without_distribution(
             db_session,
             tenant.id,
             supply.id,
-            1,
-            "ozon-box",
-            AsyncMock(),
+            True,
             actor_user_id=None,
         )
-    with pytest.raises(box_svc.FbsPackingBoxError, match="ozon_boxes_managed_automatically"):
+    assert (
         await box_svc.set_boxes_without_distribution(
             db_session,
             tenant.id,
@@ -1548,9 +1564,11 @@ async def test_ozon_boxes_mode_is_automatic_and_cannot_be_disabled(
             False,
             actor_user_id=None,
         )
+        is False
+    )
 
 
-def test_ozon_without_distribution_does_not_require_physical_boxes() -> None:
+def test_without_distribution_stage_does_not_create_navigation_blockers() -> None:
     supply = SimpleNamespace(
         status=FBS_SUPPLY_STATUS_PACKED,
         delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
@@ -1666,11 +1684,12 @@ async def test_ozon_supply_handoff_ships_rechecks_and_creates_carriage_without_w
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    tenant, _, _, _, _, supply = await _seed_ozon_supply_case(
+    tenant, _, _, product, order, supply = await _seed_ozon_supply_case(
         db_session,
         packed=True,
     )
     assert supply is not None
+    await _seed_ready_for_handoff(db_session, order, supply, product)
     wb_deliver = AsyncMock(side_effect=AssertionError("WB deliver must not run for Ozon"))
     wb_qr = AsyncMock(side_effect=AssertionError("WB QR must not run for Ozon"))
     wb_sync = AsyncMock(side_effect=AssertionError("WB sync must not run for Ozon"))
@@ -1693,16 +1712,7 @@ async def test_ozon_supply_handoff_ships_rechecks_and_creates_carriage_without_w
     assert delivered.external_supply_id == "901"
     assert [call[0] for call in transport.endpoint_calls] == [
         "/v3/posting/fbs/get",
-        "/v1/posting/fbs/restrictions",
-        "/v4/posting/fbs/ship",
-        "/v3/posting/fbs/get",
-        # Этикеток здесь больше нет намеренно: Ozon советует запрашивать их
-        # через 45—60 секунд после сборки, а передача ждала 0,35 секунды и
-        # роняла всю операцию уже после подтверждённой перевозки. Этикетка
-        # печатается отдельной кнопкой, когда отправление в `awaiting_deliver`.
         "/v1/carriage/create",
-        "/v1/carriage/get",
-        "/v1/carriage/set-postings",
         "/v1/carriage/get",
         "/v1/carriage/approve",
         "/v1/carriage/get",
@@ -1740,8 +1750,9 @@ async def test_ozon_live_handoff_never_falls_back_to_fake_success(
 async def test_ozon_ship_failed_readback_stays_visible_and_blocks_handoff(
     db_session: AsyncSession,
 ) -> None:
-    tenant, _, _, _, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    tenant, _, _, product, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
     assert supply is not None
+    await _seed_ready_for_handoff(db_session, order, supply, product)
     responses = _ozon_handoff_responses(substatus="ship_failed")
     transport = FakeMarketplaceTransport(endpoint_responses=responses)
 
@@ -1760,9 +1771,6 @@ async def test_ozon_ship_failed_readback_stays_visible_and_blocks_handoff(
     assert order.meta_details_json is not None
     assert "сборка" in str(order.meta_details_json).lower()
     assert [call[0] for call in transport.endpoint_calls] == [
-        "/v3/posting/fbs/get",
-        "/v1/posting/fbs/restrictions",
-        "/v4/posting/fbs/ship",
         "/v3/posting/fbs/get",
     ]
 
@@ -1795,6 +1803,7 @@ async def test_ozon_partial_handoff_is_journalled_and_the_retry_resumes(
         packed=True,
     )
     assert supply is not None
+    await _seed_ready_for_handoff(db_session, first, supply, product)
     now = datetime.now(UTC)
     second = FbsOrder(
         tenant_id=tenant.id,
@@ -1816,18 +1825,10 @@ async def test_ozon_partial_handoff_is_journalled_and_the_retry_resumes(
     )
     db_session.add(second)
     await db_session.commit()
+    await _seed_ready_for_handoff(db_session, second, supply, product)
 
-    failing = FakeMarketplaceTransport(
-        endpoint_responses=_ozon_handoff_responses(),
-        endpoint_response_queues={
-            "/v4/posting/fbs/ship": [
-                {"result": ["ozon-posting-dispatch"]},
-                MarketplaceProviderError("ozon", 500, {"message": "boom"}),
-            ]
-        },
-    )
-
-    with pytest.raises(shipment_svc.FbsShipmentError):
+    failing = FakeMarketplaceTransport(endpoint_responses=_ozon_handoff_responses())
+    with pytest.raises(shipment_svc.FbsShipmentError, match="ozon_order_not_assembled"):
         await shipment_svc.deliver_supply(
             db_session,
             tenant.id,
@@ -1837,14 +1838,16 @@ async def test_ozon_partial_handoff_is_journalled_and_the_retry_resumes(
             actor_user_id=None,
             ozon_provider=OzonMarketplaceProvider(transport=failing),
         )
-
-    assert [path for path, _ in failing.endpoint_calls].count("/v4/posting/fbs/ship") == 2
-    journalled = await _ozon_deliver_operation("ozon-partial-first")
-    assert journalled.state == "failed"
-    assert journalled.request_summary_json is not None
-    progress = journalled.request_summary_json["ozon_handoff_progress"]
-    assert progress["shipped_postings"] == ["ozon-posting-dispatch"]
-    assert progress["carriage_id"] is None
+    assert all(
+        path not in {"/v4/posting/fbs/ship", "/v1/carriage/create"}
+        for path, _ in failing.endpoint_calls
+    )
+    assert (await _ozon_deliver_operation("ozon-partial-first")).state == "failed"
+    second.meta_details_json = {
+        **(second.meta_details_json or {}),
+        "ozon_assembly": {"posting_numbers": ["ozon-posting-second"]},
+    }
+    await db_session.commit()
 
     healthy = FakeMarketplaceTransport(endpoint_responses=_ozon_handoff_responses())
     delivered = await shipment_svc.deliver_supply(
@@ -1857,19 +1860,13 @@ async def test_ozon_partial_handoff_is_journalled_and_the_retry_resumes(
         ozon_provider=OzonMarketplaceProvider(transport=healthy),
     )
 
-    # Собирается только то отправление, которое в прошлый раз не уехало.
-    ship_payloads = [
-        payload for path, payload in healthy.endpoint_calls if path == "/v4/posting/fbs/ship"
+    paths = [path for path, _ in healthy.endpoint_calls]
+    assert "/v4/posting/fbs/ship" not in paths
+    assert "/v1/carriage/set-postings" not in paths
+    progress = (await _ozon_deliver_operation("ozon-partial-retry")).request_summary_json[
+        "ozon_handoff_progress"
     ]
-    assert [payload["posting_number"] for payload in ship_payloads] == ["ozon-posting-second"]
-    # А в перевозку попадают оба: первое отправление помнится по снимку.
-    set_postings = next(
-        payload for path, payload in healthy.endpoint_calls if path == "/v1/carriage/set-postings"
-    )
-    assert set_postings["posting_numbers"] == [
-        "ozon-posting-dispatch",
-        "ozon-posting-second",
-    ]
+    assert set(progress["posting_numbers"]) == {"ozon-posting-dispatch", "ozon-posting-second"}
     assert delivered.status == FBS_SUPPLY_STATUS_IN_DELIVERY
     assert (await _ozon_deliver_operation("ozon-partial-retry")).state == "confirmed"
     assert first.status == "in_delivery"
@@ -1885,8 +1882,9 @@ async def test_ozon_handoff_after_approved_carriage_does_not_approve_twice(
     Второй `/v1/carriage/approve` по уже подтверждённой перевозке — это
     повторная мутация в кабинете; снимок обязан её предотвратить.
     """
-    tenant, _, _, _, _, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    tenant, _, _, product, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
     assert supply is not None
+    await _seed_ready_for_handoff(db_session, order, supply, product)
     responses = _ozon_handoff_responses()
     failing = FakeMarketplaceTransport(
         endpoint_responses=responses,
@@ -2411,9 +2409,7 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
         (
             await db_session.execute(
                 select(MarkingCodeEvent).where(
-                    MarkingCodeEvent.code_id.in_(
-                        [marking.marking_code_id for marking in markings]
-                    )
+                    MarkingCodeEvent.code_id.in_([marking.marking_code_id for marking in markings])
                 )
             )
         )
@@ -2451,8 +2447,11 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
             AsyncMock(),
             actor_user_id=None,
         )
-    assert incomplete.can_deliver is False
-    assert any(check.code == "marking_not_allowed" and not check.ok for check in incomplete.checks)
+    assert incomplete.can_deliver is True
+    assert any(
+        check.code == "marking_not_allowed" and not check.ok and check.severity == "warning"
+        for check in incomplete.checks
+    )
 
     markings[0].order_product_id = first_position_id
     first_details = dict(markings[0].meta_details_json or {})
@@ -2466,14 +2465,17 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
             AsyncMock(),
             actor_user_id=None,
         )
-    assert blocked.can_deliver is False
-    assert any(check.code == "marking_not_allowed" and not check.ok for check in blocked.checks)
+    assert blocked.can_deliver is True
+    assert any(
+        check.code == "marking_not_allowed" and not check.ok and check.severity == "warning"
+        for check in blocked.checks
+    )
     wb_token.assert_not_awaited()
     wb_delete.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_ozon_preflight_blocks_required_marking_without_product_positions(
+async def test_ozon_preflight_warns_about_required_marking_without_product_positions(
     db_session: AsyncSession,
 ) -> None:
     tenant, _, _, _, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
@@ -2500,8 +2502,11 @@ async def test_ozon_preflight_blocks_required_marking_without_product_positions(
         actor_user_id=None,
     )
 
-    assert result.can_deliver is False
-    assert any(check.code == "marking_not_allowed" for check in result.checks)
+    assert result.can_deliver is True
+    assert any(
+        check.code == "marking_not_allowed" and not check.ok and check.severity == "warning"
+        for check in result.checks
+    )
 
 
 @pytest.mark.asyncio
@@ -2728,8 +2733,11 @@ async def test_ozon_negative_sync_does_not_fall_back_to_accepted_history(
             AsyncMock(),
             actor_user_id=None,
         )
-    assert preflight.can_deliver is False
-    assert any(check.code == "marking_not_allowed" for check in preflight.checks)
+    assert preflight.can_deliver is True
+    assert any(
+        check.code == "marking_not_allowed" and not check.ok and check.severity == "warning"
+        for check in preflight.checks
+    )
 
 
 @pytest.mark.asyncio
@@ -2974,11 +2982,7 @@ async def test_ozon_poll_takes_only_orders_whose_stock_we_publish(
     )
 
     orders = list(
-        (
-            await db_session.execute(
-                select(FbsOrder).where(FbsOrder.tenant_id == tenant.id)
-            )
-        )
+        (await db_session.execute(select(FbsOrder).where(FbsOrder.tenant_id == tenant.id)))
         .scalars()
         .all()
     )
@@ -3129,12 +3133,8 @@ def test_existing_supply_never_accepts_an_order_of_another_marketplace() -> None
     wb_supply = _supply("wb")
     ozon_supply = _supply("ozon")
 
-    ozon_into_wb = supply_order_link_discrepancy(
-        wb_supply, _order("ozon", 991), existing_orders=[]
-    )
-    wb_into_ozon = supply_order_link_discrepancy(
-        ozon_supply, _order("wb", 992), existing_orders=[]
-    )
+    ozon_into_wb = supply_order_link_discrepancy(wb_supply, _order("ozon", 991), existing_orders=[])
+    wb_into_ozon = supply_order_link_discrepancy(ozon_supply, _order("wb", 992), existing_orders=[])
 
     assert ozon_into_wb is not None
     assert ozon_into_wb.code == "different_marketplace"

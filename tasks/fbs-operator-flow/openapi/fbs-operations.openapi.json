@@ -357,6 +357,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/FbsOrderCancelBody"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -810,6 +827,59 @@
                     "$ref": "#/components/schemas/FbsSellerWarehouseOut"
                   },
                   "title": "Response List Fbs Seller Warehouses Operations Fbs Sellers  Seller Id  Warehouses Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-sellers/{seller_id}/ozon-warehouses": {
+      "get": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "List Fbs Seller Ozon Warehouses",
+        "description": "Справочник складов Ozon для выбора вместо ручного ввода номера (WMS-362).\n\nОтдельная ручка, а не общий список со складами Wildberries: у тех другой\nисточник, другой ключ и свои поля, а продавец бывает подключён только к\nодной из площадок. Смешав их, мы бы уронили список Ozon вместе с\nвайлдберрисовским ключом, которого у продавца может не быть вовсе.",
+        "operationId": "list_fbs_seller_ozon_warehouses_operations_fbs_sellers__seller_id__ozon_warehouses_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "seller_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Seller Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FbsSellerOzonWarehouseOut"
+                  },
+                  "title": "Response List Fbs Seller Ozon Warehouses Operations Fbs Sellers  Seller Id  Ozon Warehouses Get"
                 }
               }
             }
@@ -2676,6 +2746,23 @@
               "type": "string",
               "format": "uuid",
               "title": "Order Id"
+            }
+          },
+          {
+            "name": "order_product_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Order Product Id"
             }
           }
         ],
@@ -5630,15 +5717,12 @@
           "supply": {
             "$ref": "#/components/schemas/FbsCancelledSupplyOut"
           },
-          "cargo_place": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/FbsCancelledCargoPlaceOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "cargo_places": {
+            "items": {
+              "$ref": "#/components/schemas/FbsCancelledCargoPlaceOut"
+            },
+            "type": "array",
+            "title": "Cargo Places"
           },
           "assembled_at": {
             "anyOf": [
@@ -5724,7 +5808,6 @@
           "product",
           "seller",
           "supply",
-          "cargo_place",
           "assembled_at",
           "picked_at",
           "packed_at",
@@ -6612,6 +6695,35 @@
         ],
         "title": "FbsKizValidateOut"
       },
+      "FbsOrderCancelBody": {
+        "properties": {
+          "reason_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Id"
+          },
+          "reason_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Message"
+          }
+        },
+        "type": "object",
+        "title": "FbsOrderCancelBody",
+        "description": "Причина отмены — она нужна только Ozon и только там применяется.\n\nТело необязательное: у метода отмены WB причины нет вовсе, а у Ozon без\nявного указания берётся «товар закончился на складе продавца» — та, по\nкоторой отменяет фулфилмент чаще всего. Экран сегодня тело не шлёт, и\nломать его этим полем не нужно: отсутствие тела означает причину по\nумолчанию."
+      },
       "FbsOrderMarkingOut": {
         "properties": {
           "id": {
@@ -7265,14 +7377,19 @@
             },
             "type": "array",
             "maxItems": 100,
-            "minItems": 1,
             "title": "Order Ids"
+          },
+          "order_product_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Order Product Ids"
           }
         },
         "type": "object",
-        "required": [
-          "order_ids"
-        ],
         "title": "FbsPackingBoxAssignOrdersBody"
       },
       "FbsPackingBoxCreateBody": {
@@ -7337,6 +7454,18 @@
             },
             "type": "array",
             "title": "Assigned Order Ids"
+          },
+          "assigned_order_product_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Assigned Order Product Ids"
+          },
+          "ozon_assembled": {
+            "type": "boolean",
+            "title": "Ozon Assembled",
+            "default": false
           },
           "trbx_id": {
             "anyOf": [
@@ -8437,6 +8566,52 @@
         "type": "object",
         "title": "FbsSellerOfficeOut"
       },
+      "FbsSellerOzonWarehouseOut": {
+        "properties": {
+          "warehouse_id": {
+            "type": "integer",
+            "title": "Warehouse Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "has_entrusted_acceptance": {
+            "type": "boolean",
+            "title": "Has Entrusted Acceptance"
+          },
+          "is_rfbs": {
+            "type": "boolean",
+            "title": "Is Rfbs"
+          },
+          "served": {
+            "type": "boolean",
+            "title": "Served"
+          },
+          "wms_warehouse_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wms Warehouse Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "warehouse_id",
+          "name",
+          "has_entrusted_acceptance",
+          "is_rfbs",
+          "served",
+          "wms_warehouse_id"
+        ],
+        "title": "FbsSellerOzonWarehouseOut",
+        "description": "Строка справочника складов Ozon: то, из чего оператор выбирает склад.\n\n`has_entrusted_acceptance` едет отсюда и никуда не сохраняется: это\nсостояние кабинета продавца, а не наше. Будущая работа по грузовым местам\n(WMS-355, WMS-357) читает его в тот момент, когда склад выбирают, — там же,\nгде выбирается сам склад."
+      },
       "FbsSellerWarehouseConfigure": {
         "properties": {
           "served": {
@@ -8461,6 +8636,15 @@
               }
             ],
             "title": "Wms Warehouse Id"
+          },
+          "marketplace": {
+            "type": "string",
+            "enum": [
+              "wb",
+              "ozon"
+            ],
+            "title": "Marketplace",
+            "default": "wb"
           }
         },
         "type": "object",
@@ -10151,6 +10335,27 @@
             "type": "boolean",
             "title": "Stock Sync Enabled",
             "default": true
+          },
+          "marketplace": {
+            "type": "string",
+            "enum": [
+              "wb",
+              "ozon"
+            ],
+            "title": "Marketplace",
+            "default": "wb"
+          },
+          "external_warehouse_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Warehouse Id"
           }
         },
         "type": "object",
@@ -10408,6 +10613,17 @@
             "type": "boolean",
             "title": "Can Pvz"
           },
+          "delivery_route": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Route"
+          },
           "metadata": {
             "$ref": "#/components/schemas/FbsWorklistMetadataOut"
           },
@@ -10579,6 +10795,21 @@
       },
       "FbsWorklistPositionOut": {
         "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
           "product_id": {
             "anyOf": [
               {
@@ -10631,6 +10862,7 @@
         },
         "type": "object",
         "required": [
+          "id",
           "product_id",
           "name",
           "seller_article",
@@ -11047,6 +11279,17 @@
           "can_pvz": {
             "type": "boolean",
             "title": "Can Pvz"
+          },
+          "delivery_route": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Route"
           },
           "metadata": {
             "$ref": "#/components/schemas/FbsWorklistMetadataOut"
@@ -11945,6 +12188,13 @@
             "type": "boolean",
             "title": "Is Manual",
             "default": false
+          },
+          "marketplaces": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Marketplaces"
           }
         },
         "type": "object",
@@ -13768,6 +14018,24 @@
         ],
         "title": "InventoryCountActualIn"
       },
+      "InventoryCountContainerCreateIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "pallet",
+              "box",
+              "cargo_place"
+            ],
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "InventoryCountContainerCreateIn"
+      },
       "InventoryCountCreateIn": {
         "properties": {
           "source": {
@@ -14306,6 +14574,68 @@
         ],
         "title": "InventoryCountLineOut"
       },
+      "InventoryCountManualLineIn": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Product Id"
+          },
+          "quantity": {
+            "type": "integer",
+            "maximum": 1000000000.0,
+            "minimum": 1.0,
+            "title": "Quantity"
+          },
+          "cell_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cell Id"
+          },
+          "container_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pallet",
+                  "box",
+                  "cargo_place"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Kind"
+          },
+          "container_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "quantity"
+        ],
+        "title": "InventoryCountManualLineIn",
+        "description": "Добавление товара руками через модалку выбора — кнопка «Добавить товар»."
+      },
       "InventoryCountObjectIn": {
         "properties": {
           "type": {
@@ -14374,6 +14704,13 @@
             },
             "type": "array",
             "title": "Changed Balances"
+          },
+          "stock_write_off": {
+            "items": {
+              "$ref": "#/components/schemas/InventoryStockWriteOffOut"
+            },
+            "type": "array",
+            "title": "Stock Write Off"
           }
         },
         "type": "object",
@@ -14628,6 +14965,51 @@
           "created_at"
         ],
         "title": "InventoryMovementRowOut"
+      },
+      "InventoryStockWriteOffOut": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "marketplace": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marketplace"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          },
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "product_name",
+          "quantity"
+        ],
+        "title": "InventoryStockWriteOffOut"
       },
       "InvoiceHistoryItemOut": {
         "properties": {
@@ -18381,6 +18763,73 @@
         ],
         "title": "OzonReturnPreviewOut"
       },
+      "OzonSelfSyncProductsOut": {
+        "properties": {
+          "cards_read": {
+            "type": "integer",
+            "title": "Cards Read"
+          },
+          "links_matched": {
+            "type": "integer",
+            "title": "Links Matched"
+          },
+          "links_created": {
+            "type": "integer",
+            "title": "Links Created"
+          },
+          "products_created": {
+            "type": "integer",
+            "title": "Products Created"
+          },
+          "dimensions_applied": {
+            "type": "integer",
+            "title": "Dimensions Applied"
+          },
+          "barcodes_applied": {
+            "type": "integer",
+            "title": "Barcodes Applied"
+          },
+          "images_applied": {
+            "type": "integer",
+            "title": "Images Applied"
+          },
+          "product_ids_applied": {
+            "type": "integer",
+            "title": "Product Ids Applied"
+          },
+          "skipped_manual_dimensions": {
+            "type": "integer",
+            "title": "Skipped Manual Dimensions"
+          },
+          "skipped_unknown_units": {
+            "type": "integer",
+            "title": "Skipped Unknown Units"
+          },
+          "unmatched_offer_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unmatched Offer Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cards_read",
+          "links_matched",
+          "links_created",
+          "products_created",
+          "dimensions_applied",
+          "barcodes_applied",
+          "images_applied",
+          "product_ids_applied",
+          "skipped_manual_dimensions",
+          "skipped_unknown_units",
+          "unmatched_offer_ids"
+        ],
+        "title": "OzonSelfSyncProductsOut",
+        "description": "Ровно то, что импорт сделал, без обещаний того, чего он не делает."
+      },
       "PackProgressIn": {
         "properties": {
           "quantity": {
@@ -19947,6 +20396,33 @@
         ],
         "title": "PrintAllMarkingOut"
       },
+      "PrintLabelOptionsOut": {
+        "properties": {
+          "include_size": {
+            "type": "boolean",
+            "title": "Include Size",
+            "default": true
+          },
+          "include_color": {
+            "type": "boolean",
+            "title": "Include Color",
+            "default": true
+          },
+          "include_brand": {
+            "type": "boolean",
+            "title": "Include Brand",
+            "default": true
+          },
+          "include_composition": {
+            "type": "boolean",
+            "title": "Include Composition",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "PrintLabelOptionsOut",
+        "description": "Состав этикетки ШК: что печатать, а что нет.\n\nПорядок строк не настраивается и един для всех — размер, цвет, бренд,\nсостав (решение владельца 03.09.2026)."
+      },
       "PrintLayoutOut": {
         "properties": {
           "units": {
@@ -19955,6 +20431,15 @@
             },
             "type": "array",
             "title": "Units"
+          },
+          "label_options": {
+            "$ref": "#/components/schemas/PrintLabelOptionsOut",
+            "default": {
+              "include_size": true,
+              "include_color": true,
+              "include_brand": true,
+              "include_composition": true
+            }
           }
         },
         "type": "object",
@@ -20644,6 +21129,18 @@
             },
             "type": "object",
             "title": "By Warehouse"
+          },
+          "units_mode": {
+            "type": "boolean",
+            "title": "Units Mode",
+            "default": false
+          },
+          "units_by_warehouse": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Units By Warehouse"
           }
         },
         "additionalProperties": false,
@@ -20679,6 +21176,18 @@
             "type": "object",
             "title": "By Warehouse"
           },
+          "units_mode": {
+            "type": "boolean",
+            "title": "Units Mode",
+            "default": false
+          },
+          "units_by_warehouse": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Units By Warehouse"
+          },
           "free_stock": {
             "type": "integer",
             "title": "Free Stock"
@@ -20694,6 +21203,13 @@
           "published_now": {
             "type": "integer",
             "title": "Published Now"
+          },
+          "units_remaining_by_warehouse": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Units Remaining By Warehouse"
           },
           "product_id": {
             "type": "string",
@@ -20737,6 +21253,18 @@
             "type": "object",
             "title": "By Warehouse"
           },
+          "units_mode": {
+            "type": "boolean",
+            "title": "Units Mode",
+            "default": false
+          },
+          "units_by_warehouse": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Units By Warehouse"
+          },
           "free_stock": {
             "type": "integer",
             "title": "Free Stock"
@@ -20752,6 +21280,13 @@
           "published_now": {
             "type": "integer",
             "title": "Published Now"
+          },
+          "units_remaining_by_warehouse": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Units Remaining By Warehouse"
           }
         },
         "additionalProperties": false,
@@ -21093,6 +21628,26 @@
           "shared_baskets"
         ],
         "title": "ProductMarkingOverviewOut"
+      },
+      "ProductMergeBody": {
+        "properties": {
+          "product_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Product Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "product_ids"
+        ],
+        "title": "ProductMergeBody"
       },
       "ProductMovementSummaryRowOut": {
         "properties": {
@@ -22295,17 +22850,18 @@
             "maxItems": 100,
             "title": "Selected Root Ids"
           },
-          "storage_calculation_token": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 4096
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Storage Calculation Token"
+          "include_storage": {
+            "type": "boolean",
+            "title": "Include Storage",
+            "default": false
+          },
+          "manual_lines": {
+            "items": {
+              "$ref": "#/components/schemas/ManualInvoiceV2LineIn"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Manual Lines"
           }
         },
         "type": "object",
@@ -22425,6 +22981,30 @@
           "valid_from"
         ],
         "title": "SellerExceptionBody"
+      },
+      "SellerLabelOptionsIn": {
+        "properties": {
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          },
+          "label_options": {
+            "$ref": "#/components/schemas/PrintLabelOptionsOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label_options"
+        ],
+        "title": "SellerLabelOptionsIn"
       },
       "SellerMarketplaceUnloadRequestCreate": {
         "properties": {
@@ -22670,6 +23250,20 @@
             ],
             "title": "Source Target"
           },
+          "supply": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supply"
+          },
           "document_number": {
             "anyOf": [
               {
@@ -22789,6 +23383,20 @@
               }
             ],
             "title": "Source Target"
+          },
+          "supply": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supply"
           },
           "document_number": {
             "anyOf": [
@@ -22961,6 +23569,20 @@
             ],
             "title": "Source Target"
           },
+          "supply": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supply"
+          },
           "document_number": {
             "anyOf": [
               {
@@ -23057,6 +23679,17 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Invoice History"
+          },
+          "billing_ledger_entry_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Billing Ledger Entry Id"
           }
         },
         "type": "object",
@@ -23108,10 +23741,6 @@
             ],
             "title": "Status"
           },
-          "calculation_token": {
-            "type": "string",
-            "title": "Calculation Token"
-          },
           "amount_kopecks": {
             "anyOf": [
               {
@@ -23130,8 +23759,7 @@
           "date_from",
           "date_to",
           "liter_days",
-          "status",
-          "calculation_token"
+          "status"
         ],
         "title": "SellerReportFinancialStorageOut"
       },
@@ -23473,6 +24101,20 @@
             ],
             "title": "Source Target"
           },
+          "supply": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supply"
+          },
           "document_number": {
             "anyOf": [
               {
@@ -23682,10 +24324,6 @@
               "negative_stock"
             ],
             "title": "Status"
-          },
-          "calculation_token": {
-            "type": "string",
-            "title": "Calculation Token"
           }
         },
         "type": "object",
@@ -23694,8 +24332,7 @@
           "date_from",
           "date_to",
           "liter_days",
-          "status",
-          "calculation_token"
+          "status"
         ],
         "title": "SellerReportStorageOut"
       },
@@ -25285,11 +25922,25 @@
             "title": "Measurements"
           },
           "total_liter_days": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Total Liter Days"
           },
           "total_amount": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Total Amount"
           },
           "problem_count": {
@@ -25384,13 +26035,6 @@
           "tariff_revision": {
             "type": "integer",
             "title": "Tariff Revision"
-          },
-          "recalculated_statements": {
-            "items": {
-              "$ref": "#/components/schemas/StorageStatementOut"
-            },
-            "type": "array",
-            "title": "Recalculated Statements"
           }
         },
         "type": "object",
@@ -25675,6 +26319,11 @@
               }
             ],
             "title": "Fbs Shipment Cutoff Time"
+          },
+          "label_template_enabled": {
+            "type": "boolean",
+            "title": "Label Template Enabled",
+            "default": false
           }
         },
         "type": "object",

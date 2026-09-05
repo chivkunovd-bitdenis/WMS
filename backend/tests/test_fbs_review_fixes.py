@@ -870,7 +870,7 @@ async def test_sync_order_statuses_advances_sorted_to_sold(
         assert order.status == FBS_ORDER_STATUS_DONE
 
 
-# TC-NEW-FBS-REVERSAL-001 — shipment and reversal use the deterministic source plan.
+# Shipment uses the source plan; cancellation cannot create a physical return.
 @pytest.mark.asyncio
 async def test_fbs_shipment_uses_each_planned_source_location(
     async_client: AsyncClient,
@@ -1044,6 +1044,5 @@ async def test_fbs_shipment_uses_each_planned_source_location(
             {
                 (locations[0].id, -1): 1,
                 (locations[1].id, -1): 1,
-                (locations[0].id, 1): 1,
             }
         )

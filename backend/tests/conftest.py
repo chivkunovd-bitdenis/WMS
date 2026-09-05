@@ -9,10 +9,13 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Before importing app.db.session: same DATABASE_URL for routes and BackgroundTasks.
-os.environ.setdefault(
-    "JWT_SECRET_KEY", "test-jwt-secret-key-at-least-32-characters-long"
+os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key-at-least-32-characters-long")
+_TEST_RUN_ID = "_".join(
+    (
+        os.environ.get("PYTEST_XDIST_TESTRUNUID", str(os.getpid())),
+        os.environ.get("PYTEST_XDIST_WORKER", "main"),
+    )
 )
-_TEST_RUN_ID = os.environ.get("PYTEST_XDIST_WORKER", str(os.getpid()))
 _TEST_DB_PATH = Path(__file__).resolve().parent / f"wms_pytest_{_TEST_RUN_ID}.sqlite"
 _TEST_DATA_DIR = Path(__file__).resolve().parent / f"wms_pytest_data_{_TEST_RUN_ID}"
 os.environ["DATABASE_URL"] = os.environ.get(
@@ -37,15 +40,10 @@ async def _rebuild_schema() -> None:
 
 
 async def _reset_database() -> None:
-    """Схему строим один раз за прогон, между тестами только вычищаем строки.
+    """Build each worker's schema once, then clear rows between tests.
 
-    Снос и постройка 97 таблиц стоят 334 мс, очистка строк — 23 мс. На полном
-    прогоне это разница между 16 и 3 минутами, при той же изоляции: тест всё
-    так же начинает с пустой базы.
-
-    Часть тестовых файлов сносит схему собственными фикстурами и не
-    восстанавливает её. Поэтому очистку оборачиваем: пропала таблица —
-    пересобираем схему и продолжаем.
+    API and direct service fixtures share this path and drain background work
+    before resetting. Rebuild only if a test deliberately removed schema.
     """
     global _SCHEMA_READY
     from sqlalchemy import text as _sql_text
@@ -84,3 +82,15 @@ async def async_client() -> AsyncIterator[AsyncClient]:
     await drain_background_stock_publish_tasks()
     await drain_zero_publish_background_tasks()
     await _reset_database()
+
+
+@pytest_asyncio.fixture
+async def db_session() -> AsyncIterator[AsyncSession]:
+    """Use the same isolated schema and task cleanup as API tests (WMS-365)."""
+    await drain_background_stock_publish_tasks()
+    await drain_zero_publish_background_tasks()
+    await _reset_database()
+    async with SessionLocal() as session:
+        yield session
+    await drain_background_stock_publish_tasks()
+    await drain_zero_publish_background_tasks()

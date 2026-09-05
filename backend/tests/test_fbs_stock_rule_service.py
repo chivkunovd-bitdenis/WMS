@@ -9,16 +9,12 @@ TC-NEW-FBS-RULE-004: товар без доли не публикуется, с�
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
 from datetime import datetime
 
 import pytest
-import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import SessionLocal, engine
-from app.models import Base
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inventory_balance import InventoryBalance
@@ -40,18 +36,6 @@ from app.services.fbs_stock_rule_service import (
 )
 from app.services.fbs_stock_sync_service import _resolve_publish_quantities
 from app.services.stock_direction_service import create_stock_direction
-
-
-@pytest_asyncio.fixture
-async def db_session() -> AsyncIterator[AsyncSession]:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    async with SessionLocal() as session:
-        yield session
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
 
 
 class _Seed:
@@ -973,9 +957,7 @@ async def test_share_rule_keeps_allocation_the_rule_does_not_reach(
         row.binding_id: row.quantity
         for row in (
             await db_session.scalars(
-                select(FbsBindingStockPool).where(
-                    FbsBindingStockPool.product_id == seed.product.id
-                )
+                select(FbsBindingStockPool).where(FbsBindingStockPool.product_id == seed.product.id)
             )
         ).all()
     }

@@ -673,7 +673,6 @@ async def create_supply_from_orders(
             planned_destination_name=dest_name,
             planned_destination_zone=dest_zone,
             planned_shipment_date=planned_shipment_date,
-            boxes_without_distribution_at=(datetime.now(UTC) if marketplace == "ozon" else None),
         )
         session.add(supply)
         await session.flush()
@@ -1407,9 +1406,7 @@ async def repair_supply_composition_from_wb(
         {
             "wb_order_id": discrepancy.wb_order_id,
             "order_id": (
-                str(discrepancy.local_order_id)
-                if discrepancy.local_order_id is not None
-                else None
+                str(discrepancy.local_order_id) if discrepancy.local_order_id is not None else None
             ),
             "reason": discrepancy.code,
         }
@@ -1556,9 +1553,7 @@ async def add_order_to_supply(
         # Deprecated clients still use this endpoint.  They must obey the same
         # WB contract as the batch endpoint: the packaging aggregate never
         # freezes composition.
-        editable_statuses.update(
-            {FBS_SUPPLY_STATUS_ASSEMBLING, FBS_SUPPLY_STATUS_PACKED}
-        )
+        editable_statuses.update({FBS_SUPPLY_STATUS_ASSEMBLING, FBS_SUPPLY_STATUS_PACKED})
     if supply.status not in editable_statuses:
         raise FbsSupplyError("supply_not_editable")
 

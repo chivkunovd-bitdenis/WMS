@@ -9,16 +9,11 @@ Ozon вида ``OZN<sku>``.
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
-import pytest_asyncio
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import SessionLocal, engine
-from app.models import Base
 from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
@@ -56,23 +51,6 @@ BAG_CARD: dict[str, Any] = {
     "weight": 470,
     "weight_unit": "g",
 }
-
-
-@pytest_asyncio.fixture()
-async def db_session() -> AsyncIterator[AsyncSession]:
-    """Пустая база без сноса схемы.
-
-    Этот файл идёт в одном прогоне с тестами API, которые ходят в ту же базу.
-    Полный `drop_all` посреди их прогона уносил у них таблицы — падали то они,
-    то мы, в зависимости от того, как pytest разложил тесты по процессам.
-    Изоляция от этого не страдает: тест всё так же начинает с пустых таблиц.
-    """
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        for table in reversed(Base.metadata.sorted_tables):
-            await conn.execute(text(f'DELETE FROM "{table.name}"'))
-    async with SessionLocal() as session:
-        yield session
 
 
 async def _seed(

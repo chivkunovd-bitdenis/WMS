@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -39,6 +40,7 @@ from app.models.fbs_order import (
     FbsOrder,
     FbsOrderProduct,
 )
+from app.models.fbs_supply import FbsSupply
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
@@ -61,9 +63,7 @@ OZON_STATUS_SYNC_BATCH_LIMIT = 200
 
 # Конец жизни отправления у Ozon. Опрашивать эти заказы незачем: статус уже не
 # изменится, а каждый из них стоит отдельного запроса.
-OZON_STATUS_SYNC_TERMINAL_STATUSES = frozenset(
-    {FBS_ORDER_STATUS_DONE, FBS_ORDER_STATUS_CANCELLED}
-)
+OZON_STATUS_SYNC_TERMINAL_STATUSES = frozenset({FBS_ORDER_STATUS_DONE, FBS_ORDER_STATUS_CANCELLED})
 
 # Ключ в `meta_details_json`, по которому видно: требования по маркировке для
 # этого отправления разобраны. Без него пустое требование неотличимо от
@@ -499,9 +499,7 @@ async def _stock_is_published_for_row(
     """
     if binding is None or not binding.served:
         return False
-    product_ids = {
-        position.product_id for position in positions if position.product_id is not None
-    }
+    product_ids = {position.product_id for position in positions if position.product_id is not None}
     if fallback_product_id is not None:
         product_ids.add(fallback_product_id)
     if not product_ids:
@@ -563,8 +561,22 @@ def _positions_are_mapped(
     )
 
 
-def _position_signature(position: FbsOrderProduct) -> tuple[int | None, int, dict[str, Any] | None]:
-    return position.ozon_sku, position.quantity, position.provider_data_json
+def _position_signature(position: FbsOrderProduct) -> tuple[int | None, str | None, int]:
+    return position.ozon_sku, position.offer_id, position.quantity
+
+
+def _update_position_metadata(
+    existing: list[FbsOrderProduct], incoming: list[FbsOrderProduct]
+) -> None:
+    # Keep the operator's position IDs and ordering. Duplicate SKU/offer pairs
+    # cannot be matched unambiguously, so leave those metadata untouched.
+    counts = Counter((position.ozon_sku, position.offer_id) for position in existing)
+    by_product = {(position.ozon_sku, position.offer_id): position for position in incoming}
+    for position in existing:
+        key = (position.ozon_sku, position.offer_id)
+        if key != (None, None) and counts[key] == 1:
+            position.name = by_product[key].name
+            position.provider_data_json = by_product[key].provider_data_json
 
 
 def _apply_delivery_method(order: FbsOrder, row: dict[str, Any]) -> None:
@@ -756,9 +768,7 @@ async def sync_ozon_orders(
         fallback_product_id = await _product_id_for_row(session, tenant_id, seller_id, row)
         positions = await _posting_products_for_row(session, tenant_id, seller_id, row)
         binding = await _binding_for_row(session, tenant_id, seller_id, row)
-        if not await _stock_is_published_for_row(
-            session, binding, positions, fallback_product_id
-        ):
+        if not await _stock_is_published_for_row(session, binding, positions, fallback_product_id):
             continue
         if MARKING_KIND_SGTIN not in required_kinds and await _honest_sign_required_by_catalog(
             session, positions, fallback_product_id
@@ -770,9 +780,35 @@ async def sync_ozon_orders(
         product_id = _primary_product_id(positions, fallback_product_id)
         positions_mapped = _positions_are_mapped(positions, fallback_product_id)
         if existing is not None:
-            composition_changed = has_positions_payload and [
-                _position_signature(position) for position in existing.product_positions
-            ] != [_position_signature(position) for position in positions]
+            if has_positions_payload and existing.supply_id is not None:
+                # Box edits and assembly take this same lock; reread the saved
+                # composition after waiting so a concurrent ship cannot lose it.
+                await session.scalar(
+                    select(FbsSupply.id)
+                    .where(
+                        FbsSupply.id == existing.supply_id,
+                        FbsSupply.tenant_id == tenant_id,
+                    )
+                    .with_for_update()
+                )
+                await session.refresh(
+                    existing,
+                    attribute_names=[
+                        "meta_details_json",
+                        "product_positions",
+                    ],
+                )
+            assembly_started = bool((existing.meta_details_json or {}).get("ozon_assembly"))
+            composition_changed = (
+                has_positions_payload
+                and not assembly_started
+                and Counter(
+                    _position_signature(position) for position in existing.product_positions
+                )
+                != Counter(_position_signature(position) for position in positions)
+            )
+            if has_positions_payload and not composition_changed and not assembly_started:
+                _update_position_metadata(existing.product_positions, positions)
             if composition_changed:
                 await _release_reservation(session, existing)
                 existing.product_positions.clear()
