@@ -6,7 +6,7 @@ from typing import Annotated, Any, Literal
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -124,7 +124,9 @@ class FbsCancelledAfterPackItemOut(BaseModel):
     product: FbsCancelledProductOut
     seller: FbsCancelledSellerOut
     supply: FbsCancelledSupplyOut
-    cargo_place: FbsCancelledCargoPlaceOut | None
+    # Заказ может лежать в нескольких коробах (WMS-355) — список, а не одно
+    # значение. Пустой список означает, что по коробам заказ не раскладывали.
+    cargo_places: list[FbsCancelledCargoPlaceOut] = Field(default_factory=list)
     assembled_at: datetime | None
     picked_at: datetime | None
     packed_at: datetime | None

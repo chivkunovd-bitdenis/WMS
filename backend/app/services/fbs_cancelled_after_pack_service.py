@@ -192,7 +192,7 @@ async def _load_supplemental_rows(
     dict[uuid.UUID, uuid.UUID],
     dict[uuid.UUID, datetime],
     dict[uuid.UUID, uuid.UUID],
-    dict[uuid.UUID, dict[str, Any]],
+    dict[uuid.UUID, list[dict[str, Any]]],
     dict[uuid.UUID, FbsSupply],
 ]:
     order_ids = [order.id for order in orders]
@@ -200,7 +200,10 @@ async def _load_supplemental_rows(
     pick_supply: dict[uuid.UUID, uuid.UUID] = {}
     fulfilled_at: dict[uuid.UUID, datetime] = {}
     pack_task: dict[uuid.UUID, uuid.UUID] = {}
-    cargo: dict[uuid.UUID, dict[str, Any]] = {}
+    # Заказ может лежать сразу в нескольких коробах (WMS-355), поэтому здесь
+    # список, а не одно значение: словарь «короб по заказу» показал бы в отчёте
+    # последний короб из семи, а остальные молча потерял.
+    cargo: dict[uuid.UUID, list[dict[str, Any]]] = {}
     if not order_ids:
         return printed_at, pick_supply, fulfilled_at, pack_task, cargo, {}
 
@@ -273,15 +276,17 @@ async def _load_supplemental_rows(
         )
     ).all()
     box_supply: dict[uuid.UUID, uuid.UUID] = {}
-    for order_id, box, warehouse_box, trbx in box_rows:
+    for order_id, box, warehouse_box, trbx in sorted(box_rows, key=lambda row: row[1].box_number):
         box_supply[order_id] = box.supply_id
-        cargo[order_id] = {
-            "box_id": str(box.id),
-            "box_number": box.box_number,
-            "box_barcode": warehouse_box.internal_barcode,
-            "trbx_id": str(trbx.id) if trbx is not None else None,
-            "wb_trbx_id": trbx.wb_trbx_id if trbx is not None else None,
-        }
+        cargo.setdefault(order_id, []).append(
+            {
+                "box_id": str(box.id),
+                "box_number": box.box_number,
+                "box_barcode": warehouse_box.internal_barcode,
+                "trbx_id": str(trbx.id) if trbx is not None else None,
+                "wb_trbx_id": trbx.wb_trbx_id if trbx is not None else None,
+            }
+        )
 
     supply_ids = {
         supply_id
@@ -467,7 +472,7 @@ async def fetch_cancelled_after_pack_page(
                         "status": None,
                     }
                 ),
-                "cargo_place": cargo.get(order.id),
+                "cargo_places": cargo.get(order.id, []),
                 "assembled_at": assembled_at,
                 "picked_at": order.picked_at,
                 "packed_at": order.packed_at,
