@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.settings import settings
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.seller import Seller
 from app.services.integration_fernet import decrypt_secret, encrypt_secret
@@ -16,6 +17,7 @@ from app.services.integration_fernet import decrypt_secret, encrypt_secret
 PUBLIC_STATUS_KEYS = {
     "marketplace",
     "connected",
+    "live_exchange_enabled",
     "validation_status",
     "last_validated_at",
     "last_validation_error",
@@ -48,6 +50,7 @@ def public_status_for(row: MarketplaceAccount | None) -> dict[str, object]:
         return {
             "marketplace": "ozon",
             "connected": False,
+            "live_exchange_enabled": bool(settings.ozon_live_api_enabled),
             "validation_status": "not_configured",
             "last_validated_at": None,
             "last_validation_error": None,
@@ -58,6 +61,7 @@ def public_status_for(row: MarketplaceAccount | None) -> dict[str, object]:
     return {
         "marketplace": "ozon",
         "connected": True,
+        "live_exchange_enabled": bool(settings.ozon_live_api_enabled),
         "validation_status": row.validation_status,
         "last_validated_at": row.last_validated_at,
         "last_validation_error": row.last_validation_error_code,

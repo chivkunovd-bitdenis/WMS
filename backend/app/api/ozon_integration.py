@@ -36,6 +36,7 @@ from app.services.seller_staff_permissions_service import PERM_SETTINGS
 class OzonAccountStatusOut(BaseModel):
     marketplace: Literal["ozon"]
     connected: bool
+    live_exchange_enabled: bool
     validation_status: Literal["not_configured", "valid", "invalid", "unavailable"]
     last_validated_at: datetime | None
     last_validation_error: str | None

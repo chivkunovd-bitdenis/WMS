@@ -303,6 +303,7 @@ async def test_tc_s32_ozon_014_public_schema_hides_account_identity_and_future_f
     assert set(response.json()) == {
         "marketplace",
         "connected",
+        "live_exchange_enabled",
         "validation_status",
         "last_validated_at",
         "last_validation_error",
@@ -321,6 +322,7 @@ async def test_tc_s32_ozon_014_public_schema_hides_account_identity_and_future_f
     assert public_fields == {
         "marketplace",
         "connected",
+        "live_exchange_enabled",
         "validation_status",
         "last_validated_at",
         "last_validation_error",
@@ -356,3 +358,17 @@ async def test_tc_s32_ozon_014_public_schema_hides_account_identity_and_future_f
             "expires_at",
             "capabilities",
         }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("enabled", [False, True])
+async def test_public_status_reports_actual_exchange_setting(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch, enabled: bool,
+) -> None:
+    from app.core.settings import settings
+
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", enabled)
+    response = await async_client.get(ACCOUNT, headers=await _seller_headers(async_client))
+    assert response.status_code == 200
+    assert response.json()["live_exchange_enabled"] is enabled
+    assert response.json()["connected"] is False

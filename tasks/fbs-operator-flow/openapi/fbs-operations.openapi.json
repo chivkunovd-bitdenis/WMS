@@ -18241,6 +18241,10 @@
             "type": "boolean",
             "title": "Connected"
           },
+          "live_exchange_enabled": {
+            "type": "boolean",
+            "title": "Live Exchange Enabled"
+          },
           "validation_status": {
             "type": "string",
             "enum": [
@@ -18314,6 +18318,7 @@
         "required": [
           "marketplace",
           "connected",
+          "live_exchange_enabled",
           "validation_status",
           "last_validated_at",
           "last_validation_error",
