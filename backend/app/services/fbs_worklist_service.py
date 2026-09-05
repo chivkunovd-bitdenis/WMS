@@ -49,6 +49,7 @@ from app.models.storage_location import StorageLocation
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.models.warehouse import Warehouse
 from app.services import tenant_settings_service as tenant_settings_svc
+from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.fbs_stock_availability_service import fbs_available_qty_by_product
 from app.services.inventory_service import OUTBOUND_RESERVE_STATUSES
 from app.services.wb_card_enrichment import (
@@ -408,6 +409,8 @@ async def _load_worklist_context(
     markings = await _load_markings(session, order_ids)
     picks = await _load_active_picks(session, tenant_id, order_ids)
     sticker_assets = await _load_sticker_assets(session, tenant_id, order_ids)
+    # У озоновского товара снапшота карточки WB нет — фото лежит в привязке Ozon.
+    ozon_photos = await load_ozon_primary_image_urls(session, tenant_id, product_ids)
     return {
         "sellers": sellers,
         "warehouses": warehouses,
@@ -415,6 +418,7 @@ async def _load_worklist_context(
         "products": products,
         "positions": positions,
         "cards": cards,
+        "ozon_photos": ozon_photos,
         "availability": availability,
         "locations": locations,
         "markings": markings,
@@ -766,6 +770,8 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     # От WB на упаковке нужен только QR стикера заказа; штрихкод — всегда наш.
     barcode = (product.wb_barcode if product else None) or order.wb_barcode
     image_url = first_photo_url_from_card(card_raw) if card_raw else None
+    # У озоновского товара снапшота карточки WB нет — фото лежит в привязке Ozon.
+    image_url = image_url or ctx["ozon_photos"].get(order.product_id)
     category = subject_name_from_card(card_raw) if card_raw else None
     color = color_from_card(card_raw) if card_raw else None
     # Бренд и состав нужны этикетке ШК: без них она печаталась с пустыми

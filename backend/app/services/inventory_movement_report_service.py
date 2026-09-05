@@ -31,6 +31,7 @@ from app.models.product import Product
 from app.models.seller import Seller
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.storage_location import StorageLocation
+from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.wb_card_enrichment import first_photo_url_from_card
 
 # Технические raw-строки movement_type, которые не заведены как модульные константы
@@ -257,17 +258,16 @@ async def load_report_photo_urls(
     seller_ids = {
         sid for sid, nm in seller_nm_by_product.values() if sid is not None and nm is not None
     }
-    if not seller_ids:
-        return {}
-    card_stmt = select(SellerWildberriesImportedCard).where(
-        SellerWildberriesImportedCard.tenant_id == tenant_id,
-        SellerWildberriesImportedCard.seller_id.in_(seller_ids),
-    )
-    res = await session.execute(card_stmt)
     by_seller_nm: dict[tuple[uuid.UUID, int], dict[str, Any]] = {}
-    for card in res.scalars().all():
-        if isinstance(card.raw_json, dict):
-            by_seller_nm[(card.seller_id, int(card.nm_id))] = card.raw_json
+    if seller_ids:
+        card_stmt = select(SellerWildberriesImportedCard).where(
+            SellerWildberriesImportedCard.tenant_id == tenant_id,
+            SellerWildberriesImportedCard.seller_id.in_(seller_ids),
+        )
+        res = await session.execute(card_stmt)
+        for card in res.scalars().all():
+            if isinstance(card.raw_json, dict):
+                by_seller_nm[(card.seller_id, int(card.nm_id))] = card.raw_json
 
     out: dict[uuid.UUID, str | None] = {}
     for pid, (sid, nm) in seller_nm_by_product.items():
@@ -276,4 +276,8 @@ async def load_report_photo_urls(
         card_raw = by_seller_nm.get((sid, nm))
         if card_raw is not None:
             out[pid] = first_photo_url_from_card(card_raw)
+    # У озоновского товара снапшота карточки WB нет — фото лежит в привязке Ozon.
+    missing = {pid for pid in seller_nm_by_product if out.get(pid) is None}
+    if missing:
+        out.update(await load_ozon_primary_image_urls(session, tenant_id, missing))
     return out

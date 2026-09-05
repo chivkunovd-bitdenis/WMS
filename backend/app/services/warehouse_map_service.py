@@ -33,6 +33,7 @@ from app.services import (
     pallet_service,
     warehouse_box_service,
 )
+from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.inventory_container_service import ContainerKind, validate_container
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
@@ -511,6 +512,13 @@ async def get_warehouse_map(
         request_numbers,
         cards,
     ) = await _load_map_rows(session, tenant_id, warehouse_id)
+    # У озоновского товара снапшота карточки WB нет — фото лежит в привязке Ozon.
+    ozon_photos = await load_ozon_primary_image_urls(
+        session,
+        tenant_id,
+        {product.id for _balance, _location, product, _seller in rows}
+        | {row.product.id for row in pending_contents},
+    )
 
     location_by_id = {location.id: location for location in locations}
     balance_location: dict[tuple[str, uuid.UUID], uuid.UUID] = {}
@@ -603,6 +611,7 @@ async def get_warehouse_map(
             else None
         )
         category, photo_url = _card_data(card)
+        photo_url = photo_url or ozon_photos.get(product.id)
         seller_name = seller.name if seller is not None else None
         if seller_name:
             sellers.add(seller_name)
@@ -654,6 +663,7 @@ async def get_warehouse_map(
             else None
         )
         category, photo_url = _card_data(card)
+        photo_url = photo_url or ozon_photos.get(product.id)
         seller_name = pending.seller.name if pending.seller is not None else None
         if seller_name:
             sellers.add(seller_name)

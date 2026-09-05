@@ -31,6 +31,7 @@ from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
 from app.services import inventory_service, tenant_settings_service, warehouse_map_service
+from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.inventory_container_service import ContainerKind
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
@@ -1261,31 +1262,36 @@ async def product_photos(
         for product in products
         if product.seller_id is not None and product.wb_nm_id is not None
     }
-    if not pairs:
-        return result
-    rows = await session.execute(
-        select(SellerWildberriesImportedCard).where(
-            SellerWildberriesImportedCard.tenant_id == products[0].tenant_id,
-            or_(
-                *[
-                    and_(
-                        SellerWildberriesImportedCard.seller_id == seller_id,
-                        SellerWildberriesImportedCard.nm_id == nm_id,
-                    )
-                    for seller_id, nm_id in pairs
-                ]
-            ),
+    if pairs:
+        rows = await session.execute(
+            select(SellerWildberriesImportedCard).where(
+                SellerWildberriesImportedCard.tenant_id == products[0].tenant_id,
+                or_(
+                    *[
+                        and_(
+                            SellerWildberriesImportedCard.seller_id == seller_id,
+                            SellerWildberriesImportedCard.nm_id == nm_id,
+                        )
+                        for seller_id, nm_id in pairs
+                    ]
+                ),
+            )
         )
-    )
-    by_pair = {
-        (card.seller_id, card.nm_id): first_photo_url_from_card(card.raw_json or {})
-        for card in rows.scalars()
-    }
-    for product in products:
-        seller_id = product.seller_id
-        nm_id = product.wb_nm_id
-        if seller_id is not None and nm_id is not None:
-            result[product.id] = by_pair.get((seller_id, nm_id))
+        by_pair = {
+            (card.seller_id, card.nm_id): first_photo_url_from_card(card.raw_json or {})
+            for card in rows.scalars()
+        }
+        for product in products:
+            seller_id = product.seller_id
+            nm_id = product.wb_nm_id
+            if seller_id is not None and nm_id is not None:
+                result[product.id] = by_pair.get((seller_id, nm_id))
+    # У озоновского товара снапшота карточки WB нет — фото лежит в привязке Ozon.
+    missing = {pid for pid, url in result.items() if url is None}
+    if missing:
+        result.update(
+            await load_ozon_primary_image_urls(session, products[0].tenant_id, missing)
+        )
     return result
 
 

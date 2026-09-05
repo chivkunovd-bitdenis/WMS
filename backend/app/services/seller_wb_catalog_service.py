@@ -20,6 +20,7 @@ from app.services.catalog_service import (
     list_ozon_product_links,
     list_products,
     marketplace_scope_condition,
+    ozon_link_primary_image_url,
 )
 from app.services.wb_card_enrichment import (
     brand_from_card,
@@ -278,6 +279,8 @@ async def list_seller_wb_catalog_rows(
             subj = subject_name_from_card(card_raw)
         if img is None and card_raw:
             img = first_photo_url_from_card(card_raw)
+        if img is None:
+            img = ozon_link_primary_image_url(ozon_links.get(p.id))
         chrt_id = int(p.wb_chrt_id) if p.wb_chrt_id is not None else None
         sync_state = sync_state_by_key.get((seller_id, chrt_id)) if chrt_id is not None else None
         rows.append(
@@ -452,6 +455,8 @@ async def _enrich_linked_products(
             subj = subject_name_from_card(card_raw)
         if img is None and card_raw:
             img = first_photo_url_from_card(card_raw)
+        if img is None:
+            img = ozon_link_primary_image_url(ozon_links.get(p.id))
         chrt_id = int(p.wb_chrt_id) if p.wb_chrt_id is not None else None
         sync_state = (
             sync_state_by_key.get((p.seller_id, chrt_id))

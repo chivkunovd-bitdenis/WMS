@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 
 from app.api.fbs_errors import fbs_error_message
 from app.models.fbs_order import FbsOrder
-from app.services import fbs_workspace_service as workspace_svc
+from app.services.marketplace_scope import order_display_number
 from app.services.operation_fact_service import normalize_marketplace
 
 
@@ -36,13 +36,13 @@ def test_operator_gate_shows_the_number_a_person_can_find_in_the_cabinet() -> No
     нет ни в одном кабинете, и сопоставить его было не с чем.
     """
     ozon = _order(marketplace="ozon", external_order_id="0195832-0021-1")
-    assert workspace_svc._order_number(ozon) == "0195832-0021-1"
+    assert order_display_number(ozon) == "0195832-0021-1"
 
 
 def test_operator_gate_keeps_the_wb_number_untouched() -> None:
     wb = _order(marketplace="wb", external_order_id=None)
     wb.wb_order_id = 1200123
-    assert workspace_svc._order_number(wb) == "1200123"
+    assert order_display_number(wb) == "1200123"
 
 
 def test_ozon_error_code_has_a_human_fallback_like_the_wb_one() -> None:

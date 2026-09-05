@@ -42,6 +42,7 @@ from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.services import fbs_marking_service as marking_svc
 from app.services import marking_code_service as marking_code_svc
+from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.marketplace_scope import is_wildberries
 from app.services.ozon_kiz_service import OzonKizError
 from app.services.ozon_kiz_service import commit_ozon_kiz as commit_ozon
@@ -578,20 +579,25 @@ def _mask_kiz(value: str) -> str:
 
 
 async def _image_url_for_order(session: AsyncSession, order: FbsOrder) -> str | None:
-    if order.wb_nm_id is None:
-        return None
-    stmt = (
-        select(SellerWildberriesImportedCard.raw_json)
-        .where(
-            SellerWildberriesImportedCard.seller_id == order.seller_id,
-            SellerWildberriesImportedCard.nm_id == int(order.wb_nm_id),
+    if order.wb_nm_id is not None:
+        stmt = (
+            select(SellerWildberriesImportedCard.raw_json)
+            .where(
+                SellerWildberriesImportedCard.seller_id == order.seller_id,
+                SellerWildberriesImportedCard.nm_id == int(order.wb_nm_id),
+            )
+            .limit(1)
         )
-        .limit(1)
-    )
-    raw = (await session.execute(stmt)).scalar_one_or_none()
-    if isinstance(raw, dict):
-        return first_photo_url_from_card(raw)
-    return None
+        raw = (await session.execute(stmt)).scalar_one_or_none()
+        if isinstance(raw, dict):
+            wb_url = first_photo_url_from_card(raw)
+            if wb_url is not None:
+                return wb_url
+    # У озоновского товара снапшота карточки WB нет — фото лежит в привязке Ozon.
+    if order.product_id is None:
+        return None
+    urls = await load_ozon_primary_image_urls(session, order.tenant_id, {order.product_id})
+    return urls.get(order.product_id)
 
 
 def _product_payload(order: FbsOrder, image_url: str | None) -> FbsKizProduct:
