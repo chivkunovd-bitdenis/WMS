@@ -11,7 +11,11 @@ describe('FfReportsPage pagination actions', () => {
     expect(markup).toMatch(/<button[^>]*class="[^"]*MuiButton-outlined[^"]*"[^>]*disabled=""[^>]*data-testid="ff-reports-next-page"/)
     expect(markup).toContain('aria-label="Это первая страница"')
     expect(markup).toContain('aria-label="Это последняя страница"')
-    expect(markup).toContain('data-testid="ff-reports-metrics-net"')
+    // «Нетто» убрано намеренно: цифра не отвечала ни на один вопрос склада.
+    // Панель читается как приход → расход → остаток, а начинается с того,
+    // что было на начало периода, иначе остаток выглядит как ошибка расчёта.
+    expect(markup).not.toContain('data-testid="ff-reports-metrics-net"')
+    expect(markup).toContain('data-testid="ff-reports-metrics-opening"')
     expect(markup).not.toContain('ff-reports-comparison')
     expect(markup).not.toContain('ff-reports-chart')
   })

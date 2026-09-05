@@ -141,6 +141,7 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     # "Склады и привязки" / "Синхронизация остатков" sections.
     "binding_not_found": "Привязка склада не найдена.",
     "invalid_wb_warehouse_id": "Некорректный ID склада WB.",
+    "unsupported_marketplace": "Привязка складов поддерживается только для Wildberries и Ozon.",
     "wms_warehouse_already_bound": "WMS-склад уже привязан.",
     "wb_warehouse_already_bound": "Этот WB-склад уже привязан к другому складу WMS.",
     "active_fbs_reservations": "Есть активные FBS-резервы.",
@@ -172,6 +173,10 @@ def fbs_error_message(code: str, explicit: str | None = None) -> str:
         return FBS_ERROR_MESSAGES_RU[code]
     if code.startswith("wb_"):
         return "Ошибка Wildberries."
+    # У вайлдберрисовских кодов запасной текст был, у озоновских — нет, и
+    # оператор видел на экране голый код вида `ozon_ship_unconfirmed`.
+    if code.startswith("ozon_"):
+        return "Ошибка Ozon."
     return code
 
 

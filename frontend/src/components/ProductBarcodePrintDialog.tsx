@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box,
   Button,
@@ -20,6 +20,7 @@ import { printProductThermalLabels } from '../utils/printProductThermalLabel'
 import { resolvePackUnits, resolveWbBarcodeLabelCount } from '../utils/productBarcodePrint'
 import { resolveProductPrimaryBarcode, type ProductLineDisplayMeta } from '../types/wbProductCatalog'
 import { resolveLabelSize, loadLabelSizeId, type LabelSize } from '../utils/labelSize'
+import { resolvePrintTemplate } from '../utils/printTemplate'
 import { LabelSizeSelect } from './LabelSizeSelect'
 import { MarkingLabelPreview } from './MarkingLabelPreview'
 
@@ -27,15 +28,21 @@ type Props = {
   open: boolean
   meta: ProductLineDisplayMeta | null
   onClose: () => void
+  /** Токен и товар нужны, чтобы подтянуть состав этикетки, закреплённый за
+   *  продавцом: без них печать из каталога жила по своим галочкам и расходилась
+   *  с тем, что печатает склад. */
+  token?: string
+  productId?: string
 }
 
-export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
+export function ProductBarcodePrintDialog({ open, meta, onClose, token, productId }: Props) {
   const [qty, setQty] = useState('1')
   const [error, setError] = useState<string | null>(null)
   const [labelSize, setLabelSize] = useState<LabelSize>(() => resolveLabelSize(loadLabelSizeId()))
   const [printOptions, setPrintOptions] = useState<ProductLabelPrintOptions>(
     DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS,
   )
+  const requestedProductRef = useRef<string | null>(null)
 
   const hasComposition = Boolean(meta?.wb_composition?.trim())
 
@@ -46,8 +53,34 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
       setPrintOptions({
         includeComposition: Boolean(meta?.wb_composition?.trim()),
       })
+      // Состав, закреплённый за продавцом, важнее локальных галочек: этикетка
+      // должна быть одинаковой везде, где её печатают.
+      if (token && productId) {
+        // Ответ по прошлому товару не должен применяться к текущему: закрыли
+        // печать одного, открыли другого — медленный ответ первого пришёл бы
+        // последним и напечатал бы чужим составом.
+        requestedProductRef.current = productId
+        void (async () => {
+          try {
+            const template = await resolvePrintTemplate(token, { productId })
+            const saved = template.layout.label_options
+            if (saved && requestedProductRef.current === productId) {
+              setPrintOptions({
+                includeSize: saved.include_size,
+                includeColor: saved.include_color,
+                includeBrand: saved.include_brand,
+                includeComposition:
+                  saved.include_composition && Boolean(meta?.wb_composition?.trim()),
+              })
+            }
+          } catch {
+            // Настройка не загрузилась — печатаем по галочкам на форме, как
+            // печатали раньше. Ронять печать из-за этого нельзя.
+          }
+        })()
+      }
     }
-  }, [open, meta?.sku_code, meta?.wb_composition])
+  }, [open, meta?.sku_code, meta?.wb_composition, token, productId])
 
   const barcode = meta ? resolveProductPrimaryBarcode(meta) : ''
   const packUnits = useMemo(

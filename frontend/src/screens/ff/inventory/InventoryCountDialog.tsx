@@ -103,6 +103,9 @@ function InventoryCountDialogState({
   // кнопка стоит рядом с «Сохранить», а действие необратимое.
   const [confirmPost, setConfirmPost] = useState(false)
   const [scanFocus, setScanFocus] = useState<{ key: string; request: number } | null>(null)
+  // Место, на котором оператор сейчас стоит: ячейка или короб. Другое
+  // состояние, чем scanFocus — держится, пока не выберут другое место.
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const treeRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -156,6 +159,11 @@ function InventoryCountDialogState({
       else next.add(row.key)
       return next
     })
+  }
+
+  // Повторный клик по уже выбранной строке снимает выделение.
+  function handleSelectRow(row: InvRow) {
+    setSelectedKey((current) => (current === row.key ? null : row.key))
   }
 
   function handlePrintContents(row: InvRow) {
@@ -276,6 +284,8 @@ function InventoryCountDialogState({
             loading={false}
             readOnly={false}
             highlightedKey={scanFocus?.key}
+            selectedKey={selectedKey}
+            onSelect={handleSelectRow}
             empty={{
               title: 'Здесь пусто',
               hint: 'Внутри этого места сейчас нет товара — пересчитывать нечего.',

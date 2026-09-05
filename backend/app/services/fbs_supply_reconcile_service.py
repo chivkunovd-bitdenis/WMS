@@ -224,6 +224,39 @@ async def get_active_deliver_operation_for_supply(
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def list_deliver_operations_for_supply(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    local_supply_id: uuid.UUID,
+) -> list[FbsWbOperation]:
+    """Все попытки передачи этой поставки — в любом состоянии, от старых к новым.
+
+    Отличие от `get_active_deliver_operation_for_supply` в том, что сюда
+    попадают и отказавшие попытки. Именно они нужны повтору Ozon: в их журнале
+    лежит снимок того, что уже необратимо сделано в кабинете, и без него повтор
+    отправил бы собранные отправления второй раз.
+
+    Отдаём весь список, а не «последнюю»: у `created_at` в SQLite разрешение —
+    секунда, и две попытки в одну секунду становятся неразличимы, после чего
+    «последняя» выбирается случайным UUID. Складом такое решать нельзя, поэтому
+    вызывающий код складывает снимки всех попыток.
+    """
+    stmt = (
+        select(FbsWbOperation)
+        .where(
+            FbsWbOperation.tenant_id == tenant_id,
+            FbsWbOperation.seller_id == seller_id,
+            FbsWbOperation.operation_kind == OPERATION_KIND_SUPPLY_DELIVER,
+            FbsWbOperation.local_entity_type == "fbs_supply",
+            FbsWbOperation.local_entity_id == local_supply_id,
+        )
+        .order_by(FbsWbOperation.created_at.asc(), FbsWbOperation.id.asc())
+    )
+    return list((await session.execute(stmt)).scalars().all())
+
+
 async def create_pending_deliver_operation(
     session: AsyncSession,
     *,

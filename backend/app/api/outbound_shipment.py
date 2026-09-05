@@ -68,7 +68,6 @@ class OutboundShipmentRequestSummaryOut(BaseModel):
     goods_qty_total: int
     planned_shipment_date: str | None = None
     created_at: str
-    marketplace_label: str = "Wildberries"
     seller_id: str | None = None
     seller_name: str | None = None
 

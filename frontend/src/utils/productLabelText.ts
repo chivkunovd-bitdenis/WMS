@@ -77,11 +77,15 @@ export function productBarcodeColumnSubLines(
 /** Which optional WB fields to show on thermal label / print preview. */
 export type ProductLabelPrintOptions = {
   includeSize?: boolean
+  includeColor?: boolean
+  includeBrand?: boolean
   includeComposition: boolean
 }
 
 export const DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS: ProductLabelPrintOptions = {
   includeSize: true,
+  includeColor: true,
+  includeBrand: true,
   includeComposition: true,
 }
 
@@ -101,6 +105,10 @@ export function productLabelDetailLines(
   const includeSize = options.includeSize ?? DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS.includeSize
   const includeComposition =
     options.includeComposition ?? DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS.includeComposition
+  // Цвет и бренд раньше печатались всегда: выключателей у них не было вовсе,
+  // и «настроить состав этикетки» получалось только наполовину.
+  const includeColor = options.includeColor ?? DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS.includeColor
+  const includeBrand = options.includeBrand ?? DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS.includeBrand
   const lines: string[] = []
   const size = meta.wb_size?.trim()
   const color = meta.wb_color?.trim()
@@ -109,10 +117,10 @@ export function productLabelDetailLines(
   if (includeSize && size && size !== '0') {
     lines.push(`Размер: ${size}`)
   }
-  if (color) {
+  if (includeColor && color) {
     lines.push(`Цвет: ${truncateProductLabelColor(color)}`)
   }
-  if (brand) {
+  if (includeBrand && brand) {
     lines.push(`Бренд: ${brand}`)
   }
   if (includeComposition && composition) {

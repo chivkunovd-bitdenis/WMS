@@ -31,7 +31,9 @@ import {
   tapeToLayout,
   type TapeBlock,
 } from '../utils/markingPrintPresets'
-import { resolvePrintTemplate, type PrintLayout } from '../utils/printTemplate'
+import { resolvePrintTemplate, type PrintLabelOptions, type PrintLayout } from '../utils/printTemplate'
+import { labelOptionsFromLayout } from '../utils/printMarkingCodeLabel'
+import type { ProductLabelPrintOptions } from '../utils/productLabelText'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import {
   beginPrintUserGesture,
@@ -179,6 +181,7 @@ function buildProductLabelSections(
   product: ProductThermalLabelData,
   count: number,
   size: LabelSize,
+  labelOptions?: ProductLabelPrintOptions,
 ): string[] {
   const barcode = product.barcode?.trim()
   if (!barcode) {
@@ -189,7 +192,7 @@ function buildProductLabelSections(
     buildProductLabelSectionHtml(
       product,
       barcodeDataUrl,
-      undefined,
+      labelOptions,
       size,
     ).replace('data-testid="product-thermal-label"', 'data-testid="product-thermal-label" data-tape-block="label"'),
   )
@@ -201,6 +204,8 @@ export type MarkingPrintContext = {
   lineId?: string
   source?: 'packaging' | 'catalog'
   productId: string
+  /** Селлер товара: по нему подбирается закреплённый за селлером шаблон. */
+  sellerId?: string | null
   documentNumber: string | null
   qtyNeedPack: number
   markingAvailable: number
@@ -224,7 +229,12 @@ type Props = {
   onClose: () => void
 }
 
-export function resolveTapeCounts(nextCz: number, nextWb: number, allowQrOnly: boolean) {
+export function resolveTapeCounts(
+  nextCz: number,
+  nextWb: number,
+  allowQrOnly: boolean,
+  labelOptions?: PrintLabelOptions,
+) {
   const cz = Math.max(0, Math.min(99, Math.floor(nextCz) || 0))
   const wb = Math.max(0, Math.min(99, Math.floor(nextWb) || 0))
   const qrOnly = allowQrOnly && cz === 0 && wb === 0
@@ -234,7 +244,11 @@ export function resolveTapeCounts(nextCz: number, nextWb: number, allowQrOnly: b
     cz: effectiveCz,
     wb,
     tape,
-    layout: qrOnly ? { units: [] } satisfies PrintLayout : tapeToLayout(tape),
+    // Состав этикетки переживает смену количества блоков: он про товар
+    // продавца, а не про раскладку оператора.
+    layout: qrOnly
+      ? ({ units: [], label_options: labelOptions } satisfies PrintLayout)
+      : tapeToLayout(tape, labelOptions),
   }
 }
 
@@ -258,6 +272,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [czQty, setCzQty] = useState(2)
   const [wbQty, setWbQty] = useState(0)
   const [tapeOrder, setTapeOrder] = useState<TapeBlock[]>(buildDefaultTape(2, 0))
+  const requestedProductRef = useRef<string | null>(null)
   const [dragTapeIndex, setDragTapeIndex] = useState<number | null>(null)
   const [catalogPrintQty, setCatalogPrintQty] = useState(1)
   const [wbBarcodeQty, setWbBarcodeQty] = useState(1)
@@ -352,7 +367,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     // здесь законна пустая раскладка ЧЗ/ШК: оператор печатает только QR, а ЧЗ
     // сканирует или печатает позже. Во всех остальных режимах сохраняем прежний
     // минимум — хотя бы один блок ЧЗ.
-    const next = resolveTapeCounts(nextCz, nextWb, includesOrderQr)
+    const next = resolveTapeCounts(nextCz, nextWb, includesOrderQr, layout.label_options)
     setCzQty(next.cz)
     setWbQty(next.wb)
     setTapeOrder(next.tape)
@@ -361,7 +376,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
   const applyTapeOrder = (nextTape: TapeBlock[]) => {
     setTapeOrder(nextTape)
-    setLayout(tapeToLayout(nextTape))
+    // Состав переносим в новый макет: он принадлежит товару продавца, а не
+    // раскладке. Без этого перетаскивание блоков возвращало выключенные поля.
+    setLayout((current) => tapeToLayout(nextTape, current.label_options))
     setCzQty(nextTape.filter((b) => b === 'cz').length)
     setWbQty(nextTape.filter((b) => b === 'label').length)
   }
@@ -445,8 +462,34 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setCzLabelSize(resolveLabelSize(loadLabelSizeId('cz')))
     setCzPrintOrientation(loadLabelPrintOrientation())
     setWbLabelSize(resolveLabelSize(loadLabelSizeId('label')))
+    // Метка «какой товар мы сейчас спрашиваем» ставится ДО развилки: её сверяют
+    // обе ветки, и обе летят за шаблоном. Пока она стояла только в ветке обычного
+    // товара, у маркируемого сверка шла с null и ответ выбрасывался всегда —
+    // то есть шаблон переставал применяться на живом вайлдберрисовском потоке.
+    requestedProductRef.current = ctx.productId
     if (!requiresHonestSign) {
+      // Лента у обычного товара фиксированная — один ШК, без Честного знака.
+      // Но состав этикетки всё равно принадлежит продавцу: без этого запроса
+      // настройка не применялась к большинству товаров, у которых маркировки
+      // нет вовсе.
       setLayout(cloneLayout(NON_HONEST_SIGN_LABEL_LAYOUT))
+      void (async () => {
+        try {
+          const template = await resolvePrintTemplate(ctx.token, {
+            productId: ctx.productId,
+            sellerId: ctx.sellerId ?? undefined,
+          })
+          if (requestedProductRef.current !== ctx.productId) return
+          if (template.layout.label_options) {
+            setLayout({
+              ...cloneLayout(NON_HONEST_SIGN_LABEL_LAYOUT),
+              label_options: { ...template.layout.label_options },
+            })
+          }
+        } catch {
+          // Настройка не загрузилась — печатаем полным составом, как раньше.
+        }
+      })()
       return
     }
     const defaultPresetId = 'pairs' as const
@@ -459,7 +502,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setLayout(cloneLayout(defaultPreset.layout))
     void (async () => {
       try {
-        const template = await resolvePrintTemplate(ctx.token, { productId: ctx.productId })
+        const template = await resolvePrintTemplate(ctx.token, {
+          productId: ctx.productId,
+          sellerId: ctx.sellerId ?? undefined,
+        })
+        // Ответ по прошлому товару не применяем к текущему: диалог могли
+        // закрыть и открыть на другом заказе, пока запрос летел.
+        if (requestedProductRef.current !== ctx.productId) return
         const matched = MARKING_PRINT_PRESETS.find(
           (preset) =>
             preset.id !== 'custom' &&
@@ -724,7 +773,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       setError('У товара нет штрихкода для печати.')
       return false
     }
-    printProductThermalLabels(label, count, undefined, size)
+    // Состав этикетки принадлежит продавцу и должен действовать одинаково
+    // везде: и в ленте ФБС, и здесь — в упаковке, каталоге и раздельной печати.
+    printProductThermalLabels(label, count, labelOptionsFromLayout(layout), size)
     markSectionDone(markDone)
     ctx.onPrinted()
     if (closeAfter) {
@@ -819,7 +870,12 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               }
             } else if (fallbackLabelCopies > 0) {
               orderSections.push(
-                ...buildProductLabelSections(order.productLabel, fallbackLabelCopies, size),
+                ...buildProductLabelSections(
+                  order.productLabel,
+                  fallbackLabelCopies,
+                  size,
+                  labelOptionsFromLayout(printLayout),
+                ),
               )
             }
             if (orderSections.length === 0) {
@@ -1387,6 +1443,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                     showOrderQr={includesOrderQr}
                     fbsOrders={fbsPreviewOrders}
                     fbsNonHonestLabelCopies={fbsPreviewLabelCopies}
+                    printOptions={labelOptionsFromLayout(layout)}
                     testId="marking-print-wb-only-preview"
                   />
                 </Box>
@@ -1581,6 +1638,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                       unitsToShow={Math.max(1, sepWbTotal)}
                       totalUnits={Math.max(1, sepWbTotal)}
                       productLabel={ctx?.productLabel ?? null}
+                      printOptions={labelOptionsFromLayout(layout)}
                       testId="marking-print-sep-wb-preview"
                     />
                   </Box>

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import binascii
 import uuid
 from collections import Counter
 from typing import TypeVar, cast
@@ -51,6 +52,22 @@ class OzonReturnError(Exception):
         self.message = message
         self.status_code = status_code
         super().__init__(code)
+
+
+def _decode_return_file(raw: str | None, invalid_message: str, empty_message: str) -> bytes:
+    """Разобрать файл возврата, не превращая пустой ответ в пятисотку.
+
+    Раньше здесь стоял голый `base64.b64decode(..., validate=True)` и ловился
+    только `ValueError`. На пустом ответе Ozon поле приходит `None`, декодер
+    бросает `TypeError`, и три ручки возвратов отвечали 500 вместо внятного
+    текста.
+    """
+    if not raw:
+        raise OzonReturnError("ozon_file_missing", empty_message)
+    try:
+        return base64.b64decode(raw, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise OzonReturnError("ozon_invalid_file", invalid_message) from exc
 
 
 async def _call(
@@ -663,13 +680,11 @@ async def get_giveout_pass_pdf(
         request=OzonV1Empty(),
         response_type=OzonV1GiveoutGetPDFResponse,
     )
-    try:
-        content = base64.b64decode(response.file_content, validate=True)
-    except ValueError as exc:
-        raise OzonReturnError(
-            "ozon_invalid_file",
-            "Ozon вернул повреждённый PDF пропуска.",
-        ) from exc
+    content = _decode_return_file(
+        response.file_content,
+        "Ozon вернул повреждённый PDF пропуска.",
+        "Ozon не вернул PDF пропуска.",
+    )
     return (
         content,
         response.file_name or "ozon-return-pass.pdf",
@@ -693,13 +708,11 @@ async def get_giveout_pass_png(
         request=OzonV1Empty(),
         response_type=OzonV1GiveoutGetPNGResponse,
     )
-    try:
-        content = base64.b64decode(response.file_content, validate=True)
-    except ValueError as exc:
-        raise OzonReturnError(
-            "ozon_invalid_file",
-            "Ozon вернул повреждённое изображение пропуска.",
-        ) from exc
+    content = _decode_return_file(
+        response.file_content,
+        "Ozon вернул повреждённое изображение пропуска.",
+        "Ozon не вернул изображение пропуска.",
+    )
     return (
         content,
         response.file_name or "ozon-return-pass.png",
@@ -723,13 +736,11 @@ async def reset_giveout_barcode(
         request=OzonV1Empty(),
         response_type=OzonV1GiveoutBarcodeResetResponse,
     )
-    try:
-        content = base64.b64decode(response.file_content, validate=True)
-    except ValueError as exc:
-        raise OzonReturnError(
-            "ozon_invalid_file",
-            "Ozon вернул повреждённый новый штрихкод.",
-        ) from exc
+    content = _decode_return_file(
+        response.file_content,
+        "Ozon вернул повреждённый новый штрихкод.",
+        "Ozon не вернул новый штрихкод.",
+    )
     return (
         content,
         response.file_name or "ozon-return-pass-reset.png",
@@ -753,6 +764,13 @@ async def current_barcode(
         request=OzonV1Empty(),
         response_type=OzonV1GiveoutGetBarcodeResponse,
     )
+    # Пустой штрихкод дальше не проходит валидацию ответа ручки (min_length=1)
+    # и превращался в пятисотку. Отвечаем понятной ошибкой на границе сервиса.
+    if not response.barcode:
+        raise OzonReturnError(
+            "ozon_barcode_missing",
+            "Ozon не вернул штрихкод получения возврата.",
+        )
     return response.barcode
 
 

@@ -195,7 +195,10 @@ export function FfDashboard({
         direction: row.warehouse_name ?? 'Направление не указано',
         boxesCount: row.goods_qty_total ?? row.line_count,
         shipmentType: 'FBO' as const,
-        title: row.marketplace_label ?? 'FBO',
+        // Заявка на отгрузку (`OutboundShipmentRequest`) — это общее списание
+        // остатков со склада, у неё нет привязки к конкретному маркетплейсу
+        // (в отличие от `mp`-строк выше, которые различают WB/Ozon по-настоящему).
+        title: 'FBO',
         source: 'fbo' as const,
       }))
     return [...fbs, ...mp, ...fbo].sort((a, b) => {

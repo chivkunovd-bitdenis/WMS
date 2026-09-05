@@ -363,6 +363,10 @@ export function MarkingLabelPreview(props: Props) {
     productLabel?.product_name,
     productPrintOptions?.includeComposition,
     productPrintOptions?.includeSize,
+    // Цвет и бренд тоже входят в состав: без них предпросмотр показывал поле,
+    // которого в печати уже не будет.
+    productPrintOptions?.includeColor,
+    productPrintOptions?.includeBrand,
     showOrderQr,
     fbsOrdersKey,
     nonHonestLabelCopies,

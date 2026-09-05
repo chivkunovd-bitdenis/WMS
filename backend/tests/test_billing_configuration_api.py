@@ -213,7 +213,7 @@ async def test_tariff_matrix_api_returns_and_atomically_persists_full_versioned_
         "versions": [
             {
                 "service_code": "inbound",
-                "unit": "document",
+                "unit": "item",
                 "enabled": True,
                 "rate": 1250,
                 "valid_from_at": "2026-08-27T09:00:00Z",
@@ -229,7 +229,7 @@ async def test_tariff_matrix_api_returns_and_atomically_persists_full_versioned_
             "product_id": None,
             "employee_user_id": None,
             "service_code": "inbound",
-            "unit": "document",
+            "unit": "item",
             "enabled": True,
             "rate": 1250,
             "valid_from_at": "2026-08-27T09:00:00Z",
@@ -403,7 +403,7 @@ async def test_tariff_matrix_api_persists_product_and_employee_rates_without_cro
 
 
 @pytest.mark.asyncio
-async def test_tariff_matrix_rate_edit_closes_old_interval_and_rejects_document_product_override(
+async def test_tariff_matrix_rate_edit_closes_old_interval_and_rejects_document_rate(
     async_client: AsyncClient,
 ) -> None:
     headers = await _register_admin(async_client, "matrix-version-edit")
@@ -475,7 +475,10 @@ async def test_tariff_matrix_rate_edit_closes_old_interval_and_rejects_document_
         (row["rate"], row["valid_to_at"]) for row in inserted.json()["versions"]
     ]
 
-    invalid_override = await async_client.put(
+    # Ставку «за документ» больше не заводят: склад принимает штуки, а не бумажки.
+    # Раньше такая ставка сохранялась и мешала завести цену на товар; теперь она
+    # отбивается сразу, самой единицей.
+    invalid_unit = await async_client.put(
         "/billing/tariff-matrix",
         headers=headers,
         json={
@@ -490,6 +493,23 @@ async def test_tariff_matrix_rate_edit_closes_old_interval_and_rejects_document_
                     "rate": 1200,
                     "valid_from_at": "2026-08-27T11:00:00Z",
                 },
+            ],
+        },
+    )
+    assert invalid_unit.status_code == 400
+    assert invalid_unit.json()["detail"] == "billing_tariff_matrix_unit_invalid"
+    after_invalid = await async_client.get("/billing/tariff-matrix", headers=headers)
+    assert after_invalid.json()["revision"] == 3
+
+    # Цена на товар при действующей ставке «за штуку» проходит.
+    product_override = await async_client.put(
+        "/billing/tariff-matrix",
+        headers=headers,
+        json={
+            "revision": 3,
+            "services": services,
+            "versions": [
+                *inserted.json()["versions"],
                 {
                     "seller_id": seller.json()["id"],
                     "product_id": product.json()["id"],
@@ -502,10 +522,7 @@ async def test_tariff_matrix_rate_edit_closes_old_interval_and_rejects_document_
             ],
         },
     )
-    assert invalid_override.status_code == 400
-    assert invalid_override.json()["detail"] == "billing_tariff_matrix_product_requires_item"
-    after_invalid = await async_client.get("/billing/tariff-matrix", headers=headers)
-    assert after_invalid.json()["revision"] == 3
+    assert product_override.status_code == 200, product_override.text
 
 
 def test_matrix_out_uses_interval_active_common_not_a_future_version() -> None:

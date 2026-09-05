@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.settings import settings
 from app.models.print_template import (
     LAYOUT_BLOCK_CZ,
     LAYOUT_BLOCKS,
@@ -15,6 +16,7 @@ from app.models.print_template import (
     USER_LAST_LAYOUT_NAME,
     PrintTemplate,
 )
+from app.models.seller import Seller
 from app.services.catalog_service import get_product
 
 
@@ -31,13 +33,52 @@ class LayoutUnit:
 
 
 @dataclass(frozen=True)
-class PrintLayout:
-    units: list[LayoutUnit]
+class LabelOptions:
+    """Что печатать на этикетке ШК, а что нет.
+
+    Раньше это жило только в момент печати: оператор ставил галочку в окне, она
+    действовала один раз и забывалась. Закрепить состав за селлером было нельзя,
+    хотя само хранилище шаблонов с привязкой к селлеру существует с июня —
+    в нём просто хранилась одна лента, без состава самой этикетки.
+
+    Порядок строк не настраивается и остаётся единым для всех: размер, цвет,
+    бренд, состав. Решение владельца от 03.09.2026.
+    """
+
+    include_size: bool = True
+    include_color: bool = True
+    include_brand: bool = True
+    include_composition: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "units": [{"block": u.block, "copies": u.copies} for u in self.units],
+            "include_size": self.include_size,
+            "include_color": self.include_color,
+            "include_brand": self.include_brand,
+            "include_composition": self.include_composition,
         }
+
+
+DEFAULT_LABEL_OPTIONS = LabelOptions()
+
+
+@dataclass(frozen=True)
+class PrintLayout:
+    units: list[LayoutUnit]
+    label_options: LabelOptions = DEFAULT_LABEL_OPTIONS
+    #: Шаблон заведён панелью состава и лентой не распоряжается. Признак нужен
+    #: именно в макете: по имени такой шаблон не отличить от обычного шаблона
+    #: продавца, у которого лента своя и должна работать.
+    options_only: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        data: dict[str, Any] = {
+            "units": [{"block": u.block, "copies": u.copies} for u in self.units],
+            "label_options": self.label_options.to_dict(),
+        }
+        if self.options_only:
+            data["options_only"] = True
+        return data
 
 
 @dataclass(frozen=True)
@@ -54,6 +95,8 @@ class PrintTemplateRow:
 
 
 SYSTEM_PAIRS_LAYOUT = PrintLayout(units=[LayoutUnit(block=LAYOUT_BLOCK_CZ, copies=2)])
+
+SELLER_LABEL_TEMPLATE_NAME = "Этикетка продавца"
 
 
 def system_pairs_template(tenant_id: uuid.UUID) -> PrintTemplateRow:
@@ -94,7 +137,36 @@ def parse_layout(raw: dict[str, Any] | str) -> PrintLayout:
         if not isinstance(copies, int) or copies < 1 or copies > 10:
             raise PrintTemplateServiceError("invalid_layout_copies")
         units.append(LayoutUnit(block=block, copies=copies))
-    return PrintLayout(units=units)
+    return PrintLayout(
+        units=units,
+        label_options=_parse_label_options(data.get("label_options")),
+        options_only=data.get("options_only") is True,
+    )
+
+
+def _parse_label_options(raw: Any) -> LabelOptions:
+    """Состав этикетки из сохранённого шаблона.
+
+    Ключа может не быть вовсе: шаблоны, заведённые до 03.09.2026, хранят только
+    ленту. Для них действует прежнее поведение — печатаем всё, что есть в
+    данных, — иначе выкатка молча урезала бы уже настроенные этикетки.
+    """
+    if raw is None:
+        return DEFAULT_LABEL_OPTIONS
+    if not isinstance(raw, dict):
+        raise PrintTemplateServiceError("invalid_layout_json")
+    values: dict[str, bool] = {}
+    for field, default in (
+        ("include_size", DEFAULT_LABEL_OPTIONS.include_size),
+        ("include_color", DEFAULT_LABEL_OPTIONS.include_color),
+        ("include_brand", DEFAULT_LABEL_OPTIONS.include_brand),
+        ("include_composition", DEFAULT_LABEL_OPTIONS.include_composition),
+    ):
+        value = raw.get(field, default)
+        if not isinstance(value, bool):
+            raise PrintTemplateServiceError("invalid_layout_json")
+        values[field] = value
+    return LabelOptions(**values)
 
 
 def layout_to_json(layout: PrintLayout | dict[str, Any]) -> str:
@@ -206,6 +278,15 @@ async def _validate_scope(
         if resolved_seller_id is not None and product.seller_id != resolved_seller_id:
             raise PrintTemplateServiceError("product_seller_mismatch")
         resolved_seller_id = product.seller_id
+    elif resolved_seller_id is not None:
+        # Продавца тоже надо сверить с арендатором. Раньше проверка шла только
+        # через товар, и запрос без товара пропускал чужой id: администратор
+        # одного арендатора мог завести шаблон на продавца другого.
+        owner = await session.scalar(
+            select(Seller.tenant_id).where(Seller.id == resolved_seller_id)
+        )
+        if owner != tenant_id:
+            raise PrintTemplateServiceError("seller_not_found")
     return resolved_seller_id
 
 
@@ -413,6 +494,12 @@ async def save_user_last_print_layout(
     layout: PrintLayout | dict[str, Any],
 ) -> PrintTemplateRow:
     parsed_layout = parse_layout(layout) if not isinstance(layout, PrintLayout) else layout
+    # В личной раскладке оператора состав этикетки не храним вовсе — только
+    # ленту. Иначе он переезжает вместе с ней: напечатал для продавца с
+    # выключенным брендом, и следующий продавец, у которого своей настройки нет,
+    # получил чужой состав. Раскладка — привычка человека, состав — свойство
+    # товара продавца, и смешивать их нельзя.
+    parsed_layout = PrintLayout(units=parsed_layout.units, label_options=DEFAULT_LABEL_OPTIONS)
     existing = await _find_user_last_layout(session, tenant_id, user_id)
     if existing is not None:
         existing.layout_json = layout_to_json(parsed_layout)
@@ -437,7 +524,142 @@ async def save_user_last_print_layout(
     return _row_from_model(model)
 
 
+async def _scoped_label_options(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    product_id: uuid.UUID | None,
+    seller_id: uuid.UUID | None,
+) -> LabelOptions | None:
+    """Состав этикетки, закреплённый за товаром или продавцом.
+
+    Возвращает None, когда ничего не закреплено: тогда действует то, что лежит
+    в раскладке оператора, и поведение не меняется.
+    """
+    resolved_seller_id = seller_id
+    if product_id is not None:
+        product = await get_product(session, tenant_id, product_id)
+        if product is not None:
+            resolved_seller_id = product.seller_id
+            stmt = (
+                select(PrintTemplate)
+                .where(
+                    PrintTemplate.tenant_id == tenant_id,
+                    PrintTemplate.product_id == product_id,
+                    PrintTemplate.user_id.is_(None),
+                    PrintTemplate.is_default.is_(True),
+                )
+                .limit(1)
+            )
+            product_default = (await session.execute(stmt)).scalar_one_or_none()
+            if product_default is not None:
+                return parse_layout(product_default.layout_json).label_options
+    if resolved_seller_id is None:
+        return None
+    stmt = (
+        select(PrintTemplate)
+        .where(
+            PrintTemplate.tenant_id == tenant_id,
+            PrintTemplate.seller_id == resolved_seller_id,
+            PrintTemplate.product_id.is_(None),
+            PrintTemplate.user_id.is_(None),
+            PrintTemplate.is_default.is_(True),
+        )
+        .limit(1)
+    )
+    seller_default = (await session.execute(stmt)).scalar_one_or_none()
+    if seller_default is None:
+        return None
+    return parse_layout(seller_default.layout_json).label_options
+
+
+async def set_seller_label_options(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID,
+    options: LabelOptions,
+) -> PrintTemplateRow:
+    """Закрепить за продавцом состав этикетки, не трогая его ленту печати.
+
+    Панель настроек отвечает только за состав: что печатать на этикетке ШК, а
+    что нет. Лента (сколько блоков Честного знака и сколько ШК гнать подряд) —
+    отдельное решение, она приходит из привычки оператора или из умолчания
+    продавца. Пока панель сохраняла шаблон целиком, она заодно переписывала
+    ленту на «один ШК», и у оператора без личной раскладки из печати молча
+    пропадал Честный знак.
+
+    Поэтому у существующего шаблона продавца меняем только состав, а новый
+    заводим с лентой системного умолчания — той же, что действует, когда за
+    продавцом не настроено ничего.
+    """
+    if not settings.label_template_enabled:
+        # Рубильник выключен — состав этикетки не настраивается вовсе, чтобы в
+        # боевой сборке не могло появиться ни одной строки, влияющей на печать.
+        raise PrintTemplateServiceError("label_template_disabled")
+    await _validate_scope(session, tenant_id, seller_id=seller_id, product_id=None)
+    stmt = (
+        select(PrintTemplate)
+        .where(
+            PrintTemplate.tenant_id == tenant_id,
+            PrintTemplate.seller_id == seller_id,
+            PrintTemplate.product_id.is_(None),
+            PrintTemplate.user_id.is_(None),
+            PrintTemplate.is_default.is_(True),
+        )
+        .limit(1)
+    )
+    existing = (await session.execute(stmt)).scalar_one_or_none()
+    if existing is not None:
+        current = parse_layout(existing.layout_json)
+        existing.layout_json = layout_to_json(
+            PrintLayout(units=current.units, label_options=options, options_only=True)
+        )
+        await session.flush()
+        # Без коммита ручка отвечала «сохранено», а следующий запрос читал старое:
+        # провайдер сессии сам ничего не коммитит, а ветка создания коммитит.
+        await session.commit()
+        await session.refresh(existing)
+        return _row_from_model(existing)
+    return await create_print_template(
+        session,
+        tenant_id,
+        name=SELLER_LABEL_TEMPLATE_NAME,
+        layout=PrintLayout(
+            units=SYSTEM_PAIRS_LAYOUT.units, label_options=options, options_only=True
+        ),
+        seller_id=seller_id,
+        user_id=None,
+        is_default=True,
+    )
+
+
 async def resolve_default_print_template(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    user_id: uuid.UUID | None = None,
+    product_id: uuid.UUID | None = None,
+    seller_id: uuid.UUID | None = None,
+) -> PrintTemplateRow:
+    """Какой макет печати применить: лента плюс состав этикетки.
+
+    Рубильник сборки выключен — состав не участвует вовсе. Возвращаем полный
+    набор полей, каким он был до появления функции, что бы ни лежало в базе:
+    боевая сборка не имеет права изменить ни одной напечатанной этикетки, даже
+    если настройка успела где-то сохраниться.
+    """
+    row = await _resolve_default_print_template(
+        session, tenant_id, user_id=user_id, product_id=product_id, seller_id=seller_id
+    )
+    if settings.label_template_enabled:
+        return row
+    return replace(
+        row, layout=PrintLayout(units=row.layout.units, label_options=DEFAULT_LABEL_OPTIONS)
+    )
+
+
+async def _resolve_default_print_template(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     *,
@@ -448,7 +670,29 @@ async def resolve_default_print_template(
     if user_id is not None:
         user_last = await _find_user_last_layout(session, tenant_id, user_id)
         if user_last is not None:
-            return _row_from_model(user_last)
+            # Раскладка оператора — это его привычка печати: сколько блоков и в
+            # каком порядке гнать лентой. Она сознательно важнее умолчания
+            # продавца (PRINT-05) и остаётся такой.
+            #
+            # А вот состав этикетки — свойство товара продавца, а не привычка
+            # оператора. Раньше он в раскладку не попадал вовсе, и вопрос не
+            # стоял. Теперь попадает — и если брать его отсюда, то напечатав
+            # для продавца А, оператор унесёт его состав на продавца Б.
+            # Поэтому ленту берём из раскладки оператора, а состав — из
+            # шаблона, закреплённого за продавцом или товаром.
+            scoped = (
+                await _scoped_label_options(
+                    session, tenant_id, product_id=product_id, seller_id=seller_id
+                )
+                if settings.label_template_enabled
+                else None
+            )
+            row = _row_from_model(user_last)
+            if scoped is None:
+                return row
+            return replace(
+                row, layout=PrintLayout(units=row.layout.units, label_options=scoped)
+            )
 
     if product_id is not None:
         product = await get_product(session, tenant_id, product_id)
@@ -518,6 +762,21 @@ async def resolve_default_print_template(
         result = await session.execute(stmt)
         seller_default = result.scalar_one_or_none()
         if seller_default is not None:
-            return _row_from_model(seller_default)
+            row = _row_from_model(seller_default)
+            if settings.label_template_enabled and row.layout.options_only:
+                # Шаблон, заведённый панелью состава, лентой не распоряжается:
+                # он отвечает только за то, что печатать на этикетке ШК. Иначе у
+                # оператора без личной раскладки лента молча становилась «один
+                # ШК», и Честный знак из печати пропадал. Признак хранится в
+                # самом макете: имя для этого не годится — его может носить
+                # обычный шаблон продавца со своей лентой.
+                return replace(
+                    row,
+                    layout=PrintLayout(
+                        units=SYSTEM_PAIRS_LAYOUT.units,
+                        label_options=row.layout.label_options,
+                    ),
+                )
+            return row
 
     return system_pairs_template(tenant_id)

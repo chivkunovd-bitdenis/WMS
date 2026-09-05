@@ -84,6 +84,7 @@ from app.services.fbs_workspace_service import get_supply_workspace
 from app.services.marketplace_provider import (
     OzonMarketplaceProvider,
 )
+from app.services.marketplace_scope import is_wildberries, wrong_marketplace_message
 from app.services.marketplace_seller_lock_service import marketplace_seller_lock
 from app.services.wildberries_client import (
     WildberriesClientError,
@@ -1717,6 +1718,17 @@ async def add_orders_to_existing_supply(
             "order_incompatible",
             message="Не все выбранные заказы подходят к этой поставке.",
             context={"issues": issues},
+            http_status=409,
+        )
+
+    # Дальше идёт настоящий PATCH в кабинет Wildberries с номерами заказов. У
+    # поставки Ozon номера синтетические (отрицательный хеш), и такой запрос
+    # ушёл бы в чужой кабинет. Своей ручки «добавить заказ в поставку» у Ozon
+    # нет — состав отправления там определяет сам маркетплейс.
+    if not is_wildberries(supply):
+        raise FbsSupplyError(
+            "marketplace_not_supported",
+            message=wrong_marketplace_message(supply, "Добавление заказов в поставку"),
             http_status=409,
         )
 

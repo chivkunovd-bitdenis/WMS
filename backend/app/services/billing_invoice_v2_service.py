@@ -7,7 +7,7 @@ import hashlib
 import json
 import re
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -25,10 +25,7 @@ from app.models.billing import (
     BillingProfile,
 )
 from app.models.seller import Seller
-from app.services.billing_seller_report_service import (
-    SellerReportError,
-    verify_storage_calculation_token,
-)
+from app.services.billing_seller_report_service import moscow_interval
 from app.services.document_number_service import DOC_TYPE_INVOICE, next_document_number
 
 DECIMAL_RE = re.compile(r"^-?\d+(\.\d{1,2})?$")
@@ -124,6 +121,36 @@ def invoice_v2_out(invoice: BillingInvoiceV2) -> dict[str, Any]:
     }
 
 
+def _manual_lines(
+    raw_lines: list[dict[str, Any]] | Any, *, first_sort_order: int
+) -> list[dict[str, Any]]:
+    """Строки, введённые человеком: описание и сумма, без ссылки на начисление.
+
+    Одна и та же сборка нужна и пустому счёту, и счёту по выбранным операциям:
+    к отгруженным заказам добавляют короба, доставку, разовую работу. Строка без
+    `sources` — это нормально: за ней не стоит начисления, и в базе она хранится
+    так же, просто без источников.
+    """
+    lines: list[dict[str, Any]] = []
+    for index, line in enumerate(raw_lines or []):
+        description = str(line.get("description", "")).strip()
+        if not description:
+            raise BillingInvoiceV2Error("manual_description_required")
+        unit_price = line.get("unit_price")
+        lines.append(
+            {
+                "id": uuid.uuid4(),
+                "description": description,
+                "unit_price_kopecks": decimal_to_kopecks(str(unit_price))
+                if unit_price not in (None, "")
+                else None,
+                "total_amount_kopecks": decimal_to_kopecks(str(line.get("amount", ""))),
+                "sort_order": first_sort_order + index,
+            }
+        )
+    return lines
+
+
 async def preview_invoice_v2(
     session: AsyncSession, *, tenant_id: uuid.UUID, request: dict[str, Any]
 ) -> dict[str, Any]:
@@ -133,24 +160,7 @@ async def preview_invoice_v2(
         raise BillingInvoiceV2Error("invalid_creation_mode")
     seller_id = uuid.UUID(str(request["seller_id"]))
     ff_profile, seller_profile = await _profiles(session, tenant_id=tenant_id, seller_id=seller_id)
-    lines: list[dict[str, Any]] = []
-    for index, line in enumerate(request.get("lines", [])):
-        description = str(line.get("description", "")).strip()
-        if not description:
-            raise BillingInvoiceV2Error("manual_description_required")
-        amount = decimal_to_kopecks(str(line.get("amount", "")))
-        unit_price = line.get("unit_price")
-        lines.append(
-            {
-                "id": uuid.uuid4(),
-                "description": description,
-                "unit_price_kopecks": decimal_to_kopecks(str(unit_price))
-                if unit_price not in (None, "")
-                else None,
-                "total_amount_kopecks": amount,
-                "sort_order": index,
-            }
-        )
+    lines = _manual_lines(request.get("lines", []), first_sort_order=0)
     if not 1 <= len(lines) <= 10:
         raise BillingInvoiceV2Error("manual_line_count")
     return {
@@ -176,43 +186,75 @@ async def _storage_line(
     seller_id: uuid.UUID,
     date_from: date,
     date_to: date,
-    token: Any,
+    include_storage: bool,
     sort_order: int,
 ) -> dict[str, Any] | None:
-    """Пересчитать хранение на сервере и превратить его в одну строку счёта.
+    """Собрать строку хранения из ночных начислений.
 
-    Токен из запроса — только заявка «я видел вот этот расчёт», а не цена.
-    Сумма всегда берётся из свежего серверного пересчёта; расходится хоть в
-    копейке, хоть по границам периода или селлеру — счёт не сохраняется.
-    Пересчёт повторяется и при сохранении, поэтому расчёт, устаревший между
-    предпросмотром и кнопкой «Сохранить», тоже будет отклонён.
+    Раньше счёт пересчитывал хранение сам и сверял результат с подписанным
+    токеном из отчёта. Это был второй источник цифры: ночная задача писала
+    начисления, а счёт их не читал. Две правды об одних и тех же сутках рано
+    или поздно разошлись бы, и разобраться, какая настоящая, было бы нельзя.
+    Теперь источник один — то, что записала ночь.
     """
-    if token in (None, ""):
+    if not include_storage:
         return None
-    try:
-        amount_kopecks = await verify_storage_calculation_token(
-            session,
-            tenant_id=tenant_id,
-            seller_id=seller_id,
-            date_from=date_from,
-            date_to=date_to,
-            token=str(token),
-        )
-    except SellerReportError as exc:
-        # Сюда же приходит хранение без габаритов: у него статус не
-        # `calculated`, поэтому верификатор отказывает, а не молча берёт ноль.
-        raise BillingInvoiceV2Error(str(exc)) from exc
+    start, end = moscow_interval(date_from, date_to)
+    entries = list(
+        (
+            await session.scalars(
+                select(BillingLedgerEntry).where(
+                    BillingLedgerEntry.tenant_id == tenant_id,
+                    BillingLedgerEntry.seller_id == seller_id,
+                    BillingLedgerEntry.service_code == "storage",
+                    # Только ночные начисления. Старые зафиксированные ведомости
+                    # лежат тем же кодом услуги, но другим источником
+                    # (`storage_measurement`), и без этого фильтра счёт сложил бы
+                    # обе строки за одни и те же сутки — заплатили бы дважды.
+                    BillingLedgerEntry.source_type == "storage_day",
+                    BillingLedgerEntry.entry_type == "charge",
+                    BillingLedgerEntry.occurred_at >= start,
+                    BillingLedgerEntry.occurred_at < end,
+                )
+            )
+        ).all()
+    )
+    if not entries:
+        return None
+    # Сутки, уже попавшие в выставленный счёт, второй раз в счёт не идут.
+    # Хранение — ежесуточное начисление, и повторно взять за него деньги нельзя
+    # ни при каком сценарии. До 03.09.2026 эта дыра была недостижима только
+    # потому, что галочка хранения вообще не доезжала до запроса.
+    invoiced = set(
+        (
+            await session.scalars(
+                select(BillingInvoiceV2Source.billing_ledger_entry_id).where(
+                    BillingInvoiceV2Source.tenant_id == tenant_id,
+                    BillingInvoiceV2Source.billing_ledger_entry_id.in_(
+                        {entry.id for entry in entries}
+                    ),
+                )
+            )
+        ).all()
+    )
+    entries = [entry for entry in entries if entry.id not in invoiced]
+    if not entries:
+        return None
+    # Сутки без заданной ставки идут в счёт нулём, а не отказом: отчёт и счёт
+    # показывают одно и то же, а разбираться с незаведённым тарифом — работа
+    # человека, а не повод не дать выставить счёт.
     return {
         "id": uuid.uuid4(),
         "description": STORAGE_LINE_DESCRIPTION,
         "unit_price_kopecks": None,
-        "total_amount_kopecks": amount_kopecks,
+        "total_amount_kopecks": sum(int(entry.amount or 0) for entry in entries),
         "sort_order": sort_order,
         "sources": [
             {
-                "storage_calculation_token": str(token),
-                "signed_amount_kopecks_snapshot": amount_kopecks,
+                "billing_ledger_entry_id": entry.id,
+                "signed_amount_kopecks_snapshot": int(entry.amount or 0),
             }
+            for entry in entries
         ],
     }
 
@@ -238,13 +280,21 @@ async def _preview_selected_operations(
     )
     if len(roots) != len(root_ids):
         raise BillingInvoiceV2Error("selected_source_not_found")
+    period_start, period_end = moscow_interval(date_from, date_to)
     selected: dict[uuid.UUID, BillingLedgerEntry] = {}
     for root in roots:
         if root.seller_id != seller_id:
             raise BillingInvoiceV2Error("selected_source_not_found")
         if root.entry_type == "reversal" or root.reversal_of_id is not None:
             raise BillingInvoiceV2Error("standalone_reversal")
-        if not date_from <= root.occurred_at.date() <= date_to:
+        # Границы периода — московские, как и во всём отчёте (`moscow_interval`).
+        # Сравнение по календарной дате UTC отвергало операцию, которая по Москве
+        # попадает в выбранный день: 3 сентября 22:30 UTC — это 4 сентября 01:30
+        # по Москве. Оператор видел её в отчёте, а счёт по ней не выставлялся.
+        occurred_at = root.occurred_at
+        if occurred_at.tzinfo is None:
+            occurred_at = occurred_at.replace(tzinfo=UTC)
+        if not period_start <= occurred_at < period_end:
             raise BillingInvoiceV2Error("selected_source_outside_period")
         frontier = {root.id}
         while frontier:
@@ -294,11 +344,17 @@ async def _preview_selected_operations(
         seller_id=seller_id,
         date_from=date_from,
         date_to=date_to,
-        token=request.get("storage_calculation_token"),
+        include_storage=bool(request.get("include_storage")),
         sort_order=len(lines),
     )
     if storage_line is not None:
         lines.append(storage_line)
+    # Ручные строки идут последними: сначала то, за что уже начислено, потом
+    # добавленное человеком.
+    extra_lines = _manual_lines(request.get("manual_lines", []), first_sort_order=len(lines))
+    if len(extra_lines) > 10:
+        raise BillingInvoiceV2Error("manual_line_count")
+    lines.extend(extra_lines)
     if not lines:
         raise BillingInvoiceV2Error("selected_operations_required")
     return {

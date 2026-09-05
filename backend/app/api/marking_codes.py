@@ -353,8 +353,23 @@ class PrintLayoutUnitOut(BaseModel):
     copies: int
 
 
+class PrintLabelOptionsOut(BaseModel):
+    """Состав этикетки ШК: что печатать, а что нет.
+
+    Порядок строк не настраивается и един для всех — размер, цвет, бренд,
+    состав (решение владельца 03.09.2026).
+    """
+
+    include_size: bool = True
+    include_color: bool = True
+    include_brand: bool = True
+    include_composition: bool = True
+
+
 class PrintLayoutOut(BaseModel):
     units: list[PrintLayoutUnitOut]
+    # Может не прийти со старого шаблона — тогда печатаем всё, что есть.
+    label_options: PrintLabelOptionsOut = PrintLabelOptionsOut()
 
 
 class PrintTemplateOut(BaseModel):
@@ -376,6 +391,11 @@ class CreatePrintTemplateIn(BaseModel):
     is_default: bool = False
 
 
+class SellerLabelOptionsIn(BaseModel):
+    seller_id: uuid.UUID | None = None
+    label_options: PrintLabelOptionsOut
+
+
 class UpdatePrintTemplateIn(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=256)
     layout: PrintLayoutOut | None = None
@@ -387,17 +407,26 @@ def _http_from_pt_error(exc: pt_svc.PrintTemplateServiceError) -> HTTPException:
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     if code in ("template_not_found", "product_not_found"):
         status_code = status.HTTP_404_NOT_FOUND
+    if code == "label_template_disabled":
+        # Функция выключена рубильником сборки — ручки для клиента просто нет.
+        status_code = status.HTTP_404_NOT_FOUND
     return HTTPException(status_code=status_code, detail=code)
 
 
 def _layout_out(layout: pt_svc.PrintLayout) -> PrintLayoutOut:
     return PrintLayoutOut(
         units=[PrintLayoutUnitOut(block=u.block, copies=u.copies) for u in layout.units],
+        label_options=PrintLabelOptionsOut(**layout.label_options.to_dict()),
     )
 
 
 def _layout_in_to_dict(layout: PrintLayoutOut) -> dict[str, object]:
-    return {"units": [{"block": u.block, "copies": u.copies} for u in layout.units]}
+    return {
+        "units": [{"block": u.block, "copies": u.copies} for u in layout.units],
+        # Без этого состав этикетки молча терялся при сохранении: наружу
+        # уходила только лента, и «настроить этикетку селлеру» не работало.
+        "label_options": layout.label_options.model_dump(),
+    }
 
 
 def _print_marking_codes_out(result: mc_svc.PrintMarkingCodesResult) -> PrintMarkingCodesOut:
@@ -1340,8 +1369,48 @@ async def create_print_template(
             layout=_layout_in_to_dict(body.layout),
             seller_id=target_seller_id,
             product_id=body.product_id,
-            user_id=user.id,
+            # Шаблон, закреплённый за продавцом или товаром, — общий: его должны
+            # видеть все операторы, а не только тот, кто сохранил. Раньше сюда
+            # всегда шёл id администратора, и настройка продавца оставалась
+            # личной настройкой одного человека — другой оператор печатал
+            # по-старому и об этом не знал.
+            user_id=None if (target_seller_id or body.product_id) else user.id,
             is_default=body.is_default,
+        )
+    except pt_svc.PrintTemplateServiceError as exc:
+        raise _http_from_pt_error(exc) from exc
+    return _print_template_out(row)
+
+
+@router.put("/print-templates/seller-label-options", response_model=PrintTemplateOut)
+async def set_seller_label_options(
+    body: SellerLabelOptionsIn,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> PrintTemplateOut:
+    """Закрепить за продавцом состав этикетки, не меняя его ленту печати.
+
+    Отдельная ручка появилась потому, что панель настроек раньше сохраняла
+    шаблон целиком и заодно переписывала ленту на «один ШК»: у оператора без
+    личной раскладки из печати пропадал Честный знак.
+    """
+    if user.role == FULFILLMENT_SELLER:
+        if effective_seller_id is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
+        target_seller_id: uuid.UUID | None = effective_seller_id
+    elif user.role == FULFILLMENT_ADMIN:
+        target_seller_id = body.seller_id
+    else:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    if target_seller_id is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="seller_required")
+    try:
+        row = await pt_svc.set_seller_label_options(
+            session,
+            user.tenant_id,
+            seller_id=target_seller_id,
+            options=pt_svc.LabelOptions(**body.label_options.model_dump()),
         )
     except pt_svc.PrintTemplateServiceError as exc:
         raise _http_from_pt_error(exc) from exc

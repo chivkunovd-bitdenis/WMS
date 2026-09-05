@@ -322,6 +322,46 @@ async def test_return_defective_quantity_uses_the_inbound_service_constraint(
 
 
 @pytest.mark.asyncio
+async def test_empty_ozon_answer_gives_a_readable_error_instead_of_a_five_hundred(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Три ручки возвратов отвечали 500 на пустом ответе кабинета.
+
+    `pass.png` и `barcode/reset.png` разбирали содержимое файла голым
+    `base64.b64decode(..., validate=True)` и ловили только `ValueError`, а на
+    пустом ответе поле приходит `None` и декодер бросает `TypeError`.
+    Ручка `barcode` падала иначе — на валидации ответа с `min_length=1`.
+    """
+    headers = await _admin_headers(async_client)
+    request_id, _seller_id = await _return_request(async_client, headers)
+    # Пустой фейк: любой путь отвечает пустым словарём — ровно так и отвечает
+    # сегодня боевой провайдер возвратов по умолчанию.
+    provider = OzonMarketplaceProvider(transport=FakeMarketplaceTransport())
+
+    async def stored_credentials(
+        _self: MarketplaceAccountService, _tenant_id: uuid.UUID, _seller_id: uuid.UUID
+    ) -> tuple[str, str]:
+        return "fake-client", "fake-key"
+
+    monkeypatch.setattr(MarketplaceAccountService, "stored_credentials", stored_credentials)
+    app = async_client._transport.app  # type: ignore[attr-defined]
+    app.dependency_overrides[get_ozon_return_provider] = lambda: provider
+
+    base = f"/operations/inbound-intake-requests/{request_id}/ozon-returns"
+    png = await async_client.get(f"{base}/pass.png", headers=headers)
+    assert png.status_code == 502, png.text
+    assert png.json()["detail"]["code"] == "ozon_file_missing"
+
+    reset = await async_client.post(f"{base}/barcode/reset.png", headers=headers)
+    assert reset.status_code == 502, reset.text
+    assert reset.json()["detail"]["code"] == "ozon_file_missing"
+
+    barcode = await async_client.get(f"{base}/barcode", headers=headers)
+    assert barcode.status_code == 502, barcode.text
+    assert barcode.json()["detail"]["code"] == "ozon_barcode_missing"
+
+
+@pytest.mark.asyncio
 async def test_posted_ozon_return_refresh_is_best_effort_and_uses_fake_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

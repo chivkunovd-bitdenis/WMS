@@ -8,7 +8,6 @@ from types import SimpleNamespace
 import pytest
 
 from app.models.billing import BillingLedgerEntry
-from app.services import billing_seller_report_service
 from app.services.billing_seller_report_service import _token, build_seller_report
 from app.services.storage_measurement_service import MOSCOW, interval_liter_days
 
@@ -76,47 +75,6 @@ def test_storage_fingerprint_token_is_stable_then_changes_with_source_data() -> 
 
     assert _token(base) == _token(dict(base))
     assert _token(base) != _token({**base, "moves": [["move-1", 3]]})
-
-
-@pytest.mark.asyncio
-async def test_storage_token_recomputes_and_rejects_tampering(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    tenant_id, seller_id = uuid.uuid4(), uuid.uuid4()
-    payload = {
-        "tenant_id": str(tenant_id),
-        "seller_id": str(seller_id),
-        "date_from": "2026-08-20",
-        "date_to": "2026-08-22",
-    }
-    token = _token(payload)
-
-    async def current(*_args, **_kwargs):
-        return {"status": "calculated", "calculation_token": token, "amount_kopecks": 500}
-
-    monkeypatch.setattr(billing_seller_report_service, "_storage_row", current)
-    assert (
-        await billing_seller_report_service.verify_storage_calculation_token(
-            None,
-            tenant_id=tenant_id,
-            seller_id=seller_id,
-            date_from=date(2026, 8, 20),
-            date_to=date(2026, 8, 22),
-            token=token,
-        )
-        == 500
-    )
-    with pytest.raises(
-        billing_seller_report_service.SellerReportError, match="storage_calculation_stale"
-    ):
-        await billing_seller_report_service.verify_storage_calculation_token(
-            None,
-            tenant_id=tenant_id,
-            seller_id=seller_id,
-            date_from=date(2026, 8, 20),
-            date_to=date(2026, 8, 22),
-            token=f"{token}x",
-        )
 
 
 @pytest.mark.asyncio

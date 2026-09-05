@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -99,6 +99,14 @@ class FbsWarehouseBindingOut(BaseModel):
 class FbsWarehouseBindingUpsert(BaseModel):
     wms_warehouse_id: uuid.UUID
     stock_sync_enabled: bool = True
+    # Измерение маркетплейса у привязки было в модели и не было в ручке:
+    # завести склад Ozon было физически неоткуда. Умолчание `wb` сохраняет
+    # прежнее поведение всех существующих вызовов без единой правки на фронте.
+    marketplace: Literal["wb", "ozon"] = "wb"
+    # По этому значению привязка находится при разборе отправления. Для Ozon
+    # это строковый вид его же числового идентификатора склада; если его не
+    # передали, подставляется номер из пути.
+    external_warehouse_id: str | None = Field(default=None, max_length=255)
 
 
 class FbsSellerWarehouseConfigure(BaseModel):
@@ -131,7 +139,7 @@ def _raise_from_binding_service(exc: binding_svc.FbsWarehouseBindingError) -> No
         "product_not_found",
     }:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
-    if exc.code in {"invalid_wb_warehouse_id", "invalid_quantity"}:
+    if exc.code in {"invalid_wb_warehouse_id", "invalid_quantity", "unsupported_marketplace"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
     if exc.code == "wms_warehouse_required":
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
@@ -310,7 +318,11 @@ async def upsert_fbs_warehouse_binding(
     was_enabled = False
     try:
         existing = await binding_svc.get_binding(
-            session, user.tenant_id, seller_id, wb_warehouse_id
+            session,
+            user.tenant_id,
+            seller_id,
+            wb_warehouse_id,
+            marketplace=body.marketplace,
         )
         was_enabled = bool(existing.is_active and existing.stock_sync_enabled)
     except binding_svc.FbsWarehouseBindingError:
@@ -324,6 +336,8 @@ async def upsert_fbs_warehouse_binding(
             wb_warehouse_id,
             wms_warehouse_id=body.wms_warehouse_id,
             stock_sync_enabled=body.stock_sync_enabled,
+            marketplace=body.marketplace,
+            external_warehouse_id=body.external_warehouse_id,
         )
     except binding_svc.FbsWarehouseBindingError as exc:
         _raise_from_binding_service(exc)

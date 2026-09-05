@@ -19,7 +19,8 @@ type Measurement = {
   quantity_days?: string | null
   volume_liters: string | null
   dimensions_source: string | null
-  liter_days: string
+  // Пусто, пока ночь по этому товару не начисляла: экран показывает прочерк.
+  liter_days: string | null
   rate_snapshot: string | null
   amount: string | null
   status?: 'calculated' | 'missing_dimensions'
@@ -32,13 +33,12 @@ type Statement = {
   warehouse_name: string
   status: 'draft' | 'fixed'
   fixed_at: string | null
-  total_liter_days: string
-  total_amount: string
+  total_liter_days: string | null
+  total_amount: string | null
   problem_count: number
   measurements: Measurement[]
 }
 type StorageResponse = { tariff_configured: boolean; tariff_revision: number; warehouses: { id: string; name: string }[]; statements: Statement[] }
-type TariffCreateResponse = { recalculated_statements: Statement[] }
 type HistoryRow = { id: string; created_at: string; source: string; length_mm: number | null; width_mm: number | null; height_mm: number | null; volume_liters: string | null; author_name: string | null; is_current: boolean }
 type BackgroundJob = { id: string; status: string; error_message?: string | null }
 
@@ -53,7 +53,9 @@ const authHeaders = (token: string) => ({ Authorization: `Bearer ${token}`, 'Con
 const MINIMUM_RATE_BEFORE_CURRENCY_ROUNDING = 0.005
 const MINIMUM_STORAGE_RATE_MESSAGE = 'Минимальная сохраняемая ставка — 0,01 ₽/л·день'
 export const STORAGE_TARIFF_SCOPE_LABEL = 'Все операционные склады'
-const statusLabel = (statement: Statement) => statement.status === 'fixed' ? 'Зафиксирован' : statement.problem_count ? 'Требует исправления' : 'Черновик'
+// Фиксации расчёта больше нет: деньги за хранение пишет ночная задача. Статус
+// «Зафиксирован» остаётся только у документов, закрытых до этого перехода.
+const statusLabel = (statement: Statement) => statement.status === 'fixed' ? 'Зафиксирован' : statement.problem_count ? 'Требует исправления' : 'Рассчитан'
 const statusTone = (statement: Statement) => statement.status === 'fixed' ? 'ok' as const : statement.problem_count ? 'stop' as const : 'neutral' as const
 const sourceLabel = (source: string | null) => ({ manual: 'Ручной обмер', wb: 'Wildberries', wildberries: 'Wildberries', container: 'Объём тары', container_override: 'Объём тары' }[source ?? ''] ?? 'Неизвестно')
 // Сервер отдаёт числа строками с полной точностью Numeric — «4511.4300000»
@@ -106,21 +108,6 @@ export function buildStorageTariffPayload({
         valid_from: sellerException.validFrom,
       },
     }),
-  }
-}
-
-export function mergeRecalculatedStorageStatements<T extends { id: string }>(current: readonly T[], recalculated: readonly T[]) {
-  const recalculatedById = new Map(recalculated.map((statement) => [statement.id, statement]))
-  return current.map((statement) => recalculatedById.get(statement.id) ?? statement)
-}
-
-export function mergeRecalculatedStorageData<T extends { statements: readonly { id: string }[] }>(
-  current: T,
-  recalculated: readonly T['statements'][number][],
-): T & { statements: T['statements'][number][] } {
-  return {
-    ...current,
-    statements: mergeRecalculatedStorageStatements(current.statements, recalculated),
   }
 }
 
@@ -219,7 +206,15 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
     }
     throw new Error('job_timeout')
   }
-  async function generate() {
+  /**
+   * Пересчёт расчёта после внесения обмера.
+   *
+   * Кнопки «Сформировать за месяц» больше нет: деньги за хранение пишет ночная
+   * задача, а витрину она же обновляет. Но обмер, внесённый только что, должен
+   * быть виден сразу — иначе оператор заполнил габариты и продолжает смотреть
+   * на «Нет габаритов» до следующей ночи.
+   */
+  async function refreshCalculation() {
     setActionLoading(true); setError(null)
     try {
       const started = await request('/operations/storage/measurements/rebuild', { method: 'POST', body: JSON.stringify({ year: Number(month.slice(0, 4)), month: Number(month.slice(5, 7)), warehouse_id: selectedWarehouse || undefined }) }) as BackgroundJob
@@ -238,7 +233,7 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
       } else {
         await request(`/products/${measure.product_id}/dimensions/container`, { method: 'POST', body: JSON.stringify({ volume_liters: Number(containerVolume.replace(',', '.')), container_basis: containerBasis }) })
       }
-      setMeasure(null); await generate()
+      setMeasure(null); await refreshCalculation()
     } catch { setError('Не удалось сохранить обмер. Проверьте заполненные поля.') }
     finally { setActionLoading(false) }
   }
@@ -250,15 +245,8 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
   async function restoreWb() {
     if (!historyProductId) return
     setActionLoading(true)
-    try { await request(`/products/${historyProductId}/dimensions/restore-wb`, { method: 'POST' }); setHistoryProductId(null); await generate() }
+    try { await request(`/products/${historyProductId}/dimensions/restore-wb`, { method: 'POST' }); setHistoryProductId(null); await refreshCalculation() }
     catch { setHistoryError('Не удалось вернуть данные Wildberries. Повторите попытку') }
-    finally { setActionLoading(false) }
-  }
-  async function fix() {
-    if (!expanded) return
-    setActionLoading(true); setError(null)
-    try { const result = await request(`/operations/storage/statements/${expanded.id}/fix`, { method: 'POST' }) as Statement; setPrintStatement(result); await load() }
-    catch { setError('Не удалось зафиксировать расчёт. Повторите попытку') }
     finally { setActionLoading(false) }
   }
   async function openPrint(statement: Statement) {
@@ -301,8 +289,10 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
           },
         }),
       })
-      const result = await request('/operations/storage/tariffs', { method: 'POST', body: JSON.stringify(tariffBody) }) as TariffCreateResponse
-      if (!Array.isArray(result?.recalculated_statements)) throw new Error('recalculation_result_missing')
+      // Ставка сохранена — дальше просто перечитываем список. Пересчитанных
+      // ведомостей сервер не возвращает: новая ставка работает с ближайшей ночи
+      // и уже начисленное не переписывает.
+      await request('/operations/storage/tariffs', { method: 'POST', body: JSON.stringify(tariffBody) })
       setRateSellerId('')
       setData(null)
       if (await load()) {
@@ -316,7 +306,7 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
   }
 
   return <Box data-testid="ff-storage-page" sx={{ minWidth: 0, width: { xs: 'calc(100vw - 48px)', md: 'calc(100vw - 308px)' }, maxWidth: '100%' }}>
-    <ScreenHeader title="Хранение" purpose="Рассчитайте фактическое хранение по селлерам и зафиксируйте месяц для начисления" />
+    <ScreenHeader title="Хранение" purpose="Проверьте фактическое хранение по селлерам и внесите недостающие габариты — начисления считаются каждую ночь" />
     <FilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Селлер, SKU или артикул продавца" testId="storage-filters">
       <DatePicker
         label="Месяц"
@@ -350,7 +340,6 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
     </FilterBar>
     {error && <ErrorNotice testId="storage-error">{error}</ErrorNotice>}
     <ActionGroup>
-      <PrimaryAction data-testid="storage-generate" disabledReason={actionLoading ? 'Формирование уже запущено' : undefined} onClick={() => void generate()}>{actionLoading ? 'Формируем…' : 'Сформировать за месяц'}</PrimaryAction>
       {isFulfillmentAdmin && data && <SecondaryAction data-testid="storage-rate" onClick={openRate}>{data.tariff_configured ? 'Изменить тариф' : 'Задать тариф'}</SecondaryAction>}
     </ActionGroup>
     <Box sx={{ mt: 2 }}>
@@ -360,12 +349,12 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
         { key: 'liter-days', header: 'Литро-дни', width: 140, align: 'right', render: (row: Statement) => decimal(row.total_liter_days, 2) },
         { key: 'total', header: 'Сумма, ₽', width: 140, align: 'right', render: (row: Statement) => decimal(row.total_amount, 2) },
         { key: 'problems', header: 'Проблемы', width: 110, align: 'right', render: (row: Statement) => row.problem_count },
-        { key: 'actions', header: 'Действия', width: 120, align: 'center', render: (row: Statement) => <Stack direction="row"><IconAction title={expandedId === row.id ? 'Закрыть расчёт селлера' : 'Открыть расчёт селлера'} onClick={() => setExpandedId(expandedId === row.id ? null : row.id)} testId={`storage-expand-${row.id}`}><ExpandMoreIcon /></IconAction>{row.status === 'fixed' && <PrintAction what="накладную" placement="row" onClick={() => void openPrint(row)} testId={`storage-print-${row.id}`} />}</Stack> },
+        { key: 'actions', header: 'Действия', width: 120, align: 'center', render: (row: Statement) => <Stack direction="row"><IconAction title={expandedId === row.id ? 'Закрыть расчёт селлера' : 'Открыть расчёт селлера'} onClick={() => setExpandedId(expandedId === row.id ? null : row.id)} testId={`storage-expand-${row.id}`}><ExpandMoreIcon /></IconAction><PrintAction what="накладную" placement="row" onClick={() => void openPrint(row)} testId={`storage-print-${row.id}`} /></Stack> },
       ]} rows={statements} getRowKey={(row) => row.id} loading={loading} empty={data?.tariff_configured === false ? { title: 'Тариф хранения ещё не задан', hint: isFulfillmentAdmin ? 'Задайте цену за литр-день и дату начала, чтобы сформировать первый расчёт' : 'Обратитесь к администратору ФФ, чтобы задать тариф хранения.' } : { title: 'Ничего не найдено — измените поиск или фильтры' }} testId="storage-seller-table" />
       {expanded && <Box sx={{ p: 2, mt: 1, minWidth: 0, maxWidth: '100%', overflow: 'hidden', borderLeft: 4, borderColor: 'primary.main', '& [data-testid="storage-sku-table"]': { maxWidth: '100%', overflowX: 'auto' }, '& [data-testid="storage-sku-table"] .MuiTable-root': { tableLayout: 'fixed', width: '100%' }, '& [data-testid="storage-sku-table"] .MuiTableCell-root': { px: 1, overflow: 'hidden', textOverflow: 'ellipsis' } }} data-testid="storage-detail">
         <Typography variant="h6">Расчёт селлера {expanded.seller_name} за {formatMonth(month)}</Typography>
         <Typography color="text.secondary">{expanded.warehouse_name}</Typography>
-        {missingCount > 0 && <ErrorNotice>Расчёт нельзя зафиксировать: устраните проблемы в строках ниже</ErrorNotice>}
+        {missingCount > 0 && <ErrorNotice>Хранение этих товаров не начисляется, пока не внесены габариты — заполните строки ниже</ErrorNotice>}
         <DataTable columns={[
           { key: 'product', header: 'Товар', width: 200, render: (row: Measurement) => <Stack spacing={0.25} sx={{ minWidth: 0 }}><Typography component="div" variant="body2" sx={{ fontWeight: 600 }}><TextCell value={row.product_name || row.sku} width={200} /></Typography><Typography component="div" variant="caption" color="text.secondary"><TextCell value={[row.sku, row.seller_article].filter(Boolean).join(' · ')} width={200} /></Typography></Stack> },
           { key: 'dimensions', header: 'Габариты, мм', width: 130, align: 'right', render: (row: Measurement) => dimensionsLabel(row.dimensions_mm) },
@@ -378,7 +367,6 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
           { key: 'status', header: 'Статус', width: 125, render: (row: Measurement) => <StatusChip tone={row.status === 'missing_dimensions' ? 'stop' : 'neutral'} label={row.status === 'missing_dimensions' ? 'Нет габаритов' : 'Рассчитано'} /> },
           { key: 'actions', header: 'Действия', width: 115, render: (row: Measurement) => row.status === 'missing_dimensions' ? <PrimaryAction onClick={() => setMeasure(row)}>Внести обмер</PrimaryAction> : <IconAction title="История габаритов" testId={`storage-history-${row.product_id}`} onClick={() => void openHistory(row.product_id)}><HistoryOutlinedIcon /></IconAction> },
         ]} rows={expanded.measurements} getRowKey={(row) => row.product_id} testId="storage-sku-table" />
-        {isFulfillmentAdmin && expanded.status === 'draft' && <ActionGroup><PrimaryAction data-testid="storage-fix" disabledReason={missingCount ? `Нет габаритов у ${missingCount} товара` : actionLoading ? 'Фиксация выполняется' : undefined} onClick={() => void fix()}>Зафиксировать</PrimaryAction></ActionGroup>}
       </Box>}
     </Box>
     <Dialog open={Boolean(measure)} onClose={() => setMeasure(null)}><DialogTitle>Внести обмер</DialogTitle><DialogContent><Typography sx={{ mb: 1 }}>{measure?.sku} · {measure?.seller_article}</Typography><RadioGroup row value={measureMode} onChange={(event) => setMeasureMode(event.target.value as 'dimensions' | 'container')}><FormControlLabel value="dimensions" control={<Radio />} label="Габариты товара" /><FormControlLabel value="container" control={<Radio />} label="Объём тары" /></RadioGroup>{measureMode === 'dimensions' ? <><Stack direction="row" spacing={1}><TextField label="Длина, см" value={length} onChange={(event) => setLength(event.target.value)} /><TextField label="Ширина, см" value={width} onChange={(event) => setWidth(event.target.value)} /><TextField label="Высота, см" value={height} onChange={(event) => setHeight(event.target.value)} /></Stack><Typography sx={{ mt: 2 }}>Объём: {Number.isFinite(computedVolume) && computedVolume > 0 ? computedVolume.toFixed(2).replace('.', ',') : '—'} л</Typography></> : <Stack spacing={1}><TextField label="Объём тары, л" value={containerVolume} onChange={(event) => setContainerVolume(event.target.value)} /><TextField label="Комментарий" value={containerBasis} onChange={(event) => setContainerBasis(event.target.value)} /></Stack>}</DialogContent><DialogActions><SecondaryAction onClick={() => setMeasure(null)}>Отмена</SecondaryAction><PrimaryAction disabledReason={measureMode === 'dimensions' ? !Number.isFinite(computedVolume) || computedVolume <= 0 ? 'Введите положительные габариты' : undefined : !Number(containerVolume.replace(',', '.')) || !containerBasis.trim() ? 'Укажите объём и причину' : undefined} onClick={() => void saveMeasure()}>Сохранить</PrimaryAction></DialogActions></Dialog>

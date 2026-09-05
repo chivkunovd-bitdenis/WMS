@@ -183,17 +183,28 @@ async def test_storage_is_not_an_employee_rate(async_client: AsyncClient) -> Non
 
 
 @pytest.mark.asyncio
-async def test_report_prices_storage_by_the_matrix_and_prefers_the_seller_rate(
+async def test_night_prices_storage_by_the_matrix_and_prefers_the_seller_rate(
     async_client: AsyncClient,
 ) -> None:
-    """TC-NEW-405: хранение в отчёте считается по матрице, своя ставка бьёт общую."""
+    """TC-NEW-405: хранение считается по матрице, своя ставка бьёт общую.
+
+    Ставку теперь применяет ночное начисление, а отчёт только читает записанное.
+    Поэтому и проверяем в том же порядке: сначала заводим ставку, потом гоняем
+    ночь, потом смотрим отчёт.
+
+    Заодно видно, что смена ставки не переписывает прошлое: первые сутки
+    остаются по общей ставке, хотя индивидуальная заведена задним числом. Это
+    решение владельца, а не недосмотр — ночь записала факт, а не черновик.
+    """
     from datetime import time as datetime_time
     from datetime import timedelta
     from decimal import Decimal
 
     from app.models.inventory_movement import InventoryMovement
     from app.models.product import Product
+    from app.models.tenant import Tenant
     from app.services.sorting_location_service import get_or_create_sorting_location
+    from app.services.storage_daily_charge_service import charge_storage_day
     from app.services.storage_measurement_service import MOSCOW
 
     suffix = f"storage-price-{uuid.uuid4().hex[:8]}"
@@ -206,8 +217,12 @@ async def test_report_prices_storage_by_the_matrix_and_prefers_the_seller_rate(
     seller_id = uuid.UUID(seller.json()["id"])
 
     today = datetime.now(MOSCOW).date()
-    date_from = today - timedelta(days=2)
+    first_day = today - timedelta(days=2)
+    second_day = today - timedelta(days=1)
     async with SessionLocal() as session:
+        tenant = await session.get(Tenant, tenant_id)
+        assert tenant is not None
+        tenant.billing_enabled_from = first_day
         product = Product(
             tenant_id=tenant_id,
             seller_id=seller_id,
@@ -228,12 +243,12 @@ async def test_report_prices_storage_by_the_matrix_and_prefers_the_seller_rate(
                 product_id=product.id,
                 quantity_delta=3,
                 movement_type="matrix_storage_price_test",
-                created_at=datetime.combine(date_from, datetime_time.min, MOSCOW),
+                created_at=datetime.combine(first_day, datetime_time.min, MOSCOW),
             )
         )
         await session.commit()
 
-    params = f"date_from={date_from.isoformat()}&date_to={today.isoformat()}&include_finance=true"
+    params = f"date_from={first_day.isoformat()}&date_to={today.isoformat()}&include_finance=true"
 
     async def storage_row() -> dict[str, object]:
         response = await async_client.get(
@@ -242,8 +257,8 @@ async def test_report_prices_storage_by_the_matrix_and_prefers_the_seller_rate(
         assert response.status_code == 200, response.text
         return response.json()["storage_row"]
 
-    # Без ставки в матрице хранение стоит ноль: старые складские тарифы больше
-    # не читаются, и это осознанное решение владельца, а не потеря данных.
+    # Пока ночь не прошла, платить не за что: экран и отчёт показывают то, что
+    # записано, а не то, что можно было бы посчитать.
     assert (await storage_row())["amount_kopecks"] == 0
 
     matrix = await async_client.get("/billing/tariff-matrix", headers=headers)
@@ -259,8 +274,11 @@ async def test_report_prices_storage_by_the_matrix_and_prefers_the_seller_rate(
         },
     )
     assert common_only.status_code == 200, common_only.text
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=first_day) == 1
     with_common = (await storage_row())["amount_kopecks"]
-    assert isinstance(with_common, int) and with_common > 0
+    # Три штуки по два литра сутки лежали, ставка — рубль за литро-день.
+    assert with_common == 600
 
     matrix = await async_client.get("/billing/tariff-matrix", headers=headers)
     with_seller = await async_client.put(
@@ -280,4 +298,9 @@ async def test_report_prices_storage_by_the_matrix_and_prefers_the_seller_rate(
         },
     )
     assert with_seller.status_code == 200, with_seller.text
-    assert (await storage_row())["amount_kopecks"] == with_common // 2
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=second_day) == 1
+
+    # Вторые сутки посчитаны по своей ставке — вдвое дешевле первых. Первые при
+    # этом не переписаны: пересчёт задним числом отменён намеренно.
+    assert (await storage_row())["amount_kopecks"] == with_common + with_common // 2

@@ -205,7 +205,6 @@ type OutboundSummaryRow = {
   goods_qty_total?: number
   planned_shipment_date?: string | null
   created_at?: string
-  marketplace_label?: string
   seller_id?: string | null
   seller_name?: string | null
 }
@@ -3110,6 +3109,12 @@ export default function App() {
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
                   warehouses={reportWarehouseOptions(warehouses)}
+                  onOpenInbound={(id) => {
+                    setSelectedOutboundId(null)
+                    setSelectedInboundId(id)
+                    setFfInboundWorkspace('full')
+                    setFfDocModal('inbound')
+                  }}
                 />
               ) : (
                 ffAccessDenied

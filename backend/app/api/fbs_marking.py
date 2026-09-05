@@ -79,7 +79,10 @@ def _raise_from_service(exc: marking_svc.FbsMarkingError) -> None:
         "meta_validation_fail",
     }:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
-    if exc.code.startswith("wb_"):
+    # Ошибки маркетплейса — это не наша пятисотка. У вайлдберрисовских кодов
+    # такая развилка была, у озоновских её не было, поэтому синхронизация
+    # статусов маркировки на заказе Ozon отвечала 500 вместо внятного текста.
+    if exc.code.startswith(("wb_", "ozon_")):
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
 

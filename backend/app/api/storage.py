@@ -31,13 +31,13 @@ from app.services.storage_measurement_service import (
     previous_month,
 )
 from app.services.storage_statement_service import (
+    StorageNightCharge,
     StorageStatementError,
     create_storage_tariff,
-    fix_storage_statement,
-    get_fixed_storage_statement,
-    get_storage_draft_pricing_batch,
     get_storage_ledger_rows,
     get_storage_ledger_rows_batch,
+    get_storage_night_charges_batch,
+    get_storage_statement_for_print,
     normalize_storage_tariff_amount,
 )
 
@@ -67,8 +67,10 @@ class StorageStatementOut(BaseModel):
     seller_name: str | None = None
     warehouse_name: str | None = None
     measurements: list[dict[str, object]]
-    total_liter_days: str
-    total_amount: str
+    # Пусто, когда ночных начислений за период нет: экран показывает прочерк, а
+    # не ноль. Ноль означал бы «хранение бесплатно», и это неправда.
+    total_liter_days: str | None
+    total_amount: str | None
     problem_count: int
 
 
@@ -111,7 +113,6 @@ class TariffCreateOut(BaseModel):
     warehouse_tariff: TariffVersionOut
     seller_exception: TariffVersionOut | None = None
     tariff_revision: int
-    recalculated_statements: list[StorageStatementOut] = Field(default_factory=list)
 
 
 def _public_dimension_source(source: str | None) -> str | None:
@@ -158,7 +159,12 @@ def _dimensions_mm(row: StorageMeasurement) -> list[int] | None:
 def _statement_out(
     statement: StorageStatement, rows: list[StorageMeasurement]
 ) -> StorageStatementOut:
-    total_liter_days = sum((Decimal(str(row.liter_days)) for row in rows), Decimal(0))
+    """Операционная часть расчёта: что за товар, какой коробки и сколько лежало.
+
+    Литро-дни и деньги сюда не попадают: их даёт ночное начисление, и добавляет
+    их :func:`_apply_night_charges` (или, у документов, зафиксированных до
+    перехода, снимок проводок).
+    """
     problem_count = sum(row.status == "missing_dimensions" for row in rows)
     return StorageStatementOut(
         id=statement.id,
@@ -193,7 +199,7 @@ def _statement_out(
                     if row.dimension_event is not None
                     else row.product.dimensions_source
                 ),
-                "liter_days": str(row.liter_days),
+                "liter_days": None,
                 "rate_snapshot": None,
                 "amount": None,
                 "status": row.status,
@@ -201,8 +207,8 @@ def _statement_out(
             }
             for row in rows
         ],
-        total_liter_days=str(total_liter_days),
-        total_amount="0",
+        total_liter_days=None,
+        total_amount=None,
         problem_count=problem_count,
     )
 
@@ -260,29 +266,45 @@ def _apply_ledger_snapshot(
     output.total_amount = kopecks_to_rub_str(sum(int(entry.amount or 0) for entry in ledger))
 
 
-def _apply_draft_pricing(
+def _apply_night_charges(
     output: StorageStatementOut,
     rows: list[StorageMeasurement],
-    pricing: dict[uuid.UUID, tuple[Decimal, Decimal, BillingTariffVersionV2]],
+    charges: dict[uuid.UUID, StorageNightCharge],
 ) -> None:
-    """Attach a freshly calculated tariff preview without publishing ledger rows."""
-    total_quantity = Decimal(0)
-    total_amount = Decimal(0)
+    """Показать то, что начислила ночь, а не пересчитать хранение заново.
+
+    Ставка в строке — фактическая: начисленные деньги, делённые на начисленные
+    литро-дни. Она расходится с заведённой в тарифе, если ставку меняли внутри
+    месяца или часть суток прошла без тарифа, и тогда «ставка на литро-дни» в
+    печатной форме сходится с суммой, а не спорит с ней.
+
+    Товар без начислений остаётся с прочерками: обмера не было или ночь ещё не
+    считала эти сутки. Придуманный ноль скрыл бы и то, и другое.
+    """
+    total_liter_days = Decimal(0)
+    total_kopecks: int | None = None
+    charged = False
     for public_row, measurement in zip(output.measurements, rows, strict=True):
-        row_pricing = pricing.get(measurement.id)
-        if row_pricing is None:
+        charge = charges.get(measurement.product_id)
+        if charge is None:
             continue
-        quantity, amount, tariff = row_pricing
-        effective_rate = (
-            amount / quantity if quantity else Decimal(tariff.rate) / Decimal(100)
-        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        public_row["liter_days"] = str(quantity)
-        public_row["rate_snapshot"] = _rate_snapshot(effective_rate)
-        public_row["amount"] = str(amount)
-        total_quantity += quantity
-        total_amount += amount
-    output.total_liter_days = str(total_quantity)
-    output.total_amount = str(total_amount)
+        charged = True
+        public_row["liter_days"] = str(charge.liter_days)
+        total_liter_days += charge.liter_days
+        if charge.amount_kopecks is None:
+            continue
+        public_row["amount"] = kopecks_to_rub_str(charge.amount_kopecks)
+        total_kopecks = (total_kopecks or 0) + charge.amount_kopecks
+        if charge.liter_days > 0:
+            public_row["rate_snapshot"] = _rate_snapshot(
+                (
+                    Decimal(charge.amount_kopecks) / Decimal(100) / charge.liter_days
+                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            )
+    if charged:
+        output.total_liter_days = str(total_liter_days)
+    if total_kopecks is not None:
+        output.total_amount = kopecks_to_rub_str(total_kopecks)
 
 
 @router.get("/statements", response_model=StorageStatementsOut)
@@ -393,23 +415,6 @@ async def list_statements(
             )
         )
     )
-    rounding_scopes_by_seller: dict[
-        uuid.UUID,
-        list[tuple[StorageStatement, list[StorageMeasurement]]],
-    ] = {}
-    for statement in statements:
-        priceable_rows = [
-            row
-            for row in rows_by_scope.get(
-                (statement.seller_id, statement.warehouse_id), []
-            )
-            if row.status == "calculated"
-        ]
-        if priceable_rows:
-            rounding_scopes_by_seller.setdefault(statement.seller_id, []).append(
-                (statement, priceable_rows)
-            )
-
     rows_by_statement = {
         statement.id: rows_by_scope.get(
             (statement.seller_id, statement.warehouse_id),
@@ -426,22 +431,14 @@ async def list_statements(
         fixed_statements,
         rows_by_statement,
     )
-    has_priceable_drafts = any(
-        statement.status == "draft"
-        and any(row.status == "calculated" for row in rows_by_statement[statement.id])
-        for statement in statements
-    )
-    pricing_by_statement = (
-        await get_storage_draft_pricing_batch(
-            session,
-            [
-                scope
-                for seller_scopes in rounding_scopes_by_seller.values()
-                for scope in seller_scopes
-            ],
-        )
-        if has_priceable_drafts
-        else {}
+    # Деньги и литро-дни на экране — это ночные начисления за выбранный месяц.
+    # Фильтр по складу отбирает только то, что видно, и на цифры не влияет:
+    # каждая строка начисления уже принадлежит своему складу и товару.
+    charges_by_statement = await get_storage_night_charges_batch(
+        session,
+        user.tenant_id,
+        statements,
+        rows_by_statement,
     )
 
     statement_outputs: list[StorageStatementOut] = []
@@ -453,10 +450,8 @@ async def list_statements(
         if statement.status == "fixed":
             ledger = ledger_by_statement.get(statement.id, [])
             _apply_ledger_snapshot(output, rows, ledger)
-        elif priceable_rows := [row for row in rows if row.status == "calculated"]:
-            pricing = pricing_by_statement.get(statement.id)
-            if pricing is not None:
-                _apply_draft_pricing(output, rows, pricing)
+        else:
+            _apply_night_charges(output, rows, charges_by_statement.get(statement.id, {}))
         statement_outputs.append(output)
 
     return StorageStatementsOut(
@@ -490,7 +485,7 @@ async def create_tariff(
         else None
     )
     try:
-        wh_tariff, sel_tariff, repriced_drafts, tariff_revision = await create_storage_tariff(
+        wh_tariff, sel_tariff, tariff_revision = await create_storage_tariff(
             session,
             user.tenant_id,
             body.amount,
@@ -527,12 +522,6 @@ async def create_tariff(
             valid_from=_matrix_date_in_moscow(sel_tariff.valid_from_at),
         )
 
-    recalculated_statements: list[StorageStatementOut] = []
-    for draft in repriced_drafts:
-        output = _statement_out(draft.statement, draft.measurements)
-        _apply_draft_pricing(output, draft.measurements, draft.pricing)
-        recalculated_statements.append(output)
-
     return TariffCreateOut(
         warehouse_tariff=TariffVersionOut(
             id=wh_tariff.id,
@@ -543,10 +532,13 @@ async def create_tariff(
         ),
         seller_exception=seller_exception_out,
         tariff_revision=tariff_revision,
-        recalculated_statements=recalculated_statements,
     )
 
 
+# Пересчёт черновиков — не ручная операция и не деньги: он только обновляет
+# витрину экрана хранения. Кнопки «Сформировать за месяц» больше нет — экран
+# дёргает пересчёт сам после внесения обмера, а по ночам это делает задача
+# начисления. Деньги за хранение пишет только она.
 @router.post(
     "/measurements/rebuild", response_model=StorageRebuildOut, status_code=status.HTTP_202_ACCEPTED
 )
@@ -591,48 +583,6 @@ async def rebuild_storage(
     return StorageRebuildOut(id=str(job.id), status=job.status)
 
 
-@router.post("/statements/{statement_id}/fix", response_model=StorageStatementOut)
-async def fix_statement(
-    statement_id: uuid.UUID,
-    user: Annotated[User, Depends(require_storage_access)],
-    session: Annotated[AsyncSession, Depends(get_db)],
-) -> StorageStatementOut:
-    if user.role != "fulfillment_admin":
-        raise HTTPException(status_code=403, detail="forbidden")
-    tenant_id = user.tenant_id
-    try:
-        statement = await fix_storage_statement(session, tenant_id, statement_id)
-        statement, rows = await get_fixed_storage_statement(session, tenant_id, statement_id)
-    except StorageStatementError as exc:
-        code = str(exc)
-        raise HTTPException(
-            status_code=(
-                409
-                if code
-                in {
-                    "already_fixed",
-                    "missing_dimensions",
-                    "not_editable",
-                    "period_not_closed",
-                    "tariff_not_found",
-                }
-                else 422
-                if code
-                in {
-                    "ledger_quantity_out_of_range",
-                    "ledger_rate_out_of_range",
-                    "ledger_amount_out_of_range",
-                }
-                else 404
-            ),
-            detail=code,
-        ) from exc
-    out = _statement_out(statement, rows)
-    ledger = await get_storage_ledger_rows(session, tenant_id, statement_id)
-    _apply_ledger_snapshot(out, rows, ledger)
-    return out
-
-
 @router.get("/statements/{statement_id}/print", response_model=StorageStatementOut)
 async def print_statement(
     statement_id: uuid.UUID,
@@ -640,12 +590,28 @@ async def print_statement(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> StorageStatementOut:
     try:
-        statement, rows = await get_fixed_storage_statement(session, user.tenant_id, statement_id)
+        statement, rows = await get_storage_statement_for_print(
+            session, user.tenant_id, statement_id
+        )
         if user.role == "fulfillment_seller" and user.seller_id != statement.seller_id:
             raise StorageStatementError("not_found")
     except StorageStatementError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     out = _statement_out(statement, rows)
-    ledger = await get_storage_ledger_rows(session, user.tenant_id, statement.id)
-    _apply_ledger_snapshot(out, rows, ledger)
+    if statement.status == "fixed":
+        # Документ, зафиксированный до перехода на ночное начисление, печатается
+        # ровно теми цифрами, которые тогда ушли в проводки.
+        ledger = await get_storage_ledger_rows(session, user.tenant_id, statement.id)
+        _apply_ledger_snapshot(out, rows, ledger)
+        return out
+    # Печать берёт те же ночные начисления, что и список: одна бумага — одни
+    # цифры. Если ночь по товару ещё не проходила, в строке стоит прочерк, но
+    # обмеры, габариты и объёмы печатаются — оператору они нужны и без денег.
+    charges = await get_storage_night_charges_batch(
+        session,
+        user.tenant_id,
+        [statement],
+        {statement.id: rows},
+    )
+    _apply_night_charges(out, rows, charges.get(statement.id, {}))
     return out

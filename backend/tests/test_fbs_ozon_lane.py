@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import uuid
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -15,24 +19,26 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.fbs_orders import _run_blocked_ozon_fake
+from app.core.settings import settings
 from app.db.session import SessionLocal, engine
 from app.models import Base
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
     CHECK_STATUS_ERROR,
     CHECK_STATUS_OK,
+    FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_PACKED,
     MAPPING_STATUS_MAPPED,
     META_STATUS_ACCEPTED,
     META_STATUS_REJECTED,
     RESERVE_STATUS_RESERVED,
+    STICKER_STATUS_ERROR,
     FbsOrder,
     FbsOrderMarking,
     FbsOrderProduct,
     FbsOrderProductReservation,
 )
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
-from app.models.fbs_print_asset import PRINT_ASSET_STATUS_READY
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_PVZ,
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
@@ -42,8 +48,10 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.fbs_wb_operation import FbsWbOperation
 from app.models.inventory_balance import InventoryBalance
 from app.models.marketplace_account import MarketplaceAccount
+from app.models.marking_code import MarkingCodeEvent
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
@@ -51,6 +59,7 @@ from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
+from app.services import fbs_cancellation_service as cancellation_svc
 from app.services import fbs_kiz_service as kiz_svc
 from app.services import fbs_marking_service as marking_svc
 from app.services import fbs_packing_box_service as box_svc
@@ -176,11 +185,9 @@ async def test_order_label_dispatch_uses_only_selected_marketplace_adapter() -> 
     ozon_fetch.assert_awaited_once_with(["ozon-1"])
 
 
-@pytest.mark.asyncio
-async def test_ozon_order_label_fake_creates_ready_asset_without_wb_fetch(
+async def _ozon_supply_with_one_order(
     db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+) -> tuple[Tenant, FbsSupply, FbsOrder]:
     tenant = Tenant(name="Ozon print test", slug=f"ozon-print-{uuid.uuid4().hex[:8]}")
     seller = Seller(tenant=tenant, name="Seller")
     warehouse = Warehouse(
@@ -214,10 +221,54 @@ async def test_ozon_order_label_fake_creates_ready_asset_without_wb_fetch(
         deadline_at=now + timedelta(days=1),
     )
     db_session.add_all([tenant, seller, warehouse, supply, order])
+    await db_session.flush()
+    db_session.add(
+        MarketplaceAccount(
+            tenant_id=tenant.id,
+            seller_id=seller.id,
+            marketplace="ozon",
+            account_slot="primary",
+            external_account_id="ozon-client",
+            secret_encrypted=encrypt_secret("ozon-key"),
+            is_active=True,
+            validation_status="valid",
+        )
+    )
     await db_session.commit()
+    return tenant, supply, order
 
+
+@pytest.mark.asyncio
+async def test_ozon_pdf_label_is_stored_and_served_as_a_pdf(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Этикетка Ozon доезжает до оператора документом, а не заглушкой.
+
+    Раньше здесь сохранялся однопиксельный PNG и заказу ставилось «стикер
+    готов»: оператор получал пустой лист. Потом заглушку заменили честным
+    отказом, потому что хранилище принимало только PNG. Теперь хранилище знает
+    формат, и путь работает целиком: PDF от Ozon кладётся на диск как PDF и
+    отдаётся ручкой печати с тем же типом содержимого.
+    """
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", True)
+    tenant, supply, order = await _ozon_supply_with_one_order(db_session)
     wb_fetch = AsyncMock(side_effect=AssertionError("WB fetch must not run for Ozon"))
     monkeypatch.setattr(print_asset_svc, "fetch_marketplace_order_stickers", wb_fetch)
+    transport = FakeMarketplaceTransport(
+        order_labels=[
+            {
+                "posting_number": "ozon-posting-1",
+                "file": base64.b64encode(b"%PDF-1.7 ozon label").decode("ascii"),
+                "content_type": "application/pdf",
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        print_asset_svc,
+        "build_ozon_provider",
+        lambda **kwargs: OzonMarketplaceProvider(transport=transport),
+    )
 
     batch = await print_asset_svc.request_supply_print_batch(
         db_session,
@@ -229,11 +280,77 @@ async def test_ozon_order_label_fake_creates_ready_asset_without_wb_fetch(
         http_client=AsyncMock(),
     )
 
-    assert batch.ready == 1
     assert batch.failed == 0
-    assert batch.assets[0].status == PRINT_ASSET_STATUS_READY
-    assert batch.assets[0].storage_path
+    assert batch.ready == 1
+    asset = batch.assets[0]
+    assert asset.content_type == "application/pdf"
+    assert asset.storage_path is not None and asset.storage_path.endswith(".pdf")
+    # Рулон 58x40 — свойство вайлдберрисовского PNG. У PDF Ozon страница своя,
+    # и подписывать её нашим размером нельзя: по этим полям верстается лист.
+    assert asset.width_mm is None and asset.height_mm is None
+
+    payload, content_type, _asset = await print_asset_svc.get_asset_binary_content(
+        db_session,
+        tenant.id,
+        asset.id,
+        user_id=uuid.uuid4(),
+    )
+    assert payload == b"%PDF-1.7 ozon label"
+    assert content_type == "application/pdf"
     wb_fetch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_ozon_label_before_handoff_explains_itself_instead_of_failing_blankly(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Отказ Ozon по одному отправлению — это причина, а не тишина.
+
+    Спецификация `/v2/posting/fbs/package-label`: этикетки выдаются для
+    отправлений в статусе «Ожидает отгрузки» — `awaiting_deliver`. До передачи
+    поставки их нет, и оператор должен прочитать именно это, а не «этикетка не
+    найдена в ответе Ozon».
+    """
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", True)
+    tenant, supply, order = await _ozon_supply_with_one_order(db_session)
+    monkeypatch.setattr(
+        print_asset_svc,
+        "fetch_marketplace_order_stickers",
+        AsyncMock(side_effect=AssertionError("WB fetch must not run for Ozon")),
+    )
+    transport = FakeMarketplaceTransport(
+        order_labels=[
+            {
+                "posting_number": "ozon-posting-1",
+                "error_code": "ozon_label_400",
+                "error_message": "posting is not ready",
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        print_asset_svc,
+        "build_ozon_provider",
+        lambda **kwargs: OzonMarketplaceProvider(transport=transport),
+    )
+
+    batch = await print_asset_svc.request_supply_print_batch(
+        db_session,
+        tenant.id,
+        supply.id,
+        kind="order_sticker",
+        order_ids=[order.id],
+        retry_missing=False,
+        http_client=AsyncMock(),
+    )
+
+    assert batch.ready == 0
+    assert batch.failed == 1
+    assert batch.order_errors[0].code == "ozon_label_400"
+    assert "после передачи" in batch.order_errors[0].message
+    await db_session.refresh(order)
+    assert order.sticker_status == STICKER_STATUS_ERROR
+    assert order.sticker_file is None
 
 
 @pytest.mark.asyncio
@@ -411,6 +528,10 @@ async def test_ozon_stock_dispatch_uses_binding_pool_with_fake_transport(
         product_id=product.id,
         marketplace="ozon",
         external_offer_id="offer-1",
+        # У Ozon `product_id` и `sku` — разные числа: живой ответ
+        # /v4/product/info/stocks по одной карточке отдаёт
+        # {"product_id": 6204279711, "sku": 5680762790}.
+        external_product_id="6001",
         external_sku="3001",
         is_active=True,
     )
@@ -456,14 +577,118 @@ async def test_ozon_stock_dispatch_uses_binding_pool_with_fake_transport(
     assert result.products_targeted == 1
     assert result.products_confirmed == 1
     assert transport.calls == [("publish_stocks", "ozon-client")]
+    # В поле `product_id` уходит именно product_id Ozon, а не SKU: раньше туда
+    # клали SKU и остаток подписывался чужим идентификатором.
     assert transport.published_stocks == [
         {
             "warehouse_id": 900001,
             "offer_id": "offer-1",
-            "product_id": 3001,
+            "product_id": 6001,
             "stock": expected,
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_ozon_partial_stock_confirmation_counts_only_what_ozon_confirmed(
+    db_session: AsyncSession,
+) -> None:
+    """Ozon подтвердил одну строку из двух — второй остаток не «опубликован».
+
+    Раньше сервис прибавлял к подтверждённым весь отправленный пакет, и
+    пропущенный ноль выглядел бы опубликованным, хотя в кабинете остался
+    прежний положительный остаток.
+    """
+    tenant = Tenant(name="Ozon partial stock", slug=f"ozon-partial-{uuid.uuid4().hex[:8]}")
+    seller = Seller(tenant=tenant, name="Seller")
+    warehouse = Warehouse(tenant=tenant, name="FBS", code=f"fbs-{uuid.uuid4().hex[:8]}")
+    products = [
+        Product(
+            tenant=tenant,
+            seller=seller,
+            name=f"Product {index}",
+            sku_code=f"sku-{uuid.uuid4().hex[:8]}",
+        )
+        for index in range(2)
+    ]
+    db_session.add_all([tenant, seller, warehouse, *products])
+    await db_session.flush()
+    binding = FbsWarehouseBinding(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        marketplace="ozon",
+        external_warehouse_id="900002",
+        wb_warehouse_id=-900002,
+        wms_warehouse_id=warehouse.id,
+        is_active=True,
+        stock_sync_enabled=True,
+    )
+    db_session.add_all(
+        [
+            MarketplaceAccount(
+                tenant_id=tenant.id,
+                seller_id=seller.id,
+                marketplace="ozon",
+                account_slot="primary",
+                external_account_id="ozon-client",
+                secret_encrypted=encrypt_secret("ozon-key"),
+                is_active=True,
+                validation_status="valid",
+            ),
+            binding,
+            *[
+                ProductMarketplaceLink(
+                    tenant_id=tenant.id,
+                    seller_id=seller.id,
+                    product_id=product.id,
+                    marketplace="ozon",
+                    external_offer_id=f"offer-{index}",
+                    external_product_id=str(7000 + index),
+                    is_active=True,
+                )
+                for index, product in enumerate(products)
+            ],
+        ]
+    )
+    await db_session.flush()
+    db_session.add_all(
+        [
+            FbsBindingStockPool(
+                tenant_id=tenant.id,
+                binding_id=binding.id,
+                product_id=product.id,
+                quantity=0,
+            )
+            for product in products
+        ]
+    )
+    await db_session.commit()
+
+    transport = FakeMarketplaceTransport(
+        errors={
+            "publish_stocks": MarketplaceProviderError(
+                "ozon",
+                None,
+                {"sent": 2, "confirmed": 1, "failed": [{"codes": ["OZON_ROW_MISSING"]}]},
+                code="ozon_stock_rejected",
+            )
+        }
+    )
+
+    result = await ozon_sync_svc.sync_ozon_stocks(
+        db_session,
+        tenant.id,
+        seller.id,
+        OzonMarketplaceProvider(transport=transport),
+    )
+
+    assert result.products_targeted == 2
+    assert result.products_confirmed == 1
+    assert result.errors == 1
+    assert result.binding_errors == 1
+    await db_session.refresh(binding)
+    assert binding.last_sync_status == "error"
+    assert binding.last_error_code == "ozon_stock_rejected"
 
 
 @pytest.mark.asyncio
@@ -1053,17 +1278,25 @@ async def test_ozon_handoff_blocks_when_required_product_country_is_missing(
 
 
 @pytest.mark.asyncio
-async def test_ozon_handoff_blocks_when_posting_has_restrictions(
+async def test_ozon_handoff_blocks_when_posting_exceeds_the_drop_off_limits(
     db_session: AsyncSession,
 ) -> None:
-    """TC-S03-OZON-031: provider restrictions stop assembly before /ship."""
-    tenant, _, _, _, _, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    """TC-S03-OZON-031: превышение лимита пункта приёма останавливает сборку.
+
+    Останавливает именно превышение, а не наличие лимита: метод
+    `/v1/posting/fbs/restrictions` возвращает ограничения пункта приёма всегда,
+    и раньше сам факт их наличия валил передачу в 409 — на живом пункте приёма
+    отгрузка не прошла бы никогда.
+    """
+    tenant, _, _, _, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
     assert supply is not None
+    order.price = 60_000_000  # 600 000 ₽ в копейках
+    await db_session.commit()
     responses = _ozon_handoff_responses()
     responses["/v1/posting/fbs/restrictions"] = {
         "result": {
             "posting_number": "ozon-posting-dispatch",
-            "max_posting_weight": 1000,
+            "max_posting_price": 500000,
         }
     }
     transport = FakeMarketplaceTransport(endpoint_responses=responses)
@@ -1080,10 +1313,48 @@ async def test_ozon_handoff_blocks_when_posting_has_restrictions(
         )
 
     assert caught.value.message == (
-        "Отправление Ozon имеет ограничения (максимальный вес: 1000); "
+        "Отправление Ozon не проходит ограничения пункта приёма "
+        "(стоимость 600000 ₽ больше допустимых 500000 ₽); "
         "проверьте состав в кабинете Ozon до сборки."
     )
     assert all(path != "/v4/posting/fbs/ship" for path, _ in transport.endpoint_calls)
+
+
+@pytest.mark.asyncio
+async def test_ozon_handoff_passes_a_posting_that_fits_the_drop_off_limits(
+    db_session: AsyncSession,
+) -> None:
+    """Обычные лимиты живого пункта приёма передаче не мешают."""
+    tenant, _, _, _, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    assert supply is not None
+    order.price = 250000  # 2500 ₽
+    await db_session.commit()
+    responses = _ozon_handoff_responses()
+    responses["/v1/posting/fbs/restrictions"] = {
+        "result": {
+            "posting_number": "ozon-posting-dispatch",
+            "max_posting_weight": 40000,
+            "min_posting_weight": 0,
+            "width": 500,
+            "height": 500,
+            "length": 500,
+            "max_posting_price": 500000,
+            "min_posting_price": 0,
+        }
+    }
+    transport = FakeMarketplaceTransport(endpoint_responses=responses)
+
+    await shipment_svc.deliver_supply(
+        db_session,
+        tenant.id,
+        supply.id,
+        AsyncMock(),
+        idempotency_key=f"ozon-allowed-{uuid.uuid4()}",
+        actor_user_id=None,
+        ozon_provider=OzonMarketplaceProvider(transport=transport),
+    )
+
+    assert any(path == "/v4/posting/fbs/ship" for path, _ in transport.endpoint_calls)
 
 
 @pytest.mark.asyncio
@@ -1166,6 +1437,10 @@ async def _seed_ozon_supply_case(
         reserve_status=RESERVE_STATUS_RESERVED,
         created_at_wb=now,
         deadline_at=now + timedelta(days=1),
+        # Ozon ответил по требованиям и сказал, что маркировка не нужна. Без
+        # этого признака гейт выпуска честно не знает, нужна она или нет, и
+        # передачу не разрешает — это его новое и намеренное поведение.
+        meta_details_json={"ozon_requirements": {"kinds": []}},
     )
     db_session.add_all([tenant, seller, warehouse, product, order])
     if supply is not None:
@@ -1322,8 +1597,16 @@ def test_ozon_without_distribution_does_not_require_physical_boxes() -> None:
     assert all(item["code"] != "cargo_places_required" for item in pvz_blockers)
 
 
+# Однопиксельный PNG: минимальный корректный файл, чтобы хранилище печатных
+# активов приняло штрихкод перевозки. В боевом коде такой заглушки больше нет.
+_ONE_PIXEL_PNG_BASE64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAE"
+    "hQGAhKmMIQAAAABJRU5ErkJggg=="
+)
+
+
 def _ozon_handoff_responses(*, substatus: str = "posting_in_carriage") -> dict[str, object]:
-    png = print_asset_svc._FAKE_OZON_LABEL_PNG_BASE64
+    png = _ONE_PIXEL_PNG_BASE64
     return {
         "/v1/posting/fbs/restrictions": {"result": {"posting_number": "ozon-posting-dispatch"}},
         "/v4/posting/fbs/ship": {"result": ["ozon-posting-dispatch"]},
@@ -1358,7 +1641,8 @@ def _ozon_handoff_responses(*, substatus: str = "posting_in_carriage") -> dict[s
             "content_type": "image/png",
         },
         "/v2/posting/fbs/act/get-barcode/text": {"result": "OZON-ACT-901"},
-        "/v2/posting/fbs/digital/act/get-pdf": {
+        # Живой метод листа отгрузки: старый `digital/act/get-pdf` Ozon отключил
+        "/v2/posting/fbs/act/get-pdf": {
             "file_content": png,
             "file_name": "shipping-list.pdf",
             "content_type": "application/pdf",
@@ -1401,9 +1685,10 @@ async def test_ozon_supply_handoff_ships_rechecks_and_creates_carriage_without_w
         "/v1/posting/fbs/restrictions",
         "/v4/posting/fbs/ship",
         "/v3/posting/fbs/get",
-        "/v2/posting/fbs/package-label/create",
-        "/v1/posting/fbs/package-label/get",
-        "/v2/posting/fbs/package-label",
+        # Этикеток здесь больше нет намеренно: Ozon советует запрашивать их
+        # через 45—60 секунд после сборки, а передача ждала 0,35 секунды и
+        # роняла всю операцию уже после подтверждённой перевозки. Этикетка
+        # печатается отдельной кнопкой, когда отправление в `awaiting_deliver`.
         "/v1/carriage/create",
         "/v1/carriage/get",
         "/v1/carriage/set-postings",
@@ -1412,7 +1697,7 @@ async def test_ozon_supply_handoff_ships_rechecks_and_creates_carriage_without_w
         "/v1/carriage/get",
         "/v2/posting/fbs/act/get-barcode",
         "/v2/posting/fbs/act/get-barcode/text",
-        "/v2/posting/fbs/digital/act/get-pdf",
+        "/v2/posting/fbs/act/get-pdf",
     ]
     wb_deliver.assert_not_awaited()
     wb_qr.assert_not_awaited()
@@ -1469,6 +1754,393 @@ async def test_ozon_ship_failed_readback_stays_visible_and_blocks_handoff(
         "/v4/posting/fbs/ship",
         "/v3/posting/fbs/get",
     ]
+
+
+async def _ozon_deliver_operation(idempotency_key: str) -> FbsWbOperation:
+    """Прочитать журнал передачи из отдельной сессии — то есть только то,
+    что действительно закоммичено, а не то, что живёт в открытой транзакции."""
+    async with SessionLocal() as reader:
+        return (
+            await reader.execute(
+                select(FbsWbOperation).where(
+                    FbsWbOperation.operation_kind == "supply_deliver",
+                    FbsWbOperation.idempotency_key == idempotency_key,
+                )
+            )
+        ).scalar_one()
+
+
+@pytest.mark.asyncio
+async def test_ozon_partial_handoff_is_journalled_and_the_retry_resumes(
+    db_session: AsyncSession,
+) -> None:
+    """Первое отправление уехало, второе упало — повтор не собирает первое заново.
+
+    Это ровно тот сценарий, ради которого заведена точка сохранения: `/ship`
+    необратим, а локальная транзакция при ошибке откатывается целиком.
+    """
+    tenant, seller, warehouse, product, first, supply = await _seed_ozon_supply_case(
+        db_session,
+        packed=True,
+    )
+    assert supply is not None
+    now = datetime.now(UTC)
+    second = FbsOrder(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        warehouse_id=warehouse.id,
+        product_id=product.id,
+        supply_id=supply.id,
+        marketplace="ozon",
+        external_order_id="ozon-posting-second",
+        wb_order_id=2002,
+        wb_nm_id=3002,
+        wb_warehouse_id=11,
+        status=FBS_ORDER_STATUS_PACKED,
+        mapping_status=MAPPING_STATUS_MAPPED,
+        reserve_status=RESERVE_STATUS_RESERVED,
+        created_at_wb=now,
+        deadline_at=now + timedelta(days=1),
+        meta_details_json={"ozon_requirements": {"kinds": []}},
+    )
+    db_session.add(second)
+    await db_session.commit()
+
+    failing = FakeMarketplaceTransport(
+        endpoint_responses=_ozon_handoff_responses(),
+        endpoint_response_queues={
+            "/v4/posting/fbs/ship": [
+                {"result": ["ozon-posting-dispatch"]},
+                MarketplaceProviderError("ozon", 500, {"message": "boom"}),
+            ]
+        },
+    )
+
+    with pytest.raises(shipment_svc.FbsShipmentError):
+        await shipment_svc.deliver_supply(
+            db_session,
+            tenant.id,
+            supply.id,
+            AsyncMock(),
+            idempotency_key="ozon-partial-first",
+            actor_user_id=None,
+            ozon_provider=OzonMarketplaceProvider(transport=failing),
+        )
+
+    assert [path for path, _ in failing.endpoint_calls].count("/v4/posting/fbs/ship") == 2
+    journalled = await _ozon_deliver_operation("ozon-partial-first")
+    assert journalled.state == "failed"
+    assert journalled.request_summary_json is not None
+    progress = journalled.request_summary_json["ozon_handoff_progress"]
+    assert progress["shipped_postings"] == ["ozon-posting-dispatch"]
+    assert progress["carriage_id"] is None
+
+    healthy = FakeMarketplaceTransport(endpoint_responses=_ozon_handoff_responses())
+    delivered = await shipment_svc.deliver_supply(
+        db_session,
+        tenant.id,
+        supply.id,
+        AsyncMock(),
+        idempotency_key="ozon-partial-retry",
+        actor_user_id=None,
+        ozon_provider=OzonMarketplaceProvider(transport=healthy),
+    )
+
+    # Собирается только то отправление, которое в прошлый раз не уехало.
+    ship_payloads = [
+        payload for path, payload in healthy.endpoint_calls if path == "/v4/posting/fbs/ship"
+    ]
+    assert [payload["posting_number"] for payload in ship_payloads] == ["ozon-posting-second"]
+    # А в перевозку попадают оба: первое отправление помнится по снимку.
+    set_postings = next(
+        payload for path, payload in healthy.endpoint_calls if path == "/v1/carriage/set-postings"
+    )
+    assert set_postings["posting_numbers"] == [
+        "ozon-posting-dispatch",
+        "ozon-posting-second",
+    ]
+    assert delivered.status == FBS_SUPPLY_STATUS_IN_DELIVERY
+    assert (await _ozon_deliver_operation("ozon-partial-retry")).state == "confirmed"
+    assert first.status == "in_delivery"
+    assert second.status == "in_delivery"
+
+
+@pytest.mark.asyncio
+async def test_ozon_handoff_after_approved_carriage_does_not_approve_twice(
+    db_session: AsyncSession,
+) -> None:
+    """Перевозка подтверждена, а штрихкод акта не пришёл — повтор идёт за документами.
+
+    Второй `/v1/carriage/approve` по уже подтверждённой перевозке — это
+    повторная мутация в кабинете; снимок обязан её предотвратить.
+    """
+    tenant, _, _, _, _, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    assert supply is not None
+    responses = _ozon_handoff_responses()
+    failing = FakeMarketplaceTransport(
+        endpoint_responses=responses,
+        errors={
+            "/v2/posting/fbs/act/get-barcode": MarketplaceProviderError(
+                "ozon", 503, {"message": "later"}
+            )
+        },
+    )
+
+    with pytest.raises(shipment_svc.FbsShipmentError):
+        await shipment_svc.deliver_supply(
+            db_session,
+            tenant.id,
+            supply.id,
+            AsyncMock(),
+            idempotency_key="ozon-barcode-first",
+            actor_user_id=None,
+            ozon_provider=OzonMarketplaceProvider(transport=failing),
+        )
+
+    progress = (await _ozon_deliver_operation("ozon-barcode-first")).request_summary_json[
+        "ozon_handoff_progress"
+    ]
+    assert progress["carriage_id"] == 901
+    assert progress["carriage_approved"] is True
+
+    # За время между попытками отправление ушло дальше по жизни: перевозку
+    # забрали, Ozon показывает приёмку. Гейт «должно быть awaiting_deliver»
+    # относится к сборке, и на повторе он не имеет права запирать документы.
+    retry_responses = _ozon_handoff_responses()
+    retry_responses["/v3/posting/fbs/get"] = {
+        "result": {
+            "posting_number": "ozon-posting-dispatch",
+            "status": "acceptance_in_progress",
+            "substatus": "posting_in_carriage",
+            "related_postings": {"related_posting_numbers": []},
+        }
+    }
+    healthy = FakeMarketplaceTransport(endpoint_responses=retry_responses)
+    delivered = await shipment_svc.deliver_supply(
+        db_session,
+        tenant.id,
+        supply.id,
+        AsyncMock(),
+        idempotency_key="ozon-barcode-retry",
+        actor_user_id=None,
+        ozon_provider=OzonMarketplaceProvider(transport=healthy),
+    )
+
+    paths = [path for path, _ in healthy.endpoint_calls]
+    assert "/v4/posting/fbs/ship" not in paths
+    assert "/v1/carriage/create" not in paths
+    assert "/v1/carriage/set-postings" not in paths
+    assert "/v1/carriage/approve" not in paths
+    assert "/v2/posting/fbs/act/get-barcode" in paths
+    assert delivered.status == FBS_SUPPLY_STATUS_IN_DELIVERY
+    assert delivered.external_supply_id == "901"
+
+
+@dataclass
+class _RecordingStatusTransport(FakeMarketplaceTransport):
+    """Фейк, который помнит, по каким именно отправлениям его спросили."""
+
+    requested: list[list[str]] = field(default_factory=list)
+
+    async def fetch_statuses(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        order_ids: Sequence[str],
+    ) -> list[dict[str, Any]]:
+        self.requested.append(list(order_ids))
+        return await super().fetch_statuses(
+            client_id=client_id,
+            api_key=api_key,
+            order_ids=order_ids,
+        )
+
+
+@pytest.mark.asyncio
+async def test_ozon_status_sync_skips_finished_orders_and_polls_the_rest_in_turns(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Опрос берёт порцию живых заказов по кругу, а не всю историю продавца.
+
+    Подстатус Ozon отдаёт только карточкой по одному номеру, поэтому размер
+    выборки — это ровно число последовательных запросов за круг автоопроса.
+    """
+    tenant, seller, warehouse, product, live_old, _ = await _seed_ozon_supply_case(
+        db_session,
+        packed=False,
+    )
+    now = datetime.now(UTC)
+    live_old.last_wb_sync_at = now - timedelta(hours=2)
+    extra = []
+    for index, status in enumerate(("done", "cancelled", "new"), start=1):
+        extra.append(
+            FbsOrder(
+                tenant_id=tenant.id,
+                seller_id=seller.id,
+                warehouse_id=warehouse.id,
+                product_id=product.id,
+                marketplace="ozon",
+                external_order_id=f"ozon-posting-{status}",
+                wb_order_id=9000 + index,
+                status=status,
+                mapping_status=MAPPING_STATUS_MAPPED,
+                reserve_status=RESERVE_STATUS_RESERVED,
+                created_at_wb=now,
+                deadline_at=now + timedelta(days=1),
+                last_wb_sync_at=now - timedelta(hours=1),
+            )
+        )
+    db_session.add_all(extra)
+    await db_session.commit()
+    monkeypatch.setattr(ozon_sync_svc, "OZON_STATUS_SYNC_BATCH_LIMIT", 1)
+    transport = _RecordingStatusTransport()
+
+    await ozon_sync_svc.sync_ozon_order_statuses(
+        db_session,
+        tenant.id,
+        seller.id,
+        OzonMarketplaceProvider(transport=transport),
+        AsyncMock(),
+    )
+    await ozon_sync_svc.sync_ozon_order_statuses(
+        db_session,
+        tenant.id,
+        seller.id,
+        OzonMarketplaceProvider(transport=transport),
+        AsyncMock(),
+    )
+
+    # Завершённый и отменённый не спрашиваются вовсе; живые идут по кругу,
+    # первым — тот, кого дольше не опрашивали.
+    assert transport.requested == [
+        ["ozon-posting-dispatch"],
+        ["ozon-posting-new"],
+    ]
+
+
+def _ozon_cancel_transport() -> FakeMarketplaceTransport:
+    return FakeMarketplaceTransport(
+        endpoint_responses={
+            "/v1/posting/fbs/cancel-reason": {
+                "result": [
+                    {
+                        "posting_number": "ozon-posting-dispatch",
+                        "reasons": [
+                            {"id": 352, "title": "нет товара", "type_id": "seller"},
+                            {"id": 402, "title": "другое", "type_id": "seller"},
+                        ],
+                    }
+                ]
+            },
+            "/v2/posting/fbs/cancel": {"result": True},
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_ozon_cancellation_is_journalled_before_the_local_part(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ozon отменил, локальная часть упала — повтор не отменяет в кабинете второй раз.
+
+    Отмена у Ozon необратима, а локальное сторнирование может упасть после неё.
+    Без отметки об отмене WMS считал бы заказ активным, а повтор ушёл бы в
+    кабинет ещё раз.
+    """
+    tenant, _, _, _, order, _ = await _seed_ozon_supply_case(db_session, packed=False)
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", True)
+    transport = _ozon_cancel_transport()
+    monkeypatch.setattr(
+        cancellation_svc,
+        "build_ozon_provider",
+        lambda: OzonMarketplaceProvider(transport=transport),
+    )
+
+    async def _boom(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("локальная часть отмены упала")
+
+    monkeypatch.setattr(cancellation_svc, "_release_reservation", _boom)
+
+    with pytest.raises(RuntimeError):
+        await cancellation_svc.cancel_order(
+            db_session,
+            tenant.id,
+            order.id,
+            AsyncMock(),
+            actor_user_id=None,
+        )
+
+    async with SessionLocal() as reader:
+        stored = await reader.get(FbsOrder, order.id)
+        assert stored is not None
+        assert stored.status != FBS_ORDER_STATUS_CANCELLED
+        journal = (stored.meta_details_json or {})["ozon_cancellation"]
+        assert journal["reason_id"] == 352
+        assert journal["posting_number"] == "ozon-posting-dispatch"
+
+    monkeypatch.undo()
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", True)
+    retry_transport = _ozon_cancel_transport()
+    monkeypatch.setattr(
+        cancellation_svc,
+        "build_ozon_provider",
+        lambda: OzonMarketplaceProvider(transport=retry_transport),
+    )
+
+    cancelled = await cancellation_svc.cancel_order(
+        db_session,
+        tenant.id,
+        order.id,
+        AsyncMock(),
+        actor_user_id=None,
+    )
+    await db_session.commit()
+
+    assert cancelled.status == FBS_ORDER_STATUS_CANCELLED
+    assert retry_transport.endpoint_calls == []
+
+
+@pytest.mark.asyncio
+async def test_ozon_cancellation_reason_comes_from_the_caller(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Причина — параметр, а не зашитое «товар закончился».
+
+    Упакованный заказ с браком отменяется по своей причине; раньше в кабинет
+    всегда уезжала 352, и в отчётах продавца брак выглядел как нехватка товара.
+    """
+    tenant, _, _, _, order, _ = await _seed_ozon_supply_case(db_session, packed=False)
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", True)
+    transport = _ozon_cancel_transport()
+    monkeypatch.setattr(
+        cancellation_svc,
+        "build_ozon_provider",
+        lambda: OzonMarketplaceProvider(transport=transport),
+    )
+
+    await cancellation_svc.cancel_order(
+        db_session,
+        tenant.id,
+        order.id,
+        AsyncMock(),
+        actor_user_id=None,
+        reason_id=402,
+        reason_message="Брак упаковки",
+    )
+    await db_session.commit()
+
+    cancel_payload = next(
+        payload for path, payload in transport.endpoint_calls if path == "/v2/posting/fbs/cancel"
+    )
+    assert cancel_payload == {
+        "posting_number": "ozon-posting-dispatch",
+        "cancel_reason_id": 402,
+        "cancel_reason_message": "Брак упаковки",
+    }
 
 
 @pytest.mark.asyncio
@@ -1720,6 +2392,26 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
     assert sorted(marking.meta_details_json["exemplar_id"] for marking in markings) == [81, 82, 83]
     assert [line.qty_marking_external for line in lines] == [1, 2]
     assert order.metadata_delivery_allowed is True
+
+    # TC-S03-OZON-034: лента расхода КМ должна показывать номер упаковочного
+    # документа, а не `wb_order_id` — у заказа Ozon это синтезированный
+    # отрицательный хеш номера отправления, а не читаемый номер документа.
+    events = list(
+        (
+            await db_session.execute(
+                select(MarkingCodeEvent).where(
+                    MarkingCodeEvent.code_id.in_(
+                        [marking.marking_code_id for marking in markings]
+                    )
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(events) == 3
+    assert all(event.document_number == task.document_number for event in events)
+    assert all(event.document_number != str(order.wb_order_id) for event in events)
 
     supply.status = FBS_SUPPLY_STATUS_PACKED
     order.status = FBS_ORDER_STATUS_PACKED
@@ -2135,3 +2827,45 @@ async def test_wb_background_tracking_ignores_ozon_supplies(
     assert result.supplies_synced == 0
     assert result.orders_updated == 0
     forbidden.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_ozon_labels_are_not_requested_while_the_live_transport_is_off(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Выключенный транспорт — это отказ, а не «этикетка не найдена в ответе Ozon».
+
+    На локальном фейке список этикеток пуст, и без явной проверки рубильника
+    оператор прочитал бы, что Ozon чего-то не вернул, — про Ozon, которого никто
+    не спрашивал.
+    """
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", False)
+    tenant, supply, order = await _ozon_supply_with_one_order(db_session)
+    monkeypatch.setattr(
+        print_asset_svc,
+        "fetch_marketplace_order_stickers",
+        AsyncMock(side_effect=AssertionError("WB fetch must not run for Ozon")),
+    )
+    monkeypatch.setattr(
+        print_asset_svc,
+        "build_ozon_provider",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("provider must not be built")),
+    )
+
+    batch = await print_asset_svc.request_supply_print_batch(
+        db_session,
+        tenant.id,
+        supply.id,
+        kind="order_sticker",
+        order_ids=[order.id],
+        retry_missing=False,
+        http_client=AsyncMock(),
+    )
+
+    assert batch.ready == 0
+    assert batch.failed == 1
+    assert batch.order_errors[0].code == "ozon_live_labels_blocked"
+    assert "не включён" in batch.order_errors[0].message
+    await db_session.refresh(order)
+    assert order.sticker_status == STICKER_STATUS_ERROR

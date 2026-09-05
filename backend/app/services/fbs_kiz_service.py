@@ -42,6 +42,7 @@ from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.services import fbs_marking_service as marking_svc
 from app.services import marking_code_service as marking_code_svc
+from app.services.marketplace_scope import is_wildberries
 from app.services.ozon_kiz_service import OzonKizError
 from app.services.ozon_kiz_service import commit_ozon_kiz as commit_ozon
 from app.services.wb_card_enrichment import first_photo_url_from_card
@@ -999,6 +1000,15 @@ async def _delete_sgtin_from_wb(
     http_client: httpx.AsyncClient,
     api_token: str,
 ) -> None:
+    """Снять код маркировки с заказа на стороне Wildberries.
+
+    У заказа Ozon `wb_order_id` — синтезированный отрицательный хеш, и запрос
+    ушёл бы в чужой кабинет с несуществующим номером. Отвязать код локально при
+    этом можно и нужно: Ozon о нём и не знал — озоновская маркировка живёт своим
+    сервисом, и до неё этот путь не доходит.
+    """
+    if not is_wildberries(order):
+        return
     try:
         await delete_marketplace_order_meta(
             http_client,

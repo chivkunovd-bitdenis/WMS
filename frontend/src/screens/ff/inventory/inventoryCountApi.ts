@@ -283,6 +283,28 @@ export async function createObjectCount(
 }
 
 /**
+ * Завести тару прямо в документе: кнопка «Создать короб/палету/грузоместо».
+ *
+ * Отдельная ручка, а не общая `/warehouses/{id}/sorting-objects` — та создаёт
+ * тару на складе, но не запоминает её за документом, и прунинг пустой тары
+ * (см. backend `_prune_empty_containers`) тут же выбрасывал её из дерева:
+ * оператор только что завёл короб и не видел, куда класть товар.
+ */
+export async function createCountContainer(
+  token: string,
+  countId: string,
+  kind: 'pallet' | 'box' | 'cargo_place',
+): Promise<InventoryCount> {
+  const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/containers`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
+    body: JSON.stringify({ kind }),
+  })
+  if (!res.ok) throw new Error(await readApiErrorMessage(res))
+  return toCount((await res.json()) as ApiDetail)
+}
+
+/**
  * Записать находку: товар лежит там, где по учёту его нет.
  *
  * Строку заводит сервер, а не экран: документ и его строки живут на сервере, и
@@ -326,6 +348,43 @@ export async function recordCountFound(
       container_kind: place.containerKind,
       container_id: place.containerId,
       scan_id: place.scanId,
+    }),
+  })
+  if (!res.ok) throw new InventoryHttpError(await readApiErrorMessage(res), res.status)
+  const body = (await res.json()) as {
+    count: ApiDetail
+    expected_quantity: number
+    notice: string
+  }
+  return { count: toCount(body.count), expectedQuantity: body.expected_quantity, notice: body.notice }
+}
+
+/**
+ * Добавить товар руками — кнопка «Добавить товар».
+ *
+ * Пара к recordCountFound: там строку находят по штрихкоду, здесь оператор
+ * выбрал товар в модалке (штрихкода под рукой нет) и ввёл число сразу.
+ */
+export async function addManualLine(
+  token: string,
+  countId: string,
+  place: {
+    productId: string
+    quantity: number
+    cellId: string | null
+    containerKind: 'pallet' | 'box' | 'cargo_place' | null
+    containerId: string | null
+  },
+): Promise<{ count: InventoryCount; expectedQuantity: number; notice: string }> {
+  const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/manual-line`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
+    body: JSON.stringify({
+      product_id: place.productId,
+      quantity: place.quantity,
+      cell_id: place.cellId,
+      container_kind: place.containerKind,
+      container_id: place.containerId,
     }),
   })
   if (!res.ok) throw new InventoryHttpError(await readApiErrorMessage(res), res.status)

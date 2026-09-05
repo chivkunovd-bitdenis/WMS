@@ -7,12 +7,13 @@ from datetime import UTC, date, datetime, tzinfo
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
 from app.models.fbs_order import FbsOrder, FbsOrderReservation
 from app.models.product import Product
-from app.models.stock_direction import StockMonthlySnapshot
+from app.models.stock_direction import StockDirection, StockMonthlySnapshot
 from app.services import inventory_service, stock_direction_service
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
 from app.services.marketplace_unload_service import list_available_products
@@ -200,6 +201,19 @@ async def test_seller_stock_directions_summary_and_scope(
         json={"name": "FBS WB", "comment": "пул продаж", "quantity": 3, "is_fbs": True},
     )
     assert fbs.status_code == 201, fbs.text
+
+    # Сравнять время создания явно. Правило сортировки — «сначала по времени,
+    # при равном времени по имени», и проверять мы хотим именно вторую его
+    # половину. Но `created_at` в SQLite идёт целыми секундами, и если два
+    # запроса разошлись по разные стороны секунды, решает уже время, а не имя, —
+    # тест падал через раз именно на этом.
+    async with SessionLocal() as session:
+        await session.execute(
+            update(StockDirection)
+            .where(StockDirection.product_id == product_id)
+            .values(created_at=datetime(2026, 9, 1, 12, tzinfo=UTC))
+        )
+        await session.commit()
 
     listed = await async_client.get(
         f"/products/{product_id}/stock-directions",

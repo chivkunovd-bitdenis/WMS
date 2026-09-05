@@ -19,8 +19,10 @@ from app.models.billing import (
 )
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
+from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
 from app.services.sorting_location_service import get_or_create_sorting_location
+from app.services.storage_daily_charge_service import charge_storage_day
 from app.services.storage_measurement_service import MOSCOW
 
 
@@ -272,131 +274,6 @@ async def _storage_row(async_client: AsyncClient, headers, seller_id, date_from,
 
 
 @pytest.mark.asyncio
-async def test_storage_row_reaches_the_invoice_as_one_verified_line(
-    async_client: AsyncClient,
-) -> None:
-    """TC-NEW-201: токен хранения пересчитывается сервером и попадает в счёт одной строкой."""
-    suffix = f"invoice-v2-storage-{time.time_ns()}"
-    headers, tenant_id, seller_id, _product = await _storage_ready_tenant(async_client, suffix)
-    row = await _storage_row(async_client, headers, seller_id, "2026-08-20", "2026-08-22")
-    assert row["status"] == "calculated", row
-    assert row["amount_kopecks"] > 0, row
-
-    body = {
-        "creation_mode": "selected_operations",
-        "seller_id": str(seller_id),
-        "date_from": "2026-08-20",
-        "date_to": "2026-08-22",
-        "selected_root_ids": [],
-        "storage_calculation_token": row["calculation_token"],
-    }
-    preview = await async_client.post("/billing/invoices-v2/preview", headers=headers, json=body)
-    assert preview.status_code == 200, preview.text
-    lines = preview.json()["lines"]
-    assert len(lines) == 1, lines
-    # Одна агрегированная строка без разбивки по товарам, дням и тарифам.
-    assert lines[0]["description"] == "Хранение товара за выбранный период"
-    assert lines[0]["total_amount_kopecks"] == row["amount_kopecks"]
-    assert preview.json()["total_amount_kopecks"] == row["amount_kopecks"]
-
-    saved = await async_client.post(
-        "/billing/invoices-v2", headers={**headers, "Idempotency-Key": "storage-1"}, json=body
-    )
-    assert saved.status_code == 201, saved.text
-    async with SessionLocal() as session:
-        sources = list(
-            (
-                await session.scalars(
-                    select(BillingInvoiceV2Source).where(
-                        BillingInvoiceV2Source.tenant_id == tenant_id
-                    )
-                )
-            ).all()
-        )
-    assert len(sources) == 1
-    # Токен сохранён снимком: именно его отсутствие делало строку хранения немой.
-    assert sources[0].storage_calculation_token == row["calculation_token"]
-    assert sources[0].billing_ledger_entry_id is None
-    assert sources[0].operation_fact_id is None
-    assert sources[0].signed_amount_kopecks_snapshot == row["amount_kopecks"]
-
-
-@pytest.mark.asyncio
-async def test_storage_token_is_never_trusted_as_a_price(async_client: AsyncClient) -> None:
-    """TC-NEW-202: подделанный, чужой и не тот период токены хранения счёт не создают."""
-    suffix = f"invoice-v2-storage-neg-{time.time_ns()}"
-    headers, _tenant_id, seller_id, _product = await _storage_ready_tenant(async_client, suffix)
-    row = await _storage_row(async_client, headers, seller_id, "2026-08-20", "2026-08-22")
-    body = {
-        "creation_mode": "selected_operations",
-        "seller_id": str(seller_id),
-        "date_from": "2026-08-20",
-        "date_to": "2026-08-22",
-        "selected_root_ids": [],
-        "storage_calculation_token": row["calculation_token"],
-    }
-
-    tampered = await async_client.post(
-        "/billing/invoices-v2/preview",
-        headers=headers,
-        json={**body, "storage_calculation_token": f"{row['calculation_token']}x"},
-    )
-    assert tampered.status_code == 422
-    assert tampered.json()["detail"] == "storage_calculation_stale"
-
-    # Тот же подписанный токен, но заявленный на другой период: границы входят
-    # в подпись, поэтому перенести расчёт на соседние даты нельзя.
-    moved = await async_client.post(
-        "/billing/invoices-v2/preview",
-        headers=headers,
-        json={**body, "date_from": "2026-08-21", "date_to": "2026-08-22"},
-    )
-    assert moved.status_code == 422
-    assert moved.json()["detail"] == "storage_calculation_stale"
-
-    # Ни одной операции и никакого хранения — счёт не собирается вообще.
-    empty = await async_client.post(
-        "/billing/invoices-v2/preview",
-        headers=headers,
-        json={**body, "storage_calculation_token": None},
-    )
-    assert empty.status_code == 422
-    assert empty.json()["detail"] == "selected_operations_required"
-
-
-@pytest.mark.asyncio
-async def test_storage_without_dimensions_blocks_the_invoice(async_client: AsyncClient) -> None:
-    """TC-NEW-203: товар без габаритов не даёт выставить счёт и называет причину."""
-    suffix = f"invoice-v2-storage-dim-{time.time_ns()}"
-    headers, tenant_id, seller_id, product = await _storage_ready_tenant(async_client, suffix)
-    row = await _storage_row(async_client, headers, seller_id, "2026-08-20", "2026-08-22")
-    assert row["status"] == "calculated"
-
-    # Габариты пропали уже после того, как оператор увидел рассчитанную строку.
-    async with SessionLocal() as session:
-        stored = await session.get(Product, product.id)
-        assert stored is not None
-        stored.volume_liters = None
-        await session.commit()
-
-    blocked = await async_client.post(
-        "/billing/invoices-v2/preview",
-        headers=headers,
-        json={
-            "creation_mode": "selected_operations",
-            "seller_id": str(seller_id),
-            "date_from": "2026-08-20",
-            "date_to": "2026-08-22",
-            "selected_root_ids": [],
-            "storage_calculation_token": row["calculation_token"],
-        },
-    )
-    assert blocked.status_code == 422
-    assert blocked.json()["detail"] == "storage_missing_dimensions"
-    assert tenant_id is not None
-
-
-@pytest.mark.asyncio
 async def test_invoice_history_merges_legacy_and_v2_without_losing_documents(
     async_client: AsyncClient,
 ) -> None:
@@ -577,3 +454,163 @@ async def test_v2_invoice_marks_the_operation_as_already_billed(async_client: As
     # Без этой отметки оператор не увидит, что операция уже в счёте, и выставит
     # её второй раз: повторное выставление разрешено, поэтому сервер не откажет.
     assert after.json()["entries"][0]["invoice_history"] == {"state": "known", "count": 1}
+
+
+@pytest.mark.asyncio
+async def test_storage_period_cannot_be_invoiced_twice(async_client: AsyncClient) -> None:
+    """Одни и те же сутки хранения не должны попасть в два счёта.
+
+    До 03.09.2026 дыра была недостижима только потому, что галочка хранения
+    вообще не доезжала до запроса: фронт ждал подписанный токен, которого
+    бэкенд уже не выдавал. Как только галочка заработала, второй счёт за тот же
+    период снова взял бы деньги за те же сутки.
+    """
+    suffix = f"invoice-v2-storage-twice-{time.time_ns()}"
+    headers, tenant_id, seller_id, _product = await _storage_ready_tenant(async_client, suffix)
+    async with SessionLocal() as session:
+        tenant = await session.get(Tenant, tenant_id)
+        assert tenant is not None
+        tenant.billing_enabled_from = date(2026, 8, 1)
+        await session.commit()
+
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=date(2026, 8, 20)) == 1
+
+    body = {
+        "creation_mode": "selected_operations",
+        "seller_id": str(seller_id),
+        "date_from": "2026-08-20",
+        "date_to": "2026-08-20",
+        "selected_root_ids": [],
+        "include_storage": True,
+    }
+    first = await async_client.post("/billing/invoices-v2/preview", headers=headers, json=body)
+    assert first.status_code == 200, first.text
+    assert len(first.json()["lines"]) == 1, first.text
+    assert first.json()["lines"][0]["total_amount_kopecks"] > 0
+
+    issued = await async_client.post(
+        "/billing/invoices-v2",
+        headers={**headers, "Idempotency-Key": f"{suffix}-1"},
+        json=body,
+    )
+    assert issued.status_code in (200, 201), issued.text
+
+    # Второй счёт за тот же период не должен взять те же сутки повторно.
+    second = await async_client.post("/billing/invoices-v2/preview", headers=headers, json=body)
+    assert second.status_code in (200, 422), second.text
+    assert second.status_code == 422 or second.json()["lines"] == [], second.text
+
+
+@pytest.mark.asyncio
+async def test_selected_operations_invoice_carries_manually_added_lines(
+    async_client: AsyncClient,
+) -> None:
+    """К выбранным операциям можно дописать строку, которой нет в начислениях.
+
+    Короба, доставка, разовая работа — за них начисления нет и быть не может,
+    но выставлять за них отдельный счёт значит слать селлеру две бумаги за одну
+    и ту же работу. Строка уходит в тот же счёт и так же попадает в раздел
+    выставленных.
+    """
+    suffix = f"invoice-v2-extra-lines-{time.time_ns()}"
+    headers, tenant_id, seller_id, _product = await _storage_ready_tenant(async_client, suffix)
+    async with SessionLocal() as session:
+        tenant = await session.get(Tenant, tenant_id)
+        assert tenant is not None
+        tenant.billing_enabled_from = date(2026, 8, 1)
+        await session.commit()
+
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=date(2026, 8, 20)) == 1
+
+    body = {
+        "creation_mode": "selected_operations",
+        "seller_id": str(seller_id),
+        "date_from": "2026-08-20",
+        "date_to": "2026-08-20",
+        "selected_root_ids": [],
+        "include_storage": True,
+        "manual_lines": [{"description": "Короба", "amount": "500"}],
+    }
+    preview = await async_client.post(
+        "/billing/invoices-v2/preview", headers=headers, json=body
+    )
+    assert preview.status_code == 200, preview.text
+    lines = preview.json()["lines"]
+    descriptions = [line["description"] for line in lines]
+    assert "Короба" in descriptions, lines
+    # Хранение никуда не делось: обе части в одном счёте.
+    assert len(lines) == 2, lines
+    boxes = next(line for line in lines if line["description"] == "Короба")
+    assert boxes["total_amount_kopecks"] == 50000
+    assert preview.json()["total_amount_kopecks"] == sum(
+        line["total_amount_kopecks"] for line in lines
+    )
+
+    issued = await async_client.post(
+        "/billing/invoices-v2",
+        headers={**headers, "Idempotency-Key": f"{suffix}-1"},
+        json=body,
+    )
+    assert issued.status_code in (200, 201), issued.text
+    # Выставленный счёт помнит добавленную строку, а не только начисления.
+    assert "Короба" in [line["description"] for line in issued.json()["lines"]]
+
+
+@pytest.mark.asyncio
+async def test_late_evening_utc_operation_belongs_to_the_moscow_day(
+    async_client: AsyncClient,
+) -> None:
+    """Границы периода счёта — московские, как и в отчёте.
+
+    Операция 20 августа в 22:30 UTC — это 21 августа в 01:30 по Москве. Отчёт за
+    21-е её показывал, а счёт отвечал «операция вне периода»: он сравнивал
+    календарную дату исходного времени UTC. Оператор видел деньги, выставить их
+    не мог и объяснения не получал.
+    """
+    suffix = f"invoice-v2-msk-{time.time_ns()}"
+    registered = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Invoice MSK",
+            "slug": suffix,
+            "admin_email": f"{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
+    tenant_id = uuid.UUID((await async_client.get("/auth/me", headers=headers)).json()["tenant_id"])
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Селлер"})
+    seller_id = uuid.UUID(seller.json()["id"])
+    root_id = uuid.uuid4()
+    async with SessionLocal() as session:
+        session.add(
+            BillingLedgerEntry(
+                id=root_id,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                service_code="inbound",
+                source="test",
+                source_type="test",
+                source_id=uuid.uuid4(),
+                event_kind="charge",
+                unit="item",
+                quantity=Decimal("1"),
+                rate=1000,
+                amount=1000,
+                occurred_at=datetime(2026, 8, 20, 22, 30, tzinfo=UTC),
+            )
+        )
+        await session.commit()
+
+    body = {
+        "creation_mode": "selected_operations",
+        "seller_id": str(seller_id),
+        "date_from": "2026-08-21",
+        "date_to": "2026-08-21",
+        "selected_root_ids": [str(root_id)],
+    }
+    preview = await async_client.post("/billing/invoices-v2/preview", headers=headers, json=body)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["total_amount_kopecks"] == 1000

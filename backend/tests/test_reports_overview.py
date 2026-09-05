@@ -271,3 +271,67 @@ async def test_reports_overview_seller_scope_overrides_requested_seller(
     })
     assert response.status_code == 200
     assert response.json()["current_balance"] == 0
+
+
+@pytest.mark.asyncio
+async def test_overview_opening_balance_is_the_stock_at_period_start(
+    async_client: AsyncClient,
+) -> None:
+    """«Было на начало» за прошлый период — остаток на его начало, а не сегодня.
+
+    Считать начальный остаток как «остаток сейчас минус приход плюс расход за
+    период» можно только для периода, который кончается сегодня. За прошлый
+    месяц так получалась цифра, которой на складе никогда не было: движения,
+    случившиеся после периода, в расчёт не входили.
+    """
+    suffix = str(time.time_ns())
+    registered = await async_client.post("/auth/register", json={
+        "organization_name": "Opening", "slug": f"opening-{suffix}",
+        "admin_email": f"opening-{suffix}@example.com", "password": "password123",
+    })
+    token = registered.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    tenant_id = _tenant_id(token)
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Seller"})
+    seller_id = seller.json()["id"]
+    warehouse = await async_client.post(
+        "/warehouses", headers=headers, json={"name": "Main", "code": f"open-{suffix}"}
+    )
+    warehouse_id = warehouse.json()["id"]
+    location = await async_client.post(
+        f"/warehouses/{warehouse_id}/locations", headers=headers, json={"code": "A-01"}
+    )
+    location_id = location.json()["id"]
+    product = await async_client.post("/products", headers=headers, json={
+        "name": "Opening product", "sku_code": f"OP-{suffix}", "seller_id": seller_id,
+        "length_mm": 1, "width_mm": 1, "height_mm": 1,
+    })
+    product_id = product.json()["id"]
+
+    # До периода приехало 10, внутри периода приехало 5, после периода уехало 12.
+    for quantity_delta, moment in (
+        (10, datetime(2026, 7, 10, 9, tzinfo=UTC)),
+        (5, datetime(2026, 8, 3, 9, tzinfo=UTC)),
+        (-12, datetime(2026, 8, 20, 9, tzinfo=UTC)),
+    ):
+        await _seed_movement(
+            tenant_id=tenant_id, product_id=product_id, seller_id=seller_id,
+            warehouse_id=warehouse_id, storage_location_id=location_id,
+            quantity_delta=quantity_delta, created_at=moment,
+        )
+    async with SessionLocal() as session:
+        session.add(InventoryBalance(
+            tenant_id=tenant_id, product_id=uuid.UUID(product_id),
+            storage_location_id=uuid.UUID(location_id), quantity=3,
+        ))
+        await session.commit()
+
+    response = await async_client.get("/reports/overview", headers=headers, params={
+        "date_from": "2026-08-01T00:00:00Z", "date_to": "2026-08-10T00:00:00Z",
+    })
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["current_balance"] == 3
+    assert payload["in_qty"] == 5 and payload["out_qty"] == 0
+    # На начало августа лежало десять штук, а не 3 - 5 + 0 = -2.
+    assert payload["opening_balance"] == 10

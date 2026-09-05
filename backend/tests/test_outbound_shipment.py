@@ -299,3 +299,40 @@ async def test_outbound_post_duplicate_after_fully_shipped_returns_409(
     dup = await async_client.post(f"{base}/{oid}/post", headers=h)
     assert dup.status_code == 409
     assert dup.json()["detail"] == "already_posted"
+
+
+@pytest.mark.asyncio
+async def test_outbound_shipment_summary_has_no_marketplace_label(
+    async_client: AsyncClient,
+) -> None:
+    """`OutboundShipmentRequest` — общее списание остатков со склада, привязки
+    к WB/Ozon у сущности нет вообще (ни поля в модели, ни смысла). Раньше
+    ответ API навязывал ей чужую подпись `marketplace_label="Wildberries"` —
+    поле было константой независимо от того, что на самом деле за заявка."""
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Out Label Co",
+            "slug": f"out-label-{suffix}",
+            "admin_email": f"out-label-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    token = str(reg.json()["access_token"])
+    h = {"Authorization": f"Bearer {token}"}
+
+    wh = await async_client.post(
+        "/warehouses", headers=h, json={"name": "W", "code": f"w-label-{suffix}"}
+    )
+    wid = wh.json()["id"]
+
+    base = "/operations/outbound-shipment-requests"
+    orq = await async_client.post(base, headers=h, json={"warehouse_id": wid})
+    assert orq.status_code == 201
+
+    listed = await async_client.get(base, headers=h)
+    assert listed.status_code == 200
+    rows = listed.json()
+    assert len(rows) == 1
+    assert "marketplace_label" not in rows[0]

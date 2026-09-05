@@ -236,14 +236,14 @@ async def list_product_movement_summary(
     seller_nm_by_product = {
         pid: (rows_by_product[pid].seller_id, nm_by_product[pid]) for pid in order
     }
-    photo_by_product = await _load_photo_urls(session, tenant_id, seller_nm_by_product)
+    photo_by_product = await load_report_photo_urls(session, tenant_id, seller_nm_by_product)
     for pid, row in rows_by_product.items():
         row.photo_url = photo_by_product.get(pid)
 
     return [rows_by_product[pid] for pid in order]
 
 
-async def _load_photo_urls(
+async def load_report_photo_urls(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     seller_nm_by_product: dict[uuid.UUID, tuple[uuid.UUID | None, int | None]],

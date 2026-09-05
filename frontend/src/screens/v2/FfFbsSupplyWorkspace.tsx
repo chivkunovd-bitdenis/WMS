@@ -46,6 +46,8 @@ import { type PackagingTask, type PackagingTaskLine } from '../ff/FfPackagingPag
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
+import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
+import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import {
   buildFbsPickingListPrintHtml,
@@ -194,6 +196,25 @@ const KIZ_HINT_TEXT: Record<string, string> = {
   aim_prefix: 'убран префикс сканера',
 }
 
+/**
+ * Человеческий номер стикера WB вида «5694425 3074»: на печатной этикетке
+ * хвост из четырёх цифр набран крупно и жирно, по нему стикер и находят глазами
+ * в пачке. Показываем так же, иначе оператор сверяет строку целиком.
+ *
+ * Если пробела нет (старые записи, чужой формат) — отделяем последние четыре
+ * знака: это тот же partB, просто записанный слитно.
+ */
+export function stickerCodeParts(code: string | null): { head: string; tail: string } | null {
+  const value = (code ?? '').trim()
+  if (!value) return null
+  const spaced = value.lastIndexOf(' ')
+  if (spaced > 0) {
+    return { head: value.slice(0, spaced), tail: value.slice(spaced + 1) }
+  }
+  if (value.length <= 4) return { head: '', tail: value }
+  return { head: value.slice(0, -4), tail: value.slice(-4) }
+}
+
 function kizErrorTextByCode(code: string, message: string, context: unknown): string {
   if (code === 'sticker_not_found') return 'Стикер не найден в этой поставке'
   if (code === 'order_frozen') return 'Заказ уже передан в доставку — КИЗ не изменить'
@@ -287,6 +308,9 @@ export function FfFbsSupplyWorkspace({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  // История заказа открывается прямо из состава поставки: оператор смотрит,
+  // что с заказом происходило, там же, где увидел сам заказ.
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [printBatch, setPrintBatch] = useState<FbsPrintBatch | null>(null)
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
   const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
@@ -495,7 +519,15 @@ export function FfFbsSupplyWorkspace({
         idempotency_key: createFbsIdempotencyKey(),
       })
       setWorkspace(next)
-      setStage(visualStage(next.stage))
+      // Добавление заказа — обычное обновление, а не повод вернуть оператора
+      // назад. Сервер отдаёт «подбор», пока новый заказ не подобран, и прямой
+      // setStage перекидывал человека с упаковки или коробов на подбор. Правило
+      // проекта: серверные факты не управляют навигацией в рабочем месте WB.
+      setStage((current) => fbsStageAfterWorkspaceRefresh(
+        next.supply.marketplace,
+        current,
+        visualStage(next.stage),
+      ))
       setAddOrdersOpen(false)
       setAddableSelected(new Set())
       setNotice('Заказы добавлены в поставку.')
@@ -922,6 +954,7 @@ export function FfFbsSupplyWorkspace({
       {
         token,
         productId: firstOrder.product.id,
+        sellerId: workspace.supply.seller.id,
         documentNumber: workspace.supply.name,
         qtyNeedPack: anyHonestSign ? tapeOrders.filter((order) => order.requiresHonestSign).length : tapeOrders.length,
         markingAvailable: markingAvailableForOrders(orders),
@@ -961,6 +994,7 @@ export function FfFbsSupplyWorkspace({
         token,
         lineId: line.id,
         productId: line.product_id,
+        sellerId: workspace?.supply.seller.id,
         documentNumber: workspace?.supply.name ?? null,
         qtyNeedPack: requiresOrderHonestSign(order) ? 1 : 0,
         markingAvailable: requiresOrderHonestSign(order) ? line.marking_available_count : 0,
@@ -1466,6 +1500,20 @@ export function FfFbsSupplyWorkspace({
         </Stack>
       </Box>
 
+      {/* История поставки нужна на любом этапе, а не только в составе: когда
+          что-то пошло не так, оператор смотрит хронологию там, где стоит. */}
+      <Box sx={{ px: 2, pb: 1 }}>
+        <Button
+          size="small"
+          variant="text"
+          startIcon={<HistoryOutlinedIcon fontSize="small" />}
+          onClick={() => setHistoryOpen(true)}
+          data-testid="fbs-supply-history-open"
+        >
+          История поставки
+        </Button>
+      </Box>
+
       <Tabs
         value={stage}
         onChange={(_, value) => {
@@ -1551,7 +1599,7 @@ export function FfFbsSupplyWorkspace({
                     {workspace.orders.map((order) => {
                       const positions = order.positions.length ? order.positions : [{ product_id: order.product.id, name: order.product.name, seller_article: order.product.seller_article, sku: order.product.sku, quantity: 1, picked_quantity: order.pick.status === 'picked' ? 1 : 0 }]
                       return <TableRow key={order.id}>
-                        <TableCell><ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={42} previewSize={280} testId={`fbs-composition-photo-${order.id}`} /></TableCell><TableCell>{isOzonSupply ? order.external_order_id : `№${order.wb_order_id}`}</TableCell>
+                        <TableCell><ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={42} previewSize={280} testId={`fbs-composition-photo-${order.id}`} /></TableCell><TableCell><Link component="button" type="button" underline="hover" sx={{ textAlign: 'left' }} onClick={() => setHistoryOpen(true)} data-testid={`fbs-composition-history-${order.id}`}>{isOzonSupply ? order.external_order_id : `№${order.wb_order_id}`}</Link></TableCell>
                         <TableCell><Stack spacing={0.5}>{positions.map((position, index) => <Box key={`${position.sku ?? position.product_id ?? position.name}-${index}`}><Typography variant="body2" sx={{ fontWeight: 700 }}>{position.name}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Артикул: {position.seller_article ?? '—'}{position.sku ? ` · SKU: ${position.sku}` : ''}</Typography></Box>)}</Stack></TableCell>
                         <TableCell><Stack spacing={0.5}>{positions.map((position, index) => <Typography key={`${position.sku ?? position.product_id ?? position.name}-${index}`} variant="body2">{order.positions.length ? `${position.picked_quantity} из ${position.quantity} шт.` : '1 шт.'}</Typography>)}</Stack></TableCell>
                         <TableCell>{order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется'}</TableCell><TableCell>{order.pick.status === 'picked' ? 'Подобран' : 'Ожидает'}</TableCell>
@@ -1779,6 +1827,7 @@ export function FfFbsSupplyWorkspace({
                       // красит строку зелёным, активную (только что отсканированный
                       // стикер) — голубым: оператор видит, куда сейчас ляжет код.
                       const tail = kizTail(order)
+                      const stickerParts = stickerCodeParts(order.sticker.code)
                       return (
                         <Stack
                           key={order.id}
@@ -1809,6 +1858,24 @@ export function FfFbsSupplyWorkspace({
                               {ids}
                               {markingShortOrderIds.has(order.id) ? <Box component="span" sx={{ color: '#854f0b' }}> · ЧЗ не хватило</Box> : null}
                             </Typography>
+                          </Box>
+                          <Box sx={{ width: 150, flexShrink: 0, textAlign: 'right' }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
+                              Стикер
+                            </Typography>
+                            {stickerParts ? (
+                              <Typography
+                                sx={{ fontFamily: 'monospace', fontSize: 15, lineHeight: 1.2, color: mutedColor }}
+                                data-testid="fbs-sticker-code"
+                              >
+                                {stickerParts.head ? `${stickerParts.head} ` : ''}
+                                <Box component="span" sx={{ fontWeight: 800, fontSize: 22 }}>
+                                  {stickerParts.tail}
+                                </Box>
+                              </Typography>
+                            ) : (
+                              <Typography sx={{ color: 'text.disabled', fontSize: 15 }}>—</Typography>
+                            )}
                           </Box>
                           <Box sx={{ width: 118, flexShrink: 0, textAlign: 'right' }}>
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
@@ -2083,6 +2150,12 @@ export function FfFbsSupplyWorkspace({
         open={printPreviewOpen}
         onClose={() => setPrintPreviewOpen(false)}
         onApplied={(asset) => confirmPrintApplied(asset.id)}
+      />
+      <FbsSupplyHistoryDialog
+        token={token}
+        supplyId={supplyId}
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
       />
       <Dialog open={addOrdersOpen} onClose={addOrdersBusy ? undefined : () => setAddOrdersOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Добавить заказы в поставку</DialogTitle>

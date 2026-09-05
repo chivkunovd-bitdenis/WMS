@@ -279,10 +279,14 @@ def validate(document: dict[str, Any]) -> None:
         if method.lower() in HTTP_METHODS
     ]
     schemas = document.get("components", {}).get("schemas", {})
-    if len(operations) != 24:
-        raise ValueError(f"expected 24 operations, got {len(operations)}")
-    if len(schemas) != 160:
-        raise ValueError(f"expected 160 component schemas, got {len(schemas)}")
+    # Сторож против незаметного дрейфа утверждённого документа. Числа выросли
+    # 03.09.2026, когда в документ добавили отмену отправления: `/v2/posting/fbs/cancel`
+    # и `/v1/posting/fbs/cancel-reason` с их схемами. Оба скопированы дословно из
+    # официальной спецификации Ozon (docs.ozon.ru/api/seller/swagger.json).
+    if len(operations) != 26:
+        raise ValueError(f"expected 26 operations, got {len(operations)}")
+    if len(schemas) != 165:
+        raise ValueError(f"expected 165 component schemas, got {len(schemas)}")
     unreferenced = set(schemas) - reachable_schemas(document)
     if unreferenced:
         raise ValueError("schemas are not transitively reachable: " + ", ".join(sorted(unreferenced)))
@@ -348,10 +352,10 @@ def main() -> int:
         if not args.output.exists() or args.output.read_text() != rendered:
             print(f"{args.output} is stale; run {Path(__file__).name}", file=sys.stderr)
             return 1
-        print(f"OK: {args.output} matches {args.input} (24 operations, 160 schemas)")
+        print(f"OK: {args.output} matches {args.input} (26 operations, 165 schemas)")
         return 0
     args.output.write_text(rendered)
-    print(f"wrote {args.output} (24 operations, 160 schemas)")
+    print(f"wrote {args.output} (26 operations, 165 schemas)")
     return 0
 
 

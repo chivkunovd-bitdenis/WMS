@@ -381,6 +381,7 @@ def _prune_empty_containers(
     nodes: list[CountProductNodeOut | CountContainerNodeOut],
     cell_of: dict[str, str | None],
     dropped: list[CountScannableContainerOut],
+    protected: set[tuple[str, str]],
 ) -> list[CountProductNodeOut | CountContainerNodeOut]:
     """Убрать из дерева тару, в которой по документу ничего не лежит.
 
@@ -390,6 +391,11 @@ def _prune_empty_containers(
     вырастал до сорока тысяч пикселей, и найти в нём свой короб глазами было
     нельзя. Выброшенная тара не пропадает — она уезжает в `scannable_containers`
     и по-прежнему открывается сканом, чтобы записать в неё находку.
+
+    Исключение — тара из `protected` (пары «вид, id»): она заведена прямо в
+    этом документе кнопкой «Создать короб» и пуста по определению. Оператор
+    её только что создал и должен видеть, куда класть товар, поэтому общее
+    правило для неё не действует.
     """
 
     kept: list[CountProductNodeOut | CountContainerNodeOut] = []
@@ -397,8 +403,8 @@ def _prune_empty_containers(
         if isinstance(node, CountProductNodeOut):
             kept.append(node)
             continue
-        node.children = _prune_empty_containers(node.children, cell_of, dropped)
-        if node.children:
+        node.children = _prune_empty_containers(node.children, cell_of, dropped, protected)
+        if node.children or (node.kind, node.id) in protected:
             kept.append(node)
             continue
         dropped.append(
@@ -534,15 +540,17 @@ async def _detail_out(
             )
         )
     # Тара без строк документа уезжает из дерева в список сканируемой: пикнуть
-    # её по-прежнему можно, а пустой строкой она документ не раздувает.
+    # её по-прежнему можно, а пустой строкой она документ не раздувает. Тара,
+    # заведённая прямо в этом документе, — исключение, см. _prune_empty_containers.
+    created_container_ids = await service.created_container_ids(session, count.id)
     scannable_containers: list[CountScannableContainerOut] = []
     if unassigned is not None:
         unassigned.children = _prune_empty_containers(
-            unassigned.children, cell_of_container, scannable_containers
+            unassigned.children, cell_of_container, scannable_containers, created_container_ids
         )
     for cell in cells_by_id.values():
         cell.children = _prune_empty_containers(
-            cell.children, cell_of_container, scannable_containers
+            cell.children, cell_of_container, scannable_containers, created_container_ids
         )
 
     if address_storage:
@@ -733,6 +741,35 @@ async def save_inventory_count_lines(
     return await _detail_out(session, count)
 
 
+class InventoryCountContainerCreateIn(BaseModel):
+    kind: Literal["pallet", "box", "cargo_place"]
+
+
+@router.post("/{count_id}/containers", response_model=InventoryCountDetailOut)
+async def create_inventory_count_container(
+    count_id: uuid.UUID,
+    body: InventoryCountContainerCreateIn,
+    user: Annotated[User, Depends(require_inventory_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryCountDetailOut:
+    """Завести тару прямо в документе — кнопка «Создать короб/палету/грузоместо».
+
+    В отличие от общей ручки `/warehouses/{id}/sorting-objects`, эта ещё и
+    запоминает тару за документом, чтобы прунинг пустой тары её не выбросил
+    (см. `service.create_document_container`).
+    """
+    try:
+        count = await service.create_document_container(
+            session,
+            user.tenant_id,
+            count_id,
+            kind=body.kind,
+        )
+    except service.InventoryCountError as exc:
+        raise _http_error(exc) from None
+    return await _detail_out(session, count)
+
+
 class InventoryCountFoundOut(BaseModel):
     """Документ после записи находки плюс честный текст для оператора."""
 
@@ -773,6 +810,52 @@ async def record_inventory_count_found(
         count=await _detail_out(session, found.count),
         expected_quantity=found.expected_quantity,
         notice=found.notice,
+    )
+
+
+class InventoryCountManualLineIn(BaseModel):
+    """Добавление товара руками через модалку выбора — кнопка «Добавить товар»."""
+
+    product_id: uuid.UUID
+    quantity: int = Field(ge=1, le=1_000_000_000)
+    # Тот же контракт адреса, что у находки (InventoryCountFoundIn): выделили
+    # тару — адрес из её карточки, выделили ячейку — берём её, ничего не
+    # выделили — зона сортировки. Резолвит сервер, не экран.
+    cell_id: uuid.UUID | None = None
+    container_kind: Literal["pallet", "box", "cargo_place"] | None = None
+    container_id: uuid.UUID | None = None
+
+
+@router.post("/{count_id}/manual-line", response_model=InventoryCountFoundOut)
+async def add_inventory_count_manual_line(
+    count_id: uuid.UUID,
+    body: InventoryCountManualLineIn,
+    user: Annotated[User, Depends(require_inventory_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryCountFoundOut:
+    """Добавляет товар, которого в документе нет, — по каталогу, а не сканом.
+
+    Пара к «/found»: там строку находят по штрихкоду, здесь — оператор ищет
+    товар в модалке выбора (нет штрихкода под рукой, или он стёрт) и вводит
+    количество сразу, а не по одной штуке пиком.
+    """
+    try:
+        result = await service.add_manual_line(
+            session,
+            user.tenant_id,
+            count_id,
+            product_id=body.product_id,
+            quantity=body.quantity,
+            cell_id=body.cell_id,
+            container_kind=body.container_kind,
+            container_id=body.container_id,
+        )
+    except service.InventoryCountError as exc:
+        raise _http_error(exc) from None
+    return InventoryCountFoundOut(
+        count=await _detail_out(session, result.count),
+        expected_quantity=result.expected_quantity,
+        notice=result.notice,
     )
 
 

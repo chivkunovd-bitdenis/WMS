@@ -210,6 +210,7 @@ export function SellerInboundDraftScreen({
    */
   const [catalogPaged, setCatalogPaged] = useState(false)
   const [printMeta, setPrintMeta] = useState<ProductLineDisplayMeta | null>(null)
+  const [printProductId, setPrintProductId] = useState<string | null>(null)
   const [plannedDateDraft, setPlannedDateDraft] = useState<string>('')
   const [plannedBoxCountDraft, setPlannedBoxCountDraft] = useState<string>('')
   const [localNotice, setLocalNotice] = useState<string | null>(null)
@@ -1104,7 +1105,10 @@ export function SellerInboundDraftScreen({
                               <IconButton
                                 size="small"
                                 disabled={!printLineMeta.wb_primary_barcode}
-                                onClick={() => setPrintMeta(printLineMeta)}
+                                onClick={() => {
+                                  setPrintProductId(ln.product_id)
+                                  setPrintMeta(printLineMeta)
+                                }}
                                 data-testid="seller-inbound-line-print-barcode"
                                 aria-label="Печать товарного ШК"
                               >
@@ -1161,7 +1165,12 @@ export function SellerInboundDraftScreen({
       <ProductBarcodePrintDialog
         open={printMeta !== null}
         meta={printMeta}
-        onClose={() => setPrintMeta(null)}
+        token={token}
+        productId={printProductId ?? undefined}
+        onClose={() => {
+          setPrintMeta(null)
+          setPrintProductId(null)
+        }}
       />
     </Box>
   )

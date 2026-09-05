@@ -7,8 +7,6 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 from datetime import time as datetime_time
 from decimal import Decimal
-from types import SimpleNamespace
-from typing import cast
 
 import pytest
 from httpx import AsyncClient
@@ -26,9 +24,10 @@ from app.models.product_dimension_event import ProductDimensionEvent
 from app.models.seller import Seller
 from app.models.storage_measurement import StorageMeasurement
 from app.models.storage_statement import StorageStatement
+from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
-from app.services import storage_statement_service
 from app.services.sorting_location_service import get_or_create_sorting_location
+from app.services.storage_daily_charge_service import charge_storage_day
 from app.services.storage_measurement_service import MOSCOW
 
 
@@ -207,6 +206,9 @@ async def test_statement_report_and_invoice_use_seller_matrix_rate_not_legacy_wa
         first_warehouse = await session.get(Warehouse, warehouse_ids[0])
         assert first_warehouse is not None
         tenant_id = first_warehouse.tenant_id
+        tenant = await session.get(Tenant, tenant_id)
+        assert tenant is not None
+        tenant.billing_enabled_from = period_start
         product = Product(
             tenant_id=tenant_id,
             seller_id=seller_id,
@@ -309,6 +311,11 @@ async def test_statement_report_and_invoice_use_seller_matrix_rate_not_legacy_wa
         )
         await session.commit()
 
+    # Ночь считает по ставке этих суток: своя ставка селлера бьёт общую, а
+    # складская 99 остаётся историей и в расчёт не входит.
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=period_start) == 2
+
     statements_response = await async_client.get(
         "/operations/storage/statements",
         headers=headers,
@@ -321,21 +328,11 @@ async def test_statement_report_and_invoice_use_seller_matrix_rate_not_legacy_wa
         if row["id"] in {str(statement_id) for statement_id in statement_ids}
     ]
     assert len(statements) == 2
-    assert {row["total_amount"] for row in statements} == {"93.00"}
+    # По литру на складе за сутки по три рубля за литро-день.
+    assert {row["total_amount"] for row in statements} == {"3.00"}
     assert {
         measurement["rate_snapshot"] for row in statements for measurement in row["measurements"]
     } == {"3.00"}
-
-    async with SessionLocal() as session:
-        repriced = await storage_statement_service.reprice_open_storage_drafts(
-            session,
-            tenant_id,
-            period_start,
-        )
-    assert {row.statement.id for row in repriced} == set(statement_ids)
-    assert {
-        tariff.rate for row in repriced for _quantity, _amount, tariff in row.pricing.values()
-    } == {300}
 
     details = await async_client.get(
         f"/billing/seller-report/sellers/{seller_id}/details",
@@ -348,8 +345,8 @@ async def test_statement_report_and_invoice_use_seller_matrix_rate_not_legacy_wa
     )
     assert details.status_code == 200, details.text
     storage_row = details.json()["storage_row"]
-    assert storage_row["amount_kopecks"] == 18_600
-    assert sum(Decimal(row["total_amount"]) for row in statements) == Decimal("186.00")
+    assert storage_row["amount_kopecks"] == 600
+    assert sum(Decimal(row["total_amount"]) for row in statements) == Decimal("6.00")
 
     invoice = await async_client.post(
         "/billing/invoices-v2/preview",
@@ -360,91 +357,100 @@ async def test_statement_report_and_invoice_use_seller_matrix_rate_not_legacy_wa
             "date_from": period_start.isoformat(),
             "date_to": period_end.isoformat(),
             "selected_root_ids": [],
-            "storage_calculation_token": storage_row["calculation_token"],
+            "include_storage": True,
         },
     )
     assert invoice.status_code == 200, invoice.text
     assert invoice.json()["total_amount_kopecks"] == storage_row["amount_kopecks"]
     assert len(invoice.json()["lines"]) == 1
     assert invoice.json()["lines"][0]["description"] == "Хранение товара за выбранный период"
-    assert invoice.json()["lines"][0]["total_amount_kopecks"] == 18_600
+    assert invoice.json()["lines"][0]["total_amount_kopecks"] == 600
 
-    for statement_id in statement_ids:
-        fixed = await async_client.post(
-            f"/operations/storage/statements/{statement_id}/fix",
-            headers=headers,
-        )
-        assert fixed.status_code == 200, fixed.text
+
+@pytest.mark.asyncio
+async def test_tariff_starting_at_moscow_midnight_does_not_pay_for_the_day_before(
+    async_client: AsyncClient,
+) -> None:
+    """TC-NEW-A1-006: ставка с 1 июля не оплачивает 30 июня.
+
+    Граница суток у хранения — московская полночь, и ошибиться в ней на три часа
+    значит оплатить день, в котором ставки ещё не было. Ночь считает сутки
+    целиком, поэтому промах виден сразу: у тридцатого июня ставки нет вовсе.
+    """
+    suffix = str(time.time_ns())
+    headers, _revision = await _admin(async_client, suffix)
+    seller_id = await _seller(async_client, headers, f"Boundary seller {suffix}")
+    created_warehouse = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": "Boundary", "code": f"boundary-{suffix}"},
+    )
+    assert created_warehouse.status_code == 200, created_warehouse.text
+    warehouse_id = uuid.UUID(created_warehouse.json()["id"])
 
     async with SessionLocal() as session:
-        prior_seller_rate = await session.scalar(
-            select(BillingTariffVersionV2).where(
-                BillingTariffVersionV2.tenant_id == tenant_id,
-                BillingTariffVersionV2.seller_id == seller_id,
-                BillingTariffVersionV2.service_code == "storage",
-            )
+        warehouse = await session.get(Warehouse, warehouse_id)
+        assert warehouse is not None
+        tenant_id = warehouse.tenant_id
+        tenant = await session.get(Tenant, tenant_id)
+        assert tenant is not None
+        tenant.billing_enabled_from = date(2026, 6, 1)
+        product = Product(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            name="Boundary product",
+            sku_code=f"boundary-{suffix}",
+            volume_liters=1,
+            dimensions_source="manual",
         )
-        assert prior_seller_rate is not None
-        prior_seller_rate.valid_to_at = datetime(2026, 7, 16, tzinfo=MOSCOW)
-        session.add(
-            BillingTariffVersionV2(
-                tenant_id=tenant_id,
-                seller_id=seller_id,
-                product_id=None,
-                employee_user_id=None,
-                service_code="storage",
-                unit="liter_day",
-                enabled=True,
-                rate=500,
-                valid_from_at=datetime(2026, 7, 16, tzinfo=MOSCOW),
-            )
+        session.add(product)
+        await session.flush()
+        location = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+        session.add_all(
+            [
+                InventoryMovement(
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    warehouse_id=warehouse_id,
+                    storage_location_id=location.id,
+                    product_id=product.id,
+                    quantity_delta=1,
+                    movement_type="boundary_storage_test",
+                    created_at=datetime(2026, 6, 1, tzinfo=MOSCOW),
+                ),
+                BillingTariffVersionV2(
+                    tenant_id=tenant_id,
+                    seller_id=None,
+                    product_id=None,
+                    employee_user_id=None,
+                    service_code="storage",
+                    unit="liter_day",
+                    enabled=True,
+                    rate=200,
+                    valid_from_at=datetime.combine(date(2026, 7, 1), datetime_time.min, MOSCOW),
+                ),
+            ]
         )
         await session.commit()
 
-    fixed_list = await async_client.get(
-        "/operations/storage/statements",
-        headers=headers,
-        params={"year": 2026, "month": 7},
-    )
-    assert fixed_list.status_code == 200, fixed_list.text
-    fixed_statements = [
-        row
-        for row in fixed_list.json()["statements"]
-        if row["id"] in {str(statement_id) for statement_id in statement_ids}
-    ]
-    assert {row["status"] for row in fixed_statements} == {"fixed"}
-    assert {row["total_amount"] for row in fixed_statements} == {"93.00"}
-    assert {
-        measurement["rate_snapshot"]
-        for row in fixed_statements
-        for measurement in row["measurements"]
-    } == {"3.00"}
+    for day in (date(2026, 6, 30), date(2026, 7, 1)):
+        async with SessionLocal() as session:
+            assert await charge_storage_day(session, tenant_id, day=day) == 1
 
-
-def test_sqlite_naive_utc_tariff_boundary_starts_at_moscow_midnight() -> None:
-    """TC-NEW-A1-006: SQLite's naive stored UTC instant is not shifted a day."""
-    seller_id = uuid.uuid4()
-    common = cast(
-        BillingTariffVersionV2,
-        SimpleNamespace(
-            seller_id=None,
-            valid_from_at=datetime(2026, 6, 30, 21, 0),
-            valid_to_at=None,
-            rate=200,
-        ),
-    )
-    seller = cast(
-        BillingTariffVersionV2,
-        SimpleNamespace(
-            seller_id=seller_id,
-            valid_from_at=datetime(2026, 6, 30, 21, 0),
-            valid_to_at=None,
-            rate=300,
-        ),
-    )
-
-    assert storage_statement_service._tariff_for_day([common, seller], date(2026, 7, 1)) is seller
-    assert storage_statement_service._tariff_for_day([common, seller], date(2026, 6, 30)) is None
+    async with SessionLocal() as session:
+        rates = {
+            entry.event_kind: entry.rate
+            for entry in (
+                await session.scalars(
+                    select(BillingLedgerEntry).where(
+                        BillingLedgerEntry.tenant_id == tenant_id,
+                        BillingLedgerEntry.service_code == "storage",
+                    )
+                )
+            ).all()
+        }
+    assert rates["storage_day:2026-06-30"] is None
+    assert rates["storage_day:2026-07-01"] == 200
 
 
 @pytest.mark.asyncio
@@ -469,6 +475,9 @@ async def test_fractional_measurements_keep_statement_report_and_invoice_at_one_
         warehouse = await session.get(Warehouse, warehouse_id)
         assert warehouse is not None
         tenant_id = warehouse.tenant_id
+        tenant = await session.get(Tenant, tenant_id)
+        assert tenant is not None
+        tenant.billing_enabled_from = period_start
         statement = StorageStatement(
             tenant_id=tenant_id,
             seller_id=seller_id,
@@ -556,6 +565,9 @@ async def test_fractional_measurements_keep_statement_report_and_invoice_at_one_
             )
         await session.commit()
 
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=period_start) == 2
+
     statements = await async_client.get(
         "/operations/storage/statements",
         headers=headers,
@@ -589,13 +601,14 @@ async def test_fractional_measurements_keep_statement_report_and_invoice_at_one_
             "date_from": period_start.isoformat(),
             "date_to": period_end.isoformat(),
             "selected_root_ids": [],
-            "storage_calculation_token": report["calculation_token"],
+            "include_storage": True,
         },
     )
     assert invoice.status_code == 200, invoice.text
     assert report["liter_days"] == pytest.approx(0.0098)
-    assert report["amount_kopecks"] == invoice.json()["total_amount_kopecks"] == 1
-    # Rows are publicly visible, so their allocation has to reconcile with the statement total.
+    # Строки видны оператору, поэтому их сумма обязана сходиться с итогом
+    # документа, а итог — с отчётом и счётом. Округляет теперь ночь, по строке
+    # на сутки и товар, и все трое читают один и тот же её результат.
     assert row_kopecks == statement_kopecks
     assert statement_kopecks == report["amount_kopecks"] == invoice.json()["total_amount_kopecks"]
 
@@ -624,6 +637,9 @@ async def _create_cross_warehouse_fractional_storage_case(
         first_warehouse = await session.get(Warehouse, warehouse_ids[0])
         assert first_warehouse is not None
         tenant_id = first_warehouse.tenant_id
+        tenant = await session.get(Tenant, tenant_id)
+        assert tenant is not None
+        tenant.billing_enabled_from = period_start
         session.add(
             BillingTariffVersionV2(
                 tenant_id=tenant_id,
@@ -711,6 +727,11 @@ async def _create_cross_warehouse_fractional_storage_case(
             statement_ids.append(statement.id)
         await session.commit()
 
+    # Деньги на экране появляются только после ночного начисления — фикстура
+    # обязана пройти тем же путём, что и продакшен.
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=period_start) == 2
+
     return headers, seller_id, warehouse_ids, statement_ids
 
 
@@ -765,7 +786,7 @@ async def test_fractional_warehouse_statements_sum_to_seller_report_and_invoice(
             "date_from": period_start.isoformat(),
             "date_to": period_end.isoformat(),
             "selected_root_ids": [],
-            "storage_calculation_token": report["calculation_token"],
+            "include_storage": True,
         },
     )
     assert invoice.status_code == 200, invoice.text
@@ -774,47 +795,6 @@ async def test_fractional_warehouse_statements_sum_to_seller_report_and_invoice(
     assert allocated_kopecks == statement_kopecks
     assert statement_kopecks == report["amount_kopecks"] == invoice.json()["total_amount_kopecks"]
 
-
-@pytest.mark.asyncio
-async def test_fix_waits_for_dimensions_in_the_whole_seller_rounding_scope(
-    async_client: AsyncClient,
-) -> None:
-    """P2: проводку нельзя фиксировать до расчёта всех складов продавца."""
-    headers, _seller_id, _warehouse_ids, statement_ids = (
-        await _create_cross_warehouse_fractional_storage_case(async_client)
-    )
-    async with SessionLocal() as session:
-        second_statement = await session.get(StorageStatement, statement_ids[1])
-        assert second_statement is not None
-        second_measurement = await session.scalar(
-            select(StorageMeasurement).where(
-                StorageMeasurement.seller_id == second_statement.seller_id,
-                StorageMeasurement.warehouse_id == second_statement.warehouse_id,
-                StorageMeasurement.period_start == second_statement.period_start,
-                StorageMeasurement.period_end == second_statement.period_end,
-            )
-        )
-        assert second_measurement is not None
-        second_measurement.status = "missing_dimensions"
-        await session.commit()
-
-    blocked = await async_client.post(
-        f"/operations/storage/statements/{statement_ids[0]}/fix",
-        headers=headers,
-    )
-
-    assert blocked.status_code == 409, blocked.text
-    assert blocked.json()["detail"] == "missing_dimensions"
-    async with SessionLocal() as session:
-        first_statement = await session.get(StorageStatement, statement_ids[0])
-        assert first_statement is not None
-        assert first_statement.status == "draft"
-        ledger_count = await session.scalar(
-            select(func.count(BillingLedgerEntry.id)).where(
-                BillingLedgerEntry.source_type == "storage_measurement",
-            )
-        )
-        assert ledger_count == 0
 
 
 @pytest.mark.asyncio
@@ -889,23 +869,24 @@ async def test_warehouse_filter_preserves_cross_warehouse_fractional_allocation(
             "date_from": period_start.isoformat(),
             "date_to": period_end.isoformat(),
             "selected_root_ids": [],
-            "storage_calculation_token": report["calculation_token"],
+            "include_storage": True,
         },
     )
     assert invoice.status_code == 200, invoice.text
-    assert (
-        unfiltered_kopecks
-        == report["amount_kopecks"]
-        == invoice.json()["total_amount_kopecks"]
-        == 1
-    )
+    # Фильтр по складу отбирает то, что видно, и не имеет права поменять цифру:
+    # каждая строка начисления уже принадлежит своему складу.
+    assert unfiltered_kopecks == report["amount_kopecks"] == invoice.json()["total_amount_kopecks"]
 
 
 @pytest.mark.asyncio
-async def test_storage_statement_list_loads_pricing_and_ledgers_in_batches(
+async def test_storage_statement_list_loads_night_charges_in_one_query(
     async_client: AsyncClient,
 ) -> None:
-    """P2: число запросов не растёт по строке ведомости."""
+    """P2: число запросов не растёт по строке ведомости.
+
+    И заодно: экран больше не прокручивает движения товара и историю габаритов
+    ради денег. Он читает начисления, а считает их ночь.
+    """
     headers, _seller_id, _warehouse_ids, statement_ids = (
         await _create_cross_warehouse_fractional_storage_case(async_client)
     )
@@ -942,46 +923,11 @@ async def test_storage_statement_list_loads_pricing_and_ledgers_in_batches(
 
     assert draft_response.status_code == 200, draft_response.text
     assert len(select_statements_for(draft_response.json()["statements"])) == 2
-    assert sum(" from products " in sql for sql in draft_sql) == 1
-    assert sum(" from inventory_movements " in sql for sql in draft_sql) == 1
-    assert sum(" from product_dimension_events " in sql for sql in draft_sql) == 1
-
-    for statement_id in statement_ids:
-        fixed = await async_client.post(
-            f"/operations/storage/statements/{statement_id}/fix",
-            headers=headers,
-        )
-        assert fixed.status_code == 200, fixed.text
-
-    fixed_sql: list[str] = []
-
-    def capture_fixed_sql(
-        _connection: object,
-        _cursor: object,
-        statement: str,
-        _parameters: object,
-        _context: object,
-        _executemany: bool,
-    ) -> None:
-        normalized = " ".join(statement.lower().split())
-        if normalized.startswith("select "):
-            fixed_sql.append(normalized)
-
-    event.listen(engine.sync_engine, "before_cursor_execute", capture_fixed_sql)
-    try:
-        fixed_response = await async_client.get(
-            "/operations/storage/statements",
-            headers=headers,
-            params={"year": 2026, "month": 7},
-        )
-    finally:
-        event.remove(engine.sync_engine, "before_cursor_execute", capture_fixed_sql)
-
-    assert fixed_response.status_code == 200, fixed_response.text
-    fixed_statements = select_statements_for(fixed_response.json()["statements"])
-    assert len(fixed_statements) == 2
-    assert {row["status"] for row in fixed_statements} == {"fixed"}
-    assert sum(" from billing_ledger_entries " in sql for sql in fixed_sql) == 1
+    # Начисления на весь список — один запрос, а не по одному на ведомость.
+    assert sum(" from billing_ledger_entries " in sql for sql in draft_sql) == 1
+    # Собственного расчёта больше нет, значит нет и его выборок.
+    assert sum(" from inventory_movements " in sql for sql in draft_sql) == 0
+    assert sum(" from product_dimension_events " in sql for sql in draft_sql) == 0
 
 
 @pytest.mark.asyncio
@@ -1140,7 +1086,7 @@ async def test_cross_dated_tariff_history_returns_the_new_common_seller_pair(
     assert body["seller_exception"]["id"] == str(new_seller.id)
     assert body["seller_exception"]["amount"] == "4.44"
     assert body["seller_exception"]["valid_from"] == start_b.isoformat()
-    repriced = next(
-        row for row in body["recalculated_statements"] if row["id"] == str(statement_id)
-    )
-    assert repriced["measurements"][0]["rate_snapshot"] == "4.44"
+    # Пересчитанных ведомостей в ответе больше нет: новая ставка работает с
+    # ближайшей ночи, а уже начисленное она не переписывает.
+    assert "recalculated_statements" not in body
+    assert statement_id is not None

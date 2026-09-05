@@ -1,9 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { FfInventoryCountScreen } from './FfInventoryCountScreen'
 import { mergeInFlightActuals } from './InventoryRows'
-import { createFoundQueue, type FoundPlace } from './foundQueue'
+import { createFoundQueue, FoundPlaceDeferredError, type FoundPlace } from './foundQueue'
+import type { WbProductPickerCatalogRow } from '../../../components/WbProductPickerDialog'
+
+/**
+ * Строка каталога для модалки «Добавить товар» — тот же WbProductPickerCatalogRow,
+ * плюс seller_id: он нужен, чтобы отобрать товары одного продавца самим на
+ * экране, а не просить сервер фильтровать (ff-catalog фильтрует по seller_id
+ * только для админа — обычный кладовщик с правом PERM_INVENTORY получил бы 403).
+ */
+type ManualAddCatalogRow = WbProductPickerCatalogRow & { seller_id: string | null }
 
 type FoundResponse = Awaited<ReturnType<typeof recordCountFound>>
 import { FfInventoryListScreen } from './FfInventoryListScreen'
@@ -20,6 +29,8 @@ import {
   type ApiSummary,
   recordCountFound,
   saveCountActuals,
+  createCountContainer,
+  addManualLine,
   InventoryHttpError,
 } from './inventoryCountApi'
 
@@ -49,6 +60,11 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
   // Категории для отбора приходят с сервера: ручка есть давно, экран её просто
   // не спрашивал, и выпадающий список стоял пустым.
   const [categories, setCategories] = useState<string[]>([])
+  // Каталог для модалки «Добавить товар». Грузится один раз на весь арендатора
+  // (весь каталог, без пагинации — как и остальные каталоги в системе), а по
+  // селлеру документа фильтруется на экране при открытии модалки.
+  const [productCatalog, setProductCatalog] = useState<ManualAddCatalogRow[] | null>(null)
+  const [catalogLoading, setCatalogLoading] = useState(false)
 
   const loadList = useCallback(async () => {
     setLoading(true)
@@ -83,6 +99,24 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     })()
   }, [token])
 
+  useEffect(() => {
+    void (async () => {
+      setCatalogLoading(true)
+      try {
+        const res = await fetch(apiUrl('/products/ff-catalog'), {
+          headers: { ...authHeaders(token) },
+        })
+        if (!res.ok) return
+        setProductCatalog((await res.json()) as ManualAddCatalogRow[])
+      } catch {
+        // Без каталога кнопка «Добавить товар» просто откроет пустую модалку с
+        // ошибкой поиска — сам экран пересчёта из-за этого падать не должен.
+      } finally {
+        setCatalogLoading(false)
+      }
+    })()
+  }, [token])
+
   async function open(id: string) {
     setLoading(true)
     setError(null)
@@ -90,7 +124,12 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     try {
       const res = await fetch(apiUrl(`${BASE}/${id}`), { headers: { ...authHeaders(token) } })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      setCount(toCount((await res.json()) as ApiDetail))
+      const opened = toCount((await res.json()) as ApiDetail)
+      setCount(opened)
+      countRef.current = opened
+      // Сканы, отложенные из-за ухода в другой документ, снова в работе — и
+      // снова держат проведение, пока не доедут.
+      foundQueueRef.current?.resumeFor(opened.id)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось открыть документ')
     } finally {
@@ -193,15 +232,25 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
    * серверная защита от повтора его не узнавала. Теперь повторяем мы сами и тем
    * же идентификатором.
    */
+  // Снимок документа на момент отправки скана. Без него слияние сравнивало
+  // текущее состояние с самим собой, ничего не находило и молча затирало
+  // количества, введённые кладовщиком, пока летел запрос.
+  const sentSnapshotRef = useRef<InventoryCount | null>(null)
   const foundQueueRef = useRef<ReturnType<typeof createFoundQueue<FoundResponse>> | null>(null)
   if (foundQueueRef.current === null) {
     foundQueueRef.current = createFoundQueue<FoundResponse>({
       send: async (place) => {
         const live = countRef.current
-        if (!live || live.status !== 'draft') throw new Error('Документ уже закрыт')
+        if (!live || live.id !== place.countId) {
+          // Оператор ушёл в другой документ, пока скан не доехал. Он не потерян:
+          // очередь отложит его до возвращения в свой пересчёт.
+          throw new FoundPlaceDeferredError('Находка относится к другому документу пересчёта')
+        }
+        if (live.status !== 'draft') throw new Error('Документ уже закрыт')
         // Кладём на сервер то, что оператор насчитал: автосохранения в экране
         // нет, факт живёт в состоянии React до нажатия «Сохранить».
         await saveCountActuals(token, live, touchedRef.current)
+        sentSnapshotRef.current = live
         return await recordCountFound(token, live.id, place)
       },
       onApplied: (found) => {
@@ -209,7 +258,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
           if (!live) return found.count
           // Пока летел запрос, кладовщик продолжал сканировать. Эти пики есть
           // на экране, но не в том снимке, который мы отправили.
-          return mergeInFlightActuals(found.count, live, live)
+          return mergeInFlightActuals(found.count, sentSnapshotRef.current ?? live, live)
         })
         setNote(found.notice)
       },
@@ -221,16 +270,17 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     })
   }
 
-  function recordFound(place: FoundPlace) {
+  function recordFound(place: Omit<FoundPlace, 'countId'>) {
     if (!count || count.status !== 'draft') return
     setError(null)
-    foundQueueRef.current?.push(place)
+    // Находка принадлежит тому документу, в котором её отсканировали, а не
+    // тому, который открыт в момент повторной отправки.
+    foundQueueRef.current?.push({ ...place, countId: count.id })
   }
 
   async function createContainer(kind: 'pallet' | 'box' | 'cargo_place') {
     if (!count || count.status !== 'draft') return
-    const warehouseId = count.warehouseId
-    if (!warehouseId) {
+    if (!count.warehouseId) {
       setError('Не удалось определить склад документа')
       return
     }
@@ -238,15 +288,55 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(apiUrl(`/warehouses/${warehouseId}/sorting-objects`), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
-        body: JSON.stringify({ kind }),
-      })
-      if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      await open(count.id)
+      // Ручка документа, а не общая /warehouses/{id}/sorting-objects: она же
+      // запоминает тару за документом, чтобы прунинг пустой тары не выбросил
+      // её из дерева сразу после создания (см. inventoryCountApi).
+      setCount(await createCountContainer(token, count.id, kind))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось создать тару')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  /**
+   * Добавить товар руками — кнопка «Добавить товар» (задача владельца 03.09.2026).
+   *
+   * Модалка позволяет выбрать сразу несколько товаров с количеством у каждого;
+   * кладём их одним за другим той же ручкой, что и приёмка (applyPicker) — так
+   * второй товар не потеряется, если первый уже лёг, а третий ещё нет.
+   */
+  async function addProduct(
+    selections: Record<string, number>,
+    placement: {
+      cellId: string | null
+      containerKind: 'pallet' | 'box' | 'cargo_place' | null
+      containerId: string | null
+    },
+  ) {
+    if (!count) return
+    setLoading(true)
+    setError(null)
+    try {
+      let current = count
+      let lastNotice: string | null = null
+      for (const [productId, rawQty] of Object.entries(selections)) {
+        const quantity = Number.isFinite(rawQty) ? Math.floor(rawQty) : 0
+        if (quantity <= 0) continue
+        const result = await addManualLine(token, current.id, {
+          productId,
+          quantity,
+          cellId: placement.cellId,
+          containerKind: placement.containerKind,
+          containerId: placement.containerId,
+        })
+        current = result.count
+        lastNotice = result.notice
+      }
+      setCount(current)
+      if (lastNotice) setNote(lastNotice)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось добавить товар')
     } finally {
       setLoading(false)
     }
@@ -283,6 +373,17 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     }
   }
 
+  // Документ по одному селлеру — модалка «Добавить товар» не должна предлагать
+  // чужой товар. Документ без селлера (по всем сразу, или по объекту — там
+  // фильтра по селлеру и не бывает, см. create_count) показывает весь каталог,
+  // как и приёмка, когда у заявки нет селлера.
+  const pickerSellerId = count && count.fill.mode === 'filters' ? count.fill.seller : null
+  const pickerCatalog = useMemo(() => {
+    if (!productCatalog) return null
+    if (!pickerSellerId) return productCatalog
+    return productCatalog.filter((row) => row.seller_id === pickerSellerId)
+  }, [productCatalog, pickerSellerId])
+
   if (count) {
     return (
       <FfInventoryCountScreen
@@ -297,6 +398,9 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         pendingFound={pendingFound}
         onCreateContainer={(kind) => void createContainer(kind)}
         onFound={(place) => recordFound(place)}
+        productCatalog={pickerCatalog}
+        catalogLoading={catalogLoading}
+        onAddProduct={(selections, placement) => addProduct(selections, placement)}
         onBack={() => {
           setCount(null)
           setNote(null)

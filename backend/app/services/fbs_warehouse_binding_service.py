@@ -19,6 +19,12 @@ from app.services.catalog_service import get_warehouse
 
 AUTO_FBS_WAREHOUSE_CODE_PREFIX = "fbs-wb"
 
+# Привязка склада живёт в измерении маркетплейса. Умолчание — Wildberries:
+# все существующие вызовы приходят оттуда и их поведение не меняется ни на шаг.
+MARKETPLACE_WB = "wb"
+MARKETPLACE_OZON = "ozon"
+SUPPORTED_BINDING_MARKETPLACES = frozenset({MARKETPLACE_WB, MARKETPLACE_OZON})
+
 
 class FbsWarehouseBindingError(Exception):
     def __init__(
@@ -164,11 +170,13 @@ async def _get_binding_row(
     seller_id: uuid.UUID,
     wb_warehouse_id: int,
     *,
+    marketplace: str = MARKETPLACE_WB,
     for_update: bool = False,
 ) -> FbsWarehouseBinding | None:
     stmt = select(FbsWarehouseBinding).where(
         FbsWarehouseBinding.tenant_id == tenant_id,
         FbsWarehouseBinding.seller_id == seller_id,
+        FbsWarehouseBinding.marketplace == marketplace,
         FbsWarehouseBinding.wb_warehouse_id == wb_warehouse_id,
     )
     if for_update:
@@ -222,12 +230,16 @@ async def get_binding(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     wb_warehouse_id: int,
+    *,
+    marketplace: str = MARKETPLACE_WB,
 ) -> FbsWarehouseBinding:
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
         raise FbsWarehouseBindingError("seller_not_found")
     if wb_warehouse_id <= 0:
         raise FbsWarehouseBindingError("invalid_wb_warehouse_id")
-    row = await _get_binding_row(session, tenant_id, seller_id, wb_warehouse_id)
+    row = await _get_binding_row(
+        session, tenant_id, seller_id, wb_warehouse_id, marketplace=marketplace
+    )
     if row is None:
         raise FbsWarehouseBindingError("binding_not_found")
     return row
@@ -241,7 +253,23 @@ async def upsert_binding(
     *,
     wms_warehouse_id: uuid.UUID,
     stock_sync_enabled: bool,
+    marketplace: str = MARKETPLACE_WB,
+    external_warehouse_id: str | None = None,
 ) -> FbsWarehouseBinding:
+    """Сопоставить склад маркетплейса со складом WMS.
+
+    Привязку Ozon раньше было неоткуда взять: модель по умолчанию ставила `wb`,
+    все три места создания маркетплейс не передавали, а ручка API такого поля
+    не имела вовсе. Заказ Ozon из-за этого гарантированно получал «склад не
+    привязан» и не резервировался.
+
+    ``external_warehouse_id`` — то, по чему привязка находится при разборе
+    отправления. Для Ozon это строковый вид его же числового идентификатора
+    склада (живой пример кабинета — ``1020005028840530``), поэтому по умолчанию
+    он и подставляется.
+    """
+    if marketplace not in SUPPORTED_BINDING_MARKETPLACES:
+        raise FbsWarehouseBindingError("unsupported_marketplace")
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
         raise FbsWarehouseBindingError("seller_not_found")
     if wb_warehouse_id <= 0:
@@ -249,8 +277,14 @@ async def upsert_binding(
     if await get_warehouse(session, tenant_id, wms_warehouse_id) is None:
         raise FbsWarehouseBindingError("warehouse_not_found")
 
+    external_id = (external_warehouse_id or "").strip() or str(wb_warehouse_id)
     existing = await _get_binding_row(
-        session, tenant_id, seller_id, wb_warehouse_id, for_update=True
+        session,
+        tenant_id,
+        seller_id,
+        wb_warehouse_id,
+        marketplace=marketplace,
+        for_update=True,
     )
     if existing is not None:
         old_wms = existing.wms_warehouse_id
@@ -260,6 +294,8 @@ async def upsert_binding(
             existing.wms_warehouse_id = wms_warehouse_id
         existing.stock_sync_enabled = stock_sync_enabled
         existing.is_active = True
+        if marketplace != MARKETPLACE_WB and existing.external_warehouse_id != external_id:
+            existing.external_warehouse_id = external_id
         await session.commit()
         await session.refresh(existing)
         return existing
@@ -267,6 +303,11 @@ async def upsert_binding(
     row = FbsWarehouseBinding(
         tenant_id=tenant_id,
         seller_id=seller_id,
+        marketplace=marketplace,
+        # У вайлдберрисовской привязки внешний идентификатор исторически пуст:
+        # её ключ — числовой `wb_warehouse_id`. Не заполняем его задним числом,
+        # чтобы не менять поведение существующего пути.
+        external_warehouse_id=(external_id if marketplace != MARKETPLACE_WB else None),
         wb_warehouse_id=wb_warehouse_id,
         wms_warehouse_id=wms_warehouse_id,
         stock_sync_enabled=stock_sync_enabled,
@@ -373,10 +414,19 @@ async def disable_binding(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     wb_warehouse_id: int,
+    *,
+    marketplace: str = MARKETPLACE_WB,
 ) -> FbsWarehouseBinding:
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
         raise FbsWarehouseBindingError("seller_not_found")
-    row = await _get_binding_row(session, tenant_id, seller_id, wb_warehouse_id, for_update=True)
+    row = await _get_binding_row(
+        session,
+        tenant_id,
+        seller_id,
+        wb_warehouse_id,
+        marketplace=marketplace,
+        for_update=True,
+    )
     if row is None:
         raise FbsWarehouseBindingError("binding_not_found")
     if await _has_active_fbs_reservations(session, tenant_id, seller_id, row.wms_warehouse_id):

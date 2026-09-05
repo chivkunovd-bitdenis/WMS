@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import logging
 import uuid
-from base64 import b64decode
 from contextlib import suppress
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -14,6 +13,7 @@ from typing import Any, cast
 
 import httpx
 from sqlalchemy import Select, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -47,6 +47,7 @@ from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_FAILED,
     WB_OPERATION_STATE_PENDING,
     WB_OPERATION_STATE_PENDING_CONFIRMATION,
+    FbsWbOperation,
 )
 from app.models.storage_location import StorageLocation
 from app.services import fbs_marking_service as marking_svc
@@ -68,6 +69,7 @@ from app.services.fbs_supply_reconcile_service import (
     create_pending_deliver_operation,
     get_active_deliver_operation_for_supply,
     get_deliver_operation_by_idempotency,
+    list_deliver_operations_for_supply,
     mark_deliver_operation_confirmed,
     mark_operation_failed,
     mark_operation_pending_confirmation,
@@ -80,12 +82,17 @@ from app.services.marketplace_account_service import (
     MarketplaceAccountService,
 )
 from app.services.marketplace_provider import (
-    FakeMarketplaceTransport,
     MarketplaceProviderError,
     OzonMarketplaceProvider,
     provider_error_message,
 )
-from app.services.ozon_fbs_process_service import OzonFbsProcessError, handoff_supply
+from app.services.ozon_fbs_process_service import (
+    OzonFbsProcessError,
+    OzonHandoffProgress,
+    OzonHandoffResult,
+    handoff_supply,
+)
+from app.services.ozon_provider_factory import build_ozon_provider, ozon_live_api_enabled
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import (
     _apply_wb_status_to_order,
@@ -169,10 +176,6 @@ _DELIVER_BLOCKED_SUPPLY_STATUSES = frozenset(
 logger = logging.getLogger(__name__)
 
 _WB_DISPATCH_PENDING_MESSAGE = "fix them to dispatch items"
-_FAKE_OZON_SUPPLY_QR = b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAE"
-    "hQGAhKmMIQAAAABJRU5ErkJggg=="
-)
 
 
 class FbsShipmentError(Exception):
@@ -1791,6 +1794,92 @@ async def _store_ozon_supply_qr(
     return png_bytes
 
 
+# Ключ снимка передачи Ozon в журнале операции. Рядом лежит вайлдберрисовский
+# `checkpoint_source_plan` — они не пересекаются: у каждого маркетплейса своя
+# точка сохранения и свой смысл «что уже необратимо сделано».
+OZON_HANDOFF_PROGRESS_KEY = "ozon_handoff_progress"
+
+
+async def _save_ozon_handoff_progress(
+    session: AsyncSession,
+    operation: Any,
+    progress: OzonHandoffProgress,
+) -> None:
+    """Сделать снимок передачи Ozon долговечным.
+
+    Коммит здесь обязателен и он же — весь смысл функции. Без него снимок
+    живёт только внутри открытой транзакции, а она при ошибке откатывается
+    целиком: то есть ровно в тот момент, ради которого снимок и заводился, он
+    исчезает.
+    """
+    summary = dict(operation.request_summary_json or {})
+    summary[OZON_HANDOFF_PROGRESS_KEY] = progress.to_json()
+    operation.request_summary_json = summary
+    await session.commit()
+
+
+async def _fail_ozon_deliver_operation(
+    session: AsyncSession,
+    operation: Any,
+    *,
+    error_code: str,
+    supply_id: uuid.UUID,
+    discard_local_changes: bool = False,
+) -> None:
+    """Записать отказ передачи Ozon так, чтобы он пережил откат запроса.
+
+    Раньше отказ помечался только `flush`, а коммита для озоновских кодов не
+    делал никто: запись операции пропадала вместе с транзакцией, и следующая
+    попытка не знала ни что уже уехало в кабинет, ни что предыдущая падала.
+
+    `discard_local_changes` нужен там, где в сессии висит наполовину сделанная
+    локальная работа — списание, движения по складу, печатные активы. Такое
+    закоммитить вместе с отметкой об отказе нельзя: получится поставка,
+    списанная наполовину. Состояния самой передачи это не теряет — все её шаги
+    уже закоммичены снимками.
+    """
+    if discard_local_changes:
+        with suppress(SQLAlchemyError):
+            await session.rollback()
+        refreshed = await session.get(FbsWbOperation, operation.id)
+        if refreshed is None:
+            return
+        operation = refreshed
+    try:
+        await mark_operation_failed(
+            session,
+            operation,
+            error_code=error_code,
+            local_supply_id=supply_id,
+        )
+        await session.commit()
+        return
+    except SQLAlchemyError:
+        logger.exception(
+            "ozon deliver failure could not be journalled in place",
+            extra={"supply_id": str(supply_id), "error_code": error_code},
+        )
+    # Транзакция могла умереть вместе с исходной ошибкой. Тогда единственный
+    # способ сохранить отказ — начать чистую и перечитать саму операцию.
+    try:
+        await session.rollback()
+        fresh = await session.get(FbsWbOperation, operation.id)
+        if fresh is None:
+            return
+        await mark_operation_failed(
+            session,
+            fresh,
+            error_code=error_code,
+            local_supply_id=supply_id,
+        )
+        await session.commit()
+    except SQLAlchemyError:
+        logger.exception(
+            "ozon deliver failure could not be journalled at all",
+            extra={"supply_id": str(supply_id), "error_code": error_code},
+        )
+
+
 async def _deliver_ozon_supply(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1823,18 +1912,17 @@ async def _deliver_ozon_supply(
             raise FbsShipmentError("idempotency_key_reused", http_status=409)
         if existing.state == WB_OPERATION_STATE_CONFIRMED:
             return supply
-        if existing.state == WB_OPERATION_STATE_PENDING:
+        if existing.state != WB_OPERATION_STATE_FAILED:
             raise FbsShipmentError(
                 "operation_in_progress",
                 message="Передача в Ozon уже выполняется.",
                 retryable=True,
                 http_status=503,
             )
-        raise FbsShipmentError(
-            existing.error_code or "operation_failed",
-            message="Предыдущая передача Ozon завершилась ошибкой; слепой повтор запрещён.",
-            http_status=409,
-        )
+        # Отказавшая попытка больше не тупик. Раньше повтор запрещался как
+        # «слепой» — и был им: что успело уехать в кабинет, нигде не
+        # записывалось. Теперь у каждой попытки есть сохранённый снимок
+        # сделанного, и повтор продолжает с места обрыва, а не начинает заново.
 
     if supply.status in _DELIVER_BLOCKED_SUPPLY_STATUSES:
         raise FbsShipmentError("supply_bad_status", http_status=409)
@@ -1847,30 +1935,77 @@ async def _deliver_ozon_supply(
             boxes_required=False,
         )
     )
-    operation = existing or await create_pending_deliver_operation(
+    # Снимок собираем по всем попыткам этой поставки, а не по ключу
+    # идемпотентности: браузер после отказа обычно присылает новый ключ, и
+    # привязка только к нему потеряла бы всё, что уже сделано в кабинете.
+    progress = OzonHandoffProgress()
+    for attempt in await list_deliver_operations_for_supply(
         session,
         tenant_id=tenant_id,
         seller_id=supply.seller_id,
-        idempotency_key=idempotency_key,
-        request_hash=request_hash,
         local_supply_id=supply.id,
-        confirmed_preflight_version=None,
-    )
+    ):
+        if existing is None or attempt.id != existing.id:
+            if attempt.state == WB_OPERATION_STATE_CONFIRMED:
+                return supply
+            if attempt.state in {
+                WB_OPERATION_STATE_PENDING,
+                WB_OPERATION_STATE_PENDING_CONFIRMATION,
+            }:
+                raise FbsShipmentError(
+                    "operation_in_progress",
+                    message="Передача этой поставки в Ozon уже выполняется.",
+                    retryable=True,
+                    http_status=503,
+                )
+        progress.absorb(
+            OzonHandoffProgress.from_json(
+                (attempt.request_summary_json or {}).get(OZON_HANDOFF_PROGRESS_KEY)
+            )
+        )
+    if existing is not None:
+        operation = existing
+        operation.state = WB_OPERATION_STATE_PENDING
+        operation.error_code = None
+        operation.error_context_json = None
+        operation.failed_at = None
+    else:
+        operation = await create_pending_deliver_operation(
+            session,
+            tenant_id=tenant_id,
+            seller_id=supply.seller_id,
+            idempotency_key=idempotency_key,
+            request_hash=request_hash,
+            local_supply_id=supply.id,
+            confirmed_preflight_version=None,
+        )
+    # Провайдер приходит из теста или из боевой настройки. Пока живой транспорт
+    # выключен, локальная операция сохраняется, а передача честно не выполняется:
+    # придумывать успех, которого не было, нельзя — товар физически не уехал.
+    if provider is None and ozon_live_api_enabled():
+        provider = build_ozon_provider()
     if provider is None:
-        await mark_operation_failed(
+        await _fail_ozon_deliver_operation(
             session,
             operation,
             error_code="ozon_live_handoff_blocked",
-            local_supply_id=supply.id,
+            supply_id=supply.id,
         )
         raise FbsShipmentError(
             "ozon_live_handoff_blocked",
             message=(
-                "Реальная передача в Ozon заблокирована: кабинет недоступен. "
+                "Передача в Ozon выключена настройкой: боевой транспорт Ozon не включён. "
                 "Локальная складская операция сохранена."
             ),
             http_status=503,
         )
+
+    async def _checkpoint(state: OzonHandoffProgress) -> None:
+        await _save_ozon_handoff_progress(session, operation, state)
+
+    # Первая долговечная точка — до любой мутации в кабинете. Без неё падение
+    # процесса стёрло бы саму запись о том, что передача начиналась.
+    await _checkpoint(progress)
     try:
         result = await handoff_supply(
             session,
@@ -1879,14 +2014,15 @@ async def _deliver_ozon_supply(
             provider=provider,
             client_id=client_id,
             api_key=api_key,
+            progress=progress,
+            checkpoint=_checkpoint,
         )
     except OzonFbsProcessError as exc:
-        await session.flush()
-        await mark_operation_failed(
+        await _fail_ozon_deliver_operation(
             session,
             operation,
             error_code=exc.code,
-            local_supply_id=supply.id,
+            supply_id=supply.id,
         )
         raise FbsShipmentError(
             exc.code,
@@ -1895,11 +2031,11 @@ async def _deliver_ozon_supply(
             http_status=exc.status_code or 502,
         ) from exc
     except MarketplaceProviderError as exc:
-        await mark_operation_failed(
+        await _fail_ozon_deliver_operation(
             session,
             operation,
             error_code=exc.code,
-            local_supply_id=supply.id,
+            supply_id=supply.id,
         )
         raise FbsShipmentError(
             exc.code,
@@ -1908,9 +2044,55 @@ async def _deliver_ozon_supply(
             http_status=exc.status_code or 502,
         ) from exc
 
+    try:
+        return await _finish_ozon_delivery(
+            session,
+            supply=supply,
+            orders=orders,
+            operation=operation,
+            result=result,
+            actor_user_id=actor_user_id,
+        )
+    except Exception as exc:
+        # Передача в кабинете уже состоялась, а локальная часть сорвалась.
+        # Отметить отказ обязательно: иначе операция навсегда остаётся
+        # «выполняется» и повтор упирается в 503, хотя продолжить можно.
+        await _fail_ozon_deliver_operation(
+            session,
+            operation,
+            error_code=getattr(exc, "code", None) or "ozon_local_delivery_failed",
+            supply_id=supply.id,
+            discard_local_changes=True,
+        )
+        raise
+
+
+async def _finish_ozon_delivery(
+    session: AsyncSession,
+    *,
+    supply: FbsSupply,
+    orders: list[FbsOrder],
+    operation: Any,
+    result: OzonHandoffResult,
+    actor_user_id: uuid.UUID | None,
+) -> FbsSupply:
+    """Локальная часть уже состоявшейся передачи Ozon."""
     supply.external_supply_id = str(result.carriage_id) if result.carriage_id is not None else None
     supply.document_number = str(result.carriage_id) if result.carriage_id is not None else None
     supply.display_number = result.barcode_text
+    if result.shipping_list_bytes:
+        # Лист отгрузки Ozon приходит в PDF, а хранилище печатных активов
+        # принимает только PNG, поэтому показать его оператору сегодня негде.
+        # Молча выбрасывать документ, за которым ехали в Ozon, нельзя —
+        # пусть его получение хотя бы видно в журнале.
+        logger.info(
+            "ozon shipping list received but not stored: no PDF surface yet",
+            extra={
+                "supply_id": str(supply.id),
+                "carriage_id": result.carriage_id,
+                "bytes": len(result.shipping_list_bytes),
+            },
+        )
     if result.barcode_bytes:
         try:
             await upsert_supply_qr_asset_from_bytes(
@@ -2423,9 +2605,7 @@ async def get_supply_barcode(
             tenant_id,
             supply.seller_id,
         )
-        provider = OzonMarketplaceProvider(
-            transport=FakeMarketplaceTransport(supply_qr=_FAKE_OZON_SUPPLY_QR)
-        )
+        provider = build_ozon_provider()
         png_bytes = await _store_ozon_supply_qr(
             session,
             supply,
@@ -2482,9 +2662,7 @@ async def retry_supply_qr(
         await _store_ozon_supply_qr(
             session,
             supply,
-            OzonMarketplaceProvider(
-                transport=FakeMarketplaceTransport(supply_qr=_FAKE_OZON_SUPPLY_QR)
-            ),
+            build_ozon_provider(),
             client_id=client_id,
             api_key=api_key,
         )

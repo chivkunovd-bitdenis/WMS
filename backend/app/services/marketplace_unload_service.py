@@ -28,6 +28,7 @@ from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.services import inventory_service, stock_direction_service
 from app.services.billing_ledger_service import (
+    PACKING_SERVICE_CODE,
     BillingLedgerError,
     product_billing_lines,
     record_operational_billing_issue,
@@ -41,11 +42,6 @@ from app.services.document_number_service import (
     assign_document_number_if_missing,
 )
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
-from app.services.marketplace_provider import (
-    FakeMarketplaceTransport,
-    MarketplaceProviderError,
-    OzonMarketplaceProvider,
-)
 from app.services.marketplace_unload_status import (
     BILLING_REVERSIBLE_STATUSES as BILLING_REVERSIBLE_STATUSES,
 )
@@ -114,15 +110,6 @@ class MarketplaceUnloadAvailableProduct:
 class MarketplaceUnloadAvailability:
     available: int
     uses_free_fbo_pool: bool
-
-
-def _blocked_ozon_unload_provider() -> OzonMarketplaceProvider:
-    """Current Ozon account state is a provider response, never a local shipment success."""
-    return OzonMarketplaceProvider(
-        transport=FakeMarketplaceTransport(
-            errors={"dispatch_unload": MarketplaceProviderError("ozon", 403, {"code": 7})}
-        )
-    )
 
 
 def assert_request_visible(
@@ -1037,7 +1024,6 @@ async def complete_unload(
     *,
     acknowledge_discrepancy: bool = False,
     performer_id: uuid.UUID | None = None,
-    ozon_provider: OzonMarketplaceProvider | None = None,
 ) -> MarketplaceUnloadRequest:
     """Single completion op: ship unload; set has_discrepancy when plan ≠ fact."""
     req = await get_request(session, tenant_id, request_id)
@@ -1071,18 +1057,26 @@ async def complete_unload(
             raise MarketplaceUnloadError("distribution_incomplete")
         req.ff_modified = True
 
-    if req.marketplace == "ozon":
-        try:
-            provider = ozon_provider or _blocked_ozon_unload_provider()
-            await provider.dispatch_unload(
-                client_id="",
-                api_key="",
-                document_id=str(req.id),
-            )
-        except MarketplaceProviderError as exc:
-            if exc.is_account_blocked:
-                raise MarketplaceUnloadError("provider_dispatch_blocked") from None
-            raise MarketplaceUnloadError("provider_dispatch_failed") from None
+    # Отгрузка на маркетплейс завершается локально — одинаково для WB и Ozon.
+    #
+    # Здесь стоял вызов `dispatch_unload` через границу провайдера, заведённый
+    # 25.08.2026, когда кабинет Ozon отвечал 403 и проверить было нечем. За ним
+    # никогда не было метода Ozon: у Ozon это не «передача документа», а заявка
+    # на поставку на его склад — отдельная многошаговая схема из черновика
+    # (`/v1/draft/direct/create`), кластера, таймслота (`/v2/draft/timeslot/info`),
+    # пропуска на водителя и машину. Ни одного из этих полей у нашего документа
+    # нет: `MarketplaceUnloadRequest` знает только склад ФФ, селлера, дату и
+    # строки, а колонка `external_supply_id` в коде не заполняется нигде.
+    #
+    # Практическое следствие прежнего кода было хуже, чем отсутствие интеграции:
+    # локальный фейк отвечал «403, код 7», отгрузка Ozon не завершалась никогда,
+    # документ навсегда оставался в `collecting`. Товар физически уезжал, а
+    # списания и начисления не происходило. Причина при этом называлась ложная —
+    # «кабинет Ozon недоступен», хотя кабинет отвечает.
+    #
+    # У Wildberries эта же операция всегда завершалась локально: документ
+    # поставки на складе маркетплейса создаёт селлер в своём кабинете, а ФФ
+    # отвечает за физическую отгрузку. Для Ozon верно ровно то же самое.
 
     req.has_discrepancy = has_discrepancy
     await delete_empty_boxes_for_ship(session, req)
@@ -1100,23 +1094,26 @@ async def complete_unload(
         performer_id=req.completed_by_user_id,
     )
     try:
-        await record_operational_charge(
-            session,
-            tenant_id=tenant_id,
-            seller_id=req.seller_id,
-            source_type="marketplace_unload",
-            source_id=req.id,
-            source="marketplace_unload",
-            service_code="marketplace_outbound",
-            quantity=Decimal(sum(distributed.values())),
-            occurred_at=occurred_at,
-            performer_id=performer_id,
-            lines=product_billing_lines(
-                (product_id, Decimal(quantity), {"marketplace_unload_request_id": str(req.id)})
-                for product_id, quantity in distributed.items()
-                if quantity
-            ),
-        )
+        for charged_service_code in ("marketplace_outbound", PACKING_SERVICE_CODE):
+            # Упаковку считаем по отгруженному товару, а не по событиям упаковки:
+            # уехавшая коробка упакована независимо от того, нажал ли оператор
+            # «всё упаковано». Штуки и построчный состав — те же, что у отгрузки.
+            await record_operational_charge(
+                session,
+                tenant_id=tenant_id,
+                seller_id=req.seller_id,
+                source_type="marketplace_unload",
+                source_id=req.id,
+                source="marketplace_unload",
+                service_code=charged_service_code,
+                quantity=Decimal(sum(distributed.values())),
+                occurred_at=occurred_at,
+                performer_id=performer_id,
+                lines=product_billing_lines(
+                    (product_id, Decimal(quantity), {"marketplace_unload_request_id": str(req.id)})
+                    for product_id, quantity in distributed.items() if quantity
+                ),
+            )
     except BillingLedgerError:
         if req.seller_id is not None:
             await record_operational_billing_issue(
@@ -1206,14 +1203,17 @@ async def cancel_request(
 
     if req.status in BILLING_REVERSIBLE_STATUSES:
         occurred_at = datetime.now(UTC)
-        await record_operational_reversal(
-            session,
-            tenant_id=tenant_id,
-            source_type="marketplace_unload",
-            source_id=req.id,
-            occurred_at=occurred_at,
-            performer_id=performer_id,
-        )
+        for reversed_service_code in ("marketplace_outbound", PACKING_SERVICE_CODE):
+            # Отменяем обе строки документа: и отгрузку, и упаковку по ней.
+            await record_operational_reversal(
+                session,
+                tenant_id=tenant_id,
+                source_type="marketplace_unload",
+                source_id=req.id,
+                occurred_at=occurred_at,
+                performer_id=performer_id,
+                service_code=reversed_service_code,
+            )
         if req.cancelled_by_user_id is None:
             req.cancelled_by_user_id = performer_id
         if req.cancelled_at is None:

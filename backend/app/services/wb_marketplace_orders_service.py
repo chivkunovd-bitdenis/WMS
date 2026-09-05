@@ -291,6 +291,9 @@ async def _resolve_wms_warehouse_from_binding(
         .where(
             FbsWarehouseBinding.tenant_id == tenant_id,
             FbsWarehouseBinding.seller_id == seller_id,
+            # Это вайлдберрисовский путь целиком; с появлением привязок Ozon
+            # числовой ключ перестал быть уникальным сам по себе.
+            FbsWarehouseBinding.marketplace == "wb",
             FbsWarehouseBinding.wb_warehouse_id == wb_warehouse_id,
             FbsWarehouseBinding.is_active.is_(True),
             Warehouse.tenant_id == tenant_id,

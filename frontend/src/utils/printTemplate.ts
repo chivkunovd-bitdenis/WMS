@@ -6,8 +6,28 @@ export type PrintLayoutUnit = {
   copies: number
 }
 
+/**
+ * Что печатать на этикетке ШК. Порядок строк единый для всех и не
+ * настраивается: размер, цвет, бренд, состав — решение владельца 03.09.2026.
+ */
+export type PrintLabelOptions = {
+  include_size: boolean
+  include_color: boolean
+  include_brand: boolean
+  include_composition: boolean
+}
+
+export const DEFAULT_PRINT_LABEL_OPTIONS: PrintLabelOptions = {
+  include_size: true,
+  include_color: true,
+  include_brand: true,
+  include_composition: true,
+}
+
 export type PrintLayout = {
   units: PrintLayoutUnit[]
+  /** Может не прийти со старого шаблона — тогда печатаем всё, что есть. */
+  label_options?: PrintLabelOptions
 }
 
 export type PrintTemplate = {

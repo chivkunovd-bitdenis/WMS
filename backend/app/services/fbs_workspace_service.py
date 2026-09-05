@@ -438,6 +438,21 @@ def _compute_stage(
     return "delivery"
 
 
+def _order_number(order: FbsOrder) -> str:
+    """Номер, который оператор может найти в кабинете маркетплейса.
+
+    У заказа Ozon в поле `wb_order_id` лежит не номер, а отрицательное
+    шестнадцатизначное число — синтезированный хешем заполнитель обязательной
+    вайлдберрисовской колонки. Оператор видел в тексте ворот «Заказ
+    №-3665971690784702775» и не мог сопоставить его ни с чем.
+
+    При слиянии заменить на общий помощник `marketplace_scope.order_display_number`
+    из основной копии: логика та же, а двух функций для одного номера быть не
+    должно. Здесь она своя только потому, что в этой ветке того модуля ещё нет.
+    """
+    return order.external_order_id or str(order.wb_order_id)
+
+
 def _compute_workspace_blockers(
     supply: FbsSupply,
     orders: list[FbsOrder],
@@ -480,7 +495,7 @@ def _compute_workspace_blockers(
                 {
                     "stage": "picking",
                     "code": "order_not_picked",
-                    "message": f"Заказ №{order.wb_order_id} не подобран.",
+                    "message": f"Заказ №{_order_number(order)} не подобран.",
                     "order_id": str(order.id),
                     "retryable": True,
                 }
@@ -494,7 +509,7 @@ def _compute_workspace_blockers(
                 {
                     "stage": "packing",
                     "code": "metadata_missing",
-                    "message": f"Метаданные заказа №{order.wb_order_id} не готовы.",
+                    "message": f"Метаданные заказа №{_order_number(order)} не готовы.",
                     "order_id": str(order.id),
                     "retryable": True,
                 }
@@ -536,7 +551,7 @@ def _compute_workspace_blockers(
                 {
                     "stage": "handoff_prep",
                     "code": "packed_order_unassigned",
-                    "message": f"Упакованный заказ №{order.wb_order_id} не назначен в короб.",
+                    "message": f"Упакованный заказ №{_order_number(order)} не назначен в короб.",
                     "order_id": str(order.id),
                     "retryable": True,
                 }

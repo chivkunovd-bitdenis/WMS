@@ -135,6 +135,9 @@ async def list_seller_warehouses(
         stmt = select(FbsWarehouseBinding).where(
             FbsWarehouseBinding.tenant_id == tenant_id,
             FbsWarehouseBinding.seller_id == seller_id,
+            # Экран складов продавца — вайлдберрисовский, и с появлением привязок
+            # Ozon числовой ключ перестал быть уникальным сам по себе.
+            FbsWarehouseBinding.marketplace == "wb",
             FbsWarehouseBinding.wb_warehouse_id.in_(wb_ids),
         )
         bindings = {

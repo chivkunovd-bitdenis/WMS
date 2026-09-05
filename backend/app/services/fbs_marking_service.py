@@ -46,7 +46,6 @@ from app.services.marketplace_account_service import (
     MarketplaceAccountService,
 )
 from app.services.marketplace_provider import (
-    FakeMarketplaceTransport,
     MarketplaceProviderError,
     OzonMarketplaceProvider,
 )
@@ -56,6 +55,7 @@ from app.services.ozon_fbs_process_service import (
     read_marking_status,
     submit_marking,
 )
+from app.services.ozon_provider_factory import build_ozon_provider
 from app.services.wildberries_client import (
     WildberriesClientError,
     put_marketplace_order_meta,
@@ -795,9 +795,7 @@ async def attach_order_meta_to_wb_and_sync(
             client_id, api_key = await MarketplaceAccountService(session).stored_credentials(
                 tenant_id, order.seller_id
             )
-            provider = ozon_provider or OzonMarketplaceProvider(
-                transport=FakeMarketplaceTransport()
-            )
+            provider = ozon_provider or build_ozon_provider()
             result = await submit_marking(
                 session,
                 order=order,
@@ -903,7 +901,11 @@ async def get_order_metadata(
     if order is None:
         raise FbsMarkingError("order_not_found")
     markings = await list_order_markings(session, tenant_id, order_id)
-    if sync_wb and markings:
+    # Карточка заказа Ozon не должна требовать токен Wildberries. Ветки по
+    # маркетплейсу здесь не было вовсе: открытие карточки озоновского заказа
+    # безусловно шло за чужим токеном и падало, если его нет. Статусы
+    # маркировки Ozon обновляются своей ручкой синхронизации.
+    if sync_wb and markings and getattr(order, "marketplace", "wb") == "wb":
         token = await require_marketplace_token(session, tenant_id, order.seller_id)
         markings = await _sync_order_meta_from_wb(session, order, http_client, token)
         await _notify_supply_marking_update(
@@ -939,8 +941,7 @@ async def sync_order_marking_statuses(
             )
             result = await read_marking_status(
                 posting_number=order.external_order_id or "",
-                provider=ozon_provider
-                or OzonMarketplaceProvider(transport=FakeMarketplaceTransport()),
+                provider=ozon_provider or build_ozon_provider(),
                 client_id=client_id,
                 api_key=api_key,
             )
