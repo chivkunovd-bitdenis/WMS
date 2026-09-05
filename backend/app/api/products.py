@@ -28,6 +28,7 @@ from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER, FULFILLMENT_ST
 from app.db.session import get_db
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.product import Product
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.stock_direction import StockDirection
 from app.models.user import User
@@ -61,6 +62,10 @@ from app.services.fbs_stock_rule_service import (
     get_rule_view,
     get_rule_views,
     set_rule_for_products,
+)
+from app.services.product_merge_service import (
+    ProductMergeError,
+    merge_products,
 )
 from app.services.product_tz_import_service import (
     ProductTzImportError,
@@ -170,6 +175,9 @@ class FfCatalogOut(BaseModel):
     has_packaging_instructions: bool = False
     marking_available_count: int = 0
     is_manual: bool = False
+    # Площадки товара: у озоновского — «ozon», у вайлдберрисовского — «wb», у
+    # объединённой карточки оба сразу (WMS-348).
+    marketplaces: list[str] = Field(default_factory=list)
 
 
 class FfCatalogPageOut(BaseModel):
@@ -280,6 +288,14 @@ class ProductOzonLinkPatch(BaseModel):
 
     ozon_sku: str | None = Field(default=None, max_length=255)
     ozon_offer_id: str | None = Field(default=None, max_length=255)
+
+
+class ProductMergeBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Ровно две карточки за раз — так поставил владелец. Ограничение стоит на
+    # вводе, поэтому дальше по коду сторожить нечего.
+    product_ids: list[uuid.UUID] = Field(min_length=2, max_length=2)
 
 
 class ProductContainerDimensions(BaseModel):
@@ -868,6 +884,35 @@ async def patch_product_ozon_link(
     )
 
 
+@router.post("/merge", response_model=ProductOut)
+async def post_products_merge(
+    body: ProductMergeBody,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ProductOut:
+    """Объединить две карточки одного товара в одну (WMS-349).
+
+    Возвращает карточку, которая осталась: оператор сразу видит в ответе,
+    под каким артикулом товар теперь живёт.
+    """
+    try:
+        product = await merge_products(session, user.tenant_id, body.product_ids)
+    except ProductMergeError as exc:
+        if exc.code == "product_not_found":
+            raise HTTPException(status_code=404, detail=exc.code) from None
+        if exc.code == "merge_conflict":
+            raise HTTPException(status_code=409, detail=exc.code) from None
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.code
+        ) from None
+    link = (await list_ozon_product_links(session, user.tenant_id, {product.id})).get(product.id)
+    return _product_out(
+        product,
+        ozon_sku=link.external_sku if link is not None else None,
+        ozon_offer_id=link.external_offer_id if link is not None else None,
+    )
+
+
 def _tz_preview_out(result: object) -> ProductTzImportPreviewOut:
     from app.services.product_tz_import_service import ProductTzPreviewResult
 
@@ -912,6 +957,52 @@ def _tz_preview_out(result: object) -> ProductTzImportPreviewOut:
     )
 
 
+async def _marketplaces_by_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    rows: Sequence[FfCatalogRow],
+) -> dict[uuid.UUID, list[str]]:
+    """Площадки каждой строки каталога — тем же правилом, что и фильтр над таблицей.
+
+    Правило «товар относится к площадке» уже сформулировано один раз, в
+    ``marketplace_scope_condition``: озоновский — если есть живая привязка Ozon,
+    вайлдберрисовский — если есть nmID, артикул продавца или живая привязка WB.
+    Значок обязан отвечать ровно ему, иначе оператор отфильтрует каталог по
+    Wildberries и увидит строки без вайлдберрисовского значка.
+
+    Один запрос на страницу, а не по запросу на строку: в каталоге до двухсот
+    строк за раз.
+    """
+    product_ids = {r.product_id for r in rows}
+    if not product_ids:
+        return {}
+    links = await session.execute(
+        select(ProductMarketplaceLink.product_id, ProductMarketplaceLink.marketplace).where(
+            ProductMarketplaceLink.tenant_id == tenant_id,
+            ProductMarketplaceLink.product_id.in_(product_ids),
+            ProductMarketplaceLink.is_active.is_(True),
+        )
+    )
+    linked: dict[uuid.UUID, set[str]] = {}
+    for product_id, marketplace in links.all():
+        linked.setdefault(product_id, set()).add(marketplace)
+    result: dict[uuid.UUID, list[str]] = {}
+    for row in rows:
+        markets = linked.get(row.product_id, set())
+        badges: list[str] = []
+        is_wb = (
+            row.wb_nm_id is not None
+            or row.wb_vendor_code is not None
+            or bool(markets & {"wildberries", "wb"})
+        )
+        if is_wb:
+            badges.append("wb")
+        if "ozon" in markets:
+            badges.append("ozon")
+        result[row.product_id] = badges
+    return result
+
+
 async def _ff_catalog_out_rows(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -922,11 +1013,13 @@ async def _ff_catalog_out_rows(
         tenant_id,
         {r.product_id for r in rows},
     )
+    marketplaces = await _marketplaces_by_product(session, tenant_id, rows)
     return [
         FfCatalogOut(
             **r.as_dict(),
             has_packaging_instructions=bool((r.packaging_instructions or "").strip()),
             marking_available_count=counts.get(r.product_id, 0),
+            marketplaces=marketplaces.get(r.product_id, []),
         )
         for r in rows
     ]
