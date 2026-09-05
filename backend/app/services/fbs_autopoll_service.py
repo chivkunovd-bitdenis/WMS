@@ -550,8 +550,9 @@ async def poll_fbs_orders_all_sellers(*, include_history: bool = False) -> FbsAu
             try:
                 async with (
                     SessionLocal() as session,
+                    AsyncSession(bind=session.bind) as lock_session,
                     marketplace_seller_lock(
-                        session,
+                        lock_session,
                         target.seller_id,
                         target.marketplace,
                     ) as provider_lock_acquired,
@@ -666,8 +667,9 @@ async def sync_fbs_order_statuses_all_sellers() -> FbsAutopollCycleResult:
             try:
                 async with (
                     SessionLocal() as session,
+                    AsyncSession(bind=session.bind) as lock_session,
                     marketplace_seller_lock(
-                        session,
+                        lock_session,
                         target.seller_id,
                         target.marketplace,
                     ) as provider_lock_acquired,
@@ -768,8 +770,9 @@ async def reconcile_fbs_stocks_all_sellers() -> FbsAutopollCycleResult:
             try:
                 async with (
                     SessionLocal() as session,
+                    AsyncSession(bind=session.bind) as lock_session,
                     marketplace_seller_lock(
-                        session,
+                        lock_session,
                         target.seller_id,
                         target.marketplace,
                     ) as provider_lock_acquired,

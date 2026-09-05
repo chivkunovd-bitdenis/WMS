@@ -924,7 +924,10 @@ export function FfFbsSupplyWorkspace({
 
   const refreshPackagingTask = useCallback(async () => {
     const taskId = workspace?.supply.packaging_task_id
-    if (!taskId) return
+    if (!taskId) {
+      await load(true)
+      return
+    }
     try {
       const response = await fetch(apiUrl(`/operations/packaging-tasks/${taskId}`), { headers: { ...authHeaders(token) } })
       if (response.ok) setPackagingTask((await response.json()) as PackagingTask)
@@ -1001,22 +1004,22 @@ export function FfFbsSupplyWorkspace({
   }
 
   /** Печать ЧЗ и ШК заказа через стандартный конструктор системы. */
-  const openOrderMarkingPrint = (order: FbsWorkspace['orders'][number], line: PackagingTaskLine, reprint = false) => {
-    if (!workspace) return
+  const openOrderMarkingPrint = (order: FbsWorkspace['orders'][number], line?: PackagingTaskLine, reprint = false) => {
+    if (!workspace || !order.product.id) return
     openPrint(
       {
         token,
-        lineId: line.id,
-        productId: line.product_id,
+        lineId: line?.id,
+        productId: order.product.id,
         sellerId: workspace?.supply.seller.id,
         documentNumber: workspace?.supply.name ?? null,
         qtyNeedPack: requiresOrderHonestSign(order) ? 1 : 0,
-        markingAvailable: requiresOrderHonestSign(order) ? line.marking_available_count : 0,
+        markingAvailable: requiresOrderHonestSign(order) ? (line?.marking_available_count ?? 0) : 0,
         qtyMarkingPrinted: orderPrintDone(order) ? 1 : 0,
         requiresHonestSign: requiresOrderHonestSign(order),
-        skuCode: line.sku_code,
-        productName: line.product_name,
-        packagingInstructions: line.packaging_instructions,
+        skuCode: line?.sku_code ?? order.product.sku ?? order.product.seller_article ?? `WB-${order.wb_order_id}`,
+        productName: line?.product_name ?? order.product.name,
+        packagingInstructions: line?.packaging_instructions,
         productLabel: productLabelFromOrder(order),
         fbsTape: {
           orders: [{
@@ -1679,7 +1682,7 @@ export function FfFbsSupplyWorkspace({
           {workspace && stage === 'packing' ? (
             <Stack spacing={2}>
               {!packagingEditable ? <Alert severity="success">Поставка уже передана в WB. Состав менять нельзя, печать этикеток и стикеров доступна.</Alert> : null}
-              {packagingTask ? (
+              {packagingTask || deliveryConfirmed ? (
                 <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
                   <Box sx={{ px: 2, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
@@ -1923,12 +1926,12 @@ export function FfFbsSupplyWorkspace({
                             <Button size="small" variant="outlined" disabled={busy} onClick={() => void requestPrintBatch([order.id])} data-task-id="FBS-09">
                               QR
                             </Button>
-                            <IconButton size="small" disabled={busy || !line} onClick={() => line && openOrderMarkingPrint(order, line)} aria-label="Печать ЧЗ и ШК" data-task-id="FBS-10">
+                            <IconButton size="small" disabled={busy || !order.product.id} onClick={() => openOrderMarkingPrint(order, line)} aria-label="Печать ЧЗ и ШК" data-task-id="FBS-10">
                               <PrintOutlinedIcon fontSize="small" />
                             </IconButton>
                             <IconButton
                               size="small"
-                              disabled={busy || !line}
+                              disabled={busy || !order.product.id}
                               onClick={(event: MouseEvent<HTMLElement>) => setReprintMenu({ orderId: order.id, anchorEl: event.currentTarget })}
                               aria-label="Перепечатать"
                               data-task-id="FBS-11"
@@ -2362,9 +2365,9 @@ export function FfFbsSupplyWorkspace({
         onClose={() => setReprintMenu(null)}
       >
         <MenuItem
-          disabled={!reprintOrder || !reprintLine}
+          disabled={!reprintOrder?.product.id}
           onClick={() => {
-            if (reprintOrder && reprintLine) openOrderMarkingPrint(reprintOrder, reprintLine, true)
+            if (reprintOrder) openOrderMarkingPrint(reprintOrder, reprintLine, true)
             setReprintMenu(null)
           }}
           data-task-id="FBS-11"
@@ -2430,11 +2433,12 @@ export function FfFbsSupplyWorkspace({
             ) : null}
             {deliveryChecks.warnings.length > 0 ? (
               <Alert severity="warning">
-                <Typography variant="subtitle2">Передаче не мешает, но проверьте</Typography>
+                <Typography variant="subtitle2">Можно передать с этими предупреждениями</Typography>
                 {deliveryChecks.warnings.map((line) => (
                   <Typography key={line} variant="body2">{line}</Typography>
                 ))}
                 <Typography variant="caption" color="text.secondary">
+                  Проверьте список. Чтобы продолжить, нажмите «Передать в {providerName}».
                   Стикеры, Честный знак и QR можно напечатать и после передачи.
                 </Typography>
               </Alert>

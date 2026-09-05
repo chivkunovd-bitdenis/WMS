@@ -76,7 +76,10 @@ def _binding(
     )
 
 
-def test_ozon_binding_api_output_keeps_provider_identity() -> None:
+@pytest.mark.parametrize("served, stock_sync_enabled", [(True, False), (False, True)])
+def test_ozon_binding_api_output_keeps_provider_identity(
+    served: bool, stock_sync_enabled: bool,
+) -> None:
     """TC-NEW-OZON-STOCK-002: UI gets Ozon identity without WB inference."""
     binding = FbsWarehouseBinding(
         id=uuid.uuid4(),
@@ -87,13 +90,17 @@ def test_ozon_binding_api_output_keeps_provider_identity() -> None:
         wb_warehouse_id=501001,
         wms_warehouse_id=uuid.uuid4(),
         is_active=True,
-        stock_sync_enabled=True,
+        served=served,
+        stock_sync_enabled=stock_sync_enabled,
     )
 
     result = _binding_out(binding)
 
     assert result.marketplace == "ozon"
     assert result.external_warehouse_id == "ozon-warehouse-1"
+
+    assert result.served is served
+    assert result.stock_sync_enabled is stock_sync_enabled
 
 
 @pytest.mark.asyncio

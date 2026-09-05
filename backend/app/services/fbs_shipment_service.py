@@ -59,6 +59,9 @@ from app.services.fbs_ozon_packaging_service import (
     OzonPackagingError,
 )
 from app.services.fbs_ozon_packaging_service import (
+    plan_shipment_sources as plan_ozon_shipment_sources,
+)
+from app.services.fbs_ozon_packaging_service import (
     prepare_shipment_sources as prepare_ozon_shipment_sources,
 )
 from app.services.fbs_ozon_packaging_service import (
@@ -526,9 +529,10 @@ def _compute_preflight_version(
 ) -> str:
     supply_status = (
         "blocked"
-        if supply.marketplace == "wb" and supply.status in _DELIVER_BLOCKED_SUPPLY_STATUSES
+        if (supply.marketplace in {"wb", "ozon"}
+            and supply.status in _DELIVER_BLOCKED_SUPPLY_STATUSES)
         else "active"
-        if supply.marketplace == "wb"
+        if supply.marketplace in {"wb", "ozon"}
         else supply.status
     )
     parts = [
@@ -537,7 +541,7 @@ def _compute_preflight_version(
         supply.delivery_type,
         composition_fingerprint,
     ]
-    if supply.marketplace != "wb":
+    if supply.marketplace not in {"wb", "ozon"}:
         parts.extend(
             [
                 str(cargo_qr_ready),
@@ -547,7 +551,7 @@ def _compute_preflight_version(
             ]
         )
     for order in sorted(orders, key=lambda item: item.id):
-        if supply.marketplace == "wb":
+        if supply.marketplace in {"wb", "ozon"}:
             # Версия WB защищает фактический состав и план списания, но не
             # advisory-факты. Переходы in_supply/assembling/packed, печать,
             # маркировка, короба и QR не имеют права породить stale_preflight.
@@ -563,7 +567,7 @@ def _compute_preflight_version(
                 str(order.metadata_delivery_allowed),
             ]
         parts.extend(order_parts)
-    if supply.marketplace == "wb":
+    if supply.marketplace in {"wb", "ozon"}:
         # ⛔ Версия защищает то, что оператор реально видел и с чем согласился:
         # состав заказов и сам факт «уйдём в минус». Точные числа, ячейки и
         # режим списания в неё НЕ входят.
@@ -598,6 +602,15 @@ def _compute_preflight_version(
                     str(item.negative_quantity),
                 ]
             )
+    if supply.marketplace == "ozon" and source_plan is not None:
+        # Same warning policy as WB: unrelated picks/packing do not stale the
+        # dialog, but changed actual order quantities/products do.
+        quantities: dict[tuple[str, str], int] = {}
+        for item in source_plan.resolutions:
+            key = (str(item.fbs_order_id), str(item.product_id))
+            quantities[key] = quantities.get(key, 0) + item.quantity
+        for (order_id, product_id), quantity in sorted(quantities.items()):
+            parts.extend([order_id, product_id, str(quantity)])
     raw = "|".join(parts).encode()
     return hashlib.sha256(raw).hexdigest()
 
@@ -708,10 +721,7 @@ def _build_delivery_checks(
                 checks.append(
                     DeliveryCheck(
                         code="order_sticker_not_ready",
-                        message=(
-                            "Стикер заказа WB не напечатан. "
-                            "Передаче не мешает, напечатать можно и после неё."
-                        ),
+                        message="Стикер заказа WB ещё не подготовлен.",
                         ok=False,
                         severity=CHECK_WARNING,
                         order_id=order.id,
@@ -820,7 +830,7 @@ def _build_delivery_checks(
         checks.append(
             DeliveryCheck(
                 code="physical_boxes_required",
-                message="Физические короба не созданы. Передаче не мешает.",
+                message="В поставке пока нет коробов.",
                 ok=False,
                 severity=soft,
             )
@@ -839,7 +849,7 @@ def _build_delivery_checks(
             checks.append(
                 DeliveryCheck(
                     code="packed_order_unassigned",
-                    message=("Заказ не разложен по физическим коробам. Передаче не мешает."),
+                    message="Для заказа не указан короб.",
                     ok=False,
                     severity=soft,
                     order_id=order_id,
@@ -1095,11 +1105,18 @@ async def preflight_delivery(
     if supply.marketplace == "ozon":
         await _ozon_credentials(session, tenant_id, supply.seller_id)
         orders = await _load_supply_orders_read(session, tenant_id, supply.id)
+        try:
+            source_plan = await plan_ozon_shipment_sources(
+                session, tenant_id=tenant_id, warehouse_id=supply.warehouse_id, orders=orders,
+            )
+        except OzonPackagingError as exc:
+            raise FbsShipmentError(str(exc), http_status=409) from exc
         checks = _build_delivery_checks(
             supply,
             orders,
             cargo_qr_ready=True,
             boxes_required=False,
+            source_plan=source_plan,
         )
         checked_at = datetime.now(UTC)
         version = _compute_preflight_version(
@@ -1109,6 +1126,7 @@ async def preflight_delivery(
             has_physical_boxes=False,
             without_distribution=False,
             unassigned_packed_order_ids=frozenset(),
+            source_plan=source_plan,
         )
         return DeliveryPreflightResult(
             can_deliver=_checks_allow_delivery(checks),
@@ -1849,6 +1867,7 @@ async def _deliver_ozon_supply(
     *,
     idempotency_key: str,
     request_hash: str,
+    confirmed_preflight_version: str | None,
     existing: Any,
     provider: OzonMarketplaceProvider | None,
     actor_user_id: uuid.UUID | None,
@@ -1861,7 +1880,7 @@ async def _deliver_ozon_supply(
     # releases this lock automatically, so persisted PENDING is resumable.
     async with (
         AsyncSession(bind=session.bind) as lock_session,
-        marketplace_seller_lock(lock_session, supply.seller_id, "ozon") as acquired,
+        marketplace_seller_lock(lock_session, supply.seller_id, "ozon-delivery") as acquired,
     ):
         if not acquired:
             raise FbsShipmentError(
@@ -1877,6 +1896,7 @@ async def _deliver_ozon_supply(
             session, tenant_id, supply_id,
             idempotency_key=idempotency_key,
             request_hash=request_hash,
+            confirmed_preflight_version=confirmed_preflight_version,
             existing=existing,
             provider=provider,
             actor_user_id=actor_user_id,
@@ -1890,6 +1910,7 @@ async def _deliver_ozon_supply_locked(
     *,
     idempotency_key: str,
     request_hash: str,
+    confirmed_preflight_version: str | None,
     existing: Any,
     provider: OzonMarketplaceProvider | None,
     actor_user_id: uuid.UUID | None,
@@ -1955,8 +1976,36 @@ async def _deliver_ozon_supply_locked(
             )
         )
     try:
+        source_plan = await plan_ozon_shipment_sources(
+            session, tenant_id=tenant_id, warehouse_id=supply.warehouse_id, orders=orders,
+        )
+        # A confirmed/ambiguous external handoff must finish local recovery;
+        # do not ask a new approval after the irreversible operation.
+        if not (progress.carriage_create_started or progress.carriage_id is not None
+                or progress.used_fallback):
+            current_version = _compute_preflight_version(
+                supply, orders, cargo_qr_ready=True, has_physical_boxes=False,
+                without_distribution=False, unassigned_packed_order_ids=frozenset(),
+                source_plan=source_plan,
+            )
+            if (confirmed_preflight_version is not None
+                    and confirmed_preflight_version != current_version):
+                raise FbsShipmentError(
+                    "stale_preflight", message=_STALE_PREFLIGHT_MESSAGE,
+                    context={"current_version": current_version,
+                             "confirmed_preflight_version": confirmed_preflight_version},
+                    http_status=409,
+                )
+            if source_plan.has_shortage and confirmed_preflight_version != current_version:
+                raise FbsShipmentError(
+                    "negative_stock_confirmation_required",
+                    message="Остатка не хватает. Откройте окно передачи, проверьте "
+                            "предупреждение о минусе и подтвердите передачу.",
+                    context={"current_version": current_version}, http_status=409,
+                )
         await prepare_ozon_shipment_sources(
             session, tenant_id=tenant_id, warehouse_id=supply.warehouse_id, orders=orders,
+            source_plan=source_plan,
         )
     except OzonPackagingError as exc:
         raise FbsShipmentError(str(exc), http_status=409) from exc
@@ -1974,7 +2023,7 @@ async def _deliver_ozon_supply_locked(
             idempotency_key=idempotency_key,
             request_hash=request_hash,
             local_supply_id=supply.id,
-            confirmed_preflight_version=None,
+            confirmed_preflight_version=confirmed_preflight_version,
         )
     # Провайдер приходит из теста или из боевой настройки. Пока живой транспорт
     # выключен, локальная операция сохраняется, а передача честно не выполняется:
@@ -2144,6 +2193,7 @@ async def deliver_supply(
             supply_id,
             idempotency_key=idempotency_key,
             request_hash=request_hash,
+            confirmed_preflight_version=confirmed_preflight_version,
             existing=existing,
             provider=ozon_provider,
             actor_user_id=actor_user_id,

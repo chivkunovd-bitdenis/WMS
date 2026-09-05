@@ -1,0 +1,255 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Честный знак</title>
+    <style>
+  @page { size: 58mm 40mm; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #fff; }
+  .label {
+    width: 58mm;
+    height: 40mm;
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+  }
+  .label:last-child { page-break-after: auto; break-after: auto; }
+  .label--cz {
+    padding: 1.5mm;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .cz-layout {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 1mm;
+  }
+  .cz-matrix {
+    flex: 0 0 27mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+  }
+  .cz-matrix img {
+    width: 24mm;
+    height: 24mm;
+    object-fit: contain;
+    display: block;
+  }
+  .cz-info {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 0.2mm 0 0;
+  }
+  .cz-brand {
+    margin: 0;
+    font-size: 5.4pt;
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+  }
+  .cz-mark {
+    margin: 0.4mm 0 0.6mm;
+    width: 5.5mm;
+    height: 5.5mm;
+    border: 0.35mm solid #111;
+    border-radius: 0.6mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 5pt;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .cz-field {
+    margin: 0;
+    font-size: 5pt;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cz-field + .cz-field { margin-top: 0.35mm; }
+  .cz-field-label {
+    font-weight: 700;
+    margin-right: 0.5mm;
+  }
+  .cz-code {
+    margin: auto 0 0;
+    padding-top: 0.5mm;
+    font-size: 4.6pt;
+    line-height: 1.1;
+    word-break: break-all;
+  }
+  .label--cz-artifact {
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .cz-artifact-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  .label--wb-qr {
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .wb-qr-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  .wb-qr-position {
+    position: absolute;
+    top: 1mm;
+    right: 1mm;
+    min-width: 7mm;
+    padding: 0.6mm 1mm;
+    border: 0.3mm solid #111;
+    border-radius: 0.8mm;
+    background: #fff;
+    color: #111;
+    font-size: 8pt;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+  }
+  .label:not(.label--cz):not(.label--wb-qr) {
+    padding: 1.4mm 1.8mm 1mm;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .barcode-wrap {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    margin-bottom: 0.45mm;
+  }
+  .barcode-wrap img {
+    width: 52mm;
+    max-width: 100%;
+    height: auto;
+    max-height: 12mm;
+    object-fit: contain;
+    display: block;
+  }
+  .digits {
+    margin: 0.3mm 0 0;
+    font-size: 9pt;
+    letter-spacing: 0.04em;
+    text-align: center;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.2;
+  }
+  .body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    margin-top: 0.39mm;
+    line-height: 1.35;
+    font-size: 7.6pt;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+  /*
+   * Межстрочный зазор — через margin-bottom, а не flex "gap": рендер термопринтера
+   * (и старые движки печати) часто игнорируют flex gap → строки слипаются и длинное
+   * название наезжает на «Артикул» (как на фото ИП Горячкина). margin работает везде.
+   */
+  .body > p {
+    margin: 0 0 0.2mm;
+    flex: 0 0 auto;
+    flex-shrink: 0;
+  }
+  .body > p:last-child {
+    margin-bottom: 0;
+  }
+  .seller {
+    font-size: 7.6pt;
+    line-height: 1.35;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /*
+   * Без max-height/overflow: название уже обрезано по символам в JS, поэтому строк
+   * ровно столько, сколько влезает, и они идут обычным потоком — «Артикул» всегда
+   * ниже названия и не может напечататься поверх (баг на термопринтере).
+   */
+  .name {
+    font-size: 7.8pt;
+    font-weight: 400;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+  .meta {
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .meta-composition {
+    white-space: nowrap;
+  }
+  .footer {
+    flex: 0 0 auto;
+    margin: 0.35mm 0 0;
+    font-size: 7.2pt;
+    text-align: left;
+    line-height: 1.2;
+  }
+
+</style>
+  </head>
+  <body><section class="label" data-testid="product-thermal-label">
+  <div class="barcode-wrap">
+    <img id="barcode" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNDAiIGhlaWdodD0iNTAiPjxwYXRoIGQ9Ik0xMCAwVjUwTTIwIDBWNTBNMjUgMFY1ME0zNSAwVjUwTTUwIDBWNTBNNTUgMFY1ME04MCAwVjUwTTEwMCAwVjUwTTEyMCAwVjUwTTEyNSAwVjUwTTE0MCAwVjUwTTE1MCAwVjUwTTE4MCAwVjUwTTIwMCAwVjUwTTIyMCAwVjUwIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjQiLz48L3N2Zz4=" alt="barcode" />
+    <p class="digits">TEST371000001</p>
+  </div>
+  <div class="body">
+    <p class="seller" title="Тестовый селлер">Тестовый селлер</p><p class="name" title="Тестовый товар WMS-371">Тестовый товар WMS-371</p><p class="meta">Артикул: TEST-ARTICLE</p><p class="meta">Цвет: коричневый</p><p class="meta">Бренд: TEST</p><p class="meta meta-composition">Состав: пластик</p>
+  </div>
+  <p class="footer">Пожалуйста оставьте отзыв</p>
+</section><section class="label" data-testid="product-thermal-label">
+  <div class="barcode-wrap">
+    <img id="barcode" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNDAiIGhlaWdodD0iNTAiPjxwYXRoIGQ9Ik0xMCAwVjUwTTIwIDBWNTBNMjUgMFY1ME0zNSAwVjUwTTUwIDBWNTBNNTUgMFY1ME04MCAwVjUwTTEwMCAwVjUwTTEyMCAwVjUwTTEyNSAwVjUwTTE0MCAwVjUwTTE1MCAwVjUwTTE4MCAwVjUwTTIwMCAwVjUwTTIyMCAwVjUwIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjQiLz48L3N2Zz4=" alt="barcode" />
+    <p class="digits">TEST371000001</p>
+  </div>
+  <div class="body">
+    <p class="seller" title="Тестовый селлер">Тестовый селлер</p><p class="name" title="Тестовый товар WMS-371">Тестовый товар WMS-371</p><p class="meta">Артикул: TEST-ARTICLE</p><p class="meta">Цвет: коричневый</p><p class="meta">Бренд: TEST</p><p class="meta meta-composition">Состав: пластик</p>
+  </div>
+  <p class="footer">Пожалуйста оставьте отзыв</p>
+</section><section class="label" data-testid="product-thermal-label">
+  <div class="barcode-wrap">
+    <img id="barcode" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNDAiIGhlaWdodD0iNTAiPjxwYXRoIGQ9Ik0xMCAwVjUwTTIwIDBWNTBNMjUgMFY1ME0zNSAwVjUwTTUwIDBWNTBNNTUgMFY1ME04MCAwVjUwTTEwMCAwVjUwTTEyMCAwVjUwTTEyNSAwVjUwTTE0MCAwVjUwTTE1MCAwVjUwTTE4MCAwVjUwTTIwMCAwVjUwTTIyMCAwVjUwIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjQiLz48L3N2Zz4=" alt="barcode" />
+    <p class="digits">TEST371000001</p>
+  </div>
+  <div class="body">
+    <p class="seller" title="Тестовый селлер">Тестовый селлер</p><p class="name" title="Тестовый товар WMS-371">Тестовый товар WMS-371</p><p class="meta">Артикул: TEST-ARTICLE</p><p class="meta">Цвет: коричневый</p><p class="meta">Бренд: TEST</p><p class="meta meta-composition">Состав: пластик</p>
+  </div>
+  <p class="footer">Пожалуйста оставьте отзыв</p>
+</section></body>
+</html>

@@ -606,6 +606,7 @@ async def test_ozon_partial_stock_confirmation_counts_only_what_ozon_confirmed(
             seller=seller,
             name=f"Product {index}",
             sku_code=f"sku-{uuid.uuid4().hex[:8]}",
+            fbs_units_mode=True,
         )
         for index in range(2)
     ]
@@ -667,7 +668,12 @@ async def test_ozon_partial_stock_confirmation_counts_only_what_ozon_confirmed(
             "publish_stocks": MarketplaceProviderError(
                 "ozon",
                 None,
-                {"sent": 2, "confirmed": 1, "failed": [{"codes": ["OZON_ROW_MISSING"]}]},
+                {
+                    "sent": 2,
+                    "confirmed": 1,
+                    "confirmed_zeroed": 1,
+                    "failed": [{"codes": ["OZON_ROW_MISSING"]}],
+                },
                 code="ozon_stock_rejected",
             )
         }
@@ -682,11 +688,82 @@ async def test_ozon_partial_stock_confirmation_counts_only_what_ozon_confirmed(
 
     assert result.products_targeted == 2
     assert result.products_confirmed == 1
+    assert result.products_zeroed == 1
     assert result.errors == 1
     assert result.binding_errors == 1
     await db_session.refresh(binding)
     assert binding.last_sync_status == "error"
     assert binding.last_error_code == "ozon_stock_rejected"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "active, served, sync_enabled, configured, expected_targets",
+    [
+        (True, True, True, True, 1),
+        (True, True, True, False, 0),
+        (False, True, True, True, 0),
+        (True, False, True, True, 0),
+        (True, True, False, True, 0),
+    ],
+)
+async def test_ozon_publish_respects_configured_products_and_all_binding_flags(
+    db_session: AsyncSession,
+    active: bool,
+    served: bool,
+    sync_enabled: bool,
+    configured: bool,
+    expected_targets: int,
+) -> None:
+    """WMS-375: no rule means no write; a disabled configured product sends zero."""
+    tenant, seller, _warehouse, _provider = await _seed_ozon_scope_case(
+        db_session, published=False, served=served
+    )
+    product = (await db_session.scalars(select(Product))).one()
+    product.fbs_percent = 50 if configured else None
+    binding = (await db_session.scalars(select(FbsWarehouseBinding))).one()
+    binding.is_active = active
+    binding.stock_sync_enabled = sync_enabled
+    link = (await db_session.scalars(select(ProductMarketplaceLink))).one()
+    link.external_offer_id = "configured-ozon"
+    unrelated_wb = Product(
+        tenant=tenant, seller=seller, name="WB only, no rule", sku_code="wb-no-rule"
+    )
+    unrelated_ozon = Product(
+        tenant=tenant, seller=seller, name="Ozon, no rule", sku_code="ozon-no-rule"
+    )
+    db_session.add_all([unrelated_wb, unrelated_ozon])
+    await db_session.flush()
+    db_session.add(
+        ProductMarketplaceLink(
+            tenant_id=tenant.id,
+            seller_id=seller.id,
+            product_id=unrelated_ozon.id,
+            marketplace="ozon",
+            external_offer_id="never-publish-this",
+            is_active=True,
+        )
+    )
+    await db_session.commit()
+    transport = FakeMarketplaceTransport()
+
+    result = await ozon_sync_svc.sync_ozon_stocks(
+        db_session, tenant.id, seller.id, OzonMarketplaceProvider(transport=transport)
+    )
+
+    assert result.bindings_processed == int(active and served and sync_enabled)
+    assert result.products_targeted == expected_targets
+    assert result.products_confirmed == expected_targets
+    assert result.products_zeroed == expected_targets
+    assert result.binding_errors == 0
+    assert result.errors == 0
+    assert transport.published_stocks == (
+        [{"warehouse_id": 1020005028840530, "offer_id": "configured-ozon", "stock": 0}]
+        if expected_targets
+        else []
+    )
+    await db_session.refresh(product)
+    assert product.fbs_stock_sync_enabled is False
 
 
 @pytest.mark.asyncio
@@ -1739,8 +1816,9 @@ async def test_ozon_supply_handoff_ships_rechecks_and_creates_carriage_without_w
 async def test_ozon_live_handoff_never_falls_back_to_fake_success(
     db_session: AsyncSession,
 ) -> None:
-    tenant, _, _, _, _, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    tenant, _, _, product, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
     assert supply is not None
+    await _seed_ready_for_handoff(db_session, order, supply, product)
 
     with pytest.raises(shipment_svc.FbsShipmentError, match="ozon_live_handoff_blocked"):
         await shipment_svc.deliver_supply(
@@ -3239,7 +3317,7 @@ async def test_ozon_live_owner_blocks_retry_before_external_calls(
         lock_session: AsyncSession, seller_id: uuid.UUID, marketplace: str,
     ) -> AsyncIterator[bool]:
         assert lock_session is not db_session  # checkpoints cannot release the ownership lock
-        assert seller_id == supply.seller_id and marketplace == "ozon"
+        assert seller_id == supply.seller_id and marketplace == "ozon-delivery"
         yield False
 
     monkeypatch.setattr(shipment_svc, "marketplace_seller_lock", occupied)

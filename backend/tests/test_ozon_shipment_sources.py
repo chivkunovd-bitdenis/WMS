@@ -132,6 +132,21 @@ async def test_ozon_without_fulfillment_snapshots_stock_before_handoff_and_write
         )
     ).all()
     assert sum(balances) == 0
+    ledger = await db_session.scalar(select(FbsShipmentReversalLedger).where(
+        FbsShipmentReversalLedger.fbs_order_id == order.id,
+    ))
+    assert ledger is not None
+    # Verify that the JSON field was persisted, not only mutated in memory.
+    await db_session.refresh(ledger)
+    assert ledger.ozon_positions_json
+    movement_ids = [uuid.UUID(str(row["movement_id"])) for row in ledger.ozon_positions_json]
+    assert len(movement_ids) == len(set(movement_ids)) == 2
+    from app.models.inventory_movement import InventoryMovement
+    movements = list((await db_session.scalars(select(InventoryMovement).where(
+        InventoryMovement.id.in_(movement_ids),
+    ))).all())
+    assert len(movements) == 2
+    assert sorted(movement.quantity_delta for movement in movements) == [-2, -1]
     assert sum(path == "/v1/carriage/approve" for path, _ in transport.endpoint_calls) == 1
 
 
@@ -198,7 +213,8 @@ async def test_ozon_complete_fulfillment_keeps_its_exact_source(db_session: Asyn
         warehouse_id=warehouse.id,
         orders=[order],
     )
-    assert ledgers[0].ozon_positions_json == [
+    assert [{key: row[key] for key in ("product_id", "storage_location_id", "quantity")}
+            for row in ledgers[0].ozon_positions_json or []] == [
         {
             "product_id": str(product.id),
             "storage_location_id": expected_location,

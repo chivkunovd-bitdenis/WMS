@@ -8,6 +8,7 @@ import {
   ActionGroup,
   DataTable,
   ErrorNotice,
+  WarningNotice,
   FilterBar,
   MoscowDateRangeInput,
   PrimaryAction,
@@ -87,7 +88,7 @@ type SellerRow = {
   total_out: number
   net: number
 }
-type OperationRow = { operation: string; in_qty: number; out_qty: number; net: number }
+type OperationRow = { operation: string; in_qty: number; out_qty: number; net: number; integrity_error?: boolean }
 type MovementRow = {
   id: string
   at: string
@@ -103,6 +104,31 @@ type MovementRow = {
   } | null
 }
 type Grouping = 'seller' | 'product' | 'operation'
+
+export function reportCsvDisabledReason(options: {
+  periodError: string; csvLoading: boolean; tableError: boolean;
+  loading: boolean; loadedRowCount: number;
+}): string | undefined {
+  return options.periodError
+    || (options.csvLoading ? 'Файл формируется' : '')
+    || (options.loading || options.tableError ? 'Строки отчёта не загружены' : '')
+    || (options.loadedRowCount === 0 ? 'За выбранный период нечего выгружать' : undefined)
+}
+
+export function ReportNotices({ warnings, detailRows }: {
+  warnings: ReportWarning[]; detailRows: { integrity_error?: boolean }[];
+}) {
+  return <>
+    {warnings.map(warning => <WarningNotice key={warning.code} testId={`ff-reports-warning-${warning.code}`}>
+      {warning.code === 'wildberries_stale'
+        ? `Данные Wildberries могут быть неполными. Последнее обновление: ${warning.last_updated_at ? new Date(warning.last_updated_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' }) : '—'}.`
+        : `В отчёте есть исторические записи, восстановленные по доступным связям: ${warning.count}`}
+    </WarningNotice>)}
+    {detailRows.some(row => row.integrity_error)
+      ? <ErrorNotice testId="ff-reports-integrity-error">В истории есть неполное перемещение. Значения показаны как записаны; отчёт ничего не достраивал.</ErrorNotice>
+      : null}
+  </>
+}
 
 type CalendarDate = { year: number; month: number; day: number }
 
@@ -394,11 +420,10 @@ export function FfReportsPage({ token, onOpenInbound, sellers = [], warehouses =
         ]} rows={movements} getRowKey={move => move.id} loading={movementsLoading} empty={{ title: 'Движений за период нет' }} testId="ff-reports-movements" />
       </Stack>
 
-  const hasIntegrityError = rows.some((row) => row.integrity_error)
-  const csvDisabledReason = periodError
-    || (csvLoading ? 'Файл формируется' : '')
-    || (tableError ? 'Строки отчёта не загружены' : '')
-    || (rows.length === 0 ? 'За выбранный период нечего выгружать' : undefined)
+  const csvDisabledReason = reportCsvDisabledReason({
+    periodError, csvLoading, tableError, loading: loading || tableLoading,
+    loadedRowCount: sellerRows.length,
+  })
 
   return <Stack spacing={0} sx={{ minWidth: 0, width: `calc(100vw - ${contentInset}px)` }} data-testid="ff-reports-page">
     <ScreenHeader title="Остатки и движения" purpose="Текущий остаток и складские движения за выбранный период." />
@@ -418,7 +443,9 @@ export function FfReportsPage({ token, onOpenInbound, sellers = [], warehouses =
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }} data-testid="ff-reports-freshness">Данные на {overview ? new Date(overview.generated_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' }) : '—'} МСК</Typography>
     </>}
     {tableError ? <ErrorNotice testId="ff-reports-table-error">Не удалось загрузить строки отчёта. Повторите попытку.</ErrorNotice> : null}
-    {hasIntegrityError ? <ErrorNotice testId="ff-reports-integrity-error">В истории есть неполное перемещение. Значения показаны как записаны; отчёт ничего не достраивал.</ErrorNotice> : null}
+    <ReportNotices warnings={overview?.warnings ?? []} detailRows={[
+      ...rows, ...sellerProducts, ...sellerOperations,
+    ]} />
     {csvError ? <ErrorNotice testId="ff-reports-csv-error">Не удалось скачать CSV. Повторите попытку.</ErrorNotice> : null}
     <Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: 'center' }} data-testid="ff-reports-table-controls">
       <TextField select size="small" label="Группировка" value={grouping} onChange={event => { const next = event.target.value as Grouping; groupingRef.current = next; setGrouping(next); setExpandedSeller(null); setExpandedProduct(null) }} data-testid="ff-reports-grouping">

@@ -1,0 +1,137 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Этикетка товара</title>
+    <style>
+  @page { size: 58mm 40mm; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #fff; }
+  .label {
+    width: 58mm;
+    height: 40mm;
+    padding: 1.2mm 1.8mm 0.8mm;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+  }
+  .label:last-child { page-break-after: auto; break-after: auto; }
+
+  .barcode-wrap {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    margin-bottom: 0.45mm;
+  }
+  .barcode-wrap img {
+    width: 52mm;
+    max-width: 100%;
+    height: auto;
+    max-height: 12mm;
+    object-fit: contain;
+    display: block;
+  }
+  .digits {
+    margin: 0.3mm 0 0;
+    font-size: 9pt;
+    letter-spacing: 0.04em;
+    text-align: center;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.2;
+  }
+  .body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    margin-top: 0.39mm;
+    line-height: 1.35;
+    font-size: 7.6pt;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+  /*
+   * Межстрочный зазор — через margin-bottom, а не flex "gap": рендер термопринтера
+   * (и старые движки печати) часто игнорируют flex gap → строки слипаются и длинное
+   * название наезжает на «Артикул» (как на фото ИП Горячкина). margin работает везде.
+   */
+  .body > p {
+    margin: 0 0 0.2mm;
+    flex: 0 0 auto;
+    flex-shrink: 0;
+  }
+  .body > p:last-child {
+    margin-bottom: 0;
+  }
+  .seller {
+    font-size: 7.6pt;
+    line-height: 1.35;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /*
+   * Без max-height/overflow: название уже обрезано по символам в JS, поэтому строк
+   * ровно столько, сколько влезает, и они идут обычным потоком — «Артикул» всегда
+   * ниже названия и не может напечататься поверх (баг на термопринтере).
+   */
+  .name {
+    font-size: 7.8pt;
+    font-weight: 400;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+  .meta {
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .meta-composition {
+    white-space: nowrap;
+  }
+  .footer {
+    flex: 0 0 auto;
+    margin: 0.35mm 0 0;
+    font-size: 7.2pt;
+    text-align: left;
+    line-height: 1.2;
+  }
+
+</style>
+  </head>
+  <body><section class="label" data-testid="product-thermal-label">
+  <div class="barcode-wrap">
+    <img id="barcode" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNDAiIGhlaWdodD0iNTAiPjxwYXRoIGQ9Ik0xMCAwVjUwTTIwIDBWNTBNMjUgMFY1ME0zNSAwVjUwTTUwIDBWNTBNNTUgMFY1ME04MCAwVjUwTTEwMCAwVjUwTTEyMCAwVjUwTTEyNSAwVjUwTTE0MCAwVjUwTTE1MCAwVjUwTTE4MCAwVjUwTTIwMCAwVjUwTTIyMCAwVjUwIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjQiLz48L3N2Zz4=" alt="barcode" />
+    <p class="digits">TEST371000001</p>
+  </div>
+  <div class="body">
+    <p class="seller" title="Тестовый селлер">Тестовый селлер</p><p class="name" title="Тестовый товар WMS-371">Тестовый товар WMS-371</p><p class="meta">Артикул: TEST-ARTICLE</p><p class="meta">Цвет: коричневый</p><p class="meta">Бренд: TEST</p><p class="meta meta-composition">Состав: пластик</p>
+  </div>
+  <p class="footer">Пожалуйста оставьте отзыв</p>
+</section><section class="label" data-testid="product-thermal-label">
+  <div class="barcode-wrap">
+    <img id="barcode" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNDAiIGhlaWdodD0iNTAiPjxwYXRoIGQ9Ik0xMCAwVjUwTTIwIDBWNTBNMjUgMFY1ME0zNSAwVjUwTTUwIDBWNTBNNTUgMFY1ME04MCAwVjUwTTEwMCAwVjUwTTEyMCAwVjUwTTEyNSAwVjUwTTE0MCAwVjUwTTE1MCAwVjUwTTE4MCAwVjUwTTIwMCAwVjUwTTIyMCAwVjUwIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjQiLz48L3N2Zz4=" alt="barcode" />
+    <p class="digits">TEST371000001</p>
+  </div>
+  <div class="body">
+    <p class="seller" title="Тестовый селлер">Тестовый селлер</p><p class="name" title="Тестовый товар WMS-371">Тестовый товар WMS-371</p><p class="meta">Артикул: TEST-ARTICLE</p><p class="meta">Цвет: коричневый</p><p class="meta">Бренд: TEST</p><p class="meta meta-composition">Состав: пластик</p>
+  </div>
+  <p class="footer">Пожалуйста оставьте отзыв</p>
+</section><section class="label" data-testid="product-thermal-label">
+  <div class="barcode-wrap">
+    <img id="barcode" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNDAiIGhlaWdodD0iNTAiPjxwYXRoIGQ9Ik0xMCAwVjUwTTIwIDBWNTBNMjUgMFY1ME0zNSAwVjUwTTUwIDBWNTBNNTUgMFY1ME04MCAwVjUwTTEwMCAwVjUwTTEyMCAwVjUwTTEyNSAwVjUwTTE0MCAwVjUwTTE1MCAwVjUwTTE4MCAwVjUwTTIwMCAwVjUwTTIyMCAwVjUwIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjQiLz48L3N2Zz4=" alt="barcode" />
+    <p class="digits">TEST371000001</p>
+  </div>
+  <div class="body">
+    <p class="seller" title="Тестовый селлер">Тестовый селлер</p><p class="name" title="Тестовый товар WMS-371">Тестовый товар WMS-371</p><p class="meta">Артикул: TEST-ARTICLE</p><p class="meta">Цвет: коричневый</p><p class="meta">Бренд: TEST</p><p class="meta meta-composition">Состав: пластик</p>
+  </div>
+  <p class="footer">Пожалуйста оставьте отзыв</p>
+</section></body>
+</html>

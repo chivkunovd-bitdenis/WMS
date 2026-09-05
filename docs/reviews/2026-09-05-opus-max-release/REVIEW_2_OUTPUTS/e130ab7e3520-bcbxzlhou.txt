@@ -1,0 +1,483 @@
+diff --git a/frontend/src/screens/ff/FfReportsPage.tsx b/frontend/src/screens/ff/FfReportsPage.tsx
+index 4e64e49b..4540fc97 100644
+--- a/frontend/src/screens/ff/FfReportsPage.tsx
++++ b/frontend/src/screens/ff/FfReportsPage.tsx
+@@ -1,5 +1,8 @@
+ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+-import { Box, MenuItem, Stack, TextField, Typography } from '@mui/material'
++import { Link, MenuItem, Stack, TextField, Typography } from '@mui/material'
++import { Link as RouterLink } from 'react-router-dom'
+ import { apiUrl } from '../../api'
++import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
++import { sellerQuickRange } from './FfBillingScreen'
+ import {
+   ActionGroup,
+@@ -7,17 +10,17 @@ import {
+   ErrorNotice,
+   FilterBar,
++  MoscowDateRangeInput,
+   PrimaryAction,
+   SecondaryAction,
+-  ProductCell,
+   QtyCell,
+   ReportMetricStrip,
+   ScreenHeader,
+-  StatusChip,
+   TextCell,
+-  WarningNotice,
+ } from '../../ui-kit'
+ 
+ type Props = {
+   token: string
++  /** Открыть документ приёмки: экран отчёта сам его не рисует. */
++  onOpenInbound?: (id: string) => void
+   sellers?: { id: string; name: string }[]
+   warehouses?: { id: string; name: string }[]
+@@ -29,4 +32,8 @@ type ReportWarning =
+ type Overview = {
+   current_balance: number
++  /** Остаток на начало периода. Считается сервером откатом сегодняшнего
++   *  остатка на все движения с начала периода: на прошлом периоде разность
++   *  «остаток − приход + расход» давала цифру, которой на складе не было. */
++  opening_balance?: number
+   in_qty: number
+   out_qty: number
+@@ -82,4 +89,18 @@ type SellerRow = {
+ }
+ type OperationRow = { operation: string; in_qty: number; out_qty: number; net: number }
++type MovementRow = {
++  id: string
++  at: string
++  operation: string
++  quantity: number
++  product_id?: string | null
++  product_name?: string | null
++  sku_code?: string | null
++  document: {
++    kind: 'inbound' | 'marketplace_unload' | 'fbs_supply' | 'fbs_order'
++    id: string
++    number: string
++  } | null
++}
+ type Grouping = 'seller' | 'product' | 'operation'
+ 
+@@ -106,6 +127,4 @@ const monthEnd = (date: CalendarDate) => dateString(addDays({
+   day: 1,
+ }, -1))
+-const yearStart = (date: CalendarDate) => `${date.year}-01-01`
+-const yearEnd = (date: CalendarDate) => `${date.year}-12-31`
+ const nextDateString = (date: string) => {
+   const [year, month, day] = date.split('-').map(Number)
+@@ -113,14 +132,7 @@ const nextDateString = (date: string) => {
+ }
+ const moscowApiBoundary = (date: string) => `${date}T00:00:00+03:00`
+-const moscowTimestamp = (value: string | null) => value
+-  ? `${new Date(value).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} МСК`
+-  : 'нет данных об обновлении'
+-const warningText = (warning: ReportWarning) => warning.code === 'wildberries_stale'
+-  ? `Данные Wildberries могут быть неполными. Последнее обновление: ${moscowTimestamp(warning.last_updated_at)}.`
+-  : `В отчёте есть исторические записи, восстановленные по доступным связям: ${warning.count}`
+ 
+-export function FfReportsPage({ token, sellers = [], warehouses = [], contentInset = 308 }: Props) {
++export function FfReportsPage({ token, onOpenInbound, sellers = [], warehouses = [], contentInset = 308 }: Props) {
+   const now = useMemo(() => moscowCalendarDate(new Date()), [])
+-  const [period, setPeriod] = useState('month')
+   const [dateFrom, setDateFrom] = useState(monthStart(now))
+   const [dateTo, setDateTo] = useState(monthEnd(now))
+@@ -130,5 +142,5 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
+   const [overview, setOverview] = useState<Overview | null>(null)
+   const [rows, setRows] = useState<Row[]>([])
+-  const [grouping, setGrouping] = useState<Grouping>('seller')
++  const [grouping, setGrouping] = useState<Grouping>('product')
+   const [sellerRows, setSellerRows] = useState<SellerRow[]>([])
+   // Раскрытая строка селлера тянет свои данные: товары и разбивку по видам
+@@ -139,7 +151,16 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
+   const [sellerDetailLoading, setSellerDetailLoading] = useState(false)
+   const [sellerDetailError, setSellerDetailError] = useState(false)
++  // Третий уровень: движения одного товара. Кладовщик открывает товар, чтобы
++  // увидеть, когда он приехал, когда уехал и по какому документу.
++  const [expandedProduct, setExpandedProduct] = useState<string | null>(null)
++  const [movements, setMovements] = useState<MovementRow[]>([])
++  const [movementsLoading, setMovementsLoading] = useState(false)
++  const [movementsError, setMovementsError] = useState(false)
++  const [movementsTruncated, setMovementsTruncated] = useState(false)
++  const [movementsLimit, setMovementsLimit] = useState(0)
++  const [expandedOperation, setExpandedOperation] = useState<string | null>(null)
+   const [page, setPage] = useState(1)
+   const [total, setTotal] = useState(0)
+-  const groupingRef = useRef<Grouping>('seller')
++  const groupingRef = useRef<Grouping>('product')
+   const [loading, setLoading] = useState(false)
+   const [summaryLoading, setSummaryLoading] = useState(false)
+@@ -223,4 +244,38 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
+   }, [params, token])
+ 
++  // Раскрыть можно и товар, и вид движения: в группировке «по видам» третьего
++  // уровня не было вовсе, потому что ручка требовала товар.
++  const loadMovements = useCallback(async (
++    scope: { productId?: string; operation?: string },
++    scopedSellerId: string,
++  ) => {
++    setMovementsLoading(true)
++    setMovementsError(false)
++    setMovementsTruncated(false)
++    try {
++      const query = params()
++      if (scope.productId) query.set('product_id', scope.productId)
++      if (scope.operation) query.set('operation', scope.operation)
++      if (scopedSellerId) query.set('seller_id', scopedSellerId)
++      const response = await fetch(apiUrl(`/reports/inventory/movements?${query.toString()}`), {
++        headers: { Authorization: `Bearer ${token}` },
++      })
++      if (!response.ok) throw new Error('movements')
++      const payload = (await response.json()) as {
++        rows?: MovementRow[]
++        truncated?: boolean
++        limit?: number
++      }
++      setMovements(payload.rows ?? [])
++      setMovementsTruncated(Boolean(payload.truncated))
++      setMovementsLimit(payload.limit ?? 0)
++    } catch {
++      setMovementsError(true)
++      setMovements([])
++    } finally {
++      setMovementsLoading(false)
++    }
++  }, [params, token])
++
+   const load = useCallback(async () => {
+     if (periodError) return
+@@ -239,5 +294,5 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
+       await Promise.all([
+         loadOverview(controller.signal).catch(error => { if (!(error instanceof DOMException && error.name === 'AbortError')) setSummaryError(true) }),
+-        loadTable(controller.signal, 1, groupingRef.current).catch(error => { if (!(error instanceof DOMException && error.name === 'AbortError')) setTableError(true) }),
++        loadTable(controller.signal, 1, 'seller').catch(error => { if (!(error instanceof DOMException && error.name === 'AbortError')) setTableError(true) }),
+       ])
+       setPage(1)
+@@ -298,12 +353,4 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
+   }
+ 
+-  const choosePeriod = (value: string) => {
+-    setPeriod(value)
+-    const end = moscowCalendarDate(new Date())
+-    if (value === '7') { setDateFrom(dateString(addDays(end, -6))); setDateTo(dateString(end)) }
+-    if (value === '30') { setDateFrom(dateString(addDays(end, -29))); setDateTo(dateString(end)) }
+-    if (value === 'month') { setDateFrom(monthStart(end)); setDateTo(monthEnd(end)) }
+-    if (value === 'year') { setDateFrom(yearStart(end)); setDateTo(yearEnd(end)) }
+-  }
+ 
+   useEffect(() => {
+@@ -314,10 +361,38 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
+   }, [dateFrom, dateTo])
+ 
++  // Порядок такой, как читают: сколько пришло, сколько ушло, сколько осталось.
++  // «Нетто» убрано — оно не отвечало ни на один вопрос склада.
+   const metrics = [
+-    { key: 'balance', label: 'Остаток сейчас', value: overview?.current_balance ?? null },
++    // Остаток на начало показываем явно: без него «приход 50, расход 2,
++    // остаток 58» читается как ошибка расчёта, хотя арифметика верна.
++    { key: 'opening', label: 'Было на начало', value: overview?.opening_balance ?? null },
+     { key: 'inbound', label: 'Приход за период', value: overview?.in_qty ?? null },
+     { key: 'outbound', label: 'Расход за период', value: overview?.out_qty ?? null },
+-    { key: 'net', label: 'Нетто за период', value: overview == null ? null : overview.in_qty - overview.out_qty },
++    { key: 'balance', label: 'Остаток сейчас', value: overview?.current_balance ?? null },
+   ]
++  // Одна и та же таблица движений для обоих третьих уровней: по товару и по
++  // виду движения. Во втором случае товар обязателен — в пачке их много.
++  const movementsTable = (options: { showProduct: boolean }) => movementsError
++    ? <ErrorNotice testId="ff-reports-movements-error">Не удалось загрузить движения</ErrorNotice>
++    : <Stack spacing={1}>
++        {movementsTruncated ? <Typography variant="caption" color="text.secondary" data-testid="ff-reports-movements-truncated">
++          Показаны первые {movementsLimit} движений из большего числа. Сузьте период или фильтр, чтобы увидеть остальные.
++        </Typography> : null}
++        <DataTable<MovementRow> columns={[
++          { key: 'at', header: 'Когда', width: 190, render: move => <TextCell value={new Date(move.at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} width={160} /> },
++          ...(options.showProduct ? [{ key: 'product', header: 'Товар', width: 260, render: (move: MovementRow) => <TextCell value={move.product_name ?? '—'} width={250} /> }] : []),
++          { key: 'operation', header: 'Движение', width: 260, render: (move: MovementRow) => <TextCell value={move.operation} /> },
++          { key: 'document', header: 'Документ', width: 200, render: (move: MovementRow) => {
++              const doc = move.document
++              if (!doc) return <TextCell value="—" />
++              if (doc.kind === 'inbound') return <Link component="button" type="button" sx={{ textAlign: 'left' }} onClick={() => onOpenInbound?.(doc.id)}>{doc.number}</Link>
++              if (doc.kind === 'marketplace_unload') return <Link component={RouterLink} to={`/app/ff/mp-shipments?open_mp=${doc.id}`} sx={{ textAlign: 'left' }}>{doc.number}</Link>
++              if (doc.kind === 'fbs_supply') return <Link component={RouterLink} to={`/app/ff/fbs?supply_id=${doc.id}`} sx={{ textAlign: 'left' }}>{doc.number}</Link>
++              return <TextCell value={doc.number} />
++            } },
++          { key: 'qty', header: 'Штук', align: 'right', width: 110, render: (move: MovementRow) => <QtyCell value={move.quantity} /> },
++        ]} rows={movements} getRowKey={move => move.id} loading={movementsLoading} empty={{ title: 'Движений за период нет' }} testId="ff-reports-movements" />
++      </Stack>
++
+   const hasIntegrityError = rows.some((row) => row.integrity_error)
+   const csvDisabledReason = periodError
+@@ -329,10 +404,13 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
+     <ScreenHeader title="Остатки и движения" purpose="Текущий остаток и складские движения за выбранный период." />
+     <FilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Название, артикул продавца, SKU, ШК" testId="ff-reports-filters">
+-      <TextField select size="small" label="Период" value={period} onChange={event => choosePeriod(event.target.value)} data-testid="ff-reports-period"><MenuItem value="7">7 дней</MenuItem><MenuItem value="30">30 дней</MenuItem><MenuItem value="month">Текущий месяц</MenuItem><MenuItem value="year">Текущий год</MenuItem><MenuItem value="custom">Другой период</MenuItem></TextField>
+-      {warehouses.length > 1 ? <TextField select size="small" label="Склад" value={warehouseId} onChange={event => setWarehouseId(event.target.value)} data-testid="ff-reports-warehouse"><MenuItem value="">Все склады</MenuItem>{warehouses.map(warehouse => <MenuItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</MenuItem>)}</TextField> : null}
+-      {sellers.length > 0 ? <TextField select size="small" label="Селлер" value={sellerId} onChange={event => setSellerId(event.target.value)} data-testid="ff-reports-seller"><MenuItem value="">Все селлеры</MenuItem>{sellers.map(seller => <MenuItem key={seller.id} value={seller.id}>{seller.name}</MenuItem>)}</TextField> : null}
+-      {period === 'custom' ? <><TextField size="small" label="С" type="date" value={dateFrom} onChange={event => { setDateFrom(event.target.value) }} data-testid="ff-reports-date-from" slotProps={{ inputLabel: { shrink: true } }} /><TextField size="small" label="По" type="date" value={dateTo} onChange={event => { setDateTo(event.target.value) }} data-testid="ff-reports-date-to" slotProps={{ inputLabel: { shrink: true } }} /></> : null}
++      <MoscowDateRangeInput label="Период" startLabel="с" endLabel="по" value={{ start: dateFrom, end: dateTo }} onChange={(value) => { setDateFrom(value.start ?? dateFrom); setDateTo(value.end ?? dateTo) }} maxDays={366} testId="ff-reports-range" />
++      <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', flexShrink: 0, alignSelf: { sm: 'flex-end' }, pb: { sm: 0.25 } }} aria-label="Быстрый период">
++        {([['today', 'Сегодня'], ['seven_days', '7 дней'], ['thirty_days', '30 дней'], ['current_month', 'Этот месяц'], ['previous_month', 'Прошлый месяц']] as const).map(([key, label]) => (
++          <SecondaryAction key={key} onClick={() => { const range = sellerQuickRange(key); setDateFrom(range.start); setDateTo(range.end) }}>{label}</SecondaryAction>
++        ))}
++      </Stack>
++      {warehouses.length > 1 ? <TextField select size="small" label="Склад" sx={{ minWidth: 180 }} value={warehouseId} onChange={event => setWarehouseId(event.target.value)} data-testid="ff-reports-warehouse"><MenuItem value="">Все склады</MenuItem>{warehouses.map(warehouse => <MenuItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</MenuItem>)}</TextField> : null}
++      {sellers.length > 0 ? <TextField select size="small" label="Селлер" sx={{ minWidth: 200 }} value={sellerId} onChange={event => setSellerId(event.target.value)} data-testid="ff-reports-seller"><MenuItem value="">Все селлеры</MenuItem>{sellers.map(seller => <MenuItem key={seller.id} value={seller.id}>{seller.name}</MenuItem>)}</TextField> : null}
+     </FilterBar>
+-    {overview?.warnings.map((warning, index) => <WarningNotice key={`${warning.code}-${index}`} testId="ff-reports-warning">{warningText(warning)}</WarningNotice>)}
+     {periodError ? <ErrorNotice testId="ff-reports-period-error">{periodError}</ErrorNotice> : null}
+     {summaryError ? <ErrorNotice testId="ff-reports-summary-error">Не удалось загрузить сводку. Повторите попытку. <PrimaryAction onClick={() => void retryOverview()}>Повторить</PrimaryAction></ErrorNotice> : <>
+@@ -344,16 +422,15 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
+     {csvError ? <ErrorNotice testId="ff-reports-csv-error">Не удалось скачать CSV. Повторите попытку.</ErrorNotice> : null}
+     <Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: 'center' }} data-testid="ff-reports-table-controls">
+-      <TextField select size="small" label="Группировка" value={grouping} onChange={event => { const next = event.target.value as Grouping; groupingRef.current = next; setGrouping(next); setExpandedSeller(null); void changeTable(next, 1) }} data-testid="ff-reports-grouping">
+-        <MenuItem value="seller">По селлерам</MenuItem><MenuItem value="product">По товарам</MenuItem><MenuItem value="operation">По операциям</MenuItem>
++      <TextField select size="small" label="Группировка" value={grouping} onChange={event => { const next = event.target.value as Grouping; groupingRef.current = next; setGrouping(next); setExpandedSeller(null); setExpandedProduct(null) }} data-testid="ff-reports-grouping">
++        <MenuItem value="product">По товарам</MenuItem><MenuItem value="operation">По операциям</MenuItem>
+       </TextField>
+       <PrimaryAction onClick={() => void downloadCsv()} disabledReason={csvDisabledReason} data-testid="ff-reports-download-csv">{csvLoading ? 'Формирование CSV…' : 'Скачать CSV'}</PrimaryAction>
+     </Stack>
+-    {tableError ? null : <>{grouping === 'seller' ? <DataTable<SellerRow> columns={[
+-      { key: 'seller', header: 'Селлер', render: row => <TextCell value={row.seller_name} /> },
++    {tableError ? null : <><DataTable<SellerRow> columns={[
++      { key: 'seller', header: 'Селлер', width: 320, render: row => <TextCell value={row.seller_name} width={310} /> },
+       { key: 'products', header: 'Товаров', align: 'right', width: 110, render: row => <QtyCell value={row.product_count} /> },
+-      { key: 'balance', header: <Typography component="span" variant="inherit" sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Остаток сейчас</Typography>, align: 'right', width: 120, render: row => <QtyCell value={row.current_balance} /> },
+-      { key: 'in', header: 'Приход', align: 'right', width: 100, render: row => <QtyCell value={row.total_in} /> },
+-      { key: 'out', header: 'Расход', align: 'right', width: 100, render: row => <QtyCell value={row.total_out} /> },
+-      { key: 'net', header: 'Нетто', align: 'right', width: 100, render: row => <QtyCell value={row.net} /> },
++      { key: 'in', header: 'Приход', align: 'right', width: 110, render: row => <QtyCell value={row.total_in} /> },
++      { key: 'out', header: 'Расход', align: 'right', width: 110, render: row => <QtyCell value={row.total_out} /> },
++      { key: 'balance', header: <Typography component="span" variant="inherit" sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Остаток сейчас</Typography>, align: 'right', width: 130, render: row => <QtyCell value={row.current_balance} /> },
+     ]} rows={sellerRows} getRowKey={row => row.seller_id || 'no-seller'} loading={loading || tableLoading} empty={{ title: 'За выбранный период движений нет', hint: 'Измените период или снимите фильтры.' }} testId="ff-reports-seller-table" expand={{
+       isExpanded: row => expandedSeller === (row.seller_id || 'no-seller'),
+@@ -363,52 +440,48 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
+         if (expandedSeller === key) { setExpandedSeller(null); return }
+         setExpandedSeller(key)
+-        setSellerProducts([]); setSellerOperations([])
++        setExpandedProduct(null)
++        setSellerProducts([]); setSellerOperations([]); setMovements([])
+         void loadSellerDetail(row.seller_id)
+       },
+-      render: () => sellerDetailError
++      render: row => sellerDetailError
+         ? <ErrorNotice testId="ff-reports-seller-detail-error">Не удалось загрузить движения селлера</ErrorNotice>
+-        : <Stack spacing={2} data-testid="ff-reports-seller-detail">
+-          <Box>
+-            <Typography variant="subtitle2" sx={{ mb: 1 }}>Виды движений</Typography>
+-            <DataTable<OperationRow> columns={[
+-              { key: 'operation', header: 'Движение', render: row => <TextCell value={row.operation} /> },
+-              { key: 'in', header: 'Приход', align: 'right', width: 100, render: row => <QtyCell value={row.in_qty} /> },
+-              { key: 'out', header: 'Расход', align: 'right', width: 100, render: row => <QtyCell value={row.out_qty} /> },
+-              { key: 'net', header: 'Нетто', align: 'right', width: 100, render: row => <QtyCell value={row.net} /> },
+-            ]} rows={sellerOperations} getRowKey={row => row.operation} loading={sellerDetailLoading} empty={{ title: 'Движений за период нет' }} testId="ff-reports-seller-operations" />
+-          </Box>
+-          <Box>
+-            <Typography variant="subtitle2" sx={{ mb: 1 }}>Товары</Typography>
+-            <DataTable<Row> columns={[
+-              { key: 'product', header: 'Товар', width: 105, render: row => <ProductCell sku={row.sku_code} photo={row.photo_url ? <img src={row.photo_url} alt="" width="32" height="32" /> : undefined} /> },
+-              { key: 'name', header: 'Название', render: row => <TextCell value={row.product_name} /> },
+-              { key: 'vendor', header: <Typography component="span" variant="inherit" sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Артикул продавца</Typography>, width: 120, render: row => <TextCell value={row.wb_vendor_code ?? '—'} width={110} /> },
+-              { key: 'barcode', header: 'ШК', width: 120, render: row => <TextCell value={row.wb_barcode ?? '—'} width={110} /> },
+-              { key: 'balance', header: <Typography component="span" variant="inherit" sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Остаток сейчас</Typography>, align: 'right', width: 105, render: row => <QtyCell value={row.current_balance ?? 0} /> },
+-              { key: 'in', header: 'Приход', align: 'right', width: 90, render: row => <QtyCell value={row.total_in} /> },
+-              { key: 'out', header: 'Расход', align: 'right', width: 90, render: row => <QtyCell value={row.total_out} /> },
+-              { key: 'net', header: 'Нетто', align: 'right', width: 90, render: row => <QtyCell value={row.net} /> },
+-            ]} rows={sellerProducts} getRowKey={row => row.product_id} loading={sellerDetailLoading} empty={{ title: 'Товаров за период нет' }} testId="ff-reports-seller-products" />
+-          </Box>
+-        </Stack>,
+-    }} /> : <DataTable<Row> columns={grouping === 'product' ? [
+-      { key: 'product', header: 'Товар', width: 105, render: row => <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><ProductCell sku={row.sku_code} photo={row.photo_url ? <img src={row.photo_url} alt="" width="32" height="32" /> : undefined} />{row.integrity_error ? <StatusChip label="Ошибка" tone="stop" testId="ff-reports-row-integrity-error" /> : null}</Stack> },
+-      { key: 'name', header: 'Название', width: 125, render: row => <TextCell value={row.product_name} width={115} /> },
+-      { key: 'vendor', header: <Typography component="span" variant="inherit" sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Артикул продавца</Typography>, width: 120, render: row => <TextCell value={row.wb_vendor_code ?? '—'} width={110} /> },
+-      { key: 'barcode', header: 'ШК', width: 120, render: row => <TextCell value={row.wb_barcode ?? '—'} width={110} /> },
+-      ...(sellers.length > 0 ? [{ key: 'seller', header: 'Селлер', width: 90, render: (row: Row) => <TextCell value={row.seller_name ?? '—'} width={80} /> }] : []),
+-      { key: 'balance', header: <Typography component="span" variant="inherit" sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Остаток сейчас</Typography>, align: 'right', width: 105, render: row => <QtyCell value={row.current_balance ?? 0} /> },
+-      { key: 'in', header: 'Приход', align: 'right', width: 65, render: row => <QtyCell value={row.total_in} /> },
+-      { key: 'out', header: 'Расход', align: 'right', width: 65, render: row => <QtyCell value={row.total_out} /> },
+-      { key: 'net', header: 'Нетто', align: 'right', width: 65, render: row => <QtyCell value={row.net} /> },
+-    ] : [
+-      { key: 'operation', header: 'Операция', width: 260, render: row => <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><TextCell value={(row as Row & { operation?: string }).operation ?? '—'} />{row.integrity_error ? <StatusChip label="Ошибка" tone="stop" testId="ff-reports-row-integrity-error" /> : null}</Stack> },
+-      { key: 'in', header: 'Приход', width: 130, align: 'right', render: row => { const value = row.total_in ?? (row as Row & { in_qty?: number }).in_qty ?? 0; return <QtyCell value={row.integrity_error && value === 0 ? null : value} /> } },
+-      { key: 'out', header: 'Расход', width: 130, align: 'right', render: row => { const value = row.total_out ?? (row as Row & { out_qty?: number }).out_qty ?? 0; return <QtyCell value={row.integrity_error && value === 0 ? null : value} /> } },
+-      { key: 'net', header: 'Нетто', width: 130, align: 'right', render: row => <QtyCell value={row.net} /> },
+-    ]} rows={rows} getRowKey={row => row.product_id ?? (row as Row & { operation?: string }).operation ?? 'report-row'} loading={loading || tableLoading} empty={{ title: 'За выбранный период движений нет', hint: 'Измените период или снимите фильтры.' }} testId="ff-reports-table" />}
++        : grouping === 'operation'
++          ? <DataTable<OperationRow> columns={[
++              { key: 'operation', header: 'Движение', width: 320, render: op => <TextCell value={op.operation} width={310} /> },
++              { key: 'in', header: 'Приход', align: 'right', width: 110, render: op => <QtyCell value={op.in_qty} /> },
++              { key: 'out', header: 'Расход', align: 'right', width: 110, render: op => <QtyCell value={op.out_qty} /> },
++            ]} rows={sellerOperations} getRowKey={op => op.operation} loading={sellerDetailLoading} empty={{ title: 'Движений за период нет' }} testId="ff-reports-seller-operations" expand={{
++              isExpanded: op => expandedOperation === op.operation,
++              label: op => `Показать движения: ${op.operation}`,
++              onToggle: op => {
++                if (expandedOperation === op.operation) { setExpandedOperation(null); return }
++                setExpandedOperation(op.operation)
++                setMovements([])
++                void loadMovements({ operation: op.operation }, row.seller_id)
++              },
++              render: () => movementsTable({ showProduct: true }),
++            }} />
++          : <DataTable<Row> columns={[
++              { key: 'product', header: 'Товар', width: 320, render: product => <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', minWidth: 0 }}><ProductPhotoThumb src={product.photo_url} alt={product.product_name} size={40} previewSize={280} testId={`ff-reports-photo-${product.product_id}`} /><Stack sx={{ minWidth: 0 }}><Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{product.product_name}</Typography><Typography variant="caption" color="text.secondary" noWrap>{[product.sku_code, product.wb_vendor_code].filter(Boolean).join(' · ')}</Typography></Stack></Stack> },
++              { key: 'barcode', header: 'ШК', width: 150, render: product => <TextCell value={product.wb_barcode ?? '—'} width={140} /> },
++              { key: 'in', header: 'Приход', align: 'right', width: 110, render: product => <QtyCell value={product.total_in} /> },
++              { key: 'out', header: 'Расход', align: 'right', width: 110, render: product => <QtyCell value={product.total_out} /> },
++              { key: 'balance', header: <Typography component="span" variant="inherit" sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Остаток сейчас</Typography>, align: 'right', width: 130, render: product => <QtyCell value={product.current_balance ?? 0} /> },
++            ]} rows={sellerProducts} getRowKey={product => product.product_id} loading={sellerDetailLoading} empty={{ title: 'Товаров за период нет' }} testId="ff-reports-seller-products" expand={{
++              isExpanded: product => expandedProduct === product.product_id,
++              label: product => `Показать движения товара ${product.product_name}`,
++              onToggle: product => {
++                if (expandedProduct === product.product_id) { setExpandedProduct(null); return }
++                setExpandedProduct(product.product_id)
++                setMovements([])
++                void loadMovements({ productId: product.product_id }, row.seller_id)
++              },
++              render: () => movementsTable({ showProduct: false }),
++            }} />,
++    }} />
++
+     <Stack direction="row" sx={{ py: 2, justifyContent: 'space-between', alignItems: 'center' }} data-testid="ff-reports-pagination">
+       <Typography variant="body2" color="text.secondary">{total === 0 ? '0 из 0' : `${(page - 1) * 50 + 1}–${Math.min(page * 50, total)} из ${total}`}</Typography>
+-      <ActionGroup><SecondaryAction data-testid="ff-reports-previous-page" disabledReason={page <= 1 ? 'Это первая страница' : undefined} onClick={() => void changeTable(grouping, page - 1)}>Назад</SecondaryAction><SecondaryAction data-testid="ff-reports-next-page" disabledReason={page * 50 >= total ? 'Это последняя страница' : undefined} onClick={() => void changeTable(grouping, page + 1)}>Вперёд</SecondaryAction></ActionGroup>
++      <ActionGroup><SecondaryAction data-testid="ff-reports-previous-page" disabledReason={page <= 1 ? 'Это первая страница' : undefined} onClick={() => void changeTable('seller', page - 1)}>Назад</SecondaryAction><SecondaryAction data-testid="ff-reports-next-page" disabledReason={page * 50 >= total ? 'Это последняя страница' : undefined} onClick={() => void changeTable('seller', page + 1)}>Вперёд</SecondaryAction></ActionGroup>
+     </Stack></>}
+   </Stack>
+diff --git a/frontend/src/screens/ff/FfStoragePage.tsx b/frontend/src/screens/ff/FfStoragePage.tsx
+index bb690e5d..72740371 100644
+--- a/frontend/src/screens/ff/FfStoragePage.tsx
++++ b/frontend/src/screens/ff/FfStoragePage.tsx
+@@ -20,5 +20,6 @@ type Measurement = {
+   volume_liters: string | null
+   dimensions_source: string | null
+-  liter_days: string
++  // Пусто, пока ночь по этому товару не начисляла: экран показывает прочерк.
++  liter_days: string | null
+   rate_snapshot: string | null
+   amount: string | null
+@@ -33,11 +34,10 @@ type Statement = {
+   status: 'draft' | 'fixed'
+   fixed_at: string | null
+-  total_liter_days: string
+-  total_amount: string
++  total_liter_days: string | null
++  total_amount: string | null
+   problem_count: number
+   measurements: Measurement[]
+ }
+ type StorageResponse = { tariff_configured: boolean; tariff_revision: number; warehouses: { id: string; name: string }[]; statements: Statement[] }
+-type TariffCreateResponse = { recalculated_statements: Statement[] }
+ type HistoryRow = { id: string; created_at: string; source: string; length_mm: number | null; width_mm: number | null; height_mm: number | null; volume_liters: string | null; author_name: string | null; is_current: boolean }
+ type BackgroundJob = { id: string; status: string; error_message?: string | null }
+@@ -54,5 +54,7 @@ const MINIMUM_RATE_BEFORE_CURRENCY_ROUNDING = 0.005
+ const MINIMUM_STORAGE_RATE_MESSAGE = 'Минимальная сохраняемая ставка — 0,01 ₽/л·день'
+ export const STORAGE_TARIFF_SCOPE_LABEL = 'Все операционные склады'
+-const statusLabel = (statement: Statement) => statement.status === 'fixed' ? 'Зафиксирован' : statement.problem_count ? 'Требует исправления' : 'Черновик'
++// Фиксации расчёта больше нет: деньги за хранение пишет ночная задача. Статус
++// «Зафиксирован» остаётся только у документов, закрытых до этого перехода.
++const statusLabel = (statement: Statement) => statement.status === 'fixed' ? 'Зафиксирован' : statement.problem_count ? 'Требует исправления' : 'Рассчитан'
+ const statusTone = (statement: Statement) => statement.status === 'fixed' ? 'ok' as const : statement.problem_count ? 'stop' as const : 'neutral' as const
+ const sourceLabel = (source: string | null) => ({ manual: 'Ручной обмер', wb: 'Wildberries', wildberries: 'Wildberries', container: 'Объём тары', container_override: 'Объём тары' }[source ?? ''] ?? 'Неизвестно')
+@@ -110,19 +112,4 @@ export function buildStorageTariffPayload({
+ }
+ 
+-export function mergeRecalculatedStorageStatements<T extends { id: string }>(current: readonly T[], recalculated: readonly T[]) {
+-  const recalculatedById = new Map(recalculated.map((statement) => [statement.id, statement]))
+-  return current.map((statement) => recalculatedById.get(statement.id) ?? statement)
+-}
+-
+-export function mergeRecalculatedStorageData<T extends { statements: readonly { id: string }[] }>(
+-  current: T,
+-  recalculated: readonly T['statements'][number][],
+-): T & { statements: T['statements'][number][] } {
+-  return {
+-    ...current,
+-    statements: mergeRecalculatedStorageStatements(current.statements, recalculated),
+-  }
+-}
+-
+ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmin: boolean; token: string }) {
+   const [search, setSearch] = useState('')
+@@ -220,5 +207,13 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
+     throw new Error('job_timeout')
+   }
+-  async function generate() {
++  /**
++   * Пересчёт расчёта после внесения обмера.
++   *
++   * Кнопки «Сформировать за месяц» больше нет: деньги за хранение пишет ночная
++   * задача, а витрину она же обновляет. Но обмер, внесённый только что, должен
++   * быть виден сразу — иначе оператор заполнил габариты и продолжает смотреть
++   * на «Нет габаритов» до следующей ночи.
++   */
++  async function refreshCalculation() {
+     setActionLoading(true); setError(null)
+     try {
+@@ -239,5 +234,5 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
+         await request(`/products/${measure.product_id}/dimensions/container`, { method: 'POST', body: JSON.stringify({ volume_liters: Number(containerVolume.replace(',', '.')), container_basis: containerBasis }) })
+       }
+-      setMeasure(null); await generate()
++      setMeasure(null); await refreshCalculation()
+     } catch { setError('Не удалось сохранить обмер. Проверьте заполненные поля.') }
+     finally { setActionLoading(false) }
+@@ -251,15 +246,8 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
+     if (!historyProductId) return
+     setActionLoading(true)
+-    try { await request(`/products/${historyProductId}/dimensions/restore-wb`, { method: 'POST' }); setHistoryProductId(null); await generate() }
++    try { await request(`/products/${historyProductId}/dimensions/restore-wb`, { method: 'POST' }); setHistoryProductId(null); await refreshCalculation() }
+     catch { setHistoryError('Не удалось вернуть данные Wildberries. Повторите попытку') }
+     finally { setActionLoading(false) }
+   }
+-  async function fix() {
+-    if (!expanded) return
+-    setActionLoading(true); setError(null)
+-    try { const result = await request(`/operations/storage/statements/${expanded.id}/fix`, { method: 'POST' }) as Statement; setPrintStatement(result); await load() }
+-    catch { setError('Не удалось зафиксировать расчёт. Повторите попытку') }
+-    finally { setActionLoading(false) }
+-  }
+   async function openPrint(statement: Statement) {
+     setActionLoading(true)
+@@ -302,6 +290,8 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
+         }),
+       })
+-      const result = await request('/operations/storage/tariffs', { method: 'POST', body: JSON.stringify(tariffBody) }) as TariffCreateResponse
+-      if (!Array.isArray(result?.recalculated_statements)) throw new Error('recalculation_result_missing')
++      // Ставка сохранена — дальше просто перечитываем список. Пересчитанных
++      // ведомостей сервер не возвращает: новая ставка работает с ближайшей ночи
++      // и уже начисленное не переписывает.
++      await request('/operations/storage/tariffs', { method: 'POST', body: JSON.stringify(tariffBody) })
+       setRateSellerId('')
+       setData(null)
+@@ -317,5 +307,5 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
+ 
+   return <Box data-testid="ff-storage-page" sx={{ minWidth: 0, width: { xs: 'calc(100vw - 48px)', md: 'calc(100vw - 308px)' }, maxWidth: '100%' }}>
+-    <ScreenHeader title="Хранение" purpose="Рассчитайте фактическое хранение по селлерам и зафиксируйте месяц для начисления" />
++    <ScreenHeader title="Хранение" purpose="Проверьте фактическое хранение по селлерам и внесите недостающие габариты — начисления считаются каждую ночь" />
+     <FilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Селлер, SKU или артикул продавца" testId="storage-filters">
+       <DatePicker
+@@ -351,5 +341,4 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
+     {error && <ErrorNotice testId="storage-error">{error}</ErrorNotice>}
+     <ActionGroup>
+-      <PrimaryAction data-testid="storage-generate" disabledReason={actionLoading ? 'Формирование уже запущено' : undefined} onClick={() => void generate()}>{actionLoading ? 'Формируем…' : 'Сформировать за месяц'}</PrimaryAction>
+       {isFulfillmentAdmin && data && <SecondaryAction data-testid="storage-rate" onClick={openRate}>{data.tariff_configured ? 'Изменить тариф' : 'Задать тариф'}</SecondaryAction>}
+     </ActionGroup>
+@@ -361,10 +350,10 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
+         { key: 'total', header: 'Сумма, ₽', width: 140, align: 'right', render: (row: Statement) => decimal(row.total_amount, 2) },
+         { key: 'problems', header: 'Проблемы', width: 110, align: 'right', render: (row: Statement) => row.problem_count },
+-        { key: 'actions', header: 'Действия', width: 120, align: 'center', render: (row: Statement) => <Stack direction="row"><IconAction title={expandedId === row.id ? 'Закрыть расчёт селлера' : 'Открыть расчёт селлера'} onClick={() => setExpandedId(expandedId === row.id ? null : row.id)} testId={`storage-expand-${row.id}`}><ExpandMoreIcon /></IconAction>{row.status === 'fixed' && <PrintAction what="накладную" placement="row" onClick={() => void openPrint(row)} testId={`storage-print-${row.id}`} />}</Stack> },
++        { key: 'actions', header: 'Действия', width: 120, align: 'center', render: (row: Statement) => <Stack direction="row"><IconAction title={expandedId === row.id ? 'Закрыть расчёт селлера' : 'Открыть расчёт селлера'} onClick={() => setExpandedId(expandedId === row.id ? null : row.id)} testId={`storage-expand-${row.id}`}><ExpandMoreIcon /></IconAction><PrintAction what="накладную" placement="row" onClick={() => void openPrint(row)} testId={`storage-print-${row.id}`} /></Stack> },
+       ]} rows={statements} getRowKey={(row) => row.id} loading={loading} empty={data?.tariff_configured === false ? { title: 'Тариф хранения ещё не задан', hint: isFulfillmentAdmin ? 'Задайте цену за литр-день и дату начала, чтобы сформировать первый расчёт' : 'Обратитесь к администратору ФФ, чтобы задать тариф хранения.' } : { title: 'Ничего не найдено — измените поиск или фильтры' }} testId="storage-seller-table" />
+       {expanded && <Box sx={{ p: 2, mt: 1, minWidth: 0, maxWidth: '100%', overflow: 'hidden', borderLeft: 4, borderColor: 'primary.main', '& [data-testid="storage-sku-table"]': { maxWidth: '100%', overflowX: 'auto' }, '& [data-testid="storage-sku-table"] .MuiTable-root': { tableLayout: 'fixed', width: '100%' }, '& [data-testid="storage-sku-table"] .MuiTableCell-root': { px: 1, overflow: 'hidden', textOverflow: 'ellipsis' } }} data-testid="storage-detail">
+         <Typography variant="h6">Расчёт селлера {expanded.seller_name} за {formatMonth(month)}</Typography>
+         <Typography color="text.secondary">{expanded.warehouse_name}</Typography>
+-        {missingCount > 0 && <ErrorNotice>Расчёт нельзя зафиксировать: устраните проблемы в строках ниже</ErrorNotice>}
++        {missingCount > 0 && <ErrorNotice>Хранение этих товаров не начисляется, пока не внесены габариты — заполните строки ниже</ErrorNotice>}
+         <DataTable columns={[
+           { key: 'product', header: 'Товар', width: 200, render: (row: Measurement) => <Stack spacing={0.25} sx={{ minWidth: 0 }}><Typography component="div" variant="body2" sx={{ fontWeight: 600 }}><TextCell value={row.product_name || row.sku} width={200} /></Typography><Typography component="div" variant="caption" color="text.secondary"><TextCell value={[row.sku, row.seller_article].filter(Boolean).join(' · ')} width={200} /></Typography></Stack> },
+@@ -379,5 +368,4 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
+           { key: 'actions', header: 'Действия', width: 115, render: (row: Measurement) => row.status === 'missing_dimensions' ? <PrimaryAction onClick={() => setMeasure(row)}>Внести обмер</PrimaryAction> : <IconAction title="История габаритов" testId={`storage-history-${row.product_id}`} onClick={() => void openHistory(row.product_id)}><HistoryOutlinedIcon /></IconAction> },
+         ]} rows={expanded.measurements} getRowKey={(row) => row.product_id} testId="storage-sku-table" />
+-        {isFulfillmentAdmin && expanded.status === 'draft' && <ActionGroup><PrimaryAction data-testid="storage-fix" disabledReason={missingCount ? `Нет габаритов у ${missingCount} товара` : actionLoading ? 'Фиксация выполняется' : undefined} onClick={() => void fix()}>Зафиксировать</PrimaryAction></ActionGroup>}
+       </Box>}
+     </Box>

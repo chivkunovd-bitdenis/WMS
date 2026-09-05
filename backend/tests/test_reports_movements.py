@@ -193,3 +193,130 @@ async def test_movements_require_a_product_or_an_operation(async_client: AsyncCl
         "/reports/inventory/movements", headers=headers, params=PERIOD
     )
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("has_recipe_ids", [True, False])
+async def test_ozon_report_links_exact_recipe_movement_ids_only(
+    async_client: AsyncClient, has_recipe_ids: bool,
+) -> None:
+    from app.models.fbs_order import FbsOrder
+    from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
+
+    headers, tenant_id, seller_id, warehouse_id, location_id = await _context(async_client)
+    product_ids = [await _movement(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+        location_id=location_id, quantity_delta=5,
+    ) for _ in range(2)]
+    movement_ids = [uuid.uuid4() for _ in range(4)]
+    async with SessionLocal() as session:
+        order = FbsOrder(
+            tenant_id=tenant_id, seller_id=uuid.UUID(seller_id), marketplace="ozon",
+            wb_order_id=-812345, external_order_id="ORDER-OZON-RECIPE",
+            product_id=product_ids[0], warehouse_id=uuid.UUID(warehouse_id),
+            created_at_wb=datetime(2026, 8, 1, tzinfo=UTC),
+            deadline_at=datetime(2026, 8, 2, tzinfo=UTC),
+            mapping_status="mapped", reserve_status="no_stock",
+        )
+        session.add(order)
+        await session.flush()
+        # Two products and repeated source/product in the same second. The
+        # fourth movement is another operation and must not be guessed into order.
+        for index, movement_id in enumerate(movement_ids):
+            session.add(InventoryMovement(
+                id=movement_id, tenant_id=tenant_id,
+                product_id=product_ids[index % 2], seller_id=uuid.UUID(seller_id),
+                warehouse_id=uuid.UUID(warehouse_id),
+                storage_location_id=uuid.UUID(location_id), quantity_delta=-1,
+                movement_type="fbs_shipment", created_at=datetime(2026, 8, 1, 12, tzinfo=UTC),
+            ))
+        await session.flush()
+        session.add(FbsShipmentReversalLedger(
+            tenant_id=tenant_id, fbs_order_id=order.id, product_id=product_ids[0],
+            storage_location_id=uuid.UUID(location_id), quantity=3,
+            shipment_movement_id=movement_ids[0],
+            ozon_positions_json=[{
+                "product_id": str(product_ids[index % 2]),
+                "storage_location_id": location_id, "quantity": 1,
+                **({"movement_id": str(movement_id)} if has_recipe_ids else {}),
+            } for index, movement_id in enumerate(movement_ids[:3])],
+        ))
+        await session.commit()
+    response = await async_client.get(
+        "/reports/inventory/movements", headers=headers,
+        params={**PERIOD, "operation": "FBS"},
+    )
+    assert response.status_code == 200, response.text
+    documents = {row["id"]: row["document"] for row in response.json()["rows"]}
+    expected = movement_ids[:3] if has_recipe_ids else movement_ids[:1]
+    for movement_id in expected:
+        assert documents[str(movement_id)]["number"] == "Заказ ORDER-OZON-RECIPE"
+    for movement_id in set(movement_ids) - set(expected):
+        assert documents[str(movement_id)] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("search", ["OZON-ONLY-OFFER", "OZON-ONLY-SKU"])
+async def test_ozon_identity_search_has_one_scope_for_rows_overview_and_csv(
+    async_client: AsyncClient, search: str,
+) -> None:
+    from app.models.inventory_balance import InventoryBalance
+    from app.models.product_marketplace_link import ProductMarketplaceLink
+
+    headers, tenant_id, seller_id, warehouse_id, location_id = await _context(async_client)
+    product_id = await _movement(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+        location_id=location_id, quantity_delta=7,
+    )
+    await _movement(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+        location_id=location_id, product_id=product_id, quantity_delta=-2,
+    )
+    # An unrelated product must not inflate search totals.
+    unrelated_id = await _movement(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+        location_id=location_id, quantity_delta=100,
+    )
+    await _movement(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+        location_id=location_id, product_id=product_id, quantity_delta=-3,
+        created_at=datetime(2026, 7, 31, 12, tzinfo=UTC),
+    )
+    async with SessionLocal() as session:
+        session.add(ProductMarketplaceLink(
+            tenant_id=tenant_id, seller_id=uuid.UUID(seller_id), product_id=product_id,
+            marketplace="ozon", external_offer_id="OZON-ONLY-OFFER",
+            external_sku="OZON-ONLY-SKU", is_active=True,
+        ))
+        session.add(InventoryBalance(
+            tenant_id=tenant_id, product_id=product_id,
+            storage_location_id=uuid.UUID(location_id), quantity=15,
+        ))
+        session.add(InventoryBalance(
+            tenant_id=tenant_id, product_id=unrelated_id,
+            storage_location_id=uuid.UUID(location_id), quantity=100,
+        ))
+        await session.commit()
+    query = {**PERIOD, "search": search}
+    response = await async_client.get("/reports/overview", headers=headers, params=query)
+    assert response.status_code == 200, response.text
+    overview = response.json()
+    assert (overview["in_qty"], overview["out_qty"]) == (7, 2)
+    assert overview["current_balance"] == 15
+    assert overview["opening_balance"] == 10
+    assert overview["comparison"]["previous_out_qty"] == 3
+    for grouping in ("seller", "product", "operation"):
+        response = await async_client.get(
+            "/reports/inventory", headers=headers, params={**query, "group_by": grouping},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["rows"]
+        if grouping == "product":
+            assert [row["product_id"] for row in response.json()["rows"]] == [str(product_id)]
+        if grouping == "seller":
+            assert response.json()["rows"][0]["current_balance"] == 15
+    csv = await async_client.get(
+        "/reports/inventory/export.csv", headers=headers, params={**query, "group_by": "product"},
+    )
+    assert csv.status_code == 200, csv.text
+    assert "Moved product" in csv.text

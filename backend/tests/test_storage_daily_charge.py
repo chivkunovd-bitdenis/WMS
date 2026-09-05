@@ -507,3 +507,23 @@ async def test_invoiced_day_is_topped_up_by_a_separate_line(
     async with SessionLocal() as session:
         assert await charge_storage_day(session, tenant_id, day=day) == 0
     assert len(await _storage_entries(tenant_id)) == 2
+
+    # The editable storage statement must show the same ledger total, including
+    # the supplementary charge whose base entry is already attached to an invoice.
+    from app.models.storage_measurement import StorageMeasurement
+    from app.models.storage_statement import StorageStatement
+    from app.services.storage_statement_service import get_storage_night_charges_batch
+
+    statement = StorageStatement(
+        id=uuid.uuid4(), tenant_id=tenant_id, seller_id=seller_id,
+        warehouse_id=after[0].warehouse_id, period_start=day, period_end=day,
+    )
+    measurement = StorageMeasurement(product_id=_product_id)
+    async with SessionLocal() as session:
+        charges = await get_storage_night_charges_batch(
+            session, tenant_id, [statement], {statement.id: [measurement]},
+        )
+    actual = charges[statement.id][_product_id]
+    assert actual.liter_days == full
+    amounts = [entry.amount for entry in after if entry.amount is not None]
+    assert actual.amount_kopecks == (sum(amounts) if amounts else None)

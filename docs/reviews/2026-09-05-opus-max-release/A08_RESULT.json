@@ -1,0 +1,74 @@
+{
+  "database": "wms375_a08_pre0252",
+  "revision": [
+    "20260904_0251"
+  ],
+  "transaction_read_only": "on",
+  "units_products": 82,
+  "pool_rows": 206,
+  "null_allocated_at_rows": 0,
+  "migration_sort_ties": 0,
+  "spent_difference_rows": 1,
+  "old_raw_vs_new_raw": {
+    "rows": 206,
+    "different_rows": 1,
+    "lower_rows": 1,
+    "higher_rows": 0,
+    "decrease_units": 1,
+    "increase_units": 0,
+    "left_total": 2424,
+    "right_total": 2423
+  },
+  "old_counter_with_identical_cap_vs_0252": {
+    "rows": 206,
+    "different_rows": 0,
+    "lower_rows": 0,
+    "higher_rows": 0,
+    "decrease_units": 0,
+    "increase_units": 0,
+    "left_total": 2423,
+    "right_total": 2423
+  },
+  "stored_quantity_vs_0252": {
+    "rows": 206,
+    "different_rows": 80,
+    "lower_rows": 80,
+    "higher_rows": 0,
+    "decrease_units": 233,
+    "increase_units": 0,
+    "left_total": 2656,
+    "right_total": 2423
+  },
+  "stored_quantity_same_cap_vs_0252": {
+    "rows": 206,
+    "different_rows": 57,
+    "lower_rows": 32,
+    "higher_rows": 25,
+    "decrease_units": 83,
+    "increase_units": 83,
+    "left_total": 2423,
+    "right_total": 2423
+  },
+  "baseline_publication_vs_0252_stored_quantity": {
+    "rows": 206,
+    "different_rows": 0,
+    "lower_rows": 0,
+    "higher_rows": 0,
+    "decrease_units": 0,
+    "increase_units": 0,
+    "left_total": 2423,
+    "right_total": 2423
+  },
+  "by_cutoff": {
+    "dated_cutoff": {
+      "rows": 206,
+      "different_rows": 0,
+      "lower_rows": 0,
+      "higher_rows": 0,
+      "decrease_units": 0,
+      "increase_units": 0,
+      "left_total": 2423,
+      "right_total": 2423
+    }
+  }
+}
