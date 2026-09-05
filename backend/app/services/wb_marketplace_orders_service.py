@@ -732,7 +732,10 @@ async def _apply_wb_status_to_order(
     )
 
     if any(_is_cancel_like_wb_status(status) for status in effective_statuses):
-        from app.services.fbs_cancellation_service import reverse_fbs_shipment_if_needed
+        from app.services.fbs_cancellation_service import (
+            reverse_fbs_order_billing,
+            reverse_fbs_shipment_if_needed,
+        )
         from app.services.fbs_packaging_integration_service import (
             detach_cancelled_order_from_supply,
         )
@@ -743,6 +746,10 @@ async def _apply_wb_status_to_order(
             order,
             actor_user_id=actor_user_id,
         )
+        # WB отменил уже подтверждённый заказ: начисление за него сняли, а
+        # работы не было. Сторно идёт ровно сюда — руками такой заказ отменить
+        # нельзя, статусы sorted и done в отмену не пускают.
+        await reverse_fbs_order_billing(session, order, performer_id=actor_user_id)
         await detach_cancelled_order_from_supply(
             session,
             order.tenant_id,

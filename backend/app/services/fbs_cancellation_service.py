@@ -18,6 +18,16 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_SORTED,
     FbsOrder,
 )
+from app.services.billing_ledger_service import (
+    PACKING_SERVICE_CODE,
+    record_operational_reversal,
+)
+from app.services.fbs_order_billing_service import (
+    FBS_ORDER_SERVICE_CODE,
+)
+from app.services.fbs_order_billing_service import (
+    SOURCE_TYPE as FBS_ORDER_BILLING_SOURCE_TYPE,
+)
 from app.services.marketplace_account_service import (
     MarketplaceAccountError,
     MarketplaceAccountService,
@@ -101,6 +111,45 @@ async def reverse_fbs_shipment_if_needed(
     return False
 
 
+async def reverse_fbs_order_billing(
+    session: AsyncSession,
+    order: FbsOrder,
+    *,
+    performer_id: uuid.UUID | None = None,
+) -> None:
+    """Снять с селлера деньги за отменённый заказ.
+
+    Начисление появляется, когда маркетплейс подтвердил, что забрал заказ. После
+    этого заказ всё ещё может отмениться — покупателем или самим маркетплейсом, —
+    и без сторно селлер платит за работу, которой не было. Отменяем обе строки
+    документа: и сборку заказа, и упаковку по нему.
+
+    Второе сторно появиться не может: начисление, у которого сторно уже есть,
+    перестаёт быть активным, и повторная отмена возвращает прежнюю строку, не
+    создавая новую. Речь только про деньги — товар отмена не приходует, для
+    этого нужен документ возврата.
+
+    Точка сохранения обязательна: отмена заказа не должна падать из-за биллинга.
+    Ошибка на стороне базы иначе переводит всю транзакцию в аварийное состояние,
+    и вместе с начислением откатились бы статус заказа и снятие резерва.
+    """
+    try:
+        async with session.begin_nested():
+            occurred_at = datetime.now(UTC)
+            for service_code in (FBS_ORDER_SERVICE_CODE, PACKING_SERVICE_CODE):
+                await record_operational_reversal(
+                    session,
+                    tenant_id=order.tenant_id,
+                    source_type=FBS_ORDER_BILLING_SOURCE_TYPE,
+                    source_id=order.id,
+                    occurred_at=occurred_at,
+                    performer_id=performer_id,
+                    service_code=service_code,
+                )
+    except Exception:
+        logger.exception("fbs order billing reversal skipped: order_id=%s", order.id)
+
+
 def penalty_band_for_order(created_at_wb: datetime) -> str:
     """WB cancel penalty window band (logged only in MVP)."""
     now = datetime.now(tz=UTC)
@@ -138,6 +187,7 @@ async def _finish_local_cancellation(
         order,
         actor_user_id=actor_user_id,
     )
+    await reverse_fbs_order_billing(session, order, performer_id=actor_user_id)
     from app.services.fbs_packaging_integration_service import (
         detach_cancelled_order_from_supply,
     )
