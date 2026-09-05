@@ -67,12 +67,31 @@ type SellerStaffAccountRow = {
 type OzonAccountStatus = {
   marketplace: 'ozon'
   connected: boolean
+  live_exchange_enabled?: boolean
   validation_status: 'not_configured' | 'valid' | 'invalid' | 'unavailable'
   last_validated_at: string | null
   last_validation_error: string | null
   credentials_updated_at: string | null
   last_synced_at: string | null
   last_sync_error: string | null
+}
+
+export function resolveOzonAccountDisplay(status: Pick<OzonAccountStatus, 'connected' | 'validation_status' | 'live_exchange_enabled'> | null) {
+  if (!status?.connected) return { label: 'Не подключено', exchangeDisabled: false }
+  if (status.validation_status !== 'valid') {
+    return {
+      label: status.validation_status === 'invalid' ? 'Подключение требует проверки' : 'Проверка подключения недоступна',
+      exchangeDisabled: false,
+    }
+  }
+  return {
+    label: status.live_exchange_enabled === true
+      ? 'Подключено, обмен включён'
+      : status.live_exchange_enabled === false
+        ? 'Ключ принят, обмен не включён'
+        : 'Ключ принят',
+    exchangeDisabled: status.live_exchange_enabled === false,
+  }
 }
 
 const DEFAULT_STAFF_PERMISSIONS: SellerPermissions = {
@@ -841,15 +860,7 @@ export function SellerSettingsScreen({
             </Alert>
           ) : null}
           {ozonOk ? <Alert severity="success">{ozonOk}</Alert> : null}
-          {/*
-            Проверка ключа ходит в Ozon по-настоящему (`validate_ozon_credentials`
-            со своим httpx-клиентом), а вот рабочий обмен — заказы, статусы,
-            остатки — идёт через `ozon_provider_factory` и включается настройкой
-            `WMS_OZON_LIVE_API` (`settings.ozon_live_api_enabled`). На бою она
-            выключена, поэтому «Подключено» обещало селлеру заказы, которых не
-            будет. Когда обмен включат, этот блок и слово в статусе снимаются.
-          */}
-          {!ozonError && ozonStatus?.connected && ozonStatus.validation_status === 'valid' ? (
+          {!ozonError && resolveOzonAccountDisplay(ozonStatus).exchangeDisabled ? (
             <Alert severity="info" data-testid="seller-settings-ozon-not-live">
               Ozon подтвердил Client-Id и Api-Key — ключ рабочий. Но обмен с Ozon мы ещё не
               включили: заказы, статусы и остатки не передаются. Заказы Ozon в системе пока не
@@ -860,11 +871,7 @@ export function SellerSettingsScreen({
             <>
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                 <Typography data-testid="seller-settings-ozon-status" variant="body2">
-                  {ozonStatus.validation_status === 'valid'
-                    ? 'Ключ принят, обмен не включён'
-                    : ozonStatus.validation_status === 'invalid'
-                      ? 'Подключение требует проверки'
-                      : 'Проверка подключения недоступна'}
+                  {resolveOzonAccountDisplay(ozonStatus).label}
                 </Typography>
                 {ozonStatus.last_validated_at ? (
                   <Typography variant="body2" color="text.secondary">

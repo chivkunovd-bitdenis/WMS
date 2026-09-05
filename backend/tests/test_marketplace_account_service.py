@@ -193,6 +193,7 @@ async def test_tc_s32_ozon_008_real_db_disconnect_erases_ciphertext_and_public_s
         assert set(status) == {
             "marketplace",
             "connected",
+        "live_exchange_enabled",
             "validation_status",
             "last_validated_at",
             "last_validation_error",
