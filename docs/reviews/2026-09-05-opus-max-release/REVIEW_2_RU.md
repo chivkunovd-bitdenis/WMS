@@ -342,3 +342,112 @@ WHERE p.fbs_units_mode AND pool.quantity = 0;
 Из накопленного релиза одна находка требует правки до того, как продавцы начнут пользоваться Ozon всерьёз, — обнуление ненастроенных товаров (P0-1), и она чинится одной строкой по образцу вайлдберрисовского пути. Следом за ней сами уходят P1-2 и P2-3. Остальное — либо взведённые, но пока недостижимые с фронта мины (P2-4, P2-5), либо разовое последствие миграции, которое нужно сверить с базой (P2-6), либо отсутствие блокировки на событийной публикации (P2-7).
 
 Прежние три P1 закрыты по-настоящему, а не переименованы: в каждом случае я нашёл конкретную строку, которая делает исправление, и там, где было можно, — тест, который его держит.
+
+
+---
+
+# Незавершённая дочитка второго ревью — сохранённая история
+
+Оркестратор остановил дополнительный проход SIGINT после вопроса владельца о сроках и повторного чтения уже просмотренных зон. Основное ревью выше завершено успешно; у дочитки **нет финального заключения**. Ниже только видимые промежуточные сообщения автора без редакторской подмены. Все команды и результаты сохранены в REVIEW_2_HISTORY.jsonl; вынесенные CLI результаты — в REVIEW_2_OUTPUTS/.
+
+**Граница независимости:** основной отчёт был закончен до доступа к первому. В дочитке широкий grep дважды вывел фрагменты REVIEW_1_RU.md; автор сам отметил это в сообщениях. Поэтому дополнение нельзя считать полностью слепым к первому ревью. Отдельная CLI-сессия не равна файловой изоляции. Промежуточные утверждения о найденных ошибках не являются проверенным финальным вердиктом.
+
+## Видимые сообщения дочитки в порядке появления
+
+I'll start by reading the brief and my own prior report to understand what was already covered.
+
+Tree confirmed identical to target SHA for all code paths. Now let me size up the unreviewed areas.
+
+Starting with the FBS operator flow — the highest-risk area per the owner. `fbs_workspace_service` has the largest rewrite and is where navigation blockers would live.
+
+Box service reviewed. Now the picking/worklist/supply group.
+
+Now the print subsystem — owner flagged печать/ЧЗ as sensitive.
+
+Now the frontend print path — I need to identify which dialog is actually mounted.
+
+The brief's file list doesn't match the actual diff. Let me verify precisely.
+
+I made a working-directory error — an earlier `cd frontend` persisted. Correcting and re-verifying.
+
+I'll resume with absolute paths, starting with the mounted frontend print path.
+
+Print path mapped. Now the billing/money block.
+
+Reports covered. Moving to inventory counts.
+
+I'll continue the assigned coverage with the remaining services and APIs.
+
+I'll continue the coverage: `fbs_order_history_service.py` and the remaining FBS frontend screens.
+
+I'll continue with the money paths — reading the remaining billing and reporting diffs.
+
+Note: that grep surfaced two lines from `REVIEW_1_RU.md`; I did not open it and will scope further searches to `backend/`/`frontend/` only. Continuing with the packing-charge callers.
+
+Full changed-file inventory captured (155 files). Now the reports/storage API surface.
+
+R2-A1 is now proven on both sides. Reading the new movements report.
+
+Reports block done — found a search-scope mismatch. Now the print/marking block.
+
+Correcting an earlier item: that `?? meta.sku_code` fallback was already dead code. Now the marking print dialog.
+
+Print block verified: with the build flag off, no printed label changes. Now the remaining FBS services.
+
+I'll continue with the remaining FBS services from the brief's list.
+
+I'll finish the inventory-deduction verification first, then continue down the brief's list.
+
+On-disk code matches the production target exactly. Now the deduction ordering.
+
+The arithmetic is self-consistent only if the intermediate balance writes are flushed. Checking the session factory.
+
+Arithmetic is self-consistent — balance writes are Core UPDATEs in the same transaction, so each recursive slice sees the previous one. Now how the deductions reach the operator.
+
+Zero rows are filtered at api/inventory_counts.py:915. Let me check what `pool.quantity` represents relative to the operator's number.
+
+`fbs_stock_pool_debit.py` still exists as a model — checking whether the removed journal left a live table behind.
+
+The debit table/model survives with no production reader. Now the operator's number in `fbs_stock_rule_service`.
+
+`pool.quantity` is both the operator's saved number (written line 653, read back line 258) and a live counter. Let me verify what decrements it and what publishes from it.
+
+Confirmed: `pool.quantity` is decremented on reserve (line 225) and on count shortfall (line 306). Now the publication formula and the release boundary.
+
+Migration 0251 (`fbs_units_mode`) predates the release. Let me read the model diff and migration 0252.
+
+Migration 0252 overwrites the operator's saved number with a computed availability figure. Reading the publication formula.
+
+This is a strong lead. Let me verify how the operator's form loads and re-posts these numbers.
+
+The form seeding is unchanged, so that ratchet is pre-existing — not a release regression. Let me record the migration-0252 mechanism and move to the unread list, starting with infra.
+
+CI adds a backlog gate; prod compose adds only the Ozon flag. Let me check the label-template flag and the backlog script.
+
+Note: that grep leaked `REVIEW_1_RU.md` content again despite the exclude glob — I'll disclose it. Checking the backlog gate's base ref.
+
+CI triggers only on `pull_request`/`workflow_dispatch`, and `origin/etalon` exists — the fallback is sound. Now the real print path and the label-template panel.
+
+The label panel renders nothing when the flag is off — clean. `ProductBarcodePrintDialog` is mounted only in the seller portal; the FF path is the provider. Reading it.
+
+Print path is flag-gated and byte-identical with the flag off. Moving to the billing cluster.
+
+The ledger fix is sound. Critical question: do all reversal callers pass `service_code` where a document now carries two charges?
+
+`order_work_moment` back-dates FBS charges to the work date. Let me check whether an invoice already issued for that period would then miss them.
+
+Two proven billing findings so far. Let me size the remaining FBS and misc services.
+
+I'll read the completed storage_statement_service diff, then continue down the brief's remaining list.
+
+R2-A1 now has hard evidence. Let me confirm the divergent side — how the seller report and invoice read the same rows.
+
+Storage divergence (R2-A1) is now proven on both sides. Moving to the reporting layer.
+
+The reports screen was restructured substantially. Let me verify what happened to the warning banners and the integrity guard.
+
+This looks like a real regression. Let me verify every call path before claiming it.
+
+Verified at the component level. Let me check the screen's own test file for any contradicting assertion.
+
+CSV regression confirmed — the test doesn't assert enablement, so it can't contradict. Now the highest-risk area: the FBS workspace navigation rule.
