@@ -158,6 +158,22 @@ async def _seller_bindings(
     *,
     served_only: bool,
 ) -> list[FbsWarehouseBinding]:
+    """Привязки продавца ПО ВСЕМ площадкам сразу, а не по одной (WMS-341).
+
+    Фильтра по маркетплейсу здесь нет намеренно, и это не упущение. Товар лежит
+    у нас один, а склады Wildberries и склады Ozon — это направления отгрузки из
+    одной и той же кучи. Стоит отфильтровать по площадке, и каждая начнёт делить
+    свободный остаток так, будто он её: Wildberries возьмёт сто процентов, Ozon
+    возьмёт те же сто процентов, и одну физическую единицу пообещают двум
+    покупателям.
+
+    Пока список общий, ``split_amounts`` перебирает обе площадки подряд и
+    отрезает по остатку (``remaining``), а ``validate_rule`` считает сумму долей
+    по всем складам обеих площадок — тот самый один потолок в сто процентов из
+    WMS-350. Отдельный пул под Ozon при этом уже есть и заводить его не нужно:
+    ``FbsBindingStockPool`` висит на ``binding_id``, а привязка знает свою
+    площадку.
+    """
     stmt = select(FbsWarehouseBinding).where(
         FbsWarehouseBinding.tenant_id == tenant_id,
         FbsWarehouseBinding.seller_id == seller_id,
@@ -168,7 +184,10 @@ async def _seller_bindings(
     rows = list((await session.execute(stmt)).scalars().all())
     # Порядок важен: при раздаче остатка он определяет, кому достанется остаток
     # от округления. Стабильный порядок делает публикацию воспроизводимой.
-    rows.sort(key=lambda row: int(row.wb_warehouse_id))
+    # Маркетплейс — только запасной ключ сортировки: номера складов у площадок
+    # из разных пространств и совпасть в принципе могут, а порядок должен быть
+    # один и тот же от запуска к запуску.
+    rows.sort(key=lambda row: (int(row.wb_warehouse_id), row.marketplace))
     return rows
 
 
@@ -462,6 +481,28 @@ async def set_rule_for_products(
     bindings = await _seller_bindings(session, tenant_id, seller_id, served_only=False)
     served = [binding for binding in bindings if binding.served]
     known_wb_ids = {int(binding.wb_warehouse_id) for binding in bindings}
+    # Номер склада — единственный ключ, которым правило адресует привязку. У
+    # Wildberries и у Ozon эти номера из разных пространств и совпасть могут:
+    # база их и разводит по маркетплейсу (уникальность на seller+marketplace+
+    # wb_warehouse_id). На совпадении одно и то же число легло бы сразу на две
+    # площадки, и доля Wildberries молча уехала бы на Ozon. Ловим это на вводе,
+    # а не в рантайме: писать наугад в такой ситуации нельзя.
+    if len(known_wb_ids) != len(bindings):
+        collided = sorted(
+            wb_id
+            for wb_id in known_wb_ids
+            if sum(1 for binding in bindings if int(binding.wb_warehouse_id) == wb_id) > 1
+        )
+        raise FbsStockRuleError(
+            "warehouse_id_collision",
+            message=(
+                "У продавца есть склады разных маркетплейсов с одинаковым номером "
+                f"({', '.join(str(one) for one in collided)}). Номер — единственное, "
+                "чем правило их различает, поэтому долю задать нельзя, пока номера "
+                "совпадают."
+            ),
+            context={"wb_warehouse_ids": collided},
+        )
     unknown = (
         set(rule.units_by_warehouse) if rule.units_mode else set(rule.by_warehouse)
     ) - known_wb_ids
@@ -556,6 +597,24 @@ async def set_rule_for_products(
             binding.stock_sync_enabled = True
 
     binding_by_wb = {int(binding.wb_warehouse_id): binding for binding in bindings}
+    # WMS-342. Обнуление выделения ниже раньше искало строки по одному товару и
+    # тенанту — то есть доставало ВСЁ, включая привязки чужой площадки. Оператор
+    # сохранял правило доли для Wildberries и молча стирал штуки, выделенные на
+    # Ozon: товар исчезал с озоновской витрины, и связать это с действием было
+    # нечем. Тот же класс аварии, что квота 04.09.2026, зашедший с другой стороны.
+    #
+    # Правило распоряжается ровно тем, что охватывает: привязками ЭТОГО продавца
+    # и ТЕХ площадок, чьи склады оно перечисляет. Неактивные привязки охваченных
+    # площадок из зачистки не исключаем — их выделение продолжает занимать товар
+    # (см. hidden_pools выше), и оставленное там число опубликовалось бы, как
+    # только привязку вернут в строй.
+    governed_bindings = select(FbsWarehouseBinding.id).where(
+        FbsWarehouseBinding.tenant_id == tenant_id,
+        FbsWarehouseBinding.seller_id == seller_id,
+        FbsWarehouseBinding.marketplace.in_(
+            sorted({binding.marketplace for binding in bindings})
+        ),
+    )
     for product in products:
         product.fbs_stock_sync_enabled = rule.publish
         product.fbs_same_everywhere = rule.same_everywhere
@@ -570,6 +629,7 @@ async def set_rule_for_products(
                 .where(
                     FbsBindingStockPool.product_id == product.id,
                     FbsBindingStockPool.tenant_id == tenant_id,
+                    FbsBindingStockPool.binding_id.in_(governed_bindings),
                 )
                 .values(quantity=0)
             )

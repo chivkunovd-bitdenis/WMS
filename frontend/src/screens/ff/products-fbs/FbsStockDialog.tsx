@@ -15,6 +15,7 @@ import {
 } from '../../../ui-kit'
 import {
   freeStock,
+  MARKETPLACE_NAMES,
   onHandTotal,
   publishedQty,
   reservedTotal,
@@ -22,9 +23,12 @@ import {
   splitAmounts,
   totalPercent,
   totalUnits,
+  warehouseMarketplace,
   type FbsRule,
+  type MarketplaceCode,
   type Product,
   type Seller,
+  type SellerWarehouse,
 } from './stub'
 
 // Модалка остатка для FBS. Заменяет собой целую вкладку «Остатки WB».
@@ -161,6 +165,29 @@ function FbsStockDialogBody({
     return acc
   }, {})
 
+  // Склады раскладываются по площадкам (WMS-350). Порядок фиксированный:
+  // Wildberries первым, потому что он был здесь всегда, Ozon следом.
+  // Заголовки появляются только когда площадок правда две — у продавца с одним
+  // Wildberries окно остаётся ровно таким, каким было.
+  const groups: Array<{ marketplace: MarketplaceCode; warehouses: SellerWarehouse[] }> = (
+    ['wb', 'ozon'] as const
+  )
+    .map((marketplace) => ({
+      marketplace,
+      warehouses: seller.warehouses.filter((one) => warehouseMarketplace(one) === marketplace),
+    }))
+    .filter((group) => group.warehouses.length > 0)
+  const manyMarketplaces = groups.length > 1
+  // Товар живёт на Ozon, если так сказал каталог. Пустой список — источник
+  // данных площадок не знает; тогда ведём себя как раньше и считаем товар
+  // вайлдберрисовским.
+  const someProductOnOzon = products.some((one) => (one.marketplaces ?? []).includes('ozon'))
+  // Как назвать площадки в общих подписях окна. У продавца с одним только
+  // Wildberries это по-прежнему «Wildberries», текст не меняется ни на букву.
+  const placesLabel = manyMarketplaces
+    ? `${MARKETPLACE_NAMES.wb} и ${MARKETPLACE_NAMES.ozon}`
+    : MARKETPLACE_NAMES[groups[0]?.marketplace ?? 'wb']
+
   return (
     <AppDialog
       open
@@ -211,17 +238,17 @@ function FbsStockDialogBody({
         {noneServed ? (
           <WarningNotice testId="fbs-stock-none-served">
             {noWarehouses
-              ? 'Склады Wildberries не загрузились. Выбор склада WMS появится здесь после загрузки хотя бы одного направления WB.'
-              : 'Ни один склад Wildberries не выбран. Выберите ниже физический склад WMS хотя бы для одного направления — до этого доля не задаётся и остаток в Wildberries не уйдёт.'}
+              ? `Склады ${placesLabel} не загрузились. Выбор склада WMS появится здесь после загрузки хотя бы одного направления ${placesLabel}.`
+              : `Ни один склад ${placesLabel} не выбран. Выберите ниже физический склад WMS хотя бы для одного направления — до этого доля не задаётся и остаток в ${placesLabel} не уйдёт.`}
           </WarningNotice>
         ) : null}
 
         <CheckboxInput
-          label="Передавать остаток в Wildberries"
+          label={`Передавать остаток в ${placesLabel}`}
           checked={draft.publish}
           onChange={(publish) => setDraft((one) => ({ ...one, publish }))}
           disabledReason={
-            noneServed ? 'Сначала выберите хотя бы один склад Wildberries' : undefined
+            noneServed ? `Сначала выберите хотя бы один склад ${placesLabel}` : undefined
           }
           testId="fbs-stock-publish"
         />
@@ -242,7 +269,7 @@ function FbsStockDialogBody({
               : 'Включите, чтобы задать количество по каждому складу числом, а не долей'
           }
           disabledReason={
-            noneServed ? 'Сначала выберите хотя бы один склад Wildberries' : undefined
+            noneServed ? `Сначала выберите хотя бы один склад ${placesLabel}` : undefined
           }
           testId="fbs-stock-units-mode"
         />
@@ -263,7 +290,7 @@ function FbsStockDialogBody({
           disabled={noneServed || draft.unitsMode || (!single && !draft.sameEverywhere)}
           disabledReason={
             noneServed
-              ? 'Сначала выберите хотя бы один склад Wildberries'
+              ? `Сначала выберите хотя бы один склад ${placesLabel}`
               : draft.unitsMode
                 ? 'Включён остаток по штукам — количество задаётся числом под каждым складом'
                 : 'Сейчас доля задаётся по каждому складу отдельно'
@@ -284,7 +311,7 @@ function FbsStockDialogBody({
               // Доля применяется к каждому складу отдельно, а не делится между
               // ними. Из старой подписи это не читалось, и оператор, поставив
               // «половину» на два склада, отдавал в WB весь остаток.
-              helperText={`Доля уйдёт на КАЖДЫЙ из ${served.length} складов — в сумме ${percentSum}%. Выключите, чтобы задать свою долю каждому`}
+              helperText={`Доля уйдёт на КАЖДЫЙ из ${served.length} складов ${placesLabel} — в сумме ${percentSum}%. Выключите, чтобы задать свою долю каждому`}
               testId="fbs-stock-same"
             />
           </>
@@ -293,8 +320,8 @@ function FbsStockDialogBody({
         {overAllocated ? (
           <ErrorNotice testId="fbs-stock-over">
             {draft.unitsMode
-              ? `По складам распределено ${unitsSum.toLocaleString('ru-RU')} шт, а свободно только ${base.toLocaleString('ru-RU')}. Товар лежит у нас один, а склады Wildberries — это направления отгрузки: больше, чем есть, раздать нельзя.`
-              : `В сумме по складам получается ${percentSum}% свободного остатка, а он у складов общий: товар лежит у нас один, а склады Wildberries — это направления отгрузки. Больше 100% раздать нельзя, сервер такое правило не примет.`}
+              ? `По складам распределено ${unitsSum.toLocaleString('ru-RU')} шт, а свободно только ${base.toLocaleString('ru-RU')}. Товар лежит у нас один, а склады ${placesLabel} — это направления отгрузки: больше, чем есть, раздать нельзя.`
+              : `В сумме по складам получается ${percentSum}% свободного остатка, а он у складов общий: товар лежит у нас один, а склады ${placesLabel} — это направления отгрузки. Больше 100% раздать нельзя, сервер такое правило не примет.`}
           </ErrorNotice>
         ) : null}
 
@@ -309,10 +336,45 @@ function FbsStockDialogBody({
         <Stack spacing={2}>
           {noWarehouses ? (
             <Typography color="text.secondary" data-testid="fbs-stock-no-warehouses">
-              Нет направлений Wildberries, которые можно сопоставить со складом WMS.
+              Нет направлений маркетплейсов, которые можно сопоставить со складом WMS.
             </Typography>
           ) : null}
-          {seller.warehouses.map((warehouse) => (
+          {/* Сто процентов — на все склады обеих площадок разом, а не на каждую
+              отдельно: товар лежит у нас один. Сказать это надо один раз и до
+              списка, иначе вторая площадка читается как второй остаток. */}
+          {manyMarketplaces ? (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              data-testid="fbs-stock-shared-pool"
+            >
+              Склады обеих площадок делят один и тот же остаток: сто процентов — это
+              всё вместе, а не по сотне на площадку.
+            </Typography>
+          ) : null}
+          {groups.map((group) => (
+            <Stack key={group.marketplace} spacing={2}>
+              {manyMarketplaces ? (
+                <Stack spacing={0.25}>
+                  <Typography
+                    variant="subtitle2"
+                    data-testid={`fbs-stock-marketplace-${group.marketplace}`}
+                  >
+                    {MARKETPLACE_NAMES[group.marketplace]}
+                  </Typography>
+                  {group.marketplace === 'ozon' && !someProductOnOzon ? (
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      data-testid="fbs-stock-ozon-unlinked"
+                    >
+                      Выбранный товар с карточкой Ozon не связан: туда с него ничего не
+                      уедет, но склад всё равно считается в общих ста процентах.
+                    </Typography>
+                  ) : null}
+                </Stack>
+              ) : null}
+              {group.warehouses.map((warehouse) => (
             <Stack key={warehouse.id} spacing={1}>
               <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                 {/* Галочка «обслуживаем» — свойство продавца, а не товара, но живёт
@@ -327,9 +389,16 @@ function FbsStockDialogBody({
                   disabledReason={
                     !onServedChange
                       ? 'Настройка доступна из каталога'
-                      : warehouse.boundTo === null && !warehouse.fbsEnabled
-                        ? 'Сначала выберите склад WMS'
-                        : undefined
+                      : // Ручка настройки склада продавца адресует привязку одним
+                        // номером и всегда ищет её среди вайлдберрисовских. Нажатие
+                        // здесь по складу Ozon завело бы вместо него склад-двойник
+                        // на Wildberries. До тех пор, пока ручка не научится
+                        // маркетплейсу, галку по Ozon не даём трогать.
+                        warehouseMarketplace(warehouse) !== 'wb'
+                        ? 'Склад Ozon включается в карточке продавца: эта ручка умеет только склады Wildberries'
+                        : warehouse.boundTo === null && !warehouse.fbsEnabled
+                          ? 'Сначала выберите склад WMS'
+                          : undefined
                   }
                   testId={`fbs-stock-served-${warehouse.id}`}
                 />
@@ -342,7 +411,7 @@ function FbsStockDialogBody({
                   <StatusChip
                     label="склад не сопоставлен"
                     tone="warn"
-                    hint="Пока WB-направление не сопоставлено с физическим складом WMS, остаток по нему не уйдёт"
+                    hint={`Пока направление ${MARKETPLACE_NAMES[warehouseMarketplace(warehouse)]} не сопоставлено с физическим складом WMS, остаток по нему не уйдёт`}
                   />
                 ) : null}
                 <Box sx={{ flexGrow: 1 }} />
@@ -356,7 +425,10 @@ function FbsStockDialogBody({
                     onChange={(value) => onBind(warehouse.id, value)}
                     options={seller.wbWarehouses.map((one) => ({ value: one.id, label: one.name }))}
                     emptyLabel="не сопоставлен"
-                    disabled={!warehouse.fbsEnabled && warehouse.boundTo !== null}
+                    disabled={
+                      warehouseMarketplace(warehouse) !== 'wb' ||
+                      (!warehouse.fbsEnabled && warehouse.boundTo !== null)
+                    }
                     testId={`fbs-stock-bind-${warehouse.id}`}
                   />
                 </Box>
@@ -420,6 +492,8 @@ function FbsStockDialogBody({
                 </Typography>
               ) : null}
             </Stack>
+              ))}
+            </Stack>
           ))}
         </Stack>
 
@@ -431,10 +505,10 @@ function FbsStockDialogBody({
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {noneServed
-              ? 'ни один склад Wildberries не выбран — отправлять некуда'
+              ? `ни один склад ${placesLabel} не выбран — отправлять некуда`
               : draft.publish
-                ? 'уйдёт в Wildberries прямо сейчас и будет пересчитываться само'
-                : 'передача выключена — в Wildberries не уйдёт ничего'}
+                ? `уйдёт в ${placesLabel} прямо сейчас и будет пересчитываться само`
+                : `передача выключена — в ${placesLabel} не уйдёт ничего`}
           </Typography>
         </Stack>
 

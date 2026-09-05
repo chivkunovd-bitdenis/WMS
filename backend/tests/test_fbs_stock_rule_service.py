@@ -897,3 +897,212 @@ async def test_available_stock_migration_keeps_current_remainder(db_session: Asy
         )
     ).all()
     assert quantities == [(501001, 198), (501002, 200)]
+
+
+# --- Ozon рядом с Wildberries --------------------------------------------
+#
+# WMS-341: отдельного пула под Ozon заводить не нужно — он уже отдельный,
+#          потому что `FbsBindingStockPool` висит на привязке, а привязка знает
+#          свою площадку. Общий у площадок только потолок.
+# WMS-342: правило доли, сохранённое для Wildberries, не смеет обнулять то,
+#          что выделено на Ozon.
+# WMS-350: сумма долей по всем складам ВСЕХ площадок — не больше ста процентов.
+# WMS-351: остаток уезжает на Ozon тем же расчётом, что и на Wildberries, и
+#          одну физическую единицу двум площадкам не обещает.
+
+
+async def _ozon_binding(
+    session: AsyncSession,
+    seed: _Seed,
+    *,
+    wb_warehouse_id: int,
+    is_active: bool = True,
+    served: bool = True,
+) -> FbsWarehouseBinding:
+    """Привязка озоновского склада того же продавца к тому же складу WMS."""
+    binding = FbsWarehouseBinding(
+        id=uuid.uuid4(),
+        tenant_id=seed.tenant.id,
+        seller_id=seed.seller.id,
+        marketplace="ozon",
+        external_warehouse_id=str(wb_warehouse_id),
+        wb_warehouse_id=wb_warehouse_id,
+        wms_warehouse_id=seed.warehouse.id,
+        is_active=is_active,
+        stock_sync_enabled=True,
+        served=served,
+    )
+    session.add(binding)
+    await session.commit()
+    return binding
+
+
+@pytest.mark.asyncio
+async def test_share_rule_keeps_allocation_the_rule_does_not_reach(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-342: перевод на долю обнуляет только то, чем правило распоряжается.
+
+    Раньше обнуление искало строки по одному товару и тенанту и выгребало ВСЁ,
+    включая привязки площадки, которой это правило не касается. Оператор
+    сохранял долю для Wildberries — и молча стирал штуки, выделенные на Ozon.
+    """
+    seed = await _units_seed(db_session, on_hand=400)
+    # Привязка Ozon выключена, поэтому в правило она не попадает: `_seller_bindings`
+    # берёт только активные. Ровно этот случай и был дырой — строку никто не
+    # проверял, а обнуляли её всё равно.
+    ozon = await _ozon_binding(db_session, seed, wb_warehouse_id=900101, is_active=False)
+    db_session.add(
+        FbsBindingStockPool(
+            tenant_id=seed.tenant.id,
+            binding_id=ozon.id,
+            product_id=seed.product.id,
+            quantity=40,
+        )
+    )
+    await _allocate(db_session, seed, {501001: 100, 501002: 60})
+
+    await set_rule_for_products(
+        db_session,
+        seed.tenant.id,
+        [seed.product.id],
+        FbsRule(publish=True, same_everywhere=True, percent=30, by_warehouse={}),
+    )
+
+    pools = {
+        row.binding_id: row.quantity
+        for row in (
+            await db_session.scalars(
+                select(FbsBindingStockPool).where(
+                    FbsBindingStockPool.product_id == seed.product.id
+                )
+            )
+        ).all()
+    }
+    # Склады Wildberries правило перечисляет — их выделение вернулось в общий
+    # остаток, как и было задумано при переходе на долю.
+    assert pools[seed.bindings[0].id] == 0
+    assert pools[seed.bindings[1].id] == 0
+    # А озоновское выделение правило не трогало и трогать не имело права.
+    assert pools[ozon.id] == 40
+
+
+@pytest.mark.asyncio
+async def test_percent_ceiling_counts_wb_and_ozon_together(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-350: сто процентов — на все склады всех площадок разом, а не на каждую."""
+    seed = await _seed(db_session, on_hand=100)
+    ozon = await _ozon_binding(db_session, seed, wb_warehouse_id=900201)
+
+    with pytest.raises(FbsStockRuleError) as over:
+        await set_rule_for_products(
+            db_session,
+            seed.tenant.id,
+            [seed.product.id],
+            FbsRule(
+                publish=True,
+                same_everywhere=False,
+                percent=0,
+                by_warehouse={501001: 60, 900201: 60},
+            ),
+        )
+    assert over.value.code == "percent_sum_exceeded"
+
+    # Ровно сто в сумме — принимается: это и есть весь свободный остаток.
+    await set_rule_for_products(
+        db_session,
+        seed.tenant.id,
+        [seed.product.id],
+        FbsRule(
+            publish=True,
+            same_everywhere=False,
+            percent=0,
+            by_warehouse={501001: 60, 900201: 40},
+        ),
+    )
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert view.rule.by_warehouse == {501001: 60, 900201: 40}
+    assert view.free_stock == 100
+    assert view.published_now == 100
+    assert ozon.marketplace == "ozon"
+
+
+@pytest.mark.asyncio
+async def test_same_everywhere_counts_the_ozon_warehouse_too(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-350: «одинаково по всем складам» — это и озоновские склады тоже.
+
+    Доля при этой галке применяется к КАЖДОМУ обслуживаемому складу, поэтому с
+    появлением второй площадки тот же процент даёт вдвое больший расход.
+    """
+    seed = await _seed(db_session, on_hand=100)
+    await _ozon_binding(db_session, seed, wb_warehouse_id=900301)
+
+    with pytest.raises(FbsStockRuleError) as over:
+        await set_rule_for_products(
+            db_session,
+            seed.tenant.id,
+            [seed.product.id],
+            FbsRule(publish=True, same_everywhere=True, percent=60, by_warehouse={}),
+        )
+    assert over.value.code == "percent_sum_exceeded"
+    assert over.value.context == {"total": 120}
+
+
+@pytest.mark.asyncio
+async def test_one_physical_unit_is_never_promised_to_both_marketplaces(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-341/351: площадки черпают из одной бочки, а не каждая из своей.
+
+    Это причина, по которой `_seller_bindings` не фильтрует по маркетплейсу.
+    С фильтром Wildberries взял бы свои сто процентов свободного остатка, Ozon —
+    свои сто процентов того же остатка, и одну и ту же единицу пообещали бы
+    двум покупателям.
+    """
+    seed = await _seed(db_session, on_hand=100)
+    ozon = await _ozon_binding(db_session, seed, wb_warehouse_id=900401)
+    await set_rule_for_products(
+        db_session,
+        seed.tenant.id,
+        [seed.product.id],
+        FbsRule(
+            publish=True,
+            same_everywhere=False,
+            percent=0,
+            by_warehouse={501001: 60, 900401: 40},
+        ),
+    )
+
+    wb_amounts = await publish_amounts_for_binding(db_session, seed.bindings[0], [seed.product])
+    ozon_amounts = await publish_amounts_for_binding(db_session, ozon, [seed.product])
+    assert wb_amounts == {seed.product.id: 60}
+    assert ozon_amounts == {seed.product.id: 40}
+    # Сумма ровно равна свободному остатку, а не вдвое больше него.
+    assert wb_amounts[seed.product.id] + ozon_amounts[seed.product.id] == 100
+
+
+@pytest.mark.asyncio
+async def test_rule_refuses_when_two_marketplaces_share_a_warehouse_number(
+    db_session: AsyncSession,
+) -> None:
+    """Номер склада — единственный ключ правила, и совпасть он у площадок может.
+
+    База разводит склады по маркетплейсу, а правило адресует их числом. Пока
+    числа совпадают, доля Wildberries легла бы заодно и на Ozon, поэтому
+    отказываем на вводе, а не пишем наугад.
+    """
+    seed = await _seed(db_session, on_hand=100)
+    await _ozon_binding(db_session, seed, wb_warehouse_id=501001)
+
+    with pytest.raises(FbsStockRuleError) as collision:
+        await set_rule_for_products(
+            db_session,
+            seed.tenant.id,
+            [seed.product.id],
+            FbsRule(publish=True, same_everywhere=True, percent=50, by_warehouse={}),
+        )
+    assert collision.value.code == "warehouse_id_collision"
+    assert collision.value.context == {"wb_warehouse_ids": [501001]}

@@ -82,6 +82,10 @@ type FfCatalogRow = {
   wb_vendor_code: string | null
   ozon_sku?: string | null
   ozon_offer_id?: string | null
+  // Площадки товара, как их считает сервер: «wb», «ozon» или обе у объединённой
+  // карточки. Своего правила экран не заводит — иначе значок и фильтр над
+  // таблицей разъедутся.
+  marketplaces?: string[]
   wb_subject_name: string | null
   wb_primary_image_url: string | null
   wb_barcodes: string[]
@@ -197,6 +201,23 @@ function humanFfCatalogError(message: string): string {
   return normalized || 'Не удалось загрузить каталог.'
 }
 
+function humanMergeError(code: string): string {
+  const normalized = code.trim()
+  if (normalized === 'merge_different_sellers') {
+    return 'Карточки принадлежат разным продавцам. Объединять можно только товар одного продавца.'
+  }
+  if (normalized === 'product_not_found') {
+    return 'Одной из карточек уже нет. Обновите список и попробуйте снова.'
+  }
+  if (normalized === 'merge_conflict') {
+    return 'Объединить не удалось: обе карточки уже встречаются в одном документе. В базе ничего не изменилось.'
+  }
+  if (/^[a-z0-9_:-]+$/.test(normalized)) {
+    return 'Не удалось объединить карточки.'
+  }
+  return normalized || 'Не удалось объединить карточки.'
+}
+
 function fbsWarehousesLoadError(status: number, message: string): string {
   const lower = message.toLowerCase()
   if (status === 403 || lower.includes('нет токена') || lower.includes('missing_marketplace_token')) {
@@ -255,6 +276,11 @@ export function FfProductsCatalogScreen({
     rule: FbsRuleModel
   } | null>(null)
   const [fbsDialogError, setFbsDialogError] = useState<string | null>(null)
+
+  // ── Ручное объединение двух карточек (WMS-349) ──────────────────────────
+  const [mergeOpen, setMergeOpen] = useState(false)
+  const [mergeBusy, setMergeBusy] = useState(false)
+  const [mergeError, setMergeError] = useState<string | null>(null)
 
   // ── Фильтры над таблицей (CAT-12, часть 2) ──────────────────────────────
   const [filterSearch, setFilterSearch] = useState('')
@@ -555,6 +581,40 @@ export function FfProductsCatalogScreen({
     })
   }, [])
 
+  // Объединяем то, что отмечено галками, — ровно две карточки, больше сервер и
+  // не примет. Остатки берём из тех же строк, что видит оператор.
+  const mergeCandidates = useMemo(
+    () => filteredRows.filter((row) => selectedIds.has(row.id)),
+    [filteredRows, selectedIds],
+  )
+  const mergeStockTotal = mergeCandidates.reduce((sum, row) => sum + row.stock_on_hand, 0)
+
+  const confirmMerge = useCallback(async () => {
+    if (mergeCandidates.length !== 2) return
+    setMergeBusy(true)
+    setMergeError(null)
+    try {
+      const res = await fetch(apiUrl('/products/merge'), {
+        method: 'POST',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_ids: mergeCandidates.map((row) => row.id) }),
+      })
+      if (!res.ok) {
+        setMergeError(humanMergeError(await readApiErrorMessage(res)))
+        return
+      }
+      const merged = (await res.json()) as { sku_code: string }
+      setMergeOpen(false)
+      setSelectedIds(new Set())
+      setImportNotice(`Карточки объединены. Осталась одна — «${merged.sku_code}».`)
+      await load()
+    } catch (e) {
+      setMergeError(e instanceof Error ? e.message : 'Не удалось объединить карточки.')
+    } finally {
+      setMergeBusy(false)
+    }
+  }, [authHeaders, load, mergeCandidates, token])
+
   const openFbsStockDialog = useCallback(async (onlyIds?: string[]) => {
     setFbsDialogError(null)
     const pick = onlyIds ? new Set(onlyIds) : selectedIds
@@ -600,9 +660,16 @@ export function FfProductsCatalogScreen({
         name: string | null
         wms_warehouse_id: string | null
         served: boolean
+        // Площадка склада. У строк из кабинета Wildberries она всегда «wb»:
+        // эта ручка другого и не отдаёт. У сохранённых привязок берётся из
+        // самой привязки — там маркетплейс лежит с самого начала (WMS-350).
+        marketplace?: 'wb' | 'ozon'
       }
       const whRows: SellerWarehouseRow[] = whRes.ok
-        ? ((await whRes.json()) as SellerWarehouseRow[])
+        ? ((await whRes.json()) as SellerWarehouseRow[]).map((one) => ({
+            ...one,
+            marketplace: 'wb' as const,
+          }))
         : []
       const warehouseLoadError = whRes.ok
         ? null
@@ -616,15 +683,27 @@ export function FfProductsCatalogScreen({
           wms_warehouse_id: string
           is_active: boolean
           stock_sync_enabled: boolean
+          marketplace?: 'wb' | 'ozon'
+          external_warehouse_id?: string | null
         }>
-        const knownIds = new Set(whRows.map((one) => String(one.wb_warehouse_id)))
+        const knownIds = new Set(
+          whRows.map((one) => `${one.marketplace ?? 'wb'}:${one.wb_warehouse_id}`),
+        )
         for (const binding of savedBindings) {
-          if (knownIds.has(String(binding.wb_warehouse_id))) continue
+          const marketplace = binding.marketplace ?? 'wb'
+          // Ключ теперь с площадкой: номера складов у Wildberries и у Ozon из
+          // разных пространств и совпасть могут, а до этого озоновский склад с
+          // тем же номером просто не показывался.
+          if (knownIds.has(`${marketplace}:${binding.wb_warehouse_id}`)) continue
           whRows.push({
             wb_warehouse_id: binding.wb_warehouse_id,
-            name: `Склад WB ${binding.wb_warehouse_id}`,
+            name:
+              marketplace === 'ozon'
+                ? `Склад Ozon ${binding.external_warehouse_id ?? binding.wb_warehouse_id}`
+                : `Склад WB ${binding.wb_warehouse_id}`,
             wms_warehouse_id: binding.wms_warehouse_id,
             served: binding.is_active && binding.stock_sync_enabled,
+            marketplace,
           })
         }
       }
@@ -636,6 +715,7 @@ export function FfProductsCatalogScreen({
           name: one.name ?? `Склад ${one.wb_warehouse_id}`,
           boundTo: one.wms_warehouse_id,
           fbsEnabled: one.served,
+          marketplace: one.marketplace ?? 'wb',
         })),
         // Имя поля осталось от старого макета, но Select справа выбирает именно
         // наш физический WMS-склад для WB-направления. Технические fbs-wb-* и
@@ -653,6 +733,7 @@ export function FfProductsCatalogScreen({
             sku_code: r.sku_code,
             wb_size: r.wb_size,
             wb_primary_barcode: r.wb_primary_barcode,
+            marketplaces: r.marketplaces,
           },
           ruleById.get(r.id),
           sellerId,
@@ -1140,6 +1221,18 @@ export function FfProductsCatalogScreen({
                 >
                   Задать остаток · {selectedIds.size}
                 </Button>
+                {/* Ручное объединение (WMS-349) — ровно две карточки за раз. */}
+                <Button
+                  variant="outlined"
+                  disabled={mergeCandidates.length !== 2}
+                  onClick={() => {
+                    setMergeError(null)
+                    setMergeOpen(true)
+                  }}
+                  data-testid="ff-catalog-merge-open"
+                >
+                  Объединить
+                </Button>
               </Stack>
             </Stack>
             {/* Отказ показываем здесь, у самой кнопки. Раньше он рисовался в самом
@@ -1274,13 +1367,17 @@ export function FfProductsCatalogScreen({
                       </Stack>
                     </TableCell>
                     <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, minHeight: 45 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.75, minWidth: 0, minHeight: 45 }}>
                         <Typography variant="body2" sx={{ flex: '1 1 0', minWidth: 0, wordBreak: 'break-word' }}>
                           {p.wb_vendor_code ?? '—'}
                         </Typography>
-                        {p.ozon_sku || p.ozon_offer_id ? (
-                          <MarketplaceChip marketplace="ozon" testId="ff-catalog-marketplace-ozon" />
-                        ) : null}
+                        {(p.marketplaces ?? []).map((marketplace) => (
+                          <MarketplaceChip
+                            key={marketplace}
+                            marketplace={marketplace === 'ozon' ? 'ozon' : 'wb'}
+                            testId={`ff-catalog-marketplace-${marketplace}`}
+                          />
+                        ))}
                       </Box>
                     </TableCell>
                     <TableCell>
@@ -1882,6 +1979,62 @@ export function FfProductsCatalogScreen({
               data-testid="ff-stock-direction-confirm-delete"
             >
               Удалить
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Подтверждение объединения (WMS-349). Про сложение остатков человек
+            узнаёт здесь, до нажатия, а не после. */}
+        <Dialog
+          open={mergeOpen}
+          onClose={() => {
+            if (!mergeBusy) setMergeOpen(false)
+          }}
+          fullWidth
+          maxWidth="sm"
+          data-testid="ff-catalog-merge-dialog"
+        >
+          <DialogTitle>Объединить две карточки?</DialogTitle>
+          <DialogContent>
+            <Stack spacing={1.5} sx={{ pt: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                Две карточки станут одной. Всё, что было привязано ко второй —
+                остатки, движения, коды маркировки, привязки к площадкам, —
+                перейдёт на объединённую карточку, а сама вторая карточка исчезнет.
+              </Typography>
+              <Stack spacing={0.5}>
+                {mergeCandidates.map((row) => (
+                  <Typography key={row.id} variant="body2">
+                    {row.sku_code} — {row.name} · остаток {row.stock_on_hand} шт
+                  </Typography>
+                ))}
+              </Stack>
+              <Alert severity="warning" data-testid="ff-catalog-merge-stock-warning">
+                Остатки складываются: у объединённой карточки будет{' '}
+                {mergeStockTotal} шт. Если на складе фактически меньше,
+                пересчитайте товар инвентаризацией.
+              </Alert>
+              <Typography variant="body2" color="text.secondary">
+                Отменить объединение нельзя.
+              </Typography>
+              {mergeError ? (
+                <Alert severity="error" data-testid="ff-catalog-merge-error">
+                  {mergeError}
+                </Alert>
+              ) : null}
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button disabled={mergeBusy} onClick={() => setMergeOpen(false)}>
+              Отмена
+            </Button>
+            <Button
+              variant="contained"
+              disabled={mergeBusy || mergeCandidates.length !== 2}
+              onClick={() => void confirmMerge()}
+              data-testid="ff-catalog-merge-confirm"
+            >
+              Объединить
             </Button>
           </DialogActions>
         </Dialog>

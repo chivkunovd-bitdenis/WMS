@@ -24,6 +24,9 @@ export type ApiCatalogRow = {
   wb_size?: string | null
   wb_primary_barcode: string | null
   wb_subject_name?: string | null
+  // Площадки товара считает сервер (WMS-348). Окно квоты по ним решает, звать
+  // ли строку Ozon; своего правила здесь не заводим.
+  marketplaces?: string[]
 }
 
 export type ApiRule = {
@@ -69,6 +72,7 @@ export function toProduct(row: ApiCatalogRow, rule: ApiRule | undefined, sellerI
     sellerId,
     category: row.wb_subject_name ?? '—',
     stock: { [TOTAL_KEY]: { onHand, reserved } },
+    marketplaces: row.marketplaces,
   }
 }
 
@@ -162,6 +166,8 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
             name: one.name ?? `Склад ${one.wb_warehouse_id}`,
             boundTo: one.wms_warehouse_id,
             fbsEnabled: one.served,
+            // Эта ручка отдаёт кабинет Wildberries и ничего кроме него.
+            marketplace: 'wb' as const,
           })),
           wbWarehouses: rows.map((one) => ({
             id: String(one.wb_warehouse_id),
