@@ -19,7 +19,9 @@ from app.models.fbs_order import (
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_supply import FbsSupply
+from app.models.inventory_balance import InventoryBalance
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
+from app.models.storage_location import StorageLocation
 from app.services import fbs_shipment_source_service as source_svc
 from app.services import inventory_service as inv_svc
 from app.services.inventory_container_service import ContainerKind
@@ -145,14 +147,14 @@ def record_pack_unit(
     return fulfillment
 
 
-async def prepare_shipment_sources(
+async def plan_shipment_sources(
     session: AsyncSession,
     *,
     tenant_id: uuid.UUID,
     warehouse_id: uuid.UUID,
     orders: list[FbsOrder],
-) -> list[FbsShipmentReversalLedger]:
-    """Save the existing per-order reversal recipe before any external handoff."""
+) -> source_svc.FbsShipmentSourcePlan:
+    """Preview exact Ozon sources and current shortage without staging a write-off."""
     orders = [order for order in orders if order.status != FBS_ORDER_STATUS_CANCELLED]
     ledgers = {
         ledger.fbs_order_id: ledger
@@ -199,7 +201,6 @@ async def prepare_shipment_sources(
                 continue
             # An earlier attempt may have stopped before assembly. Its source
             # recipe must not retain an older quantity after a real composition change.
-            ledger.ozon_positions_json = None
         fulfillment = await active_order_fulfillment(session, order.id)
         units = packed_units(fulfillment)
         grouped: dict[tuple[uuid.UUID, uuid.UUID], int] = defaultdict(int)
@@ -280,31 +281,94 @@ async def prepare_shipment_sources(
         row["negative_quantity"] += resolution.negative_quantity
     for recipe_key, row in grouped_resolutions.items():
         recipes.setdefault(recipe_key[0], []).append(row)
+    # Fulfillment and durable recipes keep their exact locations. Recalculate
+    # their shortage too: stock may have changed since packing or a failed attempt.
+    location_ids = {uuid.UUID(str(row["storage_location_id"]))
+                    for recipe in recipes.values() for row in recipe}
+    locations = {location.id: location for location in (
+        await session.scalars(select(StorageLocation).where(
+            StorageLocation.id.in_(location_ids), StorageLocation.tenant_id == tenant_id,
+        ))
+    ).all()}
+    balances = {(balance.product_id, balance.storage_location_id,
+                 balance.container_kind, balance.container_id): int(balance.quantity)
+                for balance in (await session.scalars(select(InventoryBalance).where(
+                    InventoryBalance.tenant_id == tenant_id,
+                    InventoryBalance.storage_location_id.in_(location_ids),
+                ))).all()}
+    resolutions: list[source_svc.FbsShipmentSourceResolution] = []
+    for order_id, recipe in recipes.items():
+        for row in recipe:
+            product_id = uuid.UUID(str(row["product_id"]))
+            location_id = uuid.UUID(str(row["storage_location_id"]))
+            location = locations.get(location_id)
+            if location is None:
+                raise OzonPackagingError("fbs_shipment_source_missing")
+            container_kind = cast(ContainerKind | None, row.get("container_kind"))
+            container_id = uuid.UUID(str(row["container_id"])) if row.get("container_id") else None
+            stock_key = (product_id, location_id, container_kind, container_id)
+            quantity = int(row["quantity"])
+            positive = min(quantity, max(0, balances.get(stock_key, 0)))
+            balances[stock_key] = balances.get(stock_key, 0) - quantity
+            shortage = quantity - positive
+            resolutions.append(source_svc.FbsShipmentSourceResolution(
+                fbs_order_id=order_id, product_id=product_id, quantity=quantity,
+                source_warehouse_id=location.warehouse_id, storage_location_id=location_id,
+                container_kind=container_kind, container_id=container_id,
+                source_mode=cast(
+                    source_svc.FbsShipmentSourceMode, row.get("source_mode", "legacy_ledger"),
+                ),
+                positive_quantity=positive, shortage_quantity=shortage, negative_quantity=shortage,
+            ))
+    return source_svc.FbsShipmentSourcePlan(tenant_id, warehouse_id, tuple(resolutions))
+
+
+async def prepare_shipment_sources(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    orders: list[FbsOrder],
+    source_plan: source_svc.FbsShipmentSourcePlan | None = None,
+) -> list[FbsShipmentReversalLedger]:
+    """Stage exactly the plan checked at the handoff boundary, before calling Ozon."""
+    plan = source_plan or await plan_shipment_sources(
+        session, tenant_id=tenant_id, warehouse_id=warehouse_id, orders=orders,
+    )
+    ledgers = {ledger.fbs_order_id: ledger for ledger in (await session.scalars(
+        select(FbsShipmentReversalLedger).where(
+            FbsShipmentReversalLedger.tenant_id == tenant_id,
+            FbsShipmentReversalLedger.fbs_order_id.in_([order.id for order in orders]),
+        ).with_for_update()
+    )).all()}
+    recipes: dict[uuid.UUID, list[dict[str, Any]]] = defaultdict(list)
+    for item in plan.resolutions:
+        recipes[item.fbs_order_id].append({
+            "product_id": str(item.product_id),
+            "storage_location_id": str(item.storage_location_id),
+            "source_warehouse_id": str(item.source_warehouse_id),
+            "container_kind": item.container_kind,
+            "container_id": str(item.container_id) if item.container_id else None,
+            "source_mode": item.source_mode,
+            "quantity": item.quantity,
+            "negative_quantity": item.negative_quantity,
+        })
     for order_id, recipe in recipes.items():
         ledger = ledgers.get(order_id)
+        if ledger is not None and ledger.shipment_movement_id is not None:
+            continue
+        first = recipe[0]
         if ledger is None:
-            first = recipe[0]
-            ledger = FbsShipmentReversalLedger(
-                tenant_id=tenant_id,
-                fbs_order_id=order_id,
-                product_id=uuid.UUID(str(first["product_id"])),
-                storage_location_id=uuid.UUID(str(first["storage_location_id"])),
-                source_warehouse_id=warehouse_id,
-                quantity=sum(int(row["quantity"]) for row in recipe),
-                ozon_positions_json=recipe,
-                negative_quantity=sum(int(row.get("negative_quantity", 0)) for row in recipe),
-                shortage_quantity=sum(int(row.get("negative_quantity", 0)) for row in recipe),
-            )
+            ledger = FbsShipmentReversalLedger(tenant_id=tenant_id, fbs_order_id=order_id)
             session.add(ledger)
             ledgers[order_id] = ledger
-        elif not ledger.ozon_positions_json:
-            first = recipe[0]
-            ledger.product_id = uuid.UUID(str(first["product_id"]))
-            ledger.storage_location_id = uuid.UUID(str(first["storage_location_id"]))
-            ledger.quantity = sum(int(row["quantity"]) for row in recipe)
-            ledger.negative_quantity = sum(int(row.get("negative_quantity", 0)) for row in recipe)
-            ledger.shortage_quantity = ledger.negative_quantity
-            ledger.ozon_positions_json = recipe
+        ledger.product_id = uuid.UUID(str(first["product_id"]))
+        ledger.storage_location_id = uuid.UUID(str(first["storage_location_id"]))
+        ledger.source_warehouse_id = uuid.UUID(str(first["source_warehouse_id"]))
+        ledger.quantity = sum(int(row["quantity"]) for row in recipe)
+        ledger.negative_quantity = sum(int(row["negative_quantity"]) for row in recipe)
+        ledger.shortage_quantity = ledger.negative_quantity
+        ledger.ozon_positions_json = recipe
     await session.flush()
     return list(ledgers.values())
 
@@ -332,7 +396,8 @@ async def write_off_order(
         return ledger
     if not ledger.ozon_positions_json:
         raise OzonPackagingError("fbs_shipment_source_missing")
-    for row in ledger.ozon_positions_json:
+    completed_recipe = [dict(row) for row in ledger.ozon_positions_json]
+    for row in completed_recipe:
         quantity = int(str(row["quantity"]))
         allow_negative = int(str(row.get("negative_quantity", 0))) > 0
         values: dict[str, Any] = {
@@ -367,7 +432,9 @@ async def write_off_order(
             ledger.negative_quantity += quantity
             ledger.shortage_quantity += quantity
         await session.flush()
+        row["movement_id"] = str(movement.id)
         if ledger.shipment_movement_id is None:
             ledger.shipment_movement_id = movement.id
+    ledger.ozon_positions_json = completed_recipe
     await session.flush()
     return ledger

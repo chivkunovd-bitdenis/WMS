@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from httpx import AsyncClient
@@ -19,6 +20,55 @@ from app.models.product import Product
 from app.services import fbs_stock_publish_service, inventory_service
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
 from tests.inventory_actor_helpers import resolve_test_actor_user_id
+
+
+@pytest.mark.asyncio
+@pytest.mark.postgresql_concurrency
+async def test_publish_lock_survives_business_commits_and_does_not_block_delivery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sqlalchemy import text
+
+    from app.db.session import engine
+    from app.services import fbs_autopoll_service
+    from app.services.marketplace_seller_lock_service import marketplace_seller_lock
+
+    if engine.dialect.name != "postgresql":
+        pytest.skip("Real PostgreSQL advisory locks required")
+    tenant_id, seller_id = uuid.uuid4(), uuid.uuid4()
+    target = SimpleNamespace(tenant_id=tenant_id, seller_id=seller_id, marketplace="ozon")
+    checked = []
+
+    async def targets(_session):
+        return [target]
+
+    async def sync(session, _target, _client):
+        # A real publisher commits inside its service. The connection owning
+        # the advisory lock must remain pinned throughout both commits.
+        for _ in range(2):
+            await session.execute(text("select 1"))
+            await session.commit()
+            async with SessionLocal() as contender:
+                async with marketplace_seller_lock(contender, seller_id, "ozon") as acquired:
+                    assert not acquired
+                async with marketplace_seller_lock(
+                    contender, seller_id, "ozon-delivery",
+                ) as acquired:
+                    assert acquired
+            checked.append(True)
+        return SimpleNamespace(
+            bindings_processed=1, products_targeted=1, products_confirmed=1, binding_errors=0,
+        )
+
+    monkeypatch.setattr(fbs_autopoll_service, "list_marketplace_poll_targets", targets)
+    monkeypatch.setattr(fbs_autopoll_service, "sync_marketplace_stocks_for_target", sync)
+    await fbs_stock_publish_service.publish_seller_stocks_now(tenant_id, seller_id)
+    assert checked == [True, True]
+    async with (
+        SessionLocal() as contender,
+        marketplace_seller_lock(contender, seller_id, "ozon") as acquired,
+    ):
+        assert acquired, "The publication lock must be released after completion"
 
 
 @pytest.mark.asyncio

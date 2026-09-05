@@ -1,3 +1,4 @@
+import { PrintQuantityField } from './PrintQuantityField'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
@@ -1445,7 +1446,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
             {!effectiveReprint && !requiresHonestSign ? (
               <>
-                <TextField
+                <PrintQuantityField
                   size="small"
                   label={fbsTapeMode ? `${productBarcodeName} на заказ` : 'Количество этикеток'}
                   helperText={
@@ -1453,16 +1454,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                       ? '0 — печатать ленту только с QR заказов'
                       : undefined
                   }
-                  type="number"
                   value={wbBarcodeQty}
-                  onChange={(e) => {
-                    const raw = Number(e.target.value)
-                    const floor = fbsTapeMode ? 0 : 1
-                    setWbBarcodeQty(
-                      Math.max(floor, Math.min(999, Number.isFinite(raw) ? Math.floor(raw) : floor)),
-                    )
-                  }}
-                  slotProps={{ htmlInput: { min: fbsTapeMode ? 0 : 1, max: 999 } }}
+                  onChange={setWbBarcodeQty}
+                  min={fbsTapeMode ? 0 : 1} max={999}
                   data-testid="marking-print-wb-qty"
                   sx={{ maxWidth: 280 }}
                 />
@@ -1503,16 +1497,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             {separateMode ? (
               <>
                 {isCatalogSource ? (
-                  <TextField
+                  <PrintQuantityField
                     size="small"
                     label="Количество товаров"
-                    type="number"
                     value={catalogPrintQty}
-                    onChange={(e) =>
-                      setCatalogPrintQty(Math.max(1, Math.min(999, Number(e.target.value) || 1)))
-                    }
+                    onChange={setCatalogPrintQty}
                     disabled={busy || sepCzDone}
-                    slotProps={{ htmlInput: { min: 1, max: 999 } }}
+                    min={1} max={999}
                     data-testid="marking-print-catalog-qty"
                     sx={{ maxWidth: 220 }}
                   />
@@ -1528,16 +1519,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                     Честный знак
                   </Typography>
                   <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-                    <TextField
+                    <PrintQuantityField
                       size="small"
                       label="ЧЗ на единицу"
-                      type="number"
                       value={sepCzQty}
-                      onChange={(e) =>
-                        setSepCzQty(Math.max(1, Math.min(99, Number(e.target.value) || 1)))
-                      }
+                      onChange={setSepCzQty}
                       disabled={busy || sepCzDone}
-                      slotProps={{ htmlInput: { min: 1, max: 99 } }}
+                      min={1} max={99}
                       data-testid="marking-print-sep-cz-qty"
                       sx={{ width: 140 }}
                     />
@@ -1619,16 +1607,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                     {productBarcodeName}
                   </Typography>
                   <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-                    <TextField
+                    <PrintQuantityField
                       size="small"
                       label="Количество этикеток"
-                      type="number"
                       value={sepWbQty}
-                      onChange={(e) =>
-                        setSepWbQty(Math.max(1, Math.min(999, Number(e.target.value) || 1)))
-                      }
+                      onChange={setSepWbQty}
                       disabled={busy}
-                      slotProps={{ htmlInput: { min: 1, max: 999 } }}
+                      min={1} max={999}
                       data-testid="marking-print-sep-wb-qty"
                       sx={{ width: 180 }}
                     />
@@ -1710,38 +1695,33 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             {(!effectiveReprint || fbsTapeMode) && requiresHonestSign && !separateMode && !separateModeResolving ? (
               <>
                 {isCatalogSource ? (
-                  <TextField
+                  <PrintQuantityField
                     size="small"
                     label="Количество товаров"
-                    type="number"
                     value={catalogPrintQty}
-                    onChange={(e) =>
-                      setCatalogPrintQty(Math.max(1, Math.min(999, Number(e.target.value) || 1)))
-                    }
-                    slotProps={{ htmlInput: { min: 1, max: 999 } }}
+                    onChange={setCatalogPrintQty}
+                    min={1} max={999}
                     data-testid="marking-print-catalog-qty"
                     sx={{ maxWidth: 220 }}
                   />
                 ) : null}
 
                 <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap' }}>
-                  <TextField
+                  <PrintQuantityField
                     size="small"
                     label="ЧЗ"
-                    type="number"
                     value={czQty}
-                    onChange={(e) => applyTapeCounts(Number(e.target.value) || 0, wbQty)}
-                    slotProps={{ htmlInput: { min: 0, max: 99 } }}
+                    onChange={(next) => applyTapeCounts(next, wbQty)}
+                    min={0} max={99}
                     data-testid="marking-print-cz-qty"
                     sx={{ width: 120 }}
                   />
-                  <TextField
+                  <PrintQuantityField
                     size="small"
                     label={productBarcodeName}
-                    type="number"
                     value={wbQty}
-                    onChange={(e) => applyTapeCounts(czQty, Number(e.target.value) || 0)}
-                    slotProps={{ htmlInput: { min: 0, max: 99 } }}
+                    onChange={(next) => applyTapeCounts(czQty, next)}
+                    min={0} max={99}
                     data-testid="marking-print-wb-qty"
                     sx={{ width: 120 }}
                   />

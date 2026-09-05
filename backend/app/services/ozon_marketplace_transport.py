@@ -251,7 +251,7 @@ def _row_error_texts(row: Mapping[str, object]) -> tuple[list[str], list[str]]:
 def _reconcile_stock_rows(
     batch: Sequence[Mapping[str, object]],
     rows: Sequence[object],
-) -> tuple[int, list[dict[str, object]]]:
+) -> tuple[int, int, list[dict[str, object]]]:
     """Сверить ответ Ozon с отправленным пакетом построчно.
 
     Ozon не обязан отвечать строкой на каждую отправленную пару товар-склад, и
@@ -261,8 +261,8 @@ def _reconcile_stock_rows(
     только та строка, на которую Ozon ответил `updated: true` и которую мы
     смогли сопоставить с отправленной по идентификатору.
 
-    Возвращает число подтверждённых строк и список неподтверждённых: и тех, что
-    Ozon отклонил, и тех, про которые он промолчал.
+    Возвращает число подтверждённых строк, число подтверждённых нулей и список
+    неподтверждённых: и тех, что Ozon отклонил, и тех, про которые промолчал.
     """
     batch_warehouses = {int(str(item["warehouse_id"])) for item in batch}
     confirmed: set[_StockKey] = set()
@@ -287,10 +287,12 @@ def _reconcile_stock_rows(
             }
     failures: list[dict[str, object]] = []
     confirmed_count = 0
+    confirmed_zeroed = 0
     for item in batch:
         key = _stock_item_key(item)
         if key in confirmed:
             confirmed_count += 1
+            confirmed_zeroed += int(item.get("stock") == 0)
             continue
         failure = rejected.get(key)
         if failure is not None:
@@ -305,7 +307,7 @@ def _reconcile_stock_rows(
                 "messages": ["Ozon не ответил по этой паре товар-склад."],
             }
         )
-    return confirmed_count, failures
+    return confirmed_count, confirmed_zeroed, failures
 
 
 class HttpxOzonMarketplaceTransport:
@@ -569,46 +571,82 @@ class HttpxOzonMarketplaceTransport:
         """Опубликовать остатки парами товар-склад, порциями по сотне.
 
         Возвращает число строк, которые Ozon подтвердил построчно. Любая
-        неподтверждённая строка — отказ всей публикации: подтверждённое до неё
-        число уезжает в `payload["confirmed"]`, чтобы вызывающий не приписывал
-        себе чужого успеха, но и не терял настоящий.
+        неподтверждённая строка входит в итоговый отказ, но не мешает отправить
+        следующие независимые порции. Никакая порция автоматически не
+        повторяется. Итоговое подтверждённое число уезжает в payload ошибки.
         """
-        items = [_stock_item(stock) for stock in stocks]
-        if not items:
-            return 0
+        items: list[dict[str, object]] = []
+        first_error: MarketplaceProviderError | None = None
+        failures_total: list[dict[str, object]] = []
+        for stock in stocks:
+            try:
+                items.append(_stock_item(stock))
+            except MarketplaceProviderError as error:
+                first_error = first_error or error
+                failures_total.append({**dict(stock), "codes": [error.code]})
         confirmed_total = 0
+        confirmed_zeroed_total = 0
+        sent_total = 0
         for start in range(0, len(items), STOCK_BATCH_SIZE):
             batch = items[start : start + STOCK_BATCH_SIZE]
-            raw = await self.call(
-                client_id=client_id,
-                api_key=api_key,
-                path=PRODUCTS_STOCKS_PATH,
-                payload={"stocks": batch},
-            )
+            sent_total += len(batch)
+            try:
+                raw = await self.call(
+                    client_id=client_id,
+                    api_key=api_key,
+                    path=PRODUCTS_STOCKS_PATH,
+                    payload={"stocks": batch},
+                )
+            except MarketplaceProviderError as error:
+                first_error = first_error or error
+                failures_total.extend({**item, "codes": [error.code]} for item in batch)
+                if error.status_code in {401, 403, 429}:
+                    # Account access and rate limits affect every remaining
+                    # batch. Preserve their status/payload for the caller.
+                    first_error = error
+                    break
+                continue
             rows = raw.get("result") if isinstance(raw, dict) else None
             if not isinstance(rows, list) or not rows:
                 # 200 без единой строки результата — это не подтверждение. Считать
                 # его успехом значит покрасить привязку в «опубликовано», когда
                 # Ozon про наш остаток ничего не сказал.
-                raise MarketplaceProviderError(
+                first_error = first_error or MarketplaceProviderError(
                     "ozon",
                     None,
-                    {"sent": len(batch), "confirmed": confirmed_total},
+                    {},
                     code="ozon_stock_unconfirmed",
                 )
-            confirmed, failures = _reconcile_stock_rows(batch, rows)
+                failures_total.extend(
+                    {**item, "codes": ["OZON_ROW_MISSING"]} for item in batch
+                )
+                continue
+            confirmed, zeroed, failures = _reconcile_stock_rows(batch, rows)
             confirmed_total += confirmed
+            confirmed_zeroed_total += zeroed
             if failures:
-                raise MarketplaceProviderError(
+                failures_total.extend(failures)
+                first_error = first_error or MarketplaceProviderError(
                     "ozon",
                     None,
-                    {
-                        "failed": failures,
-                        "sent": len(batch),
-                        "confirmed": confirmed_total,
-                    },
+                    {},
                     code="ozon_stock_rejected",
                 )
+        if first_error is not None:
+            raise MarketplaceProviderError(
+                "ozon",
+                first_error.status_code,
+                {
+                    **first_error.payload,
+                    "failed": failures_total,
+                    "requested": len(stocks),
+                    "sent": sent_total,
+                    "confirmed": confirmed_total,
+                    "confirmed_zeroed": confirmed_zeroed_total,
+                    "errors": len(stocks) - confirmed_total,
+                },
+                code=first_error.code,
+            )
         return confirmed_total
 
     async def fetch_supply_qr(

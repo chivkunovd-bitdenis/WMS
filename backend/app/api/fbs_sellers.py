@@ -115,6 +115,7 @@ class FbsWarehouseBindingOut(BaseModel):
     wb_warehouse_id: int
     wms_warehouse_id: str
     is_active: bool
+    served: bool
     stock_sync_enabled: bool
     last_sync_status: str | None = None
     last_sync_at: datetime | None = None
@@ -151,6 +152,7 @@ def _binding_out(row: FbsWarehouseBinding, allocated_pool_total: int = 0) -> Fbs
         wb_warehouse_id=row.wb_warehouse_id,
         wms_warehouse_id=str(row.wms_warehouse_id),
         is_active=row.is_active,
+        served=row.served,
         stock_sync_enabled=row.stock_sync_enabled,
         last_sync_status=row.last_sync_status,
         last_sync_at=row.last_sync_at,
@@ -170,6 +172,8 @@ def _raise_from_binding_service(exc: binding_svc.FbsWarehouseBindingError) -> No
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
     if exc.code in {"invalid_wb_warehouse_id", "invalid_quantity", "unsupported_marketplace"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+    if exc.code == "ozon_stock_cleanup_failed":
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
     if exc.code == "wms_warehouse_required":
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
     if exc.code in {
@@ -392,7 +396,7 @@ async def upsert_fbs_warehouse_binding(
     except binding_svc.FbsWarehouseBindingError as exc:
         _raise_from_binding_service(exc)
 
-    if was_enabled and not body.stock_sync_enabled:
+    if row.marketplace == "wb" and was_enabled and not body.stock_sync_enabled:
         # Оператор снял тумблер — WB не должен вечно хранить старое положительное
         # число. Помечаем "ожидание" сразу (синхронно), пока WB не подтвердил ноль,
         # а саму публикацию нуля выполняем асинхронно в фоне.

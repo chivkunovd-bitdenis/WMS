@@ -413,6 +413,125 @@ async def test_a_rejected_stock_row_is_an_error_and_carries_ozons_own_code() -> 
     assert failed[0]["codes"] == ["PRODUCT_IS_ARCHIVED"]
 
 
+@pytest.mark.parametrize(
+    "first_failure, expected_confirmed",
+    [("row", 149), ("empty", 50), ("http", 50)],
+)
+async def test_failed_first_stock_batch_does_not_starve_the_remaining_fifty(
+    first_failure: str,
+    expected_confirmed: int,
+) -> None:
+    """WMS-375: every independent batch is tried once, with truthful totals."""
+    sent_ids: list[list[int]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        items = json.loads(request.content)["stocks"]
+        sent_ids.append([item["product_id"] for item in items])
+        if len(sent_ids) == 1 and first_failure == "http":
+            return httpx.Response(500, json={"message": "batch rejected"})
+        if len(sent_ids) == 1 and first_failure == "empty":
+            return httpx.Response(200, json={"result": []})
+        return httpx.Response(
+            200,
+            json={
+                "result": [
+                    {
+                        "product_id": item["product_id"],
+                        "warehouse_id": 42,
+                        "updated": not (first_failure == "row" and item["product_id"] == 1),
+                    }
+                    for item in items
+                ]
+            },
+        )
+
+    with pytest.raises(MarketplaceProviderError) as caught:
+        await _transport(handler).publish_stocks(
+            client_id="c",
+            api_key="k",
+            stocks=[
+                {"product_id": index, "stock": 0, "warehouse_id": 42}
+                for index in range(1, 151)
+            ],
+        )
+
+    assert sent_ids == [list(range(1, 101)), list(range(101, 151))]
+    assert caught.value.payload["sent"] == 150
+    assert caught.value.payload["confirmed"] == expected_confirmed
+    assert caught.value.payload["confirmed_zeroed"] == expected_confirmed
+    assert caught.value.payload["errors"] == 150 - expected_confirmed
+
+
+async def test_one_invalid_stock_identity_does_not_prevent_valid_batches() -> None:
+    sent_ids: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        items = json.loads(request.content)["stocks"]
+        sent_ids.extend(item["product_id"] for item in items)
+        return httpx.Response(
+            200,
+            json={
+                "result": [{"product_id": item["product_id"], "updated": True} for item in items]
+            },
+        )
+
+    with pytest.raises(MarketplaceProviderError) as caught:
+        await _transport(handler).publish_stocks(
+            client_id="c",
+            api_key="k",
+            stocks=[{"stock": 5, "warehouse_id": 42}]
+            + [
+                {"product_id": index, "stock": 3, "warehouse_id": 42}
+                for index in range(1, 151)
+            ],
+        )
+
+    assert sent_ids == list(range(1, 151))
+    assert caught.value.code == "ozon_stock_item_invalid"
+    assert caught.value.payload["requested"] == 151
+    assert caught.value.payload["sent"] == 150
+    assert caught.value.payload["confirmed"] == 150
+    assert caught.value.payload["confirmed_zeroed"] == 0
+    assert caught.value.payload["errors"] == 1
+
+
+@pytest.mark.parametrize("status_code", [403, 429])
+async def test_account_wide_refusal_preserves_earlier_confirmations_and_stops_requests(
+    status_code: int,
+) -> None:
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            return httpx.Response(status_code, json={"code": 7, "message": "account refusal"})
+        items = json.loads(request.content)["stocks"]
+        return httpx.Response(
+            200,
+            json={
+                "result": [{"product_id": item["product_id"], "updated": True} for item in items]
+            },
+        )
+
+    with pytest.raises(MarketplaceProviderError) as caught:
+        await _transport(handler).publish_stocks(
+            client_id="c",
+            api_key="k",
+            stocks=[
+                {"product_id": index, "stock": 0, "warehouse_id": 42}
+                for index in range(1, 251)
+            ],
+        )
+
+    assert calls == 2
+    assert caught.value.status_code == status_code
+    assert caught.value.payload["code"] == 7
+    assert caught.value.payload["confirmed"] == 100
+    assert caught.value.payload["confirmed_zeroed"] == 100
+    assert caught.value.payload["errors"] == 150
+
+
 async def test_a_silently_skipped_stock_row_is_not_a_confirmation() -> None:
     """Отправили два нуля, Ozon ответил про один — это отказ, а не успех.
 

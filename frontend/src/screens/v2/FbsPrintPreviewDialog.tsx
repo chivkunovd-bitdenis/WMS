@@ -1,3 +1,4 @@
+import { PrintQuantityField } from '../../components/PrintQuantityField'
 import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
@@ -11,7 +12,6 @@ import {
   DialogTitle,
   Paper,
   Stack,
-  TextField,
   Typography,
   LinearProgress,
 } from '@mui/material'
@@ -236,13 +236,12 @@ export function FbsPrintPreviewDialog({
             {batch?.failed ? <Chip label={`Ошибок ${batch.failed}`} color="error" /> : null}
           </Stack>
           <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap' }} useFlexGap data-task-id="FBS-10">
-            <TextField
+            <PrintQuantityField
               size="small"
-              type="number"
               label="Копий каждого макета"
               value={copies}
-              onChange={(event) => setCopies(Math.max(1, Math.min(99, Number(event.target.value) || 1)))}
-              slotProps={{ htmlInput: { min: 1, max: 99 } }}
+              onChange={setCopies}
+              min={1} max={99}
               sx={{ width: 220 }}
               data-testid="fbs-print-preview-copies"
               data-task-id="FBS-10"

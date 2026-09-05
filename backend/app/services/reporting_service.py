@@ -182,6 +182,24 @@ def validated_sort(
     return resolved_sort, sort_order
 
 
+def product_search_filter(tenant_id: uuid.UUID, search: str) -> ColumnElement[bool]:
+    """One product scope for report rows, exports, balances and overview totals."""
+    pattern = f"%{search.strip()}%"
+    marketplace_match = select(ProductMarketplaceLink.product_id).where(
+        ProductMarketplaceLink.tenant_id == tenant_id,
+        ProductMarketplaceLink.is_active.is_(True),
+        or_(
+            ProductMarketplaceLink.external_sku.ilike(pattern),
+            ProductMarketplaceLink.external_offer_id.ilike(pattern),
+        ),
+    )
+    return or_(
+        Product.name.ilike(pattern), Product.sku_code.ilike(pattern),
+        Product.wb_vendor_code.ilike(pattern), Product.wb_barcode.ilike(pattern),
+        Product.id.in_(marketplace_match),
+    )
+
+
 async def build_inventory_report(
     session: AsyncSession, tenant_id: uuid.UUID, *, date_from: datetime,
     date_to: datetime, group_by: str, page: int, seller_id: uuid.UUID | None = None,
@@ -204,20 +222,7 @@ async def build_inventory_report(
     if warehouse_id is not None:
         filters.append(InventoryMovement.warehouse_id == warehouse_id)
     if search:
-        pattern = f"%{search.strip()}%"
-        # Плейсхолдер поиска обещает артикул продавца и SKU, а у товара Ozon
-        # они живут не в вайлдберрисовских полях, а в связке с маркетплейсом.
-        marketplace_match = select(ProductMarketplaceLink.product_id).where(
-            ProductMarketplaceLink.tenant_id == tenant_id,
-            ProductMarketplaceLink.is_active.is_(True),
-            or_(
-                ProductMarketplaceLink.external_sku.ilike(pattern),
-                ProductMarketplaceLink.external_offer_id.ilike(pattern),
-            ),
-        )
-        filters.append(or_(Product.name.ilike(pattern), Product.sku_code.ilike(pattern),
-            Product.wb_vendor_code.ilike(pattern), Product.wb_barcode.ilike(pattern),
-            Product.id.in_(marketplace_match)))
+        filters.append(product_search_filter(tenant_id, search))
     in_qty = func.coalesce(func.sum(case((InventoryMovement.quantity_delta > 0,
         InventoryMovement.quantity_delta), else_=0)), 0)
     out_qty = func.coalesce(func.sum(case((InventoryMovement.quantity_delta < 0,
@@ -336,6 +341,10 @@ async def build_inventory_report(
         )
         if warehouse_id is not None:
             seller_balance_stmt = seller_balance_stmt.where(Warehouse.id == warehouse_id)
+        if search:
+            seller_balance_stmt = seller_balance_stmt.where(
+                product_search_filter(tenant_id, search)
+            )
         balances_by_seller = {
             row_seller_id: int(quantity)
             for row_seller_id, quantity in (await session.execute(seller_balance_stmt)).all()
@@ -422,12 +431,8 @@ async def build_inventory_csv(
     if warehouse_id is not None:
         filters.append(InventoryMovement.warehouse_id == warehouse_id)
     if search:
-        pattern = f"%{search.strip()}%"
         filters.append(
-            or_(
-                Product.name.ilike(pattern), Product.sku_code.ilike(pattern),
-                Product.wb_vendor_code.ilike(pattern), Product.wb_barcode.ilike(pattern),
-            )
+            product_search_filter(tenant_id, search)
         )
 
     in_qty = func.coalesce(func.sum(case((InventoryMovement.quantity_delta > 0,
@@ -581,16 +586,10 @@ async def build_overview(
     if seller_id is not None:
         movement_filter.append(InventoryMovement.seller_id == seller_id)
     if search:
-        pattern = f"%{search.strip()}%"
         movement_filter.extend(
             [
                 Product.id == InventoryMovement.product_id,
-                or_(
-                    Product.name.ilike(pattern),
-                    Product.sku_code.ilike(pattern),
-                    Product.wb_vendor_code.ilike(pattern),
-                    Product.wb_barcode.ilike(pattern),
-                ),
+                product_search_filter(tenant_id, search),
             ]
         )
 
@@ -637,16 +636,10 @@ async def build_overview(
     if warehouse_id is not None:
         previous_filter.append(InventoryMovement.warehouse_id == warehouse_id)
     if search:
-        pattern = f"%{search.strip()}%"
         previous_filter.extend(
             [
                 Product.id == InventoryMovement.product_id,
-                or_(
-                    Product.name.ilike(pattern),
-                    Product.sku_code.ilike(pattern),
-                    Product.wb_vendor_code.ilike(pattern),
-                    Product.wb_barcode.ilike(pattern),
-                ),
+                product_search_filter(tenant_id, search),
             ]
         )
     previous_out = int(
@@ -675,14 +668,8 @@ async def build_overview(
     if warehouse_id is not None:
         balance_stmt = balance_stmt.where(Warehouse.id == warehouse_id)
     if search:
-        pattern = f"%{search.strip()}%"
         balance_stmt = balance_stmt.where(
-            or_(
-                Product.name.ilike(pattern),
-                Product.sku_code.ilike(pattern),
-                Product.wb_vendor_code.ilike(pattern),
-                Product.wb_barcode.ilike(pattern),
-            )
+            product_search_filter(tenant_id, search)
         )
     current_balance = int((await session.scalar(balance_stmt)) or 0)
 
@@ -703,16 +690,10 @@ async def build_overview(
     if seller_id is not None:
         since_start_filter.append(InventoryMovement.seller_id == seller_id)
     if search:
-        pattern = f"%{search.strip()}%"
         since_start_filter.extend(
             [
                 Product.id == InventoryMovement.product_id,
-                or_(
-                    Product.name.ilike(pattern),
-                    Product.sku_code.ilike(pattern),
-                    Product.wb_vendor_code.ilike(pattern),
-                    Product.wb_barcode.ilike(pattern),
-                ),
+                product_search_filter(tenant_id, search),
             ]
         )
     delta_since_start = int(
@@ -989,21 +970,38 @@ async def list_product_movements(
         fbs_rows = await session.execute(
             select(
                 FbsShipmentReversalLedger.shipment_movement_id,
+                FbsShipmentReversalLedger.ozon_positions_json,
                 FbsOrder.wb_order_id,
                 FbsOrder.external_order_id,
                 FbsOrder.supply_id,
             )
             .join(FbsOrder, FbsOrder.id == FbsShipmentReversalLedger.fbs_order_id)
-            .where(FbsShipmentReversalLedger.shipment_movement_id.in_(fbs_movement_ids))
+            .where(
+                FbsShipmentReversalLedger.tenant_id == tenant_id,
+                FbsOrder.tenant_id == tenant_id,
+                or_(
+                    FbsShipmentReversalLedger.shipment_movement_id.in_(fbs_movement_ids),
+                    FbsShipmentReversalLedger.ozon_positions_json.is_not(None),
+                ),
+            )
         )
-        for movement_id, wb_order_id, external_order_id, supply_id in fbs_rows:
-            if movement_id is not None:
+        for movement_id, positions, wb_order_id, external_order_id, supply_id in fbs_rows:
+            # Each newly written recipe position carries its exact movement ID.
+            # Older recipes retain only the first ID: never infer links by time,
+            # product, quantity or source location shared with another order.
+            linked_ids = {movement_id} if movement_id is not None else set()
+            for position in positions or []:
+                try:
+                    linked_ids.add(uuid.UUID(str(position.get("movement_id"))))
+                except (ValueError, AttributeError):
+                    continue
+            for linked_id in linked_ids & fbs_movement_ids:
                 # Настоящий номер отправления лежит в `external_order_id` и
                 # раньше не читался: у заказа Ozon в колонке «Документ»
                 # печаталось отрицательное шестнадцатизначное число —
                 # синтезированный хешем номер, которого нет ни в одном кабинете.
                 number = external_order_id or str(wb_order_id)
-                fbs_by_movement[movement_id] = (f"Заказ {number}", supply_id)
+                fbs_by_movement[linked_id] = (f"Заказ {number}", supply_id)
 
     unload_numbers: dict[uuid.UUID, str | None] = {}
     if unload_ids:

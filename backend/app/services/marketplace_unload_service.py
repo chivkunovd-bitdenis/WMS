@@ -473,15 +473,14 @@ async def _available_product_availability_in_warehouse(
     )
     direction_total = directions.get(product_id)
     if direction_total is not None and direction_total.has_any:
-        product = await session.get(Product, product_id)
-        unit_reserve = reserved_fbs if product is not None and product.fbs_units_mode else 0
+        # Existing order reservations protect real stock in every publication mode.
         return MarketplaceUnloadAvailability(
             available=on_hand
             + sorting_on_hand
             - direction_total.total
             - reserved_outbound
             - reserved_mp
-            - unit_reserve
+            - reserved_fbs
             - allocated_fbs,
             uses_free_fbo_pool=True,
         )

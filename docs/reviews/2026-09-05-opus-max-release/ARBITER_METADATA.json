@@ -1,0 +1,35 @@
+{
+  "requested_model": "gpt-6-astra",
+  "requested_reasoning_effort": "high",
+  "cli_version": "0.153.4",
+  "isolated_new_session": true,
+  "sandbox": "read-only",
+  "baseline": "c0dfaecae5985ac7a0597dc2acf56901ee242fe4",
+  "target": "ed72c8888a6e383f5101e0c1bd96d3793810e4fc",
+  "thread_events": [
+    {
+      "type": "thread.started",
+      "thread_id": "01a07357-eb57-74d0-affd-96dd328f28d4"
+    },
+    {
+      "type": "turn.completed",
+      "usage": {
+        "input_tokens": 6494975,
+        "cached_input_tokens": 6179968,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 23505,
+        "reasoning_output_tokens": 4328
+      }
+    }
+  ],
+  "private_reasoning_omitted": true,
+  "final_characters": 33560,
+  "command_model_selection": {
+    "model_flag": "gpt-6-astra",
+    "config": "model_reasoning_effort=\"high\"",
+    "ignore_user_config": true,
+    "fallback_model": null
+  },
+  "completion_status": "completed",
+  "completed_date_moscow": "2026-09-06"
+}
