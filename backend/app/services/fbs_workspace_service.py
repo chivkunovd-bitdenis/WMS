@@ -33,12 +33,9 @@ from app.models.fbs_print_asset import (
     FbsPrintAsset,
 )
 from app.models.fbs_supply import (
-    FBS_DELIVERY_TYPE_PVZ,
-    FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_DONE,
     FBS_SUPPLY_STATUS_DRAFT,
     FBS_SUPPLY_STATUS_IN_DELIVERY,
-    FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
 from app.models.fbs_trbx import FbsTrbx
@@ -400,57 +397,32 @@ def _compute_stage(
     if progress.total == 0:
         return "composition"
 
-    # WB: упаковка — только факт в БД и не участвует даже в выборе стартовой
+    # Упаковка — только факт в БД, она не участвует даже в выборе стартовой
     # рабочей поверхности. Короба открываются фронтом независимо от этого
     # значения; здесь остаются только состав, подбор и уже созданные короба.
-    if getattr(supply, "marketplace", None) == "wb":
-        if has_physical_boxes or without_distribution:
-            return "handoff_prep"
-        if progress.picked < progress.total:
-            return "picking"
-        return "packing"
-
+    #
+    # Правило одно для всех маркетплейсов (AGENTS.md): ни один факт прогресса не
+    # управляет навигацией оператора. Раньше этот ранний выход стоял только под
+    # WB, а Ozon шёл по хвосту с ожиданием стикеров и `status == assembling ->
+    # picking`. У Ozon этикетка выдаётся только после сборки, поэтому
+    # `stickers_ready` не мог догнать `total` до передачи: оператора всегда
+    # приводило на «Короба», где операции с коробами у Ozon закрыты, и он
+    # упирался в стену. Восстанавливать тот хвост нельзя ни напрямую, ни под
+    # другим именем — целостность самой передачи проверяется на её границе.
+    #
+    # Порядок проверок — порядок работы: сначала незакрытый подбор, потом уже
+    # заведённые короба, потом упаковка. Проверка коробов стояла первой, пока
+    # правило было только для WB, где `without_distribution` включает оператор
+    # вручную. У Ozon этот признак ставится в момент создания поставки
+    # (`fbs_supply_service`: у Ozon распределения по коробам нет вовсе), поэтому
+    # первой же строкой оператора уносило на «Короба» — на вкладку с алертом
+    # «правила грузомест не подтверждены» и погашенными кнопками, ещё до того,
+    # как он подобрал хоть одну единицу.
     if progress.picked < progress.total:
         return "picking"
-    if progress.packed < progress.total:
-        return "packing"
-    if progress.metadata_ready < progress.total:
-        return "packing"
-    # Короба можно готовить параллельно с повторным получением стикеров WB.
-    # Отсутствующий стикер не должен возвращать оператора назад в упаковку и
-    # запирать вкладку коробов; финальная передача проверяет стикеры отдельно.
-    if (not has_physical_boxes and not without_distribution) or (
-        unassigned_packed_order_ids and not without_distribution
-    ):
+    if has_physical_boxes or without_distribution:
         return "handoff_prep"
-    if (
-        supply.delivery_type == FBS_DELIVERY_TYPE_PVZ
-        and not supply.trbxes
-        and not without_distribution
-    ):
-        return "handoff_prep"
-    if progress.stickers_ready < progress.total:
-        return "handoff_prep"
-    if supply.status == FBS_SUPPLY_STATUS_PACKED:
-        return "delivery"
-    if supply.status == FBS_SUPPLY_STATUS_ASSEMBLING:
-        return "picking"
-    return "delivery"
-
-
-def _order_number(order: FbsOrder) -> str:
-    """Номер, который оператор может найти в кабинете маркетплейса.
-
-    У заказа Ozon в поле `wb_order_id` лежит не номер, а отрицательное
-    шестнадцатизначное число — синтезированный хешем заполнитель обязательной
-    вайлдберрисовской колонки. Оператор видел в тексте ворот «Заказ
-    №-3665971690784702775» и не мог сопоставить его ни с чем.
-
-    При слиянии заменить на общий помощник `marketplace_scope.order_display_number`
-    из основной копии: логика та же, а двух функций для одного номера быть не
-    должно. Здесь она своя только потому, что в этой ветке того модуля ещё нет.
-    """
-    return order.external_order_id or str(order.wb_order_id)
+    return "packing"
 
 
 def _compute_workspace_blockers(
@@ -463,113 +435,18 @@ def _compute_workspace_blockers(
     without_distribution: bool = False,
     unassigned_packed_order_ids: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
 ) -> list[dict[str, Any]]:
-    blockers: list[dict[str, Any]] = []
-    # WB: рабочее место не публикует навигационные блокеры. Факты подбора,
-    # упаковки, метаданных, стикеров и коробов остаются в progress/orders и
-    # проверяются в конкретной операции передачи, но не запирают вкладки и не
-    # отправляют оператора на уже пройденный этап.
-    if getattr(supply, "marketplace", None) == "wb":
-        return blockers
-    if not orders:
-        blockers.append(
-            {
-                "stage": "composition",
-                "code": "supply_empty",
-                "message": "В поставке нет заказов.",
-                "order_id": None,
-                "retryable": False,
-            }
-        )
-    for order in orders:
-        if (
-            getattr(supply, "marketplace", None) != "wb"
-            and order.pick_status != PICK_STATUS_PICKED
-            and stage in {
-            "packing",
-            "order_stickers",
-            "handoff_prep",
-            "delivery",
-            }
-        ):
-            blockers.append(
-                {
-                    "stage": "picking",
-                    "code": "order_not_picked",
-                    "message": f"Заказ №{_order_number(order)} не подобран.",
-                    "order_id": str(order.id),
-                    "retryable": True,
-                }
-            )
-        if not _metadata_ready(order) and stage in {
-            "order_stickers",
-            "handoff_prep",
-            "delivery",
-        }:
-            blockers.append(
-                {
-                    "stage": "packing",
-                    "code": "metadata_missing",
-                    "message": f"Метаданные заказа №{_order_number(order)} не готовы.",
-                    "order_id": str(order.id),
-                    "retryable": True,
-                }
-            )
-    if (
-        supply.delivery_type == FBS_DELIVERY_TYPE_PVZ
-        and stage in {"handoff_prep", "delivery"}
-        and not supply.trbxes
-        and not without_distribution
-    ):
-        blockers.append(
-            {
-                "stage": "handoff_prep",
-                "code": "cargo_places_required",
-                "message": "Для ПВЗ нужны грузоместа.",
-                "order_id": None,
-                "retryable": True,
-            }
-        )
-    if (
-        stage in {"handoff_prep", "delivery"}
-        and not has_physical_boxes
-        and not without_distribution
-    ):
-        blockers.append(
-            {
-                "stage": "handoff_prep",
-                "code": "physical_boxes_required",
-                "message": "Создайте физические короба для передачи поставки.",
-                "order_id": None,
-                "retryable": True,
-            }
-        )
-    for order in orders:
-        if without_distribution:
-            break
-        if order.id in unassigned_packed_order_ids:
-            blockers.append(
-                {
-                    "stage": "handoff_prep",
-                    "code": "packed_order_unassigned",
-                    "message": f"Упакованный заказ №{_order_number(order)} не назначен в короб.",
-                    "order_id": str(order.id),
-                    "retryable": True,
-                }
-            )
-    if progress.total and progress.stickers_ready < progress.total and stage in {
-        "handoff_prep",
-        "delivery",
-    }:
-        blockers.append(
-            {
-                "stage": "handoff_prep",
-                "code": "stickers_not_ready",
-                "message": "Не все стикеры заказов готовы. Получите их повторно перед передачей.",
-                "order_id": None,
-                "retryable": True,
-            }
-        )
-    return blockers
+    # Рабочее место не публикует навигационные блокеры — ни одному
+    # маркетплейсу. Факты подбора, упаковки, метаданных, стикеров и коробов
+    # остаются в progress/orders и проверяются в самой операции передачи
+    # (идемпотентность, единичное списание товара, ответ маркетплейса), но не
+    # запирают вкладки и не отправляют оператора на уже пройденный этап.
+    #
+    # Раньше пустой список отдавался только WB, а Ozon получал полный набор:
+    # «не подобран», «метаданные не готовы», «нужны грузоместа», «создайте
+    # короба», «не все стикеры готовы». Фронт фильтрует этот список по текущему
+    # этапу и рисует алертом, поэтому любая запись здесь мгновенно становится
+    # навигационной. Список остаётся в контракте, но всегда пустой.
+    return []
 
 
 def _unassigned_order_ids(

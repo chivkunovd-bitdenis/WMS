@@ -399,6 +399,9 @@ async def test_ozon_autopoll_positive_fake_upserts_shared_order_and_status(
         seller=seller,
         name="Product",
         sku_code=f"sku-{uuid.uuid4().hex[:8]}",
+        # WMS-352: опрос забирает только те заказы, по чьим товарам и складам
+        # остаток выставлен нами.
+        fbs_stock_sync_enabled=True,
     )
     db_session.add_all([tenant, seller, warehouse, product])
     await db_session.flush()
@@ -761,6 +764,9 @@ async def _sync_ozon_posting_with_products(
             name=str(position["name"]),
             sku_code=f"sku-{position['sku']}",
             wb_barcode=(str(position["barcode"]) if position.get("barcode") else None),
+            # WMS-352: опрос забирает только те заказы, по чьим товарам и складам
+            # остаток выставлен нами.
+            fbs_stock_sync_enabled=True,
         )
         for position in positions
     ]
@@ -1574,7 +1580,12 @@ def test_ozon_without_distribution_does_not_require_physical_boxes() -> None:
         without_distribution=True,
     )
 
-    assert stage == "delivery"
+    # Режим «без раскладки» сразу открывает подготовку к передаче: физические
+    # короба не нужны. Раньше здесь ждали "delivery", но этот этап выдавался
+    # хвостом `_compute_stage`, который проверял стикеры и статус поставки и
+    # тем самым управлял навигацией. Хвост снят, оба значения фронт показывает
+    # одной и той же вкладкой «Короба».
+    assert stage == "handoff_prep"
     assert all(item["code"] != "physical_boxes_required" for item in blockers)
 
     supply.delivery_type = FBS_DELIVERY_TYPE_PVZ
@@ -1593,7 +1604,7 @@ def test_ozon_without_distribution_does_not_require_physical_boxes() -> None:
         has_physical_boxes=False,
         without_distribution=True,
     )
-    assert pvz_stage == "delivery"
+    assert pvz_stage == "handoff_prep"
     assert all(item["code"] != "cargo_places_required" for item in pvz_blockers)
 
 
@@ -2869,3 +2880,263 @@ async def test_ozon_labels_are_not_requested_while_the_live_transport_is_off(
     assert "не включён" in batch.order_errors[0].message
     await db_session.refresh(order)
     assert order.sticker_status == STICKER_STATUS_ERROR
+
+
+async def _seed_ozon_scope_case(
+    db_session: AsyncSession,
+    *,
+    published: bool,
+    served: bool,
+    delivery_method: dict[str, object] | None = None,
+) -> tuple[Tenant, Seller, Warehouse, OzonMarketplaceProvider]:
+    """Один продавец Ozon, один товар, один склад и одно отправление на него."""
+    tenant = Tenant(name="Ozon scope", slug=f"ozon-scope-{uuid.uuid4().hex[:8]}")
+    seller = Seller(tenant=tenant, name="Seller")
+    warehouse = Warehouse(tenant=tenant, name="FBS", code=f"ozon-scope-{uuid.uuid4().hex[:8]}")
+    product = Product(
+        tenant=tenant,
+        seller=seller,
+        name="Product",
+        sku_code=f"sku-{uuid.uuid4().hex[:8]}",
+        fbs_stock_sync_enabled=published,
+    )
+    db_session.add_all([tenant, seller, warehouse, product])
+    await db_session.flush()
+    db_session.add_all(
+        [
+            MarketplaceAccount(
+                tenant_id=tenant.id,
+                seller_id=seller.id,
+                marketplace="ozon",
+                account_slot="primary",
+                external_account_id="client-id",
+                secret_encrypted=encrypt_secret("api-key"),
+                is_active=True,
+                validation_status="valid",
+            ),
+            ProductMarketplaceLink(
+                tenant_id=tenant.id,
+                seller_id=seller.id,
+                product_id=product.id,
+                marketplace="ozon",
+                external_sku="ozon-sku-scope",
+            ),
+            FbsWarehouseBinding(
+                tenant_id=tenant.id,
+                seller_id=seller.id,
+                marketplace="ozon",
+                external_warehouse_id="1020005028840530",
+                wb_warehouse_id=-4242,
+                wms_warehouse_id=warehouse.id,
+                is_active=True,
+                served=served,
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    row: dict[str, object] = {
+        "posting_number": "ozon-scope-1",
+        "status": "awaiting_packaging",
+        "sku": "ozon-sku-scope",
+        "in_process_at": datetime.now(UTC).isoformat(),
+        "delivery_method": delivery_method
+        or {"id": 45409131, "name": "самостоятельно. В ПВЗ Ozon", "warehouse_id": 1020005028840530},
+    }
+    provider = OzonMarketplaceProvider(transport=FakeMarketplaceTransport(orders=[row]))
+    return tenant, seller, warehouse, provider
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "published, served, expected_orders",
+    [(True, True, 1), (False, True, 0), (True, False, 0)],
+)
+async def test_ozon_poll_takes_only_orders_whose_stock_we_publish(
+    db_session: AsyncSession,
+    published: bool,
+    served: bool,
+    expected_orders: int,
+) -> None:
+    """WMS-352: видим только заказы, по чьим товарам и складам выставлен остаток.
+
+    Кабинет Ozon отдаёт все отправления продавца — в том числе те, что он
+    собирает сам на другом складе. Своим считается ровно то, по чему остаток
+    публикуем мы: обслуживаемый склад и товар с включённой публикацией. Правило
+    то же, что у Wildberries, и отсев идёт там же — до записи в базу.
+    """
+    tenant, seller, _warehouse, provider = await _seed_ozon_scope_case(
+        db_session, published=published, served=served
+    )
+
+    result = await ozon_sync_svc.sync_ozon_orders(
+        db_session, tenant.id, seller.id, provider, AsyncMock()
+    )
+
+    orders = list(
+        (
+            await db_session.execute(
+                select(FbsOrder).where(FbsOrder.tenant_id == tenant.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(orders) == expected_orders
+    assert result["orders_created"] == expected_orders
+
+
+@pytest.mark.asyncio
+async def test_ozon_order_row_carries_its_delivery_route(db_session: AsyncSession) -> None:
+    """WMS-358: колонка «Маршрут сдачи» у заказа Ozon заполнена методом доставки.
+
+    Отгрузка Ozon создаётся по методу доставки, значит метод и есть маршрут.
+    Справочника методов у Ozon нет — `/v1/delivery-method/list` объявлен
+    устаревшим, — поэтому название берётся из самого отправления.
+    """
+    tenant, seller, _warehouse, provider = await _seed_ozon_scope_case(
+        db_session, published=True, served=True
+    )
+    await ozon_sync_svc.sync_ozon_orders(db_session, tenant.id, seller.id, provider, AsyncMock())
+
+    order = (
+        await db_session.execute(select(FbsOrder).where(FbsOrder.tenant_id == tenant.id))
+    ).scalar_one()
+    assert (order.meta_details_json or {})["ozon_delivery_method_id"] == "45409131"
+
+    page = await worklist_svc.fetch_worklist_page(db_session, tenant.id, seller_id=seller.id)
+
+    assert [item["delivery_route"] for item in page.items] == ["самостоятельно. В ПВЗ Ozon"]
+
+
+@pytest.mark.asyncio
+async def test_ozon_order_route_falls_back_to_the_method_id(db_session: AsyncSession) -> None:
+    """Без названия метода маршрут показывает его идентификатор, а не прочерк.
+
+    Иначе заказы разных методов — то есть разных отгрузок — на экране выглядели
+    бы одинаково, и оператор смешал бы их в одну.
+    """
+    tenant, seller, _warehouse, provider = await _seed_ozon_scope_case(
+        db_session,
+        published=True,
+        served=True,
+        delivery_method={"id": 45409131, "warehouse_id": 1020005028840530},
+    )
+    await ozon_sync_svc.sync_ozon_orders(db_session, tenant.id, seller.id, provider, AsyncMock())
+
+    page = await worklist_svc.fetch_worklist_page(db_session, tenant.id, seller_id=seller.id)
+
+    assert [item["delivery_route"] for item in page.items] == ["Метод доставки 45409131"]
+
+
+@pytest.mark.asyncio
+async def test_supply_creation_refuses_a_mixed_wb_and_ozon_selection(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-353: смешать заказы двух площадок в одну поставку нельзя.
+
+    Проверка идёт до любого обращения к маркетплейсу, поэтому отказ виден на
+    самом создании поставки, а не только в списке замечаний предпроверки.
+    """
+    tenant = Tenant(name="Mixed supply", slug=f"mixed-{uuid.uuid4().hex[:12]}")
+    seller = Seller(tenant=tenant, name="Seller")
+    warehouse = Warehouse(tenant=tenant, name="FBS", code=f"mixed-{uuid.uuid4().hex[:8]}")
+    product = Product(
+        tenant=tenant,
+        seller=seller,
+        name="Product",
+        sku_code=f"sku-{uuid.uuid4().hex[:8]}",
+    )
+    db_session.add_all([tenant, seller, warehouse, product])
+    await db_session.flush()
+    now = datetime.now(UTC)
+    orders = [
+        FbsOrder(
+            tenant_id=tenant.id,
+            seller_id=seller.id,
+            warehouse_id=warehouse.id,
+            product_id=product.id,
+            marketplace=marketplace,
+            external_order_id=f"{marketplace}-mixed-1",
+            wb_order_id=wb_order_id,
+            wb_warehouse_id=11,
+            mapping_status=MAPPING_STATUS_MAPPED,
+            reserve_status=RESERVE_STATUS_RESERVED,
+            created_at_wb=now,
+            deadline_at=now + timedelta(days=1),
+        )
+        for marketplace, wb_order_id in (("wb", 991), ("ozon", 992))
+    ]
+    db_session.add_all(orders)
+    await db_session.commit()
+
+    with pytest.raises(supply_svc.FbsSupplyError) as raised:
+        await supply_svc.create_supply_from_orders(
+            db_session,
+            tenant.id,
+            name="Смешанная",
+            order_ids=[orders[0].id, orders[1].id],
+            planned_delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+            planned_destination=None,
+            idempotency_key=str(uuid.uuid4()),
+            http_client=AsyncMock(),
+        )
+
+    assert raised.value.code == "order_incompatible"
+    assert raised.value.http_status == 409
+    assert "different_marketplace" in raised.value.context["reasons"]
+
+
+def test_existing_supply_never_accepts_an_order_of_another_marketplace() -> None:
+    """Вторая дверь в поставку — добавление заказа к уже созданной — закрыта тоже.
+
+    Здесь проверка строже, чем при создании: к поставке WB не привязывается
+    заказ Ozon, а к поставке Ozon — вообще ничего, потому что состав отправления
+    у Ozon определяет сам маркетплейс.
+    """
+    from app.services.fbs_supply_composition_service import supply_order_link_discrepancy
+
+    now = datetime.now(UTC)
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    warehouse_id = uuid.uuid4()
+
+    def _order(marketplace: str, wb_order_id: int) -> FbsOrder:
+        return FbsOrder(
+            id=uuid.uuid4(),
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            warehouse_id=warehouse_id,
+            marketplace=marketplace,
+            wb_order_id=wb_order_id,
+            wb_warehouse_id=11,
+            created_at_wb=now,
+            deadline_at=now + timedelta(days=1),
+        )
+
+    def _supply(marketplace: str) -> FbsSupply:
+        return FbsSupply(
+            id=uuid.uuid4(),
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            warehouse_id=warehouse_id,
+            marketplace=marketplace,
+            status=FBS_SUPPLY_STATUS_ASSEMBLING,
+            name="Поставка",
+            delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+        )
+
+    wb_supply = _supply("wb")
+    ozon_supply = _supply("ozon")
+
+    ozon_into_wb = supply_order_link_discrepancy(
+        wb_supply, _order("ozon", 991), existing_orders=[]
+    )
+    wb_into_ozon = supply_order_link_discrepancy(
+        ozon_supply, _order("wb", 992), existing_orders=[]
+    )
+
+    assert ozon_into_wb is not None
+    assert ozon_into_wb.code == "different_marketplace"
+    assert wb_into_ozon is not None
+    assert wb_into_ozon.code == "different_marketplace"

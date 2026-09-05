@@ -58,8 +58,9 @@ describe('WB optional picking', () => {
     expect(fbsAccessibleStageIndex({ marketplace: 'wb', currentStage: 'picking' })).toBe(3)
   })
 
-  it('keeps the Ozon picking gate unchanged', () => {
-    expect(fbsAccessibleStageIndex({ marketplace: 'ozon', currentStage: 'picking' })).toBe(1)
+  it('opens every stage for Ozon too — the server does not lock tabs', () => {
+    expect(fbsAccessibleStageIndex({ marketplace: 'ozon', currentStage: 'picking' })).toBe(3)
+    expect(fbsAccessibleStageIndex({ marketplace: 'ozon', currentStage: 'composition' })).toBe(3)
   })
 
   it('keeps box controls active before WB handoff', () => {
@@ -84,8 +85,10 @@ describe('WB optional picking', () => {
     expect(fbsStageAfterWorkspaceRefresh('wb', 'packing', 'picking')).toBe('packing')
   })
 
-  it('keeps the server-driven Ozon stage', () => {
-    expect(fbsStageAfterWorkspaceRefresh('ozon', 'boxes', 'picking')).toBe('picking')
+  it('does not yank the Ozon operator back from boxes during refresh either', () => {
+    expect(fbsStageAfterWorkspaceRefresh('ozon', 'boxes', 'picking')).toBe('boxes')
+    expect(fbsStageAfterWorkspaceRefresh('ozon', 'packing', 'picking')).toBe('packing')
+    expect(fbsStageAfterWorkspaceRefresh('ozon', 'composition', 'picking')).toBe('picking')
   })
 
   it('offers unassigned orders in boxes regardless of packaging status', () => {

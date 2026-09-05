@@ -1322,6 +1322,122 @@ def test_workspace_wb_never_exposes_navigation_blockers() -> None:
     assert blockers == []
 
 
+def test_workspace_fresh_ozon_supply_starts_with_picking_not_boxes() -> None:
+    """Поставка Ozon создаётся сразу с `boxes_without_distribution_at`.
+
+    Признак «без распределения» у Ozon — не действие оператора, а факт площадки:
+    короба там ведёт сам Ozon. Пока проверка коробов стояла первой строкой,
+    оператора уносило на «Короба» с погашенными кнопками ещё до подбора.
+    """
+    supply = SimpleNamespace(
+        marketplace="ozon",
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+        trbxes=[],
+    )
+    order = SimpleNamespace(
+        id=uuid.uuid4(),
+        wb_order_id=-3665971690784702777,
+        external_order_id="0195832-0021-3",
+        pick_status="pending",
+        metadata_delivery_allowed=True,
+        required_meta_json=[],
+    )
+
+    stage = _compute_stage(
+        supply,
+        [order],
+        WorkspaceProgress(picked=0, packed=0, metadata_ready=0, stickers_ready=0, total=3),
+        has_physical_boxes=False,
+        without_distribution=True,
+    )
+
+    assert stage == "picking"
+
+
+def test_workspace_ozon_never_exposes_navigation_blockers() -> None:
+    """Правило AGENTS.md одно для обеих площадок, не только для WB.
+
+    У Ozon этикетка выдаётся только после сборки, поэтому `stickers_ready`
+    никогда не догоняет `total` до передачи. Пока сервер публиковал по этому
+    факту навигационные блокеры, оператора запирало на «Коробах», где операции
+    с коробами у Ozon закрыты.
+    """
+    order_id = uuid.uuid4()
+    supply = SimpleNamespace(
+        marketplace="ozon",
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+        trbxes=[],
+    )
+    order = SimpleNamespace(
+        id=order_id,
+        wb_order_id=-3665971690784702775,
+        external_order_id="0195832-0021-1",
+        pick_status="pending",
+        metadata_delivery_allowed=False,
+        required_meta_json=["sgtin"],
+        meta_details_json={},
+    )
+    progress = WorkspaceProgress(
+        picked=0,
+        packed=0,
+        metadata_ready=0,
+        stickers_ready=0,
+        total=1,
+    )
+
+    blockers = _compute_workspace_blockers(
+        supply,
+        [order],
+        "handoff_prep",
+        progress,
+        has_physical_boxes=False,
+        without_distribution=False,
+        unassigned_packed_order_ids={order_id},
+    )
+
+    assert blockers == []
+
+
+def test_workspace_completed_ozon_assembling_never_returns_to_picking() -> None:
+    """Запрещённое правило `status == assembling -> picking` снято и для Ozon."""
+    order_id = uuid.uuid4()
+    supply = SimpleNamespace(
+        marketplace="ozon",
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+        trbxes=[],
+    )
+    order = SimpleNamespace(
+        id=order_id,
+        wb_order_id=-3665971690784702776,
+        external_order_id="0195832-0021-2",
+        pick_status="picked",
+        metadata_delivery_allowed=True,
+        required_meta_json=[],
+    )
+    progress = WorkspaceProgress(
+        picked=18,
+        packed=18,
+        metadata_ready=18,
+        # Стикеров у Ozon до передачи нет — и это не повод отправлять оператора
+        # назад в подбор.
+        stickers_ready=0,
+        total=18,
+    )
+
+    stage = _compute_stage(
+        supply,
+        [order],
+        progress,
+        has_physical_boxes=True,
+        without_distribution=True,
+    )
+
+    assert stage == "handoff_prep"
+
+
 def test_workspace_without_distribution_skips_assignment_gate() -> None:
     order_id = uuid.uuid4()
     supply = SimpleNamespace(
