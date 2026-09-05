@@ -115,6 +115,7 @@ class FbsWarehouseBindingOut(BaseModel):
     wb_warehouse_id: int
     wms_warehouse_id: str
     is_active: bool
+    served: bool
     stock_sync_enabled: bool
     last_sync_status: str | None = None
     last_sync_at: datetime | None = None
@@ -151,6 +152,7 @@ def _binding_out(row: FbsWarehouseBinding, allocated_pool_total: int = 0) -> Fbs
         wb_warehouse_id=row.wb_warehouse_id,
         wms_warehouse_id=str(row.wms_warehouse_id),
         is_active=row.is_active,
+        served=row.served,
         stock_sync_enabled=row.stock_sync_enabled,
         last_sync_status=row.last_sync_status,
         last_sync_at=row.last_sync_at,

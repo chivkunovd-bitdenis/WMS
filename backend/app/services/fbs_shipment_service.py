@@ -721,10 +721,7 @@ def _build_delivery_checks(
                 checks.append(
                     DeliveryCheck(
                         code="order_sticker_not_ready",
-                        message=(
-                            "Стикер заказа WB не напечатан. "
-                            "Передаче не мешает, напечатать можно и после неё."
-                        ),
+                        message="Стикер заказа WB ещё не подготовлен.",
                         ok=False,
                         severity=CHECK_WARNING,
                         order_id=order.id,
@@ -833,7 +830,7 @@ def _build_delivery_checks(
         checks.append(
             DeliveryCheck(
                 code="physical_boxes_required",
-                message="Физические короба не созданы. Передаче не мешает.",
+                message="В поставке пока нет коробов.",
                 ok=False,
                 severity=soft,
             )
@@ -852,7 +849,7 @@ def _build_delivery_checks(
             checks.append(
                 DeliveryCheck(
                     code="packed_order_unassigned",
-                    message=("Заказ не разложен по физическим коробам. Передаче не мешает."),
+                    message="Для заказа не указан короб.",
                     ok=False,
                     severity=soft,
                     order_id=order_id,

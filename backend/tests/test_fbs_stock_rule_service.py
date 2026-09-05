@@ -1070,12 +1070,7 @@ async def test_one_physical_unit_is_never_promised_to_both_marketplaces(
 async def test_rule_refuses_when_two_marketplaces_share_a_warehouse_number(
     db_session: AsyncSession,
 ) -> None:
-    """Номер склада — единственный ключ правила, и совпасть он у площадок может.
-
-    База разводит склады по маркетплейсу, а правило адресует их числом. Пока
-    числа совпадают, доля Wildberries легла бы заодно и на Ozon, поэтому
-    отказываем на вводе, а не пишем наугад.
-    """
+    """Legacy ambiguous numeric input must never select a marketplace by row order."""
     seed = await _seed(db_session, on_hand=100)
     await _ozon_binding(db_session, seed, wb_warehouse_id=501001)
 
@@ -1084,10 +1079,60 @@ async def test_rule_refuses_when_two_marketplaces_share_a_warehouse_number(
             db_session,
             seed.tenant.id,
             [seed.product.id],
-            FbsRule(publish=True, same_everywhere=True, percent=50, by_warehouse={}),
+            FbsRule(publish=True, same_everywhere=False, percent=0, by_warehouse={501001: 50}),
         )
     assert collision.value.code == "warehouse_id_collision"
     assert collision.value.context == {"wb_warehouse_ids": [501001]}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("units_mode", [True, False])
+@pytest.mark.parametrize("ozon_has_pool", [True, False])
+async def test_existing_pools_do_not_alias_when_another_marketplace_uses_same_warehouse_id(
+    db_session: AsyncSession, units_mode: bool, ozon_has_pool: bool,
+) -> None:
+    """WMS-375: connecting an Ozon warehouse must not copy the WB allocation."""
+    seed = await _seed(db_session, on_hand=100)
+    await set_rule_for_products(
+        db_session,
+        seed.tenant.id,
+        [seed.product.id],
+        FbsRule(
+            publish=True,
+            same_everywhere=False,
+            percent=0,
+            units_mode=units_mode,
+            by_warehouse={501001: 20},
+            units_by_warehouse={501001: 20},
+        ),
+    )
+    # The old WB rule exists before another marketplace adds the same number.
+    ozon = await _ozon_binding(db_session, seed, wb_warehouse_id=501001)
+    if ozon_has_pool:
+        db_session.add(
+            FbsBindingStockPool(
+                tenant_id=seed.tenant.id,
+                product_id=seed.product.id,
+                binding_id=ozon.id,
+                quantity=30 if units_mode else 0,
+                percent=30 if not units_mode else None,
+            )
+        )
+        await db_session.commit()
+
+    wb_amounts = await publish_amounts_for_binding(db_session, seed.bindings[0], [seed.product])
+    ozon_amounts = await publish_amounts_for_binding(db_session, ozon, [seed.product])
+    assert wb_amounts == {seed.product.id: 20}
+    assert ozon_amounts == {seed.product.id: 30 if ozon_has_pool else 0}
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    views = await get_rule_views(db_session, seed.tenant.id, [seed.product.id])
+    for current in (view, views[seed.product.id]):
+        assert current.published_now == (50 if ozon_has_pool else 20)
+        # The unchanged numeric DTO cannot represent two different bindings.
+        # Omit the ambiguous entry instead of displaying a foreign pool twice.
+        assert 501001 not in current.rule.by_warehouse
+        assert 501001 not in current.rule.units_by_warehouse
+        assert 501001 not in current.units_remaining_by_warehouse
 
 
 @pytest.mark.parametrize("free,expected", [(0, [0, 0]), (10, [8, 2]), (20, [8, 8])])
@@ -1115,3 +1160,127 @@ def test_units_publication_caps_combined_marketplaces_after_outbound(free, expec
     amounts = split_amounts(rule, free, bindings)
     assert [amounts[binding.id] for binding in bindings] == expected
     assert rule.units_by_warehouse == {1: 8, 2: 8}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("percent", [0, 25, 100])
+async def test_named_direction_never_exposes_existing_fbs_reservations_to_fbo(
+    db_session: AsyncSession, percent: int,
+) -> None:
+    from app.services.marketplace_unload_service import (
+        MarketplaceUnloadError,
+        _assert_available_for_unload_quantity,
+        _available_product_availability_in_warehouse,
+    )
+
+    seed = await _seed(db_session, on_hand=10)
+    seed.product.fbs_percent = percent
+    seed.product.fbs_units_mode = False
+    await db_session.commit()
+    await create_stock_direction(
+        db_session, seed.tenant.id, seed.product.id, name="Other allocation", quantity=1,
+        is_fbs=False,
+    )
+    for _ in range(2):
+        await _place_order(db_session, seed, seed.bindings[0].wb_warehouse_id)
+    await db_session.commit()
+    availability = await _available_product_availability_in_warehouse(
+        db_session, seed.tenant.id, seed.warehouse.id, seed.product.id,
+    )
+    assert availability.available == 7
+    with pytest.raises(MarketplaceUnloadError) as error:
+        await _assert_available_for_unload_quantity(
+            db_session, seed.tenant.id, seed.warehouse.id, seed.product.id, 8,
+        )
+    assert error.value.code == "insufficient_free_fbo"
+
+
+@pytest.mark.parametrize("units_mode", [False, True])
+async def test_qualified_warehouse_keys_round_trip_both_marketplaces_and_keep_combined_limit(
+    db_session: AsyncSession, units_mode: bool,
+) -> None:
+    from app.api.products import ProductFbsRuleBody, _rule_from_body, _rule_view_out
+
+    seed = await _seed(db_session, on_hand=100)
+    ozon = await _ozon_binding(db_session, seed, wb_warehouse_id=501001)
+    body = ProductFbsRuleBody.model_validate({
+        "publish": True, "same_everywhere": False, "percent": 0,
+        "units_mode": units_mode,
+        "by_warehouse": {"wb:501001": 20, "ozon:501001": 30},
+        "units_by_warehouse": {"wb:501001": 20, "ozon:501001": 30},
+    })
+    await set_rule_for_products(
+        db_session, seed.tenant.id, [seed.product.id], _rule_from_body(body),
+    )
+    # Reread through both single and bulk rule loaders used by the editor.
+    single = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    bulk = (await get_rule_views(db_session, seed.tenant.id, [seed.product.id]))[seed.product.id]
+    for view in [single, bulk]:
+        output = _rule_view_out(seed.product.id, view).model_dump()
+        assert output["by_warehouse"] == {"wb:501001": 20, "ozon:501001": 30}
+        expected_units = {"wb:501001": 20, "ozon:501001": 30} if units_mode else {
+            "wb:501001": 0, "ozon:501001": 0,
+        }
+        assert output["units_remaining_by_warehouse"] == expected_units
+    assert await publish_amounts_for_binding(db_session, seed.bindings[0], [seed.product]) == {
+        seed.product.id: 20,
+    }
+    assert await publish_amounts_for_binding(db_session, ozon, [seed.product]) == {
+        seed.product.id: 30,
+    }
+    # The newly distinguishable keys still share the existing quota limit.
+    oversized = ProductFbsRuleBody.model_validate({
+        **body.model_dump(),
+        "by_warehouse": {"wb:501001": 60, "ozon:501001": 50},
+        "units_by_warehouse": {"wb:501001": 60, "ozon:501001": 50},
+    })
+    with pytest.raises(FbsStockRuleError) as over:
+        await set_rule_for_products(
+            db_session, seed.tenant.id, [seed.product.id], _rule_from_body(oversized),
+        )
+    assert over.value.code == ("units_sum_exceeded" if units_mode else "percent_sum_exceeded")
+
+
+@pytest.mark.parametrize("qualified", [False, True])
+def test_remaining_units_respect_the_supplied_binding_filter(qualified: bool) -> None:
+    from app.services.fbs_stock_rule_service import _units_by_wb
+
+    wb = FbsWarehouseBinding(wb_warehouse_id=123, marketplace="wb")
+    if qualified:
+        quantities: dict[int | str, int] = {"wb:123": 10, "ozon:123": 20, "wb:456": 30}
+        expected = {"wb:123": 10}
+    else:
+        quantities = {123: 10, 456: 30}
+        expected = {123: 10}
+    rule = FbsRule(
+        publish=True, same_everywhere=False, percent=0, units_mode=True,
+        units_by_warehouse=quantities,
+    )
+    assert _units_by_wb(rule, [wb]) == expected
+
+
+@pytest.mark.parametrize("units_mode", [False, True])
+async def test_unused_mode_warehouse_keys_do_not_block_saving_the_active_rule(
+    db_session: AsyncSession, units_mode: bool,
+) -> None:
+    seed = await _seed(db_session, on_hand=100)
+    ozon = await _ozon_binding(db_session, seed, wb_warehouse_id=501001)
+    active: dict[int | str, int] = {"wb:501001": 20, "ozon:501001": 30}
+    # A stale dormant mode can contain both an unknown and an ambiguous numeric key.
+    inactive: dict[int | str, int] = {999999: 10, 501001: 40}
+    await set_rule_for_products(
+        db_session, seed.tenant.id, [seed.product.id],
+        FbsRule(
+            publish=True, same_everywhere=False, percent=0, units_mode=units_mode,
+            by_warehouse=inactive if units_mode else active,
+            units_by_warehouse=active if units_mode else inactive,
+        ),
+    )
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert (view.rule.units_by_warehouse if units_mode else view.rule.by_warehouse) == active
+    assert (await publish_amounts_for_binding(db_session, seed.bindings[0], [seed.product])) == {
+        seed.product.id: 20,
+    }
+    assert (await publish_amounts_for_binding(db_session, ozon, [seed.product])) == {
+        seed.product.id: 30,
+    }

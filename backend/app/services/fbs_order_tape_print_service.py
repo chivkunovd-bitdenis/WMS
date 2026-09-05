@@ -21,7 +21,7 @@ from app.models.fbs_order import (
     FbsOrderMarking,
     current_order_marking,
 )
-from app.models.fbs_supply import FbsSupply
+from app.models.fbs_supply import FBS_SUPPLY_STATUS_DONE, FBS_SUPPLY_STATUS_IN_DELIVERY, FbsSupply
 from app.models.marking_code import EVENT_REPRINTED, STATUS_PRINTED, MarkingCode
 from app.models.packaging_task import PackagingTaskLine
 from app.services import fbs_marking_service as marking_svc
@@ -151,7 +151,8 @@ async def print_fbs_order_tape(
     }:
         ordered.sort(key=picking_list_order_key)
     line_by_product = await _line_by_product(session, tenant_id, supply)
-    if not qr_only and not reprint and not allow_partial:
+    prints_honest_sign = any(unit.block == "cz" and unit.copies > 0 for unit in print_layout.units)
+    if prints_honest_sign and not reprint and not allow_partial:
         preflight_shortage = await _preflight_new_code_shortage(session, tenant_id, ordered)
         if preflight_shortage > 0:
             return FbsOrderTapePrintResult(
@@ -237,7 +238,7 @@ async def print_fbs_order_tape(
                 )
             )
             continue
-        if qr_only:
+        if not prints_honest_sign:
             result_orders.append(
                 FbsOrderTapeOrder(
                     order_id=order.id,
@@ -248,6 +249,45 @@ async def print_fbs_order_tape(
             )
             continue
         line = line_by_product.get(order.product_id)
+        if (
+            line is None
+            and getattr(supply, "marketplace", "wb") == "wb"
+            and getattr(supply, "status", None)
+            in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}
+        ):
+            # A printed code belongs to the order, not to an obligatory packing
+            # stage. Reuse it after handoff without issuing another code or
+            # resending metadata to WB. Operator-supplied codes stay protected.
+            existing = _existing_sgtin_marking(order)
+            if existing is not None and existing.source == "operator":
+                errors.append(FbsOrderTapeError(
+                    order_id=order.id,
+                    wb_order_id=int(order.wb_order_id),
+                    code="operator_kiz_print_forbidden",
+                    message="operator_kiz_print_forbidden",
+                ))
+                continue
+            if existing is not None and existing.marking_code is not None:
+                code = existing.marking_code
+                if reprint:
+                    await mc_svc.record_event(
+                        session, code=code, event_type=EVENT_REPRINTED,
+                        actor=actor_user_id, document_number=supply.document_number,
+                        copies=mc_svc.cz_copies_from_layout(print_layout),
+                        source_process=mc_svc.MARKING_SOURCE_PACKING_FBS_PRINT,
+                    )
+                result_orders.append(FbsOrderTapeOrder(
+                    order_id=order.id,
+                    wb_order_id=int(order.wb_order_id),
+                    requires_honest_sign=True,
+                    qr_asset_id=qr_asset_id,
+                    codes=[code.cis_code],
+                    printed_codes=[FbsOrderTapePrintedCode(
+                        id=code.id, cis_code=code.cis_code,
+                        has_label_artifact=bool(code.label_artifact_pdf),
+                    )],
+                ))
+                continue
         if line is None:
             errors.append(
                 FbsOrderTapeError(

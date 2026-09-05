@@ -380,7 +380,8 @@ class ProductFbsRuleBody(BaseModel):
     same_everywhere: bool
     percent: int = Field(ge=0, le=100)
     # Ключ — идентификатор склада в кабинете WB (он приходит числом, но в JSON
-    # ключи объекта всегда строки).
+    # ключи объекта всегда строки). Также принимает wb:<id> / ozon:<id>
+    # для складов разных площадок с одинаковыми номерами.
     by_warehouse: dict[str, int] = Field(default_factory=dict)
     # Режим «остаток по штукам»: доля не применяется, числа задаются по складам.
     units_mode: bool = False
@@ -1575,10 +1576,13 @@ def _rule_from_body(body: ProductFbsRuleBody) -> FbsRule:
         publish=body.publish,
         same_everywhere=body.same_everywhere,
         percent=body.percent,
-        by_warehouse={int(key): value for key, value in body.by_warehouse.items()},
+        by_warehouse={
+            int(key) if key.isdigit() else key: value for key, value in body.by_warehouse.items()
+        },
         units_mode=body.units_mode,
         units_by_warehouse={
-            int(key): value for key, value in body.units_by_warehouse.items()
+            int(key) if key.isdigit() else key: value
+            for key, value in body.units_by_warehouse.items()
         },
     )
 

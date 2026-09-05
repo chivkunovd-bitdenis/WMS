@@ -41,6 +41,12 @@ import TuneOutlined from '@mui/icons-material/TuneOutlined'
 import { apiUrl } from '../../api'
 import { FbsStockDialog } from '../ff/products-fbs/FbsStockDialog'
 import {
+  qualifyWarehouseRuleValues,
+  warehouseNumberFromRuleKey,
+  warehouseRuleKey,
+  type WarehouseRuleBinding,
+} from '../ff/products-fbs/fbsWarehouseRuleKeys'
+import {
   toProduct as toFbsProduct,
   toRule as toFbsRule,
   type ApiRule as FbsApiRule,
@@ -712,15 +718,18 @@ export function FfProductsCatalogScreen({
 
       // Если WB временно не отдал список, не прячем уже сохранённые привязки:
       // оператор всё равно должен видеть внешний ID и выбранный WMS-склад.
+      let ruleBindings: WarehouseRuleBinding[] = whRows
       if (bindingsRes.ok) {
         const savedBindings = (await bindingsRes.json()) as Array<{
           wb_warehouse_id: number | string
           wms_warehouse_id: string
           is_active: boolean
+          served: boolean
           stock_sync_enabled: boolean
           marketplace?: 'wb' | 'ozon'
           external_warehouse_id?: string | null
         }>
+        ruleBindings = savedBindings.filter((binding) => binding.is_active)
         const knownIds = new Set(
           whRows.map((one) => `${one.marketplace ?? 'wb'}:${one.wb_warehouse_id}`),
         )
@@ -737,7 +746,7 @@ export function FfProductsCatalogScreen({
                 ? `Склад Ozon ${binding.external_warehouse_id ?? binding.wb_warehouse_id}`
                 : `Склад WB ${binding.wb_warehouse_id}`,
             wms_warehouse_id: binding.wms_warehouse_id,
-            served: binding.is_active && binding.stock_sync_enabled,
+            served: binding.is_active && binding.served,
             marketplace,
           })
         }
@@ -746,7 +755,7 @@ export function FfProductsCatalogScreen({
         id: sellerId,
         name: chosen[0]!.seller_name ?? '—',
         warehouses: whRows.map((one) => ({
-          id: String(one.wb_warehouse_id),
+          id: warehouseRuleKey(one),
           name: one.name ?? `Склад ${one.wb_warehouse_id}`,
           boundTo: one.wms_warehouse_id,
           fbsEnabled: one.served,
@@ -774,7 +783,12 @@ export function FfProductsCatalogScreen({
           sellerId,
         ),
       )
-      const rule: FbsRuleModel = toFbsRule(chosen[0]!.id, ruleById.get(chosen[0]!.id))
+      const rawRule = toFbsRule(chosen[0]!.id, ruleById.get(chosen[0]!.id))
+      const rule: FbsRuleModel = {
+        ...rawRule,
+        byWarehouse: qualifyWarehouseRuleValues(rawRule.byWarehouse, ruleBindings),
+        unitsByWarehouse: qualifyWarehouseRuleValues(rawRule.unitsByWarehouse, ruleBindings),
+      }
       setFbsDialog({ products, seller, rule, ozonWarehousesError })
       if (warehouseLoadError) setFbsDialogError(warehouseLoadError)
     } catch (e) {
@@ -800,7 +814,7 @@ export function FfProductsCatalogScreen({
         fbsDialog.seller.warehouses.find((one) => one.id === wbWarehouseId)?.marketplace ?? 'wb'
       try {
         const res = await fetch(
-          apiUrl(`/fbs-sellers/${fbsDialog.seller.id}/warehouses/${wbWarehouseId}`),
+          apiUrl(`/fbs-sellers/${fbsDialog.seller.id}/warehouses/${warehouseNumberFromRuleKey(wbWarehouseId)}`),
           {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
