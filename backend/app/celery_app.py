@@ -12,6 +12,11 @@ from app.core.settings import settings
 
 MOSCOW = ZoneInfo("Europe/Moscow")
 
+def moscow_now() -> datetime:
+    """Named callable survives Celery beat schedule persistence through pickle."""
+    return datetime.now(MOSCOW)
+
+
 _broker = settings.celery_broker_url or "memory://"
 celery_app = Celery(
     "wms",
@@ -49,6 +54,6 @@ celery_app.conf.beat_schedule = {
     # смена часового пояса всему Celery сдвинула бы и остальные расписания.
     "billing-storage-daily": {
         "task": "wms.billing_storage_daily",
-        "schedule": crontab(hour=0, minute=0, nowfun=lambda: datetime.now(MOSCOW)),
+        "schedule": crontab(hour=0, minute=0, nowfun=moscow_now),
     },
 }
