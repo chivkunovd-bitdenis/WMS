@@ -360,6 +360,10 @@ class FbsWorklistOrderOut(BaseModel):
     buyer_type: str
     cargo_type: str
     can_pvz: bool
+    # Маршрут сдачи Ozon: название метода доставки, по которому потом собирается
+    # отгрузка (WMS-358). У Wildberries маршрут виден из `can_pvz`, поэтому там
+    # поле пустое и колонка рисуется по-старому.
+    delivery_route: str | None = None
     metadata: FbsWorklistMetadataOut
     sticker: FbsWorklistStickerOut
     pick: FbsWorklistPickOut

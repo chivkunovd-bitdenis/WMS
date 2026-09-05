@@ -881,6 +881,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         "buyer_type": "legal" if order.is_legal else "individual",
         "cargo_type": order.cargo_type or "unknown",
         "can_pvz": bool(order.can_pvz),
+        "delivery_route": _delivery_route(order),
         "metadata": _build_metadata(order, markings),
         "sticker": {
             "code": order.sticker_code,
@@ -906,6 +907,31 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
             server_now=server_now,
         ),
     }
+
+
+def _delivery_route(order: FbsOrder) -> str | None:
+    """Маршрут сдачи Ozon — метод доставки из самого отправления (WMS-358).
+
+    Отгрузка Ozon создаётся по методу доставки (`/v1/carriage/create` принимает
+    `delivery_method_id`), значит заказы одного метода уезжают одной отгрузкой,
+    разных — разными. Это ровно тот смысл, который у Wildberries несёт «маршрут
+    сдачи», и колонка в таблице заказов у него уже есть.
+
+    Справочника методов у нас нет и быть не может: `/v1/delivery-method/list`
+    объявлен Ozon устаревшим. Поэтому название берём из того, что положил в
+    заказ опрос, а если названия не пришло — показываем идентификатор, чтобы
+    заказы разных методов всё равно различались глазами.
+    """
+    if order.marketplace != "ozon":
+        return None
+    details = order.meta_details_json or {}
+    name = details.get("ozon_delivery_method_name")
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    method_id = details.get("ozon_delivery_method_id")
+    if isinstance(method_id, str) and method_id.strip():
+        return f"Метод доставки {method_id.strip()}"
+    return None
 
 
 def _marking_value_tail(value: str | None, length: int = 8) -> str | None:

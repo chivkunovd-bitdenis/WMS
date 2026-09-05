@@ -64,6 +64,7 @@ import {
   fetchFbsWorklist,
   fetchFbsCargoPlaces,
   addFbsOrdersToSupply,
+  cancelFbsOrder,
   confirmFbsPrintApplied,
   createFbsIdempotencyKey,
   retryFbsSupplyQr,
@@ -132,12 +133,39 @@ function marketplaceLabel(marketplace: 'wb' | 'ozon'): string {
 }
 
 function orderNumberLabel(order: FbsWorklistOrder): string {
-  return `${marketplaceLabel(order.marketplace)} №${order.external_order_id ?? order.wb_order_id}`
+  // В строке заказа маркетплейс называется коротко — «WB №123», как было всегда.
+  // Полное «Wildberries» остаётся в поясняющих текстах, где место есть.
+  const short = order.marketplace === 'ozon' ? 'Ozon' : 'WB'
+  return `${short} №${order.external_order_id ?? order.wb_order_id}`
 }
 
 function externalSupplyHint(order: FbsWorklistOrder): string {
   const marketplace = marketplaceLabel(order.marketplace)
   return `Поставку создали в кабинете ${marketplace}, а в WMS она не привязана. Открыть её здесь нельзя.`
+}
+
+// WMS-358: маршрут сдачи Ozon — это метод доставки. Отгрузка создаётся по нему
+// (`/v1/carriage/create` принимает `delivery_method_id`), значит заказы одного
+// метода уезжают одной отгрузкой, разных — разными: тот же смысл, что у
+// вайлдберрисовского маршрута. Название приходит в самом отправлении, справочника
+// методов у Ozon нет. У WB маршрут прежний — ПВЗ или склад/СЦ.
+function deliveryRouteLabel(order: FbsWorklistOrder): string {
+  return order.delivery_route?.trim() || (order.can_pvz ? 'ПВЗ' : 'Склад / СЦ')
+}
+
+function DeliveryRouteChip({ order }: { order: FbsWorklistOrder }) {
+  const label = deliveryRouteLabel(order)
+  return (
+    <Tooltip title={label}>
+      <Chip
+        size="small"
+        variant="outlined"
+        label={label}
+        sx={{ maxWidth: 190, '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }}
+        data-testid={`fbs-order-${order.id}-delivery-route`}
+      />
+    </Tooltip>
+  )
 }
 
 function MissingText({ children }: { children: string }) {
@@ -356,7 +384,7 @@ const NewOrderRow = memo(function NewOrderRow({
         </Tooltip>
       </TableCell>
       <TableCell>
-        <Chip size="small" variant="outlined" label={order.can_pvz ? 'ПВЗ' : 'Склад / СЦ'} />
+        <DeliveryRouteChip order={order} />
         {order.buyer_type === 'legal' ? <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>Юридическое лицо</Typography> : null}
       </TableCell>
       <TableCell>
@@ -555,6 +583,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [addExistingOpen, setAddExistingOpen] = useState(false)
   const [addExistingSupplyId, setAddExistingSupplyId] = useState('')
   const [addingExisting, setAddingExisting] = useState(false)
+  // WMS-360: отмена заказа Ozon. Обычное подтверждение перед необратимым
+  // действием — отменённое отправление Ozon восстановить нельзя.
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [workspaceSeed, setWorkspaceSeed] = useState<FbsWorkspace | null>(null)
@@ -873,6 +905,43 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     [matchingOrders],
   )
   const exportRows = selected.size > 0 ? selectedOrders : searchTerm ? matchingOrders : orders
+
+  // WMS-360: отмена доступна только по заказам Ozon. У Wildberries отмена стоит
+  // продавцу штрафа и отдельного разговора с маркетплейсом — своей кнопки на
+  // этом экране у неё нет и здесь не появляется.
+  const ozonSelection = useMemo(
+    () =>
+      selectedOrders.length > 0 &&
+      selectedOrders.length === selected.size &&
+      selectedOrders.every((order) => order.marketplace === 'ozon'),
+    [selectedOrders, selected],
+  )
+
+  const cancelSelectedOzonOrders = async () => {
+    setCancelling(true)
+    setError(null)
+    setNotice(null)
+    // Отмена уходит по одному заказу — ручка `PATCH .../{id}/cancel` работает с
+    // одним отправлением. Если Ozon отказал на середине, честно говорим, сколько
+    // успело отмениться: молча показать «не получилось» после трёх отменённых
+    // заказов — соврать оператору.
+    let done = 0
+    try {
+      for (const order of selectedOrders) {
+        await cancelFbsOrder(token, authHeaders, order.id)
+        done += 1
+      }
+      setCancelOpen(false)
+      setNotice(`Отменено заказов в Ozon: ${done}.`)
+      setSelected(new Set())
+    } catch (cause) {
+      const reason = cause instanceof Error ? cause.message : 'Не удалось отменить заказ в Ozon.'
+      setError(done > 0 ? `Отменено заказов: ${done}, дальше остановились. ${reason}` : reason)
+    } finally {
+      setCancelling(false)
+      await load()
+    }
+  }
 
   const addSelectedToExistingSupply = async () => {
     if (!addExistingSupplyId || selectedOrderIds.length === 0) return
@@ -1548,7 +1617,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                               {order.product.id ? order.product.name : 'Товар не сопоставлен'}
                             </Typography>
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                              Заказ WB №{order.wb_order_id}
+                              Заказ {orderNumberLabel(order)}
                             </Typography>
                           </Box>
                         </Stack>
@@ -1582,7 +1651,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                         <Typography variant="body2">{order.seller.name ?? '—'}</Typography>
                       </TableCell>
                       <TableCell>
-                        <Chip size="small" variant="outlined" label={order.can_pvz ? 'ПВЗ' : 'Склад / СЦ'} />
+                        <DeliveryRouteChip order={order} />
                         {order.buyer_type === 'legal' ? <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>Юридическое лицо</Typography> : null}
                       </TableCell>
                       <TableCell>
@@ -1715,6 +1784,15 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               Показать выбранные
             </Button>
             <Button onClick={() => setSelected(new Set())}>Снять выбор</Button>
+            {ozonSelection ? (
+              <Button
+                color="error"
+                onClick={() => setCancelOpen(true)}
+                data-testid="fbs-orders-cancel-ozon"
+              >
+                Отменить в Ozon
+              </Button>
+            ) : null}
             <Button
               variant="outlined"
               size="large"
@@ -1736,6 +1814,43 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         </Paper>
       ) : null}
 
+      <Dialog
+        open={cancelOpen}
+        onClose={() => !cancelling && setCancelOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Отменить заказы в Ozon?</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2">
+            Отмена уходит в кабинет Ozon и обратного хода не имеет: восстановить отменённое
+            отправление нельзя. Причину Ozon получит стандартную — «товар закончился на складе
+            продавца».
+          </Typography>
+          <Stack spacing={0.5} sx={{ mt: 1.5 }} data-testid="fbs-orders-cancel-list">
+            {selectedOrders.map((order) => (
+              <Typography key={order.id} variant="caption" color="text.secondary">
+                {orderNumberLabel(order)} · {order.product.name}
+              </Typography>
+            ))}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCancelOpen(false)} disabled={cancelling}>
+            Не отменять
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={() => void cancelSelectedOzonOrders()}
+            disabled={cancelling || selectedOrders.length === 0}
+            data-testid="fbs-orders-cancel-ozon-confirm"
+          >
+            {cancelling ? 'Отменяем…' : 'Отменить заказы'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog open={selectedOpen} onClose={() => setSelectedOpen(false)} fullWidth maxWidth="md">
         <DialogTitle>Выбранные FBS-заказы</DialogTitle>
         <DialogContent dividers>
@@ -1748,7 +1863,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' } }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                        WB №{order.wb_order_id} · {order.product.name}
+                        {orderNumberLabel(order)} · {order.product.name}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {order.seller.name} · {order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`} · {order.product.barcode ?? 'ШК нет'}

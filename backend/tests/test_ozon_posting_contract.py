@@ -110,7 +110,12 @@ async def _seed(db_session: AsyncSession, *, with_binding: bool = True) -> Simpl
         tenant=tenant, name="FBS", code=f"ozon-contract-{uuid.uuid4().hex[:8]}"
     )
     product = Product(
-        tenant=tenant, seller=seller, name="Очки", sku_code=f"sku-{uuid.uuid4().hex[:8]}"
+        tenant=tenant,
+        seller=seller,
+        name="Очки",
+        sku_code=f"sku-{uuid.uuid4().hex[:8]}",
+        # WMS-352: заказ Ozon импортируется только там, где мы публикуем остаток.
+        fbs_stock_sync_enabled=True,
     )
     db_session.add_all([tenant, seller, warehouse, product])
     await db_session.flush()
@@ -192,6 +197,10 @@ async def test_binding_created_through_the_normal_path_matches_a_real_posting(
 
     Привязку создаём тем же путём, что и оператор, — через сервис, а не руками
     в базе, — и проверяем, что разбор отправления её находит.
+
+    Синхронизация остатка включена, потому что `upsert_binding` выводит из неё
+    «обслуживаем этот склад», а с WMS-352 необслуживаемый склад в опрос вообще
+    не попадает.
     """
     ctx = await _seed(db_session, with_binding=False)
     await binding_svc.upsert_binding(
@@ -200,7 +209,7 @@ async def test_binding_created_through_the_normal_path_matches_a_real_posting(
         ctx.seller.id,
         OZON_WAREHOUSE_ID,
         wms_warehouse_id=ctx.warehouse.id,
-        stock_sync_enabled=False,
+        stock_sync_enabled=True,
         marketplace="ozon",
     )
 

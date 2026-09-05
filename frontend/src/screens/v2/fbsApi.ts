@@ -239,6 +239,9 @@ export type FbsWorklistOrder = {
   buyer_type: 'individual' | 'legal'
   cargo_type: string
   can_pvz: boolean
+  // Маршрут сдачи Ozon — название метода доставки, по которому потом собирается
+  // отгрузка (WMS-358). У Wildberries маршрут виден из can_pvz, поэтому там null.
+  delivery_route?: string | null
   metadata: FbsOrderMetadata
   sticker: {
     code: string | null
@@ -1573,4 +1576,21 @@ export async function syncFbsOrderStatuses(
   })
   const payload = await jsonOrThrow<{ statuses_updated: number }>(res)
   return payload.statuses_updated
+}
+
+// WMS-360: отмена заказа. Ручка `PATCH /operations/fbs-orders/{id}/cancel` жила
+// на сервере без единого вызова с экрана. Тело необязательное: без причины Ozon
+// получает свою причину по умолчанию — «товар закончился на складе продавца», —
+// а WB метод отмены причину не принимает вовсе.
+export async function cancelFbsOrder(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  orderId: string,
+): Promise<FbsOrderRow> {
+  const res = await fetch(apiUrl(`/operations/fbs-orders/${orderId}/cancel`), {
+    method: 'PATCH',
+    headers: { ...ah(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+  return await jsonOrThrow<FbsOrderRow>(res)
 }

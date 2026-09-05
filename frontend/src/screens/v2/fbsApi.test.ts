@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  cancelFbsOrder,
   deleteFbsCargoPlaces,
   deliverFbsSupply,
   FbsApiError,
@@ -194,5 +195,48 @@ describe('FBS API client', () => {
         idempotency_key: 'delete-1',
       }),
     })
+  })
+
+  // WMS-360: ручка отмены жила на сервере без единого вызова с экрана — слова
+  // `cancel` не было даже в этом файле. Тест держит вызов на месте.
+  it('cancels one order through the server cancel endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: 'order-1', status: 'cancelled' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(cancelFbsOrder('token', authHeaders, 'order-1')).resolves.toMatchObject({
+      status: 'cancelled',
+    })
+    expect(fetchMock).toHaveBeenCalledWith('/api/operations/fbs-orders/order-1/cancel', {
+      method: 'PATCH',
+      headers: {
+        Authorization: 'Bearer token',
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    })
+  })
+
+  it('surfaces the server reason when Ozon refuses the cancellation', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: {
+            code: 'ozon_cancel_reason_unavailable',
+            message: 'Ozon не разрешает эту причину отмены для отправления.',
+          },
+        }),
+        { status: 409, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(cancelFbsOrder('token', authHeaders, 'order-1')).rejects.toThrow(
+      'Ozon не разрешает эту причину отмены для отправления.',
+    )
   })
 })

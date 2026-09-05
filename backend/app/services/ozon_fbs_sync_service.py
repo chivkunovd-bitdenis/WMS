@@ -482,6 +482,38 @@ async def _binding_for_row(
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def _stock_is_published_for_row(
+    session: AsyncSession,
+    binding: FbsWarehouseBinding | None,
+    positions: list[FbsOrderProduct],
+    fallback_product_id: uuid.UUID | None,
+) -> bool:
+    """Наш ли это заказ: выставлен ли по его складу и товару остаток (WMS-352).
+
+    Кабинет Ozon отдаёт все отправления продавца, включая те, что он собирает
+    сам на другом складе. Своими считаем ровно те, по которым остаток публикуем
+    мы: склад продавца отмечен обслуживаемым, а у товара включена публикация.
+    Правило и его место — те же, что у Wildberries в
+    ``fbs_order_import_scope_service.import_wb_order_rows``: отсев до записи в
+    локальную базу, без отдельного признака «чужой» у заказа.
+    """
+    if binding is None or not binding.served:
+        return False
+    product_ids = {
+        position.product_id for position in positions if position.product_id is not None
+    }
+    if fallback_product_id is not None:
+        product_ids.add(fallback_product_id)
+    if not product_ids:
+        return False
+    published = await session.scalar(
+        select(Product.id)
+        .where(Product.id.in_(product_ids), Product.fbs_stock_sync_enabled.is_(True))
+        .limit(1)
+    )
+    return published is not None
+
+
 async def _posting_products_for_row(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -542,15 +574,32 @@ def _apply_delivery_method(order: FbsOrder, row: dict[str, Any]) -> None:
     записать этот ключ было некому — грепом по бэкенду находился один читатель
     и ни одного писателя. Идентификатор приходит в каждом отправлении, в
     `delivery_method.id`.
+
+    Рядом кладём название метода (WMS-358). Отгрузка Ozon создаётся по методу
+    доставки, то есть метод и есть «маршрут сдачи» из таблицы заказов, а
+    справочника методов у нас нет: `/v1/delivery-method/list` объявлен Ozon
+    устаревшим и отвечает `code 9`. Единственный источник названия — само
+    отправление, поэтому запоминаем его тут же, а не ходим за ним потом.
     """
-    delivery_method_id = _nested_text(row, "delivery_method", "id")
-    if delivery_method_id is None or not delivery_method_id.isdigit():
-        return
     details = dict(order.meta_details_json or {})
-    if details.get("ozon_delivery_method_id") == delivery_method_id:
-        return
-    details["ozon_delivery_method_id"] = delivery_method_id
-    order.meta_details_json = details
+    changed = False
+    delivery_method_id = _nested_text(row, "delivery_method", "id")
+    if (
+        delivery_method_id is not None
+        and delivery_method_id.isdigit()
+        and details.get("ozon_delivery_method_id") != delivery_method_id
+    ):
+        details["ozon_delivery_method_id"] = delivery_method_id
+        changed = True
+    delivery_method_name = _nested_text(row, "delivery_method", "name")
+    if (
+        delivery_method_name is not None
+        and details.get("ozon_delivery_method_name") != delivery_method_name
+    ):
+        details["ozon_delivery_method_name"] = delivery_method_name
+        changed = True
+    if changed:
+        order.meta_details_json = details
 
 
 async def _honest_sign_required_by_catalog(
@@ -635,6 +684,7 @@ async def _apply_status(
     if order.status in terminal:
         if order.status == FBS_ORDER_STATUS_CANCELLED:
             from app.services.fbs_cancellation_service import (
+                reverse_fbs_order_billing,
                 reverse_fbs_shipment_if_needed,
             )
 
@@ -643,6 +693,10 @@ async def _apply_status(
                 order,
                 actor_user_id=None,
             )
+            # Ozon отменил заказ, за который уже начислили. Деньги снимаем
+            # здесь: опрос — единственный путь, которым подтверждённый заказ
+            # уходит в отмену.
+            await reverse_fbs_order_billing(session, order)
         await _release_reservation(session, order)
     return changed
 
@@ -701,6 +755,11 @@ async def sync_ozon_orders(
         required_kinds, _ = _requirement_kinds(row)
         fallback_product_id = await _product_id_for_row(session, tenant_id, seller_id, row)
         positions = await _posting_products_for_row(session, tenant_id, seller_id, row)
+        binding = await _binding_for_row(session, tenant_id, seller_id, row)
+        if not await _stock_is_published_for_row(
+            session, binding, positions, fallback_product_id
+        ):
+            continue
         if MARKING_KIND_SGTIN not in required_kinds and await _honest_sign_required_by_catalog(
             session, positions, fallback_product_id
         ):
@@ -745,7 +804,6 @@ async def sync_ozon_orders(
             upserted += 1
             continue
 
-        binding = await _binding_for_row(session, tenant_id, seller_id, row)
         # У отправления Ozon нет поля `created_at`: дата начала обработки живёт
         # в `in_process_at`. Пока читали `created_at`, дата создания молча
         # подменялась на «сейчас» у каждого заказа.
