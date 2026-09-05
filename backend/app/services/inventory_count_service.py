@@ -544,6 +544,7 @@ async def create_document_container(
             tenant_id,
             count.warehouse_id,
             kind=kind,
+            commit=False,
         )
     except warehouse_map_service.WarehouseMapError as exc:
         raise InventoryCountError(exc.code) from exc

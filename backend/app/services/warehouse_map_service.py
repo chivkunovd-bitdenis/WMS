@@ -1285,6 +1285,7 @@ async def create_sorting_object(
     *,
     kind: Literal["pallet", "box", "cargo_place"],
     inbound_request_id: uuid.UUID | None = None,
+    commit: bool = True,
 ) -> dict[str, str | None]:
     await _assert_warehouse(session, tenant_id, warehouse_id)
     if inbound_request_id is not None:
@@ -1302,6 +1303,7 @@ async def create_sorting_object(
                 tenant_id,
                 warehouse_id=warehouse_id,
                 inbound_request_id=inbound_request_id,
+                commit=commit,
             )
         except pallet_service.PalletServiceError as exc:
             raise WarehouseMapError(exc.code) from exc
@@ -1321,8 +1323,9 @@ async def create_sorting_object(
             inbound_request_id=inbound_request_id,
             container_kind=kind,
         )
-        await session.commit()
-        await session.refresh(container)
+        if commit:
+            await session.commit()
+            await session.refresh(container)
     except warehouse_box_service.WarehouseBoxError as exc:
         await session.rollback()
         raise WarehouseMapError(exc.code) from exc
