@@ -35,8 +35,15 @@ from app.models.fbs_stock_sync_item import (
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller import Seller
+from app.models.user import User
 from app.models.warehouse import Warehouse
+from app.services import fbs_seller_warehouse_service as wh_svc
 from app.services.fbs_autopoll_service import list_active_stock_sync_bindings
+from app.services.marketplace_account_service import MarketplaceAccountService
+from app.services.marketplace_provider import (
+    FakeMarketplaceTransport,
+    OzonMarketplaceProvider,
+)
 
 
 def _assert_fbs_error(
@@ -860,3 +867,148 @@ async def test_ozon_binding_is_addressed_separately_from_the_wb_one(
     assert rows["wb"]["wms_warehouse_id"] == wh_wb
     assert rows["ozon"]["wms_warehouse_id"] == wh_ozon
     assert rows["ozon"]["stock_sync_enabled"] is False
+
+
+# --- Справочник складов Ozon (WMS-362) ----------------------------------
+
+
+def _ozon_warehouses_url(seller_id: str) -> str:
+    return f"/operations/fbs-sellers/{seller_id}/ozon-warehouses"
+
+
+async def _connect_ozon_cabinet(async_client: AsyncClient, seller_id: str, suffix: str) -> None:
+    """Сохранить пару Client-Id/Api-Key так же, как это делает подключение кабинета."""
+    async with SessionLocal() as session:
+        seller = await session.get(Seller, uuid.UUID(seller_id))
+        assert seller is not None
+        actor = await session.scalar(
+            select(User).where(User.email == f"fbs-bind-{suffix}@example.com")
+        )
+        assert actor is not None
+        await MarketplaceAccountService(session).save_validated_candidate(
+            seller.tenant_id,
+            seller.id,
+            actor.id,
+            "5641753",
+            "ozon-api-key",
+        )
+
+
+@pytest.mark.asyncio
+async def test_ozon_warehouse_directory_says_why_it_is_empty_while_the_switch_is_off(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Выключенный рубильник — это причина, а не «у продавца нет складов».
+
+    При `WMS_OZON_LIVE_API=false` фабрика отдаёт локальный фейк, и тот вернул бы
+    пустой список. Оператор прочитал бы «складов нет» про кабинет, которого
+    никто не спрашивал, и пошёл бы искать несуществующую проблему у продавца.
+    """
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", False)
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+
+    response = await async_client.get(_ozon_warehouses_url(seller_id), headers=headers)
+
+    _assert_fbs_error(
+        response,
+        status_code=503,
+        code="ozon_live_warehouses_blocked",
+        message=(
+            "Справочник складов Ozon недоступен: боевые запросы к Ozon выключены "
+            "настройкой WMS_OZON_LIVE_API. Список пуст не потому, что складов нет."
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_ozon_warehouse_directory_offers_the_cabinet_list_with_entrusted_acceptance(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Оператор выбирает склад из списка, а не набирает его номер по памяти.
+
+    Идентификатор и название взяты живые: `/v2/warehouse/list` на кабинете
+    «ИП Горячкина Т.И.» 03.09.2026 отдал склад `1020005028840530` «мой склад».
+    Вместе со списком приезжает `has_entrusted_acceptance` — тот самый признак
+    доверительной приёмки, ради которого в WMS-356 собирались в кабинет руками.
+    """
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", True)
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wms_warehouse_id = await _create_warehouse(async_client, headers, suffix, "ozon")
+    await _connect_ozon_cabinet(async_client, seller_id, suffix)
+
+    bound_warehouse_id = 1020005028840530
+    free_warehouse_id = 1020005028840531
+    created = await async_client.put(
+        _bindings_url(seller_id, bound_warehouse_id),
+        headers=headers,
+        json={
+            "wms_warehouse_id": wms_warehouse_id,
+            "stock_sync_enabled": True,
+            "marketplace": "ozon",
+        },
+    )
+    assert created.status_code == 200, created.text
+
+    transport = FakeMarketplaceTransport(
+        warehouses=[
+            {
+                "warehouse_id": bound_warehouse_id,
+                "name": "мой склад",
+                "has_entrusted_acceptance": True,
+                "is_rfbs": False,
+            },
+            {
+                "warehouse_id": free_warehouse_id,
+                "name": "",
+                "has_entrusted_acceptance": False,
+                "is_rfbs": True,
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        wh_svc,
+        "build_ozon_provider",
+        lambda **kwargs: OzonMarketplaceProvider(transport=transport),
+    )
+
+    listed = await async_client.get(_ozon_warehouses_url(seller_id), headers=headers)
+
+    assert listed.status_code == 200, listed.text
+    rows = {row["warehouse_id"]: row for row in listed.json()}
+    assert set(rows) == {bound_warehouse_id, free_warehouse_id}
+    assert rows[bound_warehouse_id]["name"] == "мой склад"
+    assert rows[bound_warehouse_id]["has_entrusted_acceptance"] is True
+    assert rows[bound_warehouse_id]["is_rfbs"] is False
+    # Уже сопоставленный склад виден сопоставленным: иначе оператор заведёт
+    # вторую привязку поверх существующей.
+    assert rows[bound_warehouse_id]["wms_warehouse_id"] == wms_warehouse_id
+    assert rows[bound_warehouse_id]["served"] is True
+    # Безымянный склад подписывается своим номером, а не пустой строкой.
+    assert rows[free_warehouse_id]["name"] == f"Склад Ozon {free_warehouse_id}"
+    assert rows[free_warehouse_id]["wms_warehouse_id"] is None
+    assert rows[free_warehouse_id]["is_rfbs"] is True
+    assert transport.calls == [("fetch_warehouses", "5641753")]
+
+
+@pytest.mark.asyncio
+async def test_ozon_warehouse_directory_refuses_a_seller_without_a_cabinet(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Без сохранённой пары Client-Id/Api-Key спрашивать нечего и некого."""
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", True)
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+
+    response = await async_client.get(_ozon_warehouses_url(seller_id), headers=headers)
+
+    _assert_fbs_error(
+        response,
+        status_code=403,
+        code="ozon_not_connected",
+        message="У продавца не подключён кабинет Ozon: нет Client-Id и Api-Key.",
+    )

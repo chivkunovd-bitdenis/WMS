@@ -28,6 +28,8 @@ from app.services.ozon_marketplace_transport import (
     PACKAGE_LABEL_PATH,
     PRODUCTS_STOCKS_PATH,
     UNFULFILLED_LIST_PATH,
+    WAREHOUSE_LIST_PATH,
+    WAREHOUSE_PAGE_LIMIT,
     HttpxOzonMarketplaceTransport,
 )
 from app.services.ozon_provider_factory import build_ozon_transport
@@ -137,6 +139,82 @@ async def test_binary_answer_is_normalised_into_the_same_file_envelope() -> None
     assert base64.b64decode(str(result["file_content"])) == b"%PDF-1.4 fake"
     assert result["content_type"] == "application/pdf"
     assert result["file_name"] == "act.pdf"
+
+
+async def test_warehouses_are_walked_page_by_page_and_carry_entrusted_acceptance() -> None:
+    """Справочник складов Ozon и признак доверительной приёмки одним вызовом (WMS-362).
+
+    Номер склада до этого оператор вводил руками, а «включена ли доверительная
+    приёмка» собирались смотреть в кабинете глазами (WMS-356). И то и другое
+    лежит в ответе `/v2/warehouse/list`.
+    """
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == WAREHOUSE_LIST_PATH
+        body = json.loads(request.content)
+        bodies.append(body)
+        if not body.get("cursor"):
+            return httpx.Response(
+                200,
+                json={
+                    "warehouses": [
+                        {
+                            "warehouse_id": 1020005028840530,
+                            "name": "мой склад",
+                            "has_entrusted_acceptance": True,
+                            "is_rfbs": False,
+                        }
+                    ],
+                    "cursor": "next-page",
+                    "has_next": True,
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "warehouses": [
+                    {
+                        "warehouse_id": 1020005028840531,
+                        "name": "склад rFBS",
+                        "has_entrusted_acceptance": False,
+                        "is_rfbs": True,
+                    }
+                ],
+                "cursor": "",
+                "has_next": False,
+            },
+        )
+
+    rows = await _transport(handler).fetch_warehouses(client_id="c", api_key="k")
+
+    assert [row["warehouse_id"] for row in rows] == [1020005028840530, 1020005028840531]
+    assert [row["has_entrusted_acceptance"] for row in rows] == [True, False]
+    # `limit` у метода обязательный: без него Ozon не отвечает.
+    assert bodies[0] == {"limit": WAREHOUSE_PAGE_LIMIT}
+    assert bodies[1]["cursor"] == "next-page"
+
+
+async def test_warehouse_walk_stops_when_ozon_says_there_is_no_next_page() -> None:
+    """Курсор в ответе есть всегда; страницу за ним берём только по `has_next`."""
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(
+            200,
+            json={
+                "warehouses": [{"warehouse_id": 1020005028840530}],
+                "cursor": "looks-like-more",
+                "has_next": False,
+            },
+        )
+
+    rows = await _transport(handler).fetch_warehouses(client_id="c", api_key="k")
+
+    assert calls == 1
+    assert [row["warehouse_id"] for row in rows] == [1020005028840530]
 
 
 async def test_unfulfilled_orders_are_walked_page_by_page_with_barcodes_asked_for() -> None:

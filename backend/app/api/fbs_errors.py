@@ -142,6 +142,17 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "binding_not_found": "Привязка склада не найдена.",
     "invalid_wb_warehouse_id": "Некорректный ID склада WB.",
     "unsupported_marketplace": "Привязка складов поддерживается только для Wildberries и Ozon.",
+    # Справочник складов Ozon (WMS-362). Общего запасного текста «Ошибка Ozon»
+    # тут мало: оператор должен понять, что список пуст не из-за кабинета.
+    "ozon_live_warehouses_blocked": (
+        "Справочник складов Ozon недоступен: боевые запросы к Ozon выключены "
+        "настройкой WMS_OZON_LIVE_API. Список пуст не потому, что складов нет."
+    ),
+    "ozon_not_connected": "У продавца не подключён кабинет Ozon: нет Client-Id и Api-Key.",
+    "ozon_account_blocked": "Кабинет Ozon заблокирован. Обратитесь в поддержку Ozon.",
+    "ozon_auth_failed": "Ozon отклонил данные подключения.",
+    "ozon_rate_limited": "Ozon временно ограничил частоту запросов.",
+    "ozon_unavailable": "Ozon временно недоступен.",
     "wms_warehouse_already_bound": "WMS-склад уже привязан.",
     "wb_warehouse_already_bound": "Этот WB-склад уже привязан к другому складу WMS.",
     "active_fbs_reservations": "Есть активные FBS-резервы.",

@@ -92,6 +92,8 @@ class MarketplaceTransport(Protocol):
         payload: Mapping[str, object],
     ) -> object: ...
 
+    async def fetch_warehouses(self, *, client_id: str, api_key: str) -> list[dict[str, Any]]: ...
+
     async def fetch_orders(self, *, client_id: str, api_key: str) -> list[dict[str, Any]]: ...
 
     async def fetch_statuses(
@@ -130,6 +132,7 @@ class MarketplaceTransport(Protocol):
 @dataclass
 class FakeMarketplaceTransport:
     orders: list[dict[str, Any]] = field(default_factory=list)
+    warehouses: list[dict[str, Any]] = field(default_factory=list)
     statuses: list[dict[str, Any]] = field(default_factory=list)
     order_labels: list[dict[str, Any]] = field(default_factory=list)
     supply_qr: bytes = b""
@@ -159,6 +162,13 @@ class FakeMarketplaceTransport:
                 raise value
             return value
         return self.endpoint_responses.get(path, {})
+
+    async def fetch_warehouses(self, *, client_id: str, api_key: str) -> list[dict[str, Any]]:
+        _ = api_key
+        self.calls.append(("fetch_warehouses", client_id))
+        if error := self.errors.get("fetch_warehouses"):
+            raise error
+        return list(self.warehouses)
 
     async def fetch_orders(self, *, client_id: str, api_key: str) -> list[dict[str, Any]]:
         _ = api_key
@@ -257,6 +267,14 @@ class OzonMarketplaceProvider:
                 path=path,
                 payload=payload,
             )
+        except MarketplaceProviderError as error:
+            self._remember_blocked(error)
+            raise
+
+    async def fetch_warehouses(self, *, client_id: str, api_key: str) -> list[dict[str, Any]]:
+        self._raise_if_blocked()
+        try:
+            return await self.transport.fetch_warehouses(client_id=client_id, api_key=api_key)
         except MarketplaceProviderError as error:
             self._remember_blocked(error)
             raise

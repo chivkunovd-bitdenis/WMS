@@ -61,7 +61,16 @@ MAX_UNFULFILLED_PAGES = 100
 CUTOFF_WINDOW_PAST_DAYS = 30
 CUTOFF_WINDOW_FUTURE_DAYS = 30
 
+# Справочник складов продавца: по нему оператор выбирает склад Ozon вместо того,
+# чтобы вводить его номер руками. Двести — потолок поля `limit` в схеме
+# `v2WarehouseListV2Request`, и само поле обязательное: без него метод не
+# отвечает. Десять страниц по двести — это две тысячи складов у одного продавца,
+# заведомо больше, чем бывает.
+WAREHOUSE_PAGE_LIMIT = 200
+MAX_WAREHOUSE_PAGES = 10
+
 UNFULFILLED_LIST_PATH = "/v4/posting/fbs/unfulfilled/list"
+WAREHOUSE_LIST_PATH = "/v2/warehouse/list"
 POSTING_GET_PATH = "/v3/posting/fbs/get"
 ACT_BARCODE_PATH = "/v2/posting/fbs/act/get-barcode"
 PRODUCTS_STOCKS_PATH = "/v2/products/stocks"
@@ -379,6 +388,41 @@ class HttpxOzonMarketplaceTransport:
                     code="ozon_invalid_json",
                 ) from exc
         return _binary_envelope(response)
+
+    async def fetch_warehouses(self, *, client_id: str, api_key: str) -> list[dict[str, Any]]:
+        """Справочник складов продавца — тот самый список, которого не было вовсе.
+
+        Номер склада Ozon оператор до сих пор вводил руками, и опечатка
+        обнаруживалась только по тому, что у продавца пропали продажи. Список
+        приезжает по запросу и нигде не хранится: складов у продавца единицы, а
+        второй экземпляр этого списка у нас немедленно разойдётся с кабинетом.
+
+        Тем же ответом приходит `has_entrusted_acceptance` — включена ли у
+        склада доверительная приёмка. Раньше за этим собирались лезть в кабинет
+        руками (WMS-356); теперь это просто поле строки.
+        """
+        rows: list[dict[str, Any]] = []
+        cursor = ""
+        for _ in range(MAX_WAREHOUSE_PAGES):
+            payload: dict[str, object] = {"limit": WAREHOUSE_PAGE_LIMIT}
+            if cursor:
+                payload["cursor"] = cursor
+            raw = await self.call(
+                client_id=client_id,
+                api_key=api_key,
+                path=WAREHOUSE_LIST_PATH,
+                payload=payload,
+            )
+            if not isinstance(raw, dict):
+                break
+            warehouses = raw.get("warehouses")
+            if isinstance(warehouses, list):
+                rows.extend(item for item in warehouses if isinstance(item, dict))
+            next_cursor = raw.get("cursor")
+            cursor = next_cursor if isinstance(next_cursor, str) else ""
+            if not raw.get("has_next") or not cursor:
+                break
+        return rows
 
     async def fetch_orders(self, *, client_id: str, api_key: str) -> list[dict[str, Any]]:
         """Walk every unfulfilled posting page; the caller upserts them as they are."""
