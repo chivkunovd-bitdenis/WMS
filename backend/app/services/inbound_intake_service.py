@@ -770,6 +770,11 @@ async def _record_charge_if_done(
     if req.status != STATUS_DONE:
         return
     occurred_at = req.posted_at or datetime.now(UTC)
+    # Возврат — тот же документ приёмки с operation_type='return', и работа по
+    # нему тарифицируется своей услугой. Раньше в леджер по возврату уходил код
+    # «inbound», хотя факт операции уже писался с «return»: ставка возврата была
+    # заведена, а начислений по ней не появлялось ни одного.
+    service_code = "return" if req.operation_type == OPERATION_TYPE_RETURN else "inbound"
     try:
         await record_operational_charge(
             session,
@@ -777,8 +782,8 @@ async def _record_charge_if_done(
             seller_id=req.seller_id,
             source_type="inbound_intake",
             source_id=req.id,
-            source="inbound",
-            service_code="inbound",
+            source=service_code,
+            service_code=service_code,
             quantity=Decimal(sum(line.posted_qty for line in req.lines)),
             occurred_at=occurred_at,
             performer_id=performer_id,

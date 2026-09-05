@@ -6,7 +6,7 @@ from typing import Annotated, Any, Literal
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,11 +34,11 @@ from app.services.fbs_cancelled_after_pack_service import fetch_cancelled_after_
 from app.services.fbs_order_history_service import FbsOrderHistoryError, order_history
 from app.services.fbs_worklist_service import fetch_worklist_page
 from app.services.marketplace_provider import (
-    FakeMarketplaceTransport,
     MarketplaceProviderError,
-    OzonMarketplaceProvider,
     provider_error_message,
 )
+from app.services.ozon_fbs_sync_service import sync_ozon_order_statuses, sync_ozon_orders
+from app.services.ozon_provider_factory import build_ozon_provider, ozon_live_api_enabled
 from app.services.wb_marketplace_orders_service import list_orders
 
 router = APIRouter(
@@ -58,6 +58,20 @@ class FbsOrderSyncBody(BaseModel):
 class FbsOrderSyncStatusesBody(BaseModel):
     seller_id: uuid.UUID
     marketplace: Literal["wb", "ozon"] = "wb"
+
+
+class FbsOrderCancelBody(BaseModel):
+    """Причина отмены — она нужна только Ozon и только там применяется.
+
+    Тело необязательное: у метода отмены WB причины нет вовсе, а у Ozon без
+    явного указания берётся «товар закончился на складе продавца» — та, по
+    которой отменяет фулфилмент чаще всего. Экран сегодня тело не шлёт, и
+    ломать его этим полем не нужно: отсутствие тела означает причину по
+    умолчанию.
+    """
+
+    reason_id: int | None = None
+    reason_message: str | None = None
 
 
 class FbsOrderSyncStatusesOut(BaseModel):
@@ -110,7 +124,9 @@ class FbsCancelledAfterPackItemOut(BaseModel):
     product: FbsCancelledProductOut
     seller: FbsCancelledSellerOut
     supply: FbsCancelledSupplyOut
-    cargo_place: FbsCancelledCargoPlaceOut | None
+    # Заказ может лежать в нескольких коробах (WMS-355) — список, а не одно
+    # значение. Пустой список означает, что по коробам заказ не раскладывали.
+    cargo_places: list[FbsCancelledCargoPlaceOut] = Field(default_factory=list)
     assembled_at: datetime | None
     picked_at: datetime | None
     packed_at: datetime | None
@@ -222,10 +238,8 @@ async def get_fbs_cancelled_after_pack(
 
 
 async def _run_blocked_ozon_fake() -> None:
-    error = MarketplaceProviderError("ozon", 403, {"code": 7})
-    provider = OzonMarketplaceProvider(
-        transport=FakeMarketplaceTransport(errors={"fetch_orders": error})
-    )
+    """Локальный отказ, пока боевой транспорт Ozon выключен настройкой."""
+    provider = build_ozon_provider(blocked_operation="fetch_orders")
     try:
         await provider.fetch_orders(client_id="fake", api_key="fake")
     except MarketplaceProviderError as exc:
@@ -234,6 +248,14 @@ async def _run_blocked_ozon_fake() -> None:
             "ozon_account_blocked",
             message=provider_error_message(exc),
         )
+
+
+def _raise_ozon_provider_http(exc: MarketplaceProviderError) -> None:
+    raise_fbs_http(
+        status.HTTP_403_FORBIDDEN if exc.is_account_blocked else status.HTTP_502_BAD_GATEWAY,
+        "ozon_account_blocked" if exc.is_account_blocked else exc.code,
+        message=provider_error_message(exc),
+    )
 
 
 class FbsWorklistSellerOut(BaseModel):
@@ -314,6 +336,8 @@ class FbsWorklistBlockerOut(BaseModel):
 
 
 class FbsWorklistPositionOut(BaseModel):
+    id: str
+    image_url: str | None = None
     product_id: str | None
     name: str
     seller_article: str | None
@@ -340,6 +364,10 @@ class FbsWorklistOrderOut(BaseModel):
     buyer_type: str
     cargo_type: str
     can_pvz: bool
+    # Маршрут сдачи Ozon: название метода доставки, по которому потом собирается
+    # отгрузка (WMS-358). У Wildberries маршрут виден из `can_pvz`, поэтому там
+    # поле пустое и колонка рисуется по-старому.
+    delivery_route: str | None = None
     metadata: FbsWorklistMetadataOut
     sticker: FbsWorklistStickerOut
     pick: FbsWorklistPickOut
@@ -448,8 +476,21 @@ async def start_fbs_orders_sync(
     if body.marketplace == "ozon":
         if not await _active_ozon_account_exists(session, user.tenant_id, body.seller_id):
             return FbsOrderSyncOut(id="", status="skipped")
-        await _run_blocked_ozon_fake()
-        return FbsOrderSyncOut(id="", status="skipped")
+        if not ozon_live_api_enabled():
+            await _run_blocked_ozon_fake()
+            return FbsOrderSyncOut(id="", status="skipped")
+        async with httpx.AsyncClient() as http_client:
+            try:
+                await sync_ozon_orders(
+                    session,
+                    user.tenant_id,
+                    body.seller_id,
+                    build_ozon_provider(),
+                    http_client,
+                )
+            except MarketplaceProviderError as exc:
+                _raise_ozon_provider_http(exc)
+        return FbsOrderSyncOut(id="", status="done")
     payload: dict[str, Any] = {"seller_id": str(body.seller_id)}
     job = await job_svc.create_pending_job(
         session,
@@ -559,11 +600,23 @@ def _raise_cancellation_http(exc: FbsCancellationError) -> None:
     detail = envelope_from_exc(exc)
     if exc.code == "order_not_found":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
-    if exc.code == "order_not_cancellable":
+    if exc.code in ("order_not_cancellable", "marketplace_not_supported"):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
-    if exc.code in ("seller_not_found", "missing_marketplace_token"):
+    if exc.code in ("seller_not_found", "missing_marketplace_token", "ozon_not_connected"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
-    if exc.code.startswith("wb_"):
+    # Отказы Ozon — не наша внутренняя ошибка, и отдавать по ним 500 значит
+    # спрятать от оператора причину. «Причина отмены недоступна» — это конфликт
+    # состояния, «транспорт выключен» — временная недоступность, остальное
+    # пришло от маркетплейса.
+    if exc.code in (
+        "ozon_cancel_reason_unavailable",
+        "ozon_cancel_not_available",
+        "ozon_cancel_reason_message_required",
+    ):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+    if exc.code == "ozon_live_cancel_blocked":
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
+    if exc.code.startswith("wb_") or exc.code.startswith("ozon_"):
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
 
@@ -573,6 +626,7 @@ async def cancel_fbs_order(
     order_id: uuid.UUID,
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    body: FbsOrderCancelBody | None = None,
 ) -> FbsOrderOut:
     async with httpx.AsyncClient() as http_client:
         try:
@@ -582,6 +636,8 @@ async def cancel_fbs_order(
                 order_id,
                 http_client,
                 actor_user_id=user.id,
+                reason_id=body.reason_id if body is not None else None,
+                reason_message=body.reason_message if body is not None else None,
             )
         except FbsCancellationError as exc:
             _raise_cancellation_http(exc)
@@ -602,8 +658,21 @@ async def sync_fbs_order_statuses(
     if body.marketplace == "ozon":
         if not await _active_ozon_account_exists(session, user.tenant_id, body.seller_id):
             return FbsOrderSyncStatusesOut(statuses_updated=0)
-        await _run_blocked_ozon_fake()
-        return FbsOrderSyncStatusesOut(statuses_updated=0)
+        if not ozon_live_api_enabled():
+            await _run_blocked_ozon_fake()
+            return FbsOrderSyncStatusesOut(statuses_updated=0)
+        async with httpx.AsyncClient() as http_client:
+            try:
+                ozon_updated = await sync_ozon_order_statuses(
+                    session,
+                    user.tenant_id,
+                    body.seller_id,
+                    build_ozon_provider(),
+                    http_client,
+                )
+            except MarketplaceProviderError as exc:
+                _raise_ozon_provider_http(exc)
+        return FbsOrderSyncStatusesOut(statuses_updated=ozon_updated)
     async with httpx.AsyncClient() as http_client:
         try:
             updated = await sync_seller_order_statuses(

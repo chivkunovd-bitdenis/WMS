@@ -23,6 +23,8 @@ export type SellerReportEntry = {
   item_quantity: number | null
   source_type: string
   source_id: string
+  /** Поставка заказа FBS: номер для колонки и id для перехода. */
+  supply?: { id: string; number: string } | null
   source_target:
     | { kind: 'inbound'; source_id: string }
     | { kind: 'route'; to: string }
@@ -50,7 +52,6 @@ export type StorageReportRow = {
   liter_days: number
   status: 'calculated' | 'missing_dimensions' | 'negative_stock'
   amount_kopecks?: number
-  calculation_token: string
 }
 
 export type SellerReportDetails = {
@@ -78,14 +79,13 @@ type DocumentRow =
   | { kind: 'storagePeriod'; id: 'storage-period'; storage: StorageReportRow }
 
 /** Порядок разделов — по ходу работы склада, а не по алфавиту. */
-const SECTION_ORDER = ['inbound', 'packing', 'fbs', 'marketplace_outbound', 'picking', 'return', 'other']
+const SECTION_ORDER = ['inbound', 'packing', 'fbs', 'marketplace_outbound', 'return', 'other']
 
 const sectionLabels: Record<string, string> = {
   inbound: 'Приёмка',
   packing: 'Упаковка',
   fbs: 'FBS',
   marketplace_outbound: 'Отгрузка',
-  picking: 'Подбор',
   return: 'Возврат',
   storage: 'Хранение',
   other: 'Прочие услуги',
@@ -137,7 +137,14 @@ export function selectionReason(entry: SellerReportEntry): string | undefined {
 }
 
 /** Почему хранение нельзя выбрать в счёт. */
-function storageReason(status: StorageReportRow['status']): string | undefined {
+function storageReason(row: StorageReportRow): string | undefined {
+  // За период ничего не начислено — выставлять нечего. Раньше галка оставалась
+  // живой при нуле, а «Выставить счёт» отвечал «Выберите операции»: человек
+  // выбрал строку и получал отказ без объяснения.
+  if (!(row.liter_days > 0) && !(row.amount_kopecks ?? 0)) {
+    return 'За период хранение не начислено — выставлять нечего'
+  }
+  const status = row.status
   if (status === 'missing_dimensions') return 'Нет габаритов у товара — хранение в счёт не включить'
   if (status === 'negative_stock') {
     return 'Остаток по движениям уходит в минус — хранение по этому селлеру не считается, пока движения не выправят'
@@ -228,7 +235,7 @@ export function FfBillingSellerDetails({
   onToggleStorage: (checked: boolean) => void
   onLoadMore: (cursor: string) => void
   onOpenInbound: (id: string) => void
-  onOpenFbsOrder: (id: string) => void
+  onOpenFbsOrder: (supplyId: string) => void
 }) {
   const [openSections, setOpenSections] = useState<string[]>([])
   const sections = buildSections(details)
@@ -253,7 +260,7 @@ export function FfBillingSellerDetails({
                     hideLabel
                     checked={storageSelected}
                     onChange={onToggleStorage}
-                    disabledReason={storageReason(row.storage.status)}
+                    disabledReason={storageReason(row.storage)}
                     testId="billing-pick-storage"
                   />
                 ) : (
@@ -333,12 +340,17 @@ export function FfBillingSellerDetails({
             )
           }
           if (target?.kind === 'fbs_order') {
+            // Без поставки открывать нечего: отдельного экрана заказа в системе
+            // нет, история живёт на поставке. Ссылка, которая ничего не делает,
+            // хуже обычного текста — по ней жмут и решают, что сломалось.
+            const supply = row.entry.supply
+            if (!supply) return withStatus(<TextCell value={title} />)
             return withStatus(
               <Link
                 component="button"
                 type="button"
                 sx={{ textAlign: 'left' }}
-                onClick={() => onOpenFbsOrder(target.source_id)}
+                onClick={() => onOpenFbsOrder(supply.id)}
               >
                 {title}
               </Link>,
@@ -358,6 +370,27 @@ export function FfBillingSellerDetails({
                 status ? undefined : 'Первоисточник недоступен или не поддерживает переход'
               }
             />,
+          )
+        },
+      },
+      {
+        key: 'supply',
+        header: 'Поставка',
+        width: 190,
+        // Отдельного экрана заказа в системе нет: смотреть его идут в поставку.
+        // Поэтому у заказа два перехода — номер открывает историю, а эта
+        // колонка ведёт в саму карточку поставки.
+        render: (row: DocumentRow) => {
+          const supply = row.kind === 'document' ? row.entry.supply : null
+          if (!supply) return <TextCell value="—" />
+          return (
+            <Link
+              component={RouterLink}
+              to={`/app/ff/fbs?supply_id=${supply.id}`}
+              sx={{ textAlign: 'left' }}
+            >
+              {supply.number}
+            </Link>
           )
         },
       },
@@ -432,7 +465,7 @@ export function FfBillingSellerDetails({
                     hideLabel
                     checked={storageSelected}
                     onChange={onToggleStorage}
-                    disabledReason={storageReason(row.storage.status)}
+                    disabledReason={storageReason(row.storage)}
                     testId="billing-pick-section-storage"
                   />
                 )

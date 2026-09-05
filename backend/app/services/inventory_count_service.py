@@ -18,6 +18,7 @@ from app.models.inbound_intake import (
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_count import (
     InventoryCount,
+    InventoryCountCreatedContainer,
     InventoryCountFoundScan,
     InventoryCountLine,
 )
@@ -29,7 +30,8 @@ from app.models.seller_wildberries_imported_card import SellerWildberriesImporte
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
-from app.services import inventory_service, tenant_settings_service
+from app.services import inventory_service, tenant_settings_service, warehouse_map_service
+from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.inventory_container_service import ContainerKind
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
@@ -83,6 +85,7 @@ class PostResult:
     posted_lines: int
     unchanged_lines: int
     changed_balances: list[ChangedBalance]
+    stock_deductions: list[inventory_service.StockDeduction]
 
 
 def _product_category_column() -> Any | None:
@@ -504,6 +507,73 @@ async def save_actuals(
     return loaded
 
 
+async def create_document_container(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    count_id: uuid.UUID,
+    *,
+    kind: ContainerKind,
+) -> InventoryCount:
+    """Завести пустую тару прямо в документе пересчёта.
+
+    Тара создаётся на складе документа как обычная тара (`sorting-objects`),
+    но дополнительно запоминается за этим документом — иначе прунинг пустой
+    тары в API (`_prune_empty_containers`) выбросит её из дерева сразу же:
+    она пуста по определению, оператор только что её завёл. Общее правило
+    прунинга не трогаем, здесь только точечное исключение для этой пары
+    (документ, тара).
+    """
+    result = await session.execute(
+        select(InventoryCount)
+        .where(
+            InventoryCount.id == count_id,
+            InventoryCount.tenant_id == tenant_id,
+        )
+        .with_for_update()
+    )
+    count = result.scalar_one_or_none()
+    if count is None:
+        raise InventoryCountError("not_found")
+    if count.status != STATUS_DRAFT:
+        raise InventoryCountError("not_editable")
+    if count.warehouse_id is None:
+        raise InventoryCountError("warehouse_not_found")
+    try:
+        created = await warehouse_map_service.create_sorting_object(
+            session,
+            tenant_id,
+            count.warehouse_id,
+            kind=kind,
+        )
+    except warehouse_map_service.WarehouseMapError as exc:
+        raise InventoryCountError(exc.code) from exc
+    session.add(
+        InventoryCountCreatedContainer(
+            tenant_id=tenant_id,
+            count_id=count_id,
+            container_kind=kind,
+            container_id=uuid.UUID(str(created["id"])),
+        )
+    )
+    await session.commit()
+    loaded = await get_count(session, tenant_id, count_id)
+    assert loaded is not None
+    return loaded
+
+
+async def created_container_ids(
+    session: AsyncSession,
+    count_id: uuid.UUID,
+) -> set[tuple[str, str]]:
+    """Тара, заведённая прямо в этом документе — исключения из прунинга."""
+    rows = await session.scalars(
+        select(InventoryCountCreatedContainer).where(
+            InventoryCountCreatedContainer.count_id == count_id
+        )
+    )
+    return {(row.container_kind, str(row.container_id)) for row in rows.all()}
+
+
 @dataclass(frozen=True)
 class FoundResult:
     """Результат записи находки вместе с честным текстом для оператора."""
@@ -632,6 +702,27 @@ async def record_found(
         product_stmt = product_stmt.where(Product.seller_id == count.seller_id)
     products = list((await session.execute(product_stmt)).scalars().all())
     if not products:
+        # Запасной поиск по штрихкодам маркетплейса: у товара Ozon свой код
+        # вида OZN<sku>, которого нет ни в `wb_barcode`, ни в `sku_code`.
+        from app.services.ozon_product_import_service import (
+            find_product_ids_by_marketplace_barcode,
+        )
+
+        product_ids = await find_product_ids_by_marketplace_barcode(
+            session,
+            tenant_id,
+            list(codes),
+            seller_id=count.seller_id,
+        )
+        if product_ids:
+            fallback_stmt = select(Product).where(
+                Product.tenant_id == tenant_id,
+                Product.id.in_(product_ids),
+            )
+            if count.seller_id is not None:
+                fallback_stmt = fallback_stmt.where(Product.seller_id == count.seller_id)
+            products = list((await session.execute(fallback_stmt)).scalars().all())
+    if not products:
         raise InventoryCountError("product_not_found")
     if len(products) > 1:
         raise InventoryCountError("barcode_is_ambiguous")
@@ -692,6 +783,130 @@ async def record_found(
             storage_location_id=storage_location_id,
             container_kind=container_kind,
             container_id=container_id,
+        )
+    loaded = await get_count(session, tenant_id, count_id)
+    assert loaded is not None
+    return FoundResult(loaded, expected, _found_notice(expected))
+
+
+async def add_manual_line(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    count_id: uuid.UUID,
+    *,
+    product_id: uuid.UUID,
+    quantity: int,
+    cell_id: uuid.UUID | None,
+    container_kind: str | None,
+    container_id: uuid.UUID | None,
+) -> FoundResult:
+    """Добавляет в документ товар, которого там нет, — руками, по каталогу.
+
+    Решение владельца от 03.09.2026: находка (`record_found`) ловит только то,
+    что оператор смог отсканировать. Штрихкод бывает стёрт или не наклеен, а
+    товар в короб класть уже надо — тогда ищут по каталогу и вводят число сразу,
+    а не по одной штуке сканом. Адрес выводим тем же способом, что и у находки:
+    выделили тару — адрес из её карточки, выделили ячейку — берём её, ничего не
+    выделили — зона сортировки. Свой резолвер адреса здесь не пишем, см.
+    _resolve_found_location.
+    """
+    preview = await get_count(session, tenant_id, count_id)
+    if preview is None:
+        raise InventoryCountError("count_not_found")
+    if preview.status != STATUS_DRAFT:
+        raise InventoryCountError("count_not_editable")
+    storage_location_id = await _resolve_found_location(
+        session,
+        tenant_id,
+        preview,
+        cell_id=cell_id,
+        container_kind=container_kind,
+        container_id=container_id,
+    )
+
+    # Тот же порядок блокировки, что у record_found: адрес вычисляем ДО
+    # блокировки документа, чтобы возможное создание зоны сортировки внутри
+    # резолвера не срабатывало rollback'ом по уже заблокированному объекту.
+    locked = await session.execute(
+        select(InventoryCount)
+        .where(InventoryCount.id == count_id, InventoryCount.tenant_id == tenant_id)
+        .with_for_update()
+    )
+    if locked.scalar_one_or_none() is None:
+        raise InventoryCountError("count_not_found")
+    count = await get_count(session, tenant_id, count_id)
+    if count is None:
+        raise InventoryCountError("count_not_found")
+    if count.status != STATUS_DRAFT:
+        raise InventoryCountError("count_not_editable")
+
+    product = await session.get(Product, product_id)
+    # Чужой товар не пускаем той же проверкой, что у находки по штрихкоду:
+    # документ по одному селлеру не должен наполниться товаром другого. Ошибка
+    # звучит как «не найден», а не «чужой» — так же честно, как found, который
+    # просто не находит продукт вне области поиска, ничего не раскрывая про
+    # чужой каталог.
+    if (
+        product is None
+        or product.tenant_id != tenant_id
+        or (count.seller_id is not None and product.seller_id != count.seller_id)
+    ):
+        raise InventoryCountError("product_not_found")
+    if quantity <= 0:
+        raise InventoryCountError("invalid_actual_quantity")
+
+    existing = next(
+        (
+            line
+            for line in count.lines
+            if line.product_id == product.id
+            and line.storage_location_id == storage_location_id
+            and line.container_kind == container_kind
+            and line.container_id == container_id
+        ),
+        None,
+    )
+    if existing is not None:
+        # Тот же товар в то же место добавляют второй раз — прибавляем к тому,
+        # что уже насчитано, а не создаём вторую строку поверх первой.
+        existing.actual_quantity = int(existing.actual_quantity or 0) + quantity
+        expected = int(existing.expected_quantity)
+        await session.commit()
+        loaded = await get_count(session, tenant_id, count_id)
+        assert loaded is not None
+        return FoundResult(loaded, expected, _found_notice(expected))
+
+    line = InventoryCountLine(
+        count_id=count.id,
+        product_id=product.id,
+        storage_location_id=storage_location_id,
+        container_kind=container_kind,
+        container_id=container_id,
+        expected_quantity=0,
+        actual_quantity=quantity,
+        posted_delta=None,
+    )
+    line.expected_quantity = await _current_quantity(
+        session, tenant_id=tenant_id, line=line, lock=False
+    )
+    expected = int(line.expected_quantity)
+    session.add(line)
+    try:
+        await session.commit()
+    except IntegrityError:
+        # Гонка с параллельным добавлением той же строки (сканом или тоже
+        # руками): уникальный индекс сработал — прибавляем к уже созданной,
+        # а не роняем оператора пятисоткой.
+        await session.rollback()
+        return await _increment_existing_found_line(
+            session,
+            tenant_id,
+            count_id,
+            product_id=product.id,
+            storage_location_id=storage_location_id,
+            container_kind=container_kind,
+            container_id=container_id,
+            amount=quantity,
         )
     loaded = await get_count(session, tenant_id, count_id)
     assert loaded is not None
@@ -800,6 +1015,7 @@ async def _increment_existing_found_line(
     storage_location_id: uuid.UUID,
     container_kind: str | None,
     container_id: uuid.UUID | None,
+    amount: int = 1,
 ) -> FoundResult:
     line = await session.scalar(
         select(InventoryCountLine)
@@ -814,7 +1030,7 @@ async def _increment_existing_found_line(
     )
     if line is None:
         raise InventoryCountError("count_not_found")
-    line.actual_quantity = int(line.actual_quantity or 0) + 1
+    line.actual_quantity = int(line.actual_quantity or 0) + amount
     expected = int(line.expected_quantity)
     await session.commit()
     loaded = await get_count(session, tenant_id, count_id)
@@ -937,6 +1153,10 @@ async def post_count(
     if not entered_lines:
         raise InventoryCountError("empty_count")
 
+    for product_id in sorted({line.product_id for line in entered_lines}, key=str):
+        await inventory_service.lock_stock_product(session, tenant_id, product_id)
+
+    stock_deductions: list[inventory_service.StockDeduction] = []
     changed_balances: list[ChangedBalance] = []
     posted_lines = 0
     for line in entered_lines:
@@ -973,6 +1193,7 @@ async def post_count(
                 quantity_delta=delta,
                 movement_type=MOVEMENT_TYPE_INVENTORY_COUNT,
                 inventory_count_line_id=line.id,
+                stock_deductions=stock_deductions,
                 actor_user_id=user_id,
                 container_kind=cast(ContainerKind | None, line.container_kind),
                 container_id=line.container_id,
@@ -995,6 +1216,7 @@ async def post_count(
         posted_lines=posted_lines,
         unchanged_lines=len(entered_lines) - posted_lines,
         changed_balances=changed_balances,
+        stock_deductions=stock_deductions,
     )
 
 
@@ -1040,31 +1262,36 @@ async def product_photos(
         for product in products
         if product.seller_id is not None and product.wb_nm_id is not None
     }
-    if not pairs:
-        return result
-    rows = await session.execute(
-        select(SellerWildberriesImportedCard).where(
-            SellerWildberriesImportedCard.tenant_id == products[0].tenant_id,
-            or_(
-                *[
-                    and_(
-                        SellerWildberriesImportedCard.seller_id == seller_id,
-                        SellerWildberriesImportedCard.nm_id == nm_id,
-                    )
-                    for seller_id, nm_id in pairs
-                ]
-            ),
+    if pairs:
+        rows = await session.execute(
+            select(SellerWildberriesImportedCard).where(
+                SellerWildberriesImportedCard.tenant_id == products[0].tenant_id,
+                or_(
+                    *[
+                        and_(
+                            SellerWildberriesImportedCard.seller_id == seller_id,
+                            SellerWildberriesImportedCard.nm_id == nm_id,
+                        )
+                        for seller_id, nm_id in pairs
+                    ]
+                ),
+            )
         )
-    )
-    by_pair = {
-        (card.seller_id, card.nm_id): first_photo_url_from_card(card.raw_json or {})
-        for card in rows.scalars()
-    }
-    for product in products:
-        seller_id = product.seller_id
-        nm_id = product.wb_nm_id
-        if seller_id is not None and nm_id is not None:
-            result[product.id] = by_pair.get((seller_id, nm_id))
+        by_pair = {
+            (card.seller_id, card.nm_id): first_photo_url_from_card(card.raw_json or {})
+            for card in rows.scalars()
+        }
+        for product in products:
+            seller_id = product.seller_id
+            nm_id = product.wb_nm_id
+            if seller_id is not None and nm_id is not None:
+                result[product.id] = by_pair.get((seller_id, nm_id))
+    # У озоновского товара снапшота карточки WB нет — фото лежит в привязке Ozon.
+    missing = {pid for pid, url in result.items() if url is None}
+    if missing:
+        result.update(
+            await load_ozon_primary_image_urls(session, products[0].tenant_id, missing)
+        )
     return result
 
 

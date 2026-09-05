@@ -26,6 +26,10 @@ from app.models.tenant import Tenant
 MOSCOW = ZoneInfo("Europe/Moscow")
 POSTGRES_INTEGER_MIN = -(2**31)
 POSTGRES_INTEGER_MAX = 2**31 - 1
+# Упаковка считается по факту отгрузки товара — по тем же штукам, что и сама
+# отгрузка. Ни события упаковки, ни кнопка «всё упаковано» на неё не влияют:
+# оператор может не нажать кнопку, а коробка всё равно уехала упакованной.
+PACKING_SERVICE_CODE = "packing"
 OPERATIONAL_BILLING_ISSUE_REASON = "billing_calculation_overflow"
 OPERATIONAL_BILLING_ISSUE_MESSAGE = (
     "Начисление не рассчитано: значение превышает допустимый предел. Складская операция завершена."
@@ -214,8 +218,15 @@ async def _active_charge_for_source(
     tenant_id: uuid.UUID,
     source_type: str,
     source_id: uuid.UUID,
+    service_code: str | None = None,
 ) -> BillingLedgerEntry | None:
-    """Return the only charge for a source that has not been reversed."""
+    """Return the only charge for a source that has not been reversed.
+
+    Один документ теперь платный дважды: за саму операцию и за упаковку. База
+    это и так разрешает — уникальность идёт по паре «услуга + событие», — а вот
+    поиск существующего начисления без услуги нашёл бы чужую строку и молча
+    отменил бы второе начисление. Поэтому услуга участвует в отборе.
+    """
     charge = aliased(BillingLedgerEntry)
     reversal = aliased(BillingLedgerEntry)
     return cast(
@@ -229,6 +240,11 @@ async def _active_charge_for_source(
                 charge.source_id == source_id,
                 charge.entry_type == "charge",
                 reversal.id.is_(None),
+                *(
+                    ()
+                    if service_code is None
+                    else (charge.service_code == service_code,)
+                ),
             )
             .order_by(charge.occurred_at.desc(), charge.id.desc())
         ),
@@ -241,6 +257,7 @@ async def _latest_reversal_for_source(
     tenant_id: uuid.UUID,
     source_type: str,
     source_id: uuid.UUID,
+    service_code: str | None = None,
 ) -> BillingLedgerEntry | None:
     """Return the latest immutable reversal in a source's charge history."""
     charge = aliased(BillingLedgerEntry)
@@ -255,6 +272,11 @@ async def _latest_reversal_for_source(
                 charge.source_type == source_type,
                 charge.source_id == source_id,
                 charge.entry_type == "charge",
+                *(
+                    ()
+                    if service_code is None
+                    else (charge.service_code == service_code,)
+                ),
             )
             .order_by(reversal.occurred_at.desc(), reversal.id.desc())
         ),
@@ -355,6 +377,7 @@ async def record_operational_charge(
         tenant_id=tenant_id,
         source_type=source_type,
         source_id=source_id,
+        service_code=service_code,
     )
     if existing is not None:
         return existing
@@ -364,6 +387,7 @@ async def record_operational_charge(
         tenant_id=tenant_id,
         source_type=source_type,
         source_id=source_id,
+        service_code=service_code,
     )
     event_kind = (
         "completed"
@@ -514,6 +538,7 @@ async def record_operational_charge(
             tenant_id=tenant_id,
             source_type=source_type,
             source_id=source_id,
+            service_code=service_code,
         )
         if concurrent is None:
             raise
@@ -531,13 +556,20 @@ async def record_operational_reversal(
     source_id: uuid.UUID,
     occurred_at: datetime,
     performer_id: uuid.UUID | None,
+    service_code: str | None = None,
 ) -> BillingLedgerEntry | None:
-    """Reverse a recorded final fact once, preserving its immutable tariff snapshot."""
+    """Reverse a recorded final fact once, preserving its immutable tariff snapshot.
+
+    ``service_code`` называют, когда у документа несколько начислений — отгрузка
+    и упаковка. Без него отменилась бы только одна строка из двух, и селлер
+    остался бы должен за упаковку отменённой отгрузки.
+    """
     original = await _active_charge_for_source(
         session,
         tenant_id=tenant_id,
         source_type=source_type,
         source_id=source_id,
+        service_code=service_code,
     )
     if original is None:
         # Billing may have been disabled when the warehouse fact was recorded.
@@ -548,6 +580,7 @@ async def record_operational_reversal(
             tenant_id=tenant_id,
             source_type=source_type,
             source_id=source_id,
+            service_code=service_code,
         )
 
     existing = await session.scalar(

@@ -11,6 +11,7 @@ import {
   DialogTitle,
   FormControlLabel,
   LinearProgress,
+  MenuItem,
   Paper,
   Stack,
   TextField,
@@ -19,6 +20,7 @@ import {
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../api'
+import { resolveProductBarcodeSelection, type ProductBarcodeOption } from '../types/wbProductCatalog'
 import { plural } from '../utils/plural'
 import {
   MARKING_PRINT_PRESETS,
@@ -31,7 +33,9 @@ import {
   tapeToLayout,
   type TapeBlock,
 } from '../utils/markingPrintPresets'
-import { resolvePrintTemplate, type PrintLayout } from '../utils/printTemplate'
+import { resolvePrintTemplate, type PrintLabelOptions, type PrintLayout } from '../utils/printTemplate'
+import { labelOptionsFromLayout } from '../utils/printMarkingCodeLabel'
+import type { ProductLabelPrintOptions } from '../utils/productLabelText'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import {
   beginPrintUserGesture,
@@ -179,6 +183,7 @@ function buildProductLabelSections(
   product: ProductThermalLabelData,
   count: number,
   size: LabelSize,
+  labelOptions?: ProductLabelPrintOptions,
 ): string[] {
   const barcode = product.barcode?.trim()
   if (!barcode) {
@@ -189,7 +194,7 @@ function buildProductLabelSections(
     buildProductLabelSectionHtml(
       product,
       barcodeDataUrl,
-      undefined,
+      labelOptions,
       size,
     ).replace('data-testid="product-thermal-label"', 'data-testid="product-thermal-label" data-tape-block="label"'),
   )
@@ -201,6 +206,8 @@ export type MarkingPrintContext = {
   lineId?: string
   source?: 'packaging' | 'catalog'
   productId: string
+  /** Селлер товара: по нему подбирается закреплённый за селлером шаблон. */
+  sellerId?: string | null
   documentNumber: string | null
   qtyNeedPack: number
   markingAvailable: number
@@ -209,6 +216,8 @@ export type MarkingPrintContext = {
   skuCode: string
   productName: string
   productLabel?: ProductThermalLabelData | null
+  /** Реальные коды связанной Ozon/объединённой карточки; WB-only не меняется. */
+  productBarcodeOptions?: ProductBarcodeOption[]
   packagingInstructions?: string | null
   unitsInPack?: number | null
   fbsTape?: FbsTapeContext
@@ -224,7 +233,12 @@ type Props = {
   onClose: () => void
 }
 
-export function resolveTapeCounts(nextCz: number, nextWb: number, allowQrOnly: boolean) {
+export function resolveTapeCounts(
+  nextCz: number,
+  nextWb: number,
+  allowQrOnly: boolean,
+  labelOptions?: PrintLabelOptions,
+) {
   const cz = Math.max(0, Math.min(99, Math.floor(nextCz) || 0))
   const wb = Math.max(0, Math.min(99, Math.floor(nextWb) || 0))
   const qrOnly = allowQrOnly && cz === 0 && wb === 0
@@ -234,7 +248,11 @@ export function resolveTapeCounts(nextCz: number, nextWb: number, allowQrOnly: b
     cz: effectiveCz,
     wb,
     tape,
-    layout: qrOnly ? { units: [] } satisfies PrintLayout : tapeToLayout(tape),
+    // Состав этикетки переживает смену количества блоков: он про товар
+    // продавца, а не про раскладку оператора.
+    layout: qrOnly
+      ? ({ units: [], label_options: labelOptions } satisfies PrintLayout)
+      : tapeToLayout(tape, labelOptions),
   }
 }
 
@@ -250,14 +268,37 @@ export function resolveFbsFallbackLabelCopies(
     : configuredCopies
 }
 
+export function resolveProductTapeBarcodeError(
+  barcodeOptions: ProductBarcodeOption[] | undefined,
+  barcode: string | null | undefined,
+  layout: PrintLayout,
+): string | null {
+  if (barcodeOptions !== undefined && !barcode?.trim() && layout.units.some((unit) => unit.block === 'label')) {
+    return 'У товара нет штрихкода Ozon для печати. Уберите ШК товара из ленты или добавьте штрихкод в привязке товара.'
+  }
+  return null
+}
+
 export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
+  const [productBarcodeKey, setProductBarcodeKey] = useState('')
+  const barcodeOptions = ctx?.productBarcodeOptions
+  const selectedBarcode = barcodeOptions ? resolveProductBarcodeSelection(barcodeOptions, productBarcodeKey) : undefined
+  const isOzonBarcode = selectedBarcode?.marketplace === 'ozon' || (barcodeOptions !== undefined && barcodeOptions.length === 0)
+  const selectedProductLabel = useMemo(() => {
+    const label = ctx?.productLabel
+    if (!label || barcodeOptions === undefined) return label
+    return { ...label, barcode: selectedBarcode?.barcode ?? '' }
+  }, [ctx?.productLabel, barcodeOptions, selectedBarcode])
+  const productBarcodeName = isOzonBarcode ? 'ШК Ozon' : 'ШК ВБ'
+
   const [labelSize, setLabelSize] = useState<LabelSize>(() => resolveLabelSize(loadLabelSizeId()))
   const [layout, setLayout] = useState<PrintLayout>(MARKING_PRINT_PRESETS[0].layout)
   const [allowPartial, setAllowPartial] = useState(false)
   const [czQty, setCzQty] = useState(2)
   const [wbQty, setWbQty] = useState(0)
   const [tapeOrder, setTapeOrder] = useState<TapeBlock[]>(buildDefaultTape(2, 0))
+  const requestedProductRef = useRef<string | null>(null)
   const [dragTapeIndex, setDragTapeIndex] = useState<number | null>(null)
   const [catalogPrintQty, setCatalogPrintQty] = useState(1)
   const [wbBarcodeQty, setWbBarcodeQty] = useState(1)
@@ -352,7 +393,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     // здесь законна пустая раскладка ЧЗ/ШК: оператор печатает только QR, а ЧЗ
     // сканирует или печатает позже. Во всех остальных режимах сохраняем прежний
     // минимум — хотя бы один блок ЧЗ.
-    const next = resolveTapeCounts(nextCz, nextWb, includesOrderQr)
+    const next = resolveTapeCounts(nextCz, nextWb, includesOrderQr, layout.label_options)
     setCzQty(next.cz)
     setWbQty(next.wb)
     setTapeOrder(next.tape)
@@ -361,7 +402,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
   const applyTapeOrder = (nextTape: TapeBlock[]) => {
     setTapeOrder(nextTape)
-    setLayout(tapeToLayout(nextTape))
+    // Состав переносим в новый макет: он принадлежит товару продавца, а не
+    // раскладке. Без этого перетаскивание блоков возвращало выключенные поля.
+    setLayout((current) => tapeToLayout(nextTape, current.label_options))
     setCzQty(nextTape.filter((b) => b === 'cz').length)
     setWbQty(nextTape.filter((b) => b === 'label').length)
   }
@@ -425,6 +468,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       return
     }
     setError(null)
+    setProductBarcodeKey('')
     setFbsTapeBuildProgress(null)
     setAllowPartial(false)
     setSeparateModeChoice(null)
@@ -445,8 +489,34 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setCzLabelSize(resolveLabelSize(loadLabelSizeId('cz')))
     setCzPrintOrientation(loadLabelPrintOrientation())
     setWbLabelSize(resolveLabelSize(loadLabelSizeId('label')))
+    // Метка «какой товар мы сейчас спрашиваем» ставится ДО развилки: её сверяют
+    // обе ветки, и обе летят за шаблоном. Пока она стояла только в ветке обычного
+    // товара, у маркируемого сверка шла с null и ответ выбрасывался всегда —
+    // то есть шаблон переставал применяться на живом вайлдберрисовском потоке.
+    requestedProductRef.current = ctx.productId
     if (!requiresHonestSign) {
+      // Лента у обычного товара фиксированная — один ШК, без Честного знака.
+      // Но состав этикетки всё равно принадлежит продавцу: без этого запроса
+      // настройка не применялась к большинству товаров, у которых маркировки
+      // нет вовсе.
       setLayout(cloneLayout(NON_HONEST_SIGN_LABEL_LAYOUT))
+      void (async () => {
+        try {
+          const template = await resolvePrintTemplate(ctx.token, {
+            productId: ctx.productId,
+            sellerId: ctx.sellerId ?? undefined,
+          })
+          if (requestedProductRef.current !== ctx.productId) return
+          if (template.layout.label_options) {
+            setLayout({
+              ...cloneLayout(NON_HONEST_SIGN_LABEL_LAYOUT),
+              label_options: { ...template.layout.label_options },
+            })
+          }
+        } catch {
+          // Настройка не загрузилась — печатаем полным составом, как раньше.
+        }
+      })()
       return
     }
     const defaultPresetId = 'pairs' as const
@@ -459,7 +529,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setLayout(cloneLayout(defaultPreset.layout))
     void (async () => {
       try {
-        const template = await resolvePrintTemplate(ctx.token, { productId: ctx.productId })
+        const template = await resolvePrintTemplate(ctx.token, {
+          productId: ctx.productId,
+          sellerId: ctx.sellerId ?? undefined,
+        })
+        // Ответ по прошлому товару не применяем к текущему: диалог могли
+        // закрыть и открыть на другом заказе, пока запрос летел.
+        if (requestedProductRef.current !== ctx.productId) return
         const matched = MARKING_PRINT_PRESETS.find(
           (preset) =>
             preset.id !== 'custom' &&
@@ -698,7 +774,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       printedNative = false
     }
     if (!printedNative) {
-      const sections = await buildMarkingTapeSections(tapeUnits, printLayout, ctx.productLabel, {
+      const sections = await buildMarkingTapeSections(tapeUnits, printLayout, selectedProductLabel, {
         authToken: ctx.token,
       })
       await printTapeSections(sections, size)
@@ -719,12 +795,14 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     if (!ctx || count < 1) {
       return false
     }
-    const label: ProductThermalLabelData | null | undefined = ctx.productLabel
+    const label: ProductThermalLabelData | null | undefined = selectedProductLabel
     if (!label?.barcode?.trim()) {
       setError('У товара нет штрихкода для печати.')
       return false
     }
-    printProductThermalLabels(label, count, undefined, size)
+    // Состав этикетки принадлежит продавцу и должен действовать одинаково
+    // везде: и в ленте ФБС, и здесь — в упаковке, каталоге и раздельной печати.
+    printProductThermalLabels(label, count, labelOptionsFromLayout(layout), size)
     markSectionDone(markDone)
     ctx.onPrinted()
     if (closeAfter) {
@@ -819,7 +897,12 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               }
             } else if (fallbackLabelCopies > 0) {
               orderSections.push(
-                ...buildProductLabelSections(order.productLabel, fallbackLabelCopies, size),
+                ...buildProductLabelSections(
+                  order.productLabel,
+                  fallbackLabelCopies,
+                  size,
+                  labelOptionsFromLayout(printLayout),
+                ),
               )
             }
             if (orderSections.length === 0) {
@@ -904,6 +987,11 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     if (!ctx || canPrintCount < 1) {
       return false
     }
+    const barcodeError = resolveProductTapeBarcodeError(barcodeOptions, selectedProductLabel?.barcode, printLayout)
+    if (barcodeError) {
+      setError(barcodeError)
+      return false
+    }
     const res = await fetch(
       apiUrl(`/operations/marking-codes/products/${ctx.productId}/print`),
       {
@@ -953,7 +1041,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
           cis,
           codeId: meta?.id,
           hasLabelArtifact: meta?.has_label_artifact ?? false,
-          productLabel: ctx.productLabel ?? null,
+          productLabel: selectedProductLabel ?? null,
         }
       }),
       data.layout ?? printLayout,
@@ -973,6 +1061,11 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   }: TapePrintOptions) => {
     if (!ctx?.lineId) {
       setError('Нет строки упаковки для печати КМ.')
+      return false
+    }
+    const barcodeError = resolveProductTapeBarcodeError(barcodeOptions, selectedProductLabel?.barcode, printLayout)
+    if (barcodeError) {
+      setError(barcodeError)
       return false
     }
     const requestReprint = effectiveReprint || forceReprint
@@ -1028,7 +1121,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
           cis,
           codeId: meta?.id,
           hasLabelArtifact: meta?.has_label_artifact ?? false,
-          productLabel: ctx.productLabel ?? null,
+          productLabel: selectedProductLabel ?? null,
         }
       }),
       data.layout ?? printLayout,
@@ -1190,7 +1283,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         : 'Печать ШК и QR заказа'
       : requiresHonestSign
         ? 'Печать ЧЗ'
-        : 'Печать ШК ВБ'
+        : isOzonBarcode ? 'Печать ШК Ozon' : 'Печать ШК ВБ'
 
   return (
     <>
@@ -1208,6 +1301,19 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogContent>
           <Stack spacing={3} sx={{ pt: 0.5 }}>
+            {barcodeOptions && barcodeOptions.length > 1 && !effectiveReprint ? (
+              <TextField select fullWidth size="small" label="Площадка и штрихкод"
+                value={selectedBarcode ? `${selectedBarcode.marketplace}:${selectedBarcode.barcode}` : ''}
+                disabled={busy}
+                onChange={(event) => setProductBarcodeKey(event.target.value)}
+                data-testid="marking-print-product-barcode-select">
+                {barcodeOptions.map((option) => (
+                  <MenuItem key={`${option.marketplace}:${option.barcode}`} value={`${option.marketplace}:${option.barcode}`}>
+                    {option.marketplace === 'ozon' ? 'Ozon' : 'WB'} · {option.barcode}
+                  </MenuItem>
+                ))}
+              </TextField>
+            ) : null}
             {ctx ? (
               <Box data-testid="marking-print-header">
                 <Typography variant="subtitle2">{ctx.productName}</Typography>
@@ -1224,7 +1330,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             {requiresHonestSign && !effectiveReprint && !fbsTapeMode && !separateModeResolving ? (
               <Box data-testid="marking-print-mode-toggle" data-task-id="FBS-10">
                 <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                  Как печатать ЧЗ и ШК ВБ
+                  {isOzonBarcode ? 'Как печатать ЧЗ и ШК Ozon' : 'Как печатать ЧЗ и ШК ВБ'}
                 </Typography>
                 <ToggleButtonGroup
                   exclusive
@@ -1255,7 +1361,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 onChange={setWbLabelSize}
                 disabled={busy}
                 scope="label"
-                label="Размер ШК ВБ"
+                label={isOzonBarcode ? "Размер ШК Ozon" : "Размер ШК ВБ"}
                 testId="marking-print-label-size"
               />
             ) : separateEnabled && effectiveReprint ? (
@@ -1341,7 +1447,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               <>
                 <TextField
                   size="small"
-                  label={fbsTapeMode ? 'ШК ВБ на заказ' : 'Количество этикеток'}
+                  label={fbsTapeMode ? `${productBarcodeName} на заказ` : 'Количество этикеток'}
                   helperText={
                     fbsTapeMode
                       ? '0 — печатать ленту только с QR заказов'
@@ -1380,13 +1486,14 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 <Box sx={{ mt: 1 }}>
                   <MarkingLabelPreview
                     variant="product"
-                    productLabel={ctx?.productLabel ?? null}
+                    productLabel={selectedProductLabel ?? null}
                     size={nonCzPrintSize}
                     unitsToShow={Math.max(1, totalWbLabels)}
                     totalUnits={Math.max(1, totalWbLabels)}
                     showOrderQr={includesOrderQr}
                     fbsOrders={fbsPreviewOrders}
                     fbsNonHonestLabelCopies={fbsPreviewLabelCopies}
+                    printOptions={labelOptionsFromLayout(layout)}
                     testId="marking-print-wb-only-preview"
                   />
                 </Box>
@@ -1509,7 +1616,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   data-task-id="FBS-10"
                 >
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    ШК ВБ
+                    {productBarcodeName}
                   </Typography>
                   <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
                     <TextField
@@ -1548,7 +1655,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                       onChange={setWbLabelSize}
                       disabled={busy}
                       scope="label"
-                      label="Размер ШК ВБ"
+                      label={isOzonBarcode ? "Размер ШК Ozon" : "Размер ШК ВБ"}
                       testId="marking-print-wb-label-size"
                     />
                     <Button
@@ -1560,7 +1667,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                       {/* Печать ШК — не расходуемый ресурс (в отличие от кодов ЧЗ), поэтому
                           кнопка не блокируется после первой печати: повторная печать должна
                           работать сколько угодно раз. */}
-                      Печать ШК ВБ
+                      {isOzonBarcode ? 'Печать ШК Ozon' : 'Печать ШК ВБ'}
                     </Button>
                   </Stack>
                   {sepWbTotal > 0 ? (
@@ -1570,7 +1677,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                       sx={{ mt: 0.75, display: 'block' }}
                       data-testid="marking-print-sep-wb-total"
                     >
-                      К печати: {sepWbTotal} ШК ВБ
+                      К печати: {sepWbTotal} {productBarcodeName}
                       {printDoubleWbBarcode ? ' (× 2)' : ''}
                     </Typography>
                   ) : null}
@@ -1580,7 +1687,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                       size={wbLabelSize}
                       unitsToShow={Math.max(1, sepWbTotal)}
                       totalUnits={Math.max(1, sepWbTotal)}
-                      productLabel={ctx?.productLabel ?? null}
+                      productLabel={selectedProductLabel ?? null}
+                      printOptions={labelOptionsFromLayout(layout)}
                       testId="marking-print-sep-wb-preview"
                     />
                   </Box>
@@ -1629,7 +1737,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   />
                   <TextField
                     size="small"
-                    label="ШК ВБ"
+                    label={productBarcodeName}
                     type="number"
                     value={wbQty}
                     onChange={(e) => applyTapeCounts(czQty, Number(e.target.value) || 0)}
@@ -1720,7 +1828,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                     size={czTapePrintSize}
                     unitsToShow={previewUnitCount}
                     totalUnits={canPrintCount}
-                    productLabel={ctx?.productLabel ?? null}
+                    productLabel={selectedProductLabel ?? null}
                     showOrderQr={includesOrderQr}
                     fbsOrders={fbsPreviewOrders}
                     fbsNonHonestLabelCopies={fbsPreviewLabelCopies}
@@ -1793,7 +1901,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
             {!effectiveReprint && requiresHonestSign && !separateMode && canPrintCount > 0 ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
-                К печати: {canPrintCount} ед. · {czQty * canPrintCount} ЧЗ + {wbQty * canPrintCount} ШК ВБ ·{' '}
+                К печати: {canPrintCount} ед. · {czQty * canPrintCount} ЧЗ + {wbQty * canPrintCount} {productBarcodeName} ·{' '}
                 {totalTapeCount} {plural(totalTapeCount, ['блок', 'блока', 'блоков'])} в ленте
               </Typography>
             ) : null}
@@ -1809,7 +1917,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
             {!effectiveReprint && !requiresHonestSign && !fbsTapeMode && totalWbLabels > 0 ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
-                К печати: {totalWbLabels} ШК ВБ{printDoubleWbBarcode ? ' (× 2)' : ''}
+                К печати: {totalWbLabels} {productBarcodeName}{printDoubleWbBarcode ? ' (× 2)' : ''}
               </Typography>
             ) : null}
 

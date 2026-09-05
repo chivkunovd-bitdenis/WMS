@@ -39,6 +39,7 @@ from app.db.session import SessionLocal
 from app.models.operation_fact import OperationFact, OperationFactLine
 from app.models.tenant import Tenant
 from app.services.billing_ledger_service import (
+    PACKING_SERVICE_CODE,
     BillingLedgerError,
     _active_charge_for_source,
     product_billing_lines,
@@ -52,6 +53,15 @@ MOSCOW = ZoneInfo("Europe/Moscow")
 # закрыло бы весь документ и оплатило его по первому событию. Такие услуги
 # трогать нельзя — они попадут в отчёт скрипта отдельной строкой.
 CHARGEABLE_SERVICES = frozenset({"inbound", "marketplace_outbound", "return", "fbs_order"})
+
+# Упаковка своего факта не пишет: живой код начисляет её по тому же документу,
+# что и отгрузку или заказ FBS, — уехавшая коробка упакована независимо от того,
+# нажал ли оператор «всё упаковано». Задним числом её надо начислять так же,
+# иначе ретроспективный счёт выйдет без половины услуги.
+COMPANION_SERVICES: dict[str, tuple[str, ...]] = {
+    "marketplace_outbound": (PACKING_SERVICE_CODE,),
+    "fbs_order": (PACKING_SERVICE_CODE,),
+}
 
 
 def _interval(date_from: date, date_to: date) -> tuple[datetime, datetime]:
@@ -130,15 +140,6 @@ async def main() -> None:
             if service not in CHARGEABLE_SERVICES:
                 unpriced[f"услуга начисляется не по документу: {service}"] += 1
                 continue
-            existing = await _active_charge_for_source(
-                session,
-                tenant_id=fact.tenant_id,
-                source_type=fact.document_type,
-                source_id=fact.document_id,
-            )
-            if existing is not None:
-                existed += 1
-                continue
             lines = list(
                 (
                     await session.scalars(
@@ -148,45 +149,64 @@ async def main() -> None:
                     )
                 ).all()
             )
-            try:
-                entry = await record_operational_charge(
+            for charged_service in (service, *COMPANION_SERVICES.get(service, ())):
+                existing = await _active_charge_for_source(
                     session,
                     tenant_id=fact.tenant_id,
-                    seller_id=fact.seller_id,
                     source_type=fact.document_type,
                     source_id=fact.document_id,
-                    source=fact.source_kind,
-                    service_code=service,
-                    quantity=Decimal(int(fact.item_quantity or 0)),
-                    occurred_at=fact.occurred_at,
-                    performer_id=None,
-                    warehouse_id=fact.warehouse_id,
-                    # Без строк ставка ищется только в старой таблице тарифов, а
-                    # матрица пишет в новую: начисление вышло бы с пустой суммой,
-                    # и повторный, уже правильный, прогон стал бы невозможен.
-                    lines=product_billing_lines(
-                        (line.product_id, Decimal(int(line.item_quantity)), {"fact": str(fact.id)})
-                        for line in lines
-                        if line.product_id is not None
-                    ),
+                    # У одного документа бывает несколько начислений: сама
+                    # операция и упаковка по ней. Без услуги в отборе скрипт
+                    # нашёл бы чужую строку и решил, что документ уже оплачен.
+                    service_code=charged_service,
                 )
-            except BillingLedgerError as exc:
-                unpriced[f"ошибка: {exc}"] += 1
-                continue
-            if entry is None:
-                # Дата начала биллинга у арендатора позже операции — начисление
-                # сознательно не создаётся. Это не сбой, а настройка.
-                unpriced["биллинг не включён на эту дату"] += 1
-                continue
-            if entry.amount is None:
-                unpriced[f"нет ставки: {service}"] += 1
-            else:
-                money += int(entry.amount)
-            created += 1
-            if args.apply and created % 200 == 0:
-                # Длинная транзакция на боевой базе держит блокировки и копит
-                # вложенные подтранзакции. Пишем порциями.
-                await session.commit()
+                if existing is not None:
+                    existed += 1
+                    continue
+                try:
+                    entry = await record_operational_charge(
+                        session,
+                        tenant_id=fact.tenant_id,
+                        seller_id=fact.seller_id,
+                        source_type=fact.document_type,
+                        source_id=fact.document_id,
+                        source=fact.source_kind,
+                        service_code=charged_service,
+                        quantity=Decimal(int(fact.item_quantity or 0)),
+                        occurred_at=fact.occurred_at,
+                        performer_id=None,
+                        warehouse_id=fact.warehouse_id,
+                        # Без строк ставка ищется только в старой таблице
+                        # тарифов, а матрица пишет в новую: начисление вышло бы
+                        # с пустой суммой, и повторный, уже правильный, прогон
+                        # стал бы невозможен.
+                        lines=product_billing_lines(
+                            (
+                                line.product_id,
+                                Decimal(int(line.item_quantity)),
+                                {"fact": str(fact.id)},
+                            )
+                            for line in lines
+                            if line.product_id is not None
+                        ),
+                    )
+                except BillingLedgerError as exc:
+                    unpriced[f"ошибка: {exc}"] += 1
+                    continue
+                if entry is None:
+                    # Дата начала биллинга у арендатора позже операции —
+                    # начисление сознательно не создаётся. Это настройка, а не сбой.
+                    unpriced["биллинг не включён на эту дату"] += 1
+                    continue
+                if entry.amount is None:
+                    unpriced[f"нет ставки: {charged_service}"] += 1
+                else:
+                    money += int(entry.amount)
+                created += 1
+                if args.apply and created % 200 == 0:
+                    # Длинная транзакция на боевой базе держит блокировки и
+                    # копит вложенные подтранзакции. Пишем порциями.
+                    await session.commit()
 
         if args.apply:
             await session.commit()

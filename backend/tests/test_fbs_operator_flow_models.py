@@ -9,16 +9,13 @@ TC-NEW-FBS-OP-004: new FbsOrder defaults for operator sub-statuses.
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
-import pytest_asyncio
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import SessionLocal, engine
-from app.models import Base
+from app.db.session import engine
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_NEW,
     MAPPING_STATUS_MISSING,
@@ -38,20 +35,6 @@ from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
-
-
-@pytest_asyncio.fixture
-async def db_session() -> AsyncIterator[AsyncSession]:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    async with SessionLocal() as session:
-        yield session
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
 
 
 async def _seed_operator_context(

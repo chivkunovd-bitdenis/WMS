@@ -13,6 +13,7 @@ from app.models.inbound_intake import (
     InboundIntakeRequest,
 )
 from app.models.inventory_balance import InventoryBalance
+from app.models.inventory_count import InventoryCountLine
 from app.models.inventory_movement import InventoryMovement
 from app.models.pallet import Pallet
 from app.models.product import Product
@@ -1022,6 +1023,112 @@ async def test_inventory_count_drops_empty_containers_but_keeps_them_scannable(
 
 
 @pytest.mark.asyncio
+async def test_inventory_count_create_container_keeps_it_visible_but_not_other_empty_boxes(
+    async_client: AsyncClient,
+) -> None:
+    # Кнопка «Создать короб» была мертва: тара создавалась на складе, но
+    # прунинг тут же выбрасывал её из дерева документа — она пуста по
+    # определению, оператор только что её завёл. Ручка
+    # POST /operations/inventory-counts/{id}/containers должна и создать
+    # тару, и удержать её в дереве, но не отключать прунинг для чужой пустой
+    # тары склада (см. test_inventory_count_drops_empty_containers_...).
+    setup = await _tenant(async_client, "NewBox")
+    product = await _product(async_client, setup, name="Товар в коробе")
+    pallet_id, box_id, _cargo_place_id, empty_box_id = await _containers(setup)
+    await _balance(
+        setup,
+        product,
+        3,
+        location_id=setup.location_id,
+        container_kind="box",
+        container_id=box_id,
+    )
+
+    count = await _create_all(async_client, setup)
+
+    response = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/containers",
+        headers=setup.headers,
+        json={"kind": "box"},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    def container_ids(nodes: list[dict[str, object]]) -> set[str]:
+        found: set[str] = set()
+        for node in nodes:
+            if node["kind"] == "product":
+                continue
+            found.add(str(node["id"]))
+            found |= container_ids(node["children"])  # type: ignore[arg-type]
+        return found
+
+    in_tree: set[str] = set()
+    for cell in body["cells"]:
+        in_tree |= container_ids(cell["children"])  # type: ignore[arg-type]
+
+    # Новый короб виден в дереве документа сразу после создания. Короб с
+    # товаром и его палета (родитель, у которого теперь есть непустой
+    # ребёнок) остаются в дереве по обычному правилу «не пусто — не трогаем».
+    created_ids = in_tree - {str(box_id), str(pallet_id)}
+    assert len(created_ids) == 1, in_tree
+    created_id = next(iter(created_ids))
+    assert created_id != str(empty_box_id)
+
+    # ...а старая пустая тара склада, не заведённая через эту ручку,
+    # по-прежнему выброшена из дерева: общее правило прунинга не отключилось.
+    assert str(empty_box_id) not in in_tree
+    scannable_ids = {item["id"] for item in body["scannable_containers"]}
+    assert str(empty_box_id) in scannable_ids
+    assert created_id not in scannable_ids
+
+    # Исключение привязано к документу, а не только к разовому ответу ручки:
+    # обычное переоткрытие документа отдаёт тот же результат.
+    reopened = await async_client.get(
+        f"/operations/inventory-counts/{count['id']}", headers=setup.headers
+    )
+    assert reopened.status_code == 200, reopened.text
+    reopened_tree: set[str] = set()
+    for cell in reopened.json()["cells"]:
+        reopened_tree |= container_ids(cell["children"])  # type: ignore[arg-type]
+    assert created_id in reopened_tree
+    assert str(empty_box_id) not in reopened_tree
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_create_container_rejects_posted_document(
+    async_client: AsyncClient,
+) -> None:
+    # Пересчёт проведён — дерево уже история движений, заводить в него тару
+    # незачем и небезопасно. Как и правка строк (save_actuals), создание
+    # тары должно быть заперто статусом документа на сервере, а не только
+    # проверкой на экране.
+    setup = await _tenant(async_client, "PostedNoBox")
+    product = await _product(async_client, setup, name="Товар для проводки")
+    await _balance(setup, product, 2)
+    count = await _create_all(async_client, setup)
+    line = count["lines"][0]
+    saved = await async_client.put(
+        f"/operations/inventory-counts/{count['id']}/lines",
+        headers=setup.headers,
+        json={"lines": [{"line_id": line["id"], "actual_quantity": 2}]},
+    )
+    assert saved.status_code == 200, saved.text
+    posted = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/post", headers=setup.headers
+    )
+    assert posted.status_code == 200, posted.text
+
+    response = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/containers",
+        headers=setup.headers,
+        json={"kind": "box"},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "not_editable"
+
+
+@pytest.mark.asyncio
 async def test_inventory_count_records_found_into_container_dropped_as_empty(
     async_client: AsyncClient,
 ) -> None:
@@ -1068,3 +1175,302 @@ async def test_inventory_count_records_found_into_container_dropped_as_empty(
     )
     assert line["container_id"] == str(empty_box_id)
     assert line["actual_quantity"] == 1
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_reports_ordinary_and_fbs_deductions(
+    async_client: AsyncClient,
+) -> None:
+    from app.models.fbs_binding_stock_pool import FbsBindingStockPool
+    from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+
+    setup = await _tenant(async_client, "FbsBreakdown")
+    seller_id = await _seller(async_client, setup, "ФБС селлер")
+    product_id = await _product(async_client, setup, name="Футболка", seller_id=seller_id)
+    await _balance(setup, product_id, 400)
+    async with SessionLocal() as session:
+        product = await session.get(Product, product_id)
+        assert product is not None
+        product.fbs_units_mode = True
+        for warehouse_number, quantity in [(501001, 100), (501002, 200)]:
+            binding = FbsWarehouseBinding(
+                tenant_id=setup.tenant_id, seller_id=seller_id,
+                wms_warehouse_id=setup.warehouse_id,
+                wb_warehouse_id=warehouse_number, marketplace="wb",
+            )
+            session.add(binding)
+            await session.flush()
+            session.add(FbsBindingStockPool(
+                tenant_id=setup.tenant_id, binding_id=binding.id,
+                product_id=product_id, quantity=quantity,
+            ))
+        await session.commit()
+    count = await _create_all(async_client, setup)
+    saved = await async_client.put(
+        f"/operations/inventory-counts/{count['id']}/lines",
+        headers=setup.headers,
+        json={"lines": [{"line_id": count["lines"][0]["id"], "actual_quantity": 250}]},
+    )
+    assert saved.status_code == 200, saved.text
+    posted = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/post", headers=setup.headers,
+    )
+    assert posted.status_code == 200, posted.text
+    summary = await async_client.get(
+        "/operations/inventory-balances/summary", headers=setup.headers
+    )
+    assert summary.status_code == 200, summary.text
+    stock = next(row for row in summary.json() if row["product_id"] == str(product_id))
+    assert stock["quantity_fbs"] == 250
+    assert stock["quantity_free_fbo"] == 0
+    assert stock["available"] == 0
+    deductions = posted.json()["stock_write_off"]
+    assert sum(row["quantity"] for row in deductions if row["marketplace"] is None) == 100
+    fbs = [row for row in deductions if row["marketplace"] == "wb"]
+    assert sum(row["quantity"] for row in fbs) == 50
+    assert all(row["warehouse_id"] in {"501001", "501002"} for row in fbs)
+    assert all(row["product_id"] == str(product_id) for row in deductions)
+    repeat = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/post", headers=setup.headers,
+    )
+    assert repeat.status_code == 409
+    async with SessionLocal() as session:
+        assert await session.scalar(select(func.sum(InventoryBalance.quantity)).where(
+            InventoryBalance.product_id == product_id,
+        )) == 250
+        assert await session.scalar(select(func.sum(FbsBindingStockPool.quantity)).where(
+            FbsBindingStockPool.product_id == product_id,
+        )) == 250
+
+
+async def test_inventory_count_manual_line_without_selection_uses_sorting_zone(
+    async_client: AsyncClient,
+) -> None:
+    # Оператор нашёл товар, но штрихкода под рукой нет (стёрт, не наклеен) —
+    # ищет по каталогу и вводит количество сразу, а не сканирует по штуке.
+    # Ничего не выделено — строка уходит в зону сортировки, как и находка без
+    # открытой тары или ячейки (тот же резолвер адреса, что у /found).
+    setup = await _tenant(async_client, "ManualNoSelect")
+    # Документ по всем селлерам сразу — filters без seller_id, как в
+    # InventoryCreateDialog при пустом «Селлер» (emptyLabel «Все селлеры»).
+    seller_id = await _seller(async_client, setup, "Любой селлер")
+    product = await _product(async_client, setup, name="Товар руками", seller_id=seller_id)
+    count = await _create_all(async_client, setup)
+    assert count["fill"]["seller_id"] is None
+
+    res = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/manual-line",
+        headers=setup.headers,
+        json={"product_id": str(product), "quantity": 3},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["expected_quantity"] == 0
+    assert "ничего не числится" in body["notice"]
+    line = next(
+        item for item in body["count"]["lines"] if item["product_id"] == str(product)
+    )
+    assert line["actual_quantity"] == 3
+    assert line["expected_quantity"] == 0
+    assert line["container_kind"] is None
+    assert line["container_id"] is None
+
+    async with SessionLocal() as session:
+        sorting = await get_or_create_sorting_location(
+            session, setup.tenant_id, setup.warehouse_id
+        )
+        db_line = await session.scalar(
+            select(InventoryCountLine).where(InventoryCountLine.product_id == product)
+        )
+        assert db_line is not None
+        assert db_line.storage_location_id == sorting.id
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_manual_line_into_selected_container_binds_its_location(
+    async_client: AsyncClient,
+) -> None:
+    # Выделение стояло на коробе (задача 2) — количество идёт в этот короб, а
+    # адрес строки сервер берёт из карточки короба, а не выдумывает сам.
+    setup = await _tenant(async_client, "ManualContainer")
+    product = await _product(async_client, setup, name="Товар в короб руками")
+    _pallet_id, box_id, _cargo_place_id, _empty_box_id = await _containers(setup)
+    count = await _create_all(async_client, setup)
+
+    res = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/manual-line",
+        headers=setup.headers,
+        json={
+            "product_id": str(product),
+            "quantity": 2,
+            "container_kind": "box",
+            "container_id": str(box_id),
+        },
+    )
+    assert res.status_code == 200, res.text
+    line = next(
+        item
+        for item in res.json()["count"]["lines"]
+        if item["product_id"] == str(product)
+    )
+    assert line["container_kind"] == "box"
+    assert line["container_id"] == str(box_id)
+    assert line["storage_location_id"] == str(setup.location_id)
+    assert line["actual_quantity"] == 2
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_manual_line_into_selected_cell(
+    async_client: AsyncClient,
+) -> None:
+    # Выделение стояло на ячейке, а не на коробе — постановка явно описывает
+    # только случай с коробом (п. 6) и случай без выделения (п. 7); ячейку
+    # ведём тем же путём, что и находка с открытой ячейкой (cell_id без
+    # тары) — иначе выбрать ячейку в задаче 2 было бы нечем воспользоваться.
+    setup = await _tenant(async_client, "ManualCell")
+    product = await _product(async_client, setup, name="Товар в ячейку руками")
+    count = await _create_all(async_client, setup)
+
+    res = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/manual-line",
+        headers=setup.headers,
+        json={
+            "product_id": str(product),
+            "quantity": 1,
+            "cell_id": str(setup.location_id),
+        },
+    )
+    assert res.status_code == 200, res.text
+    line = next(
+        item
+        for item in res.json()["count"]["lines"]
+        if item["product_id"] == str(product)
+    )
+    assert line["container_kind"] is None
+    assert line["container_id"] is None
+    assert line["storage_location_id"] == str(setup.location_id)
+    assert line["actual_quantity"] == 1
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_manual_line_merges_into_existing_line_at_same_place(
+    async_client: AsyncClient,
+) -> None:
+    # Тот же товар в то же место добавляют второй раз (например, нашли ещё) —
+    # прибавляем к уже насчитанному, а не заводим вторую строку поверх первой:
+    # уникальный индекс документа (product+location+container) этого и не
+    # позволил бы, а прибавление — тот же ответ, что и у повторного скана.
+    setup = await _tenant(async_client, "ManualMerge")
+    product = await _product(async_client, setup, name="Товар дважды руками")
+    count = await _create_all(async_client, setup)
+
+    first = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/manual-line",
+        headers=setup.headers,
+        json={"product_id": str(product), "quantity": 2},
+    )
+    assert first.status_code == 200, first.text
+
+    second = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/manual-line",
+        headers=setup.headers,
+        json={"product_id": str(product), "quantity": 5},
+    )
+    assert second.status_code == 200, second.text
+    lines = [
+        item
+        for item in second.json()["count"]["lines"]
+        if item["product_id"] == str(product)
+    ]
+    assert len(lines) == 1
+    assert lines[0]["actual_quantity"] == 7
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_manual_line_rejects_product_from_other_seller(
+    async_client: AsyncClient,
+) -> None:
+    # Документ заведён по конкретному селлеру — модалка обязана предлагать
+    # только его товары, но проверка не может жить только на экране: запрос с
+    # чужим product_id сервер обязан отклонить сам.
+    setup = await _tenant(async_client, "ManualSellerScope")
+    seller_a = await _seller(async_client, setup, "Селлер А")
+    seller_b = await _seller(async_client, setup, "Селлер Б")
+    product_a = await _product(async_client, setup, name="Товар А", seller_id=seller_a)
+    product_b = await _product(async_client, setup, name="Товар Б", seller_id=seller_b)
+    await _balance(setup, product_a, 1)
+
+    res = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={
+            "source": "planned",
+            "filters": {"seller_id": str(seller_a), "warehouse_id": str(setup.warehouse_id)},
+        },
+    )
+    assert res.status_code == 201, res.text
+    count = res.json()
+    assert count["seller_id"] == str(seller_a)
+
+    blocked = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/manual-line",
+        headers=setup.headers,
+        json={"product_id": str(product_b), "quantity": 1},
+    )
+    assert blocked.status_code == 404
+    assert blocked.json()["detail"] == "product_not_found"
+
+    allowed = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/manual-line",
+        headers=setup.headers,
+        json={"product_id": str(product_a), "quantity": 1},
+    )
+    assert allowed.status_code == 200, allowed.text
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_manual_line_rejects_posted_document(
+    async_client: AsyncClient,
+) -> None:
+    # Как и создание тары (задача 1) и правка факта, добавление строки должно
+    # быть заперто статусом документа на сервере, а не только кнопкой на экране.
+    setup = await _tenant(async_client, "ManualPostedNo")
+    product = await _product(async_client, setup, name="Товар для проводки руками")
+    other_product = await _product(async_client, setup, name="Учтённый товар")
+    await _balance(setup, other_product, 2)
+    count = await _create_all(async_client, setup)
+    line = count["lines"][0]
+    saved = await async_client.put(
+        f"/operations/inventory-counts/{count['id']}/lines",
+        headers=setup.headers,
+        json={"lines": [{"line_id": line["id"], "actual_quantity": 2}]},
+    )
+    assert saved.status_code == 200, saved.text
+    posted = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/post", headers=setup.headers
+    )
+    assert posted.status_code == 200, posted.text
+
+    response = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/manual-line",
+        headers=setup.headers,
+        json={"product_id": str(product), "quantity": 1},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "count_not_editable"
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_manual_line_rejects_non_positive_quantity(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "ManualZeroQty")
+    product = await _product(async_client, setup, name="Товар с нулём")
+    count = await _create_all(async_client, setup)
+
+    response = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/manual-line",
+        headers=setup.headers,
+        json={"product_id": str(product), "quantity": 0},
+    )
+    assert response.status_code == 422

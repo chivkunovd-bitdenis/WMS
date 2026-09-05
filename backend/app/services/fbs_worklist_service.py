@@ -49,10 +49,13 @@ from app.models.storage_location import StorageLocation
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.models.warehouse import Warehouse
 from app.services import tenant_settings_service as tenant_settings_svc
+from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.fbs_stock_availability_service import fbs_available_qty_by_product
 from app.services.inventory_service import OUTBOUND_RESERVE_STATUSES
 from app.services.wb_card_enrichment import (
+    brand_from_card,
     color_from_card,
+    composition_from_card,
     first_photo_url_from_card,
     size_from_card_for_barcode,
     subject_name_from_card,
@@ -395,17 +398,13 @@ async def _load_worklist_context(
     products = await _load_products(session, tenant_id, product_ids)
     cards = await _load_imported_cards(session, tenant_id, seller_nm_pairs)
     availability = await _load_availability_by_warehouse_product(session, tenant_id, orders)
-    address_enabled = await tenant_settings_svc.is_address_storage_enabled(
-        session, tenant_id
-    )
-    locations = (
-        await _load_location_balances(session, tenant_id, orders)
-        if address_enabled
-        else {}
-    )
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(session, tenant_id)
+    locations = await _load_location_balances(session, tenant_id, orders) if address_enabled else {}
     markings = await _load_markings(session, order_ids)
     picks = await _load_active_picks(session, tenant_id, order_ids)
     sticker_assets = await _load_sticker_assets(session, tenant_id, order_ids)
+    # У озоновского товара снапшота карточки WB нет — фото лежит в привязке Ozon.
+    ozon_photos = await load_ozon_primary_image_urls(session, tenant_id, product_ids)
     return {
         "sellers": sellers,
         "warehouses": warehouses,
@@ -413,6 +412,7 @@ async def _load_worklist_context(
         "products": products,
         "positions": positions,
         "cards": cards,
+        "ozon_photos": ozon_photos,
         "availability": availability,
         "locations": locations,
         "markings": markings,
@@ -764,8 +764,14 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     # От WB на упаковке нужен только QR стикера заказа; штрихкод — всегда наш.
     barcode = (product.wb_barcode if product else None) or order.wb_barcode
     image_url = first_photo_url_from_card(card_raw) if card_raw else None
+    # У озоновского товара снапшота карточки WB нет — фото лежит в привязке Ozon.
+    image_url = image_url or ctx["ozon_photos"].get(order.product_id)
     category = subject_name_from_card(card_raw) if card_raw else None
     color = color_from_card(card_raw) if card_raw else None
+    # Бренд и состав нужны этикетке ШК: без них она печаталась с пустыми
+    # строками там, где в каталоге всё заполнено, и выглядела обрезанной.
+    brand = brand_from_card(card_raw) if card_raw else None
+    composition = composition_from_card(card_raw) if card_raw else None
     size = None
     if product and product.wb_size:
         size = product.wb_size
@@ -784,11 +790,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     sticker_url = print_asset_content_url(sticker_asset.id) if sticker_asset is not None else None
     applied_at = order.sticker_applied_at or (sticker_asset.applied_at if sticker_asset else None)
     pick_location = None
-    if (
-        ctx["address_storage_enabled"]
-        and pick_row
-        and pick_row.source_storage_location is not None
-    ):
+    if ctx["address_storage_enabled"] and pick_row and pick_row.source_storage_location is not None:
         pick_location = pick_row.source_storage_location.code
     picked_at = order.picked_at or (pick_row.picked_at if pick_row else None)
     return {
@@ -830,6 +832,8 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
             ),
             "category": category,
             "color": color,
+            "brand": brand,
+            "composition": composition,
             "size": size,
             "packaging_instructions": product.packaging_instructions if product else None,
             "has_packaging_instructions": bool(
@@ -840,6 +844,8 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         },
         "positions": [
             {
+                "id": str(position.id),
+                "image_url": ctx["ozon_photos"].get(position.product_id),
                 "product_id": str(position.product_id) if position.product_id else None,
                 "name": (
                     ctx["products"][position.product_id].name
@@ -873,6 +879,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         "buyer_type": "legal" if order.is_legal else "individual",
         "cargo_type": order.cargo_type or "unknown",
         "can_pvz": bool(order.can_pvz),
+        "delivery_route": _delivery_route(order),
         "metadata": _build_metadata(order, markings),
         "sticker": {
             "code": order.sticker_code,
@@ -898,6 +905,31 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
             server_now=server_now,
         ),
     }
+
+
+def _delivery_route(order: FbsOrder) -> str | None:
+    """Маршрут сдачи Ozon — метод доставки из самого отправления (WMS-358).
+
+    Отгрузка Ozon создаётся по методу доставки (`/v1/carriage/create` принимает
+    `delivery_method_id`), значит заказы одного метода уезжают одной отгрузкой,
+    разных — разными. Это ровно тот смысл, который у Wildberries несёт «маршрут
+    сдачи», и колонка в таблице заказов у него уже есть.
+
+    Справочника методов у нас нет и быть не может: `/v1/delivery-method/list`
+    объявлен Ozon устаревшим. Поэтому название берём из того, что положил в
+    заказ опрос, а если названия не пришло — показываем идентификатор, чтобы
+    заказы разных методов всё равно различались глазами.
+    """
+    if order.marketplace != "ozon":
+        return None
+    details = order.meta_details_json or {}
+    name = details.get("ozon_delivery_method_name")
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    method_id = details.get("ozon_delivery_method_id")
+    if isinstance(method_id, str) and method_id.strip():
+        return f"Метод доставки {method_id.strip()}"
+    return None
 
 
 def _marking_value_tail(value: str | None, length: int = 8) -> str | None:

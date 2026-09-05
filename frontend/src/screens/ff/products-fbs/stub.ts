@@ -5,6 +5,14 @@
 // разложено под другие пулы, и то, что добавлено в текущую отгрузку. Поэтому у
 // товара три числа, а не одно, и на экране видно все три.
 
+/** Площадка, на которой живёт склад продавца. */
+export type MarketplaceCode = 'wb' | 'ozon'
+
+export const MARKETPLACE_NAMES: Record<MarketplaceCode, string> = {
+  wb: 'Wildberries',
+  ozon: 'Ozon',
+}
+
 export type SellerWarehouse = {
   id: string
   name: string
@@ -18,6 +26,16 @@ export type SellerWarehouse = {
    * какие заказы вообще наши и по каким складам раздаётся остаток.
    */
   fbsEnabled: boolean
+  /**
+   * Площадка склада. Не задана — Wildberries: так было до появления Ozon, и
+   * все прежние источники данных этого поля не присылают (WMS-350).
+   */
+  marketplace?: MarketplaceCode
+}
+
+/** Площадка склада с умолчанием. Отсутствие поля означает Wildberries. */
+export function warehouseMarketplace(warehouse: SellerWarehouse): MarketplaceCode {
+  return warehouse.marketplace ?? 'wb'
 }
 
 export type Seller = {
@@ -45,6 +63,12 @@ export type Product = {
    * 100% на одном складе и 70% на другом дают в сумме больше, чем есть.
    */
   stock: Record<string, StockAt>
+  /**
+   * Площадки самого товара: `wb`, `ozon` либо оба у объединённой карточки.
+   * Пусто — источник данных этого не знает, тогда считаем товар только
+   * вайлдберрисовским, как было до Ozon (WMS-348, WMS-350).
+   */
+  marketplaces?: string[]
 }
 
 /** Настройка публикации остатка в FBS по товару. */
@@ -86,6 +110,15 @@ export const SELLERS: Seller[] = [
     warehouses: [
       { id: 'w-gor-1', name: 'Ярцево', boundTo: 'wb-koledino', fbsEnabled: true },
       { id: 'w-gor-2', name: 'Химки', boundTo: null, fbsEnabled: true },
+      // Продавец на двух площадках: те же штуки делятся между Wildberries и
+      // Ozon, а не удваиваются (WMS-350).
+      {
+        id: 'w-gor-oz',
+        name: 'Ozon Хоругвино',
+        boundTo: 'wb-koledino',
+        fbsEnabled: true,
+        marketplace: 'ozon',
+      },
     ],
     wbWarehouses: [
       { id: 'wb-koledino', name: 'Коледино' },
@@ -114,7 +147,7 @@ export const SELLERS: Seller[] = [
 ]
 
 export const PRODUCTS: Product[] = [
-  { id: 'p1', name: 'Футболка хлопок белая', sku: 'TS-WHT-M', size: 'M', barcode: '4680123456789', sellerId: 's-gor', category: 'Футболки', stock: { 'w-gor-1': { onHand: 280, reserved: 76 }, 'w-gor-2': { onHand: 140, reserved: 20 } } },
+  { id: 'p1', name: 'Футболка хлопок белая', sku: 'TS-WHT-M', size: 'M', barcode: '4680123456789', sellerId: 's-gor', category: 'Футболки', stock: { 'w-gor-1': { onHand: 280, reserved: 76 }, 'w-gor-2': { onHand: 140, reserved: 20 } }, marketplaces: ['wb', 'ozon'] },
   { id: 'p2', name: 'Футболка хлопок белая', sku: 'TS-WHT-L', size: 'L', barcode: '4680123456772', sellerId: 's-gor', category: 'Футболки', stock: { 'w-gor-1': { onHand: 180, reserved: 20 }, 'w-gor-2': { onHand: 80, reserved: 0 } } },
   { id: 'p3', name: 'Худи оверсайз серое', sku: 'HD-GRY-L', size: 'L', barcode: '4680123456796', sellerId: 's-gor', category: 'Худи и свитшоты', stock: { 'w-gor-1': { onHand: 120, reserved: 0 }, 'w-gor-2': { onHand: 60, reserved: 0 } } },
   { id: 'p4', name: 'Кроссовки беговые', sku: 'SN-RUN-42', size: '42', barcode: '4600987654321', sellerId: 's-city', category: 'Кроссовки', stock: { 'w-city-1': { onHand: 96, reserved: 36 } } },

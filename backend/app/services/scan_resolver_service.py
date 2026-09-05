@@ -247,7 +247,30 @@ async def _find_products(
         Product.tenant_id == tenant_id,
         or_(Product.wb_barcode == code, Product.sku_code == code),
     )
-    rows = (await session.execute(stmt)).scalars().all()
+    rows = list((await session.execute(stmt)).scalars().all())
+    if not rows:
+        # Запасной поиск по штрихкодам маркетплейса. Ozon печатает на товаре
+        # собственный код вида OZN<sku>, которого нет ни в одном нашем поле, и
+        # кладовщик получал «объект с таким кодом не найден». Путь Wildberries
+        # сюда не доходит: обычный поиск для него уже сработал.
+        from app.services.ozon_product_import_service import (
+            find_product_ids_by_marketplace_barcode,
+        )
+
+        product_ids = await find_product_ids_by_marketplace_barcode(session, tenant_id, [code])
+        if product_ids:
+            rows = list(
+                (
+                    await session.execute(
+                        select(Product).where(
+                            Product.tenant_id == tenant_id,
+                            Product.id.in_(product_ids),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
     return [
         ScanMatch(type="product", id=row.id, name=row.name, warehouse_id=None)
         for row in rows

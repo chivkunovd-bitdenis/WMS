@@ -4,16 +4,13 @@ from __future__ import annotations
 
 import base64
 import uuid
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 import pytest
-import pytest_asyncio
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import SessionLocal, engine
-from app.models import Base
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.ozon_return import InboundOzonReturnGiveout
@@ -117,17 +114,6 @@ class FakeOzonReturnsTransport:
                 if int(item.get("id", item.get("giveout_id", 0))) > int(last_id)
             )
         return items[start : start + int(payload["limit"])]
-
-
-@pytest_asyncio.fixture
-async def db_session() -> AsyncIterator[AsyncSession]:
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
-        await connection.run_sync(Base.metadata.create_all)
-    async with SessionLocal() as session:
-        yield session
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
 
 
 async def _create_scope(session: AsyncSession) -> ReturnScope:
@@ -261,9 +247,7 @@ async def test_preview_imports_one_selected_giveout_after_full_pagination(
     db_session: AsyncSession,
 ) -> None:
     scope = await _create_scope(db_session)
-    product_by_offer = await _add_product_link(
-        db_session, scope, external_offer_id="offer-linked"
-    )
+    product_by_offer = await _add_product_link(db_session, scope, external_offer_id="offer-linked")
     product_by_sku = await _add_product_link(db_session, scope, external_sku="2002")
     giveouts = [_giveout(index, 10_000 + index) for index in range(1, 102)]
     first_warehouse_returns = [
@@ -457,9 +441,7 @@ async def test_provider_failure_does_not_create_import_records(db_session: Async
     provider = _provider(
         FakeOzonReturnsTransport(
             errors={
-                "/v1/return/giveout/is-enabled": MarketplaceProviderError(
-                    "ozon", 403, {"code": 7}
-                )
+                "/v1/return/giveout/is-enabled": MarketplaceProviderError("ozon", 403, {"code": 7})
             }
         )
     )
@@ -470,8 +452,8 @@ async def test_provider_failure_does_not_create_import_records(db_session: Async
     assert raised.value.status_code == 403
     assert (
         await db_session.scalar(
-            select(func.count()).select_from(InboundOzonReturnGiveout).where(
-                InboundOzonReturnGiveout.request_id == scope.request_id
-            )
+            select(func.count())
+            .select_from(InboundOzonReturnGiveout)
+            .where(InboundOzonReturnGiveout.request_id == scope.request_id)
         )
     ) == 0

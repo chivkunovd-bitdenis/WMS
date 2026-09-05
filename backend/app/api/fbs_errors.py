@@ -42,9 +42,7 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "seller_stock_mismatch": "Товар принадлежит другому селлеру.",
     "product_not_in_supply": "Товар не входит в состав поставки или уже подобран.",
     "order_already_picked": "Заказ уже подобран.",
-    "pick_quantity_exceeds_demand": (
-        "Количество больше, чем ждут неподобранные заказы поставки."
-    ),
+    "pick_quantity_exceeds_demand": ("Количество больше, чем ждут неподобранные заказы поставки."),
     "location_required": "Сначала отсканируйте место, из которого снимаете товар.",
     "barcode_empty": "Штрихкод не может быть пустым.",
     "insufficient_unpacked": "Недостаточно неупакованного остатка.",
@@ -56,6 +54,11 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "wrong_delivery_type": "Неверный тип доставки для этой операции.",
     "invalid_status_transition": "Недопустимый переход статуса.",
     "order_not_in_supply": "Заказ не входит в эту поставку.",
+    "ozon_box_multiple_orders": "В короб Ozon можно положить позиции только одного заказа.",
+    "ozon_order_already_assembled": "Состав уже отправлен в Ozon; изменить раскладку нельзя.",
+    "ozon_box_distribution_required": "Разложите позиции заказа Ozon по коробам.",
+    "ozon_order_positions_required": "Выберите позиции заказа Ozon для этого короба.",
+    "order_positions_not_supported": "Для Wildberries в короб назначается целый заказ.",
     "order_product_mismatch": "Товар не совпадает с заказом.",
     "order_already_packed": "Заказ уже упакован.",
     "no_eligible_order": "Нет подходящего заказа для упаковки.",
@@ -141,6 +144,18 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     # "Склады и привязки" / "Синхронизация остатков" sections.
     "binding_not_found": "Привязка склада не найдена.",
     "invalid_wb_warehouse_id": "Некорректный ID склада WB.",
+    "unsupported_marketplace": "Привязка складов поддерживается только для Wildberries и Ozon.",
+    # Справочник складов Ozon (WMS-362). Общего запасного текста «Ошибка Ozon»
+    # тут мало: оператор должен понять, что список пуст не из-за кабинета.
+    "ozon_live_warehouses_blocked": (
+        "Справочник складов Ozon недоступен: боевые запросы к Ozon выключены "
+        "настройкой WMS_OZON_LIVE_API. Список пуст не потому, что складов нет."
+    ),
+    "ozon_not_connected": "У продавца не подключён кабинет Ozon: нет Client-Id и Api-Key.",
+    "ozon_account_blocked": "Кабинет Ozon заблокирован. Обратитесь в поддержку Ozon.",
+    "ozon_auth_failed": "Ozon отклонил данные подключения.",
+    "ozon_rate_limited": "Ozon временно ограничил частоту запросов.",
+    "ozon_unavailable": "Ozon временно недоступен.",
     "wms_warehouse_already_bound": "WMS-склад уже привязан.",
     "wb_warehouse_already_bound": "Этот WB-склад уже привязан к другому складу WMS.",
     "active_fbs_reservations": "Есть активные FBS-резервы.",
@@ -172,6 +187,10 @@ def fbs_error_message(code: str, explicit: str | None = None) -> str:
         return FBS_ERROR_MESSAGES_RU[code]
     if code.startswith("wb_"):
         return "Ошибка Wildberries."
+    # У вайлдберрисовских кодов запасной текст был, у озоновских — нет, и
+    # оператор видел на экране голый код вида `ozon_ship_unconfirmed`.
+    if code.startswith("ozon_"):
+        return "Ошибка Ozon."
     return code
 
 

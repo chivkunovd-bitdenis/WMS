@@ -10,7 +10,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.fbs_order import FbsOrderReservation
 from app.models.inventory_balance import InventoryBalance
 from app.models.product import Product
 from app.models.stock_direction import StockDirection, StockMonthlySnapshot
@@ -296,22 +295,9 @@ async def fbs_reserved_totals_by_product(
     *,
     warehouse_id: uuid.UUID | None = None,
 ) -> dict[uuid.UUID, int]:
-    if not product_ids:
-        return {}
-    stmt = (
-        select(
-            FbsOrderReservation.product_id,
-            func.coalesce(func.sum(FbsOrderReservation.quantity), 0),
-        )
-        .where(
-            FbsOrderReservation.tenant_id == tenant_id,
-            FbsOrderReservation.product_id.in_(product_ids),
-        )
-        .group_by(FbsOrderReservation.product_id)
-    )
-    if warehouse_id is not None:
-        stmt = stmt.where(FbsOrderReservation.warehouse_id == warehouse_id)
-    return {pid: int(qty or 0) for pid, qty in (await session.execute(stmt)).all()}
+    from app.services.fbs_stock_availability_service import fbs_reserved_by_product
+
+    return await fbs_reserved_by_product(session, tenant_id, warehouse_id, product_ids)
 
 
 async def stock_totals_by_product(
@@ -359,16 +345,32 @@ async def distributions_by_product(
         warehouse_id=warehouse_id,
     )
     direction_totals = await direction_totals_by_product(session, tenant_id, product_ids)
+    from app.services.fbs_stock_availability_service import fbs_allocated_available_by_product
+
+    allocated = await fbs_allocated_available_by_product(
+        session, tenant_id, warehouse_id, product_ids
+    )
+    reserved = await fbs_reserved_totals_by_product(
+        session, tenant_id, product_ids, warehouse_id=warehouse_id
+    )
+    units_products = set(await session.scalars(select(Product.id).where(
+        Product.tenant_id == tenant_id,
+        Product.id.in_(product_ids),
+        Product.fbs_units_mode.is_(True),
+    )))
     distributions: dict[uuid.UUID, StockDistribution] = {}
     for product_id in product_ids:
         total = int(stock_totals.get(product_id, 0))
         directions = direction_totals.get(product_id, StockDirectionTotals())
+        fbs = allocated.get(product_id, 0) + (
+            reserved.get(product_id, 0) if product_id in units_products else 0
+        )
         distributions[product_id] = StockDistribution(
             product_id=product_id,
             quantity_total=total,
-            quantity_fbs=0,
+            quantity_fbs=fbs,
             quantity_reserved=directions.total,
-            quantity_free_fbo=max(0, total - directions.total),
+            quantity_free_fbo=max(0, total - directions.total - fbs),
         )
     return distributions
 

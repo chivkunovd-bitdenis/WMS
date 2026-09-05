@@ -29,6 +29,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg_async://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wms}}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      WMS_OZON_LIVE_API: ${WMS_OZON_LIVE_API:-false}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set in .env}
       WMS_SECRETS_FERNET_KEY: ${WMS_SECRETS_FERNET_KEY:?set in .env}
       WMS_MARKING_IMPORT_LOCAL_STORAGE: ${WMS_MARKING_IMPORT_LOCAL_STORAGE:-false}
@@ -72,6 +73,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg_async://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wms}}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      WMS_OZON_LIVE_API: ${WMS_OZON_LIVE_API:-false}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set in .env}
       WMS_SECRETS_FERNET_KEY: ${WMS_SECRETS_FERNET_KEY:?set in .env}
     # Фоновые задачи пишут те же файлы, что отдаёт API, — том общий.
@@ -92,6 +94,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg_async://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wms}}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      WMS_OZON_LIVE_API: ${WMS_OZON_LIVE_API:-false}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set in .env}
       WMS_SECRETS_FERNET_KEY: ${WMS_SECRETS_FERNET_KEY:?set in .env}
     depends_on:

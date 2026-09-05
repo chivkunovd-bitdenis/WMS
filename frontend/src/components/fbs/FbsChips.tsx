@@ -91,10 +91,12 @@ export function DeadlinePill({
   deadlineAt,
   cancelled,
   serverNow,
+  marketplace = 'wb',
 }: {
   deadlineAt: string | null
   cancelled?: boolean
   serverNow?: string | null
+  marketplace?: 'wb' | 'ozon'
 }) {
   // Серверное время — базовая отметка, а клиентские часы измеряют только прошедшее после
   // получения этой отметки время. Поэтому clock-skew оператора не меняет старт дедлайна,
@@ -120,7 +122,9 @@ export function DeadlinePill({
     color = 'info'
   }
   return (
-    <Tooltip title={`Отгрузить до ${new Date(deadlineAt).toLocaleString('ru-RU')}. Рассчитано WMS: 120 часов с момента создания заказа в WB.`}>
+    <Tooltip title={marketplace === 'ozon'
+      ? `Отгрузить в Ozon до ${new Date(deadlineAt).toLocaleString('ru-RU')}.`
+      : `Отгрузить до ${new Date(deadlineAt).toLocaleString('ru-RU')}. Рассчитано WMS: 120 часов с момента создания заказа в WB.`}>
       <Chip
         size="small"
         variant="outlined"

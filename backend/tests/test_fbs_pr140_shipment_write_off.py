@@ -3,18 +3,14 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import pytest
-import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.session import SessionLocal, engine
-from app.models import Base
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_PACKED,
     MAPPING_STATUS_MAPPED,
@@ -48,17 +44,6 @@ from app.services.fbs_shipment_source_service import (
     plan_fbs_shipment_sources,
 )
 from app.services.ozon_fbs_sync_service import _apply_status
-
-
-@pytest_asyncio.fixture
-async def db_session() -> AsyncIterator[AsyncSession]:
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
-        await connection.run_sync(Base.metadata.create_all)
-    async with SessionLocal() as session:
-        yield session
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
 
 
 @dataclass(frozen=True)
@@ -285,9 +270,7 @@ async def test_ozon_two_products_are_written_off_from_their_packed_locations(
         for position in ledger.ozon_positions_json or []
     } == {
         (str(product_id), str(location_id), 1)
-        for product_id, location_id in zip(
-            case.product_ids, case.location_ids, strict=True
-        )
+        for product_id, location_id in zip(case.product_ids, case.location_ids, strict=True)
     }
 
 
@@ -300,9 +283,7 @@ async def test_ozon_quantity_above_one_is_written_off_in_full(
 
     await _write_off_case(db_session, case)
 
-    assert await _balances(db_session, case) == {
-        case.product_ids[0]: case.initial_quantity - 3
-    }
+    assert await _balances(db_session, case) == {case.product_ids[0]: case.initial_quantity - 3}
     ledger = await db_session.scalar(
         select(FbsShipmentReversalLedger).where(
             FbsShipmentReversalLedger.fbs_order_id == case.order.id
@@ -314,7 +295,7 @@ async def test_ozon_quantity_above_one_is_written_off_in_full(
 
 
 @pytest.mark.asyncio
-async def test_ozon_cancellation_restores_every_written_off_position(
+async def test_ozon_cancellation_does_not_restore_written_off_positions(
     db_session: AsyncSession,
 ) -> None:
     # TC-NEW-FBS-SHIPMENT-COMPOSITION-003
@@ -325,7 +306,8 @@ async def test_ozon_cancellation_restores_every_written_off_position(
     await db_session.flush()
 
     assert await _balances(db_session, case) == {
-        product_id: case.initial_quantity for product_id in case.product_ids
+        product_id: case.initial_quantity - quantity
+        for product_id, quantity in zip(case.product_ids, (2, 3), strict=True)
     }
     ledger = await db_session.scalar(
         select(FbsShipmentReversalLedger).where(
@@ -333,7 +315,7 @@ async def test_ozon_cancellation_restores_every_written_off_position(
         )
     )
     assert ledger is not None
-    assert ledger.reversed_at is not None
+    assert ledger.reversed_at is None
     movements = list(
         (
             await db_session.execute(
@@ -346,7 +328,7 @@ async def test_ozon_cancellation_restores_every_written_off_position(
         .scalars()
         .all()
     )
-    assert sorted(int(movement.quantity_delta) for movement in movements) == [-3, -2, 2, 3]
+    assert sorted(int(movement.quantity_delta) for movement in movements) == [-3, -2]
 
 
 @pytest.mark.asyncio
@@ -358,9 +340,7 @@ async def test_ozon_single_packed_unit_keeps_the_previous_one_unit_result(
 
     await _write_off_case(db_session, case)
 
-    assert await _balances(db_session, case) == {
-        case.product_ids[0]: case.initial_quantity - 1
-    }
+    assert await _balances(db_session, case) == {case.product_ids[0]: case.initial_quantity - 1}
     ledger = await db_session.scalar(
         select(FbsShipmentReversalLedger).where(
             FbsShipmentReversalLedger.fbs_order_id == case.order.id
@@ -387,9 +367,7 @@ async def test_ozon_packaging_write_off_then_delivery_debits_stock_once(
     await _write_off_case(db_session, case)
 
     assert ledger.shipment_movement_id is not None
-    assert await _balances(db_session, case) == {
-        case.product_ids[0]: case.initial_quantity - 1
-    }
+    assert await _balances(db_session, case) == {case.product_ids[0]: case.initial_quantity - 1}
     movements = list(
         (
             await db_session.execute(
@@ -423,9 +401,7 @@ async def test_wb_delivery_keeps_single_write_off_path(db_session: AsyncSession)
     )
     assert ledger is not None
     assert ledger.shipment_movement_id is not None
-    assert await _balances(db_session, case) == {
-        case.product_ids[0]: case.initial_quantity - 1
-    }
+    assert await _balances(db_session, case) == {case.product_ids[0]: case.initial_quantity - 1}
     movements = list(
         (
             await db_session.execute(
@@ -518,17 +494,14 @@ async def test_wb_confirmed_checkpoint_replays_local_write_off_without_replannin
     )
     assert replayed_ledger is not None
     assert replayed_ledger.shipment_movement_id is not None
-    assert await _balances(db_session, case) == {
-        case.product_ids[0]: case.initial_quantity - 1
-    }
+    assert await _balances(db_session, case) == {case.product_ids[0]: case.initial_quantity - 1}
 
 
 @pytest.mark.asyncio
 async def test_ozon_cancelled_after_packaging_is_not_written_off_again(
     db_session: AsyncSession,
 ) -> None:
-    # TC-NEW-FBS-OZON-WRITE-OFF-003: отмена сторнирует старое упаковочное
-    # списание, а доставочный обработчик не создаёт новый расход отменённого заказа.
+    # WMS-060: отмена не создаёт приход и не повторяет проведённое списание.
     case = await _seed_packed_order(db_session, (1,))
     await write_off_ozon_order(
         db_session,
@@ -540,9 +513,7 @@ async def test_ozon_cancelled_after_packaging_is_not_written_off_again(
     await _apply_status(db_session, case.order, "cancelled")
     await _write_off_case(db_session, case)
 
-    assert await _balances(db_session, case) == {
-        case.product_ids[0]: case.initial_quantity
-    }
+    assert await _balances(db_session, case) == {case.product_ids[0]: case.initial_quantity - 1}
     movements = list(
         (
             await db_session.execute(
@@ -556,4 +527,55 @@ async def test_ozon_cancelled_after_packaging_is_not_written_off_again(
         .scalars()
         .all()
     )
-    assert sorted(int(movement.quantity_delta) for movement in movements) == [-1, 1]
+    assert sorted(int(movement.quantity_delta) for movement in movements) == [-1]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("marketplace, quantities", [("wb", (1,)), ("ozon", (2, 1))])
+@pytest.mark.parametrize("reserved", [True, False])
+async def test_units_shipment_consumes_once_with_or_without_reserve(
+    db_session: AsyncSession,
+    marketplace: str,
+    quantities: tuple[int, ...],
+    reserved: bool,
+) -> None:
+    from app.models.fbs_binding_stock_pool import FbsBindingStockPool
+    from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+    from app.services.inventory_service import update_fbs_order_reservation
+
+    case = await _seed_packed_order(db_session, quantities, marketplace=marketplace)
+    binding = FbsWarehouseBinding(
+        tenant_id=case.tenant_id,
+        seller_id=case.order.seller_id,
+        marketplace=marketplace,
+        wb_warehouse_id=777,
+        external_warehouse_id="777",
+        wms_warehouse_id=case.order.warehouse_id,
+    )
+    case.order.wb_warehouse_id = 777
+    db_session.add(binding)
+    await db_session.flush()
+    pools = []
+    for product_id in case.product_ids:
+        product = await db_session.get(Product, product_id)
+        assert product is not None
+        product.fbs_units_mode = True
+        pool = FbsBindingStockPool(
+            tenant_id=case.tenant_id,
+            binding_id=binding.id,
+            product_id=product_id,
+            quantity=4,
+        )
+        db_session.add(pool)
+        pools.append(pool)
+    await db_session.flush()
+    if reserved:
+        await update_fbs_order_reservation(db_session, case.order, reserve=True)
+    await _write_off_case(db_session, case)
+    await _write_off_case(db_session, case)
+    await _apply_status(db_session, case.order, "cancelled")
+    await _apply_status(db_session, case.order, "cancelled")
+    assert [p.quantity for p in pools] == [4 - q for q in quantities]
+    assert await _balances(db_session, case) == {
+        pid: case.initial_quantity - q for pid, q in zip(case.product_ids, quantities, strict=True)
+    }

@@ -9,6 +9,19 @@ on:
   workflow_dispatch:
 
 jobs:
+  backlog:
+    # Гейт бэклога: каждое изменение должно называть номер задачи из
+    # docs/KANONICHESKIY_BACKLOG.md. Заведён 04.09.2026 после того, как выяснилось, что за два
+    # месяца 97 задач владельца жили только в переписке, а постановка по
+    # инвентаризации вообще исчезла из проекта при слиянии.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Проверить ссылку на задачу
+        run: ./scripts/ci/check-backlog-ref.sh "origin/${{ github.base_ref || 'etalon' }}"
+
   backend:
     runs-on: ubuntu-latest
     defaults:

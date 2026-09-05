@@ -8,18 +8,14 @@ TC-NEW-FBS-STOCK-010: per-item sync state and unique (binding_id, chrt_id).
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
-import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.fbs_sellers import _binding_out
-from app.db.session import SessionLocal, engine
-from app.models import Base
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_NEW,
     MAPPING_STATUS_MISSING,
@@ -41,20 +37,6 @@ from app.services.fbs_warehouse_binding_service import (
     FbsWarehouseBindingError,
     set_binding_stock_pool_quantity,
 )
-
-
-@pytest_asyncio.fixture
-async def db_session() -> AsyncIterator[AsyncSession]:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    async with SessionLocal() as session:
-        yield session
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
 
 
 async def _seed_tenant_seller_warehouses(
@@ -172,12 +154,16 @@ async def test_binding_allows_one_wms_warehouse_for_many_wb_warehouses(
     await db_session.commit()
 
     rows = (
-        await db_session.execute(
-            select(FbsWarehouseBinding).where(
-                FbsWarehouseBinding.seller_id == seller.id,
+        (
+            await db_session.execute(
+                select(FbsWarehouseBinding).where(
+                    FbsWarehouseBinding.seller_id == seller.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert {row.wb_warehouse_id for row in rows} == {501001, 501002}
     assert all(row.wms_warehouse_id == wh_a.id for row in rows)
 

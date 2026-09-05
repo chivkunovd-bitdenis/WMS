@@ -68,6 +68,26 @@ def _type_expression(schema: dict[str, Any], names: dict[str, str]) -> str:
     raise ValueError(f"Unsupported OpenAPI type: {schema_type!r}")
 
 
+def _is_real_regex(pattern: object) -> bool:
+    """Отличить настоящий шаблон от человеческого описания формата.
+
+    В спеке Ozon поля дат объявлены как `pattern: " YYYY-MM-DDThh:mm:ss.mcsZ"` —
+    это подсказка человеку, а не регулярное выражение. Перенесённая в модель
+    буквально, она делает поле непроходимым: ни одна настоящая дата ей не
+    удовлетворяет, и модель не собирается ни на запросе, ни на разборе ответа.
+    Признак такой подсказки — плейсхолдеры YYYY/MM-DD/hh:mm в тексте.
+    """
+    if not isinstance(pattern, str):
+        return False
+    if re.search(r"YYYY|MM-DD|hh:mm", pattern):
+        return False
+    try:
+        re.compile(pattern)
+    except re.error:
+        return False
+    return True
+
+
 def _field_expression(
     openapi_name: str,
     schema: dict[str, Any],
@@ -99,7 +119,7 @@ def _field_expression(
         arguments.append(f"max_length={schema['maxLength']!r}")
     if "maxItems" in schema:
         arguments.append(f"max_length={schema['maxItems']!r}")
-    if "pattern" in schema:
+    if "pattern" in schema and _is_real_regex(schema["pattern"]):
         arguments.append(f"pattern={schema['pattern']!r}")
     if "format" in schema:
         arguments.append(f"json_schema_extra={{'format': {schema['format']!r}}}")

@@ -109,6 +109,9 @@ async def drain_background_stock_publish_tasks() -> None:
     while _BACKGROUND_TASKS:
         tasks = tuple(_BACKGROUND_TASKS)
         await asyncio.gather(*tasks, return_exceptions=True)
+        # gather over already finished tasks may not yield to their callbacks.
+        # Remove this completed batch explicitly so teardown cannot busy-loop.
+        _BACKGROUND_TASKS.difference_update(tasks)
 
 
 def schedule_seller_stock_publish(

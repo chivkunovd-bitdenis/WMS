@@ -547,7 +547,11 @@ def marketplace_scope_condition(
                 ProductMarketplaceLink.is_active.is_(True),
             )
         )
-    if marketplace == "wildberries":
+    # Каталог называет Wildberries полным именем, а заказы, поставки и привязки
+    # складов — коротким `wb`. Пока эти два мира не встречаются в одном запросе,
+    # это безобидно; в день, когда встретятся, половина строк молча выпадет.
+    # Принимаем оба написания на входе фильтра, чтобы не выпадала.
+    if marketplace in {"wildberries", "wb"}:
         return or_(
             Product.wb_nm_id.is_not(None),
             Product.wb_vendor_code.is_not(None),
@@ -555,7 +559,7 @@ def marketplace_scope_condition(
                 select(ProductMarketplaceLink.id).where(
                     ProductMarketplaceLink.tenant_id == tenant_id,
                     ProductMarketplaceLink.product_id == Product.id,
-                    ProductMarketplaceLink.marketplace == "wildberries",
+                    ProductMarketplaceLink.marketplace.in_(("wildberries", "wb")),
                     ProductMarketplaceLink.is_active.is_(True),
                 )
             ),
@@ -796,6 +800,48 @@ async def list_ozon_product_links(
         )
     )
     return {link.product_id: link for link in result.scalars().all()}
+
+
+# Ключ, под которым импорт карточек Ozon кладёт ссылку на главное фото товара в
+# уже существующий JSON `provider_data` привязки. Отдельного поля под картинку не
+# заводим: у Wildberries фото тоже не хранится колонкой, а вынимается из снапшота
+# карточки. Здесь снапшотом служит `provider_data`, а это — его единственный ключ.
+OZON_PRIMARY_IMAGE_KEY = "primary_image"
+
+
+def ozon_link_primary_image_url(link: ProductMarketplaceLink | None) -> str | None:
+    """Фото озоновской карточки: единственная точка чтения на все экраны.
+
+    Зачем отдельная функция. Фото товара показывается на пятнадцати экранах, и
+    каждый из них сам достаёт снапшот карточки Wildberries и зовёт
+    `first_photo_url_from_card`. У товара, которого на WB нет, снапшота нет тоже,
+    и во всех пятнадцати местах остаётся пустой квадрат, по которому кладовщик
+    должен сверять товар глазами.
+
+    Экрану достаточно дописать один запасной источник — эту функцию, — а не
+    разбираться в устройстве `provider_data`.
+    """
+    if link is None or not isinstance(link.provider_data, dict):
+        return None
+    url = link.provider_data.get(OZON_PRIMARY_IMAGE_KEY)
+    if isinstance(url, str) and url.strip():
+        return url.strip()
+    return None
+
+
+async def load_ozon_primary_image_urls(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_ids: set[uuid.UUID],
+) -> dict[uuid.UUID, str]:
+    """То же фото, но пачкой — для экранов, которые не держат привязки под рукой."""
+    links = await list_ozon_product_links(session, tenant_id, product_ids)
+    out: dict[uuid.UUID, str] = {}
+    for product_id, link in links.items():
+        url = ozon_link_primary_image_url(link)
+        if url is not None:
+            out[product_id] = url
+    return out
 
 
 async def update_ozon_product_link(
@@ -1059,11 +1105,14 @@ async def _record_dimension_event(
     force_new: bool = False,
 ) -> ProductDimensionEvent:
     existing_event = None
-    if source == "wb":
+    # Импорт карточек маркетплейса повторяется по расписанию и по кнопке.
+    # Дедуп по содержимому нужен обоим импортам одинаково: без него каждая
+    # повторная выгрузка Ozon плодила бы новое событие обмера с теми же числами.
+    if source in {"wb", "ozon"}:
         result = await session.execute(
             select(ProductDimensionEvent).where(
                 ProductDimensionEvent.product_id == product.id,
-                ProductDimensionEvent.source == "wb",
+                ProductDimensionEvent.source == source,
                 ProductDimensionEvent.fingerprint == fingerprint,
             )
         )

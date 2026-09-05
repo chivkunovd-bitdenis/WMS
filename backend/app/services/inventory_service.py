@@ -9,13 +9,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.models.fbs_order import FbsOrderReservation
+from app.models.fbs_binding_stock_pool import FbsBindingStockPool
+from app.models.fbs_order import (
+    RESERVE_STATUS_NO_STOCK,
+    RESERVE_STATUS_NOT_PUBLISHED,
+    RESERVE_STATUS_RELEASED,
+    RESERVE_STATUS_RESERVED,
+    RESERVE_STATUS_SKIPPED_NO_PRODUCT,
+    RESERVE_STATUS_WAREHOUSE_UNMAPPED,
+    FbsOrder,
+    FbsOrderProduct,
+    FbsOrderProductReservation,
+    FbsOrderReservation,
+)
+from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import (
     MOVEMENT_TYPE_CONTAINER_REATTACH,
     MOVEMENT_TYPE_FBS_SHIPMENT,
     MOVEMENT_TYPE_INBOUND_INTAKE,
+    MOVEMENT_TYPE_INVENTORY_COUNT,
     MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
     MOVEMENT_TYPE_OUTBOUND_SHIPMENT,
     MOVEMENT_TYPE_STOCK_TRANSFER_IN,
@@ -39,6 +54,260 @@ from app.services.sorting_location_service import SORTING_LOCATION_CODE
 OUTBOUND_RESERVE_STATUSES = ("draft", "submitted")
 RESERVATION_ERROR = "insufficient_available"
 DeductPrefer = Literal["packed", "unpacked"]
+# Только результат проведения для ответа оператору, не отдельный учёт.
+StockDeduction = tuple[uuid.UUID, uuid.UUID | None, int]
+
+
+async def lock_stock_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> Product | None:
+    return (
+        await session.scalars(
+            select(Product)
+            .where(Product.tenant_id == tenant_id, Product.id == product_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).one_or_none()
+
+
+async def _order_stock_pool(
+    session: AsyncSession,
+    order: FbsOrder,
+    product_id: uuid.UUID,
+) -> FbsBindingStockPool | None:
+    return (
+        await session.scalars(
+            select(FbsBindingStockPool)
+            .join(FbsWarehouseBinding, FbsWarehouseBinding.id == FbsBindingStockPool.binding_id)
+            .where(
+                FbsBindingStockPool.tenant_id == order.tenant_id,
+                FbsBindingStockPool.product_id == product_id,
+                FbsWarehouseBinding.tenant_id == order.tenant_id,
+                FbsWarehouseBinding.seller_id == order.seller_id,
+                FbsWarehouseBinding.marketplace == order.marketplace,
+                FbsWarehouseBinding.wb_warehouse_id == order.wb_warehouse_id,
+            )
+            .execution_options(populate_existing=True)
+        )
+    ).one_or_none()
+
+
+async def update_fbs_order_reservation(
+    session: AsyncSession,
+    order: FbsOrder,
+    *,
+    reserve: bool,
+) -> None:
+    """Общая операция WB/Ozon: доступность ↔ существующий резерв заказа.
+
+    Физическое списание остаётся в record_movement_and_adjust_balance. После
+    проведённого списания снятие резерва не возвращает доступность.
+    """
+    from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
+
+    positions = list(
+        (
+            await session.scalars(
+                select(FbsOrderProduct)
+                .where(FbsOrderProduct.order_id == order.id)
+                .order_by(FbsOrderProduct.id)
+            )
+        ).all()
+    )
+    required: dict[uuid.UUID, int] = {}
+    if order.marketplace == "ozon" and positions:
+        for position in positions:
+            if position.product_id is None or position.quantity < 1:
+                if reserve:
+                    order.reserve_status = RESERVE_STATUS_SKIPPED_NO_PRODUCT
+                    return
+                continue
+            required[position.product_id] = required.get(position.product_id, 0) + position.quantity
+    elif order.product_id is not None:
+        required[order.product_id] = 1
+    elif reserve:
+        order.reserve_status = RESERVE_STATUS_SKIPPED_NO_PRODUCT
+        return
+    # Include old reservation products even if mapping/composition has changed.
+    existing = list(
+        (
+            await session.scalars(
+                select(FbsOrderReservation).where(FbsOrderReservation.fbs_order_id == order.id)
+            )
+        ).all()
+    )
+    position_reserves = list(
+        (
+            await session.scalars(
+                select(FbsOrderProductReservation)
+                .join(FbsOrderProduct)
+                .where(FbsOrderProduct.order_id == order.id)
+            )
+        ).all()
+    )
+    reservations: list[FbsOrderReservation | FbsOrderProductReservation] = [
+        *existing,
+        *position_reserves,
+    ]
+    product_ids = set(required) | {r.product_id for r in reservations}
+    products = {
+        pid: await lock_stock_product(session, order.tenant_id, pid)
+        for pid in sorted(product_ids, key=str)
+    }
+    # Re-read AFTER the lock: concurrent import/cancellation may have committed.
+    existing = list(
+        (
+            await session.scalars(
+                select(FbsOrderReservation)
+                .where(FbsOrderReservation.fbs_order_id == order.id)
+                .execution_options(populate_existing=True)
+            )
+        ).all()
+    )
+    position_reserves = list(
+        (
+            await session.scalars(
+                select(FbsOrderProductReservation)
+                .join(FbsOrderProduct)
+                .where(FbsOrderProduct.order_id == order.id)
+                .execution_options(populate_existing=True)
+            )
+        ).all()
+    )
+    reservations = [*existing, *position_reserves]
+    shipped = (
+        await session.scalar(
+            select(FbsShipmentReversalLedger.id).where(
+                FbsShipmentReversalLedger.fbs_order_id == order.id,
+                FbsShipmentReversalLedger.shipment_movement_id.is_not(None),
+            )
+        )
+        is not None
+    )
+    if reserve:
+        if reservations or shipped:
+            return
+        if order.warehouse_id is None:
+            order.reserve_status = RESERVE_STATUS_WAREHOUSE_UNMAPPED
+            return
+        pools: dict[uuid.UUID, FbsBindingStockPool] = {}
+        for pid, quantity in required.items():
+            product = products[pid]
+            if product is None:
+                order.reserve_status = RESERVE_STATUS_SKIPPED_NO_PRODUCT
+                return
+            if product.fbs_units_mode:
+                pool = await _order_stock_pool(session, order, pid)
+                if pool is None or pool.quantity < quantity:
+                    order.reserve_status = RESERVE_STATUS_NO_STOCK
+                    return
+                pools[pid] = pool
+            else:
+                if order.marketplace == "wb" and (
+                    not product.fbs_stock_sync_enabled or product.fbs_percent is None
+                ):
+                    order.reserve_status = RESERVE_STATUS_NOT_PUBLISHED
+                    return
+                available = await fbs_available_qty_for_product(
+                    session,
+                    order.tenant_id,
+                    order.warehouse_id,
+                    pid,
+                    exclude_fbs_order_id=order.id,
+                )
+                if available < quantity:
+                    order.reserve_status = RESERVE_STATUS_NO_STOCK
+                    return
+        for pid, pool in pools.items():
+            pool.quantity -= required[pid]
+        if order.marketplace == "ozon" and positions:
+            for position in positions:
+                assert position.product_id is not None
+                session.add(
+                    FbsOrderProductReservation(
+                        tenant_id=order.tenant_id,
+                        order_product_id=position.id,
+                        product_id=position.product_id,
+                        warehouse_id=order.warehouse_id,
+                        quantity=position.quantity,
+                    )
+                )
+                position.reserved_quantity = position.quantity
+        else:
+            assert order.product_id is not None
+            session.add(
+                FbsOrderReservation(
+                    tenant_id=order.tenant_id,
+                    fbs_order_id=order.id,
+                    product_id=order.product_id,
+                    warehouse_id=order.warehouse_id,
+                    quantity=1,
+                )
+            )
+        order.reserve_status = RESERVE_STATUS_RESERVED
+    else:
+        if not reservations:
+            return
+        for reservation in reservations:
+            product = products[reservation.product_id]
+            if not shipped and product is not None and product.fbs_units_mode:
+                pool = await _order_stock_pool(session, order, reservation.product_id)
+                if pool is not None:
+                    pool.quantity += reservation.quantity
+            await session.delete(reservation)
+        for position in positions:
+            position.reserved_quantity = 0
+        order.reserve_status = RESERVE_STATUS_RELEASED
+    await session.flush()
+    schedule_seller_stock_publish(session, order.tenant_id, order.seller_id)
+
+
+async def _deduct_inventory_from_fbs(
+    session: AsyncSession,
+    product: Product,
+    warehouse_id: uuid.UUID,
+    shortage: int,
+) -> list[StockDeduction]:
+    """Недостача: сначала обычный свободный остаток, затем доступное ФБС."""
+    if not product.fbs_units_mode:
+        return [(product.id, None, shortage)]
+    from app.services.fbs_stock_availability_service import fbs_stock_breakdown_by_product
+
+    pools = list(
+        (
+            await session.scalars(
+                select(FbsBindingStockPool)
+                .join(FbsWarehouseBinding)
+                .where(
+                    FbsBindingStockPool.tenant_id == product.tenant_id,
+                    FbsBindingStockPool.product_id == product.id,
+                    FbsWarehouseBinding.wms_warehouse_id == warehouse_id,
+                )
+                .order_by(FbsBindingStockPool.binding_id)
+                .execution_options(populate_existing=True)
+            )
+        ).all()
+    )
+    if not pools:
+        return [(product.id, None, shortage)]
+    stock = (
+        await fbs_stock_breakdown_by_product(session, product.tenant_id, warehouse_id, [product.id])
+    )[product.id]
+    ordinary_free = max(0, stock.free - sum(p.quantity for p in pools))
+    deductions: list[StockDeduction] = [(product.id, None, min(shortage, ordinary_free))]
+    remaining = max(0, shortage - ordinary_free)
+    for pool in pools:
+        take = min(remaining, pool.quantity)
+        if take:
+            deductions.append((product.id, pool.binding_id, take))
+        pool.quantity -= take
+        remaining -= take
+        if remaining == 0:
+            break
+    return deductions
 
 
 async def _physical_on_hand(
@@ -523,6 +792,7 @@ async def record_movement_and_adjust_balance(
     container_kind: ContainerKind | None = None,
     container_id: uuid.UUID | None = None,
     _exact_source: bool = False,
+    stock_deductions: list[StockDeduction] | None = None,
 ) -> InventoryMovement:
     """Запись в журнал и изменение остатка (delta может быть отрицательным)."""
     if quantity_delta == 0:
@@ -537,7 +807,7 @@ async def record_movement_and_adjust_balance(
         msg = "storage location not found"
         raise ValueError(msg)
 
-    prod = await session.get(Product, product_id)
+    prod = await lock_stock_product(session, tenant_id, product_id)
     if prod is None or prod.tenant_id != tenant_id:
         msg = "product not found"
         raise ValueError(msg)
@@ -584,11 +854,7 @@ async def record_movement_and_adjust_balance(
         allocations: list[tuple[InventoryBalance, int]] = []
         remaining = quantity_to_deduct
         single_source = next(
-            (
-                source
-                for source in source_rows
-                if int(source.quantity) >= quantity_to_deduct
-            ),
+            (source for source in source_rows if int(source.quantity) >= quantity_to_deduct),
             None,
         )
         if single_source is not None and movement_type != MOVEMENT_TYPE_FBS_SHIPMENT:
@@ -632,6 +898,7 @@ async def record_movement_and_adjust_balance(
                     container_kind=cast(ContainerKind | None, raw_kind),
                     container_id=source.container_id,
                     _exact_source=True,
+                    stock_deductions=stock_deductions,
                 )
             )
         if remaining > 0:
@@ -652,11 +919,19 @@ async def record_movement_and_adjust_balance(
                     actor_user_id=actor_user_id,
                     deduct_prefer=deduct_prefer,
                     _exact_source=True,
+                    stock_deductions=stock_deductions,
                 )
             )
         if not movements:
             raise ValueError("insufficient stock")
         return movements[0]
+
+    if movement_type == MOVEMENT_TYPE_INVENTORY_COUNT and quantity_delta < 0:
+        deductions = await _deduct_inventory_from_fbs(
+            session, prod, loc.warehouse_id, -quantity_delta
+        )
+        if stock_deductions is not None:
+            stock_deductions.extend(deductions)
 
     movement_values: dict[str, object] = dict(
         tenant_id=tenant_id,
@@ -1405,6 +1680,7 @@ async def apply_fbs_supply_write_off(
     quantity: int,
     actor_user_id: uuid.UUID | None,
     allow_negative: bool = False,
+    fbs_order_id: uuid.UUID | None = None,
     container_kind: ContainerKind | None = None,
     container_id: uuid.UUID | None = None,
 ) -> InventoryMovement:
@@ -1416,20 +1692,49 @@ async def apply_fbs_supply_write_off(
     if quantity < 1:
         msg = "quantity must be positive"
         raise ValueError(msg)
+    # При отгрузке без резерва (существующий сценарий подтверждения минуса)
+    # расходуем только доступное своего направления. Обычный зарезервированный
+    # заказ уже исключён из него, повторно его не вычитаем.
+    product = await lock_stock_product(session, tenant_id, product_id)
+    if fbs_order_id is not None and product is not None and product.fbs_units_mode:
+        order = await session.get(FbsOrder, fbs_order_id)
+        if order is None or order.tenant_id != tenant_id:
+            raise ValueError("fbs order not found")
+        wb_reserved = await session.scalar(
+            select(func.sum(FbsOrderReservation.quantity)).where(
+                FbsOrderReservation.fbs_order_id == fbs_order_id,
+                FbsOrderReservation.product_id == product_id,
+            )
+        )
+        position_reserved = await session.scalar(
+            select(func.sum(FbsOrderProductReservation.quantity))
+            .join(FbsOrderProduct)
+            .where(
+                FbsOrderProduct.order_id == fbs_order_id,
+                FbsOrderProductReservation.product_id == product_id,
+            )
+        )
+        unreserved = max(0, quantity - int(wb_reserved or 0) - int(position_reserved or 0))
+        if unreserved:
+            pool = await _order_stock_pool(session, order, product_id)
+            if pool is not None:
+                pool.quantity = max(0, pool.quantity - unreserved)
+
     from app.services import stock_direction_service
 
-    try:
-        await stock_direction_service.consume_fbs_pool(
-            session,
-            tenant_id,
-            product_id,
-            quantity,
-        )
-    except stock_direction_service.StockDirectionError as exc:
-        # Пул кончился — это тоже расхождение, а не повод отказать в списании
-        # того, что уже уехало.
-        if exc.code != "insufficient_fbs_pool":
-            raise
+    if product is None or not product.fbs_units_mode:
+        try:
+            await stock_direction_service.consume_fbs_pool(
+                session,
+                tenant_id,
+                product_id,
+                quantity,
+            )
+        except stock_direction_service.StockDirectionError as exc:
+            # Пул кончился — это тоже расхождение, а не повод отказать в списании
+            # того, что уже уехало.
+            if exc.code != "insufficient_fbs_pool":
+                raise
     return await record_movement_and_adjust_balance(
         session,
         tenant_id=tenant_id,

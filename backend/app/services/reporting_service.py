@@ -13,15 +13,21 @@ from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.background_job import BackgroundJob
+from app.models.fbs_order import FbsOrder
+from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
+from app.models.marketplace_unload import MarketplaceUnloadRequest
 from app.models.product import Product
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.services.inventory_movement_report_service import (
     REPORT_MOVEMENT_TYPE_GROUPS,
+    load_report_photo_urls,
     movement_group_label,
 )
 
@@ -199,8 +205,19 @@ async def build_inventory_report(
         filters.append(InventoryMovement.warehouse_id == warehouse_id)
     if search:
         pattern = f"%{search.strip()}%"
+        # Плейсхолдер поиска обещает артикул продавца и SKU, а у товара Ozon
+        # они живут не в вайлдберрисовских полях, а в связке с маркетплейсом.
+        marketplace_match = select(ProductMarketplaceLink.product_id).where(
+            ProductMarketplaceLink.tenant_id == tenant_id,
+            ProductMarketplaceLink.is_active.is_(True),
+            or_(
+                ProductMarketplaceLink.external_sku.ilike(pattern),
+                ProductMarketplaceLink.external_offer_id.ilike(pattern),
+            ),
+        )
         filters.append(or_(Product.name.ilike(pattern), Product.sku_code.ilike(pattern),
-            Product.wb_vendor_code.ilike(pattern), Product.wb_barcode.ilike(pattern)))
+            Product.wb_vendor_code.ilike(pattern), Product.wb_barcode.ilike(pattern),
+            Product.id.in_(marketplace_match)))
     in_qty = func.coalesce(func.sum(case((InventoryMovement.quantity_delta > 0,
         InventoryMovement.quantity_delta), else_=0)), 0)
     out_qty = func.coalesce(func.sum(case((InventoryMovement.quantity_delta < 0,
@@ -245,12 +262,22 @@ async def build_inventory_report(
             Seller.name,
         )
     else:
-        operation = operation_group_expr()
+        # Возврат приезжает движением типа «приёмка» — он и есть приёмка, только
+        # с другим типом операции в документе. В отчёте это должна быть отдельная
+        # строка: возврат и поставка — разные вещи и для склада, и для денег.
+        operation = case(
+            (InboundIntakeRequest.operation_type == "return", "Возврат"),
+            else_=operation_group_expr(),
+        )
         grouped = select(
             operation.label("operation"), in_qty, out_qty,
         ).select_from(InventoryMovement).join(
             Product, Product.id == InventoryMovement.product_id).join(Warehouse,
-            Warehouse.id == InventoryMovement.warehouse_id).where(*filters).group_by(
+            Warehouse.id == InventoryMovement.warehouse_id).outerjoin(
+            InboundIntakeLine,
+            InboundIntakeLine.id == InventoryMovement.inbound_intake_line_id).outerjoin(
+            InboundIntakeRequest,
+            InboundIntakeRequest.id == InboundIntakeLine.request_id).where(*filters).group_by(
             operation)
         sort_columns = {
             "operation": operation, "in_qty": in_qty,
@@ -323,12 +350,30 @@ async def build_inventory_report(
             seller_id=seller_id,
         )
     )
+    # Фото товара берём из импортированной карточки маркетплейса — тем же
+    # способом, что и остальные экраны. Без него в отчёте стояла пустая рамка:
+    # фронт поле ждал, а запрос его не выбирал.
+    photos: dict[uuid.UUID, str | None] = {}
+    if group_by == "product" and rows:
+        product_ids = [row[0] for row in rows]
+        seller_nm = {
+            pid: (sid, nm)
+            for pid, sid, nm in (
+                await session.execute(
+                    select(Product.id, Product.seller_id, Product.wb_nm_id).where(
+                        Product.tenant_id == tenant_id, Product.id.in_(product_ids)
+                    )
+                )
+            ).all()
+        }
+        photos = await load_report_photo_urls(session, tenant_id, seller_nm)
     result: list[dict[str, object]] = []
     for row in rows:
         if group_by == "product":
             pid, name, sku, vendor, barcode, seller_name, incoming, outgoing = row
             result.append({"product_id": str(pid), "product_name": name, "sku_code": sku,
                 "wb_vendor_code": vendor, "wb_barcode": barcode, "seller_name": seller_name,
+                "photo_url": photos.get(pid),
                 "current_balance": balances_by_product.get(pid, 0),
                 "total_in": int(incoming), "total_out": int(outgoing),
                 "net": int(incoming) - int(outgoing),
@@ -430,13 +475,22 @@ async def build_inventory_csv(
             Product.id,
         )
     else:
-        operation = operation_group_expr()
+        # Возврат — отдельная строка, как и на экране. Выгрузка жила по старым
+        # правилам и снова смешивала его с приёмкой: файл и экран расходились.
+        operation = case(
+            (InboundIntakeRequest.operation_type == "return", "Возврат"),
+            else_=operation_group_expr(),
+        )
         grouped = select(
             operation.label("operation"), in_qty.label("in_qty"),
             out_qty.label("out_qty"),
         ).select_from(InventoryMovement).join(
             Product, Product.id == InventoryMovement.product_id).join(
-            Warehouse, Warehouse.id == InventoryMovement.warehouse_id).where(*filters).group_by(
+            Warehouse, Warehouse.id == InventoryMovement.warehouse_id).outerjoin(
+            InboundIntakeLine,
+            InboundIntakeLine.id == InventoryMovement.inbound_intake_line_id).outerjoin(
+            InboundIntakeRequest,
+            InboundIntakeRequest.id == InboundIntakeLine.request_id).where(*filters).group_by(
             operation)
         sort_columns = {
             "operation": operation, "in_qty": in_qty,
@@ -471,7 +525,7 @@ async def build_inventory_csv(
             headers = ["Товар", "Название", "Артикул продавца", "ШК"]
             if include_seller:
                 headers.append("Селлер")
-            headers.extend(["Остаток сейчас", "Приход", "Расход", "Нетто"])
+            headers.extend(["Остаток сейчас", "Приход", "Расход"])
             yield b"\xef\xbb\xbf" + csv_line(headers)
 
             result = await session.stream(grouped)
@@ -481,13 +535,11 @@ async def build_inventory_csv(
                 values: list[object] = [sku, name, vendor, barcode]
                 if include_seller:
                     values.append(seller_name)
-                values.extend(
-                    [int(balance), int(incoming), int(outgoing), int(incoming) - int(outgoing)]
-                )
+                values.extend([int(balance), int(incoming), int(outgoing)])
                 yield csv_line(values)
             return
 
-        yield b"\xef\xbb\xbf" + csv_line(["Операция", "Приход", "Расход", "Нетто"])
+        yield b"\xef\xbb\xbf" + csv_line(["Операция", "Приход", "Расход"])
         result = await session.stream(grouped)
         async for operation, incoming, outgoing in result:
             incoming_value = int(incoming)
@@ -498,7 +550,6 @@ async def build_inventory_csv(
                     f"{operation} (Ошибка)" if integrity_error else operation,
                     "—" if integrity_error and incoming_value == 0 else incoming_value,
                     "—" if integrity_error and outgoing_value == 0 else outgoing_value,
-                    incoming_value - outgoing_value,
                 ]
             )
 
@@ -635,6 +686,49 @@ async def build_overview(
         )
     current_balance = int((await session.scalar(balance_stmt)) or 0)
 
+    # Остаток на начало периода. Считать его как «остаток сейчас минус приход
+    # плюс расход за период» верно только для периода, который кончается
+    # сегодня: за прошлый месяц так получалась цифра, которой на складе никогда
+    # не было. Правильно откатить от сегодняшнего остатка все движения с начала
+    # периода и до сих пор, а не только те, что попали в период.
+    since_start_filter = [
+        InventoryMovement.tenant_id == tenant_id,
+        InventoryMovement.created_at >= date_from,
+        Warehouse.is_operational.is_(True),
+    ]
+    if warehouse_id is None:
+        since_start_filter.append(InventoryMovement.transfer_group_id.is_(None))
+    else:
+        since_start_filter.append(InventoryMovement.warehouse_id == warehouse_id)
+    if seller_id is not None:
+        since_start_filter.append(InventoryMovement.seller_id == seller_id)
+    if search:
+        pattern = f"%{search.strip()}%"
+        since_start_filter.extend(
+            [
+                Product.id == InventoryMovement.product_id,
+                or_(
+                    Product.name.ilike(pattern),
+                    Product.sku_code.ilike(pattern),
+                    Product.wb_vendor_code.ilike(pattern),
+                    Product.wb_barcode.ilike(pattern),
+                ),
+            ]
+        )
+    delta_since_start = int(
+        (
+            await session.scalar(
+                select(func.coalesce(func.sum(InventoryMovement.quantity_delta), 0))
+                .select_from(InventoryMovement)
+                .join(Product, Product.id == InventoryMovement.product_id)
+                .join(Warehouse, Warehouse.id == InventoryMovement.warehouse_id)
+                .where(*since_start_filter)
+            )
+        )
+        or 0
+    )
+    opening_balance = current_balance - delta_since_start
+
     # Keep calendar grouping in Python.  This is deliberately portable between
     # SQLite (tests) and PostgreSQL and, unlike ``date(created_at)``, always
     # uses the Moscow calendar that defines the requested report period.
@@ -705,6 +799,11 @@ async def build_overview(
         freshness_filters.append(FbsWarehouseBinding.seller_id == seller_id)
     if warehouse_id is not None:
         freshness_filters.append(FbsWarehouseBinding.wms_warehouse_id == warehouse_id)
+    # Свежесть считается по задачам импорта Wildberries, поэтому и привязки
+    # берём вайлдберрисовские. Без этого фильтра арендатор с одними озоновскими
+    # привязками всегда получал предупреждение «данные Wildberries устарели» —
+    # про площадку, которой у него нет.
+    freshness_filters.append(FbsWarehouseBinding.marketplace == "wb")
     binding_count = int(
         (await session.scalar(select(func.count()).where(*freshness_filters))) or 0
     )
@@ -761,6 +860,7 @@ async def build_overview(
     return {
         "date_from": date_from.isoformat(), "date_to": date_to.isoformat(),
         "current_balance": current_balance,
+        "opening_balance": opening_balance,
         "in_qty": int(totals[0] or 0), "out_qty": current_out,
         "comparison": {
             "previous_out_qty": previous_out,
@@ -773,3 +873,199 @@ async def build_overview(
         "generated_at": datetime.now(UTC).isoformat(),
         "source_freshness": source_freshness, "warnings": warnings,
     }
+
+
+MOVEMENT_PAGE_LIMIT = 200
+
+
+async def list_product_movements(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    product_id: uuid.UUID | None = None,
+    operation: str | None = None,
+    date_from: datetime,
+    date_to: datetime,
+    seller_id: uuid.UUID | None = None,
+    warehouse_id: uuid.UUID | None = None,
+    limit: int = MOVEMENT_PAGE_LIMIT,
+) -> tuple[list[dict[str, object]], bool]:
+    """Движения за период — то, что видно при раскрытии строки отчёта.
+
+    Сводка отвечает «сколько пришло и ушло», но не отвечает «когда и по какому
+    документу». Кладовщик открывает строку именно за этим: увидеть приёмку,
+    отгрузку и сборку FBS по датам и перейти в сам документ.
+
+    Раскрыть можно и товар, и вид движения: в группировке «по видам» третьего
+    уровня раньше не было вовсе, потому что ручка требовала товар.
+
+    Вторым значением возвращается признак «показано не всё»: молча обрезанный
+    список выглядит как полный, и по нему сходятся не те итоги.
+    """
+    if product_id is None and operation is None:
+        raise ValueError("movements require a product or an operation group")
+    date_from, date_to = normalize_period(date_from, date_to)
+    filters = [
+        InventoryMovement.tenant_id == tenant_id,
+        InventoryMovement.created_at >= date_from,
+        InventoryMovement.created_at < date_to,
+        Warehouse.is_operational.is_(True),
+    ]
+    if product_id is not None:
+        filters.append(InventoryMovement.product_id == product_id)
+    if warehouse_id is None:
+        filters.append(InventoryMovement.transfer_group_id.is_(None))
+    else:
+        filters.append(InventoryMovement.warehouse_id == warehouse_id)
+    if seller_id is not None:
+        filters.append(InventoryMovement.seller_id == seller_id)
+
+    query = (
+        select(InventoryMovement)
+        .join(Warehouse, Warehouse.id == InventoryMovement.warehouse_id)
+    )
+    if operation is not None:
+        # Название вида движения — то же самое, по которому строится второй
+        # уровень: возврат отделён от приёмки, всё незнакомое идёт в «Прочее».
+        grouped_operation = case(
+            (InboundIntakeRequest.operation_type == "return", "Возврат"),
+            else_=operation_group_expr(),
+        )
+        query = query.outerjoin(
+            InboundIntakeLine,
+            InboundIntakeLine.id == InventoryMovement.inbound_intake_line_id,
+        ).outerjoin(
+            InboundIntakeRequest,
+            InboundIntakeRequest.id == InboundIntakeLine.request_id,
+        )
+        filters.append(grouped_operation == operation)
+
+    rows = list(
+        (
+            await session.execute(
+                query.where(*filters)
+                .order_by(InventoryMovement.created_at.desc(), InventoryMovement.id)
+                .limit(limit + 1)
+            )
+        ).scalars().all()
+    )
+    truncated = len(rows) > limit
+    rows = rows[:limit]
+
+    intake_line_ids = {row.inbound_intake_line_id for row in rows if row.inbound_intake_line_id}
+    unload_ids = {
+        row.marketplace_unload_request_id for row in rows if row.marketplace_unload_request_id
+    }
+    # Возврат — это документ приёмки с другим типом операции, и движение у него
+    # тоже типа «приёмка». Без разбора типа возврат в отчёте неотличим от
+    # поставки, а это разные вещи и по смыслу, и по деньгам.
+    intake_by_line: dict[uuid.UUID, tuple[uuid.UUID, str | None, str]] = {}
+    if intake_line_ids:
+        intake_rows = await session.execute(
+            select(
+                InboundIntakeLine.id,
+                InboundIntakeRequest.id,
+                InboundIntakeRequest.display_number,
+                InboundIntakeRequest.document_number,
+                InboundIntakeRequest.operation_type,
+            )
+            .join(InboundIntakeRequest, InboundIntakeRequest.id == InboundIntakeLine.request_id)
+            .where(InboundIntakeLine.id.in_(intake_line_ids))
+        )
+        for line_id, request_id, display_number, document_number, operation_type in intake_rows:
+            intake_by_line[line_id] = (
+                request_id,
+                display_number or document_number,
+                str(operation_type),
+            )
+    # Списание FBS связано с заказом через журнал списаний: там рядом лежат
+    # fbs_order_id и id движения. Без этого в отчёте у списания FBS пустой
+    # документ — «товар ушёл, а по какому основанию, не написано».
+    fbs_by_movement: dict[uuid.UUID, tuple[str, uuid.UUID | None]] = {}
+    fbs_movement_ids = {
+        row.id for row in rows if row.movement_type in {"fbs_shipment", "fbs_order_pick"}
+    }
+    if fbs_movement_ids:
+        fbs_rows = await session.execute(
+            select(
+                FbsShipmentReversalLedger.shipment_movement_id,
+                FbsOrder.wb_order_id,
+                FbsOrder.external_order_id,
+                FbsOrder.supply_id,
+            )
+            .join(FbsOrder, FbsOrder.id == FbsShipmentReversalLedger.fbs_order_id)
+            .where(FbsShipmentReversalLedger.shipment_movement_id.in_(fbs_movement_ids))
+        )
+        for movement_id, wb_order_id, external_order_id, supply_id in fbs_rows:
+            if movement_id is not None:
+                # Настоящий номер отправления лежит в `external_order_id` и
+                # раньше не читался: у заказа Ozon в колонке «Документ»
+                # печаталось отрицательное шестнадцатизначное число —
+                # синтезированный хешем номер, которого нет ни в одном кабинете.
+                number = external_order_id or str(wb_order_id)
+                fbs_by_movement[movement_id] = (f"Заказ {number}", supply_id)
+
+    unload_numbers: dict[uuid.UUID, str | None] = {}
+    if unload_ids:
+        unload_rows = await session.execute(
+            select(
+                MarketplaceUnloadRequest.id,
+                MarketplaceUnloadRequest.display_number,
+                MarketplaceUnloadRequest.document_number,
+            ).where(MarketplaceUnloadRequest.id.in_(unload_ids))
+        )
+        for unload_id, display_number, document_number in unload_rows:
+            unload_numbers[unload_id] = display_number or document_number
+
+    # Название и артикул товара: в раскрывашке по виду движения без них не
+    # понять, что именно уехало, — там в одной пачке лежат разные товары.
+    product_names: dict[uuid.UUID, tuple[str | None, str | None]] = {}
+    product_ids = {row.product_id for row in rows if row.product_id}
+    if product_ids:
+        for pid, name, sku in await session.execute(
+            select(Product.id, Product.name, Product.sku_code).where(
+                Product.tenant_id == tenant_id, Product.id.in_(product_ids)
+            )
+        ):
+            product_names[pid] = (name, sku)
+
+    result: list[dict[str, object]] = []
+    for row in rows:
+        document: dict[str, object] | None = None
+        row_operation = movement_group_label(row.movement_type)
+        if row.inbound_intake_line_id and row.inbound_intake_line_id in intake_by_line:
+            request_id, number, operation_type = intake_by_line[row.inbound_intake_line_id]
+            if operation_type == "return":
+                row_operation = "Возврат"
+            document = {
+                "kind": "inbound",
+                "id": str(request_id),
+                "number": number or "без номера",
+            }
+        elif row.id in fbs_by_movement:
+            number, supply_id = fbs_by_movement[row.id]
+            document = {
+                "kind": "fbs_supply" if supply_id else "fbs_order",
+                "id": str(supply_id) if supply_id else str(row.id),
+                "number": number,
+            }
+        elif row.marketplace_unload_request_id:
+            document = {
+                "kind": "marketplace_unload",
+                "id": str(row.marketplace_unload_request_id),
+                "number": unload_numbers.get(row.marketplace_unload_request_id) or "без номера",
+            }
+        name, sku = product_names.get(row.product_id, (None, None))
+        result.append(
+            {
+                "id": str(row.id),
+                "at": row.created_at.isoformat(),
+                "operation": row_operation,
+                "quantity": int(row.quantity_delta),
+                "document": document,
+                "product_id": str(row.product_id) if row.product_id else None,
+                "product_name": name,
+                "sku_code": sku,
+            }
+        )
+    return result, truncated

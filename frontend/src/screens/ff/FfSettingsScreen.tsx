@@ -43,6 +43,8 @@ type StaffAccountRow = {
   packaging_billing?: StaffPackagingBilling
 }
 
+import { FfLabelTemplatePanel } from './FfLabelTemplatePanel'
+
 type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
@@ -347,6 +349,8 @@ export function FfSettingsScreen({
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Склад, печать и сотрудники фулфилмента.
       </Typography>
+
+      {isFulfillmentAdmin ? <FfLabelTemplatePanel token={token} /> : null}
 
       {isFulfillmentAdmin ? (
         <Paper

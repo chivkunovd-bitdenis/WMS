@@ -17,9 +17,11 @@ from app.core.roles import FULFILLMENT_ADMIN
 from app.db.session import get_db
 from app.models.user import User
 from app.services.reporting_service import (
+    MOVEMENT_PAGE_LIMIT,
     build_inventory_csv,
     build_inventory_report,
     build_overview,
+    list_product_movements,
 )
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -47,6 +49,42 @@ async def get_inventory_report(user: Annotated[User, Depends(get_current_user)],
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc)) from exc
+
+
+@router.get("/inventory/movements")
+async def get_product_movements(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+    date_from: Annotated[datetime, Query()],
+    date_to: Annotated[datetime, Query()],
+    product_id: Annotated[uuid.UUID | None, Query()] = None,
+    operation: Annotated[str | None, Query()] = None,
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
+) -> dict[str, object]:
+    """Движения за период: когда приехало, когда уехало и по какому документу.
+
+    Раскрыть можно товар (`product_id`) или вид движения (`operation`) — второй
+    случай нужен группировке «по видам», где третьего уровня раньше не было.
+    """
+    await assert_inventory_read_access(session, user)
+    try:
+        rows, truncated = await list_product_movements(
+            session,
+            user.tenant_id,
+            product_id=product_id,
+            operation=operation,
+            date_from=date_from,
+            date_to=date_to,
+            seller_id=seller_scope if seller_scope is not None else seller_id,
+            warehouse_id=warehouse_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    return {"rows": rows, "truncated": truncated, "limit": MOVEMENT_PAGE_LIMIT}
 
 
 @router.get("/overview")

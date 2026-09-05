@@ -166,7 +166,6 @@ function detailsFor(sellerId: string) {
       liter_days: 1240,
       status: 'calculated' as const,
       amount_kopecks: 62000,
-      calculation_token: 'preview-token',
     },
     next_cursor: null,
   }

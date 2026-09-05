@@ -32,10 +32,20 @@ type Props = {
 
 type Preview = { asset: FbsPrintAsset; objectUrl: string }
 
+const PDF_CONTENT_TYPE = 'application/pdf'
+
+// Wildberries отдаёт стикер картинкой, Ozon — документом PDF. Картинку мы
+// раскладываем на рулон 58x40 сами, у документа страница своя, и подменять её
+// нашей вёрсткой нельзя: этикетка уедет за срез.
+function isDocument(asset: FbsPrintAsset): boolean {
+  return asset.content_type === PDF_CONTENT_TYPE
+}
+
 function assetLabel(asset: FbsPrintAsset): string {
   if (asset.kind === 'box_qr') return 'Печать QR короба WMS'
   if (asset.kind === 'cargo_place_qr') return 'Печать QR грузоместа WB'
   if (asset.kind === 'supply_qr') return 'Печать QR поставки WB'
+  if (isDocument(asset)) return 'Печать этикетки отправления Ozon'
   return 'Печать стикера заказа WB'
 }
 
@@ -150,6 +160,19 @@ export function FbsPrintPreviewDialog({
       setError('Нет готовых изображений — окно печати не открыто.')
       return
     }
+    // Документы печатает сам браузер своим просмотрщиком PDF: у этикетки Ozon
+    // собственный формат страницы, и наш лист 58x40 её бы обрезал. Вставить PDF
+    // в <img> тоже нельзя — получится битая картинка.
+    const documents = items.filter(({ asset }) => isDocument(asset))
+    const images = items.filter(({ asset }) => !isDocument(asset))
+    if (documents.length > 0) {
+      const blocked = documents.some(({ objectUrl }) => !window.open(objectUrl, '_blank'))
+      if (blocked) {
+        setError('Браузер заблокировал окно печати. Разрешите всплывающие окна для WMS.')
+        return
+      }
+    }
+    if (images.length === 0) return
     const safeCopies = Math.max(1, Math.min(99, copies))
     const popup = window.open('', '_blank')
     if (!popup) {
@@ -157,7 +180,7 @@ export function FbsPrintPreviewDialog({
       return
     }
     popup.opener = null
-    const pages = items
+    const pages = images
       .flatMap(({ objectUrl, asset }) =>
         Array.from(
           { length: safeCopies },
@@ -232,6 +255,13 @@ export function FbsPrintPreviewDialog({
           </Stack>
           {error ? <Alert severity="error">{error}</Alert> : null}
           {warning ? <Alert severity="warning">{warning}</Alert> : null}
+          {previews.some(({ asset }) => isDocument(asset)) ? (
+            <Alert severity="info">
+              Этикетка Ozon приходит документом PDF со своим форматом страницы:
+              она откроется отдельной вкладкой, печать и число копий — в окне
+              печати браузера.
+            </Alert>
+          ) : null}
           {batch?.order_errors.map((item) => (
             <Alert key={item.order_id} severity="error">
               Заказ WB №{item.wb_order_id}: {item.message}
@@ -263,7 +293,11 @@ export function FbsPrintPreviewDialog({
             {previews.map(({ asset, objectUrl }) => (
               <Paper key={asset.id} variant="outlined" sx={{ p: 2 }}>
                 <Typography variant="subtitle2">{assetLabel(asset)}</Typography>
-                <Box component="img" src={objectUrl} alt={assetLabel(asset)} sx={{ width: '100%', aspectRatio: `${labelSize.widthMm} / ${labelSize.heightMm}`, objectFit: 'contain', bgcolor: '#fff', my: 1.5 }} />
+                {isDocument(asset) ? (
+                  <Box component="iframe" src={objectUrl} title={assetLabel(asset)} sx={{ width: '100%', height: 320, border: 0, bgcolor: '#fff', my: 1.5 }} />
+                ) : (
+                  <Box component="img" src={objectUrl} alt={assetLabel(asset)} sx={{ width: '100%', aspectRatio: `${labelSize.widthMm} / ${labelSize.heightMm}`, objectFit: 'contain', bgcolor: '#fff', my: 1.5 }} />
+                )}
                 <Stack direction="row" spacing={1}>
                   {previews.length > 1 ? <Button startIcon={<PrintOutlinedIcon />} onClick={() => print([{ asset, objectUrl }])} data-task-id="FBS-10">Печать только этого</Button> : null}
                   {asset.kind !== 'box_qr' ? (

@@ -17,8 +17,8 @@ export function mixedMarketplaceSelectionMessage(marketplaces: FbsMarketplace[])
     : null
 }
 
-export function fbsBoxOperationsDisabled(marketplace: FbsMarketplace): boolean {
-  return marketplace === 'ozon'
+export function fbsBoxOperationsDisabled(_marketplace: FbsMarketplace): boolean {
+  return false
 }
 
 export function fbsBoxEditingDisabled(
@@ -26,6 +26,13 @@ export function fbsBoxEditingDisabled(
   deliveryConfirmed: boolean,
 ): boolean {
   return fbsBoxOperationsDisabled(marketplace) || deliveryConfirmed
+}
+
+export function fbsUnassignedPositionQuantity(
+  positions: Array<{ id?: string | null; quantity: number }>,
+  assignedPositionIds: Set<string>,
+): number {
+  return positions.reduce((sum, position) => sum + (position.id && assignedPositionIds.has(position.id) ? 0 : position.quantity), 0)
 }
 
 export function fbsOrdersAvailableForBox<T extends { id: string }>(
@@ -62,31 +69,32 @@ export type FbsOperatorStageKey = 'composition' | 'picking' | 'packing' | 'boxes
 
 const FBS_OPERATOR_STAGES: FbsOperatorStageKey[] = ['composition', 'picking', 'packing', 'boxes']
 
-export function fbsAccessibleStageIndex(input: {
+export function fbsAccessibleStageIndex(_input: {
   marketplace: FbsMarketplace
   currentStage: FbsOperatorStageKey
 }): number {
-  const accessible = FBS_OPERATOR_STAGES.indexOf(input.currentStage)
-  if (input.marketplace !== 'wb') return accessible
-
-  // Все рабочие поверхности WB открыты одновременно, включая черновик.
-  // «Начать работу» может создать удобное упаковочное задание, но наличие этого
-  // задания не даёт права открыть короба или передать поставку — право уже есть.
-  // Упаковка — только зафиксированный факт, а не право открыть короба или
-  // передать поставку. Не добавляйте сюда progress.packed/pack.status.
+  // Все рабочие поверхности открыты одновременно, включая черновик, и одинаково
+  // для WB и Ozon. «Начать работу» может создать удобное упаковочное задание, но
+  // наличие этого задания не даёт права открыть короба или передать поставку —
+  // право уже есть. Упаковка — только зафиксированный факт, а не право открыть
+  // короба. Не добавляйте сюда progress.packed/pack.status.
+  //
+  // Ветку по маркетплейсу возвращать нельзя: у Ozon вкладки запирались по
+  // серверному этапу, а сам этап упирался в стикеры, которых до передачи не
+  // существует, — оператор не мог дойти ни до коробов, ни до передачи.
   return FBS_OPERATOR_STAGES.indexOf('boxes')
 }
 
 export function fbsStageAfterWorkspaceRefresh(
-  marketplace: FbsMarketplace,
+  _marketplace: FbsMarketplace,
   currentStage: FbsOperatorStageKey,
   serverStage: FbsOperatorStageKey,
 ): FbsOperatorStageKey {
-  // Polling and ordinary mutations must not throw a WB operator back from
-  // boxes/packing because some optional fact changed on the server.
-  return marketplace === 'wb' && currentStage !== 'composition'
-    ? currentStage
-    : serverStage
+  // Опрос и обычные мутации не должны выкидывать оператора назад из коробов или
+  // упаковки только потому, что на сервере изменился какой-то необязательный
+  // факт. Правило одно для WB и Ozon: серверный этап задаёт стартовую
+  // поверхность, но не перехватывает навигацию у уже работающего человека.
+  return currentStage !== 'composition' ? currentStage : serverStage
 }
 
 export function fbsDeliveryErrorKeepsIdempotencyKey(error: {

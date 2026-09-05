@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import pytest
-import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import SessionLocal, engine
-from app.models import Base
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_IN_SUPPLY,
     MAPPING_STATUS_MAPPED,
@@ -37,17 +33,6 @@ from app.services.fbs_shipment_source_service import (
     reversal_source_from_ledger,
 )
 from app.services.sorting_location_service import SORTING_LOCATION_CODE
-
-
-@pytest_asyncio.fixture
-async def db_session() -> AsyncIterator[AsyncSession]:
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
-        await connection.run_sync(Base.metadata.create_all)
-    async with SessionLocal() as session:
-        yield session
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
 
 
 @dataclass(frozen=True)

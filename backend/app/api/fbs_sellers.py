@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +25,7 @@ from app.services import background_job_service as job_svc
 from app.services import fbs_seller_warehouse_service as wh_svc
 from app.services import fbs_warehouse_binding_service as binding_svc
 from app.services.background_job_service import JOB_TYPE_FBS_STOCK_SYNC
+from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.fbs_autopoll_service import (
     get_binding_stock_sync_status,
     sync_seller_stocks,
@@ -53,6 +54,23 @@ class FbsSellerWarehouseOut(BaseModel):
     isProcessing: bool | None = None
 
 
+class FbsSellerOzonWarehouseOut(BaseModel):
+    """Строка справочника складов Ozon: то, из чего оператор выбирает склад.
+
+    `has_entrusted_acceptance` едет отсюда и никуда не сохраняется: это
+    состояние кабинета продавца, а не наше. Будущая работа по грузовым местам
+    (WMS-355, WMS-357) читает его в тот момент, когда склад выбирают, — там же,
+    где выбирается сам склад.
+    """
+
+    warehouse_id: int
+    name: str
+    has_entrusted_acceptance: bool
+    is_rfbs: bool
+    served: bool
+    wms_warehouse_id: str | None
+
+
 class FbsSellerOfficeOut(BaseModel):
     id: int | None = None
     officeId: int | None = None
@@ -75,9 +93,17 @@ def _map_office(row: dict[str, Any]) -> FbsSellerOfficeOut:
 def _raise_from_service(exc: wh_svc.FbsSellerWarehouseError) -> None:
     if exc.code == "seller_not_found":
         raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
-    if exc.code == "missing_marketplace_token":
+    if exc.code in {"missing_marketplace_token", "ozon_not_connected"}:
         raise_fbs_http(status.HTTP_403_FORBIDDEN, exc.code)
+    # Выключенный рубильник — это не поломка и не пустой кабинет, а наша
+    # собственная настройка. Тот же 503, что и у выключенной отмены Ozon
+    # (`ozon_live_cancel_blocked`), чтобы оператор читал причину, а не гадал
+    # по пустому списку.
+    if exc.code == "ozon_live_warehouses_blocked":
+        raise_fbs_http(status.HTTP_503_SERVICE_UNAVAILABLE, exc.code)
     if exc.code.startswith("wb_"):
+        raise_fbs_http(status.HTTP_502_BAD_GATEWAY, exc.code, retryable=True)
+    if exc.code.startswith("ozon_"):
         raise_fbs_http(status.HTTP_502_BAD_GATEWAY, exc.code, retryable=True)
     raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
 
@@ -99,11 +125,22 @@ class FbsWarehouseBindingOut(BaseModel):
 class FbsWarehouseBindingUpsert(BaseModel):
     wms_warehouse_id: uuid.UUID
     stock_sync_enabled: bool = True
+    # Измерение маркетплейса у привязки было в модели и не было в ручке:
+    # завести склад Ozon было физически неоткуда. Умолчание `wb` сохраняет
+    # прежнее поведение всех существующих вызовов без единой правки на фронте.
+    marketplace: Literal["wb", "ozon"] = "wb"
+    # По этому значению привязка находится при разборе отправления. Для Ozon
+    # это строковый вид его же числового идентификатора склада; если его не
+    # передали, подставляется номер из пути.
+    external_warehouse_id: str | None = Field(default=None, max_length=255)
 
 
 class FbsSellerWarehouseConfigure(BaseModel):
     served: bool | None = None
     wms_warehouse_id: uuid.UUID | None = None
+    # Площадка склада. Умолчание `wb` — все прежние вызовы приходят оттуда и
+    # ничего не присылают, их поведение остаётся прежним.
+    marketplace: Literal["wb", "ozon"] = "wb"
 
 
 def _binding_out(row: FbsWarehouseBinding, allocated_pool_total: int = 0) -> FbsWarehouseBindingOut:
@@ -131,7 +168,7 @@ def _raise_from_binding_service(exc: binding_svc.FbsWarehouseBindingError) -> No
         "product_not_found",
     }:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
-    if exc.code in {"invalid_wb_warehouse_id", "invalid_quantity"}:
+    if exc.code in {"invalid_wb_warehouse_id", "invalid_quantity", "unsupported_marketplace"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
     if exc.code == "wms_warehouse_required":
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
@@ -212,6 +249,26 @@ async def list_fbs_seller_warehouses(
     return [_map_warehouse(row) for row in rows]
 
 
+@router.get("/{seller_id}/ozon-warehouses", response_model=list[FbsSellerOzonWarehouseOut])
+async def list_fbs_seller_ozon_warehouses(
+    seller_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[FbsSellerOzonWarehouseOut]:
+    """Справочник складов Ozon для выбора вместо ручного ввода номера (WMS-362).
+
+    Отдельная ручка, а не общий список со складами Wildberries: у тех другой
+    источник, другой ключ и свои поля, а продавец бывает подключён только к
+    одной из площадок. Смешав их, мы бы уронили список Ozon вместе с
+    вайлдберрисовским ключом, которого у продавца может не быть вовсе.
+    """
+    try:
+        rows = await wh_svc.list_ozon_seller_warehouses(session, user.tenant_id, seller_id)
+    except wh_svc.FbsSellerWarehouseError as exc:
+        _raise_from_service(exc)
+    return [FbsSellerOzonWarehouseOut(**row) for row in rows]
+
+
 @contract_router.put(
     "/{seller_id}/warehouses/{wb_warehouse_id}",
     response_model=FbsSellerWarehouseOut,
@@ -240,6 +297,7 @@ async def configure_fbs_seller_warehouse(
             wb_warehouse_id,
             served=body.served,
             wms_warehouse_id=body.wms_warehouse_id,
+            marketplace=body.marketplace,
         )
     except binding_svc.FbsWarehouseBindingError as exc:
         _raise_from_binding_service(exc)
@@ -310,7 +368,11 @@ async def upsert_fbs_warehouse_binding(
     was_enabled = False
     try:
         existing = await binding_svc.get_binding(
-            session, user.tenant_id, seller_id, wb_warehouse_id
+            session,
+            user.tenant_id,
+            seller_id,
+            wb_warehouse_id,
+            marketplace=body.marketplace,
         )
         was_enabled = bool(existing.is_active and existing.stock_sync_enabled)
     except binding_svc.FbsWarehouseBindingError:
@@ -324,6 +386,8 @@ async def upsert_fbs_warehouse_binding(
             wb_warehouse_id,
             wms_warehouse_id=body.wms_warehouse_id,
             stock_sync_enabled=body.stock_sync_enabled,
+            marketplace=body.marketplace,
+            external_warehouse_id=body.external_warehouse_id,
         )
     except binding_svc.FbsWarehouseBindingError as exc:
         _raise_from_binding_service(exc)
@@ -471,6 +535,8 @@ async def list_fbs_binding_stock_pool(
     }
 
     image_by_nm_id = await _stock_pool_images_by_nm_id(session, seller_id, products)
+    # У озоновского товара снапшота карточки WB нет — фото лежит в привязке Ozon.
+    ozon_images = await load_ozon_primary_image_urls(session, user.tenant_id, set(product_ids))
 
     out: list[FbsStockPoolProductOut] = []
     for product in products:
@@ -487,9 +553,12 @@ async def list_fbs_binding_stock_pool(
                 wb_barcode=product.wb_barcode,
                 wb_size=product.wb_size,
                 image_url=(
-                    image_by_nm_id.get(int(product.wb_nm_id))
-                    if product.wb_nm_id is not None
-                    else None
+                    (
+                        image_by_nm_id.get(int(product.wb_nm_id))
+                        if product.wb_nm_id is not None
+                        else None
+                    )
+                    or ozon_images.get(product.id)
                 ),
                 pool_limit=limit,
                 allocated_this_binding=allocated_this,

@@ -62,6 +62,8 @@ class SellerReportEntryBaseOut(BaseModel):
     source_type: str
     source_id: str
     source_target: dict[str, str] | None
+    # Поставка заказа FBS: номер для колонки и id для перехода в карточку.
+    supply: dict[str, str] | None = None
     document_number: str | None
     product_name: str | None
     sku: str | None
@@ -83,6 +85,8 @@ class SellerReportFinancialOperationFactEntryOut(SellerReportEntryBaseOut):
     amount_kopecks: int | None
     unit: str | None
     invoice_history: dict[str, Any]
+    # Начисление по документу операции. Есть — операцию можно положить в счёт.
+    billing_ledger_entry_id: str | None = None
 
 
 class SellerReportFinancialHandedFbsEntryOut(SellerReportEntryBaseOut):
@@ -108,7 +112,6 @@ class SellerReportStorageOut(BaseModel):
     date_to: str
     liter_days: float
     status: Literal["calculated", "missing_dimensions", "negative_stock"]
-    calculation_token: str
 
 
 class SellerReportFinancialStorageOut(SellerReportStorageOut):

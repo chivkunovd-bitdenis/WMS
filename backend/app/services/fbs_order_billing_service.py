@@ -28,10 +28,12 @@ from app.models.fbs_order import (
 from app.models.product import Product
 from app.models.seller import Seller
 from app.services.billing_ledger_service import (
+    PACKING_SERVICE_CODE,
     BillingLedgerError,
     product_billing_lines,
     record_operational_charge,
 )
+from app.services.marketplace_scope import order_display_number
 from app.services.operation_fact_service import OperationFactError, line_input, write_operation_fact
 
 logger = logging.getLogger(__name__)
@@ -59,6 +61,25 @@ async def _positions(session: AsyncSession, order: FbsOrder) -> list[tuple[uuid.
     return [(order.product_id, 1)]
 
 
+def order_work_moment(order: FbsOrder) -> datetime:
+    """Когда склад сделал работу по заказу, а не когда мы об этом узнали.
+
+    Раньше здесь стоял момент обработки, и это тихо ломало деньги: опрос
+    статусов приносит подтверждения WB пачками, в том числе по заказам
+    двухнедельной давности, — и вся плата за две недели падала одним днём. На
+    боевой базе так получилось 1577 записей «Империи ФФ», все датированные
+    одним числом.
+
+    Порядок источников: когда упаковали, иначе когда подобрали, иначе когда
+    заказ появился у маркетплейса. Первые два — сама работа склада, третий
+    заполнен всегда и отличается от неё на день-два.
+    """
+    for moment in (order.packed_at, order.picked_at, order.created_at_wb):
+        if moment is not None:
+            return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
+    return datetime.now(UTC)
+
+
 async def record_fbs_order_confirmed(
     session: AsyncSession,
     order: FbsOrder,
@@ -70,7 +91,7 @@ async def record_fbs_order_confirmed(
         return
     if order.seller_id is None:
         return
-    moment = occurred_at or datetime.now(UTC)
+    moment = occurred_at or order_work_moment(order)
     positions = await _positions(session, order)
     quantity = sum(count for _, count in positions)
 
@@ -106,7 +127,10 @@ async def record_fbs_order_confirmed(
             marketplace=order.marketplace,
             document_type="fbs_order",
             document_id=order.id,
-            document_number_snapshot=str(order.wb_order_id),
+            # Номер так, как его называет маркетплейс заказа: у Ozon в
+            # `wb_order_id` лежит синтезированный отрицательный хеш, по которому
+            # заказ не найти ни у нас, ни в кабинете.
+            document_number_snapshot=order_display_number(order),
             occurred_at=moment,
             item_quantity=quantity,
             lines=[
@@ -120,26 +144,30 @@ async def record_fbs_order_confirmed(
         logger.exception("operation fact for fbs order failed: order_id=%s", order.id)
 
     try:
-        await record_operational_charge(
-            session,
-            tenant_id=order.tenant_id,
-            seller_id=order.seller_id,
-            source_type=SOURCE_TYPE,
-            source_id=order.id,
-            source="fbs",
-            service_code=FBS_ORDER_SERVICE_CODE,
-            quantity=Decimal(quantity),
-            occurred_at=moment,
-            performer_id=None,
-            warehouse_id=order.warehouse_id,
-            # Без строк ставка ищется только в старой таблице тарифов, а матрица
-            # — единственный живой экран — пишет в новую: начисление выходило с
-            # пустой суммой.
-            lines=product_billing_lines(
-                (product_id, Decimal(count), {"fbs_order_id": str(order.id)})
-                for product_id, count in positions
-                if product_id is not None
-            ),
-        )
+        # Упаковка идёт по тем же штукам, что и сборка заказа: заказ уехал —
+        # значит он упакован. От событий упаковки и кнопки «всё упаковано»
+        # начисление не зависит.
+        for charged_service_code in (FBS_ORDER_SERVICE_CODE, PACKING_SERVICE_CODE):
+            await record_operational_charge(
+                session,
+                tenant_id=order.tenant_id,
+                seller_id=order.seller_id,
+                source_type=SOURCE_TYPE,
+                source_id=order.id,
+                source="fbs",
+                service_code=charged_service_code,
+                quantity=Decimal(quantity),
+                occurred_at=moment,
+                performer_id=None,
+                warehouse_id=order.warehouse_id,
+                # Без строк ставка ищется только в старой таблице тарифов, а
+                # матрица — единственный живой экран — пишет в новую:
+                # начисление выходило с пустой суммой.
+                lines=product_billing_lines(
+                    (product_id, Decimal(count), {"fbs_order_id": str(order.id)})
+                    for product_id, count in positions
+                    if product_id is not None
+                ),
+            )
     except BillingLedgerError:
         logger.exception("fbs order charge failed: order_id=%s", order.id)

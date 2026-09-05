@@ -35,8 +35,15 @@ from app.models.fbs_stock_sync_item import (
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller import Seller
+from app.models.user import User
 from app.models.warehouse import Warehouse
+from app.services import fbs_seller_warehouse_service as wh_svc
 from app.services.fbs_autopoll_service import list_active_stock_sync_bindings
+from app.services.marketplace_account_service import MarketplaceAccountService
+from app.services.marketplace_provider import (
+    FakeMarketplaceTransport,
+    OzonMarketplaceProvider,
+)
 
 
 def _assert_fbs_error(
@@ -743,3 +750,324 @@ async def test_wb_stock_sync_does_not_publish_ozon_binding(
         )
 
     assert rows == []
+
+
+# --- Ozon ---------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ozon_warehouse_binding_can_be_created_and_found_by_a_posting(
+    async_client: AsyncClient,
+) -> None:
+    """Привязку склада Ozon раньше было неоткуда взять.
+
+    Модель по умолчанию ставила `wb`, три места создания маркетплейс не
+    передавали, а у ручки такого поля не было вовсе. Каждый заказ Ozon из-за
+    этого гарантированно получал «склад не привязан» и не резервировался.
+
+    Идентификатор склада взят живой: `/v2/warehouse/list` на кабинете
+    «ИП Горячкина Т.И.» 03.09.2026 отдал склад `1020005028840530` «мой склад».
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    warehouse_id = await _create_warehouse(async_client, headers, suffix, "ozon")
+    ozon_warehouse_id = 1020005028840530
+
+    created = await async_client.put(
+        _bindings_url(seller_id, ozon_warehouse_id),
+        headers=headers,
+        json={
+            "wms_warehouse_id": warehouse_id,
+            "stock_sync_enabled": False,
+            "marketplace": "ozon",
+        },
+    )
+    assert created.status_code == 200, created.text
+    body = created.json()
+    assert body["marketplace"] == "ozon"
+    # Внешний идентификатор подставляется из пути: именно по нему привязка
+    # находится при разборе отправления.
+    assert body["external_warehouse_id"] == str(ozon_warehouse_id)
+    assert body["wb_warehouse_id"] == ozon_warehouse_id
+
+    listed = await async_client.get(_bindings_url(seller_id), headers=headers)
+    assert listed.status_code == 200, listed.text
+    assert [row["marketplace"] for row in listed.json()] == ["ozon"]
+
+
+@pytest.mark.asyncio
+async def test_binding_marketplace_defaults_to_wb_and_keeps_external_id_empty(
+    async_client: AsyncClient,
+) -> None:
+    """Вайлдберрисовский путь не меняется ни на шаг: то же тело, тот же результат."""
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    warehouse_id = await _create_warehouse(async_client, headers, suffix, "wb")
+
+    created = await async_client.put(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+        json={"wms_warehouse_id": warehouse_id, "stock_sync_enabled": True},
+    )
+    assert created.status_code == 200, created.text
+    assert created.json()["marketplace"] == "wb"
+    assert created.json()["external_warehouse_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_unknown_marketplace_is_refused_with_a_readable_error(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    warehouse_id = await _create_warehouse(async_client, headers, suffix, "x")
+
+    refused = await async_client.put(
+        _bindings_url(seller_id, 501002),
+        headers=headers,
+        json={
+            "wms_warehouse_id": warehouse_id,
+            "stock_sync_enabled": False,
+            "marketplace": "avito",
+        },
+    )
+    assert refused.status_code == 422, refused.text
+
+
+@pytest.mark.asyncio
+async def test_ozon_binding_is_addressed_separately_from_the_wb_one(
+    async_client: AsyncClient,
+) -> None:
+    """Одна ручка на два маркетплейса не должна их путать."""
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wh_wb = await _create_warehouse(async_client, headers, suffix, "wbwh")
+    wh_ozon = await _create_warehouse(async_client, headers, suffix, "ozwh")
+
+    wb = await async_client.put(
+        _bindings_url(seller_id, 501003),
+        headers=headers,
+        json={"wms_warehouse_id": wh_wb, "stock_sync_enabled": True},
+    )
+    assert wb.status_code == 200, wb.text
+    ozon = await async_client.put(
+        _bindings_url(seller_id, 1020005028840530),
+        headers=headers,
+        json={
+            "wms_warehouse_id": wh_ozon,
+            "stock_sync_enabled": False,
+            "marketplace": "ozon",
+        },
+    )
+    assert ozon.status_code == 200, ozon.text
+
+    listed = await async_client.get(_bindings_url(seller_id), headers=headers)
+    rows = {row["marketplace"]: row for row in listed.json()}
+    assert set(rows) == {"wb", "ozon"}
+    assert rows["wb"]["wms_warehouse_id"] == wh_wb
+    assert rows["ozon"]["wms_warehouse_id"] == wh_ozon
+    assert rows["ozon"]["stock_sync_enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_configure_seller_warehouse_takes_the_marketplace_and_makes_no_wb_twin(
+    async_client: AsyncClient,
+) -> None:
+    """Включение склада из модалки квоты не должно заводить склад-двойник на WB.
+
+    Ручка настройки склада продавца искала привязку одним номером и всегда
+    среди вайлдберрисовских. Нажатие по озоновской строке не находило
+    озоновскую привязку и заводило рядом новую — с маркетплейсом `wb` из
+    умолчания модели. Это и был блокер включения озоновского склада.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wh_wb = await _create_warehouse(async_client, headers, suffix, "wbwh")
+    wh_ozon = await _create_warehouse(async_client, headers, suffix, "ozwh")
+    ozon_warehouse_id = 1020005028840530
+
+    # Вайлдберрисовский вызов маркетплейс не присылает — как и весь прежний фронт.
+    wb = await async_client.put(
+        f"/fbs-sellers/{seller_id}/warehouses/507000",
+        headers=headers,
+        json={"served": True, "wms_warehouse_id": wh_wb},
+    )
+    assert wb.status_code == 200, wb.text
+
+    ozon = await async_client.put(
+        f"/fbs-sellers/{seller_id}/warehouses/{ozon_warehouse_id}",
+        headers=headers,
+        json={"served": True, "wms_warehouse_id": wh_ozon, "marketplace": "ozon"},
+    )
+    assert ozon.status_code == 200, ozon.text
+    assert ozon.json()["served"] is True
+    assert ozon.json()["wms_warehouse_id"] == wh_ozon
+
+    listed = await async_client.get(_bindings_url(seller_id), headers=headers)
+    assert listed.status_code == 200, listed.text
+    rows = {row["marketplace"]: row for row in listed.json()}
+    # Ровно две строки, по одной на площадку: двойника на Wildberries нет.
+    assert len(listed.json()) == 2
+    assert rows["wb"]["wb_warehouse_id"] == 507000
+    assert rows["wb"]["wms_warehouse_id"] == wh_wb
+    assert rows["wb"]["external_warehouse_id"] is None
+    assert rows["ozon"]["wb_warehouse_id"] == ozon_warehouse_id
+    assert rows["ozon"]["wms_warehouse_id"] == wh_ozon
+    # По этому значению привязку находит разбор отправления Ozon.
+    assert rows["ozon"]["external_warehouse_id"] == str(ozon_warehouse_id)
+
+    # Повторный вызов правит ту же строку, а не заводит вторую.
+    again = await async_client.put(
+        f"/fbs-sellers/{seller_id}/warehouses/{ozon_warehouse_id}",
+        headers=headers,
+        json={"served": False, "wms_warehouse_id": wh_ozon, "marketplace": "ozon"},
+    )
+    assert again.status_code == 200, again.text
+    assert again.json()["served"] is False
+    repeated = await async_client.get(_bindings_url(seller_id), headers=headers)
+    assert len(repeated.json()) == 2
+
+
+# --- Справочник складов Ozon (WMS-362) ----------------------------------
+
+
+def _ozon_warehouses_url(seller_id: str) -> str:
+    return f"/operations/fbs-sellers/{seller_id}/ozon-warehouses"
+
+
+async def _connect_ozon_cabinet(async_client: AsyncClient, seller_id: str, suffix: str) -> None:
+    """Сохранить пару Client-Id/Api-Key так же, как это делает подключение кабинета."""
+    async with SessionLocal() as session:
+        seller = await session.get(Seller, uuid.UUID(seller_id))
+        assert seller is not None
+        actor = await session.scalar(
+            select(User).where(User.email == f"fbs-bind-{suffix}@example.com")
+        )
+        assert actor is not None
+        await MarketplaceAccountService(session).save_validated_candidate(
+            seller.tenant_id,
+            seller.id,
+            actor.id,
+            "5641753",
+            "ozon-api-key",
+        )
+
+
+@pytest.mark.asyncio
+async def test_ozon_warehouse_directory_says_why_it_is_empty_while_the_switch_is_off(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Выключенный рубильник — это причина, а не «у продавца нет складов».
+
+    При `WMS_OZON_LIVE_API=false` фабрика отдаёт локальный фейк, и тот вернул бы
+    пустой список. Оператор прочитал бы «складов нет» про кабинет, которого
+    никто не спрашивал, и пошёл бы искать несуществующую проблему у продавца.
+    """
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", False)
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+
+    response = await async_client.get(_ozon_warehouses_url(seller_id), headers=headers)
+
+    _assert_fbs_error(
+        response,
+        status_code=503,
+        code="ozon_live_warehouses_blocked",
+        message=(
+            "Справочник складов Ozon недоступен: боевые запросы к Ozon выключены "
+            "настройкой WMS_OZON_LIVE_API. Список пуст не потому, что складов нет."
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_ozon_warehouse_directory_offers_the_cabinet_list_with_entrusted_acceptance(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Оператор выбирает склад из списка, а не набирает его номер по памяти.
+
+    Идентификатор и название взяты живые: `/v2/warehouse/list` на кабинете
+    «ИП Горячкина Т.И.» 03.09.2026 отдал склад `1020005028840530` «мой склад».
+    Вместе со списком приезжает `has_entrusted_acceptance` — тот самый признак
+    доверительной приёмки, ради которого в WMS-356 собирались в кабинет руками.
+    """
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", True)
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wms_warehouse_id = await _create_warehouse(async_client, headers, suffix, "ozon")
+    await _connect_ozon_cabinet(async_client, seller_id, suffix)
+
+    bound_warehouse_id = 1020005028840530
+    free_warehouse_id = 1020005028840531
+    created = await async_client.put(
+        _bindings_url(seller_id, bound_warehouse_id),
+        headers=headers,
+        json={
+            "wms_warehouse_id": wms_warehouse_id,
+            "stock_sync_enabled": True,
+            "marketplace": "ozon",
+        },
+    )
+    assert created.status_code == 200, created.text
+
+    transport = FakeMarketplaceTransport(
+        warehouses=[
+            {
+                "warehouse_id": bound_warehouse_id,
+                "name": "мой склад",
+                "has_entrusted_acceptance": True,
+                "is_rfbs": False,
+            },
+            {
+                "warehouse_id": free_warehouse_id,
+                "name": "",
+                "has_entrusted_acceptance": False,
+                "is_rfbs": True,
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        wh_svc,
+        "build_ozon_provider",
+        lambda **kwargs: OzonMarketplaceProvider(transport=transport),
+    )
+
+    listed = await async_client.get(_ozon_warehouses_url(seller_id), headers=headers)
+
+    assert listed.status_code == 200, listed.text
+    rows = {row["warehouse_id"]: row for row in listed.json()}
+    assert set(rows) == {bound_warehouse_id, free_warehouse_id}
+    assert rows[bound_warehouse_id]["name"] == "мой склад"
+    assert rows[bound_warehouse_id]["has_entrusted_acceptance"] is True
+    assert rows[bound_warehouse_id]["is_rfbs"] is False
+    # Уже сопоставленный склад виден сопоставленным: иначе оператор заведёт
+    # вторую привязку поверх существующей.
+    assert rows[bound_warehouse_id]["wms_warehouse_id"] == wms_warehouse_id
+    assert rows[bound_warehouse_id]["served"] is True
+    # Безымянный склад подписывается своим номером, а не пустой строкой.
+    assert rows[free_warehouse_id]["name"] == f"Склад Ozon {free_warehouse_id}"
+    assert rows[free_warehouse_id]["wms_warehouse_id"] is None
+    assert rows[free_warehouse_id]["is_rfbs"] is True
+    assert transport.calls == [("fetch_warehouses", "5641753")]
+
+
+@pytest.mark.asyncio
+async def test_ozon_warehouse_directory_refuses_a_seller_without_a_cabinet(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Без сохранённой пары Client-Id/Api-Key спрашивать нечего и некого."""
+    monkeypatch.setattr(settings, "ozon_live_api_enabled", True)
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+
+    response = await async_client.get(_ozon_warehouses_url(seller_id), headers=headers)
+
+    _assert_fbs_error(
+        response,
+        status_code=403,
+        code="ozon_not_connected",
+        message="У продавца не подключён кабинет Ozon: нет Client-Id и Api-Key.",
+    )

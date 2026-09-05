@@ -16,11 +16,11 @@ from app.models.user import User
 from app.services import ozon_return_service as svc
 from app.services.marketplace_account_service import MarketplaceAccountError
 from app.services.marketplace_provider import (
-    FakeMarketplaceTransport,
     MarketplaceProviderError,
     OzonMarketplaceProvider,
     provider_error_message,
 )
+from app.services.ozon_provider_factory import build_ozon_provider
 
 router = APIRouter(
     prefix="/operations/inbound-intake-requests/{request_id}/ozon-returns",
@@ -101,8 +101,8 @@ class OzonReturnBarcodeOut(BaseModel):
 
 
 async def get_ozon_return_provider() -> OzonMarketplaceProvider:
-    """The default is intentionally local-only; deployments inject a provider boundary."""
-    return OzonMarketplaceProvider(transport=FakeMarketplaceTransport())
+    """Боевой транспорт, когда он включён настройкой; иначе прежний локальный фейк."""
+    return build_ozon_provider()
 
 
 def _raise_service_error(exc: Exception) -> None:

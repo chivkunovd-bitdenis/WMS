@@ -398,17 +398,27 @@ async def test_rebuild_and_list_cover_fractional_missing_zero_idempotency_and_sc
     by_seller = {row["seller_name"]: row for row in payload["statements"]}
     assert set(by_seller) == {"Calculated seller", "Zero seller"}
     assert by_seller["Zero seller"]["measurements"] == []
-    assert by_seller["Zero seller"]["total_liter_days"] == "0"
+    # Литро-дни на экране — это начисленное ночью. Ночь тут не проходила, ставки
+    # нет, поэтому в деньгах и литро-днях прочерк, а не выдуманный ноль.
+    assert by_seller["Zero seller"]["total_liter_days"] is None
     calculated_rows = {
         row["sku"]: row for row in by_seller["Calculated seller"]["measurements"]
     }
-    assert calculated_rows[f"MEASURED-{suffix}"]["liter_days"] == "6.000000"
+    assert calculated_rows[f"MEASURED-{suffix}"]["liter_days"] is None
+    assert calculated_rows[f"MEASURED-{suffix}"]["status"] == "calculated"
     assert calculated_rows[f"MISSING-{suffix}"]["status"] == "missing_dimensions"
     assert by_seller["Calculated seller"]["problem_count"] == 1
 
     async with SessionLocal() as session:
         assert await session.scalar(select(func.count(StorageStatement.id))) == 2
         assert await session.scalar(select(func.count(StorageMeasurement.id))) == 2
+        # Сама пересборка при этом посчитала: операционные литро-дни лежат в
+        # обмере, просто экран показывает не их, а начисленное.
+        assert await session.scalar(
+            select(StorageMeasurement.liter_days).where(
+                StorageMeasurement.status == "calculated"
+            )
+        ) == Decimal("6")
         assert await session.scalar(
             select(func.count(StorageStatement.id)).where(
                 StorageStatement.warehouse_id == technical_id

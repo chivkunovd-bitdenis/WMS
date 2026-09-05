@@ -224,6 +224,8 @@ export type FbsWorklistOrder = {
     has_packaging_instructions?: boolean
   }
   positions: Array<{
+    id?: string | null
+    image_url?: string | null
     product_id: string | null
     name: string
     seller_article: string | null
@@ -239,6 +241,9 @@ export type FbsWorklistOrder = {
   buyer_type: 'individual' | 'legal'
   cargo_type: string
   can_pvz: boolean
+  // Маршрут сдачи Ozon — название метода доставки, по которому потом собирается
+  // отгрузка (WMS-358). У Wildberries маршрут виден из can_pvz, поэтому там null.
+  delivery_route?: string | null
   metadata: FbsOrderMetadata
   sticker: {
     code: string | null
@@ -409,6 +414,8 @@ export type FbsPackingBox = {
   box_number: number
   barcode: string
   assigned_order_ids: string[]
+  assigned_order_product_ids?: string[]
+  ozon_assembled?: boolean
   trbx_id: string | null
   wb_trbx_id: string | null
   qr_asset: FbsPrintAsset | null
@@ -793,10 +800,11 @@ export async function assignFbsPackingBoxOrders(
   supplyId: string,
   boxId: string,
   order_ids: string[],
+  order_product_ids?: string[],
 ): Promise<FbsWorkspace> {
   return jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes/${boxId}/orders`), {
-      method: 'POST', headers: jsonHeaders(token, ah), body: JSON.stringify({ order_ids }),
+      method: 'POST', headers: jsonHeaders(token, ah), body: JSON.stringify({ order_ids, ...(order_product_ids ? { order_product_ids } : {}) }),
     }),
   )
 }
@@ -807,9 +815,11 @@ export async function removeFbsPackingBoxOrder(
   supplyId: string,
   boxId: string,
   orderId: string,
+  orderProductId?: string,
 ): Promise<FbsWorkspace> {
+  const query = orderProductId ? `?${new URLSearchParams({ order_product_id: orderProductId })}` : ''
   return jsonOrThrow<FbsWorkspace>(
-    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes/${boxId}/orders/${orderId}`), {
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes/${boxId}/orders/${orderId}${query}`), {
       method: 'DELETE', headers: { ...ah(token) },
     }),
   )
@@ -1573,4 +1583,21 @@ export async function syncFbsOrderStatuses(
   })
   const payload = await jsonOrThrow<{ statuses_updated: number }>(res)
   return payload.statuses_updated
+}
+
+// WMS-360: отмена заказа. Ручка `PATCH /operations/fbs-orders/{id}/cancel` жила
+// на сервере без единого вызова с экрана. Тело необязательное: без причины Ozon
+// получает свою причину по умолчанию — «товар закончился на складе продавца», —
+// а WB метод отмены причину не принимает вовсе.
+export async function cancelFbsOrder(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  orderId: string,
+): Promise<FbsOrderRow> {
+  const res = await fetch(apiUrl(`/operations/fbs-orders/${orderId}/cancel`), {
+    method: 'PATCH',
+    headers: { ...ah(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+  return await jsonOrThrow<FbsOrderRow>(res)
 }

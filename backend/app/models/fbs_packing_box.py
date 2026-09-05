@@ -6,7 +6,18 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, Uuid, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    Uuid,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -64,7 +75,14 @@ class FbsPackingBox(Base):
 
 class FbsPackingBoxItem(Base):
     __tablename__ = "fbs_packing_box_items"
-    __table_args__ = (UniqueConstraint("fbs_order_id", name="uq_fbs_packing_box_items_order"),)
+    __table_args__ = (
+        Index(
+            "uq_fbs_packing_box_items_order_position",
+            "fbs_order_id",
+            text("coalesce(order_product_id, '00000000-0000-0000-0000-000000000000')"),
+            unique=True,
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
@@ -78,6 +96,11 @@ class FbsPackingBoxItem(Base):
     )
     assigned_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    order_product_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("fbs_order_products.id", ondelete="CASCADE"),
+        nullable=True,
     )
     assigned_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

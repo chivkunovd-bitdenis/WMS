@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { createFoundQueue, type FoundPlace } from './foundQueue'
+import { createFoundQueue, FoundPlaceDeferredError, type FoundPlace } from './foundQueue'
 
-function place(scanId: string): FoundPlace {
-  return { barcodes: ['x'], cellId: null, containerKind: null, containerId: null, scanId }
+function place(scanId: string, countId = 'count-1'): FoundPlace {
+  return { barcodes: ['x'], cellId: null, containerKind: null, containerId: null, scanId, countId }
 }
 
 const noWait = () => Promise.resolve()
@@ -102,5 +102,51 @@ describe('очередь находок', () => {
 
     expect(Math.max(...seen)).toBeGreaterThanOrEqual(2)
     expect(seen[seen.length - 1]).toBe(0)
+  })
+})
+
+describe('находка помнит свой документ', () => {
+  it('не уходит в чужой пересчёт и не теряется, а ждёт возвращения в свой', async () => {
+    // Раньше недоставленная находка уходила в тот документ, который открыт
+    // сейчас: оператор возвращался в список, открывал другой черновик — и чужая
+    // находка попадала туда. Потом это закрыли отказом, но находка стала просто
+    // пропадать: отказ считался сетевым, четыре попытки — и очередь её
+    // выбрасывала. Оператор возвращался в свой документ и спокойно проводил его
+    // без отсканированного товара.
+    const delivered: string[] = []
+    // Какой документ открыт у оператора прямо сейчас.
+    let openCountId = 'count-7'
+    const queue = createFoundQueue<string>({
+      send: async (p) => {
+        if (p.countId !== openCountId) {
+          throw new FoundPlaceDeferredError('другой документ')
+        }
+        delivered.push(p.scanId)
+        return 'ok'
+      },
+      onApplied: () => undefined,
+      onRejected: () => expect.unreachable('находку нельзя выбрасывать'),
+      onPendingChange: () => undefined,
+      isRetryable: () => true,
+      delay: noWait,
+    })
+
+    // Скан сделан в своём документе, но оператор успел уйти в другой.
+    openCountId = 'count-9'
+    queue.push(place('scan-1', 'count-7'))
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(delivered).toEqual([])
+    expect(queue.parked()).toBe(1)
+    // Работа в чужом документе при этом не заблокирована.
+    expect(queue.pending()).toBe(0)
+
+    // Оператор вернулся в свой пересчёт — находка доезжает сама.
+    openCountId = 'count-7'
+    queue.resumeFor('count-7')
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(delivered).toEqual(['scan-1'])
+    expect(queue.parked()).toBe(0)
   })
 })

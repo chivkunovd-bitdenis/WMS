@@ -129,22 +129,52 @@ export function catalogRowToDisplayMeta(row: {
   }
 }
 
-export function resolveProductPrimaryBarcode(meta: {
-  wb_primary_barcode?: string | null
-  wb_barcodes?: string[]
-}): string {
-  const primary = meta.wb_primary_barcode?.trim()
-  if (primary) {
-    return primary
-  }
-  const first = meta.wb_barcodes?.find((b) => b.trim())
-  return first?.trim() ?? ''
+export type ProductBarcodeOption = {
+  marketplace: MarketplaceCode
+  barcode: string
 }
 
-export function formatProductBarcodeDisplay(meta: {
+type ProductBarcodeSource = {
   wb_primary_barcode?: string | null
   wb_barcodes?: string[]
-}): string {
+  marketplace_bindings?: MarketplaceProductBinding[]
+}
+
+export function resolveProductBarcodeOptions(meta: ProductBarcodeSource): ProductBarcodeOption[] {
+  const options: ProductBarcodeOption[] = []
+  const seen = new Set<string>()
+  const add = (marketplace: MarketplaceCode, raw: string | null | undefined) => {
+    const barcode = raw?.trim()
+    if (!barcode) return
+    const key = `${marketplace}:${barcode}`
+    if (seen.has(key)) return
+    seen.add(key)
+    options.push({ marketplace, barcode })
+  }
+  // Сохраняем прежний первый код WB; коды Ozon берём только из связанной карточки.
+  add('wb', meta.wb_primary_barcode)
+  for (const barcode of meta.wb_barcodes ?? []) add('wb', barcode)
+  for (const marketplace of ['wb', 'ozon'] as const) {
+    for (const binding of meta.marketplace_bindings ?? []) {
+      if (binding.marketplace !== marketplace) continue
+      for (const barcode of binding.external_barcodes ?? []) add(marketplace, barcode)
+    }
+  }
+  return options
+}
+
+export function resolveProductBarcodeSelection(
+  options: ProductBarcodeOption[],
+  selectionKey: string,
+): ProductBarcodeOption | undefined {
+  return options.find((option) => `${option.marketplace}:${option.barcode}` === selectionKey) ?? options[0]
+}
+
+export function resolveProductPrimaryBarcode(meta: ProductBarcodeSource): string {
+  return resolveProductBarcodeOptions(meta)[0]?.barcode ?? ''
+}
+
+export function formatProductBarcodeDisplay(meta: ProductBarcodeSource): string {
   const code = resolveProductPrimaryBarcode(meta)
   if (code) {
     return code

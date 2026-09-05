@@ -28,9 +28,10 @@ from app.models.product import Product
 from app.models.seller import Seller
 from app.models.storage_measurement import StorageMeasurement
 from app.models.storage_statement import StorageStatement
+from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
-from app.services import storage_statement_service
 from app.services.sorting_location_service import get_or_create_sorting_location
+from app.services.storage_daily_charge_service import charge_storage_day
 from app.services.storage_measurement_service import MOSCOW, month_bounds
 from app.services.storage_statement_service import (
     StorageStatementError,
@@ -325,23 +326,10 @@ async def test_staff_inventory_cannot_set_tariff(async_client: AsyncClient) -> N
 )
 async def test_tariff_amount_must_be_positive(
     async_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
     target: str,
     amount: str,
 ) -> None:
     """The API rejects common and seller rates that persist as zero."""
-    reprice_called = False
-
-    async def unexpected_reprice(*args: object, **kwargs: object) -> list[object]:
-        nonlocal reprice_called
-        reprice_called = True
-        return []
-
-    monkeypatch.setattr(
-        storage_statement_service,
-        "reprice_open_storage_drafts",
-        unexpected_reprice,
-    )
     suffix = str(time.time_ns())
     headers = await _register_admin(async_client, suffix)
     warehouse_id = await _create_warehouse(async_client, headers, suffix, "amount")
@@ -377,7 +365,6 @@ async def test_tariff_amount_must_be_positive(
 
     assert response.status_code == 422, response.text
     assert response.json()["detail"][0]["loc"] == expected_location
-    assert reprice_called is False
     async with SessionLocal() as session:
         legacy_count = await session.scalar(
             select(func.count(BillingTariffVersion.id)).where(
@@ -398,22 +385,9 @@ async def test_tariff_amount_must_be_positive(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("target", ["warehouse", "seller_exception"])
 async def test_storage_tariff_service_rejects_amount_rounding_to_zero(
-    monkeypatch: pytest.MonkeyPatch,
     target: str,
 ) -> None:
     """The service keeps the persisted-money guard for callers outside the API."""
-    reprice_called = False
-
-    async def unexpected_reprice(*args: object, **kwargs: object) -> list[object]:
-        nonlocal reprice_called
-        reprice_called = True
-        return []
-
-    monkeypatch.setattr(
-        storage_statement_service,
-        "reprice_open_storage_drafts",
-        unexpected_reprice,
-    )
     tenant_id = uuid.uuid4()
     seller_exception = (
         (uuid.uuid4(), Decimal("0.001"), datetime.now(MOSCOW).date())
@@ -440,7 +414,6 @@ async def test_storage_tariff_service_rejects_amount_rounding_to_zero(
     session.add.assert_not_called()
     session.flush.assert_not_awaited()
     session.commit.assert_not_awaited()
-    assert reprice_called is False
 
 
 @pytest.mark.asyncio
@@ -661,72 +634,66 @@ async def test_tariff_scope_must_belong_to_tenant_and_operational_warehouse(
 
 
 @pytest.mark.asyncio
-async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClient) -> None:
-    """POST reprices affected drafts but preserves fixed and unrelated statements."""
+async def test_new_tariff_does_not_rewrite_what_the_night_already_charged(
+    async_client: AsyncClient,
+) -> None:
+    """Новая ставка меняет будущее, а не прошлое.
+
+    Пересчёт открытых расчётов по свежей ставке снят намеренно: хранение
+    начисляет ночь по ставке, действовавшей в те сутки, и это факт, а не
+    черновик. Здесь проверяется и то, и другое: начисленное остаётся как было, а
+    документ, зафиксированный до перехода на ночное начисление, продолжает
+    печататься своими проводками.
+    """
     suffix = str(time.time_ns())
     headers = await _register_admin(async_client, suffix)
     warehouse_id = await _create_warehouse(async_client, headers, suffix, "preview")
-    unrelated_warehouse_id = await _create_warehouse(
-        async_client, headers, suffix, "unrelated"
-    )
     today = datetime.now(MOSCOW).date()
     period_start, period_end = month_bounds(today.year, today.month)
-    previous_period_end = period_start - timedelta(days=1)
-    previous_period_start = previous_period_end.replace(day=1)
+    charged_day = today - timedelta(days=1) if today.day > 1 else today
 
     async with SessionLocal() as session:
         warehouse = await session.get(Warehouse, warehouse_id)
         assert warehouse is not None
-        sellers = [
-            Seller(tenant_id=warehouse.tenant_id, name=f"Draft seller {suffix}"),
-            Seller(tenant_id=warehouse.tenant_id, name=f"Zero seller {suffix}"),
-            Seller(tenant_id=warehouse.tenant_id, name=f"Fixed seller {suffix}"),
-            Seller(tenant_id=warehouse.tenant_id, name=f"Unrelated seller {suffix}"),
-        ]
-        session.add_all(sellers)
+        tenant_id = warehouse.tenant_id
+        tenant = await session.get(Tenant, tenant_id)
+        assert tenant is not None
+        tenant.billing_enabled_from = period_start
+        night_seller = Seller(tenant_id=tenant_id, name=f"Night seller {suffix}")
+        fixed_seller = Seller(tenant_id=tenant_id, name=f"Fixed seller {suffix}")
+        session.add_all([night_seller, fixed_seller])
         await session.flush()
-        draft_seller, zero_seller, fixed_seller, unrelated_seller = sellers
-        draft_product = Product(
-            tenant_id=warehouse.tenant_id,
-            seller_id=draft_seller.id,
-            name="Draft product",
-            sku_code=f"draft-{suffix}",
-            volume_liters=Decimal("1"),
-            dimensions_source="manual",
-        )
-        zero_product = Product(
-            tenant_id=warehouse.tenant_id,
-            seller_id=zero_seller.id,
-            name="Zero product",
-            sku_code=f"zero-{suffix}",
+        night_product = Product(
+            tenant_id=tenant_id,
+            seller_id=night_seller.id,
+            name="Night product",
+            sku_code=f"night-{suffix}",
             volume_liters=Decimal("1"),
             dimensions_source="manual",
         )
         fixed_product = Product(
-            tenant_id=warehouse.tenant_id,
+            tenant_id=tenant_id,
             seller_id=fixed_seller.id,
             name="Fixed product",
             sku_code=f"fixed-{suffix}",
             volume_liters=Decimal("1"),
             dimensions_source="manual",
         )
-        session.add_all([draft_product, zero_product, fixed_product])
+        session.add_all([night_product, fixed_product])
         await session.flush()
-        location = await get_or_create_sorting_location(
-            session, warehouse.tenant_id, warehouse.id
-        )
-        draft_movement = InventoryMovement(
-            tenant_id=warehouse.tenant_id,
-            seller_id=draft_seller.id,
+        location = await get_or_create_sorting_location(session, tenant_id, warehouse.id)
+        night_movement = InventoryMovement(
+            tenant_id=tenant_id,
+            seller_id=night_seller.id,
             warehouse_id=warehouse.id,
             storage_location_id=location.id,
-            product_id=draft_product.id,
+            product_id=night_product.id,
             quantity_delta=1,
-            movement_type="storage_tariff_preview_test",
+            movement_type="storage_tariff_night_test",
             created_at=datetime.combine(period_start, datetime_time.min, MOSCOW),
         )
         fixed_movement = InventoryMovement(
-            tenant_id=warehouse.tenant_id,
+            tenant_id=tenant_id,
             seller_id=fixed_seller.id,
             warehouse_id=warehouse.id,
             storage_location_id=location.id,
@@ -735,47 +702,16 @@ async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClien
             movement_type="storage_tariff_fixed_control_test",
             created_at=datetime.combine(period_start, datetime_time.min, MOSCOW),
         )
-        session.add_all([draft_movement, fixed_movement])
-        await session.flush()
-        initial_tariff = BillingTariffVersion(
-            tenant_id=warehouse.tenant_id,
-            seller_id=None,
-            warehouse_id=warehouse.id,
-            service_code="storage_liter_day",
-            unit="liter_day",
-            amount=100,
-            valid_from=period_start - timedelta(days=1),
-        )
-        unrelated_tariff = BillingTariffVersion(
-            tenant_id=warehouse.tenant_id,
-            seller_id=None,
-            warehouse_id=unrelated_warehouse_id,
-            service_code="storage_liter_day",
-            unit="liter_day",
-            amount=200,
-            valid_from=period_start - timedelta(days=1),
-        )
-        session.add_all([initial_tariff, unrelated_tariff])
-        await session.flush()
-
-        draft_statement = StorageStatement(
-            tenant_id=warehouse.tenant_id,
-            seller_id=draft_seller.id,
-            warehouse_id=warehouse.id,
-            period_start=period_start,
-            period_end=period_end,
-            status="draft",
-        )
-        zero_statement = StorageStatement(
-            tenant_id=warehouse.tenant_id,
-            seller_id=zero_seller.id,
+        night_statement = StorageStatement(
+            tenant_id=tenant_id,
+            seller_id=night_seller.id,
             warehouse_id=warehouse.id,
             period_start=period_start,
             period_end=period_end,
             status="draft",
         )
         fixed_statement = StorageStatement(
-            tenant_id=warehouse.tenant_id,
+            tenant_id=tenant_id,
             seller_id=fixed_seller.id,
             warehouse_id=warehouse.id,
             period_start=period_start,
@@ -783,29 +719,33 @@ async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClien
             status="fixed",
             fixed_at=datetime.now(UTC),
         )
-        unrelated_statement = StorageStatement(
-            tenant_id=warehouse.tenant_id,
-            seller_id=unrelated_seller.id,
-            warehouse_id=unrelated_warehouse_id,
-            period_start=period_start,
-            period_end=period_end,
-            status="draft",
+        session.add_all(
+            [
+                night_movement,
+                fixed_movement,
+                night_statement,
+                fixed_statement,
+                BillingTariffVersionV2(
+                    tenant_id=tenant_id,
+                    seller_id=None,
+                    product_id=None,
+                    employee_user_id=None,
+                    service_code="storage",
+                    unit="liter_day",
+                    enabled=True,
+                    rate=200,
+                    valid_from_at=datetime.combine(period_start, datetime_time.min, MOSCOW),
+                ),
+            ]
         )
-        past_statement = StorageStatement(
-            tenant_id=warehouse.tenant_id,
-            seller_id=zero_seller.id,
+        await session.flush()
+        night_measurement = StorageMeasurement(
+            tenant_id=tenant_id,
+            seller_id=night_seller.id,
             warehouse_id=warehouse.id,
-            period_start=previous_period_start,
-            period_end=previous_period_end,
-            status="draft",
-        )
-        draft_measurement = StorageMeasurement(
-            tenant_id=warehouse.tenant_id,
-            seller_id=draft_seller.id,
-            warehouse_id=warehouse.id,
-            product_id=draft_product.id,
-            movement_start_id=draft_movement.id,
-            movement_end_id=draft_movement.id,
+            product_id=night_product.id,
+            movement_start_id=night_movement.id,
+            movement_end_id=night_movement.id,
             period_start=period_start,
             period_end=period_end,
             quantity_days=Decimal("1"),
@@ -813,7 +753,7 @@ async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClien
             status="calculated",
         )
         fixed_measurement = StorageMeasurement(
-            tenant_id=warehouse.tenant_id,
+            tenant_id=tenant_id,
             seller_id=fixed_seller.id,
             warehouse_id=warehouse.id,
             product_id=fixed_product.id,
@@ -825,35 +765,12 @@ async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClien
             liter_days=Decimal("1"),
             status="calculated",
         )
-        zero_measurement = StorageMeasurement(
-            tenant_id=warehouse.tenant_id,
-            seller_id=zero_seller.id,
-            warehouse_id=warehouse.id,
-            product_id=zero_product.id,
-            period_start=period_start,
-            period_end=period_end,
-            quantity_days=Decimal("0"),
-            liter_days=Decimal("0"),
-            status="calculated",
-        )
-        session.add_all(
-            [
-                draft_statement,
-                zero_statement,
-                fixed_statement,
-                unrelated_statement,
-                past_statement,
-                draft_measurement,
-                fixed_measurement,
-                zero_measurement,
-            ]
-        )
+        session.add_all([night_measurement, fixed_measurement])
         await session.flush()
         session.add(
             BillingLedgerEntry(
-                tenant_id=warehouse.tenant_id,
+                tenant_id=tenant_id,
                 seller_id=fixed_seller.id,
-                tariff_version_id=initial_tariff.id,
                 service_code="storage_liter_day",
                 source="storage_statement",
                 source_type="storage_measurement",
@@ -865,27 +782,28 @@ async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClien
                 occurred_at=datetime.now(UTC),
             )
         )
-        await session.commit()
-        tenant_id = warehouse.tenant_id
-        draft_statement_id = draft_statement.id
-        zero_statement_id = zero_statement.id
+        night_statement_id = night_statement.id
         fixed_statement_id = fixed_statement.id
-        unrelated_statement_id = unrelated_statement.id
-        past_statement_id = past_statement.id
-        fixed_measurement_id = fixed_measurement.id
+        await session.commit()
 
-    before = await async_client.get(
-        "/operations/storage/statements",
-        headers=headers,
-        params={"year": today.year, "month": today.month, "warehouse_id": str(warehouse_id)},
-    )
-    assert before.status_code == 200, before.text
-    before_by_id = {item["id"]: item for item in before.json()["statements"]}
-    before_amount = Decimal(before_by_id[str(draft_statement_id)]["total_amount"])
-    assert before_by_id[str(fixed_statement_id)]["total_amount"] == "1.00"
+    async with SessionLocal() as session:
+        assert await charge_storage_day(session, tenant_id, day=charged_day) == 2
+
+    async def listed() -> dict[str, dict[str, object]]:
+        response = await async_client.get(
+            "/operations/storage/statements",
+            headers=headers,
+            params={"year": today.year, "month": today.month, "warehouse_id": str(warehouse_id)},
+        )
+        assert response.status_code == 200, response.text
+        return {item["id"]: item for item in response.json()["statements"]}
+
+    before = await listed()
+    assert before[str(night_statement_id)]["total_amount"] == "2.00"
+    assert before[str(fixed_statement_id)]["total_amount"] == "1.00"
+
     matrix = await async_client.get("/billing/tariff-matrix", headers=headers)
     assert matrix.status_code == 200, matrix.text
-
     created = await async_client.post(
         "/operations/storage/tariffs",
         headers=headers,
@@ -896,34 +814,14 @@ async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClien
         },
     )
     assert created.status_code == 201, created.text
-    recalculated = {
-        item["id"]: item for item in created.json()["recalculated_statements"]
-    }
-    assert set(recalculated) == {
-        str(draft_statement_id),
-        str(zero_statement_id),
-        str(unrelated_statement_id),
-    }
-    assert Decimal(recalculated[str(draft_statement_id)]["total_amount"]) > before_amount
-    assert Decimal(recalculated[str(zero_statement_id)]["total_amount"]) == 0
-    assert recalculated[str(zero_statement_id)]["measurements"][0]["rate_snapshot"] == "10.00"
-    assert str(fixed_statement_id) not in recalculated
-    assert str(unrelated_statement_id) in recalculated
-    assert str(past_statement_id) not in recalculated
+    # Ответа «пересчитанные ведомости» больше нет: пересчитывать нечего.
+    assert "recalculated_statements" not in created.json()
 
-    after = await async_client.get(
-        "/operations/storage/statements",
-        headers=headers,
-        params={"year": today.year, "month": today.month, "warehouse_id": str(warehouse_id)},
-    )
-    assert after.status_code == 200, after.text
-    after_by_id = {item["id"]: item for item in after.json()["statements"]}
-    assert Decimal(after_by_id[str(draft_statement_id)]["total_amount"]) >= Decimal(
-        recalculated[str(draft_statement_id)]["total_amount"]
-    )
-    assert after_by_id[str(draft_statement_id)]["measurements"][0]["rate_snapshot"] is not None
-    assert after_by_id[str(fixed_statement_id)]["total_amount"] == "1.00"
-    assert after_by_id[str(fixed_statement_id)]["measurements"][0]["rate_snapshot"] == "1.00"
+    after = await listed()
+    assert after[str(night_statement_id)]["total_amount"] == "2.00"
+    assert after[str(night_statement_id)]["measurements"][0]["rate_snapshot"] == "2.00"
+    assert after[str(fixed_statement_id)]["total_amount"] == "1.00"
+    assert after[str(fixed_statement_id)]["measurements"][0]["rate_snapshot"] == "1.00"
 
     failed = await async_client.post(
         "/operations/storage/tariffs",
@@ -935,21 +833,11 @@ async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClien
         },
     )
     assert failed.status_code == 409, failed.text
-    after_failed = await async_client.get(
-        "/operations/storage/statements",
-        headers=headers,
-        params={"year": today.year, "month": today.month, "warehouse_id": str(warehouse_id)},
-    )
-    assert after_failed.status_code == 200, after_failed.text
-    after_failed_by_id = {
-        item["id"]: item for item in after_failed.json()["statements"]
-    }
-    assert Decimal(after_failed_by_id[str(draft_statement_id)]["total_amount"]) >= Decimal(
-        after_by_id[str(draft_statement_id)]["total_amount"]
-    )
+    after_failed = await listed()
+    assert after_failed[str(night_statement_id)]["total_amount"] == "2.00"
 
     async with SessionLocal() as session:
-        ledger_rows = list(
+        legacy_rows = list(
             (
                 await session.scalars(
                     select(BillingLedgerEntry).where(
@@ -965,16 +853,15 @@ async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClien
                     select(BillingTariffVersionV2).where(
                         BillingTariffVersionV2.tenant_id == tenant_id,
                         BillingTariffVersionV2.service_code == "storage",
+                        BillingTariffVersionV2.rate == 1000,
                     )
                 )
             ).all()
         )
-    assert len(ledger_rows) == 1
-    assert ledger_rows[0].source_id == fixed_measurement_id
-    assert ledger_rows[0].rate == 100
-    assert ledger_rows[0].amount == 100
+    assert len(legacy_rows) == 1
+    assert legacy_rows[0].rate == 100
+    assert legacy_rows[0].amount == 100
     assert len(new_tariffs) == 1
-    assert new_tariffs[0].rate == 1000
 
 
 @pytest.mark.asyncio

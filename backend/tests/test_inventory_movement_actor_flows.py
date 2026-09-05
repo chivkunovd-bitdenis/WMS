@@ -353,11 +353,11 @@ async def test_ozon_packaging_write_off_records_operator_actor(
 
 
 @pytest.mark.asyncio
-async def test_fbs_cancellation_reversal_records_cancelling_user_actor(
+async def test_fbs_cancellation_preserves_shipment_actor_without_returning_stock(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A user cancellation must author the positive reversal movement."""
+    """Cancellation preserves the shipment actor and cannot book a physical return."""
     headers, suffix, tenant_id = await _register_ff_admin(async_client)
     actor_id = await _actor_id(async_client, headers)
     seller_id, warehouse_id, source_location_id = await _setup_seller_with_token(
@@ -394,17 +394,15 @@ async def test_fbs_cancellation_reversal_records_cancelling_user_actor(
             movement_type="system_seed",
             actor_user_id=None,
         )
-        # Списание физического остатка теперь происходит на подтверждённой
-        # доставке, и там же в расписку кладётся номер движения. Раньше это
-        # делала упаковка, поэтому расписка в тесте оставалась без движения —
-        # и отмена не находила, что возвращать.
+        # Даже историческая запись о списании не разрешает отмене оприходовать
+        # товар: физический возврат оформляется отдельным документом.
         shipment_movement = await inventory_service.apply_fbs_supply_write_off(
             session,
             tenant_id=tenant_id,
             product_id=product_id,
             storage_location_id=source_location_id,
             quantity=1,
-            actor_user_id=None,
+            actor_user_id=actor_id,
         )
         await session.flush()
         ledger = FbsShipmentReversalLedger(
@@ -449,10 +447,15 @@ async def test_fbs_cancellation_reversal_records_cancelling_user_actor(
                 )
             ).scalars()
         )
-        assert sorted(row.quantity_delta for row in movements) == [-1, 1]
-        reversal = next(row for row in movements if row.quantity_delta == 1)
-        assert reversal.actor_user_id == actor_id
-        movement_id = reversal.id
+        assert [row.quantity_delta for row in movements] == [-1]
+        assert movements[0].actor_user_id == actor_id
+        movement_id = movements[0].id
+        balance_rows = await session.scalars(
+            select(InventoryBalance).where(InventoryBalance.product_id == product_id)
+        )
+        assert sum(balance.quantity for balance in balance_rows) == 0
+        cancelled_order = await session.get(FbsOrder, order_id)
+        assert cancelled_order is not None and cancelled_order.status == "cancelled"
     await _assert_general_api_actors(async_client, headers, {movement_id}, actor_id)
 
 
@@ -585,10 +588,10 @@ async def test_marketplace_unload_box_add_and_remove_record_actor(
 
 
 @pytest.mark.asyncio
-async def test_explicit_system_reversal_is_the_only_null_actor_path(
+async def test_system_cancellation_does_not_create_a_return_movement(
     async_client: AsyncClient,
 ) -> None:
-    """Background reconciliation may pass None explicitly; user flows may not."""
+    """System cancellation also leaves the physical write-off and its actor unchanged."""
     headers, suffix, tenant_id = await _register_ff_admin(async_client)
     seller_id, warehouse_id, source_location_id = await _setup_seller_with_token(
         async_client, headers, suffix
@@ -646,17 +649,21 @@ async def test_explicit_system_reversal_is_the_only_null_actor_path(
         reversed_now = await reverse_fbs_shipment_if_needed(
             session, order, actor_user_id=None
         )
-        assert reversed_now is True
+        assert reversed_now is False
         await session.commit()
-        reversal = (
+        movements = list((
             await session.execute(
                 select(InventoryMovement).where(
                     InventoryMovement.product_id == product_id,
                     InventoryMovement.movement_type == "fbs_shipment",
-                    InventoryMovement.quantity_delta == 1,
                 )
             )
-        ).scalar_one()
-        assert reversal.actor_user_id is None
-        movement_id = reversal.id
+        ).scalars())
+        assert [row.quantity_delta for row in movements] == [-1]
+        assert movements[0].actor_user_id is None
+        movement_id = movements[0].id
+        balance_rows = await session.scalars(
+            select(InventoryBalance).where(InventoryBalance.product_id == product_id)
+        )
+        assert sum(balance.quantity for balance in balance_rows) == 0
     await _assert_general_api_actors(async_client, headers, {movement_id}, None)

@@ -109,6 +109,16 @@ type Props<Row> = {
    * и видит, где ещё работа, не читая чисел.
    */
   isComplete?: (row: Row) => boolean
+  /**
+   * Строка, на которой оператор сейчас стоит: место, куда кладёт следующий товар.
+   *
+   * Другое состояние, чем `highlightedKey` — та подсветка временная (пришла со
+   * скана и гаснет со следующим), эта держится, пока не выберут другое место.
+   * Канон R-11 не разрешает красить строку заливкой ни для чего, кроме
+   * расхождения, поэтому выделение — тонкая полоса слева тенью, а не фон и не
+   * рамка вокруг всей строки.
+   */
+  selectedKey?: string | number | null
 }
 
 export function DataTable<Row>({
@@ -123,6 +133,7 @@ export function DataTable<Row>({
   drag,
   fixedLayout = false,
   highlightedKey = null,
+  selectedKey = null,
   hideHeader = false,
   isComplete,
 }: Props<Row>) {
@@ -260,6 +271,9 @@ export function DataTable<Row>({
                             outlineOffset: '-2px',
                             backgroundColor: alpha(theme.palette.primary.main, 0.09),
                           }
+                        : null),
+                      ...(selectedKey === rowKey
+                        ? { boxShadow: `inset 3px 0 0 ${theme.palette.primary.main}` }
                         : null),
                       ...dragSx(row, rowKey),
                     }}

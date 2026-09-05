@@ -41,9 +41,7 @@ async def reconcile(
 
     async with SessionLocal() as session:
         seller_ids = list(
-            (
-                await session.execute(select(Seller.id).where(Seller.name == seller_name))
-            ).scalars()
+            (await session.execute(select(Seller.id).where(Seller.name == seller_name))).scalars()
         )
         if len(seller_ids) != 1:
             raise ValueError(
@@ -77,9 +75,7 @@ async def reconcile(
             ).all()
         )
         if apply and len(rows) != expected_count:
-            raise ValueError(
-                f"expected {expected_count} unlinked orders, found {len(rows)}"
-            )
+            raise ValueError(f"expected {expected_count} unlinked orders, found {len(rows)}")
 
         result_rows = [
             MissingShipment(
@@ -94,6 +90,7 @@ async def reconcile(
             for ledger, order, _sku_code in rows:
                 movement = await inventory_service.apply_fbs_supply_write_off(
                     session,
+                    fbs_order_id=order.id,
                     tenant_id=ledger.tenant_id,
                     product_id=ledger.product_id,
                     storage_location_id=ledger.storage_location_id,

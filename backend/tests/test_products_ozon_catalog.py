@@ -5,13 +5,17 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
+from app.models.inventory_movement import InventoryMovement
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
+from app.services import inventory_service
 from app.services.integration_fernet import encrypt_secret
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 
 async def _register_admin(async_client: AsyncClient, suffix: str) -> dict[str, str]:
@@ -523,3 +527,343 @@ async def test_seller_catalog_status_marks_only_connected_ozon_account(
     by_id = {row["id"]: row for row in response.json()}
     assert by_id[connected.json()["id"]]["ozon_connected"] is True
     assert by_id[wb_only.json()["id"]]["ozon_connected"] is False
+
+
+# ── WMS-348 · значок маркетплейса, WMS-349 · ручное объединение карточек ──────
+
+
+async def _seller_tenant_id(seller_id: str) -> uuid.UUID:
+    async with SessionLocal() as session:
+        seller_row = await session.get(Seller, uuid.UUID(seller_id))
+        assert seller_row is not None
+        return seller_row.tenant_id
+
+
+async def _create_warehouse_location(
+    async_client: AsyncClient,
+    headers: dict[str, str],
+    suffix: str,
+) -> uuid.UUID:
+    warehouse = await async_client.post(
+        "/warehouses", headers=headers, json={"name": "WH", "code": f"wh-{suffix[-8:]}"}
+    )
+    assert warehouse.status_code in (200, 201), warehouse.text
+    location = await async_client.post(
+        f"/warehouses/{warehouse.json()['id']}/locations",
+        headers=headers,
+        json={"code": f"A-{suffix[-6:]}"},
+    )
+    assert location.status_code in (200, 201), location.text
+    return uuid.UUID(location.json()["id"])
+
+
+async def _add_stock(
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    location_id: uuid.UUID,
+    quantity: int,
+) -> None:
+    async with SessionLocal() as session:
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=location_id,
+            quantity_delta=quantity,
+            movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
+        )
+        await session.commit()
+
+
+async def _catalog_marketplaces(
+    async_client: AsyncClient, headers: dict[str, str], search: str
+) -> dict[str, list[str]]:
+    page = await async_client.get(
+        "/products/ff-catalog-page", headers=headers, params={"search": search}
+    )
+    assert page.status_code == 200, page.text
+    return {row["id"]: row["marketplaces"] for row in page.json()["items"]}
+
+
+@pytest.mark.asyncio
+async def test_ff_catalog_row_reports_own_marketplaces(async_client: AsyncClient) -> None:
+    """WMS-348: у озоновского товара значок Ozon, у вайлдберрисовского WB, у склеенного оба."""
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, f"badges-{suffix}")
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Seller"})
+    assert seller.status_code == 201, seller.text
+    seller_id = seller.json()["id"]
+
+    wb_only = await _create_product(
+        async_client,
+        headers,
+        name="WB card",
+        sku_code=f"BADGE-WB-{suffix}",
+        seller_id=seller_id,
+        wb_vendor_code=f"WB-VENDOR-{suffix}",
+    )
+    ozon_only = await _create_product(
+        async_client,
+        headers,
+        name="Ozon card",
+        sku_code=f"BADGE-OZ-{suffix}",
+        seller_id=seller_id,
+        ozon_sku=f"OZ-SKU-{suffix}",
+    )
+    both = await _create_product(
+        async_client,
+        headers,
+        name="Merged card",
+        sku_code=f"BADGE-BOTH-{suffix}",
+        seller_id=seller_id,
+        wb_vendor_code=f"WB-BOTH-{suffix}",
+        ozon_sku=f"OZ-BOTH-{suffix}",
+    )
+
+    badges = await _catalog_marketplaces(async_client, headers, "BADGE-")
+    assert badges[wb_only["id"]] == ["wb"]
+    assert badges[ozon_only["id"]] == ["ozon"]
+    assert badges[both["id"]] == ["wb", "ozon"]
+
+
+@pytest.mark.asyncio
+async def test_merge_two_products_sums_stock_and_keeps_wb_card(
+    async_client: AsyncClient,
+) -> None:
+    """WMS-349: две карточки становятся одной, остатки складываются."""
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, f"merge-{suffix}")
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Seller"})
+    assert seller.status_code == 201, seller.text
+    seller_id = seller.json()["id"]
+    tenant_id = await _seller_tenant_id(seller_id)
+    location_id = await _create_warehouse_location(async_client, headers, suffix)
+
+    wb_card = await _create_product(
+        async_client,
+        headers,
+        name="WB card",
+        sku_code=f"MERGE-WB-{suffix}",
+        seller_id=seller_id,
+        wb_vendor_code=f"WB-VENDOR-{suffix}",
+    )
+    ozon_card = await _create_product(
+        async_client,
+        headers,
+        name="Ozon card",
+        sku_code=f"MERGE-OZ-{suffix}",
+        seller_id=seller_id,
+        ozon_sku=f"OZ-MERGE-SKU-{suffix}",
+        ozon_offer_id=f"OZ-MERGE-OFFER-{suffix}",
+    )
+    await _add_stock(tenant_id, uuid.UUID(wb_card["id"]), location_id, 7)
+    await _add_stock(tenant_id, uuid.UUID(ozon_card["id"]), location_id, 5)
+
+    merged = await async_client.post(
+        "/products/merge",
+        headers=headers,
+        json={"product_ids": [ozon_card["id"], wb_card["id"]]},
+    )
+    assert merged.status_code == 200, merged.text
+    # Остаётся вайлдберрисовская карточка — её артикул знает склад.
+    assert merged.json()["id"] == wb_card["id"]
+    assert merged.json()["sku_code"] == f"MERGE-WB-{suffix}"
+    # Озоновская сторона переехала на неё.
+    assert merged.json()["ozon_sku"] == f"OZ-MERGE-SKU-{suffix}"
+    assert merged.json()["ozon_offer_id"] == f"OZ-MERGE-OFFER-{suffix}"
+
+    # Второй карточки больше нет.
+    listed = await async_client.get("/products?search=MERGE-", headers=headers)
+    assert listed.status_code == 200, listed.text
+    assert [row["id"] for row in listed.json()] == [wb_card["id"]]
+
+    # Остаток сложился: 7 + 5, ни одна штука не потерялась.
+    summary = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=headers,
+        params={"product_id": wb_card["id"]},
+    )
+    assert summary.status_code == 200, summary.text
+    assert [row["quantity"] for row in summary.json()] == [12]
+
+    # История движений обеих карточек осталась и указывает на оставшуюся.
+    async with SessionLocal() as session:
+        moved = await session.execute(
+            select(func.count())
+            .select_from(InventoryMovement)
+            .where(InventoryMovement.product_id == uuid.UUID(str(wb_card["id"])))
+        )
+        assert moved.scalar_one() == 2
+        orphaned = await session.execute(
+            select(func.count())
+            .select_from(InventoryMovement)
+            .where(InventoryMovement.product_id == uuid.UUID(str(ozon_card["id"])))
+        )
+        assert orphaned.scalar_one() == 0
+
+    # В каталоге у объединённой карточки оба значка.
+    badges = await _catalog_marketplaces(async_client, headers, f"MERGE-WB-{suffix}")
+    assert badges[wb_card["id"]] == ["wb", "ozon"]
+
+
+@pytest.mark.asyncio
+async def test_merge_rejects_three_cards_and_foreign_seller(async_client: AsyncClient) -> None:
+    """WMS-349: строго две карточки за раз и только внутри одного продавца."""
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, f"merge-guard-{suffix}")
+    first = await async_client.post("/sellers", headers=headers, json={"name": "First"})
+    second = await async_client.post("/sellers", headers=headers, json={"name": "Second"})
+    assert first.status_code == second.status_code == 201
+    a = await _create_product(
+        async_client,
+        headers,
+        name="A",
+        sku_code=f"GUARD-A-{suffix}",
+        seller_id=first.json()["id"],
+    )
+    b = await _create_product(
+        async_client,
+        headers,
+        name="B",
+        sku_code=f"GUARD-B-{suffix}",
+        seller_id=first.json()["id"],
+    )
+    other_seller = await _create_product(
+        async_client,
+        headers,
+        name="C",
+        sku_code=f"GUARD-C-{suffix}",
+        seller_id=second.json()["id"],
+    )
+
+    three = await async_client.post(
+        "/products/merge",
+        headers=headers,
+        json={"product_ids": [a["id"], b["id"], other_seller["id"]]},
+    )
+    assert three.status_code == 422, three.text
+
+    one = await async_client.post(
+        "/products/merge", headers=headers, json={"product_ids": [a["id"]]}
+    )
+    assert one.status_code == 422, one.text
+
+    cross_seller = await async_client.post(
+        "/products/merge",
+        headers=headers,
+        json={"product_ids": [a["id"], other_seller["id"]]},
+    )
+    assert cross_seller.status_code == 422, cross_seller.text
+    assert cross_seller.json()["detail"] == "merge_different_sellers"
+
+    # Ни одна карточка от отказа не пострадала.
+    still_there = await async_client.get("/products?search=GUARD-", headers=headers)
+    assert still_there.status_code == 200, still_there.text
+    assert len(still_there.json()) == 3
+
+
+@pytest.mark.asyncio
+async def test_merge_survives_dimension_history_on_both_cards(async_client: AsyncClient) -> None:
+    """WMS-349: у обеих карточек своя история габаритов — объединение не спотыкается.
+
+    У product_dimension_events два частичных уникальных индекса: одно применённое
+    измерение на карточку и один отпечаток измерения на карточку. Габариты двух
+    карточек одного товара совпадают до миллиметра, поэтому перенос истории
+    упёрся бы в оба сразу. Мерки исчезающей карточки уходят вместе с ней.
+    """
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, f"merge-dims-{suffix}")
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Seller"})
+    assert seller.status_code == 201, seller.text
+    seller_id = seller.json()["id"]
+    wb_card = await _create_product(
+        async_client,
+        headers,
+        name="WB card",
+        sku_code=f"DIM-WB-{suffix}",
+        seller_id=seller_id,
+        wb_vendor_code=f"DIM-VENDOR-{suffix}",
+    )
+    ozon_card = await _create_product(
+        async_client,
+        headers,
+        name="Ozon card",
+        sku_code=f"DIM-OZ-{suffix}",
+        seller_id=seller_id,
+        ozon_sku=f"DIM-OZ-SKU-{suffix}",
+    )
+    same_dimensions = {"length_mm": 300, "width_mm": 250, "height_mm": 60, "weight_g": 400}
+    for card in (wb_card, ozon_card):
+        patched = await async_client.patch(
+            f"/products/{card['id']}/dimensions", headers=headers, json=same_dimensions
+        )
+        assert patched.status_code == 200, patched.text
+
+    merged = await async_client.post(
+        "/products/merge",
+        headers=headers,
+        json={"product_ids": [wb_card["id"], ozon_card["id"]]},
+    )
+    assert merged.status_code == 200, merged.text
+    assert merged.json()["id"] == wb_card["id"]
+
+    history = await async_client.get(
+        f"/products/{wb_card['id']}/dimensions/history", headers=headers
+    )
+    assert history.status_code == 200, history.text
+    assert len(history.json()) == 1
+
+
+@pytest.mark.asyncio
+async def test_catalog_print_exposes_imported_ozon_codes_without_replacing_wb(
+    async_client: AsyncClient,
+) -> None:
+    """The live print dialog receives actual codes through both catalog routes."""
+    from app.models.product import Product
+
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, f"print-{suffix}")
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Print seller"})
+    assert seller.status_code == 201, seller.text
+    products = []
+    for kind in ("ozon", "both", "missing"):
+        products.append(
+            await _create_product(
+                async_client,
+                headers,
+                name=kind,
+                sku_code=f"PRINT-{kind}-{suffix}",
+                seller_id=seller.json()["id"],
+                ozon_sku=f"{kind}-{suffix}",
+            )
+        )
+    async with SessionLocal() as session:
+        for index, product in enumerate(products):
+            product_id = uuid.UUID(str(product["id"]))
+            link = await session.scalar(
+                select(ProductMarketplaceLink).where(
+                    ProductMarketplaceLink.product_id == product_id,
+                    ProductMarketplaceLink.marketplace == "ozon",
+                )
+            )
+            assert link is not None
+            link.external_barcodes = ["OZN1234567890", "OZN1234567891"] if index < 2 else []
+            if index == 1:
+                row = await session.get(Product, product_id)
+                assert row is not None
+                row.wb_barcode = "4601234567890"
+        await session.commit()
+    for endpoint in ("/products/ff-catalog-page", "/products/linked-wb-catalog"):
+        response = await async_client.get(endpoint, headers=headers, params={"search": "PRINT-"})
+        assert response.status_code == 200, response.text
+        body = response.json()
+        rows = {r["name"]: r for r in (body["items"] if isinstance(body, dict) else body)}
+        assert rows["ozon"]["wb_barcodes"] == []
+        assert rows["both"]["wb_primary_barcode"] == "4601234567890"
+        for kind in ("ozon", "both"):
+            assert rows[kind]["marketplace_bindings"][0]["external_barcodes"] == [
+                "OZN1234567890",
+                "OZN1234567891",
+            ]
+        assert rows["missing"]["marketplace_bindings"][0]["external_barcodes"] == []

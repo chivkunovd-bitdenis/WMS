@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  cancelFbsOrder,
+  assignFbsPackingBoxOrders,
+  removeFbsPackingBoxOrder,
   deleteFbsCargoPlaces,
   deliverFbsSupply,
   FbsApiError,
@@ -194,5 +197,67 @@ describe('FBS API client', () => {
         idempotency_key: 'delete-1',
       }),
     })
+  })
+
+  // WMS-360: ручка отмены жила на сервере без единого вызова с экрана — слова
+  // `cancel` не было даже в этом файле. Тест держит вызов на месте.
+  it('cancels one order through the server cancel endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: 'order-1', status: 'cancelled' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(cancelFbsOrder('token', authHeaders, 'order-1')).resolves.toMatchObject({
+      status: 'cancelled',
+    })
+    expect(fetchMock).toHaveBeenCalledWith('/api/operations/fbs-orders/order-1/cancel', {
+      method: 'PATCH',
+      headers: {
+        Authorization: 'Bearer token',
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    })
+  })
+
+  it('surfaces the server reason when Ozon refuses the cancellation', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: {
+            code: 'ozon_cancel_reason_unavailable',
+            message: 'Ozon не разрешает эту причину отмены для отправления.',
+          },
+        }),
+        { status: 409, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(cancelFbsOrder('token', authHeaders, 'order-1')).rejects.toThrow(
+      'Ozon не разрешает эту причину отмены для отправления.',
+    )
+  })
+})
+
+
+describe('box position API', () => {
+  it('assigns complete Ozon positions without a second quantity value', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await assignFbsPackingBoxOrders('token', authHeaders, 'supply', 'box', [], ['position-a', 'position-b'])
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ order_ids: [], order_product_ids: ['position-a', 'position-b'] })
+  })
+
+  it('removes one Ozon position while keeping the WB URL unchanged', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await removeFbsPackingBoxOrder('token', authHeaders, 'supply', 'box', 'order', 'position-a')
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/operations/fbs-supplies/supply/boxes/box/orders/order?order_product_id=position-a')
+    await removeFbsPackingBoxOrder('token', authHeaders, 'supply', 'box', 'order')
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/operations/fbs-supplies/supply/boxes/box/orders/order')
   })
 })

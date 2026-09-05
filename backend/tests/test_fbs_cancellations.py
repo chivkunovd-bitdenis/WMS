@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -11,6 +11,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
+from app.models.billing import BillingLedgerEntry
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_DEFECT,
@@ -23,8 +24,12 @@ from app.models.fbs_order import (
     FbsOrderReservation,
 )
 from app.models.product import Product
+from app.models.tenant import Tenant
 from app.services import inventory_service
-from app.services.fbs_cancellation_service import penalty_band_for_order
+from app.services.fbs_cancellation_service import (
+    penalty_band_for_order,
+    reverse_fbs_order_billing,
+)
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import (
     sync_order_statuses,
@@ -351,6 +356,121 @@ async def test_sync_statuses_sold_and_canceled(
         assert canceled.reserve_status == RESERVE_STATUS_RELEASED
         assert sorted_order.status == FBS_ORDER_STATUS_SORTED
         assert sorted_order.wb_status == "sorted"
+
+
+async def _ledger_entries(order_id: uuid.UUID) -> tuple[list[Any], list[Any]]:
+    """Начисления по заказу и сторно к ним."""
+    async with SessionLocal() as session:
+        charges = list(
+            (
+                await session.execute(
+                    select(BillingLedgerEntry).where(
+                        BillingLedgerEntry.source_type == "fbs_order",
+                        BillingLedgerEntry.source_id == order_id,
+                        BillingLedgerEntry.entry_type == "charge",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not charges:
+            return [], []
+        reversals = list(
+            (
+                await session.execute(
+                    select(BillingLedgerEntry).where(
+                        BillingLedgerEntry.reversal_of_id.in_([row.id for row in charges])
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return charges, reversals
+
+
+@pytest.mark.asyncio
+async def test_cancel_after_confirmation_reverses_the_seller_charge(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Заказ отменили после того, как за него уже начислили деньги.
+
+    Начисление появляется, когда маркетплейс подтвердил, что забрал заказ. После
+    этого заказ всё равно может отмениться — и до сих пор начисление оставалось
+    в счёте: селлер платил за работу, которой не было. Руками такой заказ не
+    отменить (статус `sorted` в отмену не пускают), поэтому сторно проверяем на
+    том пути, которым отмена реально приходит, — на опросе статусов.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    tenant_id, order_id, _product_id = await _seed_reserved_order(
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        wb_order_id=810401,
+        barcode="FBS-CANCEL-BILLING",
+    )
+    async with SessionLocal() as session:
+        tenant = await session.get(Tenant, tenant_id)
+        assert tenant is not None
+        tenant.billing_enabled_from = date(2020, 1, 1)
+        await session.commit()
+
+    reported = {"wb_status": "sorted"}
+
+    async def fake_status(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return [{"id": oid, "wbStatus": reported["wb_status"]} for oid in order_ids]
+
+    monkeypatch.setattr(
+        "app.services.wb_marketplace_orders_service.fetch_marketplace_orders_status",
+        fake_status,
+    )
+
+    confirmed = await async_client.post(
+        "/operations/fbs-orders/sync-statuses",
+        headers=headers,
+        json={"seller_id": seller_id},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+
+    charges, reversals = await _ledger_entries(order_id)
+    assert sorted(entry.service_code for entry in charges) == ["fbs_order", "packing"]
+    assert reversals == []
+
+    reported["wb_status"] = "canceled"
+    cancelled = await async_client.post(
+        "/operations/fbs-orders/sync-statuses",
+        headers=headers,
+        json={"seller_id": seller_id},
+    )
+    assert cancelled.status_code == 200, cancelled.text
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.status == FBS_ORDER_STATUS_CANCELLED
+
+    charges, reversals = await _ledger_entries(order_id)
+    assert sorted(entry.service_code for entry in reversals) == ["fbs_order", "packing"]
+    assert all(entry.quantity < 0 for entry in reversals)
+
+    # Повторная отмена не сторнирует второй раз: у начисления со сторно нет
+    # активной строки, и повтор возвращает прежнюю, ничего не создавая.
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        await reverse_fbs_order_billing(session, order)
+        await session.commit()
+
+    _charges, repeated = await _ledger_entries(order_id)
+    assert {entry.id for entry in repeated} == {entry.id for entry in reversals}
 
 
 # TC-NEW-FBS-CANCEL-003

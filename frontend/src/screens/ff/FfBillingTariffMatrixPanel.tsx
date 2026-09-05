@@ -8,7 +8,6 @@ import {
   NumberInput,
   PrimaryAction,
   SecondaryAction,
-  SelectInput,
   StatusChip,
 } from '../../ui-kit'
 import type { Column } from '../../ui-kit'
@@ -171,7 +170,11 @@ export function FfBillingTariffMatrixPanel({ token, authHeaders, focusTariffs, o
       const changesPricing = patch.rate !== undefined || patch.unit !== undefined
       const start = patch.valid_from_at ?? (changesPricing ? nextVersionStart() : row.valid_from_at ?? defaultStartsAt())
       const nextRow = { ...row, ...patch, valid_from_at: start }
-      const unit = nextRow.unit ?? 'item'
+      // Новая версия ставки всегда за штуку: склад принимает и отгружает
+      // товар, а не документы. Старую версию «за документ» переносить в новую
+      // нельзя — иначе выбор, которого больше нет на экране, тянулся бы дальше
+      // сам собой.
+      const unit: Unit = 'item'
       const rate = nextRow.rate ?? 0
       const version: TariffVersion = {
         seller_id: null, product_id: null, employee_user_id: null, service_code: row.service_code,
@@ -193,12 +196,11 @@ export function FfBillingTariffMatrixPanel({ token, authHeaders, focusTariffs, o
    * нужно.
    */
   function addSellerRate({ sellerId, serviceCode, rate, startsAt }: { sellerId: string; serviceCode: string; rate: number; startsAt: string }) {
-    const service = matrix?.services.find((item) => item.service_code === serviceCode)
     mutate((current) => ({
       ...current,
       versions: replaceVersion(current.versions, {
         seller_id: sellerId, product_id: null, employee_user_id: null, service_code: serviceCode,
-        unit: service?.unit ?? 'item', enabled: true, rate, valid_from_at: startsAt, valid_to_at: null,
+        unit: 'item', enabled: true, rate, valid_from_at: startsAt, valid_to_at: null,
       }),
     }))
     setError(null)
@@ -278,7 +280,6 @@ export function FfBillingTariffMatrixPanel({ token, authHeaders, focusTariffs, o
 
   const serviceColumns: Column<TariffServiceState>[] = [
     { key: 'service', header: 'Услуга', width: 150, render: (row) => serviceName[row.service_code] ?? row.service_code },
-    { key: 'unit', header: 'Единица', width: 170, render: (row) => <SelectInput label="Единица" hideLabel value={row.unit ?? 'item'} onChange={(value) => setService(row, { unit: value as Unit })} options={[{ value: 'item', label: 'За единицу' }, { value: 'document', label: 'За документ' }]} disabled={saving} testId={`ff-settings-tariff-unit-${row.service_code}`} /> },
     { key: 'rate', header: 'Ставка, ₽', width: 150, align: 'right', render: (row) => <NumberInput label="Ставка" hideLabel value={row.rate} onChange={(value) => setService(row, { rate: value })} min={0} max={MAX_TARIFF_RATE_RUBLES} step={0.01} disabled={saving} testId={`ff-settings-tariff-rate-${row.service_code}`} /> },
     { key: 'start', header: 'Действует с', width: 205, render: (row) => <MoscowDateTimeInput label="Начало" hideLabel value={row.valid_from_at} onChange={(value) => value && setService(row, { valid_from_at: value })} disabled={saving} testId={`ff-settings-tariff-start-${row.service_code}`} /> },
     { key: 'products', header: 'Цен на товары', width: 150, align: 'right', render: (row) => (matrix?.versions ?? []).filter((item) => item.product_id != null && item.service_code === row.service_code).length || '—' },

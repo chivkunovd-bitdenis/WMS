@@ -55,7 +55,7 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { apiUrl } from '../../api'
 import { fetchPendingMarking, pendingMarkingLineCount } from '../../utils/pendingMarkingApi'
 import { PageHeader } from '../../ui/PageHeader'
-import { resolveProductPrimaryBarcode } from '../../types/wbProductCatalog'
+import { resolveProductBarcodeOptions, resolveProductPrimaryBarcode } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { displayMetaToProductLabel } from '../../utils/productBarcodePrint'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
@@ -321,9 +321,6 @@ export function FfPackagingTaskPanel({
     'Content-Type': 'application/json',
   }
 
-  const productLabelForLine = (ln: PackagingTaskLine) =>
-    displayMetaToProductLabel(getDisplayMeta(ln.product_id, ln))
-
   const lineBarcodeForScan = (ln: PackagingTaskLine) => {
     const displayMeta = getDisplayMeta(ln.product_id, ln)
     return resolveProductPrimaryBarcode(displayMeta) || ln.sku_code
@@ -378,6 +375,7 @@ export function FfPackagingTaskPanel({
   }
 
   const openLinePrint = (ln: PackagingTaskLine, opts?: { reprint?: boolean }) => {
+    const meta = getDisplayMeta(ln.product_id, ln)
     openPrint(
       {
         token,
@@ -390,7 +388,10 @@ export function FfPackagingTaskPanel({
         requiresHonestSign: ln.requires_honest_sign,
         skuCode: ln.sku_code,
         productName: ln.product_name,
-        productLabel: productLabelForLine(ln),
+        productLabel: displayMetaToProductLabel(meta),
+        productBarcodeOptions: meta.marketplace_bindings?.some((binding) => binding.marketplace === 'ozon')
+          ? resolveProductBarcodeOptions(meta)
+          : undefined,
         packagingInstructions: ln.packaging_instructions,
         onPrinted: () => {
           void markProductLabelPrinted(ln).finally(() => {

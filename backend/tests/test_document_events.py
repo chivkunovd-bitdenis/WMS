@@ -61,7 +61,6 @@ from app.services.fbs_shipment_source_service import (
     FbsShipmentSourceRequest,
     plan_fbs_shipment_sources,
 )
-from app.services.marketplace_provider import FakeMarketplaceTransport, OzonMarketplaceProvider
 from app.services.tokens import decode_access_token
 
 
@@ -548,7 +547,6 @@ async def test_fbs_and_marketplace_unload_status_sequences(
                 unload.id,
                 acknowledge_discrepancy=True,
                 performer_id=actor_id,
-                ozon_provider=OzonMarketplaceProvider(transport=FakeMarketplaceTransport()),
             )
         cancelled = MarketplaceUnloadRequest(
             tenant_id=tenant_id,

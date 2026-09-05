@@ -168,6 +168,27 @@ def _scope_key(draft: TariffVersionDraft | BillingTariffVersionV2) -> tuple[obje
     )
 
 
+def _is_stored_unchanged(
+    draft: TariffVersionDraft, rows: list[BillingTariffVersionV2]
+) -> bool:
+    """Ставку прислали ровно такой, какой она уже лежит в базе.
+
+    Экран тарифов присылает обратно весь список версий, включая давно
+    закрытые. Без этой проверки арендатор, у которого когда-то была ставка
+    «за документ», не смог бы сохранить матрицу вообще: собственная история
+    ломала бы ему валидацию единицы.
+    """
+    return any(
+        _scope_key(row) == _scope_key(draft)
+        and _as_utc(row.valid_from_at) == _as_utc(draft["valid_from_at"])
+        and _as_utc(row.valid_to_at) == _as_utc(draft["valid_to_at"])
+        and row.unit == draft["unit"]
+        and row.enabled == draft["enabled"]
+        and row.rate == draft["rate"]
+        for row in rows
+    )
+
+
 def _same_version(draft: TariffVersionDraft, row: BillingTariffVersionV2) -> bool:
     return (
         row.unit == draft["unit"]
@@ -226,16 +247,22 @@ async def save_tariff_matrix(
         ):
             raise BillingTariffMatrixError("billing_tariff_matrix_service_invalid")
         # Единица привязана к природе услуги: хранение считается за литро-день,
-        # остальное — за документ или за штуку. Разрешить хранению «за штуку»
-        # значит соврать в расчёте, а не просто нарушить формат.
+        # всё остальное — за штуку. Разрешить хранению «за штуку» значит
+        # соврать в расчёте, а не просто нарушить формат.
+        #
+        # Выбора «за документ» больше нет: склад принимает и отгружает штуки, а
+        # не бумажки, и ставка за документ врала тем сильнее, чем крупнее был
+        # документ. Старые версии со «за документ» остаются в истории и
+        # продолжают читаться — их можно прислать обратно неизменными, но
+        # завести новую такую ставку нельзя.
         if draft["service_code"] == STORAGE_SERVICE_CODE:
             if draft["unit"] != "liter_day":
                 raise BillingTariffMatrixError("billing_tariff_matrix_storage_unit_invalid")
         elif draft["service_code"] == FBS_ORDER_SERVICE_CODE:
             if draft["unit"] != "item":
                 raise BillingTariffMatrixError("billing_tariff_matrix_fbs_unit_invalid")
-        elif draft["unit"] not in {"document", "item"}:
-            raise BillingTariffMatrixError("billing_tariff_matrix_rate_invalid")
+        elif draft["unit"] != "item" and not _is_stored_unchanged(draft, current_versions):
+            raise BillingTariffMatrixError("billing_tariff_matrix_unit_invalid")
         if employee_scope and (draft["seller_id"] is not None or draft["product_id"] is not None):
             raise BillingTariffMatrixError("billing_tariff_matrix_employee_scope_invalid")
         if employee_scope and draft["unit"] != "item":

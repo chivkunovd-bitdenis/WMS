@@ -3,8 +3,27 @@ import { describe, expect, it } from 'vitest'
 import {
   mapConcurrentlyInOrder,
   resolveFbsFallbackLabelCopies,
+  resolveProductTapeBarcodeError,
   resolveTapeCounts,
 } from './MarkingPrintDialog'
+
+describe('product tape barcode validation before consuming marking codes', () => {
+  const mixedLayout = { units: [{ block: 'cz' as const, copies: 1 }, { block: 'label' as const, copies: 1 }] }
+
+  it('rejects a missing actual Ozon barcode in mixed tapes', () => {
+    expect(resolveProductTapeBarcodeError([], '', mixedLayout)).toContain('нет штрихкода Ozon')
+    expect(resolveProductTapeBarcodeError([], '  ', mixedLayout)).toContain('нет штрихкода Ozon')
+  })
+
+  it('allows marking codes alone without an Ozon barcode', () => {
+    expect(resolveProductTapeBarcodeError([], '', { units: [{ block: 'cz', copies: 2 }] })).toBeNull()
+  })
+
+  it('allows an actual selected barcode and preserves the WB-only path', () => {
+    expect(resolveProductTapeBarcodeError([{ marketplace: 'ozon', barcode: 'OZN-ACTUAL' }], 'OZN-ACTUAL', mixedLayout)).toBeNull()
+    expect(resolveProductTapeBarcodeError(undefined, '', mixedLayout)).toBeNull()
+  })
+})
 
 describe('mapConcurrentlyInOrder', () => {
   it('limits concurrency and preserves source order', async () => {

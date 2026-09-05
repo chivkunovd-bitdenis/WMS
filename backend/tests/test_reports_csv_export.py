@@ -104,15 +104,17 @@ async def test_inventory_csv_matches_visible_product_table_columns_and_rows(
     assert table.status_code == 200
     assert export.status_code == 200
     csv_rows = list(csv.reader(io.StringIO(export.content.decode("utf-8-sig"))))
+    # «Нетто» снято и с экрана, и из выгрузки: колонка не отвечала ни на один
+    # вопрос склада, а в файле она жила ещё долго после того, как ушла с экрана.
     assert csv_rows[0] == [
         "Товар", "Название", "Артикул продавца", "ШК", "Селлер",
-        "Остаток сейчас", "Приход", "Расход", "Нетто",
+        "Остаток сейчас", "Приход", "Расход",
     ]
     row = table.json()["rows"][0]
     assert csv_rows[1] == [
         row["sku_code"], row["product_name"], row["wb_vendor_code"], row["wb_barcode"],
         row["seller_name"], str(row["current_balance"]), str(row["total_in"]),
-        str(row["total_out"]), str(row["net"]),
+        str(row["total_out"]),
     ]
 
 
@@ -145,9 +147,9 @@ async def test_inventory_csv_matches_table_grouping_and_requested_order(
     assert table.status_code == 200
     assert export.status_code == 200
     csv_rows = list(csv.reader(io.StringIO(export.content.decode("utf-8-sig"))))
-    assert csv_rows[0] == ["Операция", "Приход", "Расход", "Нетто"]
+    assert csv_rows[0] == ["Операция", "Приход", "Расход"]
     assert csv_rows[1:] == [
-        [row["operation"], str(row["in_qty"]), str(row["out_qty"]), str(row["net"])]
+        [row["operation"], str(row["in_qty"]), str(row["out_qty"])]
         for row in table.json()["rows"]
     ]
     assert [row[0] for row in csv_rows[1:]] == ["Приёмка", "Отгрузка"]
@@ -192,12 +194,11 @@ async def test_inventory_csv_marks_incomplete_transfer_like_visible_table(
     }
     csv_rows = list(csv.reader(io.StringIO(export.content.decode("utf-8-sig"))))
     assert csv_rows == [
-        ["Операция", "Приход", "Расход", "Нетто"],
+        ["Операция", "Приход", "Расход"],
         [
             f"{table_row['operation']} (Ошибка)",
             "—",
             str(table_row["out_qty"]),
-            str(table_row["net"]),
         ],
     ]
     assert ["Перемещение: ушло", "0", "3", "-3"] not in csv_rows
@@ -263,7 +264,6 @@ async def test_inventory_csv_keeps_complete_transfer_values_unchanged(
         table_row["operation"],
         str(table_row["in_qty"]),
         str(table_row["out_qty"]),
-        str(table_row["net"]),
     ]
 
 
@@ -333,7 +333,7 @@ async def test_inventory_csv_for_seller_ignores_requested_foreign_seller_scope(
     csv_rows = list(csv.reader(io.StringIO(export.content.decode("utf-8-sig"))))
     assert csv_rows[0] == [
         "Товар", "Название", "Артикул продавца", "ШК", "Остаток сейчас",
-        "Приход", "Расход", "Нетто",
+        "Приход", "Расход",
     ]
     assert len(csv_rows) == 2
     assert csv_rows[1][0:2] == ["SKU-OWN", "Own product"]

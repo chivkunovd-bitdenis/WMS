@@ -20,6 +20,7 @@ from app.services.catalog_service import (
     list_ozon_product_links,
     list_products,
     marketplace_scope_condition,
+    ozon_link_primary_image_url,
 )
 from app.services.wb_card_enrichment import (
     brand_from_card,
@@ -46,6 +47,7 @@ class SellerWbCatalogRow:
     wb_primary_image_url: str | None
     wb_barcodes: tuple[str, ...]
     wb_primary_barcode: str | None
+    marketplace_bindings: tuple[dict[str, Any], ...] = ()
     wb_size: str | None = None
     wb_color: str | None = None
     wb_brand: str | None = None
@@ -67,6 +69,7 @@ class SellerWbCatalogRow:
             "wb_vendor_code": self.wb_vendor_code,
             "ozon_sku": self.ozon_sku,
             "ozon_offer_id": self.ozon_offer_id,
+            "marketplace_bindings": list(self.marketplace_bindings),
             "wb_subject_name": self.wb_subject_name,
             "wb_primary_image_url": self.wb_primary_image_url,
             "wb_barcodes": list(self.wb_barcodes),
@@ -83,6 +86,21 @@ class SellerWbCatalogRow:
             "fbs_published_amount": self.fbs_published_amount,
             "fbs_sync_status": self.fbs_sync_status,
         }
+
+
+def _ozon_barcode_binding(link: ProductMarketplaceLink | None) -> tuple[dict[str, Any], ...]:
+    """Expose imported codes without inventing one from SKU or copying into WB fields."""
+    if link is None:
+        return ()
+    return (
+        {
+            "marketplace": "ozon",
+            "external_product_id": link.external_product_id,
+            "external_offer_id": link.external_offer_id,
+            "external_sku": link.external_sku,
+            "external_barcodes": list(link.external_barcodes or []),
+        },
+    )
 
 
 def _barcodes_for_product(
@@ -278,6 +296,8 @@ async def list_seller_wb_catalog_rows(
             subj = subject_name_from_card(card_raw)
         if img is None and card_raw:
             img = first_photo_url_from_card(card_raw)
+        if img is None:
+            img = ozon_link_primary_image_url(ozon_links.get(p.id))
         chrt_id = int(p.wb_chrt_id) if p.wb_chrt_id is not None else None
         sync_state = sync_state_by_key.get((seller_id, chrt_id)) if chrt_id is not None else None
         rows.append(
@@ -293,6 +313,7 @@ async def list_seller_wb_catalog_rows(
                 wb_primary_image_url=img,
                 wb_barcodes=barcodes,
                 wb_primary_barcode=primary,
+                marketplace_bindings=_ozon_barcode_binding(ozon_links.get(p.id)),
                 wb_size=wb_size,
                 wb_color=wb_color,
                 wb_brand=wb_brand,
@@ -326,6 +347,7 @@ class FfCatalogRow:
     wb_primary_image_url: str | None
     wb_barcodes: tuple[str, ...]
     wb_primary_barcode: str | None
+    marketplace_bindings: tuple[dict[str, Any], ...] = ()
     ozon_sku: str | None = None
     ozon_offer_id: str | None = None
     wb_size: str | None = None
@@ -351,6 +373,7 @@ class FfCatalogRow:
             "wb_vendor_code": self.wb_vendor_code,
             "ozon_sku": self.ozon_sku,
             "ozon_offer_id": self.ozon_offer_id,
+            "marketplace_bindings": list(self.marketplace_bindings),
             "wb_subject_name": self.wb_subject_name,
             "wb_primary_image_url": self.wb_primary_image_url,
             "wb_barcodes": list(self.wb_barcodes),
@@ -452,6 +475,8 @@ async def _enrich_linked_products(
             subj = subject_name_from_card(card_raw)
         if img is None and card_raw:
             img = first_photo_url_from_card(card_raw)
+        if img is None:
+            img = ozon_link_primary_image_url(ozon_links.get(p.id))
         chrt_id = int(p.wb_chrt_id) if p.wb_chrt_id is not None else None
         sync_state = (
             sync_state_by_key.get((p.seller_id, chrt_id))
@@ -473,6 +498,7 @@ async def _enrich_linked_products(
                 wb_primary_image_url=img,
                 wb_barcodes=barcodes,
                 wb_primary_barcode=primary,
+                marketplace_bindings=_ozon_barcode_binding(ozon_links.get(p.id)),
                 wb_size=wb_size,
                 wb_color=wb_color,
                 wb_brand=wb_brand,
@@ -552,8 +578,7 @@ async def list_linked_wb_catalog_page_rows(
     normalized_category = (category or "").strip()
     if normalized_category:
         filters.append(
-            SellerWildberriesImportedCard.raw_json["subjectName"].as_string()
-            == normalized_category
+            SellerWildberriesImportedCard.raw_json["subjectName"].as_string() == normalized_category
         )
 
     matched_ids = (
@@ -562,9 +587,7 @@ async def list_linked_wb_catalog_page_rows(
         .outerjoin(SellerWildberriesImportedCard, card_join)
         .where(*filters)
     )
-    total = int(
-        await session.scalar(select(func.count()).select_from(matched_ids.subquery())) or 0
-    )
+    total = int(await session.scalar(select(func.count()).select_from(matched_ids.subquery())) or 0)
     scope_total = int(
         await session.scalar(select(func.count(Product.id)).where(*scope_filters)) or 0
     )

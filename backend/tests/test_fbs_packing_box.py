@@ -147,9 +147,7 @@ async def test_warehouse_boxes_get_cargo_places_and_orders_are_exclusive(
         json={"order_ids": [str(order_ids[1])]},
     )
     assert assigned_unpacked.status_code == 200, assigned_unpacked.text
-    assert assigned_unpacked.json()["boxes"][0]["assigned_order_ids"] == [
-        str(order_ids[1])
-    ]
+    assert assigned_unpacked.json()["boxes"][0]["assigned_order_ids"] == [str(order_ids[1])]
 
     unpacked_duplicate = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/boxes/{second}/orders",
@@ -219,11 +217,7 @@ async def test_wb_box_readiness_never_depends_on_pack_status(
 
     async with SessionLocal() as session:
         orders = list(
-            (
-                await session.scalars(
-                    select(FbsOrder).where(FbsOrder.id.in_(order_ids))
-                )
-            ).all()
+            (await session.scalars(select(FbsOrder).where(FbsOrder.id.in_(order_ids)))).all()
         )
         for order in orders:
             order.pack_status = "pending"
@@ -308,9 +302,12 @@ async def test_box_creation_wb_409_cleans_local_boxes_and_same_key_can_retry(
         "retryable": True,
     }
     async with SessionLocal() as session:
-        assert await session.scalar(
-            select(func.count(FbsPackingBox.id)).where(FbsPackingBox.supply_id == supply_id)
-        ) == 0
+        assert (
+            await session.scalar(
+                select(func.count(FbsPackingBox.id)).where(FbsPackingBox.supply_id == supply_id)
+            )
+            == 0
+        )
         failed_operations = list(
             (
                 await session.scalars(
@@ -357,9 +354,7 @@ async def test_box_retry_after_409_reconciles_timeout_with_same_operator_key(
     remote_ids: list[str] = []
     attempts = 0
 
-    async def reject_then_create_and_lose_response(
-        *args: object, **kwargs: object
-    ) -> list[str]:
+    async def reject_then_create_and_lose_response(*args: object, **kwargs: object) -> list[str]:
         nonlocal attempts
         attempts += 1
         if attempts == 1:
@@ -444,10 +439,7 @@ async def test_without_distribution_boxes_do_not_accept_order_assignment(
     async with SessionLocal() as session:
         stored_box = await session.get(FbsPackingBox, uuid.UUID(box["id"]))
         assert stored_box is not None
-        assert (
-            stored_box.creation_idempotency_key
-            == "boxes-without-distribution-1"
-        )
+        assert stored_box.creation_idempotency_key == "boxes-without-distribution-1"
 
     assigned = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/boxes/{box['id']}/orders",
@@ -699,9 +691,7 @@ async def test_truncated_legacy_key_retry_returns_existing_box(
         stored_box_ids = list(
             (
                 await session.scalars(
-                    select(FbsPackingBox.id).where(
-                        FbsPackingBox.supply_id == supply_id
-                    )
+                    select(FbsPackingBox.id).where(FbsPackingBox.supply_id == supply_id)
                 )
             ).all()
         )
@@ -822,9 +812,7 @@ async def test_without_distribution_toggle_preserves_full_key_for_create_retry(
         },
     )
     assert retried.status_code == 201, retried.text
-    assert [box["id"] for box in retried.json()["boxes"]] == [
-        created.json()["boxes"][0]["id"]
-    ]
+    assert [box["id"] for box in retried.json()["boxes"]] == [created.json()["boxes"][0]["id"]]
     assert retried.json()["boxes"][0]["without_distribution"] is False
 
     async with SessionLocal() as session:
@@ -1032,9 +1020,7 @@ async def test_client_key_with_legacy_prefix_is_not_mode_marker_and_stays_idempo
         await session.refresh(supply)
         assert supply.boxes_without_distribution_at is None
         box_count = await session.scalar(
-            select(func.count(FbsPackingBox.id)).where(
-                FbsPackingBox.supply_id == supply_id
-            )
+            select(func.count(FbsPackingBox.id)).where(FbsPackingBox.supply_id == supply_id)
         )
         assert box_count == 1
 
@@ -1320,6 +1306,117 @@ def test_workspace_wb_never_exposes_navigation_blockers() -> None:
     )
 
     assert blockers == []
+
+
+def test_workspace_fresh_ozon_supply_starts_with_picking_not_boxes() -> None:
+    """Новая поставка Ozon начинает подбор до раскладки позиций по коробам."""
+    supply = SimpleNamespace(
+        marketplace="ozon",
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+        trbxes=[],
+    )
+    order = SimpleNamespace(
+        id=uuid.uuid4(),
+        wb_order_id=-3665971690784702777,
+        external_order_id="0195832-0021-3",
+        pick_status="pending",
+        metadata_delivery_allowed=True,
+        required_meta_json=[],
+    )
+
+    stage = _compute_stage(
+        supply,
+        [order],
+        WorkspaceProgress(picked=0, packed=0, metadata_ready=0, stickers_ready=0, total=3),
+        has_physical_boxes=False,
+        without_distribution=False,
+    )
+
+    assert stage == "picking"
+
+
+def test_workspace_ozon_never_exposes_navigation_blockers() -> None:
+    """Правило AGENTS.md одно для обеих площадок, не только для WB.
+
+    У Ozon этикетка выдаётся только после сборки, поэтому `stickers_ready`
+    никогда не догоняет `total` до передачи. Пока сервер публиковал по этому
+    факту навигационные блокеры, оператора запирало на «Коробах», где операции
+    с коробами у Ozon закрыты.
+    """
+    order_id = uuid.uuid4()
+    supply = SimpleNamespace(
+        marketplace="ozon",
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+        trbxes=[],
+    )
+    order = SimpleNamespace(
+        id=order_id,
+        wb_order_id=-3665971690784702775,
+        external_order_id="0195832-0021-1",
+        pick_status="pending",
+        metadata_delivery_allowed=False,
+        required_meta_json=["sgtin"],
+        meta_details_json={},
+    )
+    progress = WorkspaceProgress(
+        picked=0,
+        packed=0,
+        metadata_ready=0,
+        stickers_ready=0,
+        total=1,
+    )
+
+    blockers = _compute_workspace_blockers(
+        supply,
+        [order],
+        "handoff_prep",
+        progress,
+        has_physical_boxes=False,
+        without_distribution=False,
+        unassigned_packed_order_ids={order_id},
+    )
+
+    assert blockers == []
+
+
+def test_workspace_completed_ozon_assembling_never_returns_to_picking() -> None:
+    """Запрещённое правило `status == assembling -> picking` снято и для Ozon."""
+    order_id = uuid.uuid4()
+    supply = SimpleNamespace(
+        marketplace="ozon",
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+        trbxes=[],
+    )
+    order = SimpleNamespace(
+        id=order_id,
+        wb_order_id=-3665971690784702776,
+        external_order_id="0195832-0021-2",
+        pick_status="picked",
+        metadata_delivery_allowed=True,
+        required_meta_json=[],
+    )
+    progress = WorkspaceProgress(
+        picked=18,
+        packed=18,
+        metadata_ready=18,
+        # Стикеров у Ozon до передачи нет — и это не повод отправлять оператора
+        # назад в подбор.
+        stickers_ready=0,
+        total=18,
+    )
+
+    stage = _compute_stage(
+        supply,
+        [order],
+        progress,
+        has_physical_boxes=True,
+        without_distribution=True,
+    )
+
+    assert stage == "handoff_prep"
 
 
 def test_workspace_without_distribution_skips_assignment_gate() -> None:
