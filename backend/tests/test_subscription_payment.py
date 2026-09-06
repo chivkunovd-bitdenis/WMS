@@ -31,10 +31,10 @@ class _FakeYooKassa:
         self.created: list[dict[str, Any]] = []
         self.idempotence_keys: list[str] = []
 
-    def client_factory(self, *args: Any, **kwargs: Any) -> "_FakeYooKassa":
+    def client_factory(self, *args: Any, **kwargs: Any) -> _FakeYooKassa:
         return self
 
-    async def __aenter__(self) -> "_FakeYooKassa":
+    async def __aenter__(self) -> _FakeYooKassa:
         return self
 
     async def __aexit__(self, *exc: Any) -> None:
@@ -215,7 +215,7 @@ async def test_payment_is_scoped_to_its_tenant(
 ) -> None:
     """Оплата одной организации не продлевает подписку другой."""
     first = await _register_admin(async_client, "pay-scope-one")
-    second = await _register_admin(async_client, "pay-scope-two")
+    await _register_admin(async_client, "pay-scope-two")
     await _set_paid_until("admin-pay-scope-two@example.com", date.today() + timedelta(days=5))
 
     fake = _FakeYooKassa(status="succeeded", paid=True)
