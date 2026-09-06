@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,7 +61,6 @@ class SellerWithAccountOut(BaseModel):
     user_id: str
     email: str
     role: str
-    invite_sent: bool = False
 
 
 class SellerWbCatalogAdminOut(BaseModel):
@@ -124,6 +123,7 @@ async def post_seller(
 async def post_seller_with_account(
     body: SellerWithAccountCreate,
     request: Request,
+    background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> SellerWithAccountOut:
@@ -148,10 +148,12 @@ async def post_seller_with_account(
                 detail="forbidden",
             ) from None
         raise
-    invite_sent = False
     if account.must_set_password:
-        invite_sent = await send_auth_link(
-            account, purpose="invite", base_url=public_base_url(request)
+        background_tasks.add_task(
+            send_auth_link,
+            account,
+            purpose="invite",
+            base_url=public_base_url(request),
         )
     return SellerWithAccountOut(
         seller_id=str(seller.id),
@@ -159,5 +161,4 @@ async def post_seller_with_account(
         user_id=str(account.id),
         email=account.email,
         role=account.role,
-        invite_sent=invite_sent,
     )

@@ -4,6 +4,7 @@ import secrets
 import uuid
 from typing import Literal
 
+from fastapi import BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -279,6 +280,7 @@ async def request_password_reset(
     *,
     email: str,
     base_url: str,
+    background_tasks: BackgroundTasks | None = None,
 ) -> None:
     """Отправить ссылку сброса, если такой пользователь есть.
 
@@ -289,6 +291,12 @@ async def request_password_reset(
     result = await session.execute(stmt)
     user = result.scalar_one_or_none()
     if user is None:
+        return
+    if background_tasks is not None:
+        # Ответ уходит сразу: человек не должен ждать почтовый сервер.
+        background_tasks.add_task(
+            send_auth_link, user, purpose="reset", base_url=base_url
+        )
         return
     await send_auth_link(user, purpose="reset", base_url=base_url)
 

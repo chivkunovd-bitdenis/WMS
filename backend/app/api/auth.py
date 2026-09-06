@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -152,7 +152,6 @@ class SellerAccountOut(BaseModel):
     email: str
     role: str
     seller_id: str
-    invite_sent: bool = False
 
 
 @router.post("/register", response_model=TokenResponse)
@@ -195,6 +194,7 @@ async def register(
 async def create_seller_account(
     body: SellerAccountCreate,
     request: Request,
+    background_tasks: BackgroundTasks,
     admin: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> SellerAccountOut:
@@ -225,17 +225,20 @@ async def create_seller_account(
             ) from None
         raise
     assert user.seller_id is not None
-    invite_sent = False
     if user.must_set_password:
-        invite_sent = await send_auth_link(
-            user, purpose="invite", base_url=public_base_url(request)
+        # Письмо уходит после ответа: почтовый сервер может отвечать долго, а
+        # оператор не должен смотреть на крутилку из-за чужой недоступности.
+        background_tasks.add_task(
+            send_auth_link,
+            user,
+            purpose="invite",
+            base_url=public_base_url(request),
         )
     return SellerAccountOut(
         id=str(user.id),
         email=user.email,
         role=user.role,
         seller_id=str(user.seller_id),
-        invite_sent=invite_sent,
     )
 
 
@@ -297,6 +300,7 @@ async def set_password_route(
 async def request_password_reset_route(
     body: PasswordResetRequestBody,
     request: Request,
+    background_tasks: BackgroundTasks,
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
     """Запросить ссылку восстановления пароля.
@@ -308,6 +312,7 @@ async def request_password_reset_route(
         session,
         email=str(body.email),
         base_url=public_base_url(request),
+        background_tasks=background_tasks,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -316,6 +321,7 @@ async def request_password_reset_route(
 async def resend_invite_route(
     body: ResendInviteBody,
     request: Request,
+    background_tasks: BackgroundTasks,
     admin: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
@@ -323,7 +329,12 @@ async def resend_invite_route(
     user = await session.get(User, body.user_id)
     if user is None or user.tenant_id != admin.tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user_not_found")
-    await send_auth_link(user, purpose="invite", base_url=public_base_url(request))
+    background_tasks.add_task(
+        send_auth_link,
+        user,
+        purpose="invite",
+        base_url=public_base_url(request),
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

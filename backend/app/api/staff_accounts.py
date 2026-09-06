@@ -4,7 +4,7 @@ import uuid
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -209,6 +209,7 @@ async def get_staff_accounts(
 async def post_staff_account(
     body: StaffAccountCreate,
     request: Request,
+    background_tasks: BackgroundTasks,
     actor: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> StaffAccountOut:
@@ -238,8 +239,11 @@ async def post_staff_account(
             ) from None
         raise
     if staff_user.must_set_password:
-        await send_auth_link(
-            staff_user, purpose="invite", base_url=public_base_url(request)
+        background_tasks.add_task(
+            send_auth_link,
+            staff_user,
+            purpose="invite",
+            base_url=public_base_url(request),
         )
     perms = await _staff_permissions_for_user(
         session,
