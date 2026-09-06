@@ -224,7 +224,11 @@ class Settings(BaseSettings):
         ge=1,
         le=6,
         validation_alias=AliasChoices("WMS_YOOKASSA_VAT_CODE", "YOOKASSA_VAT_CODE"),
-        description="Ставка НДС в чеке: 1 — без НДС (проверено на боевом магазине).",
+        description=(
+            "Ставка НДС в чеке. 1 — без НДС: решение владельца от 06.09.2026, "
+            "«строго без НДС». Проверено на боевом магазине, менять только по "
+            "его прямому указанию."
+        ),
     )
     yookassa_tax_system_code: int | None = Field(
         default=None,
