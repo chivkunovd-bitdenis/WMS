@@ -282,7 +282,7 @@ export default function App() {
     logout,
     reloadMe,
   } = useAuth('fulfillment')
-  const { subscription, reloadSubscription } = useSubscription(token)
+  const { subscription, reloadSubscription, startPayment, syncPayment } = useSubscription(token)
   const navigate = useNavigate()
   const [pendingMpUnloadId, setPendingMpUnloadId] = useState<string | null>(null)
   const [warehouses, setWarehouses] = useState<WarehouseRow[]>([])
@@ -2776,6 +2776,8 @@ export default function App() {
           subscription={subscription}
           onLogout={onLogout}
           onRetry={() => void reloadSubscription()}
+          onPay={startPayment}
+          onCheckPayment={syncPayment}
         />
       )
     }

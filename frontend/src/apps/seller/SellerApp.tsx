@@ -66,7 +66,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
     applyToken,
     reloadMe,
   } = useAuth('seller')
-  const { subscription, reloadSubscription } = useSubscription(token)
+  const { subscription, reloadSubscription, syncPayment } = useSubscription(token)
 
   const [shopsBusy, setShopsBusy] = useState(false)
 
@@ -315,6 +315,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
           subscription={subscription}
           onLogout={() => logout()}
           onRetry={() => void reloadSubscription()}
+          onCheckPayment={syncPayment}
         />
       )
     }

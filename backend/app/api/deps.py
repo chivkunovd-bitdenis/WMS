@@ -80,6 +80,8 @@ _SUBSCRIPTION_FREE_PATHS = frozenset(
         "/auth/set-password",
         "/auth/request-password-reset",
         "/subscription",
+        "/subscription/pay",
+        "/subscription/sync",
         "/health",
     }
 )

@@ -207,6 +207,42 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("WMS_AUTH_LINK_TTL_HOURS", "AUTH_LINK_TTL_HOURS"),
         description="Сколько живёт ссылка из письма (приглашение и сброс пароля).",
     )
+    yookassa_shop_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("WMS_YOOKASSA_SHOP_ID", "YOOKASSA_SHOP_ID"),
+        description=(
+            "Магазин ЮKassa для оплаты подписки (WMS-382). Пусто — кнопка оплаты "
+            "не работает, а счётчик дней и блокировка живут своей жизнью."
+        ),
+    )
+    yookassa_secret_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("WMS_YOOKASSA_SECRET_KEY", "YOOKASSA_SECRET_KEY"),
+    )
+    yookassa_vat_code: int = Field(
+        default=1,
+        ge=1,
+        le=6,
+        validation_alias=AliasChoices("WMS_YOOKASSA_VAT_CODE", "YOOKASSA_VAT_CODE"),
+        description="Ставка НДС в чеке: 1 — без НДС (проверено на боевом магазине).",
+    )
+    yookassa_tax_system_code: int | None = Field(
+        default=None,
+        ge=1,
+        le=6,
+        validation_alias=AliasChoices(
+            "WMS_YOOKASSA_TAX_SYSTEM_CODE", "YOOKASSA_TAX_SYSTEM_CODE"
+        ),
+        description=(
+            "Система налогообложения в чеке. Не задана — не отправляем: магазин "
+            "с единственной системой подставляет её сам."
+        ),
+    )
+    yookassa_api_base: str = Field(
+        default="https://api.yookassa.ru",
+        validation_alias=AliasChoices("WMS_YOOKASSA_API_BASE", "YOOKASSA_API_BASE"),
+        description="Хост ЮKassa (подменяется в тестах).",
+    )
     subscription_price_rub: int = Field(
         default=10000,
         ge=0,
