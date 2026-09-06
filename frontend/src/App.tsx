@@ -4,6 +4,8 @@ import { apiUrl } from './api'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { ProfileLoadingScreen } from './screens/ProfileLoadingScreen'
 import { PublicAuthScreen } from './screens/PublicAuthScreen'
+import { SubscriptionBlockedScreen } from './screens/SubscriptionBlockedScreen'
+import { useSubscription } from './hooks/useSubscription'
 import { AuthedAppLayout } from './layouts/AuthedAppLayout'
 import { CatalogSection } from './sections/CatalogSection'
 import { readApiErrorMessage } from './utils/readApiErrorMessage'
@@ -272,14 +274,15 @@ export default function App() {
     portalMismatch,
     loading,
     authBusy,
-    pendingPasswordSetupEmail,
-    onRegister,
+    notice,
     onLogin,
-    onSetInitialPassword,
-    onCancelPasswordSetup,
+    onSetPasswordByLink,
+    onRequestPasswordReset,
+    clearNotice,
     logout,
     reloadMe,
   } = useAuth('fulfillment')
+  const { subscription, reloadSubscription } = useSubscription(token)
   const navigate = useNavigate()
   const [pendingMpUnloadId, setPendingMpUnloadId] = useState<string | null>(null)
   const [warehouses, setWarehouses] = useState<WarehouseRow[]>([])
@@ -2753,17 +2756,28 @@ export default function App() {
         <PublicAuthScreen
           variant="fulfillment"
           error={portalMismatch ?? error}
+          notice={notice}
           authBusy={authBusy}
-          pendingPasswordSetupEmail={pendingPasswordSetupEmail}
-          onRegister={(e) => void onRegister(e)}
           onLogin={(e) => void onLogin(e)}
-          onSetInitialPassword={(e) => void onSetInitialPassword(e)}
-          onCancelPasswordSetup={onCancelPasswordSetup}
+          onSetPasswordByLink={(e, linkToken) => void onSetPasswordByLink(e, linkToken)}
+          onRequestPasswordReset={(e) => void onRequestPasswordReset(e)}
+          clearNotice={clearNotice}
         />
       )
     }
     if (token && !me) {
       return <ProfileLoadingScreen loading={loading} onLogout={onLogout} />
+    }
+    // WMS-381: подписка закончилась — дальше работать нельзя, но человек должен
+    // видеть, почему и сколько платить.
+    if (subscription?.blocked) {
+      return (
+        <SubscriptionBlockedScreen
+          subscription={subscription}
+          onLogout={onLogout}
+          onRetry={() => void reloadSubscription()}
+        />
+      )
     }
     if (!me) {
       return null

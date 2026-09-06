@@ -8,6 +8,7 @@ from httpx import AsyncClient
 from app.db.session import SessionLocal
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
+from tests.auth_helpers import set_password_via_link
 
 FF_PERMISSION_DEFAULTS = {
     "settings": False,
@@ -63,10 +64,7 @@ async def _create_staff_headers(
         json={**FF_PERMISSION_DEFAULTS, "inventory": inventory},
     )
     assert patched.status_code == 200, patched.text
-    password = await async_client.post(
-        "/auth/set-initial-password",
-        json={"email": email, "password": "password123"},
-    )
+    password = await set_password_via_link(async_client, email, "password123")
     assert password.status_code == 200, password.text
     login = await async_client.post(
         "/auth/login",

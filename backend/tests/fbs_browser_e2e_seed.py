@@ -10,6 +10,7 @@ from typing import Any
 
 import httpx
 
+from tests.auth_helpers import set_password_via_link
 from tests.fbs_operator_emulator_seed import seed_operator_emulator_wms
 
 API_BASE = os.environ.get("FBS_E2E_API_BASE", "http://127.0.0.1:8000")
@@ -72,12 +73,7 @@ async def _main() -> None:
                     },
                 )
             )
-            await _require(
-                await api.post(
-                    "/auth/set-initial-password",
-                    json={"email": email, "password": role_password},
-                )
-            )
+            await _require(await set_password_via_link(api, email, role_password))
             role_logins[role_name] = {"email": email, "password": role_password}
 
         seller_email = f"fbs-e2e-seller-{seed.tenant_id}@example.com"
@@ -89,12 +85,7 @@ async def _main() -> None:
             ),
             expected=(201,),
         )
-        await _require(
-            await api.post(
-                "/auth/set-initial-password",
-                json={"email": seller_email, "password": role_password},
-            )
-        )
+        await _require(await set_password_via_link(api, seller_email, role_password))
         role_logins["seller"] = {"email": seller_email, "password": role_password}
 
         stock_sync = await _require(

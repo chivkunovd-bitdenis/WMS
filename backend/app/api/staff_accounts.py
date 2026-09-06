@@ -4,15 +4,15 @@ import uuid
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_fulfillment_admin
+from app.api.deps import get_current_user, public_base_url, require_fulfillment_admin
 from app.core.roles import FULFILLMENT_ADMIN
 from app.db.session import get_db
 from app.models.user import User
-from app.services.auth_service import AuthError, create_staff_user
+from app.services.auth_service import AuthError, create_staff_user, send_auth_link
 from app.services.staff_packaging_billing_service import (
     aggregate_staff_billing,
     current_billing_month_msk,
@@ -208,6 +208,7 @@ async def get_staff_accounts(
 @router.post("", response_model=StaffAccountOut, status_code=201, response_model_exclude_none=True)
 async def post_staff_account(
     body: StaffAccountCreate,
+    request: Request,
     actor: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> StaffAccountOut:
@@ -236,6 +237,10 @@ async def post_staff_account(
                 detail="forbidden",
             ) from None
         raise
+    if staff_user.must_set_password:
+        await send_auth_link(
+            staff_user, purpose="invite", base_url=public_base_url(request)
+        )
     perms = await _staff_permissions_for_user(
         session,
         tenant_id=actor.tenant_id,

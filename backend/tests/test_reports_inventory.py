@@ -13,6 +13,7 @@ from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.warehouse import Warehouse
 from app.services.tokens import decode_access_token
+from tests.auth_helpers import set_password_via_link
 
 
 async def _report_context(
@@ -94,10 +95,7 @@ async def _ff_staff_report_headers(
         },
     )
     assert permissions.status_code == 200, permissions.text
-    password = await async_client.post(
-        "/auth/set-initial-password",
-        json={"email": email, "password": "password123"},
-    )
+    password = await set_password_via_link(async_client, email, "password123")
     assert password.status_code == 200, password.text
     login = await async_client.post(
         "/auth/login", json={"email": email, "password": "password123"}

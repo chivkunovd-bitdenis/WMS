@@ -10,6 +10,7 @@ from app.db.session import SessionLocal
 from app.models.inbound_intake import InboundIntakeBox, InboundIntakeRequest
 from app.models.pallet import Pallet
 from app.models.warehouse import Warehouse
+from tests.auth_helpers import set_password_via_link
 
 
 async def _register_admin(client: AsyncClient) -> tuple[dict[str, str], uuid.UUID]:
@@ -56,10 +57,7 @@ async def _create_reception_staff(
         },
     )
     assert permissions.status_code == 200, permissions.text
-    password = await client.post(
-        "/auth/set-initial-password",
-        json={"email": email, "password": "password123"},
-    )
+    password = await set_password_via_link(client, email, "password123")
     assert password.status_code == 200, password.text
     login = await client.post(
         "/auth/login",

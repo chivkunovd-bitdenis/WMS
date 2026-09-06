@@ -6,6 +6,8 @@ import uuid
 import pytest
 from httpx import AsyncClient
 
+from tests.auth_helpers import set_password_via_link
+
 
 async def _register_catalog_admin(
     async_client: AsyncClient,
@@ -54,10 +56,7 @@ async def _create_ff_staff_headers(
         },
     )
     assert patched.status_code == 200, patched.text
-    password = await async_client.post(
-        "/auth/set-initial-password",
-        json={"email": staff_email, "password": "password123"},
-    )
+    password = await set_password_via_link(async_client, staff_email, "password123")
     assert password.status_code == 200, password.text
     login = await async_client.post(
         "/auth/login",

@@ -37,6 +37,7 @@ from app.services.storage_statement_service import (
     StorageStatementError,
     create_storage_tariff,
 )
+from tests.auth_helpers import set_password_via_link
 
 FF_PERMISSION_DEFAULTS = {
     "settings": False,
@@ -96,10 +97,7 @@ async def _create_inventory_staff(
         json={**FF_PERMISSION_DEFAULTS, "inventory": True},
     )
 
-    await async_client.post(
-        "/auth/set-initial-password",
-        json={"email": email, "password": "password123"},
-    )
+    await set_password_via_link(async_client, email, "password123")
 
     login = await async_client.post(
         "/auth/login",

@@ -17,6 +17,7 @@ from app.models.stock_direction import StockDirection, StockMonthlySnapshot
 from app.services import inventory_service, stock_direction_service
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
 from app.services.marketplace_unload_service import list_available_products
+from tests.auth_helpers import set_password_via_link
 from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 
@@ -145,10 +146,7 @@ async def _ff_staff_headers(
         },
     )
     assert permissions.status_code == 200, permissions.text
-    password = await async_client.post(
-        "/auth/set-initial-password",
-        json={"email": email, "password": "password123"},
-    )
+    password = await set_password_via_link(async_client, email, "password123")
     assert password.status_code == 200, password.text
     login = await async_client.post(
         "/auth/login",

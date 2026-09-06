@@ -20,6 +20,7 @@ from app.models.marking_code import (
     MarkingCode,
     MarkingCodeEvent,
 )
+from tests.auth_helpers import set_password_via_link
 
 
 async def _seed_printed_code(
@@ -175,10 +176,7 @@ async def test_defect_requires_packaging_access(async_client: AsyncClient) -> No
         json={"email": staff_email},
     )
     staff_id = created.json()["id"]
-    await async_client.post(
-        "/auth/set-initial-password",
-        json={"email": staff_email, "password": "password123"},
-    )
+    await set_password_via_link(async_client, staff_email, "password123")
     await async_client.patch(
         f"/auth/staff-accounts/{staff_id}/permissions",
         headers=h,

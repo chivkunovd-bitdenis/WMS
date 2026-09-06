@@ -15,6 +15,7 @@ from inbound_box_intake_helpers import (
 
 from app.services.background_job_service import JOB_TYPE_WILDBERRIES_CARDS_SYNC
 from app.services.box_barcode_service import is_wb_compatible_box_barcode
+from tests.auth_helpers import set_password_via_link
 
 E2E_BARCODE = "2045526738950"
 
@@ -2081,10 +2082,7 @@ async def test_marketplace_unload_pick_allocations_admin_only(
             "packaging": False,
         },
     )
-    await async_client.post(
-        "/auth/set-initial-password",
-        json={"email": staff_email, "password": "password123"},
-    )
+    await set_password_via_link(async_client, staff_email, "password123")
     login = await async_client.post(
         "/auth/login",
         json={"email": staff_email, "password": "password123"},

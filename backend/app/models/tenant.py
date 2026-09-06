@@ -50,6 +50,11 @@ class Tenant(Base):
     # when the tenant explicitly creates its first tariff version, rather
     # than backfilling already-finalised warehouse documents.
     billing_enabled_from: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # WMS-381. Подписка на систему: дата, по которую оплачено включительно.
+    # None — подписка не применяется, система работает без ограничений. Так
+    # выкатка не может заблокировать никого, кто уже работает: пока владелец
+    # не проставил дату, ничего не меняется.
+    subscription_paid_until: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

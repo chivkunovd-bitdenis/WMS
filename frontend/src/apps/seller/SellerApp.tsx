@@ -55,10 +55,11 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
     portalMismatch,
     loading,
     authBusy,
-    pendingPasswordSetupEmail,
+    notice,
     onLogin,
-    onSetInitialPassword,
-    onCancelPasswordSetup,
+    onSetPasswordByLink,
+    onRequestPasswordReset,
+    clearNotice,
     logout,
     applyToken,
     reloadMe,
@@ -290,12 +291,12 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
         <PublicAuthScreen
           variant="seller"
           error={portalMismatch ?? error}
+          notice={notice}
           authBusy={authBusy}
-          pendingPasswordSetupEmail={pendingPasswordSetupEmail}
-          onRegister={(e) => e.preventDefault()}
           onLogin={(e) => void onLogin(e)}
-          onSetInitialPassword={(e) => void onSetInitialPassword(e)}
-          onCancelPasswordSetup={onCancelPasswordSetup}
+          onSetPasswordByLink={(e, linkToken) => void onSetPasswordByLink(e, linkToken)}
+          onRequestPasswordReset={(e) => void onRequestPasswordReset(e)}
+          clearNotice={clearNotice}
         />
       )
     }

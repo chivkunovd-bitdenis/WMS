@@ -3,15 +3,20 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_fulfillment_admin, seller_line_product_scope
+from app.api.deps import (
+    get_current_user,
+    public_base_url,
+    require_fulfillment_admin,
+    seller_line_product_scope,
+)
 from app.db.session import get_db
 from app.models.seller import Seller
 from app.models.user import User
-from app.services.auth_service import AuthError, create_seller_with_account
+from app.services.auth_service import AuthError, create_seller_with_account, send_auth_link
 from app.services.catalog_service import (
     create_seller,
     list_ozon_connected_seller_ids,
@@ -56,6 +61,7 @@ class SellerWithAccountOut(BaseModel):
     user_id: str
     email: str
     role: str
+    invite_sent: bool = False
 
 
 class SellerWbCatalogAdminOut(BaseModel):
@@ -117,6 +123,7 @@ async def post_seller(
 @router.post("/with-account", response_model=SellerWithAccountOut, status_code=201)
 async def post_seller_with_account(
     body: SellerWithAccountCreate,
+    request: Request,
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> SellerWithAccountOut:
@@ -141,10 +148,16 @@ async def post_seller_with_account(
                 detail="forbidden",
             ) from None
         raise
+    invite_sent = False
+    if account.must_set_password:
+        invite_sent = await send_auth_link(
+            account, purpose="invite", base_url=public_base_url(request)
+        )
     return SellerWithAccountOut(
         seller_id=str(seller.id),
         seller_name=seller.name,
         user_id=str(account.id),
         email=account.email,
         role=account.role,
+        invite_sent=invite_sent,
     )

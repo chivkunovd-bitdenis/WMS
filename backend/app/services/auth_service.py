@@ -2,17 +2,27 @@ from __future__ import annotations
 
 import secrets
 import uuid
+from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER, FULFILLMENT_STAFF
+from app.core.settings import settings
 from app.models.ff_staff_permissions import FfStaffPermissions
 from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.user import User
+from app.services.auth_link_tokens import (
+    AuthLinkError,
+    build_link,
+    create_auth_link_token,
+    decode_auth_link_token,
+    fingerprint_matches,
+)
 from app.services.billing_tariff_matrix_service import ensure_disabled_tariff_matrix
+from app.services.mailer import send_email
 from app.services.passwords import hash_password, verify_password
 from app.services.tokens import create_access_token
 
@@ -216,3 +226,98 @@ async def set_initial_password(
 
 async def get_user_by_id(session: AsyncSession, user_id: uuid.UUID) -> User | None:
     return await session.get(User, user_id)
+
+
+_INVITE_SUBJECT = "Доступ в складскую систему"
+_RESET_SUBJECT = "Восстановление пароля в складской системе"
+
+
+def _invite_body(link: str, hours: int) -> str:
+    return (
+        "Здравствуйте!\n\n"
+        "Для вас создан личный кабинет в складской системе.\n"
+        "Чтобы задать пароль и войти, откройте ссылку:\n\n"
+        f"{link}\n\n"
+        f"Ссылка действует {hours} ч. Если вы её не запрашивали — просто удалите письмо.\n"
+    )
+
+
+def _reset_body(link: str, hours: int) -> str:
+    return (
+        "Здравствуйте!\n\n"
+        "Кто-то запросил восстановление пароля для вашего кабинета.\n"
+        "Чтобы задать новый пароль, откройте ссылку:\n\n"
+        f"{link}\n\n"
+        f"Ссылка действует {hours} ч. Если это были не вы — просто удалите письмо, "
+        "текущий пароль останется прежним.\n"
+    )
+
+
+async def send_auth_link(
+    user: User,
+    *,
+    purpose: Literal["invite", "reset"],
+    base_url: str,
+) -> bool:
+    """Отправить письмо со ссылкой. Возвращает True, если письмо ушло."""
+    token = create_auth_link_token(user, purpose=purpose)
+    link = build_link(
+        token,
+        base_url=base_url,
+        seller_portal=user.role == FULFILLMENT_SELLER,
+    )
+    hours = settings.auth_link_ttl_hours
+    if purpose == "invite":
+        subject, body = _INVITE_SUBJECT, _invite_body(link, hours)
+    else:
+        subject, body = _RESET_SUBJECT, _reset_body(link, hours)
+    return await send_email(to=user.email, subject=subject, body=body)
+
+
+async def request_password_reset(
+    session: AsyncSession,
+    *,
+    email: str,
+    base_url: str,
+) -> None:
+    """Отправить ссылку сброса, если такой пользователь есть.
+
+    Наружу ничего не сообщаем ни в каком случае: иначе форма превращается в
+    проверялку «есть ли такая почта в системе».
+    """
+    stmt = select(User).where(User.email == email.strip().lower())
+    result = await session.execute(stmt)
+    user = result.scalar_one_or_none()
+    if user is None:
+        return
+    await send_auth_link(user, purpose="reset", base_url=base_url)
+
+
+async def set_password_by_link(
+    session: AsyncSession,
+    *,
+    token: str,
+    password: str,
+) -> tuple[User, str]:
+    """Задать пароль по ссылке из письма — и для приглашения, и для сброса."""
+    try:
+        user_id, _purpose, fingerprint = decode_auth_link_token(token)
+    except AuthLinkError as exc:
+        raise AuthError(exc.args[0] if exc.args else "link_invalid") from exc
+    user = await session.get(User, user_id)
+    if user is None:
+        raise AuthError("link_invalid")
+    if not fingerprint_matches(user, fingerprint):
+        # Пароль уже сменили — значит ссылка отработала или устарела.
+        raise AuthError("link_used")
+    user.password_hash = hash_password(password)
+    user.must_set_password = False
+    await session.commit()
+    await session.refresh(user)
+    access_token = create_access_token(
+        user_id=user.id,
+        tenant_id=user.tenant_id,
+        role=user.role,
+        seller_id=user.seller_id,
+    )
+    return user, access_token
