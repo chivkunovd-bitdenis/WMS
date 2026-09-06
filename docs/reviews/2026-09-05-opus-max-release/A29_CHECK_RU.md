@@ -81,3 +81,24 @@ async def fail_after_box_commit(*args, **kwargs):
 также прежняя видимость нового короба и запрет менять проведённый документ.
 Ruff прошёл, root mypy двух сервисов прошёл. Исходник регрессии находится
 в backend/tests/test_inventory_counts.py. Ожидает отдельного CI и выкладки.
+
+## Проверка обычного действия в браузере
+
+На локальном API с PostgreSQL `wms375_browser_20260906` root открыл уже
+созданный синтетический черновик ИНВ-9C9B7A6E, нажал «Создать короб», затем
+заново открыл документ через список инвентаризаций. Короб
+`WHB-8SV3NZX47VGEY0` остался в дереве «Без ячеек». Отдельный READ ONLY SQL
+подтвердил одну связь: документ `9c9b7a6e-7ba6-4639-8c69-e7614955329d`,
+kind=box, container_id=`5cd62d4a-6bb5-4ebe-824e-e4c92c0e603c`.
+Документ остался draft; проведение и изменение фактических количеств
+не выполнялись. Это локальная операторская проверка, не проверка production.
+
+## CI и production
+
+CI33996231353 на23de655c завершён без падений:1905passed,13skipped,1xfailed;
+Ruff/mypy, frontend build/typecheck и backlog прошли. PR189 слит в etalon
+1491fcb31ebe30516bf77044dea01a3a8e90aef3. Штатный prod-update.sh завершился
+с кодом0. В22:43:11UTC05.09.2026 root сверил все260 Python-файлов каждого
+из API/worker/beat с этим коммитом: расхождений нет. Health200; HTTP index
+совпадает с файлом нового web-контейнера. Предыдущая выкладка сохранена
+в previous_deployments файла PRODUCTION_VERIFICATION.json.

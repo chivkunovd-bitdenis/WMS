@@ -1,5 +1,6 @@
 {
-  "deployed_sha": "9b34f3f7f99ed025ef07a59fe698682290836344",
+  "observed_at_utc": "2026-09-05T22:43:11.228577+00:00",
+  "deployed_sha": "1491fcb31ebe30516bf77044dea01a3a8e90aef3",
   "backend_sources": {
     "api": {
       "source_files_checked": 260,
@@ -19,5 +20,38 @@
     "body": "{\"status\":\"ok\"}"
   },
   "frontend_http_matches_running_container": true,
-  "frontend_index_sha256": "cb89e0e98ff5a082598df96322cc664d31605bc89e404cb4371078ed02af3816"
+  "frontend_index_sha256": "cb89e0e98ff5a082598df96322cc664d31605bc89e404cb4371078ed02af3816",
+  "ci_run": 33996231353,
+  "ci_result": {
+    "passed": 1905,
+    "skipped": 13,
+    "xfailed": 1
+  },
+  "pr": 189,
+  "deployment_exit_code": 0,
+  "previous_deployments": [
+    {
+      "deployed_sha": "9b34f3f7f99ed025ef07a59fe698682290836344",
+      "backend_sources": {
+        "api": {
+          "source_files_checked": 260,
+          "mismatches": []
+        },
+        "celery_worker": {
+          "source_files_checked": 260,
+          "mismatches": []
+        },
+        "celery_beat": {
+          "source_files_checked": 260,
+          "mismatches": []
+        }
+      },
+      "health": {
+        "http": 200,
+        "body": "{\"status\":\"ok\"}"
+      },
+      "frontend_http_matches_running_container": true,
+      "frontend_index_sha256": "cb89e0e98ff5a082598df96322cc664d31605bc89e404cb4371078ed02af3816"
+    }
+  ]
 }
