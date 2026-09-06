@@ -157,7 +157,7 @@ async def _seller_bindings(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     *,
-    served_only: bool,
+    publishing_only: bool,
 ) -> list[FbsWarehouseBinding]:
     """Привязки продавца ПО ВСЕМ площадкам сразу, а не по одной (WMS-341).
 
@@ -180,8 +180,10 @@ async def _seller_bindings(
         FbsWarehouseBinding.seller_id == seller_id,
         FbsWarehouseBinding.is_active.is_(True),
     )
-    if served_only:
-        stmt = stmt.where(FbsWarehouseBinding.served.is_(True))
+    if publishing_only:
+        # WMS-376. Свободный остаток делят между собой те привязки, которые его
+        # действительно транслируют. Обслуживание склада тут ни при чём.
+        stmt = stmt.where(FbsWarehouseBinding.stock_sync_enabled.is_(True))
     rows = list((await session.execute(stmt)).scalars().all())
     # Порядок важен: при раздаче остатка он определяет, кому достанется остаток
     # от округления. Стабильный порядок делает публикацию воспроизводимой.
@@ -377,7 +379,7 @@ async def get_rule_view(
             "product_without_seller",
             message="У товара нет продавца, поэтому складов WB для него тоже нет.",
         )
-    bindings = await _seller_bindings(session, tenant_id, product.seller_id, served_only=False)
+    bindings = await _seller_bindings(session, tenant_id, product.seller_id, publishing_only=False)
     served = [binding for binding in bindings if binding.served]
     pool_rows = await _pool_rows(session, product_id, [b.id for b in bindings])
     rule = rule_from_product(product, pool_rows, bindings)
@@ -436,7 +438,7 @@ async def get_rule_views(
 
     views: dict[uuid.UUID, FbsRuleView] = {}
     for seller_id, seller_products in products_by_seller.items():
-        bindings = await _seller_bindings(session, tenant_id, seller_id, served_only=False)
+        bindings = await _seller_bindings(session, tenant_id, seller_id, publishing_only=False)
         served = [binding for binding in bindings if binding.served]
         binding_ids = [binding.id for binding in bindings]
         seller_product_ids = [product.id for product in seller_products]
@@ -541,7 +543,7 @@ async def set_rule_for_products(
             message="У товара нет продавца, поэтому складов WB для него тоже нет.",
         )
 
-    bindings = await _seller_bindings(session, tenant_id, seller_id, served_only=False)
+    bindings = await _seller_bindings(session, tenant_id, seller_id, publishing_only=False)
     served = [binding for binding in bindings if binding.served]
     rule = _qualified_rule(rule, bindings)
     # Свободный остаток читается ЗДЕСЬ, в той же транзакции, что и запись, а не
@@ -753,10 +755,13 @@ async def publish_amounts_for_binding(
     publishable = [
         product for product in products if product.fbs_percent is not None or product.fbs_units_mode
     ]
-    if not publishable or not binding.served:
+    # WMS-376. Обслуживание склада решает только то, какие входящие заказы мы
+    # видим, и к трансляции остатка отношения не имеет. Публикацией распоряжается
+    # её собственная галка.
+    if not publishable or not binding.stock_sync_enabled:
         return {}
     seller_bindings = await _seller_bindings(
-        session, binding.tenant_id, binding.seller_id, served_only=True
+        session, binding.tenant_id, binding.seller_id, publishing_only=True
     )
     if not any(row.id == binding.id for row in seller_bindings):
         return {}

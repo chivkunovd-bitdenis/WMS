@@ -528,7 +528,11 @@ async def configure_seller_warehouse(
             wb_warehouse_id=wb_warehouse_id,
             wms_warehouse_id=wms_warehouse_id,
             is_active=True,
-            stock_sync_enabled=initial_served,
+            # WMS-376. Новая привязка обслуживает склад, но остатки не транслирует,
+            # пока это не включат отдельно. Иначе сопоставление склада само по себе
+            # начинало писать в кабинет продавца: так у ИП Горячкина Т.И. подключение
+            # Ozon 05.09.2026 сразу увело три карточки в ноль.
+            stock_sync_enabled=False,
             served=initial_served,
         )
         session.add(existing)
@@ -541,8 +545,12 @@ async def configure_seller_warehouse(
             existing.wms_warehouse_id = wms_warehouse_id
         existing.is_active = True
         if served is not None:
+            # WMS-376. Обслуживание склада и трансляция остатка — разные решения.
+            # Раньше эта строка гасила публикацию заодно с галкой обслуживания:
+            # оператор снимал «обслуживается», чтобы перестать видеть заказы, и
+            # молча выключал остатки по всему складу, по всем товарам сразу.
+            # Склад отвечает только за то, какие входящие заказы мы видим.
             existing.served = served
-            existing.stock_sync_enabled = served
 
     try:
         await session.commit()

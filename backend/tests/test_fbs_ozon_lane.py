@@ -703,7 +703,9 @@ async def test_ozon_partial_stock_confirmation_counts_only_what_ozon_confirmed(
         (True, True, True, True, 1),
         (True, True, True, False, 0),
         (False, True, True, True, 0),
-        (True, False, True, True, 0),
+        # WMS-376: обслуживание склада отбирает входящие заказы и трансляцию
+        # остатка не гасит — публикацией распоряжается только её своя галка.
+        (True, False, True, True, 1),
         (True, True, False, True, 0),
     ],
 )
@@ -751,7 +753,8 @@ async def test_ozon_publish_respects_configured_products_and_all_binding_flags(
         db_session, tenant.id, seller.id, OzonMarketplaceProvider(transport=transport)
     )
 
-    assert result.bindings_processed == int(active and served and sync_enabled)
+    # WMS-376: `served` в условие публикации не входит.
+    assert result.bindings_processed == int(active and sync_enabled)
     assert result.products_targeted == expected_targets
     assert result.products_confirmed == expected_targets
     assert result.products_zeroed == expected_targets
