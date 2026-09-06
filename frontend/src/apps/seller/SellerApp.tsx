@@ -9,6 +9,8 @@ import {
   resolveSellerPermissions,
 } from '../../utils/sellerPermissions'
 import { ProfileLoadingScreen } from '../../screens/ProfileLoadingScreen'
+import { SubscriptionBlockedScreen } from '../../screens/SubscriptionBlockedScreen'
+import { useSubscription } from '../../hooks/useSubscription'
 import { PublicAuthScreen } from '../../screens/PublicAuthScreen'
 import { SellerDocumentsScreen } from '../../screens/v2/SellerDocumentsScreen'
 import { SellerInboundDraftScreen } from '../../screens/v2/SellerInboundDraftScreen'
@@ -64,6 +66,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
     applyToken,
     reloadMe,
   } = useAuth('seller')
+  const { subscription, reloadSubscription } = useSubscription(token)
 
   const [shopsBusy, setShopsBusy] = useState(false)
 
@@ -302,6 +305,18 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
     }
     if (token && !me) {
       return <ProfileLoadingScreen loading={loading} onLogout={() => logout()} />
+    }
+    // WMS-381: подписку платит фулфилмент, но система у него и селлера общая.
+    // Кончилась — работа закрыта для всех в организации, и селлер должен видеть
+    // внятный экран, а не сыпь ошибок на каждом разделе.
+    if (subscription?.blocked) {
+      return (
+        <SubscriptionBlockedScreen
+          subscription={subscription}
+          onLogout={() => logout()}
+          onRetry={() => void reloadSubscription()}
+        />
+      )
     }
     if (!me) {
       return null
