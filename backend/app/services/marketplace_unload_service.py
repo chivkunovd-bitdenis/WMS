@@ -1039,12 +1039,7 @@ async def complete_unload(
 
     from app.services import packaging_task_service as pkg_svc
 
-    try:
-        await pkg_svc.assert_unload_packaging_done(session, tenant_id, request_id)
-    except pkg_svc.PackagingTaskServiceError as exc:
-        if exc.code == "task_not_done":
-            raise MarketplaceUnloadError("packaging_not_done") from exc
-        raise
+    await pkg_svc.assert_unload_marking_done(session, tenant_id, request_id)
 
     distributed = distributed_qty_by_product(req)
     if not distributed or sum(distributed.values()) < 1:

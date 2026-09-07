@@ -346,10 +346,6 @@ async def assign_orders(
     orders = {order.id: order for order in result.scalars().all()}
     if len(orders) != len(unique_ids):
         raise FbsPackingBoxError("order_not_in_supply")
-    if supply.marketplace != "wb" and any(
-        order.pack_status != PACK_STATUS_PACKED for order in orders.values()
-    ):
-        raise FbsPackingBoxError("order_not_packed")
     assigned = await session.execute(
         select(FbsPackingBoxItem).where(
             FbsPackingBoxItem.tenant_id == tenant_id,

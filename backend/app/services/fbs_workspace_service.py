@@ -259,9 +259,7 @@ async def _inject_order_pick_fallback(
         order = orders_by_id.get(str(item.get("id")))
         if order is None or order.product_id is None:
             continue
-        if order.pick_status == PICK_STATUS_PICKED or (
-            supply.marketplace != "wb" and order.pack_status == PACK_STATUS_PACKED
-        ):
+        if order.pick_status == PICK_STATUS_PICKED:
             continue
         inventory = item.get("inventory")
         if not isinstance(inventory, dict):

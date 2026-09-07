@@ -135,7 +135,9 @@ async def _finish_unload_packaging(
 
 
 @pytest.mark.asyncio
-async def test_packaging_task_manual_convert(async_client: AsyncClient) -> None:
+async def test_packaging_task_manual_records_fact_without_inventory_convert(
+    async_client: AsyncClient,
+) -> None:
     h = await _register_admin(async_client)
     wh = await async_client.post("/warehouses", headers=h, json={"name": "W", "code": "w-pkg"})
     assert wh.status_code == 200
@@ -212,8 +214,8 @@ async def test_packaging_task_manual_convert(async_client: AsyncClient) -> None:
     assert bal.status_code == 200
     row = next(r for r in bal.json() if r["product_id"] == product_id)
     assert row["quantity"] == 10
-    assert row["quantity_unpacked"] == 6
-    assert row["quantity_packed"] == 4
+    assert row["quantity_unpacked"] == 10
+    assert row["quantity_packed"] == 0
 
 
 @pytest.mark.asyncio
@@ -432,8 +434,8 @@ async def test_packaging_scan_manual_undo_and_done_history(
         params={"storage_location_id": loc_id},
     )
     row = next(r for r in bal.json() if r["product_id"] == product_id)
-    assert row["quantity_unpacked"] == 2
-    assert row["quantity_packed"] == 1
+    assert row["quantity_unpacked"] == 3
+    assert row["quantity_packed"] == 0
 
     repack = await async_client.post(
         f"/operations/packaging-tasks/{task_id}/lines/{line_id}/pack",
@@ -468,7 +470,7 @@ async def test_packaging_scan_manual_undo_and_done_history(
 
 
 @pytest.mark.asyncio
-async def test_packaging_blocks_mp_ship_until_done(
+async def test_packaging_does_not_block_mp_ship_until_done(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -546,7 +548,7 @@ async def test_packaging_blocks_mp_ship_until_done(
     )
     assert pkg_get.status_code == 200, pkg_get.text
 
-    await _finish_unload_packaging(async_client, h, mid)
+    assert pkg_get.json()["status"] != STATUS_DONE
 
     manual = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/manual-line",

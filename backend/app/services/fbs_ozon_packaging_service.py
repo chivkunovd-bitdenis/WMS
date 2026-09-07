@@ -13,7 +13,6 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_CANCELLED,
     PACK_STATUS_PACKED,
     PACK_STATUS_PENDING,
-    PICK_STATUS_PICKED,
     FbsOrder,
 )
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
@@ -90,13 +89,9 @@ async def resolve_order_for_pack_unit(
     if explicit_order_id is not None and not candidates:
         raise OzonPackagingError("order_product_mismatch")
     for order in candidates:
-        if order.pick_status != PICK_STATUS_PICKED:
-            continue
         fulfillment = await active_order_fulfillment(session, order.id)
         if packed_quantity(fulfillment, product_id) < required_quantity(order, product_id):
             return order, fulfillment
-    if any(order.pick_status != PICK_STATUS_PICKED for order in candidates):
-        raise OzonPackagingError("order_not_picked")
     raise OzonPackagingError("no_eligible_order")
 
 
@@ -201,40 +196,17 @@ async def plan_shipment_sources(
                 continue
             # An earlier attempt may have stopped before assembly. Its source
             # recipe must not retain an older quantity after a real composition change.
-        fulfillment = await active_order_fulfillment(session, order.id)
-        units = packed_units(fulfillment)
-        grouped: dict[tuple[uuid.UUID, uuid.UUID], int] = defaultdict(int)
-        try:
-            for unit in units:
-                grouped[
-                    (uuid.UUID(unit["product_id"]), uuid.UUID(unit["storage_location_id"]))
-                ] += 1
-        except (KeyError, ValueError) as exc:
-            raise OzonPackagingError("invalid_ozon_packaging_fulfillment") from exc
-        packed: Counter[uuid.UUID] = Counter()
-        for (product_id, _), quantity in grouped.items():
-            packed[product_id] += quantity
-        if units and packed == expected:
-            recipes[order.id] = [
-                {
-                    "product_id": str(product_id),
-                    "storage_location_id": str(location_id),
-                    "quantity": quantity,
-                }
-                for (product_id, location_id), quantity in grouped.items()
-            ]
-        else:
-            # Unit requests allow the existing planner to span several stock keys
-            # for a single position, without silently discarding repeated order IDs.
-            requests.extend(
-                source_svc.FbsShipmentSourceRequest(
-                    fbs_order_id=order.id,
-                    product_id=product_id,
-                    quantity=1,
-                )
-                for product_id, quantity in expected.items()
-                for _ in range(quantity)
+        # Packing is a work fact, not a source selection. Resolve the physical
+        # pick/container/warehouse through the same planner as unpacked orders.
+        requests.extend(
+            source_svc.FbsShipmentSourceRequest(
+                fbs_order_id=order.id,
+                product_id=product_id,
+                quantity=1,
             )
+            for product_id, quantity in expected.items()
+            for _ in range(quantity)
+        )
     for recipe in recipes.values():
         for row in recipe:
             consumption_key = (
