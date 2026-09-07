@@ -551,8 +551,9 @@ def _parse_csv_rows(content: bytes) -> list[dict[str, str]]:
                 )
         if rows:
             return rows
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    if len(lines) > 1 and not any(sep in lines[0] for sep in (",", ";", "\t")):
+    # GS is a field separator inside a KIZ, not a record boundary.
+    lines = [ln.strip() for ln in re.split(r"[\r\n]+", text) if ln.strip()]
+    if lines and not any(sep in lines[0] for sep in (",", ";", "\t")):
         return [{"cis": ln, "gtin": "", "sku": ""} for ln in lines]
     return []
 
@@ -599,9 +600,11 @@ def _parse_pdf_label_rows(content: bytes) -> list[dict[str, str | bytes]]:
         raise MarkingCodeServiceError("pdf_support_unavailable") from exc
     rows: list[dict[str, str | bytes]] = []
     seen: set[str] = set()
+    if not artifacts:
+        raise MarkingCodeServiceError("no_valid_codes")
     for artifact in artifacts:
-        cis = normalize_cis(artifact.cis)
-        if cis is None or cis in seen:
+        cis = artifact.cis
+        if cis in seen:
             continue
         seen.add(cis)
         rows.append(
@@ -629,13 +632,21 @@ def is_printable_label_artifact(pdf_bytes: bytes | None, cis_code: str | None = 
     try:
         for page_index in range(doc.page_count):
             _extract_cis_codes_from_text(doc[page_index].get_text("text"), seen)
+        if len(seen) == 1 and (expected is None or expected in seen):
+            return True
+        # Full imported codes need not appear in the human-readable PDF caption.
+        from app.services.marking_datamatrix_service import decode_datamatrix_codes_on_pdf_page
+
+        decoded = {
+            item.value
+            for page in doc
+            for item in decode_datamatrix_codes_on_pdf_page(page)
+        }
+        return len(decoded) == 1 and (cis_code is None or cis_code in decoded)
     except Exception:
         return False
     finally:
         doc.close()
-    if expected is not None and expected not in seen:
-        return False
-    return len(seen) == 1
 
 
 _MAX_LABEL_ARTIFACT_TAPE = 500
@@ -915,7 +926,9 @@ def _group_cis_codes_from_rows(
     invalid_count = 0
     duplicate_count = 0
     for row in parsed_rows:
-        cis = normalize_cis(str(row.get("cis", "")))
+        raw_cis = str(row.get("cis", ""))
+        # Decoded PDF payloads are already validated; retain the original bytes.
+        cis = raw_cis if row.get("label_pdf") else normalize_cis(raw_cis)
         if cis is None:
             invalid_count += 1
             continue
