@@ -308,14 +308,18 @@ def cz_copies_from_layout(layout: PrintLayout) -> int:
     return total if total > 0 else 1
 
 
-def _printed_code_infos(codes: list[MarkingCode]) -> tuple[PrintedCodeInfo, ...]:
+async def _printed_code_infos(codes: list[MarkingCode]) -> tuple[PrintedCodeInfo, ...]:
+    printable = await asyncio.to_thread(
+        _label_artifact_flags,
+        [(code.label_artifact_pdf, code.cis_code) for code in codes],
+    )
     return tuple(
         PrintedCodeInfo(
             id=code.id,
             cis_code=code.cis_code,
-            has_label_artifact=is_printable_label_artifact(code.label_artifact_pdf, code.cis_code),
+            has_label_artifact=has_artifact,
         )
-        for code in codes
+        for code, has_artifact in zip(codes, printable, strict=True)
     )
 
 
@@ -652,6 +656,29 @@ def is_printable_label_artifact(pdf_bytes: bytes | None, cis_code: str | None = 
 _MAX_LABEL_ARTIFACT_TAPE = 500
 
 
+def _label_artifact_flags(artifacts: list[tuple[bytes | None, str]]) -> list[bool]:
+    """Validate a batch of immutable payloads without taking ORM objects into a worker."""
+    return [is_printable_label_artifact(pdf, cis) for pdf, cis in artifacts]
+
+
+def _validated_label_artifact_tape(
+    artifacts: list[tuple[bytes | None, str] | None],
+    page_width_mm: float | None,
+    page_height_mm: float | None,
+) -> bytes:
+    from app.services.marking_label_artifact_service import merge_label_artifact_pdfs_for_print
+
+    parts: list[bytes] = []
+    for artifact in artifacts:
+        if artifact is None:
+            raise MarkingCodeServiceError("code_not_found")
+        pdf_bytes, cis_code = artifact
+        if not pdf_bytes or not is_printable_label_artifact(pdf_bytes, cis_code):
+            raise MarkingCodeServiceError("label_artifact_missing")
+        parts.append(pdf_bytes)
+    return merge_label_artifact_pdfs_for_print(parts, page_width_mm, page_height_mm)
+
+
 async def build_label_artifact_tape_pdf(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -665,22 +692,18 @@ async def build_label_artifact_tape_pdf(
     if len(code_ids) > _MAX_LABEL_ARTIFACT_TAPE:
         raise MarkingCodeServiceError("too_many_codes")
 
-    from app.services.marking_label_artifact_service import merge_label_artifact_pdfs_for_print
-
-    parts: list[bytes] = []
+    artifacts: list[tuple[bytes | None, str] | None] = []
     for code_id in code_ids:
         code = await session.get(MarkingCode, code_id)
-        if code is None or code.tenant_id != tenant_id:
-            raise MarkingCodeServiceError("code_not_found")
-        pdf_bytes = code.label_artifact_pdf
-        if not pdf_bytes or not is_printable_label_artifact(pdf_bytes, code.cis_code):
-            raise MarkingCodeServiceError("label_artifact_missing")
-        parts.append(pdf_bytes)
-    # PyMuPDF is CPU-bound. Keep it outside the API event-loop thread so a
-    # large tape does not pause unrelated operator requests.
+        artifacts.append(
+            None if code is None or code.tenant_id != tenant_id
+            else (code.label_artifact_pdf, code.cis_code)
+        )
+    # Both PDF/DataMatrix validation and merging are CPU-bound. Transfer bytes
+    # once for the whole tape; keep database access and ORM objects on this thread.
     return await asyncio.to_thread(
-        merge_label_artifact_pdfs_for_print,
-        parts,
+        _validated_label_artifact_tape,
+        artifacts,
         page_width_mm,
         page_height_mm,
     )
@@ -700,6 +723,19 @@ def parse_import_file(filename: str, content: bytes) -> list[dict[str, str | byt
     if lower.endswith((".csv", ".txt", ".tsv")):
         return [{**row, "label_pdf": b""} for row in _parse_csv_rows(content)]
     raise MarkingCodeServiceError("unsupported_file_type")
+
+
+def _parse_import_files(files: list[tuple[str, bytes]]) -> list[dict[str, str | bytes]]:
+    parsed_rows: list[dict[str, str | bytes]] = []
+    for filename, content in files:
+        try:
+            rows = parse_import_file(filename, content)
+        except MarkingCodeServiceError:
+            raise
+        except (UnicodeError, OSError, ValueError) as exc:
+            raise MarkingCodeServiceError("parse_failed") from exc
+        parsed_rows.extend(rows)
+    return parsed_rows
 
 
 async def _resolve_product_for_row(
@@ -1049,15 +1085,7 @@ async def preview_marking_import(
     if not files:
         raise MarkingCodeServiceError("empty_file")
 
-    parsed_rows: list[dict[str, str | bytes]] = []
-    for filename, content in files:
-        try:
-            rows = parse_import_file(filename, content)
-        except MarkingCodeServiceError:
-            raise
-        except (UnicodeError, OSError, ValueError) as exc:
-            raise MarkingCodeServiceError("parse_failed") from exc
-        parsed_rows.extend(rows)
+    parsed_rows = await asyncio.to_thread(_parse_import_files, files)
 
     if not parsed_rows:
         raise MarkingCodeServiceError("empty_file")
@@ -1186,17 +1214,8 @@ async def import_marking_codes(
     if not files:
         raise MarkingCodeServiceError("empty_file")
 
-    parsed_rows: list[dict[str, str | bytes]] = []
-    filenames: list[str] = []
-    for filename, content in files:
-        try:
-            rows = parse_import_file(filename, content)
-        except MarkingCodeServiceError:
-            raise
-        except (UnicodeError, OSError, ValueError) as exc:
-            raise MarkingCodeServiceError("parse_failed") from exc
-        parsed_rows.extend(rows)
-        filenames.append(filename)
+    parsed_rows = await asyncio.to_thread(_parse_import_files, files)
+    filenames = [filename for filename, _content in files]
 
     if not parsed_rows:
         raise MarkingCodeServiceError("empty_file")
@@ -1472,15 +1491,19 @@ async def list_product_codes(
         .order_by(MarkingCode.created_at.desc())
     )
     codes = list((await session.execute(stmt)).scalars().all())
+    printable = await asyncio.to_thread(
+        _label_artifact_flags,
+        [(code.label_artifact_pdf, code.cis_code) for code in codes],
+    )
     return [
         ProductMarkingCodeRow(
             id=code.id,
             cis_code=code.cis_code,
             status=code.status,
             created_at=code.created_at,
-            has_label_artifact=is_printable_label_artifact(code.label_artifact_pdf, code.cis_code),
+            has_label_artifact=has_artifact,
         )
-        for code in codes
+        for code, has_artifact in zip(codes, printable, strict=True)
     ]
 
 
@@ -1650,7 +1673,7 @@ async def print_codes_for_packaging_line(
             is_reprint=True,
             codes=[c.cis_code for c in codes],
             layout=print_layout,
-            printed_codes=_printed_code_infos(codes),
+            printed_codes=await _printed_code_infos(codes),
         )
 
     already_printed = int(line.qty_marking_printed)
@@ -1760,7 +1783,7 @@ async def print_codes_for_packaging_line(
         codes=[c.cis_code for c in printed_slice],
         layout=print_layout,
         shortage=shortage if shortage > 0 else None,
-        printed_codes=_printed_code_infos(printed_slice),
+        printed_codes=await _printed_code_infos(printed_slice),
     )
 
 
@@ -1877,7 +1900,7 @@ async def print_codes_for_product(
         codes=[c.cis_code for c in printed_slice],
         layout=print_layout,
         shortage=shortage if shortage > 0 else None,
-        printed_codes=_printed_code_infos(printed_slice),
+        printed_codes=await _printed_code_infos(printed_slice),
     )
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import uuid
@@ -1255,12 +1256,14 @@ async def get_marking_code_label_artifact(
     if code is None or code.tenant_id != user.tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="code_not_found")
     pdf_bytes = code.label_artifact_pdf
-    if not pdf_bytes or not mc_svc.is_printable_label_artifact(pdf_bytes, code.cis_code):
+    if not pdf_bytes or not await asyncio.to_thread(
+        mc_svc.is_printable_label_artifact, pdf_bytes, code.cis_code
+    ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="label_artifact_missing")
     if format == "pdf":
         return Response(content=pdf_bytes, media_type="application/pdf")
     try:
-        png_bytes = pdf_bytes_to_png(pdf_bytes)
+        png_bytes = await asyncio.to_thread(pdf_bytes_to_png, pdf_bytes)
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
