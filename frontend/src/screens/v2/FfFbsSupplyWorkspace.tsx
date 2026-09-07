@@ -1239,6 +1239,10 @@ export function FfFbsSupplyWorkspace({
     || ['in_delivery', 'done'].includes(workspace?.supply.status ?? '')
   const wbOrderIdByOrderId = new Map((workspace?.orders ?? []).map((order) => [order.id, order.wb_order_id]))
   const deliveryChecks = summarizeDeliveryChecks(deliveryPreflight?.checks ?? [], wbOrderIdByOrderId)
+  const cancelledDeliveryOrders = isOzonSupply ? [] : deliveryPreflight?.cancelled_orders ?? []
+  const deliveryConfirmLabel = cancelledDeliveryOrders.length > 0
+    ? 'Передать без этих заказов'
+    : `Передать в ${providerName}`
   const packagingEditable = !deliveryConfirmed
   // Короба — рабочая поверхность, а не ступень после упаковки. Серверный stage
   // не гасит действия внутри открытой вкладки; редактирование прекращается
@@ -2441,22 +2445,38 @@ export function FfFbsSupplyWorkspace({
                   <Typography key={line} variant="body2">{line}</Typography>
                 ))}
                 <Typography variant="caption" color="text.secondary">
-                  Проверьте список. Чтобы продолжить, нажмите «Передать в {providerName}».
+                  Проверьте список. Чтобы продолжить, нажмите «{deliveryConfirmLabel}».
                   Стикеры, Честный знак и QR можно напечатать и после передачи.
                 </Typography>
+              </Alert>
+            ) : null}
+            {cancelledDeliveryOrders.length > 0 ? (
+              <Alert severity="warning">
+                <Typography variant="subtitle2">Отменённые заказы</Typography>
+                <Typography variant="body2">Выньте эти товары из коробов перед передачей. Они будут исключены из поставки.</Typography>
+                {cancelledDeliveryOrders.map((order) => (
+                  <Typography key={order.order_id} variant="body2">
+                    WB {order.wb_order_id} · {order.article ?? 'Артикул не указан'}
+                    {order.product_name ? ` · ${order.product_name}` : ''}
+                    {' · '}{order.boxes.length > 0
+                      ? order.boxes.map((box) => `Короб ${box.box_number} (${box.box_barcode})`).join(', ')
+                      : 'Короб не назначен'}
+                  </Typography>
+                ))}
               </Alert>
             ) : null}
             {!deliveryPreflightLoading
               && !deliveryPreflightError
               && deliveryChecks.blockers.length === 0
               && deliveryChecks.warnings.length === 0
+              && cancelledDeliveryOrders.length === 0
               && deliveryPreflight ? (
                 <Alert severity="success">Все проверки пройдены. Поставку можно передать.</Alert>
               ) : null}
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeliverConfirmOpen(false)}>Не передавать</Button>
+          <Button onClick={() => setDeliverConfirmOpen(false)}>{cancelledDeliveryOrders.length > 0 ? 'Вернуться и поправить' : 'Не передавать'}</Button>
           <Button
             variant="contained"
             disabled={fbsDeliveryConfirmDisabled(
@@ -2470,7 +2490,7 @@ export function FfFbsSupplyWorkspace({
             }}
             data-testid="fbs-deliver-confirm"
           >
-            Передать в {providerName}
+            {deliveryConfirmLabel}
           </Button>
         </DialogActions>
       </Dialog>

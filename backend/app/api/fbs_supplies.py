@@ -550,11 +550,26 @@ class FbsDeliveryCheckOut(BaseModel):
     order_id: str | None
 
 
+class FbsCancelledDeliveryBoxOut(BaseModel):
+    box_id: str
+    box_number: int
+    box_barcode: str
+
+
+class FbsCancelledDeliveryOrderOut(BaseModel):
+    order_id: str
+    wb_order_id: int
+    article: str | None
+    product_name: str | None
+    boxes: list[FbsCancelledDeliveryBoxOut]
+
+
 class FbsDeliveryPreflightOut(BaseModel):
     can_deliver: bool
     version: str
     checked_at: str
     checks: list[FbsDeliveryCheckOut]
+    cancelled_orders: list[FbsCancelledDeliveryOrderOut] = Field(default_factory=list)
 
 
 class FbsSupplyDeliverBody(BaseModel):
