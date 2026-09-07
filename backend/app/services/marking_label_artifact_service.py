@@ -320,27 +320,26 @@ def _fallback_label_rect(
     bbox = cast(fitz.Rect, cis_bbox)
     page = cast(fitz.Rect, page_rect)
     content = cast(fitz.Rect, content_rect)
-    ordered = sorted(
-        cis_boxes,
-        key=lambda item: (cast(fitz.Rect, item[1]).y0, cast(fitz.Rect, item[1]).x0),
-    )
-    index = next(i for i, (cis, _) in enumerate(ordered) if cast(fitz.Rect, _).intersects(bbox))
-    prev_box = cast(fitz.Rect, ordered[index - 1][1]) if index > 0 else None
-    next_box = cast(fitz.Rect, ordered[index + 1][1]) if index + 1 < len(ordered) else None
-
-    y0 = content.y0
-    y1 = content.y1
-    if prev_box is not None and abs(prev_box.y0 - bbox.y0) < abs(prev_box.x0 - bbox.x0):
-        y0 = max(content.y0, (prev_box.y1 + bbox.y0) / 2)
-    if next_box is not None and abs(next_box.y0 - bbox.y0) < abs(next_box.x0 - bbox.x0):
-        y1 = min(content.y1, (bbox.y1 + next_box.y0) / 2)
-
-    x0 = content.x0
-    x1 = content.x1
-    if prev_box is not None and abs(prev_box.x0 - bbox.x0) >= abs(prev_box.y0 - bbox.y0):
-        x0 = max(content.x0, (prev_box.x1 + bbox.x0) / 2)
-    if next_box is not None and abs(next_box.x0 - bbox.x0) >= abs(next_box.y0 - bbox.y0):
-        x1 = min(content.x1, (bbox.x1 + next_box.x0) / 2)
+    x0, y0, x1, y1 = content.x0, content.y0, content.x1, content.y1
+    for _, rect in cis_boxes:
+        other = cast(fitz.Rect, rect)
+        if other == bbox:
+            continue
+        dx = abs((other.x0 + other.x1) - (bbox.x0 + bbox.x1))
+        dy = abs((other.y0 + other.y1) - (bbox.y0 + bbox.y1))
+        same_row = max(other.y0, bbox.y0) < min(other.y1, bbox.y1)
+        same_column = max(other.x0, bbox.x0) < min(other.x1, bbox.x1)
+        # Separate neighbours along the gap between them, never through a symbol.
+        if same_row or dx >= dy:
+            if other.x1 <= bbox.x0:
+                x0 = max(x0, (other.x1 + bbox.x0) / 2)
+            elif other.x0 >= bbox.x1:
+                x1 = min(x1, (bbox.x1 + other.x0) / 2)
+        if same_column or dy > dx:
+            if other.y1 <= bbox.y0:
+                y0 = max(y0, (other.y1 + bbox.y0) / 2)
+            elif other.y0 >= bbox.y1:
+                y1 = min(y1, (bbox.y1 + other.y0) / 2)
 
     expanded = fitz.Rect(x0, y0, x1, y1)
     pad = max(2.0, min(bbox.width, bbox.height) * 0.08)
@@ -379,14 +378,34 @@ def extract_label_artifacts_from_pdf(content: bytes) -> list[ExtractedLabelArtif
     except ImportError as exc:
         raise RuntimeError("pdf_support_unavailable") from exc
 
-    _, _, extract_gtin_from_cis = _cis_helpers()
+    from app.services.marking_datamatrix_service import decode_datamatrix_codes_on_pdf_page
+
+    _, normalize_cis, extract_gtin_from_cis = _cis_helpers()
     artifacts: list[ExtractedLabelArtifact] = []
     seen: set[str] = set()
     doc = fitz.open(stream=content, filetype="pdf")
     try:
         for page_index in range(doc.page_count):
             page = doc[page_index]
-            cis_boxes = _find_cis_boxes_on_page(page)
+            decoded = decode_datamatrix_codes_on_pdf_page(page)
+            text_boxes = _find_cis_boxes_on_page(page)
+            cis_boxes: list[tuple[str, object]] = []
+            for item in decoded:
+                if normalize_cis(item.value) is None or not extract_gtin_from_cis(item.value):
+                    continue
+                # Text may locate a label, but never supplies or completes its payload.
+                box = fitz.Rect(item.page_rect)
+                matching_text = [
+                    fitz.Rect(rect) for prefix, rect in text_boxes
+                    if item.value == prefix or item.value.startswith(prefix + "\x1d")
+                ]
+                if matching_text:
+                    nearest = min(
+                        matching_text,
+                        key=lambda rect: abs(rect.x0 - box.x0) + abs(rect.y0 - box.y0),
+                    )
+                    box |= nearest
+                cis_boxes.append((item.value, box))
             if not cis_boxes:
                 continue
             frames = _drawing_rects(page)

@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import fitz
 import pytest
 from httpx import AsyncClient
+from marking_datamatrix_test_helpers import encode_datamatrix_png
 from sqlalchemy import select
 from test_packaging_tasks import _register_admin
 
@@ -21,6 +22,7 @@ def _build_label_pdf(cis: str, footer_text: str) -> bytes:
     page.insert_text((12, 24), "Честный знак", fontsize=8)
     page.insert_text((12, 42), cis, fontsize=6)
     page.insert_text((12, 58), footer_text, fontsize=7)
+    page.insert_image(fitz.Rect(60, 64, 106, 110), stream=encode_datamatrix_png(cis))
     pdf_bytes = bytes(doc.tobytes())
     doc.close()
     return pdf_bytes
@@ -33,6 +35,8 @@ def _build_two_label_pdf(cis_a: str, cis_b: str) -> bytes:
     page.insert_text((12, 42), cis_a, fontsize=6)
     page.insert_text((190, 24), "Честный знак", fontsize=8)
     page.insert_text((190, 42), cis_b, fontsize=6)
+    page.insert_image(fitz.Rect(20, 60, 170, 210), stream=encode_datamatrix_png(cis_a))
+    page.insert_image(fitz.Rect(200, 60, 350, 210), stream=encode_datamatrix_png(cis_b))
     pdf_bytes = bytes(doc.tobytes())
     doc.close()
     return pdf_bytes
@@ -261,6 +265,7 @@ def _build_seller_style_label_pdf(cis: str) -> bytes:
     page.insert_text((12, 54), "Й цвет черный.белый.тд", fontsize=7)
     page.insert_text((12, 66), "разм L", fontsize=7)
     page.insert_text((12, 90), cis, fontsize=6)
+    page.insert_image(fitz.Rect(118, 10, 164, 65), stream=encode_datamatrix_png(cis))
     pdf_bytes = bytes(doc.tobytes())
     doc.close()
     return pdf_bytes
@@ -343,6 +348,10 @@ def _build_two_line_ai_wrapped_label_pdf(gtin14: str, serial: str) -> bytes:
     page.insert_text((12, 102), f"(21) {serial}", fontsize=6)
     page.insert_text((12, 120), "Состав: внешний слой 100% полиэстер,", fontsize=7)
     page.insert_text((12, 132), "наполнитель 100% био-пух", fontsize=7)
+    page.insert_image(
+        fitz.Rect(40, 142, 120, 222),
+        stream=encode_datamatrix_png(f"01{gtin14}21{serial}"),
+    )
     pdf_bytes = bytes(doc.tobytes())
     doc.close()
     return pdf_bytes
