@@ -1682,10 +1682,11 @@ async def _persist_confirmed_delivery(
     source_plan: source_svc.FbsShipmentSourcePlan | None = None,
 ) -> None:
     """Persist marketplace confirmation and the matching local stock result."""
+    confirmed_at = operation.confirmed_at
     if source_plan is None:
-        # Ozon still uses its packaging write-off ledger.  Keep the established
-        # atomic order here: its idempotent retry path returns an already
-        # confirmed operation and does not replay unfinished local stock work.
+        # Ozon writes stock off at confirmed handover; its source recipe uses
+        # the historically named packaging ledger. Keep local stock and the
+        # operation confirmation in the same transaction.
         await _apply_local_delivered(session, supply, orders, actor_user_id, source_plan, operation)
         await mark_deliver_operation_confirmed(
             session,
@@ -1693,6 +1694,8 @@ async def _persist_confirmed_delivery(
             wb_supply_id=supply.wb_supply_id,
             local_supply_id=supply.id,
         )
+        if confirmed_at is not None:
+            operation.confirmed_at = confirmed_at
         await session.commit()
         return
 
@@ -1713,6 +1716,9 @@ async def _persist_confirmed_delivery(
         wb_supply_id=supply.wb_supply_id,
         local_supply_id=supply.id,
     )
+    # A local recovery must retain the first persisted marketplace confirmation.
+    if confirmed_at is not None:
+        operation.confirmed_at = confirmed_at
     await session.commit()
     await _apply_local_delivered(session, supply, orders, actor_user_id, source_plan, operation)
     # The optional QR fetch happens after this second checkpoint as well.
