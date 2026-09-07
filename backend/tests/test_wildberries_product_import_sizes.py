@@ -62,11 +62,18 @@ async def test_self_sync_creates_product_per_size(
         ],
     }
 
+    cursors: list[int | None] = []
+
     async def fake_fetch(*args: object, **kwargs: object) -> dict[str, object]:
+        cursor = kwargs.get("cursor_nm_id")
+        cursors.append(cursor)
+        if cursor is None:
+            cards = [{"nmID": i} for i in range(1, 101)]
+            return {"cards": cards, "cursor": {"total": 100, "updatedAt": "stamp", "nmID": 100}}
         return {"cards": [card], "cursor": {"total": 1}}
 
     monkeypatch.setattr(
-        "app.api.wildberries_integration.fetch_cards_list",
+        "app.services.wildberries_sync_service.fetch_cards_list",
         fake_fetch,
     )
 
@@ -80,6 +87,8 @@ async def test_self_sync_creates_product_per_size(
     assert sync.status_code == 200, sync.text
     body = sync.json()
     assert body["products_created"] == 3
+    assert body["cards_received"] == 101
+    assert cursors == [None, 100]
 
     cat = await async_client.get("/products/wb-catalog", headers=sh)
     assert cat.status_code == 200
@@ -217,7 +226,7 @@ async def test_self_content_token_skips_packhub_duplicate_sku_conflict_idempoten
         return None
 
     monkeypatch.setattr(
-        "app.api.wildberries_integration.fetch_cards_list",
+        "app.services.wildberries_sync_service.fetch_cards_list",
         fake_fetch_cards_list,
     )
     monkeypatch.setattr(
