@@ -20,7 +20,13 @@ import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { sellerPortalUrl } from '../../utils/portalUrls'
 import { FfBillingProfilesDialog } from '../ff/FfBillingProfilesDialog'
 
-type SellerRow = { id: string; name: string }
+type SellerRow = {
+  id: string
+  name: string
+  wb_has_key?: boolean
+  wb_marketplace_scope_ok?: boolean | null
+  wb_marketplace_scope_checked_at?: string | null
+}
 
 /** Сохранённые реквизиты в строке селлера: видно, но не редактируется. */
 function SellerProfileSummary({ profile }: { profile: SellerProfile | null }) {
@@ -185,6 +191,7 @@ export function SellersScreen({
               <TableRow>
                 <TableCell>Название</TableCell>
                 <TableCell>Реквизиты для счетов</TableCell>
+                <TableCell>WB Marketplace</TableCell>
                 {isFulfillmentAdmin ? <TableCell align="right" /> : null}
               </TableRow>
             </TableHead>
@@ -194,6 +201,24 @@ export function SellersScreen({
                   <TableCell>{s.name}</TableCell>
                   <TableCell>
                     <SellerProfileSummary profile={profiles[s.id] ?? null} />
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" data-testid="seller-wb-status">
+                      {s.wb_has_key === false
+                        ? 'Ключа нет'
+                        : s.wb_marketplace_scope_ok === true
+                          ? 'Проверка пройдена'
+                          : s.wb_marketplace_scope_ok === false
+                            ? 'Нет доступа к Marketplace'
+                            : 'Не проверяли'}
+                    </Typography>
+                    {s.wb_marketplace_scope_checked_at ? (
+                      <Typography variant="caption" color="text.secondary" data-testid="seller-wb-checked-at">
+                        {new Date(s.wb_marketplace_scope_checked_at).toLocaleString('ru-RU', {
+                          dateStyle: 'short', timeStyle: 'short',
+                        })}
+                      </Typography>
+                    ) : null}
                   </TableCell>
                   {isFulfillmentAdmin ? (
                     <TableCell align="right">
@@ -209,7 +234,7 @@ export function SellersScreen({
               ))}
               {sellers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={isFulfillmentAdmin ? 3 : 2}>
+                  <TableCell colSpan={isFulfillmentAdmin ? 4 : 3}>
                     <Typography variant="body2" color="text.secondary" data-testid="sellers-empty">
                       Пока нет селлеров. Добавьте первого в форме справа.
                     </Typography>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
@@ -23,6 +24,7 @@ from app.services.catalog_service import (
     list_sellers,
 )
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
+from app.services.wildberries_credentials_service import list_public_marketplace_statuses
 
 router = APIRouter(prefix="/sellers", tags=["sellers"])
 
@@ -53,6 +55,9 @@ class SellerOut(BaseModel):
     id: str
     name: str
     ozon_connected: bool | None = None
+    wb_has_key: bool = False
+    wb_marketplace_scope_ok: bool | None = None
+    wb_marketplace_scope_checked_at: datetime | None = None
 
 
 class SellerWithAccountOut(BaseModel):
@@ -87,10 +92,18 @@ async def get_sellers(
     connected_ids = await list_ozon_connected_seller_ids(
         session, user.tenant_id, {seller.id for seller in rows}
     )
-    return [
-        SellerOut(id=str(s.id), name=s.name, ozon_connected=s.id in connected_ids)
-        for s in rows
-    ]
+    wb_statuses = await list_public_marketplace_statuses(
+        session, user.tenant_id, {seller.id for seller in rows},
+    )
+    result = []
+    for seller in rows:
+        has_key, scope_ok, checked_at = wb_statuses.get(seller.id, (False, None, None))
+        result.append(SellerOut(
+            id=str(seller.id), name=seller.name, ozon_connected=seller.id in connected_ids,
+            wb_has_key=has_key, wb_marketplace_scope_ok=scope_ok,
+            wb_marketplace_scope_checked_at=checked_at,
+        ))
+    return result
 
 
 @router.get(
