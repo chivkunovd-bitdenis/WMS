@@ -12,7 +12,7 @@ import {
   runFbsOrdersSync,
   validateFbsKiz,
 } from './fbsApi'
-import { orderStatusForChip } from './fbsUx'
+import { fbsErrorText, fbsOrdersSyncErrorMessage, orderStatusForChip } from './fbsUx'
 
 const authHeaders = (token: string) => ({ Authorization: `Bearer ${token}` })
 
@@ -104,6 +104,35 @@ describe('FBS API client', () => {
       retryable: true,
       status: 409,
     } satisfies Partial<FbsApiError>)
+  })
+
+  it('translates raw errors without changing the structured error contract', async () => {
+    const context = { order_id: 'order-1', reason: 'sgtinEmitted' }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      detail: { code: 'wb_upstream_error_401', message: 'wb_upstream_error_401', context, retryable: false },
+    }), { status: 401 })))
+    await expect(fetchFbsWorklist('token', authHeaders)).rejects.toMatchObject({
+      code: 'wb_upstream_error_401', context, retryable: false, status: 401,
+      message: 'Wildberries не принял данные подключения или права доступа селлера. Попросите администратора проверить подключение в карточке селлера.',
+    })
+    const message = 'Код не введён в оборот. Причина WB: sgtinEmitted.'
+    expect(new FbsApiError('wb_error', message, context, false, 400).message).toBe(message)
+    expect(fbsOrdersSyncErrorMessage({ code: 'wb_error', message })).toBe(message)
+    expect(fbsErrorText('sgtinNoGS')).toContain('отсканируйте Честный знак заново целиком')
+    expect(fbsErrorText('fbs_shipment_source_missing')).toContain('Проверьте источник товара в подборе')
+  })
+
+  it('shows a translated failed background job without retrying the operation', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'job-1', status: 'pending' })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'job-1', status: 'failed', error_message: 'wb_upstream_error_500',
+      })))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(runFbsOrdersSync('token', authHeaders, 'seller-1', 'wb')).rejects.toThrow(
+      'Wildberries временно недоступен. Повторите запрос через минуту.',
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('sends direct deliver request and returns the canonical workspace', async () => {

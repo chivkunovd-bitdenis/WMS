@@ -1,4 +1,5 @@
 import { apiUrl } from '../../api'
+import { fbsErrorText } from './fbsUx'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 // Реальный backend-контракт (HANDOFF Composer):
@@ -56,7 +57,7 @@ export async function fetchFbsOrders(
     headers: { ...authHeaders(token) },
   })
   if (!res.ok) {
-    throw new Error(await readApiErrorMessage(res))
+    throw new Error(fbsErrorText(await readApiErrorMessage(res)))
   }
   return (await res.json()) as FbsOrderRow[]
 }
@@ -127,7 +128,7 @@ async function jsonOrThrow<T>(res: Response): Promise<T> {
     } catch (error) {
       if (error instanceof FbsApiError) throw error
     }
-    throw new Error(await readApiErrorMessage(res))
+    throw new Error(fbsErrorText(await readApiErrorMessage(res)))
   }
   return (await res.json()) as T
 }
@@ -139,7 +140,7 @@ export class FbsApiError extends Error {
   readonly status: number
 
   constructor(code: string, message: string, context: unknown, retryable: boolean, status: number) {
-    super(message)
+    super(fbsErrorText(message))
     this.name = 'FbsApiError'
     this.code = code
     this.context = context
@@ -1434,7 +1435,7 @@ export async function triggerFbsStockSync(
       wbWarehouseId != null ? { wb_warehouse_id: wbWarehouseId } : {},
     ),
   })
-  if (!res.ok) throw new Error(await readApiErrorMessage(res))
+  if (!res.ok) throw new Error(fbsErrorText(await readApiErrorMessage(res)))
   return (await res.json()) as FbsStockSyncResult | FbsStockSyncJob
 }
 
@@ -1532,7 +1533,7 @@ export async function waitForBackgroundJob(
     const job = await fetchBackgroundJob(token, ah, jobId)
     if (JOB_TERMINAL_STATUSES.has(job.status)) {
       if (JOB_FAILED_STATUSES.has(job.status)) {
-        throw new Error(job.error_message || 'Синхронизация заказов завершилась ошибкой.')
+        throw new Error(fbsErrorText(job.error_message || 'Синхронизация заказов завершилась ошибкой.'))
       }
       return job
     }

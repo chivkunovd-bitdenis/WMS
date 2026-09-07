@@ -52,6 +52,7 @@ import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import {
   buildFbsPickingListPrintHtml,
   fbsAccessibleStageIndex,
+  fbsErrorText,
   fbsBoxEditingDisabled,
   fbsBoxOperationsDisabled,
   fbsDeliveryErrorKeepsIdempotencyKey,
@@ -234,15 +235,14 @@ function kizErrorTextByCode(code: string, message: string, context: unknown): st
   }
   if (code === 'not_a_kiz') return 'Это не похоже на Честный знак'
   if (code === 'meta_validation_fail') return `WB не принял: ${message}`
-  if (code.startsWith('wb_')) return 'WB недоступен, попробуйте ещё раз'
-  return message
+  return fbsErrorText(message)
 }
 
 function kizErrorText(cause: unknown): string {
   if (cause instanceof FbsApiError) {
     return kizErrorTextByCode(cause.code, cause.message, cause.context)
   }
-  return cause instanceof Error ? cause.message : 'Не удалось выполнить операцию'
+  return cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось выполнить операцию'
 }
 
 function kizScannerDebug(cause: unknown): KizScannerDebug | null {
@@ -379,7 +379,7 @@ export function FfFbsSupplyWorkspace({
           ))
         }
       } catch (cause) {
-        if (!silent) setError(cause instanceof Error ? cause.message : 'Не удалось загрузить поставку.')
+        if (!silent) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось загрузить поставку.')
       } finally {
         if (!silent) setBusy(false)
       }
@@ -449,7 +449,7 @@ export function FfFbsSupplyWorkspace({
     }).then(async (response) => {
       if (!active) return
       if (!response.ok) {
-        setError(await readApiErrorMessage(response))
+        setError(fbsErrorText(await readApiErrorMessage(response)))
         return
       }
       setPackagingTask((await response.json()) as PackagingTask)
@@ -480,7 +480,7 @@ export function FfFbsSupplyWorkspace({
       return next
     } catch (cause) {
       onError?.(cause)
-      setError(cause instanceof Error ? cause.message : 'Операция не выполнена.')
+      setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Операция не выполнена.')
       if (cause instanceof FbsApiError && cause.retryable) {
         setRetryAction(() => () => { void run(operation, success, onError) })
       }
@@ -506,7 +506,7 @@ export function FfFbsSupplyWorkspace({
       setAddableOrders(page.items.filter((order) => order.selection_blockers.length === 0))
     } catch (cause) {
       setAddableOrders([])
-      setError(cause instanceof Error ? cause.message : 'Не удалось загрузить новые заказы для поставки.')
+      setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось загрузить новые заказы для поставки.')
     } finally {
       setAddOrdersBusy(false)
     }
@@ -535,7 +535,7 @@ export function FfFbsSupplyWorkspace({
       setAddableSelected(new Set())
       setNotice('Заказы добавлены в поставку.')
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось добавить заказы в поставку.')
+      setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось добавить заказы в поставку.')
     } finally {
       setAddOrdersBusy(false)
     }
@@ -578,7 +578,7 @@ export function FfFbsSupplyWorkspace({
       try {
         const found = await lookupFbsOrderBySticker(token, authHeaders, workspace.supply.id, raw)
         if (!found.can_bind) {
-          setKizScanError({ text: found.block_reason ?? 'На этот заказ КИЗ внести нельзя', debug: null })
+          setKizScanError({ text: fbsErrorText(found.block_reason ?? 'На этот заказ КИЗ внести нельзя'), debug: null })
           setKizScanValue('')
           return
         }
@@ -664,7 +664,7 @@ export function FfFbsSupplyWorkspace({
         setPrintPreviewOpen(true)
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Стикеры не получены.')
+      setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
     } finally {
       setBusy(false)
     }
@@ -727,7 +727,7 @@ export function FfFbsSupplyWorkspace({
       })
       setPrintPreviewOpen(true)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'QR короба не подготовлен.')
+      setError(cause instanceof Error ? fbsErrorText(cause.message) : 'QR короба не подготовлен.')
     } finally {
       setBusy(false)
     }
@@ -782,7 +782,7 @@ export function FfFbsSupplyWorkspace({
       }
       openAssetPreview(assets)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'QR коробов не подготовлены.')
+      setError(cause instanceof Error ? fbsErrorText(cause.message) : 'QR коробов не подготовлены.')
     } finally {
       setBusy(false)
     }
@@ -915,7 +915,7 @@ export function FfFbsSupplyWorkspace({
       setDeliveryPreflight(await preflightFbsDelivery(token, authHeaders, workspace.supply.id))
     } catch (cause) {
       setDeliveryPreflightError(
-        cause instanceof Error ? cause.message : `Не удалось получить ответ ${providerName}.`,
+        cause instanceof Error ? fbsErrorText(cause.message) : `Не удалось получить ответ ${providerName}.`,
       )
     } finally {
       setDeliveryPreflightLoading(false)
@@ -1061,7 +1061,7 @@ export function FfFbsSupplyWorkspace({
         headers: authHeaders(token),
       })
       if (!done.ok) {
-        setError(await readApiErrorMessage(done))
+        setError(fbsErrorText(await readApiErrorMessage(done)))
         return
       }
       const packed = (await done.json()) as {
@@ -1076,7 +1076,7 @@ export function FfFbsSupplyWorkspace({
       )
       await load()
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось завершить упаковку.')
+      setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось завершить упаковку.')
     } finally {
       setBusy(false)
     }
@@ -1092,7 +1092,7 @@ export function FfFbsSupplyWorkspace({
       setSkipHonestSignOpen(false)
       setNotice('Требование Честного знака снято со всей поставки.')
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось снять требование Честного знака.')
+      setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось снять требование Честного знака.')
     } finally {
       setSkipHonestSignBusy(false)
     }
@@ -1408,7 +1408,7 @@ export function FfFbsSupplyWorkspace({
         Не вошли:{' '}
         {workspace.partial_rejection.rejected_orders.length
           ? workspace.partial_rejection.rejected_orders
-            .map((order) => `№${order.wb_order_id} — ${order.reason ?? 'WB не подтвердил заказ'}`)
+            .map((order) => `№${order.wb_order_id} — ${fbsErrorText(order.reason ?? 'WB не подтвердил заказ')}`)
             .join('; ')
           : 'нет'}
       </Typography>
@@ -1580,7 +1580,7 @@ export function FfFbsSupplyWorkspace({
               <Typography variant="subtitle2">Что нужно исправить</Typography>
               {stageBlockers.map((blocker) => (
                 <Typography key={`${blocker.code}-${blocker.order_id ?? ''}`} variant="body2">
-                  {blocker.message}
+                  {fbsErrorText(blocker.message)}
                 </Typography>
               ))}
             </Alert>

@@ -1,3 +1,4 @@
+import { fbsErrorText } from './fbsUx'
 import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
@@ -239,7 +240,7 @@ export function FbsSupplyCreateDialog({
                   <Stack spacing={0.5}>
                     {preflight.issues.map((issue) => (
                       <Typography key={`${issue.order_id}-${issue.code}`} variant="body2">
-                        {issue.message}
+                        {fbsErrorText(issue.message)}
                       </Typography>
                     ))}
                   </Stack>
