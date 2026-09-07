@@ -802,6 +802,18 @@ async def _ensure_kiz_not_occupied_in_pool(
     ):
         raise FbsKizError("code_product_mismatch")
     if code.status != STATUS_AVAILABLE:
+        marking = await session.scalar(
+            select(FbsOrderMarking).where(
+                FbsOrderMarking.tenant_id == tenant_id,
+                FbsOrderMarking.order_id == order.id,
+                FbsOrderMarking.marking_code_id == code.id,
+                FbsOrderMarking.value == value,
+                FbsOrderMarking.meta_status != META_STATUS_REJECTED,
+            )
+        )
+        # UI validation must let an uncertain own binding reach GET-only reconciliation.
+        if marking is not None and await marking_svc.pending_kiz_operation(session, marking):
+            return
         raise FbsKizError(
             "duplicate_kiz",
             context={"marking_code_id": str(code.id), "status": code.status},
