@@ -40,6 +40,7 @@ class InventoryCountObjectIn(BaseModel):
 
 
 class InventoryCountFiltersIn(BaseModel):
+    product_ids: list[uuid.UUID] | None = None
     seller_id: uuid.UUID | None = None
     category: str | None = Field(default=None, max_length=255)
     warehouse_id: uuid.UUID | None = None
@@ -253,7 +254,7 @@ def _fill(count: InventoryCount) -> tuple[CountFillOut, str]:
     if count.source == service.SOURCE_OBJECT:
         return CountFillOut(mode="object", object_label="По объекту"), "По объекту"
     if count.seller_id is None and count.category is None:
-        return CountFillOut(mode="all"), "Весь склад"
+        return CountFillOut(mode="all"), "Товары документа"
     parts = [count.seller.name if count.seller is not None else None, count.category]
     label = ", ".join(part for part in parts if part)
     return (
@@ -691,6 +692,7 @@ async def create_inventory_count(
             category=body.filters.category,
             warehouse_id=body.filters.warehouse_id,
             all=body.filters.all,
+            product_ids=body.filters.product_ids,
         )
         if body.filters is not None
         else None
