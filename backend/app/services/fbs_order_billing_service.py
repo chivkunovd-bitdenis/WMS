@@ -1,9 +1,8 @@
 """Тарификация сборки заказов FBS.
 
-Заказ считается сделанной работой не тогда, когда мы нажали «передать», а тогда,
-когда маркетплейс подтвердил, что забрал его: статусы `sorted` (WB отсортировал
-у себя) и `done` (`wbStatus = sold`). Статусы `packed` и `in_delivery` ставит сам
-склад нажатием кнопки — ошиблись кнопкой, и заказ уже оказался бы в счёте.
+Начисляем при подтверждённой передаче поставки маркетплейсу. Сам по себе
+импортированный статус `in_delivery` не доказывает выполненную складом работу.
+Последующие подтверждения `sorted` и `done` используют то же начисление.
 
 Считаем **за штуку товара**, а не за заказ: у Wildberries в заказе всегда одна
 штука, у Ozon в отправлении может быть несколько позиций.
@@ -21,10 +20,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_DONE,
+    FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_SORTED,
     FbsOrder,
     FbsOrderProduct,
 )
+from app.models.fbs_supply import FbsSupply
 from app.models.product import Product
 from app.models.seller import Seller
 from app.services.billing_ledger_service import (
@@ -39,7 +40,9 @@ from app.services.operation_fact_service import OperationFactError, line_input, 
 logger = logging.getLogger(__name__)
 
 FBS_ORDER_SERVICE_CODE = "fbs_order"
-CONFIRMED_STATUSES = frozenset({FBS_ORDER_STATUS_SORTED, FBS_ORDER_STATUS_DONE})
+CONFIRMED_STATUSES = frozenset(
+    {FBS_ORDER_STATUS_IN_DELIVERY, FBS_ORDER_STATUS_SORTED, FBS_ORDER_STATUS_DONE}
+)
 SOURCE_TYPE = "fbs_order"
 
 
@@ -85,13 +88,25 @@ async def record_fbs_order_confirmed(
     order: FbsOrder,
     *,
     occurred_at: datetime | None = None,
+    confirmed_handover_at: datetime | None = None,
 ) -> None:
     """Записать факт и начисление за собранный заказ. Повтор безопасен."""
     if order.status not in CONFIRMED_STATUSES:
         return
+    # Только внутренний путь подтверждённой передачи вправе начислить раньше
+    # sorted/done; импорт внешнего in_delivery сам по себе недостаточен.
+    if order.status == FBS_ORDER_STATUS_IN_DELIVERY and confirmed_handover_at is None:
+        return
     if order.seller_id is None:
         return
-    moment = occurred_at or order_work_moment(order)
+    handover_at = confirmed_handover_at
+    if handover_at is None and order.supply_id is not None:
+        handover_at = await session.scalar(
+            select(FbsSupply.delivered_at).where(
+                FbsSupply.id == order.supply_id, FbsSupply.tenant_id == order.tenant_id
+            )
+        )
+    moment = confirmed_handover_at or occurred_at or handover_at or order_work_moment(order)
     positions = await _positions(session, order)
     quantity = sum(count for _, count in positions)
 
@@ -171,3 +186,18 @@ async def record_fbs_order_confirmed(
             )
     except BillingLedgerError:
         logger.exception("fbs order charge failed: order_id=%s", order.id)
+
+
+async def charge_handed_over_orders(
+    session: AsyncSession, orders: list[FbsOrder], *, occurred_at: datetime
+) -> None:
+    """Начислить после успешной передачи, не откатывая её при ошибке денег."""
+    for order in orders:
+        order_id = order.id
+        try:
+            async with session.begin_nested():
+                await record_fbs_order_confirmed(
+                    session, order, confirmed_handover_at=occurred_at
+                )
+        except Exception:
+            logger.exception("fbs handover charge skipped: order_id=%s", order_id)

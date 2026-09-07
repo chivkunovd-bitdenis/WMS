@@ -1201,13 +1201,17 @@ async def _apply_local_delivered(
         source_plan=source_plan,
         operation=operation,
     )
-    now = datetime.now(UTC)
+    now = supply.delivered_at or getattr(operation, "confirmed_at", None) or datetime.now(UTC)
     supply.status = FBS_SUPPLY_STATUS_IN_DELIVERY
     supply.delivered_at = now
     for order in orders:
         if order.status not in _TERMINAL_ORDER_STATUSES:
             order.status = FBS_ORDER_STATUS_IN_DELIVERY
     await session.flush()
+
+    from app.services.fbs_order_billing_service import charge_handed_over_orders
+
+    await charge_handed_over_orders(session, orders, occurred_at=now)
 
 
 async def _write_off_delivered_orders_once(
