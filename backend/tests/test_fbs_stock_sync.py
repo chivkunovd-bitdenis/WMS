@@ -502,9 +502,18 @@ async def test_sync_publishes_explicit_zero_percent_as_zero(
 
 
 @pytest.mark.asyncio
-async def test_sync_skips_binding_not_served_by_us(db_session: AsyncSession) -> None:
+async def test_unserved_binding_still_publishes_when_its_own_switch_is_on(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-376: обслуживание склада — фильтр входящих заказов, не условие публикации.
+
+    Раньше снятая галка «обслуживается» глушила и трансляцию остатка: оператор
+    переставал видеть заказы склада и молча выключал остатки по всему складу.
+    Теперь публикацией распоряжается только её собственная галка.
+    """
     ctx = await _seed_binding(db_session)
     ctx.binding.served = False
+    ctx.binding.stock_sync_enabled = True
     product = _product(
         tenant_id=ctx.tenant.id,
         seller_id=ctx.seller.id,
@@ -527,9 +536,43 @@ async def test_sync_skips_binding_not_served_by_us(db_session: AsyncSession) -> 
             marketplace_api_base="https://wb-mock.test",
         )
 
+    assert result.products_targeted == 1
+    assert transport.put_calls != []
+
+
+@pytest.mark.asyncio
+async def test_sync_skips_binding_with_publication_switched_off(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-376: выключенная трансляция молчит независимо от обслуживания склада."""
+    ctx = await _seed_binding(db_session)
+    ctx.binding.served = True
+    ctx.binding.stock_sync_enabled = False
+    product = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=337,
+        sku_suffix="publication-off",
+        fbs_percent=100,
+    )
+    db_session.add(product)
+    await db_session.commit()
+
+    transport = _MockStocksTransport()
+    transport.stored[337] = 10
+    async with _client(transport) as http_client:
+        result = await sync_binding_stocks(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            ctx.binding,
+            http_client,
+            marketplace_api_base="https://wb-mock.test",
+        )
+
     assert result.products_targeted == 0
     assert transport.put_calls == []
-    assert transport.stored[334] == 10
+    assert transport.stored[337] == 10
 
 
 @pytest.mark.asyncio

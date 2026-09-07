@@ -1071,3 +1071,80 @@ async def test_ozon_warehouse_directory_refuses_a_seller_without_a_cabinet(
         code="ozon_not_connected",
         message="У продавца не подключён кабинет Ozon: нет Client-Id и Api-Key.",
     )
+
+
+@pytest.mark.asyncio
+async def test_unserving_a_warehouse_keeps_stock_publication_untouched(
+    async_client: AsyncClient,
+) -> None:
+    """WMS-376: галка «обслуживается» не распоряжается трансляцией остатка.
+
+    Раньше сохранение настройки склада писало обе галки разом. Оператор снимал
+    обслуживание, чтобы перестать видеть заказы этого склада, и молча выключал
+    публикацию остатков — сразу по всему складу, по всем товарам. Склад отвечает
+    только за то, какие входящие заказы мы видим.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wh = await _create_warehouse(async_client, headers, suffix, "wh376")
+
+    enabled = await async_client.put(
+        _bindings_url(seller_id, 507376),
+        headers=headers,
+        json={"wms_warehouse_id": wh, "stock_sync_enabled": True},
+    )
+    assert enabled.status_code == 200, enabled.text
+    assert enabled.json()["stock_sync_enabled"] is True
+
+    unserved = await async_client.put(
+        f"/fbs-sellers/{seller_id}/warehouses/507376",
+        headers=headers,
+        json={"served": False, "wms_warehouse_id": wh},
+    )
+    assert unserved.status_code == 200, unserved.text
+    assert unserved.json()["served"] is False
+    listed = await async_client.get(_bindings_url(seller_id), headers=headers)
+    assert listed.status_code == 200, listed.text
+    row = next(r for r in listed.json() if r["wb_warehouse_id"] == 507376)
+    assert row["served"] is False
+    assert row["stock_sync_enabled"] is True
+
+    served_again = await async_client.put(
+        f"/fbs-sellers/{seller_id}/warehouses/507376",
+        headers=headers,
+        json={"served": True, "wms_warehouse_id": wh},
+    )
+    assert served_again.status_code == 200, served_again.text
+    assert served_again.json()["served"] is True
+    listed_again = await async_client.get(_bindings_url(seller_id), headers=headers)
+    row_again = next(r for r in listed_again.json() if r["wb_warehouse_id"] == 507376)
+    assert row_again["served"] is True
+    assert row_again["stock_sync_enabled"] is True
+
+
+@pytest.mark.asyncio
+async def test_serving_a_new_warehouse_does_not_start_publishing_by_itself(
+    async_client: AsyncClient,
+) -> None:
+    """WMS-376: сопоставление склада само по себе не пишет в кабинет продавца.
+
+    05.09.2026 подключение Ozon у ИП Горячкина Т.И. завело привязку с включённой
+    публикацией и сразу увело три карточки в ноль. Трансляция остатка включается
+    отдельным решением.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wh = await _create_warehouse(async_client, headers, suffix, "wh377")
+
+    created = await async_client.put(
+        f"/fbs-sellers/{seller_id}/warehouses/507377",
+        headers=headers,
+        json={"served": True, "wms_warehouse_id": wh},
+    )
+    assert created.status_code == 200, created.text
+    assert created.json()["served"] is True
+    listed = await async_client.get(_bindings_url(seller_id), headers=headers)
+    assert listed.status_code == 200, listed.text
+    row = next(r for r in listed.json() if r["wb_warehouse_id"] == 507377)
+    assert row["served"] is True
+    assert row["stock_sync_enabled"] is False

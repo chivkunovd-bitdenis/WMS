@@ -587,7 +587,8 @@ async def sync_binding_stocks(
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
         raise FbsStockSyncError(ERROR_SELLER_NOT_FOUND)
 
-    if not binding.is_active or not binding.stock_sync_enabled or not binding.served:
+    # WMS-376. `served` — фильтр входящих заказов, а не условие публикации.
+    if not binding.is_active or not binding.stock_sync_enabled:
         return FbsStockSyncResult()
 
     if not await _try_acquire_lease(session, binding):

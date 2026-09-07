@@ -330,7 +330,8 @@ async def sync_ozon_stocks(
                     FbsWarehouseBinding.seller_id == seller_id,
                     FbsWarehouseBinding.marketplace == "ozon",
                     FbsWarehouseBinding.is_active.is_(True),
-                    FbsWarehouseBinding.served.is_(True),
+                    # WMS-376. Публикация остатка зависит только от своей галки;
+                    # `served` отбирает входящие заказы и сюда не относится.
                     FbsWarehouseBinding.stock_sync_enabled.is_(True),
                 )
                 .order_by(FbsWarehouseBinding.external_warehouse_id)
