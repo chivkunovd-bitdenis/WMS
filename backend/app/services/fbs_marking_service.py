@@ -33,6 +33,12 @@ from app.models.fbs_order import (
     FbsOrderMarking,
     current_order_marking,
 )
+from app.models.fbs_wb_operation import (
+    WB_OPERATION_STATE_CONFIRMED,
+    WB_OPERATION_STATE_FAILED,
+    WB_OPERATION_STATE_PENDING_CONFIRMATION,
+    FbsWbOperation,
+)
 from app.models.marking_code import (
     EVENT_WB_ORPHANED,
     STATUS_AVAILABLE,
@@ -70,6 +76,8 @@ from app.services.wildberries_fbs_client import (
     MarketplaceOrderMetaRow,
     fetch_marketplace_orders_meta_batch,
 )
+
+OPERATION_KIND_ORDER_KIZ_BIND = "order_kiz_bind"
 
 _META_KIND_FROM_PLURAL: dict[str, str] = {
     "sgtins": MARKING_KIND_SGTIN,
@@ -663,6 +671,24 @@ async def _record_wb_orphaned_once(
     )
 
 
+async def pending_kiz_operation(
+    session: AsyncSession,
+    marking: FbsOrderMarking,
+) -> FbsWbOperation | None:
+    result = await session.execute(
+        select(FbsWbOperation)
+        .where(
+            FbsWbOperation.tenant_id == marking.tenant_id,
+            FbsWbOperation.operation_kind == OPERATION_KIND_ORDER_KIZ_BIND,
+            FbsWbOperation.local_entity_type == "fbs_order_marking",
+            FbsWbOperation.local_entity_id == marking.id,
+            FbsWbOperation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION,
+        )
+        .with_for_update()
+    )
+    return result.scalar_one_or_none()
+
+
 async def _sync_order_meta_from_wb(
     session: AsyncSession,
     order: FbsOrder,
@@ -750,6 +776,19 @@ async def _sync_order_meta_from_wb(
             )
             if marking.meta_status in {META_STATUS_MISSING, META_STATUS_REPLACEMENT_REQUIRED}:
                 await _record_wb_orphaned_once(session, marking, reason=marking.reason)
+            # A successful GET alone does not establish which binding WB accepted.
+            if meta_detail.value and _same_marking_value(marking.value, meta_detail.value):
+                operation = await pending_kiz_operation(session, marking)
+                if operation is not None:
+                    if marking.meta_status in _META_DELIVERY_OK:
+                        operation.state = WB_OPERATION_STATE_CONFIRMED
+                        operation.confirmed_at = datetime.now(tz=UTC)
+                        operation.error_code = None
+                        operation.error_context_json = None
+                    elif marking.meta_status == META_STATUS_REJECTED:
+                        operation.state = WB_OPERATION_STATE_FAILED
+                        operation.failed_at = datetime.now(tz=UTC)
+                        operation.error_code = "meta_validation_fail"
 
     if returned_row:
         # Keep the actual WB snapshot, including remote values and keys unknown to

@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.settings import settings
 from app.models.fbs_order import (
+    CHECK_STATUS_ERROR,
     CHECK_STATUS_NEW,
     FBS_ORDER_MARKING_FROZEN_STATUSES,
     FBS_ORDER_MARKING_WRITE_STATUSES,
@@ -23,12 +24,19 @@ from app.models.fbs_order import (
     META_STATUS_ASSIGNED,
     META_STATUS_REJECTED,
     META_STATUS_REPLACEMENT_REQUIRED,
+    META_STATUS_SENDING,
+    META_STATUS_UNKNOWN,
     FbsOrder,
     FbsOrderMarking,
     current_order_marking,
 )
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_supply import FbsSupply
+from app.models.fbs_wb_operation import (
+    WB_OPERATION_STATE_FAILED,
+    WB_OPERATION_STATE_PENDING_CONFIRMATION,
+    FbsWbOperation,
+)
 from app.models.marking_code import (
     EVENT_APPLIED,
     EVENT_VOIDED,
@@ -686,6 +694,8 @@ async def lookup_order_by_sticker(
 def _error_message(exc: FbsKizError) -> str:
     if exc.message:
         return exc.message
+    if exc.code == "wb_pending_confirmation":
+        return "Wildberries не подтвердил результат; нужна сверка."
     if exc.code == "meta_validation_fail":
         reasons = exc.context.get("reasons")
         if isinstance(reasons, list) and reasons:
@@ -1053,6 +1063,11 @@ async def _void_existing_sgtin_marking_locally(
         if code.source == _EXTERNAL_FBS_MARKING_SOURCE and line is not None:
             line.qty_marking_external = max(0, int(line.qty_marking_external) - 1)
 
+    operation = await marking_svc.pending_kiz_operation(session, marking)
+    if operation is not None:
+        operation.state = WB_OPERATION_STATE_FAILED
+        operation.failed_at = datetime.now(tz=UTC)
+        operation.error_code = "kiz_cancelled"
     await session.delete(marking)
     await session.flush()
 
@@ -1141,6 +1156,7 @@ async def _commit_one_kiz_pair(
     actor_user_id: uuid.UUID | None,
     pair: FbsKizCommitPair,
     http_client: httpx.AsyncClient,
+    idempotency_key: str,
 ) -> None:
     validated = await _validate_kiz_pair(
         session,
@@ -1165,6 +1181,17 @@ async def _commit_one_kiz_pair(
         and current.value == validated.value
         and current.meta_status != META_STATUS_REJECTED
     ):
+        operation = await marking_svc.pending_kiz_operation(session, current)
+        if operation is not None:
+            token = await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
+            try:
+                await marking_svc._sync_order_meta_from_wb(session, order, http_client, token)
+            except WildberriesClientError as exc:
+                raise FbsKizError("wb_pending_confirmation") from exc
+            if operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
+                raise FbsKizError("wb_pending_confirmation", persist_failure_state=True)
+            if operation.state == WB_OPERATION_STATE_FAILED:
+                raise FbsKizError("meta_validation_fail", persist_failure_state=True)
         return
     if current is not None and not pair.confirmed:
         raise FbsKizError("needs_confirmation", context={"current_kiz": _mask_kiz(current.value)})
@@ -1218,9 +1245,41 @@ async def _commit_one_kiz_pair(
         new_error = _marking_error_to_kiz(exc)
     except WildberriesClientError as exc:
         new_error = FbsKizError(marking_svc._wb_error_code(exc))
-    if new_error is not None:
-        if current is None:
+    pending_error: FbsKizError | None = None
+    if new_error is not None and current is None:
+        # A lost PUT response or a failed read after PUT cannot undo the WB write.
+        ambiguous = (
+            new_error.code == "wb_transport_error"
+            or new_error.code == "wb_upstream_error_408"
+            or new_error.code.startswith("wb_upstream_error_5")
+            or marking.meta_status == META_STATUS_SENDING
+        )
+        if not ambiguous:
             raise new_error
+        marking.meta_status = META_STATUS_UNKNOWN
+        marking.check_status = CHECK_STATUS_ERROR
+        marking.reason = "Wildberries не подтвердил результат; нужна сверка."
+        session.add(
+            FbsWbOperation(
+                tenant_id=tenant_id,
+                seller_id=order.seller_id,
+                operation_kind=marking_svc.OPERATION_KIND_ORDER_KIZ_BIND,
+                # The batch key is shared by several orders; each binding is one attempt.
+                idempotency_key=hashlib.sha256(
+                    f"{idempotency_key}:{order.id}:{marking.id}".encode()
+                ).hexdigest(),
+                request_hash=hashlib.sha256(marking.value.encode()).hexdigest(),
+                local_entity_type="fbs_order_marking",
+                local_entity_id=marking.id,
+                wb_object_kind="order",
+                wb_object_id=str(order.wb_order_id),
+                state=WB_OPERATION_STATE_PENDING_CONFIRMATION,
+                error_code=new_error.code,
+                created_by_user_id=actor_user_id,
+            )
+        )
+        pending_error = FbsKizError("wb_pending_confirmation", persist_failure_state=True)
+    elif new_error is not None and current is not None:
         try:
             await _restore_previous_wb_marking(
                 order,
@@ -1259,6 +1318,8 @@ async def _commit_one_kiz_pair(
     elif not previous_was_pool:
         line_ref.line.qty_marking_external = int(line_ref.line.qty_marking_external) + 1
     await session.flush()
+    if pending_error is not None:
+        raise pending_error
 
 
 def _ok_commit_row(order_id: uuid.UUID) -> FbsKizCommitRow:
@@ -1287,7 +1348,6 @@ async def commit_kiz_pairs(
     idempotency_key: str,
     http_client: httpx.AsyncClient,
 ) -> list[FbsKizCommitRow]:
-    del idempotency_key
     await session.rollback()
 
     rows: list[FbsKizCommitRow] = []
@@ -1299,6 +1359,7 @@ async def commit_kiz_pairs(
                 actor_user_id,
                 pair,
                 http_client,
+                idempotency_key,
             )
             await session.commit()
         except IntegrityError:
