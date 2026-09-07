@@ -20,9 +20,10 @@ services:
 
   wb-emulator:
     build:
-      context: ./src/emulator
-      dockerfile: wb_emulator/Dockerfile
+      context: .
+      dockerfile: Dockerfile.emulator
     labels:
+      io.wms.training.revision: ${TRAINING_DEPLOY_REVISION:-uncommitted}
       org.opencontainers.image.revision: 520fac16f6fabaaa229883e03dd50c5a1a71ab87
     environment:
       WB_EMULATOR_DB_PATH: /data/wb_emulator.sqlite
@@ -41,9 +42,10 @@ services:
 
   api:
     build:
-      context: ./src/wms/backend
-      dockerfile: Dockerfile.railway
+      context: .
+      dockerfile: Dockerfile.api
     labels:
+      io.wms.training.revision: ${TRAINING_DEPLOY_REVISION:-uncommitted}
       org.opencontainers.image.revision: 6afa60e7f8ea72531fb6f541ff1eb159b732ace6
     environment:
       APP_ENV: staging
@@ -54,6 +56,7 @@ services:
       WMS_PUBLIC_BASE_URL: ${TRAINING_PUBLIC_URL:?set the training URL}
       WMS_ALLOW_PUBLIC_REGISTRATION: "false"
       WMS_MARKING_IMPORT_LOCAL_STORAGE: "true"
+      WMS_LABEL_TEMPLATE: "true"
       WILDBERRIES_CONTENT_API_BASE: http://wb-emulator:8000
       WILDBERRIES_SUPPLIES_API_BASE: http://wb-emulator:8000
       WILDBERRIES_MARKETPLACE_API_BASE: http://wb-emulator:8000
@@ -82,9 +85,10 @@ services:
 
   web:
     build:
-      context: ./src/wms/frontend
-      dockerfile: Dockerfile.railway
+      context: .
+      dockerfile: Dockerfile.web
     labels:
+      io.wms.training.revision: ${TRAINING_DEPLOY_REVISION:-uncommitted}
       org.opencontainers.image.revision: 6afa60e7f8ea72531fb6f541ff1eb159b732ace6
     environment:
       PORT: "8080"

@@ -1,0 +1,6 @@
+*
+!src/
+!src/**
+!requirements-api.txt
+!requirements-emulator.txt
+!Dockerfile.*

@@ -1,0 +1,10 @@
+FROM node:20-slim AS build
+WORKDIR /web
+COPY src/wms/frontend/package*.json ./
+RUN npm ci
+COPY src/wms/frontend/ ./
+ENV VITE_SELLER_PORTAL_URL=/seller/ VITE_FF_PORTAL_URL=/
+RUN npx tsc --noEmit -p tsconfig.app.json && npm run build
+FROM caddy:2-alpine
+COPY src/wms/frontend/deploy/Caddyfile.railway /etc/caddy/Caddyfile
+COPY --from=build /web/dist /srv
