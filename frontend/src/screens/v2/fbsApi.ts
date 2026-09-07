@@ -264,6 +264,7 @@ export type FbsWorklistOrder = {
 }
 
 export type FbsWorklistPage = {
+  total?: number | null
   items: FbsWorklistOrder[]
   next_cursor: string | null
   server_now: string
@@ -323,6 +324,7 @@ export type FbsSupplyWorklistItem = {
 }
 
 export type FbsSupplyWorklistPage = {
+  total?: number | null
   items: FbsSupplyWorklistItem[]
   server_now: string
 }
@@ -602,6 +604,7 @@ export async function fetchFbsSupplyWorklist(
     seller_id?: string | null
     marketplace?: 'wb' | 'ozon' | null
     status_group?: string | null
+    search?: string | null
     limit?: number
   } = {},
 ): Promise<FbsSupplyWorklistPage> {
@@ -609,6 +612,7 @@ export async function fetchFbsSupplyWorklist(
   if (params.seller_id) qs.set('seller_id', params.seller_id)
   if (params.marketplace) qs.set('marketplace', params.marketplace)
   if (params.status_group) qs.set('status_group', params.status_group)
+  if (params.search) qs.set('search', params.search)
   return jsonOrThrow<FbsSupplyWorklistPage>(
     await fetch(apiUrl(`/operations/fbs-supplies/worklist?${qs.toString()}`), {
       headers: { ...ah(token) },

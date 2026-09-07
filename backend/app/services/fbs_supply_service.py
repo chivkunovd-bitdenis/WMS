@@ -11,7 +11,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -80,6 +80,7 @@ from app.services.fbs_supply_validator_service import (
     validate_supply_composition,
 )
 from app.services.fbs_wb_seller_lock_service import wb_seller_lock
+from app.services.fbs_worklist_service import order_search_clause, supply_number_search_clause
 from app.services.fbs_workspace_service import get_supply_workspace
 from app.services.marketplace_provider import (
     OzonMarketplaceProvider,
@@ -1171,6 +1172,7 @@ async def list_supply_worklist(
     marketplace: str | None = None,
     status_group: str = "active",
     limit: int = 100,
+    search: str | None = None,
 ) -> dict[str, Any]:
     status_map = {
         "active": {
@@ -1199,9 +1201,30 @@ async def list_supply_worklist(
         stmt = stmt.where(FbsSupply.seller_id == seller_id)
     if marketplace is not None:
         stmt = stmt.where(FbsSupply.marketplace == marketplace)
+    total = None
+    if search and search.strip():
+        term = search.strip()
+        stmt = stmt.where(
+            or_(
+                supply_number_search_clause(term),
+                exists(
+                    select(FbsOrder.id).where(
+                        FbsOrder.supply_id == FbsSupply.id,
+                        FbsOrder.tenant_id == tenant_id,
+                        order_search_clause(term),
+                    )
+                ),
+            )
+        )
+        total = int(
+            await session.scalar(
+                select(func.count()).select_from(stmt.limit(None).order_by(None).subquery())
+            )
+            or 0
+        )
     supplies = list((await session.execute(stmt)).scalars().all())
     if not supplies:
-        return {"items": [], "server_now": datetime.now(tz=UTC).isoformat()}
+        return {"items": [], "total": total, "server_now": datetime.now(tz=UTC).isoformat()}
 
     supply_ids = [supply.id for supply in supplies]
     box_rows = await session.execute(
@@ -1287,7 +1310,7 @@ async def list_supply_worklist(
                 ),
             }
         )
-    return {"items": items, "server_now": datetime.now(tz=UTC).isoformat()}
+    return {"items": items, "total": total, "server_now": datetime.now(tz=UTC).isoformat()}
 
 
 async def update_planned_shipment_date(

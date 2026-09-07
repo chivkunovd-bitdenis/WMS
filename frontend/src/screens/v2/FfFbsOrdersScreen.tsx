@@ -126,8 +126,6 @@ const SUPPLY_EMPTY_STATE: Record<'active' | 'delivery' | 'done', { title: string
   },
 }
 
-const SEARCH_NO_MATCH_NOTICE = 'Совпадений не найдено, список не изменён.'
-
 function marketplaceLabel(marketplace: 'wb' | 'ozon'): string {
   return marketplace === 'ozon' ? 'Ozon' : 'Wildberries'
 }
@@ -274,7 +272,6 @@ function blockingSelectionBlockers(blockers: Array<{ code: string; message: stri
 type NewOrderRowProps = {
   order: FbsWorklistOrder
   selected: boolean
-  highlighted: boolean
   serverNow: string | null
   registerRow: (id: string, node: HTMLTableRowElement | null) => void
   onToggle: (order: FbsWorklistOrder) => void
@@ -287,7 +284,6 @@ type NewOrderRowProps = {
 const NewOrderRow = memo(function NewOrderRow({
   order,
   selected,
-  highlighted,
   serverNow,
   registerRow,
   onToggle,
@@ -305,12 +301,6 @@ const NewOrderRow = memo(function NewOrderRow({
         cursor: order.supply_id ? 'pointer' : 'default',
         scrollMarginBottom: '220px',
         '& > td': { py: 0.9 },
-        ...(highlighted
-          ? {
-              bgcolor: 'rgba(255, 214, 102, 0.24)',
-              '&:hover': { bgcolor: 'rgba(255, 214, 102, 0.32)' },
-            }
-          : {}),
       }}
       onClick={() => order.supply_id && onOpenWorkspace(order.supply_id)}
       data-testid={`fbs-order-${order.id}`}
@@ -423,28 +413,6 @@ function warehouseOptionLabel(
   sellerWarehouseNames: Record<string, string>,
 ) {
   return sellerWarehouseNames[option.id] || option.name || option.wb_warehouse.name || `WB ${option.wb_warehouse.id}`
-}
-
-function normalizeSearch(value: string): string {
-  return value.trim().toLocaleLowerCase('ru-RU')
-}
-
-function orderSearchText(order: FbsWorklistOrder): string {
-  return [
-    order.wb_order_id,
-    order.product.name,
-    order.product.category,
-    order.product.seller_article,
-    order.product.wb_article,
-    order.product.barcode,
-    order.product.sku,
-    order.product.chrt_id,
-    order.product.color,
-    order.product.size,
-  ]
-    .filter((value) => value !== null && value !== undefined && String(value).trim())
-    .join(' ')
-    .toLocaleLowerCase('ru-RU')
 }
 
 function formatDateTime(value: string): string {
@@ -562,6 +530,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [wbWarehouseId, setWbWarehouseId] = useState('__all__')
   const [search, setSearch] = useState('')
   const [activeSearch, setActiveSearch] = useState('')
+  const [searchTotal, setSearchTotal] = useState<number | null>(null)
   const [orders, setOrders] = useState<FbsWorklistOrder[]>([])
   const [activeSupplies, setActiveSupplies] = useState<FbsSupplyWorklistItem[]>([])
   const [externalActiveOrders, setExternalActiveOrders] = useState<FbsWorklistOrder[]>([])
@@ -607,6 +576,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   }, [navigate])
   const openedSupplyFromQuery = useRef<string | null>(null)
   const loadingRef = useRef(false)
+  const loadSequence = useRef(0)
   // Плавающая панель выбора (fbs-selection-bar) прибита к низу вьюпорта и накрывает
   // собой последние строки таблицы — оператор кликал по чекбоксу второго заказа и
   // попадал в панель (см. tests-e2e/ff-fbs-orders.spec.ts:277). Меряем реальную высоту
@@ -616,9 +586,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [selectionBarHeight, setSelectionBarHeight] = useState(0)
 
   const load = useCallback(async () => {
-    // Задача 9 пула (HANDOFF-POLISH.md): поллинг не должен наслаиваться сам на себя —
-    // если предыдущий запрос ещё летит, новый тик пропускаем.
-    if (loadingRef.current) return
+    // Новые фильтры загружаются сразу; опоздавший ответ прежнего запроса
+    // не должен заменить результат последнего поиска.
+    const sequence = ++loadSequence.current
     loadingRef.current = true
     setBusy(true)
     setError(null)
@@ -631,12 +601,15 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           seller_id: sellerId === '__all__' ? null : sellerId,
           marketplace: marketplace === '__all__' ? null : marketplace,
           status_group: statusGroup,
+          search: activeSearch,
           limit: 500,
         }
         const [suppliesPage, ordersPage] = await Promise.all([
           fetchFbsSupplyWorklist(token, authHeaders, params),
           fetchFbsWorklist(token, authHeaders, params),
         ])
+        if (sequence !== loadSequence.current) return
+        setSearchTotal(suppliesPage.total ?? suppliesPage.items.length)
         setActiveSupplies(suppliesPage.items)
         setExternalActiveOrders(ordersPage.items.filter((order) => !order.supply_id))
         setOrders([])
@@ -649,9 +622,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         seller_id: sellerId === '__all__' ? null : sellerId,
         marketplace: marketplace === '__all__' ? null : marketplace,
         status_group: statusGroup,
+        search: activeSearch,
         wb_warehouse_id: statusGroup === 'new' && wbWarehouseId !== '__all__' ? wbWarehouseId : null,
         limit: statusGroup === 'new' ? NEW_ORDERS_PAGE_LIMIT : 500,
       })
+      if (sequence !== loadSequence.current) return
+      setSearchTotal(page.total ?? page.items.length)
       setOrders(page.items)
       setActiveSupplies([])
       setExternalActiveOrders([])
@@ -671,16 +647,25 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       setServerNow(page.server_now)
       setLastLoadedAt(new Date().toISOString())
     } catch (cause) {
+      if (sequence !== loadSequence.current) return
       setError(cause instanceof Error ? cause.message : 'Не удалось загрузить заказы FBS.')
     } finally {
-      setBusy(false)
-      loadingRef.current = false
+      if (sequence === loadSequence.current) {
+        setBusy(false)
+        loadingRef.current = false
+      }
     }
-  }, [token, authHeaders, sellerId, marketplace, statusGroup, wbWarehouseId])
+  }, [token, authHeaders, sellerId, marketplace, statusGroup, wbWarehouseId, activeSearch])
 
   useEffect(() => {
     void load()
+    return () => { loadSequence.current += 1 }
   }, [load])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setActiveSearch(search.trim()), 250)
+    return () => window.clearTimeout(timer)
+  }, [search])
 
   // Задача 9 пула (HANDOFF-POLISH.md): список раньше не обновлялся сам никогда. Поллинг
   // активной вкладки каждые 30 секунд; останавливается, когда вкладка браузера скрыта —
@@ -688,11 +673,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   // соседним тикам наслоиться друг на друга.
   useEffect(() => {
     const intervalId = window.setInterval(() => {
-      if (document.hidden) return
+      if (document.hidden || loadingRef.current) return
       void load()
     }, 30000)
     const onVisibilityChange = () => {
-      if (!document.hidden) void load()
+      if (!document.hidden && !loadingRef.current) void load()
     }
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
@@ -895,16 +880,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     () => orders.filter((order) => blockingSelectionBlockers(order.selection_blockers).length === 0).map((order) => order.id),
     [orders],
   )
-  const searchTerm = normalizeSearch(activeSearch)
-  const matchingOrders = useMemo(
-    () => (searchTerm ? orders.filter((order) => orderSearchText(order).includes(searchTerm)) : []),
-    [orders, searchTerm],
-  )
-  const matchingIds = useMemo(
-    () => new Set(matchingOrders.map((order) => order.id)),
-    [matchingOrders],
-  )
-  const exportRows = selected.size > 0 ? selectedOrders : searchTerm ? matchingOrders : orders
+  const exportRows = selected.size > 0 ? selectedOrders : orders
+  const visibleCount = isFbsSupplyGroup(statusGroup) ? activeSupplies.length : orders.length
+  const searchNotice = search.trim()
+    ? busy || search.trim() !== activeSearch ? 'Ищем…' : error ? 'Поиск не выполнен' :
+      `Найдено ${searchTotal ?? 0}${(searchTotal ?? 0) > visibleCount ? ` · показано ${visibleCount}` : ''}`
+    : null
 
   // WMS-360: отмена доступна только по заказам Ozon. У Wildberries отмена стоит
   // продавцу штрафа и отдельного разговора с маркетплейсом — своей кнопки на
@@ -979,23 +960,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       setError(cause instanceof Error ? cause.message : 'Не удалось загрузить поставки в работе.')
     }
   }
-
-  useEffect(() => {
-    if (!searchTerm || matchingOrders.length === 0) return
-    rowRefs.current[matchingOrders[0].id]?.scrollIntoView({ block: 'center' })
-  }, [matchingOrders, searchTerm])
-
-  useEffect(() => {
-    if (!searchTerm || statusGroup !== 'new' || orders.length === 0) {
-      if (notice === SEARCH_NO_MATCH_NOTICE) setNotice(null)
-      return
-    }
-    if (matchingOrders.length === 0) {
-      if (notice !== SEARCH_NO_MATCH_NOTICE) setNotice(SEARCH_NO_MATCH_NOTICE)
-      return
-    }
-    if (notice === SEARCH_NO_MATCH_NOTICE) setNotice(null)
-  }, [matchingOrders.length, notice, orders.length, searchTerm, statusGroup])
 
   const toggle = useCallback((order: FbsWorklistOrder) => {
     setSelected((current) => {
@@ -1320,11 +1284,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           ) : null}
           <TextField
             fullWidth
-            label="Поиск: заказ, товар, категория, артикул, ШК, SKU, цвет, размер"
+            label="Поиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер"
             value={search}
             onChange={(event) => {
               setSearch(event.target.value)
-              setActiveSearch(event.target.value.trim())
             }}
             onKeyDown={(event) => {
               if (event.key === 'Enter') setActiveSearch(search.trim())
@@ -1396,14 +1359,16 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         </Alert>
       ) : null}
 
-      {notice ? (
+      {notice || searchNotice ? (
         <Alert
-          severity={notice.startsWith('Выгружено') ? 'success' : 'info'}
+          severity={notice?.startsWith('Выгружено') ? 'success' : 'info'}
           sx={{ mt: 2 }}
-          onClose={() => setNotice(null)}
+          onClose={notice ? () => setNotice(null) : undefined}
           data-testid="fbs-orders-notice"
         >
           {notice}
+          {notice && searchNotice ? ' · ' : null}
+          {searchNotice}
         </Alert>
       ) : null}
 
@@ -1567,7 +1532,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                     key={order.id}
                     order={order}
                     selected={selected.has(order.id)}
-                    highlighted={Boolean(searchTerm && matchingIds.has(order.id))}
                     serverNow={serverNow}
                     registerRow={registerRow}
                     onToggle={toggle}
