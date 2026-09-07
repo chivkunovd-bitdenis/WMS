@@ -5,6 +5,6 @@
   "emulator_commit": "520fac16f6fabaaa229883e03dd50c5a1a71ab87",
   "postgres_image": "ghcr.io/railwayapp-templates/postgres-ssl:18@sha256:e617e80d34d40def28ab197662197acc5cd6c1dc120db9cf38d835a2386c226c",
   "source": "Railway active deployments: WMS, web, wb-emulator, Postgres",
-  "data_snapshot": "restored; source integration secrets removed; copied business/personal data retained pending scope clarification",
+  "data_snapshot": "restored; integration secrets removed; contacts and billing identities anonymized; products, orders and inventory retained",
   "delivery_transform": "clean_delivery.py: omit tests/documents and sanitize hardcoded personal examples; rebuild frontend"
 }
