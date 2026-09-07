@@ -271,3 +271,106 @@ async def test_concurrent_print_from_pool_no_double_issue(async_client: AsyncCli
             )
         ).scalar_one()
         assert int(printed_count) == 6
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("units_to_print", [None, 1])
+async def test_postgres_same_line_print_waits_and_refreshes_remaining_need(
+    async_client: AsyncClient,
+    units_to_print: int | None,
+) -> None:
+    """WMS-080: two prints share one need, including a preloaded stale line."""
+    from app.db.session import engine
+    from app.models.marking_code import STATUS_AVAILABLE
+    from app.models.packaging_task import PackagingTaskLine
+
+    if engine.dialect.name != "postgresql":
+        pytest.skip("Concurrent row locks require PostgreSQL")
+    headers, _, product_id, warehouse_id = await _seed_product_with_pool_codes(
+        async_client, code_count=4
+    )
+    claims = decode_access_token(headers["Authorization"].removeprefix("Bearer "))
+    tenant_id, user_id = uuid.UUID(claims["tenant_id"]), uuid.UUID(claims["sub"])
+    location_id = await _inventory_at_location(
+        async_client,
+        headers,
+        warehouse_id=warehouse_id,
+        product_id=product_id,
+        qty=2,
+        location_code="same-line",
+    )
+    task = await async_client.post(
+        "/operations/packaging-tasks",
+        headers=headers,
+        json={
+            "warehouse_id": warehouse_id,
+            "lines": [
+                {
+                    "product_id": product_id,
+                    "storage_location_id": location_id,
+                    "quantity": 2,
+                }
+            ],
+        },
+    )
+    assert task.status_code == 201, task.text
+    line_id = uuid.UUID(task.json()["lines"][0]["id"])
+    async with SessionLocal() as first_session, SessionLocal() as second_session:
+        # A row lock alone does not refresh an object already in this session.
+        stale_line = await second_session.get(PackagingTaskLine, line_id)
+        assert stale_line is not None and stale_line.qty_marking_printed == 0
+        first = await mc_svc.print_codes_for_packaging_line(
+            first_session,
+            tenant_id,
+            line_id,
+            acting_user_id=user_id,
+            units_to_print=units_to_print,
+            commit=False,
+        )
+        started = asyncio.Event()
+
+        async def second_print():
+            started.set()
+            try:
+                return await mc_svc.print_codes_for_packaging_line(
+                    second_session,
+                    tenant_id,
+                    line_id,
+                    acting_user_id=user_id,
+                    units_to_print=units_to_print,
+                )
+            except mc_svc.MarkingCodeServiceError as exc:
+                await second_session.rollback()
+                return str(exc)
+
+        second_task = asyncio.create_task(second_print())
+        try:
+            await started.wait()
+            done, _ = await asyncio.wait({second_task}, timeout=0.2)
+            assert not done
+            await first_session.commit()
+            second = await asyncio.wait_for(second_task, timeout=5)
+        finally:
+            if not second_task.done():
+                second_task.cancel()
+                await asyncio.gather(second_task, return_exceptions=True)
+        if units_to_print is None:
+            assert first.quantity == 2
+            assert second == "already_printed_use_reprint"
+        else:
+            assert isinstance(second, mc_svc.PrintMarkingCodesResult)
+            assert first.quantity == second.quantity == 1
+            assert set(first.codes).isdisjoint(second.codes)
+    async with SessionLocal() as session:
+        line = await session.get(PackagingTaskLine, line_id)
+        assert line is not None and line.qty_marking_printed == 2
+        statuses = dict(
+            (
+                await session.execute(
+                    select(MarkingCode.status, func.count(MarkingCode.id))
+                    .where(MarkingCode.tenant_id == tenant_id)
+                    .group_by(MarkingCode.status)
+                )
+            ).all()
+        )
+        assert statuses == {STATUS_PRINTED: 2, STATUS_AVAILABLE: 2}
