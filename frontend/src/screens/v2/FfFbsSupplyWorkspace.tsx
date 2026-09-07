@@ -84,6 +84,7 @@ import {
   removeFbsPackingBoxOrder,
   retryFbsPackingBoxQr,
   retryFbsSupplyQr,
+  setFbsSupplyBoxesWithoutDistribution,
   skipFbsSupplyHonestSign,
   startFbsSupplyWork,
   undoFbsPick,
@@ -316,7 +317,6 @@ export function FfFbsSupplyWorkspace({
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
   const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
   const [boxCount, setBoxCount] = useState('1')
-  const [boxesWithoutDistribution, setBoxesWithoutDistribution] = useState(false)
   const [boxAssignTarget, setBoxAssignTarget] = useState<string | null>(null)
   const [boxProductSearch, setBoxProductSearch] = useState('')
   const [boxProductQty, setBoxProductQty] = useState<Record<string, string>>({})
@@ -359,6 +359,7 @@ export function FfFbsSupplyWorkspace({
   const [skipHonestSignBusy, setSkipHonestSignBusy] = useState(false)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
   const isOzonSupply = workspace?.supply.marketplace === 'ozon'
+  const boxesWithoutDistribution = !isOzonSupply && Boolean(workspace?.supply.boxes_without_distribution)
   const providerName = isOzonSupply ? 'Ozon' : 'WB'
   const boxOperationsDisabled = fbsBoxOperationsDisabled(
     workspace?.supply.marketplace ?? 'wb',
@@ -397,7 +398,6 @@ export function FfFbsSupplyWorkspace({
     deliveryKeyRef.current = restoredDeliveryKey
     setPrintBatch(null)
     setBoxCount('1')
-    setBoxesWithoutDistribution(false)
     setBoxAssignTarget(null)
     setBoxProductSearch('')
     setBoxProductQty({})
@@ -1264,7 +1264,7 @@ export function FfFbsSupplyWorkspace({
   const boxMenuBox = workspace?.boxes.find((box) => box.id === boxMenu?.boxId) ?? null
   const boxMenuAssignedCount = boxMenuBox?.assigned_order_ids.length ?? 0
   const boxRouteLabel = isOzonSupply ? 'Ozon' : workspace?.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ'
-  const hasNoDistributionBoxes = Boolean(workspace?.boxes.some((box) => box.without_distribution))
+  const hasNoDistributionBoxes = boxesWithoutDistribution
   const boxDistributedCount = isOzonSupply ? ozonPositionRows.reduce((sum, row) => sum + (assignedBoxPositionIds.has(row.id) ? row.position.quantity : 0), 0) : assignedBoxOrderIds.size
   const boxTotalCount = isOzonSupply ? (workspace?.orders ?? []).reduce((sum, order) => sum + order.positions.reduce((qty, position) => qty + position.quantity, 0), 0) : workspace?.progress.total ?? 0
   const boxRemainingCount = Math.max(0, boxTotalCount - boxDistributedCount)
@@ -1977,8 +1977,11 @@ export function FfFbsSupplyWorkspace({
                         control={(
                           <Checkbox
                             checked={boxesWithoutDistribution}
-                            onChange={(event) => setBoxesWithoutDistribution(event.target.checked)}
-                            disabled={boxEditingDisabled || assignedBoxOrderIds.size > 0}
+                            onChange={(event) => {
+                              const enabled = event.target.checked
+                              void run(() => setFbsSupplyBoxesWithoutDistribution(token, authHeaders, workspace.supply.id, enabled), '')
+                            }}
+                            disabled={boxEditingDisabled || busy || assignedBoxOrderIds.size > 0}
                             data-testid="fbs-boxes-without-distribution"
                             data-task-id="FBS-12"
                           />
