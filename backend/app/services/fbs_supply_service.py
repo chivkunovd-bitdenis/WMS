@@ -64,6 +64,7 @@ from app.services.fbs_supply_composition_service import (
     supply_order_link_discrepancy,
 )
 from app.services.fbs_supply_reconcile_service import (
+    OPERATION_KIND_SUPPLY_FROM_ORDERS,
     create_pending_operation,
     get_operation_by_idempotency,
     mark_operation_confirmed,
@@ -1354,6 +1355,7 @@ async def _close_pending_operation_if_complete(
     stmt = select(FbsWbOperation).where(
         FbsWbOperation.local_entity_type == "fbs_supply",
         FbsWbOperation.local_entity_id == supply.id,
+        FbsWbOperation.operation_kind == OPERATION_KIND_SUPPLY_FROM_ORDERS,
         FbsWbOperation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION,
     )
     for operation in (await session.execute(stmt)).scalars().all():
@@ -1484,6 +1486,7 @@ async def repair_pending_supplies_for_seller(
         .where(
             FbsWbOperation.tenant_id == tenant_id,
             FbsWbOperation.seller_id == seller_id,
+            FbsWbOperation.operation_kind == OPERATION_KIND_SUPPLY_FROM_ORDERS,
             FbsWbOperation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION,
             FbsWbOperation.local_entity_type == "fbs_supply",
             FbsWbOperation.local_entity_id.is_not(None),

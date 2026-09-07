@@ -410,3 +410,101 @@ async def test_autopoll_repairs_pending_supply(
         assert order is not None
         assert order.supply_id is not None
         assert order.status == FBS_ORDER_STATUS_IN_SUPPLY
+
+
+@pytest.mark.asyncio
+async def test_composition_repair_only_confirms_its_own_operation_kind(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Читка состава не доказывает передачу, создание/удаление грузомест."""
+    from app.services import fbs_supply_service
+
+    headers, tenant_id, order_id = await _prepare_order(
+        async_client, monkeypatch, wb_order_id=871007, sku="repair-kind"
+    )
+    _patch_lost_response(monkeypatch)
+    response = await _create_supply_request(async_client, headers, order_id)
+    assert response.status_code == 504, response.text
+    foreign_ids = []
+    async with SessionLocal() as session:
+        supply = await session.scalar(
+            select(FbsSupply).where(FbsSupply.wb_supply_id == WB_SUPPLY_ID)
+        )
+        assert supply is not None
+        supply_id, seller_id = supply.id, supply.seller_id
+        # Старые строки без автора остаются законными операциями состава.
+        creation = await session.scalar(
+            select(FbsWbOperation).where(FbsWbOperation.local_entity_id == supply_id)
+        )
+        assert creation is not None
+        creation.created_by_user_id = None
+        creation_id = creation.id
+        delivery_only_supply = FbsSupply(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            warehouse_id=supply.warehouse_id,
+            delivery_type=supply.delivery_type,
+            wb_supply_id="WB-GI-DELIVERY-ONLY",
+            name="Awaiting delivery",
+        )
+        session.add(delivery_only_supply)
+        await session.flush()
+        for kind, local_id in [
+            ("supply_deliver", supply_id),
+            ("cargo_places_create", supply_id),
+            ("cargo_places_delete", supply_id),
+            ("future_operation", supply_id),
+            ("supply_deliver", delivery_only_supply.id),
+        ]:
+            operation = FbsWbOperation(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                operation_kind=kind,
+                idempotency_key=str(uuid.uuid4()),
+                local_entity_type="fbs_supply",
+                local_entity_id=local_id,
+                state=WB_OPERATION_STATE_PENDING_CONFIRMATION,
+                error_code="transport_error",
+                response_summary_json={"unconfirmed": kind},
+            )
+            session.add(operation)
+            await session.flush()
+            foreign_ids.append(operation.id)
+        await session.commit()
+
+    _patch_wb_composition(monkeypatch, [871007])
+    repair = fbs_supply_service.repair_supply_composition_from_wb
+    visited = []
+
+    async def record_repair(session, tenant_id, candidate_id, *, http_client):
+        visited.append(candidate_id)
+        return await repair(session, tenant_id, candidate_id, http_client=http_client)
+
+    monkeypatch.setattr(fbs_supply_service, "repair_supply_composition_from_wb", record_repair)
+    async with SessionLocal() as session, httpx.AsyncClient() as http_client:
+        result = await fbs_supply_service.repair_pending_supplies_for_seller(
+            session,
+            tenant_id,
+            seller_id,
+            http_client=http_client,
+        )
+    assert visited == [supply_id]
+    assert result == {"supplies_scanned": 1, "orders_linked": 1}
+    async with SessionLocal() as session:
+        creation = await session.get(FbsWbOperation, creation_id)
+        assert creation is not None
+        assert creation.state == WB_OPERATION_STATE_CONFIRMED
+        assert creation.created_by_user_id is None
+        assert creation.response_summary_json == {
+            "wb_order_ids": [871007],
+            "source": "repair_from_wb",
+        }
+        for operation_id in foreign_ids:
+            operation = await session.get(FbsWbOperation, operation_id)
+            assert operation is not None
+            assert operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION
+            assert operation.confirmed_at is None
+            assert operation.error_code == "transport_error"
+            assert operation.response_summary_json == {"unconfirmed": operation.operation_kind}
