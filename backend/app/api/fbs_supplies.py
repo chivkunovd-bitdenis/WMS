@@ -162,6 +162,7 @@ class FbsSupplyWorklistItemOut(BaseModel):
 
 
 class FbsSupplyWorklistOut(BaseModel):
+    total: int | None = None
     items: list[FbsSupplyWorklistItemOut]
     server_now: str
 
@@ -1199,6 +1200,7 @@ async def get_fbs_supplies_worklist(
     marketplace: Annotated[str | None, Query(pattern="^(wb|ozon)$")] = None,
     status_group: Annotated[str, Query()] = "active",
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    search: Annotated[str | None, Query()] = None,
 ) -> FbsSupplyWorklistOut:
     try:
         payload = await supply_svc.list_supply_worklist(
@@ -1208,6 +1210,7 @@ async def get_fbs_supplies_worklist(
             marketplace=marketplace,
             status_group=status_group,
             limit=limit,
+            search=search,
         )
     except supply_svc.FbsSupplyError as exc:
         _raise_from_service(exc)

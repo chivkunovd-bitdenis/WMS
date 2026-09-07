@@ -38,6 +38,7 @@ from app.models.fbs_print_asset import (
     PRINT_ASSET_STATUS_READY,
     FbsPrintAsset,
 )
+from app.models.fbs_supply import FbsSupply
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_reservation import InventoryReservation
@@ -109,6 +110,7 @@ class WorklistPage:
     next_cursor: str | None
     server_now: str
     warehouse_options: list[dict[str, Any]]
+    total: int | None = None
 
 
 @dataclass(frozen=True)
@@ -154,7 +156,7 @@ async def fetch_worklist_page(
     cursor: str | None = None,
 ) -> WorklistPage:
     server_now = datetime.now(tz=UTC)
-    orders = await _fetch_orders_page(
+    orders, total = await _fetch_orders_page(
         session,
         tenant_id,
         seller_id=seller_id,
@@ -183,6 +185,66 @@ async def fetch_worklist_page(
         next_cursor=next_cursor,
         server_now=server_now.isoformat(),
         warehouse_options=warehouse_options,
+        total=total,
+    )
+
+
+def supply_number_search_clause(term: str) -> ColumnElement[bool]:
+    return or_(
+        FbsSupply.name.icontains(term, autoescape=True),
+        FbsSupply.display_number.icontains(term, autoescape=True),
+        FbsSupply.wb_supply_id.icontains(term, autoescape=True),
+        FbsSupply.external_supply_id.icontains(term, autoescape=True),
+    )
+
+
+def order_search_clause(term: str) -> ColumnElement[bool]:
+    """Search identifiers and product data without duplicating orders through joins."""
+    return or_(
+        FbsOrder.wb_order_id.cast(String).icontains(term, autoescape=True),
+        FbsOrder.external_order_id.icontains(term, autoescape=True),
+        FbsOrder.wb_supply_id.icontains(term, autoescape=True),
+        FbsOrder.wb_nm_id.cast(String).icontains(term, autoescape=True),
+        FbsOrder.wb_chrt_id.cast(String).icontains(term, autoescape=True),
+        FbsOrder.wb_barcode.icontains(term, autoescape=True),
+        FbsOrder.wb_article.icontains(term, autoescape=True),
+        exists(
+            select(Product.id).where(
+                Product.id == FbsOrder.product_id,
+                Product.tenant_id == FbsOrder.tenant_id,
+                or_(
+                    *[
+                        column.cast(String).icontains(term, autoescape=True)
+                        for column in (
+                            Product.name,
+                            Product.sku_code,
+                            Product.wb_vendor_code,
+                            Product.wb_barcode,
+                            Product.wb_size,
+                            Product.wb_nm_id,
+                            Product.wb_chrt_id,
+                        )
+                    ]
+                ),
+            )
+        ),
+        exists(
+            select(SellerWildberriesImportedCard.id).where(
+                SellerWildberriesImportedCard.tenant_id == FbsOrder.tenant_id,
+                SellerWildberriesImportedCard.seller_id == FbsOrder.seller_id,
+                SellerWildberriesImportedCard.nm_id == FbsOrder.wb_nm_id,
+                or_(
+                    *[
+                        column.cast(String).icontains(term, autoescape=True)
+                        for column in (
+                            SellerWildberriesImportedCard.title,
+                            SellerWildberriesImportedCard.vendor_code,
+                            SellerWildberriesImportedCard.raw_json,
+                        )
+                    ]
+                ),
+            )
+        ),
     )
 
 
@@ -198,7 +260,7 @@ async def _fetch_orders_page(
     limit: int,
     cursor: str | None,
     server_now: datetime,
-) -> list[FbsOrder]:
+) -> tuple[list[FbsOrder], int | None]:
     served_wb_binding = exists(
         select(FbsWarehouseBinding.id).where(
             FbsWarehouseBinding.tenant_id == FbsOrder.tenant_id,
@@ -235,38 +297,24 @@ async def _fetch_orders_page(
         stmt = stmt.where(FbsOrder.wb_warehouse_id == wb_warehouse_id)
     if search and search.strip():
         term = search.strip()
-        stmt = stmt.outerjoin(Product, Product.id == FbsOrder.product_id).outerjoin(
-            SellerWildberriesImportedCard,
-            and_(
-                SellerWildberriesImportedCard.tenant_id == FbsOrder.tenant_id,
-                SellerWildberriesImportedCard.seller_id == FbsOrder.seller_id,
-                SellerWildberriesImportedCard.nm_id == FbsOrder.wb_nm_id,
-            ),
-        )
-        clauses: list[ColumnElement[bool]] = [
-            FbsOrder.wb_barcode.ilike(f"%{term}%"),
-            FbsOrder.wb_article.ilike(f"%{term}%"),
-            Product.name.ilike(f"%{term}%"),
-            Product.sku_code.ilike(f"%{term}%"),
-            Product.wb_vendor_code.ilike(f"%{term}%"),
-            Product.wb_barcode.ilike(f"%{term}%"),
-            Product.wb_size.ilike(f"%{term}%"),
-            SellerWildberriesImportedCard.title.ilike(f"%{term}%"),
-            SellerWildberriesImportedCard.vendor_code.ilike(f"%{term}%"),
-            SellerWildberriesImportedCard.raw_json.cast(String).ilike(f"%{term}%"),
-        ]
-        if term.isdigit():
-            term_num = int(term)
-            clauses.extend(
-                [
-                    FbsOrder.wb_order_id == term_num,
-                    FbsOrder.wb_nm_id == term_num,
-                    FbsOrder.wb_chrt_id == term_num,
-                    Product.wb_nm_id == term_num,
-                    Product.wb_chrt_id == term_num,
-                ]
+        stmt = stmt.where(
+            or_(
+                order_search_clause(term),
+                exists(
+                    select(FbsSupply.id).where(
+                        FbsSupply.id == FbsOrder.supply_id,
+                        FbsSupply.tenant_id == FbsOrder.tenant_id,
+                        supply_number_search_clause(term),
+                    )
+                ),
             )
-        stmt = stmt.where(or_(*clauses))
+        )
+    # Count the same filtered set before pagination, only when the UI searches.
+    total = (
+        int(await session.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
+        if search and search.strip()
+        else None
+    )
     if cursor:
         cursor_deadline, cursor_id = _decode_cursor(cursor)
         stmt = stmt.where(
@@ -280,7 +328,7 @@ async def _fetch_orders_page(
         )
     stmt = stmt.order_by(FbsOrder.deadline_at.asc(), FbsOrder.id.asc()).limit(limit)
     res = await session.execute(stmt)
-    return list(res.scalars().all())
+    return list(res.scalars().all()), total
 
 
 async def _fetch_warehouse_options(

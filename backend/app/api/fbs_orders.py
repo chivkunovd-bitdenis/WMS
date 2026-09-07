@@ -385,6 +385,7 @@ class FbsWorklistWarehouseOptionOut(BaseModel):
 
 
 class FbsWorklistPageOut(BaseModel):
+    total: int | None = None
     items: list[FbsWorklistOrderOut]
     next_cursor: str | None
     server_now: str
@@ -544,6 +545,7 @@ async def get_fbs_orders_worklist(
         raise
     return FbsWorklistPageOut.model_validate(
         {
+            "total": page.total,
             "items": page.items,
             "next_cursor": page.next_cursor,
             "server_now": page.server_now,
