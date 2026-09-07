@@ -196,6 +196,21 @@ async def test_selected_operations_invoice_uses_whole_charge_reversal_chain(
     assert response.status_code == 422
     assert response.json()["detail"] == "standalone_reversal"
 
+    duplicate = await async_client.post(
+        "/billing/invoices-v2", headers={**headers, "Idempotency-Key": "chain-2"}, json=body
+    )
+    assert duplicate.status_code == 422
+    assert duplicate.json()["detail"] == "selected_source_already_invoiced"
+    cancelled = await async_client.post(
+        f"/billing/invoices-v2/{saved.json()['id']}/cancel", headers=headers
+    )
+    assert cancelled.status_code == 200
+    reissued = await async_client.post(
+        "/billing/invoices-v2", headers={**headers, "Idempotency-Key": "chain-3"}, json=body
+    )
+    assert reissued.status_code == 201, reissued.text
+    assert reissued.json()["total_amount_kopecks"] == 800
+
 
 async def _storage_ready_tenant(async_client: AsyncClient, suffix: str):
     """Реальные склад, товар с габаритами, движение и тариф хранения."""
