@@ -358,7 +358,8 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
             seller_id: sellerId,
             category: fill.category,
             warehouse_id: warehouseId,
-            all: !fill.seller && !fill.category,
+            product_ids: fill.productIds,
+            all: !fill.seller && !fill.category && !fill.productIds.length,
           },
           comment: comment || null,
         }),
@@ -424,6 +425,8 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         warehouses={warehouses.map((w) => w.name)}
         sellers={sellers.map((s) => s.name)}
         categories={categories}
+        products={productCatalog}
+        productsLoading={catalogLoading}
         onClose={() => setCreateOpen(false)}
         onCreate={(warehouse, fill, comment) => void create(warehouse, fill, comment)}
       />

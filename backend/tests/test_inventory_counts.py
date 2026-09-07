@@ -247,6 +247,78 @@ async def test_inventory_count_seller_and_category_filters_do_not_leak_other_pro
 
 
 @pytest.mark.asyncio
+async def test_inventory_count_selected_products_narrow_existing_scope(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "Selected")
+    other = await _tenant(async_client, "OtherSelected")
+    seller = await _seller(async_client, setup, "Селлер")
+    first = await _product(async_client, setup, name="Первый", seller_id=seller)
+    second = await _product(async_client, setup, name="Второй")
+    third = await _product(async_client, setup, name="Третий")
+    foreign = await _product(async_client, other, name="Чужой")
+    _, box, _, _ = await _containers(setup)
+    await _balance(setup, first, 5)
+    await _balance(setup, first, 2, container_kind="box", container_id=box)
+    await _balance(setup, second, -3)
+    await _balance(setup, third, 9)
+    await _balance(other, foreign, 12)
+    warehouse = await async_client.post(
+        "/warehouses", headers=setup.headers, json={"name": "Второй склад", "code": "WH2"}
+    )
+    location = await async_client.post(
+        f"/warehouses/{warehouse.json()['id']}/locations",
+        headers=setup.headers,
+        json={"code": "B2"},
+    )
+    assert warehouse.status_code == location.status_code == 200
+    await _balance(setup, first, 20, location_id=uuid.UUID(location.json()["id"]))
+    async with SessionLocal() as session:
+        product = await session.get(Product, first)
+        assert product is not None
+        product.category = "Одежда"
+        await session.commit()
+
+    async def create(filters: dict[str, object]) -> dict:
+        response = await async_client.post(
+            "/operations/inventory-counts",
+            headers=setup.headers,
+            json={
+                "source": "planned",
+                "filters": {"warehouse_id": str(setup.warehouse_id), **filters},
+                "comment": "Точечный пересчёт",
+            },
+        )
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    single = await create({"product_ids": [str(first), str(first)]})
+    assert sorted(line["expected_quantity"] for line in single["lines"]) == [2, 5]
+    assert {line["product_id"] for line in single["lines"]} == {str(first)}
+    assert any(line["container_id"] == str(box) for line in single["lines"])
+    assert single["comment"] == "Точечный пересчёт"
+    reread = await async_client.get(
+        f"/operations/inventory-counts/{single['id']}", headers=setup.headers
+    )
+    assert reread.status_code == 200
+    assert len(reread.json()["lines"]) == 2
+
+    selected = [str(first), str(second), str(foreign), str(uuid.uuid4())]
+    multiple = await create({"product_ids": selected})
+    assert {line["product_id"] for line in multiple["lines"]} == {str(first), str(second)}
+    assert sorted(line["expected_quantity"] for line in multiple["lines"]) == [-3, 2, 5]
+    for narrowing in ({"seller_id": str(seller)}, {"category": "Одежда"}):
+        narrowed = await create({"product_ids": selected, **narrowing})
+        assert {line["product_id"] for line in narrowed["lines"]} == {str(first)}
+    assert (await create({"product_ids": [str(foreign)]}))["lines"] == []
+    for unfiltered in ({}, {"product_ids": []}, {"product_ids": None}):
+        whole = await create(unfiltered)
+        assert {line["product_id"] for line in whole["lines"]} == {
+            str(first), str(second), str(third)
+        }
+
+
+@pytest.mark.asyncio
 async def test_inventory_count_object_keeps_existing_location_and_product_scopes(
     async_client: AsyncClient,
 ) -> None:

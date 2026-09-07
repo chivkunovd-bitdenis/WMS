@@ -64,6 +64,7 @@ class CountObject:
 
 @dataclass(frozen=True)
 class CountFilters:
+    product_ids: list[uuid.UUID] | None = None
     seller_id: uuid.UUID | None = None
     category: str | None = None
     warehouse_id: uuid.UUID | None = None
@@ -310,6 +311,11 @@ async def create_count(
         warehouse_id=warehouse_id,
         address_storage_enabled=address_enabled,
     )
+
+    # Empty selection preserves the existing whole-scope count. The existing
+    # tenant, warehouse, seller and category predicates still apply.
+    if filters and filters.product_ids:
+        stmt = stmt.where(Product.id.in_(filters.product_ids))
 
     container_object = False
     if object_scope is not None:
