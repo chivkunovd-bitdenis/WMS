@@ -35,6 +35,8 @@ async def _link_product_wb_barcode(
         api_token: str,
         content_api_base: str | None = None,
         limit: int = 100,
+        cursor_updated_at: str | None = None,
+        cursor_nm_id: int | None = None,
     ) -> dict[str, object]:
         return {
             "cards": [

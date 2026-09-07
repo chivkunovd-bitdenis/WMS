@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.fbs_order import FbsOrder, FbsOrderProduct, FbsOrderProductPick
+from app.models.fbs_order_pick import FbsOrderPick
+from app.models.fbs_supply import FbsSupply
 from app.models.inventory_balance import InventoryBalance
 from app.models.storage_location import StorageLocation
 from app.services import inventory_service, warehouse_map_service
@@ -31,6 +34,7 @@ class PickOptionSource:
     is_loose: bool
     source_label: str
     container_path: tuple[WarehouseContainerPathItem, ...]
+    available: int | None = None
 
 
 @dataclass(frozen=True)
@@ -46,6 +50,129 @@ class PickOptionLocation:
 
 def _operator_location_code(code: str) -> str:
     return UNASSIGNED_LABEL if code == SORTING_LOCATION_CODE else code
+
+
+SourceKey = tuple[uuid.UUID, uuid.UUID, ContainerKind | None, uuid.UUID | None]
+
+
+async def active_fbs_picks_by_source(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+) -> tuple[dict[SourceKey, int], dict[tuple[uuid.UUID, uuid.UUID], int]]:
+    """Count existing assignments where the physical units still remain."""
+    assigned: dict[SourceKey, int] = defaultdict(int)
+    # Older direct Ozon sorting picks did not persist their source container.
+    # Preserve their existing conservative ceiling; never invent a container.
+    unlocated: dict[tuple[uuid.UUID, uuid.UUID], int] = defaultdict(int)
+    rows = await session.execute(
+        select(FbsOrderPick)
+        .join(FbsSupply, FbsSupply.id == FbsOrderPick.fbs_supply_id)
+        .join(FbsOrder, FbsOrder.id == FbsOrderPick.fbs_order_id)
+        .where(
+            FbsOrderPick.tenant_id == tenant_id,
+            FbsOrderPick.product_id.in_(product_ids),
+            FbsOrderPick.undone_at.is_(None),
+            FbsSupply.status.notin_(("in_delivery", "done")),
+            FbsOrder.status != "cancelled",
+        )
+    )
+    for pick in rows.scalars():
+        key: SourceKey = (
+            pick.product_id,
+            pick.sorting_storage_location_id
+            if pick.inventory_movement_id
+            else pick.source_storage_location_id,
+            None
+            if pick.inventory_movement_id
+            else cast(ContainerKind | None, pick.source_container_kind),
+            None if pick.inventory_movement_id else pick.source_container_id,
+        )
+        assigned[key] += 1
+    rows = await session.execute(
+        select(FbsOrderProductPick)
+        .join(FbsSupply, FbsSupply.id == FbsOrderProductPick.fbs_supply_id)
+        .join(FbsOrderProduct, FbsOrderProduct.id == FbsOrderProductPick.order_product_id)
+        .join(FbsOrder, FbsOrder.id == FbsOrderProduct.order_id)
+        .where(
+            FbsOrderProductPick.tenant_id == tenant_id,
+            FbsOrderProductPick.product_id.in_(product_ids),
+            FbsOrderProductPick.undone_at.is_(None),
+            FbsSupply.status.notin_(("in_delivery", "done")),
+            FbsOrder.status != "cancelled",
+        )
+    )
+    for position_pick in rows.scalars():
+        if position_pick.inventory_movement_id is None:
+            unlocated[(position_pick.product_id, position_pick.sorting_storage_location_id)] += 1
+        else:
+            assigned[
+                (position_pick.product_id, position_pick.sorting_storage_location_id, None, None)
+            ] += 1
+    return dict(assigned), dict(unlocated)
+
+
+def source_available(
+    on_hand: int,
+    source_assigned: int,
+    place_free: int,
+    place_assigned: int,
+    warehouse_ceiling: int | None = None,
+) -> int:
+    ceiling = min(on_hand - source_assigned, place_free - place_assigned)
+    if warehouse_ceiling is not None:
+        ceiling = min(ceiling, warehouse_ceiling)
+    return max(0, ceiling)
+
+
+async def available_pick_source_quantity(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    location_id: uuid.UUID,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
+    *,
+    marketplace_unload_request_id: uuid.UUID | None = None,
+) -> int:
+    """One source ceiling for scan/manual FBS and marketplace collection."""
+    on_hand = await inventory_service.physical_on_hand_in_container(
+        session,
+        tenant_id,
+        product_id,
+        location_id,
+        container_kind,
+        container_id,
+    )
+    assigned, unlocated = await active_fbs_picks_by_source(session, tenant_id, [product_id])
+    unknown = unlocated.get((product_id, location_id), 0)
+    source_assigned = (
+        assigned.get((product_id, location_id, container_kind, container_id), 0) + unknown
+    )
+    # Outbound reservations identify the place, not a container. Bound the
+    # chosen source by that place's free total instead of reserving every box.
+    place_free = await inventory_service.available_at_location(
+        session, tenant_id, product_id, location_id
+    )
+    place_assigned = sum(
+        qty
+        for (pid, loc, _kind, _cid), qty in assigned.items()
+        if pid == product_id and loc == location_id
+    )
+    ceiling = None
+    if marketplace_unload_request_id is not None:
+        from app.services import marketplace_unload_service as unload
+
+        location = await session.get(StorageLocation, location_id)
+        assert location is not None
+        ceiling = await unload._available_product_qty_in_warehouse(
+            session,
+            tenant_id,
+            location.warehouse_id,
+            product_id,
+            exclude_request_id=marketplace_unload_request_id,
+        )
+    return source_available(on_hand, source_assigned, place_free, place_assigned + unknown, ceiling)
 
 
 async def list_pick_option_locations(
@@ -64,6 +191,8 @@ async def list_pick_option_locations(
         int,
     ]
     | None = None,
+    *,
+    marketplace_unload_request_id: uuid.UUID | None = None,
 ) -> dict[uuid.UUID, list[PickOptionLocation]]:
     """Keep legacy location totals and add distinct physical stock sources."""
     locations_by_product: dict[uuid.UUID, list[PickOptionLocation]] = {
@@ -97,6 +226,28 @@ async def list_pick_option_locations(
         )
     )
     source_rows = list(source_result.all())
+    assigned, unlocated = await active_fbs_picks_by_source(session, tenant_id, product_ids)
+    assigned_at_place: dict[tuple[uuid.UUID, uuid.UUID], int] = defaultdict(int, unlocated)
+    for (pid, loc, _kind, _cid), count in assigned.items():
+        assigned_at_place[(pid, loc)] += count
+    place_free = {
+        (pid, loc): on_hand - reserved for pid, loc, _code, on_hand, reserved in legacy_rows
+    }
+    warehouse_ceilings: dict[uuid.UUID, int] = {}
+    if marketplace_unload_request_id is not None:
+        from app.services import marketplace_unload_service as unload
+
+        for pid in product_ids:
+            warehouse_ceilings[pid] = max(
+                0,
+                await unload._available_product_qty_in_warehouse(
+                    session,
+                    tenant_id,
+                    warehouse_id,
+                    pid,
+                    exclude_request_id=marketplace_unload_request_id,
+                ),
+            )
     container_refs: set[tuple[ContainerKind, uuid.UUID]] = set()
     for _product_id, _location_id, _quantity, raw_kind, container_id in source_rows:
         if raw_kind is None and container_id is None:
@@ -121,9 +272,9 @@ async def list_pick_option_locations(
     except warehouse_map_service.WarehouseMapError as exc:
         raise PickOptionLocationError("invalid_container_reference") from exc
 
-    sources_by_location: dict[
-        tuple[uuid.UUID, uuid.UUID], list[PickOptionSource]
-    ] = defaultdict(list)
+    sources_by_location: dict[tuple[uuid.UUID, uuid.UUID], list[PickOptionSource]] = defaultdict(
+        list
+    )
     seen_source_keys: set[
         tuple[
             uuid.UUID,
@@ -162,6 +313,14 @@ async def list_pick_option_locations(
                 source_label=path[-1].label,
                 container_path=path,
             )
+        available = source_available(
+            int(quantity),
+            assigned.get(source_key, 0) + unlocated.get((product_id, location_id), 0),
+            place_free.get((product_id, location_id), int(quantity)),
+            assigned_at_place[(product_id, location_id)],
+            warehouse_ceilings.get(product_id),
+        )
+        source = replace(source, available=available)
         seen_source_keys.add(source_key)
         sources_by_location[(product_id, location_id)].append(source)
 
@@ -174,6 +333,7 @@ async def list_pick_option_locations(
         if container_kind is None and container_id is None:
             source = PickOptionSource(
                 quantity=0,
+                available=0,
                 picked=picked,
                 is_loose=True,
                 source_label="Россыпью",
@@ -187,6 +347,7 @@ async def list_pick_option_locations(
                 raise PickOptionLocationError("invalid_container_reference")
             source = PickOptionSource(
                 quantity=0,
+                available=0,
                 picked=picked,
                 is_loose=False,
                 source_label=path[-1].label,
@@ -211,7 +372,13 @@ async def list_pick_option_locations(
                 location_code=_operator_location_code(code),
                 quantity=on_hand,
                 reserved=reserved,
-                available=max(0, on_hand - reserved),
+                available=source_available(
+                    on_hand,
+                    assigned_at_place[(product_id, location_id)],
+                    on_hand - reserved,
+                    assigned_at_place[(product_id, location_id)],
+                    warehouse_ceilings.get(product_id),
+                ),
                 picked=picked_by_location.get((product_id, location_id), 0),
                 sources=tuple(sources_by_location.get((product_id, location_id), [])),
             )
@@ -220,8 +387,7 @@ async def list_pick_option_locations(
     missing_picked_pairs = [
         (product_id, location_id, quantity)
         for (product_id, location_id), quantity in picked_by_location.items()
-        if (product_id, location_id) not in seen_pairs
-        and product_id in locations_by_product
+        if (product_id, location_id) not in seen_pairs and product_id in locations_by_product
     ]
     missing_location_ids = {location_id for _, location_id, _ in missing_picked_pairs}
     missing_locations: dict[uuid.UUID, StorageLocation] = {}
@@ -233,9 +399,7 @@ async def list_pick_option_locations(
                 StorageLocation.warehouse_id == warehouse_id,
             )
         )
-        missing_locations = {
-            location.id: location for location in missing_location_rows.all()
-        }
+        missing_locations = {location.id: location for location in missing_location_rows.all()}
 
     for product_id, location_id, picked in missing_picked_pairs:
         location = missing_locations.get(location_id)

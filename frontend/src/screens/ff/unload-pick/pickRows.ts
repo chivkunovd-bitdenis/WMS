@@ -155,16 +155,18 @@ export const ALL_STOCK: GoodsLine[] = [...STOCK, ...EXTRA_STOCK]
  */
 export function placesOf(
   productId: string,
-  stock: GoodsLine[],
+  stock: (GoodsLine & { pickCapacity?: number })[],
   objects: WarehouseObject[],
   cells: Cell[],
   picked: PickedMap,
 ): PickPlace[] {
   const byHolder = new Map<string, number>()
+  const capacityByHolder = new Map<string, number>()
   for (const line of stock) {
     if (line.productId !== productId) continue
     const key = line.holder ?? 'none'
     byHolder.set(key, (byHolder.get(key) ?? 0) + line.qty)
+    capacityByHolder.set(key, (capacityByHolder.get(key) ?? 0) + (line.pickCapacity ?? line.qty))
   }
   const decorated: { place: PickPlace; depth: number }[] = []
   for (const [key, qty] of byHolder) {
@@ -199,7 +201,7 @@ export function placesOf(
         cellCode: cell?.code ?? null,
         qty,
         picked: taken,
-        left: Math.max(0, qty - taken),
+        left: Math.max(0, (capacityByHolder.get(key) ?? qty) - taken),
       },
     })
   }
