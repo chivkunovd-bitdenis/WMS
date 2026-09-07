@@ -111,19 +111,71 @@ export function fbsDeliveryErrorKeepsIdempotencyKey(error: {
   ]).has(error.code ?? '')
 }
 
+const FBS_ERROR_TEXT: Record<string, string> = {
+  missing_marketplace_token: 'У селлера не подключён ключ Wildberries. Добавьте ключ WB в карточке селлера.',
+  wb_transport_error: 'Не удалось связаться с Wildberries. Проверьте соединение и повторите запрос через минуту.',
+  wb_timeout: 'Wildberries не ответил вовремя. Результат операции пока неизвестен — повторите проверку через минуту.',
+  wb_pending_confirmation: 'Wildberries ещё не подтвердил результат операции. Повторите проверку через минуту.',
+  wb_invalid_response: 'Wildberries вернул ответ, который не удалось прочитать. Повторите запрос через минуту.',
+  wb_stickers_incomplete: 'Wildberries вернул не все стикеры. Повторите получение стикеров.',
+  fbs_shipment_source_missing: 'Не указано, откуда списать товар при передаче. Проверьте источник товара в подборе.',
+  fbs_shipment_product_missing: 'У заказа не определён товар. Проверьте сопоставление товара перед передачей.',
+  stale_preflight: 'Данные поставки изменились. Обновите проверку перед передачей.',
+  operation_in_progress: 'Операция ещё выполняется. Дождитесь результата и обновите данные.',
+  ozon_not_connected: 'У селлера не подключён кабинет Ozon. Попросите администратора проверить подключение.',
+  ozon_auth_failed: 'Ozon не принял данные подключения селлера. Попросите администратора проверить подключение.',
+  ozon_account_blocked: 'Кабинет Ozon заблокирован. Обратитесь в поддержку Ozon.',
+  ozon_rate_limited: 'Ozon ограничил частоту запросов. Повторите запрос через минуту.',
+  ozon_unavailable: 'Ozon временно недоступен. Повторите запрос через минуту.',
+  ozon_ship_unconfirmed: 'Ozon ещё не подтвердил передачу заказа. Повторите проверку результата.',
+  sgtinemitted: 'Код только выпущен и ещё не введён в оборот. Попросите селлера проверить его в Честном знаке.',
+  sgtinapplied: 'Код нанесён, но не введён в оборот. Попросите селлера ввести его в оборот в Честном знаке.',
+  sgtinappliednotpaid: 'Код не оплачен в Честном знаке. Передайте вопрос селлеру.',
+  sgtinnogs: 'Код без разделителей — отсканируйте Честный знак заново целиком.',
+  sgtinnotfound: 'Честный знак не знает такого кода. Проверьте этикетку и обратитесь к селлеру.',
+  sgtinwrittenoff: 'Код уже выведен из оборота. Попросите селлера проверить маркировку товара.',
+  sgtinwithdrawn: 'Код отозван в Честном знаке. Попросите селлера проверить маркировку товара.',
+  sgtininvalidformat: 'Неверный формат кода маркировки. Отсканируйте код заново целиком.',
+  sgtininvalidpattern: 'Код маркировки не соответствует ожидаемому формату. Отсканируйте код заново целиком.',
+  sgtinhasinvalidsymbols: 'В коде маркировки недопустимые символы. Проверьте настройки сканера и повторите сканирование.',
+  sgtinhasnonlatinsymbols: 'В коде маркировки нелатинские символы. Переключите сканер на английскую раскладку и повторите сканирование.',
+}
+
+/** Переводим только машинные коды; подробный текст сервера сохраняем целиком. */
+export function fbsErrorText(message: string): string {
+  const code = message.trim()
+  const markingCode = code.toLowerCase().replaceAll(/[_-]/g, '')
+  const known = FBS_ERROR_TEXT[code] ?? FBS_ERROR_TEXT[markingCode]
+  if (known) return known
+  const upstream = /^(wb|ozon)_upstream_error_(\d{3})$/.exec(code)
+  if (upstream) {
+    const provider = upstream[1] === 'wb' ? 'Wildberries' : 'Ozon'
+    const status = Number(upstream[2])
+    if (status === 401 || status === 403) {
+      return `${provider} не принял данные подключения или права доступа селлера. Попросите администратора проверить подключение в карточке селлера.`
+    }
+    if (status === 429) return `${provider} ограничил частоту запросов. Повторите запрос через минуту.`
+    if (status >= 500) return `${provider} временно недоступен. Повторите запрос через минуту.`
+    return `${provider} отклонил запрос. Проверьте данные операции; если ошибка повторится, обратитесь к администратору.`
+  }
+  if (/^sgtin[a-z_-]+$/i.test(code)) {
+    return 'Результат проверки маркировки требует уточнения. Попросите селлера проверить состояние кода в Честном знаке.'
+  }
+  if (/^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/i.test(code)) {
+    return 'Не удалось выполнить действие. Обновите данные; если ошибка повторится, обратитесь к администратору.'
+  }
+  return message
+}
+
 export function fbsOrdersSyncErrorMessage(cause: unknown): string {
-  if (cause instanceof Error && cause.message === 'missing_marketplace_token') {
-    return 'У селлера не подключён ключ Wildberries. Добавьте ключ WB в карточке селлера.'
+  if (cause instanceof Error) return fbsErrorText(cause.message)
+  if (cause && typeof cause === 'object' && 'message' in cause && typeof cause.message === 'string') {
+    return fbsErrorText(cause.message)
   }
-  if (
-    cause
-    && typeof cause === 'object'
-    && 'code' in cause
-    && cause.code === 'missing_marketplace_token'
-  ) {
-    return 'У селлера не подключён ключ Wildberries. Добавьте ключ WB в карточке селлера.'
+  if (cause && typeof cause === 'object' && 'code' in cause && typeof cause.code === 'string') {
+    return fbsErrorText(cause.code)
   }
-  return cause instanceof Error ? cause.message : 'ошибка синхронизации'
+  return 'Не удалось синхронизировать заказы. Обновите данные и повторите запрос.'
 }
 
 export function orderStatusForChip(order: {
@@ -329,10 +381,11 @@ export function summarizeDeliveryChecks(
       byMessage.set(check.message, orders)
     }
     return [...byMessage.entries()].map(([message, orders]) => {
-      if (orders.length === 0) return message
+      const text = fbsErrorText(message)
+      if (orders.length === 0) return text
       const sorted = [...orders].sort((a, b) => a - b)
       const label = sorted.length === 1 ? 'заказ' : 'заказы'
-      return `${message} (${label} ${sorted.join(', ')})`
+      return `${text} (${label} ${sorted.join(', ')})`
     })
   }
   return { blockers: collect('blocker'), warnings: collect('warning') }
