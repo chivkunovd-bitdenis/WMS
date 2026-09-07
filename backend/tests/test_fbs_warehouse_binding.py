@@ -1148,3 +1148,69 @@ async def test_serving_a_new_warehouse_does_not_start_publishing_by_itself(
     row = next(r for r in listed.json() if r["wb_warehouse_id"] == 507377)
     assert row["served"] is True
     assert row["stock_sync_enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_operator_can_switch_publication_off_on_the_live_endpoint(
+    async_client: AsyncClient,
+) -> None:
+    """WMS-376: у оператора обязан оставаться выключатель публикации.
+
+    Экран со старым тумблером снят с маршрутов 31.08.2026, а после развязки
+    галок единственным живым писателем `stock_sync_enabled` оставалось
+    сохранение правила товара — и оно ставит только `True`. Публикация
+    превращалась в защёлку в одну сторону: включить можно, выключить нечем,
+    кроме прямого UPDATE в базе. Тумблер живёт на той же ручке, что и галка
+    обслуживания.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wh = await _create_warehouse(async_client, headers, suffix, "wh376sw")
+
+    created = await async_client.put(
+        f"/fbs-sellers/{seller_id}/warehouses/507380",
+        headers=headers,
+        json={"served": True, "wms_warehouse_id": wh, "stock_sync_enabled": True},
+    )
+    assert created.status_code == 200, created.text
+
+    listed = await async_client.get(_bindings_url(seller_id), headers=headers)
+    row = next(r for r in listed.json() if r["wb_warehouse_id"] == 507380)
+    assert row["stock_sync_enabled"] is True
+    assert row["served"] is True
+
+    switched_off = await async_client.put(
+        f"/fbs-sellers/{seller_id}/warehouses/507380",
+        headers=headers,
+        json={"wms_warehouse_id": wh, "stock_sync_enabled": False},
+    )
+    assert switched_off.status_code == 200, switched_off.text
+
+    listed = await async_client.get(_bindings_url(seller_id), headers=headers)
+    row = next(r for r in listed.json() if r["wb_warehouse_id"] == 507380)
+    assert row["stock_sync_enabled"] is False
+    # Обслуживание не тронуто: выключили только трансляцию.
+    assert row["served"] is True
+
+
+@pytest.mark.asyncio
+async def test_serving_a_new_warehouse_still_does_not_start_publishing(
+    async_client: AsyncClient,
+) -> None:
+    """Галка обслуживания сама по себе публикацию не включает — даже теперь,
+    когда тумблер приезжает той же ручкой."""
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wh = await _create_warehouse(async_client, headers, suffix, "wh376new")
+
+    created = await async_client.put(
+        f"/fbs-sellers/{seller_id}/warehouses/507381",
+        headers=headers,
+        json={"served": True, "wms_warehouse_id": wh},
+    )
+    assert created.status_code == 200, created.text
+
+    listed = await async_client.get(_bindings_url(seller_id), headers=headers)
+    row = next(r for r in listed.json() if r["wb_warehouse_id"] == 507381)
+    assert row["served"] is True
+    assert row["stock_sync_enabled"] is False

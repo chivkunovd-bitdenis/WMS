@@ -286,6 +286,21 @@ async def upsert_binding(
         )
 
 
+async def clear_marketplace_stock(
+    session: AsyncSession, binding: FbsWarehouseBinding
+) -> None:
+    """Отдать маркетплейсу ноль по этой привязке один раз.
+
+    Публичная обёртка над обнулением Ozon: у площадки нет следа опубликованного,
+    поэтому единственный честный момент отдать ноль — сам переход «публиковали ->
+    перестали». Для WB та же задача решается фоновой задачей, у неё есть свой
+    след в `fbs_stock_sync_items`.
+    """
+    if binding.marketplace == MARKETPLACE_WB:
+        return
+    await _clear_previous_ozon_stock(session, binding)
+
+
 async def _clear_previous_ozon_stock(
     session: AsyncSession, binding: FbsWarehouseBinding,
 ) -> None:
@@ -471,6 +486,7 @@ async def configure_seller_warehouse(
     served: bool | None,
     wms_warehouse_id: uuid.UUID | None,
     marketplace: str = MARKETPLACE_WB,
+    stock_sync_enabled: bool | None = None,
 ) -> FbsWarehouseBinding | None:
     """Настроить сопоставление и обслуживание внешнего склада независимо.
 
@@ -482,6 +498,12 @@ async def configure_seller_warehouse(
     вайлдберрисовских, и нажатие по озоновской строке не находило её, а заводило
     рядом склад-двойник на Wildberries. Умолчание `wb`: все существующие вызовы
     приходят оттуда, и их поведение не меняется ни на шаг.
+
+    ``stock_sync_enabled`` — тумблер трансляции остатка. Он здесь потому, что
+    экран со старым тумблером снят с маршрутов ещё 31.08.2026, а после развязки
+    галок (WMS-376) выключить публикацию стало нечем: единственный оставшийся
+    писатель этого поля — сохранение правила товара, и оно ставит только `True`.
+    Не передан — галка не меняется.
     """
     if marketplace not in SUPPORTED_BINDING_MARKETPLACES:
         raise FbsWarehouseBindingError("unsupported_marketplace")
@@ -532,7 +554,7 @@ async def configure_seller_warehouse(
             # пока это не включат отдельно. Иначе сопоставление склада само по себе
             # начинало писать в кабинет продавца: так у ИП Горячкина Т.И. подключение
             # Ozon 05.09.2026 сразу увело три карточки в ноль.
-            stock_sync_enabled=False,
+            stock_sync_enabled=bool(stock_sync_enabled),
             served=initial_served,
         )
         session.add(existing)
@@ -551,6 +573,8 @@ async def configure_seller_warehouse(
             # молча выключал остатки по всему складу, по всем товарам сразу.
             # Склад отвечает только за то, какие входящие заказы мы видим.
             existing.served = served
+        if stock_sync_enabled is not None:
+            existing.stock_sync_enabled = stock_sync_enabled
 
     try:
         await session.commit()

@@ -321,6 +321,36 @@ def rule_from_product(
     )
 
 
+def _has_rule(
+    product: Product, pool_rows: dict[uuid.UUID, FbsBindingStockPool] | None = None
+) -> bool:
+    """Есть ли у товара правило публикации.
+
+    WMS-376. Ноль — это не «ноль штук», а «правило не задано». Раньше проверка
+    была `fbs_percent is not None`, и карточка с нулём проходила отбор, а потом
+    получала осознанный ноль каждые пять минут — так у ИП Горячкина Т.И. три
+    карточки очков ушли в ноль при 72 штуках на складе.
+
+    Проверять сам ноль в лоб нельзя: у ВСЕХ 82 поштучных товаров на бою
+    `fbs_percent = 0`, потому что в режиме штук доля не используется вовсе.
+    Наивное `fbs_percent == 0` выбросило бы из публикации живые числа Ловианы,
+    Фэшн и Чжоу. Поэтому признак трёхветочный, по режиму товара.
+    """
+    if product.fbs_units_mode:
+        # Режим штук: доля не при чём, правило задаётся количеством.
+        return True
+    if product.fbs_percent is None:
+        return False
+    if product.fbs_same_everywhere:
+        return int(product.fbs_percent or 0) > 0
+    # Своя доля по каждому складу: правило считается заданным, если хоть один
+    # пул несёт положительный процент. По-привязочная проверка обязательна —
+    # иначе товар с 40% на одном складе и нулём на другом вылетел бы целиком.
+    if pool_rows is None:
+        return True
+    return any(int(pool.percent or 0) > 0 for pool in pool_rows.values())
+
+
 def split_amounts(
     rule: FbsRule,
     free_stock: int,
@@ -752,13 +782,13 @@ async def publish_amounts_for_binding(
     публикация выключена, в ответе остаётся осознанный ноль: WB не должен хранить
     последнее положительное значение после выключения товара.
     """
-    publishable = [
-        product for product in products if product.fbs_percent is not None or product.fbs_units_mode
-    ]
     # WMS-376. Обслуживание склада решает только то, какие входящие заказы мы
     # видим, и к трансляции остатка отношения не имеет. Публикацией распоряжается
     # её собственная галка.
-    if not publishable or not binding.stock_sync_enabled:
+    if not binding.stock_sync_enabled:
+        return {}
+    publishable = [product for product in products if _has_rule(product)]
+    if not publishable:
         return {}
     seller_bindings = await _seller_bindings(
         session, binding.tenant_id, binding.seller_id, publishing_only=True
@@ -775,6 +805,11 @@ async def publish_amounts_for_binding(
     amounts: dict[uuid.UUID, int] = {}
     for product in publishable:
         pool_rows = await _pool_rows(session, product.id, [row.id for row in seller_bindings])
+        # Вторая проверка — уже с пулами: для товара со своей долей по каждому
+        # складу «правило есть» решается процентом в пуле, а он читается только
+        # здесь. Без пулов первая проверка пропускает такой товар вперёд.
+        if not _has_rule(product, pool_rows):
+            continue
         rule = rule_from_product(product, pool_rows, seller_bindings)
         free = breakdown[product.id].free if product.id in breakdown else 0
         split = split_amounts(rule, free, seller_bindings, pool_rows=pool_rows)

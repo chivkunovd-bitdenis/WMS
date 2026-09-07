@@ -262,6 +262,18 @@ def _build_publish_plan(
             continue
         amount = int(publish_quantities[product.id])
         amount = max(amount, 0)
+        if amount == 0:
+            # WMS-376. Ноль отдаём ОДИН РАЗ — на переходе «публиковали ->
+            # перестали», а не каждый цикл по состоянию «выключено». Признак
+            # перехода уже есть и хранить его отдельно не нужно: пока в кабинете
+            # стоит наше положительное число, ноль имеет смысл; как только он
+            # подтверждён, строка перестаёт удовлетворять условию и замолкает
+            # сама. Раньше этой проверки не было, и снятая галка «Передавать
+            # остаток» гнала ноль каждые пять минут бесконечно.
+            item = existing_items.get(chrt_id)
+            confirmed = int(item.last_confirmed_amount or 0) if item is not None else 0
+            if confirmed <= 0:
+                continue
         # В результирующий словарь попадают только товары с настроенной долей,
         # поэтому amount == 0 здесь означает осознанную нулевую долю.
         targets_by_chrt[chrt_id] = _PublishTarget(
@@ -271,7 +283,6 @@ def _build_publish_plan(
             is_explicit_zero=(amount == 0),
         )
 
-    _ = existing_items
     return list(targets_by_chrt.values()), blocked_targets, skipped_missing, conflict_chrts
 
 

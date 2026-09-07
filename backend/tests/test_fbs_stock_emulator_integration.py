@@ -512,14 +512,16 @@ async def test_wms_emulator_fbs_stock_full_cycle(
     assert stock_result2.errors == 0
     assert await _emulator_read_stock(emu_client, CHRT_ID) == 0
 
-    # The manual API path uses the same percentage calculation and remains
-    # idempotent while the only unit is reserved.
+    # WMS-376. Ноль уже отправлен и подтверждён выше. Повторный прогон не должен
+    # слать его снова: ноль уходит один раз, на переходе, а не каждый цикл по
+    # состоянию «нечего публиковать». В кабинете при этом остаётся ноль.
     api_sync = await async_client.post(
         f"/operations/fbs-sellers/{seller_id}/stocks/sync",
         headers=headers,
         json={"wb_warehouse_id": WB_WAREHOUSE_ID},
     )
     assert api_sync.status_code == 200, api_sync.text
-    assert api_sync.json()["products_confirmed"] == 1
+    assert api_sync.json()["products_targeted"] == 0
+    assert api_sync.json()["products_confirmed"] == 0
     assert api_sync.json()["errors"] == 0
     assert await _emulator_read_stock(emu_client, CHRT_ID) == 0
