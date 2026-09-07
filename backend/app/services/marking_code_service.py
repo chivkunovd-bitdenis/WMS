@@ -2736,7 +2736,6 @@ def _ledger_filtered_stmt(
         .outerjoin(User, User.id == MarkingCodeEvent.actor_user_id)
         .where(
             MarkingCodeEvent.tenant_id == tenant_id,
-            MarkingCode.source == "pool",
         )
     )
     if seller_id is not None:
