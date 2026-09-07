@@ -1561,10 +1561,13 @@ async def print_codes_for_packaging_line(
     print_layout = resolve_print_layout(layout, duplicate_copies=duplicate_copies)
     event_copies = cz_copies_from_layout(print_layout)
 
+    # После ожидания чужой печати перечитываем потребность даже у уже загруженной строки.
     line_stmt = (
         select(PackagingTaskLine)
         .where(PackagingTaskLine.id == task_line_id)
         .options(selectinload(PackagingTaskLine.task))
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     line = (await session.execute(line_stmt)).scalar_one_or_none()
     if line is None:
