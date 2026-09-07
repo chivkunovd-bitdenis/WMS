@@ -42,6 +42,8 @@ from app.models.marking_code import (
     EVENT_VOIDED,
     STATUS_APPLIED,
     STATUS_AVAILABLE,
+    STATUS_PRINTED,
+    STATUS_RESERVED,
     STATUS_VOID,
     MarkingCode,
 )
@@ -780,7 +782,7 @@ async def _get_marking_code_by_cis(
         MarkingCode.cis_code == value,
     )
     if for_update:
-        stmt = stmt.with_for_update()
+        stmt = stmt.execution_options(populate_existing=True).with_for_update()
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
@@ -806,14 +808,22 @@ async def _ensure_kiz_not_occupied_in_pool(
             select(FbsOrderMarking).where(
                 FbsOrderMarking.tenant_id == tenant_id,
                 FbsOrderMarking.order_id == order.id,
+                FbsOrderMarking.kind == MARKING_KIND_SGTIN,
                 FbsOrderMarking.marking_code_id == code.id,
                 FbsOrderMarking.value == value,
                 FbsOrderMarking.meta_status != META_STATUS_REJECTED,
             )
         )
         # UI validation must let an uncertain own binding reach GET-only reconciliation.
-        if marking is not None and await marking_svc.pending_kiz_operation(session, marking):
+        if marking is not None and (
+            code.status in {STATUS_RESERVED, STATUS_PRINTED}
+            or await marking_svc.pending_kiz_operation(session, marking)
+        ):
             return
+        if code.status == STATUS_PRINTED:
+            line_ref = await _packaging_line_for_order(session, tenant_id, order)
+            if code.packaging_task_line_id == line_ref.line.id:
+                return
         raise FbsKizError(
             "duplicate_kiz",
             context={"marking_code_id": str(code.id), "status": code.status},
@@ -981,6 +991,7 @@ async def _prepare_code_for_binding(
             tenant_id=tenant_id,
             order=order,
             cis_raw=value,
+            printed_for_line_id=line.id,
         )
     except marking_svc.FbsMarkingError as exc:
         raise _marking_error_to_kiz(exc) from exc
@@ -1204,6 +1215,20 @@ async def _commit_one_kiz_pair(
                 raise FbsKizError("wb_pending_confirmation", persist_failure_state=True)
             if operation.state == WB_OPERATION_STATE_FAILED:
                 raise FbsKizError("meta_validation_fail", persist_failure_state=True)
+        code = await _get_marking_code_by_cis(session, tenant_id, validated.value, for_update=True)
+        if (
+            code is not None
+            and current.marking_code_id == code.id
+            and code.status in {STATUS_RESERVED, STATUS_PRINTED}
+        ):
+            line_ref = await _packaging_line_for_order(session, tenant_id, order)
+            code.status = STATUS_APPLIED
+            code.applied_at = datetime.now(UTC)
+            await marking_code_svc.record_event(
+                session, code=code, event_type=EVENT_APPLIED, actor=actor_user_id,
+                document_number=line_ref.document_number, packaging_task=line_ref.line,
+                source_process=marking_code_svc.MARKING_SOURCE_PACKING_FBS_PRINT,
+            )
         return
     if current is not None and not pair.confirmed:
         raise FbsKizError("needs_confirmation", context={"current_kiz": _mask_kiz(current.value)})
@@ -1215,6 +1240,10 @@ async def _commit_one_kiz_pair(
         validated.value,
         line_ref.line,
     )
+    # A scan records physical application; WB acceptance remains a separate result.
+    was_printed = code.status == STATUS_PRINTED
+    code.status = STATUS_APPLIED
+    code.applied_at = code.applied_at or datetime.now(UTC)
     token = await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
     await marking_code_svc.record_event(
         session,
@@ -1325,7 +1354,7 @@ async def _commit_one_kiz_pair(
         )
     previous_was_pool = current is not None and current.source == _POOL_MARKING_SOURCE
     if from_pool:
-        if not previous_was_pool:
+        if not previous_was_pool and not was_printed:
             line_ref.line.qty_marking_printed = int(line_ref.line.qty_marking_printed) + 1
     elif not previous_was_pool:
         line_ref.line.qty_marking_external = int(line_ref.line.qty_marking_external) + 1

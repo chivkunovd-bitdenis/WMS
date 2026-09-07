@@ -2019,7 +2019,8 @@ async def test_fbs_kiz_commit_claims_available_pool_code_without_reclassifying_i
         claimed_code = await session.get(MarkingCode, code_id)
         assert claimed_code is not None
         assert claimed_code.source == "pool"
-        assert claimed_code.status == STATUS_RESERVED
+        assert claimed_code.status == STATUS_APPLIED
+        assert claimed_code.applied_at is not None
         assert claimed_code.seller_id == seller_id
         assert claimed_code.product_id == order.product_id
         assert claimed_code.label_artifact_pdf == b"original-pool-label"
@@ -3776,7 +3777,8 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
         assert marking.reason and "сверка" in marking.reason
         code = await session.get(MarkingCode, marking.marking_code_id)
         assert code is not None
-        assert code.status == (STATUS_APPLIED if failure == "read" else STATUS_RESERVED)
+        assert code.status == STATUS_APPLIED
+        assert code.applied_at is not None
         assert code.source == ("external_fbs" if failure == "read" else "pool")
         operation = (await session.scalars(select(FbsWbOperation))).one()
         assert operation.state == "pending_confirmation"
