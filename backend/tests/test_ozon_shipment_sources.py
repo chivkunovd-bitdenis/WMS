@@ -182,7 +182,9 @@ async def test_ozon_missing_product_fails_before_any_provider_handoff(
 
 
 @pytest.mark.asyncio
-async def test_ozon_complete_fulfillment_keeps_its_exact_source(db_session: AsyncSession) -> None:
+async def test_ozon_packaging_fact_does_not_choose_shipment_source(
+    db_session: AsyncSession,
+) -> None:
     tenant, _, warehouse, product, order, supply = await _seed_ozon_supply_case(
         db_session,
         packed=True,
@@ -206,7 +208,20 @@ async def test_ozon_complete_fulfillment_keeps_its_exact_source(db_session: Asyn
         )
     )
     assert fulfillment is not None and fulfillment.ozon_packed_units_json
-    expected_location = fulfillment.ozon_packed_units_json[0]["storage_location_id"]
+    packaging_location = fulfillment.ozon_packed_units_json[0]["storage_location_id"]
+    # Deliberately point the work fact at a different, empty location. Physical
+    # sources still come from inventory, not from the packaging receipt.
+    empty = StorageLocation(
+        tenant_id=tenant.id, warehouse_id=warehouse.id, code="EMPTY-PACK-FACT",
+        barcode="EMPTY-PACK-FACT-BC",
+    )
+    db_session.add(empty)
+    await db_session.flush()
+    fulfillment.ozon_packed_units_json = [
+        {**unit, "storage_location_id": str(empty.id)}
+        for unit in fulfillment.ozon_packed_units_json
+    ]
+    await db_session.commit()
     ledgers = await prepare_shipment_sources(
         db_session,
         tenant_id=tenant.id,
@@ -217,7 +232,7 @@ async def test_ozon_complete_fulfillment_keeps_its_exact_source(db_session: Asyn
             for row in ledgers[0].ozon_positions_json or []] == [
         {
             "product_id": str(product.id),
-            "storage_location_id": expected_location,
+            "storage_location_id": packaging_location,
             "quantity": 2,
         }
     ]

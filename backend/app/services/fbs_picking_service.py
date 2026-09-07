@@ -14,7 +14,6 @@ from sqlalchemy.orm import selectinload
 
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_CANCELLED,
-    PACK_STATUS_PACKED,
     PICK_STATUS_PENDING,
     PICK_STATUS_PICKED,
     FbsOrder,
@@ -1086,13 +1085,6 @@ async def scan_pick_product(
         target_order = min(eligible_orders, key=lambda o: o.deadline_at)
 
     assert target_order is not None
-    if supply.marketplace != "wb" and target_order.pack_status == PACK_STATUS_PACKED:
-        raise FbsPickingError(
-            "order_already_packed",
-            "Подбор недоступен после упаковки заказа.",
-            context={"order_id": str(target_order.id)},
-        )
-
     sorting_location = await get_or_create_sorting_location(session, tenant_id, supply.warehouse_id)
     if location.id == sorting_location.id:
         # No physical transfer happens when the source is already sorting, so
@@ -1345,13 +1337,6 @@ async def undo_pick(
             http_status=404,
             context={"order_id": str(order_id)},
         )
-    if supply.marketplace != "wb" and order.pack_status == PACK_STATUS_PACKED:
-        raise FbsPickingError(
-            "pick_undo_not_allowed",
-            "Отмена подбора недоступна после упаковки.",
-            context={"order_id": str(order_id)},
-        )
-
     if supply.marketplace == "ozon":
         replayed_undo = (
             await session.execute(
