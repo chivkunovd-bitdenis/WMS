@@ -87,8 +87,8 @@ export function WildberriesScreen(props: Props) {
           <Card className="card" data-testid="wildberries-integration-section">
             <h3 style={{ margin: 0, fontSize: 16 }}>Интеграция</h3>
             <p className="subtle">
-              Токены хранятся зашифрованно. Синхронизация — только чтение: карточки (первая
-              страница) и список поставок FBW (первая страница), без записи в WB.
+              Токены хранятся зашифрованно. Синхронизация — только чтение: полный каталог
+              карточек и список поставок FBW, без записи в WB.
             </p>
 
             {sellers.length > 0 && wbSellerId ? (
@@ -147,7 +147,7 @@ export function WildberriesScreen(props: Props) {
                       data-testid="wb-supplies-token"
                       type="password"
                       autoComplete="off"
-                      placeholder="для импорта поставок FBW (первая страница)"
+                      placeholder="для импорта поставок FBW"
                     />
                   </label>
                   <label>

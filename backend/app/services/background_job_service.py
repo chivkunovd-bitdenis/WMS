@@ -137,7 +137,7 @@ async def run_storage_measurement_rebuild_job(job_id: uuid.UUID) -> None:
 
 
 async def run_wildberries_cards_sync_job(job_id: uuid.UUID) -> None:
-    """WB cards list (first page) using seller token from DB; separate DB session."""
+    """WB cards list (all pages) using seller token from DB; separate DB session."""
     async with SessionLocal() as session:
         job = await session.get(BackgroundJob, job_id)
         if job is None:
@@ -167,7 +167,7 @@ async def run_wildberries_cards_sync_job(job_id: uuid.UUID) -> None:
         await session.commit()
         try:
             async with httpx.AsyncClient() as http_client:
-                result = await wb_sync.sync_cards_list_first_page(
+                result = await wb_sync.sync_cards_list(
                     session, job.tenant_id, seller_uuid, http_client
                 )
             job.status = JOB_STATUS_DONE
@@ -188,7 +188,7 @@ async def run_wildberries_cards_sync_job(job_id: uuid.UUID) -> None:
 
 
 async def run_wildberries_supplies_sync_job(job_id: uuid.UUID) -> None:
-    """WB FBW supplies list (first page) using supplies token from DB."""
+    """WB FBW supplies list (all pages) using supplies token from DB."""
     async with SessionLocal() as session:
         job = await session.get(BackgroundJob, job_id)
         if job is None:
@@ -218,7 +218,7 @@ async def run_wildberries_supplies_sync_job(job_id: uuid.UUID) -> None:
         await session.commit()
         try:
             async with httpx.AsyncClient() as http_client:
-                result = await wb_sync.sync_supplies_list_first_page(
+                result = await wb_sync.sync_supplies_list(
                     session, job.tenant_id, seller_uuid, http_client
                 )
             job.status = JOB_STATUS_DONE

@@ -10,9 +10,12 @@ from app.services.background_job_service import JOB_TYPE_WILDBERRIES_SUPPLIES_SY
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("supply_count", [0, 2, 200, 205])
 async def test_wb_supplies_sync_job_happy_path(
-    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch, supply_count: int
 ) -> None:
+    offsets: list[int] = []
+
     async def fake_supplies(
         client: object,
         *,
@@ -22,9 +25,10 @@ async def test_wb_supplies_sync_job_happy_path(
         offset: int = 0,
     ) -> list[dict[str, object]]:
         assert api_token == "wb-supplies-token"
+        offsets.append(offset)
         return [
-            {"supplyID": 70001, "preorderID": 80001, "statusID": 5},
-            {"supplyID": None, "preorderID": 80002, "statusID": 1},
+            {"supplyID": i if i % 2 else None, "preorderID": i, "statusID": 5}
+            for i in range(offset + 1, min(offset + limit, supply_count) + 1)
         ]
 
     monkeypatch.setattr(
@@ -68,15 +72,16 @@ async def test_wb_supplies_sync_job_happy_path(
         body = r.json()
         if body["status"] in ("done", "failed"):
             assert body["status"] == "done"
-            assert body["result_json"]["supplies_received"] == 2
-            assert body["result_json"]["supplies_saved"] == 2
+            assert body["result_json"]["supplies_received"] == supply_count
+            assert body["result_json"]["supplies_saved"] == supply_count
             ic = await async_client.get(
                 f"/integrations/wildberries/sellers/{sid}/imported-supplies",
                 headers=h,
             )
             assert ic.status_code == 200
             keys = {row["external_key"] for row in ic.json()}
-            assert keys == {"s:70001", "p:80002"}
+            assert keys == {f"{'s' if i % 2 else 'p'}:{i}" for i in range(1, supply_count + 1)}
+            assert offsets == list(range(0, supply_count + 1, 100))
             return
     raise AssertionError("job did not finish")
 
