@@ -205,9 +205,8 @@ export function PickPlacesTree({
       width: 116,
       render: (node) => {
         if (node.kind !== 'goods') return null
-        // Потолок: не больше того, что лежит здесь, и не больше того, что ещё
-        // осталось по плану товара. Когда план закрыт, потолок равен уже снятому.
-        const ceiling = Math.min(node.place.qty, node.place.picked + row.left)
+        // Доступное учитывает чужие назначения; физическое «Лежит» остаётся отдельным.
+        const ceiling = node.place.picked + Math.min(node.place.left, row.left)
         return (
           <NumberInput
             label="Снять"

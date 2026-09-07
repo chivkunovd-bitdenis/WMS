@@ -188,6 +188,7 @@ class FbsPickContainerPathItemOut(BaseModel):
 
 class FbsPickOptionSourceOut(BaseModel):
     quantity: int
+    available: int
     picked: int
     is_loose: bool
     source_label: str
@@ -1245,6 +1246,8 @@ async def get_fbs_supply_pick_options(
                     sources=[
                         FbsPickOptionSourceOut(
                             quantity=source.quantity,
+                            available=(source.available
+                                       if source.available is not None else source.quantity),
                             picked=source.picked,
                             is_loose=source.is_loose,
                             source_label=source.source_label,

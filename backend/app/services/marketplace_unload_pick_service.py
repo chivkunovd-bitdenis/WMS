@@ -257,6 +257,7 @@ async def get_pick_options(
             product_ids,
             picked_by_loc,
             picked_by_source,
+            marketplace_unload_request_id=request_id,
         )
     except pick_location_svc.PickOptionLocationError as exc:
         raise MarketplaceUnloadPickError(exc.code) from exc

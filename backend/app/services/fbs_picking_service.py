@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -27,8 +27,6 @@ from app.models.fbs_order_pick import (
     FbsOrderPickEvent,
 )
 from app.models.fbs_supply import (
-    FBS_SUPPLY_STATUS_DONE,
-    FBS_SUPPLY_STATUS_IN_DELIVERY,
     FbsSupply,
 )
 from app.models.inventory_balance import InventoryBalance
@@ -108,6 +106,7 @@ class PickScanResult:
 class _ActiveAssignment:
     order_id: uuid.UUID
     picked_at: datetime
+    pick_id: uuid.UUID
 
 
 def _planned_qty_by_product(supply: FbsSupply) -> dict[uuid.UUID, int]:
@@ -227,7 +226,12 @@ async def _picked_qty_by_product_source(
         select(
             FbsOrderProductPick.product_id,
             FbsOrderProductPick.source_storage_location_id,
+            InventoryMovement.container_kind,
+            InventoryMovement.container_id,
             func.count(FbsOrderProductPick.id),
+        )
+        .outerjoin(
+            InventoryMovement, InventoryMovement.id == FbsOrderProductPick.inventory_movement_id
         )
         .where(
             FbsOrderProductPick.tenant_id == tenant_id,
@@ -237,10 +241,12 @@ async def _picked_qty_by_product_source(
         .group_by(
             FbsOrderProductPick.product_id,
             FbsOrderProductPick.source_storage_location_id,
+            InventoryMovement.container_kind,
+            InventoryMovement.container_id,
         )
     )
-    for product_id, location_id, quantity in position_rows.all():
-        key = (product_id, location_id, None, None)
+    for product_id, location_id, kind, container_id, quantity in position_rows.all():
+        key = (product_id, location_id, cast(ContainerKind | None, kind), container_id)
         picked[key] = picked.get(key, 0) + int(quantity)
     return picked
 
@@ -332,29 +338,38 @@ async def _active_assignments_for_product_location(
     supply_id: uuid.UUID,
     product_id: uuid.UUID,
     storage_location_id: uuid.UUID,
+    container_kind: ContainerKind | None,
+    container_id: uuid.UUID | None,
 ) -> list[_ActiveAssignment]:
     assignments: list[_ActiveAssignment] = []
     wb_rows = await session.execute(
-        select(FbsOrderPick.fbs_order_id, FbsOrderPick.picked_at).where(
+        select(FbsOrderPick.fbs_order_id, FbsOrderPick.picked_at, FbsOrderPick.id).where(
             FbsOrderPick.tenant_id == tenant_id,
             FbsOrderPick.fbs_supply_id == supply_id,
             FbsOrderPick.product_id == product_id,
             FbsOrderPick.source_storage_location_id == storage_location_id,
             FbsOrderPick.undone_at.is_(None),
+            FbsOrderPick.source_container_kind == container_kind,
+            FbsOrderPick.source_container_id == container_id,
         )
     )
     assignments.extend(
-        _ActiveAssignment(order_id=order_id, picked_at=picked_at)
-        for order_id, picked_at in wb_rows.all()
+        _ActiveAssignment(order_id=order_id, picked_at=picked_at, pick_id=pick_id)
+        for order_id, picked_at, pick_id in wb_rows.all()
     )
 
     position_rows = await session.execute(
-        select(FbsOrderProduct.order_id, FbsOrderProductPick.picked_at)
+        select(FbsOrderProduct.order_id, FbsOrderProductPick.picked_at, FbsOrderProductPick.id)
         .join(
             FbsOrderProduct,
             FbsOrderProduct.id == FbsOrderProductPick.order_product_id,
         )
+        .outerjoin(
+            InventoryMovement, InventoryMovement.id == FbsOrderProductPick.inventory_movement_id
+        )
         .where(
+            InventoryMovement.container_kind == container_kind,
+            InventoryMovement.container_id == container_id,
             FbsOrderProductPick.tenant_id == tenant_id,
             FbsOrderProductPick.fbs_supply_id == supply_id,
             FbsOrderProductPick.product_id == product_id,
@@ -363,76 +378,11 @@ async def _active_assignments_for_product_location(
         )
     )
     assignments.extend(
-        _ActiveAssignment(order_id=order_id, picked_at=picked_at)
-        for order_id, picked_at in position_rows.all()
+        _ActiveAssignment(order_id=order_id, picked_at=picked_at, pick_id=pick_id)
+        for order_id, picked_at, pick_id in position_rows.all()
     )
     assignments.sort(key=lambda assignment: assignment.picked_at, reverse=True)
     return assignments
-
-
-async def _active_pick_count_for_sorting_source(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    product_id: uuid.UUID,
-    storage_location_id: uuid.UUID,
-    container_kind: ContainerKind | None,
-    container_id: uuid.UUID | None,
-) -> int:
-    if container_kind is None and container_id is None:
-        # A pick from another location physically transfers the unit into
-        # sorting without a container. A direct loose pick from sorting uses
-        # the same physical pool.
-        wb_container_scope = or_(
-            FbsOrderPick.source_storage_location_id != storage_location_id,
-            and_(
-                FbsOrderPick.source_storage_location_id == storage_location_id,
-                FbsOrderPick.source_container_kind.is_(None),
-                FbsOrderPick.source_container_id.is_(None),
-            ),
-        )
-    else:
-        wb_container_scope = and_(
-            FbsOrderPick.source_storage_location_id == storage_location_id,
-            FbsOrderPick.source_container_kind == container_kind,
-            FbsOrderPick.source_container_id == container_id,
-        )
-    wb_count = await session.scalar(
-        select(func.count(FbsOrderPick.id))
-        .join(FbsSupply, FbsSupply.id == FbsOrderPick.fbs_supply_id)
-        .where(
-            FbsOrderPick.tenant_id == tenant_id,
-            FbsOrderPick.product_id == product_id,
-            FbsOrderPick.sorting_storage_location_id == storage_location_id,
-            FbsOrderPick.undone_at.is_(None),
-            FbsSupply.status.notin_(
-                (FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE)
-            ),
-            wb_container_scope,
-        )
-    )
-    # Ozon position picks currently retain the source location but not the
-    # container reference. Counting all of them at this sorting location is
-    # conservative: it may ask the operator to choose another source, but it
-    # can never assign one physical unit twice.
-    ozon_stmt = (
-        select(func.count(FbsOrderProductPick.id))
-        .join(FbsSupply, FbsSupply.id == FbsOrderProductPick.fbs_supply_id)
-        .where(
-            FbsOrderProductPick.tenant_id == tenant_id,
-            FbsOrderProductPick.product_id == product_id,
-            FbsOrderProductPick.sorting_storage_location_id == storage_location_id,
-            FbsOrderProductPick.undone_at.is_(None),
-            FbsSupply.status.notin_(
-                (FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE)
-            ),
-        )
-    )
-    if container_id is not None:
-        ozon_stmt = ozon_stmt.where(
-            FbsOrderProductPick.source_storage_location_id == storage_location_id
-        )
-    ozon_count = await session.scalar(ozon_stmt)
-    return int(wb_count or 0) + int(ozon_count or 0)
 
 
 def _pending_order_ids_for_product(
@@ -522,6 +472,8 @@ async def set_pick_quantity(
         supply_id,
         product_id,
         storage_location_id,
+        container_kind,
+        container_id,
     )
     pending_order_ids = _pending_order_ids_for_product(supply, product_id)
     max_quantity = len(active) + len(pending_order_ids)
@@ -576,22 +528,24 @@ async def set_pick_quantity(
                     ordinal=ordinal,
                 ),
                 actor=actor,
+                original_pick_id=assignment.pick_id,
             )
 
-    picked_by_location = await _picked_qty_by_product_location(
-        session, tenant_id, supply_id
-    )
+    picked_by_location = await _picked_qty_by_product_location(session, tenant_id, supply_id)
     picked_by_product = sum(
         picked
         for (picked_product_id, _location_id), picked in picked_by_location.items()
         if picked_product_id == product_id
     )
+    picked_by_source = await _picked_qty_by_product_source(session, tenant_id, supply_id)
     return PickAllocationResult(
         id=_allocation_id(supply_id, product_id, storage_location_id),
         product=product,
         storage_location_id=storage_location_id,
         location_code=location.code,
-        quantity=picked_by_location.get((product_id, storage_location_id), 0),
+        quantity=picked_by_source.get(
+            (product_id, storage_location_id, container_kind, container_id), 0,
+        ),
         picked_qty=picked_by_product,
     )
 
@@ -620,17 +574,11 @@ async def _implicit_pick_location(
             session, tenant_id, supply.warehouse_id
         )
 
-    rows = await inventory_service.list_location_balances_for_products_in_warehouse(
-        session,
-        tenant_id,
-        supply.warehouse_id,
-        [product_id],
+    rows = await pick_location_svc.list_pick_option_locations(
+        session, tenant_id, supply.warehouse_id, [product_id], {},
     )
-    candidates = [
-        (on_hand - reserved, location_id)
-        for row_product_id, location_id, _code, on_hand, reserved in rows
-        if row_product_id == product_id and on_hand - reserved > 0
-    ]
+    candidates = [(row.available, row.storage_location_id)
+                  for row in rows[product_id] if row.available > 0]
     if candidates:
         _available, location_id = max(candidates, key=lambda row: row[0])
         location = await session.get(StorageLocation, location_id)
@@ -823,6 +771,7 @@ async def pick_scan(
         if picked_product_id == product.id
     )
     reveal_location = address_storage_enabled and storage_location_id is not None
+    picked_by_source = await _picked_qty_by_product_source(session, tenant_id, supply_id)
     return PickScanResult(
         kind="product",
         storage_location_id=location.id if reveal_location else None,
@@ -831,7 +780,9 @@ async def pick_scan(
         sku_code=product.sku_code,
         product_name=product.name,
         picked_qty=picked_by_product,
-        allocation_quantity=picked_by_location.get((product.id, location.id), 0),
+        allocation_quantity=picked_by_source.get(
+            (product.id, location.id, container_kind, container_id), 0,
+        ),
     )
 
 
@@ -1086,58 +1037,18 @@ async def scan_pick_product(
 
     assert target_order is not None
     sorting_location = await get_or_create_sorting_location(session, tenant_id, supply.warehouse_id)
-    if location.id == sorting_location.id:
-        # No physical transfer happens when the source is already sorting, so
-        # lock the exact balance row and subtract active pick assignments. This
-        # makes the last unit safe under concurrent scan/manual requests.
-        balance_stmt = select(InventoryBalance.id).where(
-            InventoryBalance.tenant_id == tenant_id,
-            InventoryBalance.product_id == product.id,
-            InventoryBalance.storage_location_id == location.id,
-            InventoryBalance.container_kind == container_kind,
-            InventoryBalance.container_id == container_id,
-        )
-        await session.scalar(balance_stmt.with_for_update())
-        source_on_hand = await inventory_service.physical_on_hand_in_container(
-            session,
-            tenant_id,
-            product.id,
-            location.id,
-            container_kind,
-            container_id,
-        )
-        assigned = await _active_pick_count_for_sorting_source(
-            session,
-            tenant_id,
-            product.id,
-            location.id,
-            container_kind,
-            container_id,
-        )
-        available = source_on_hand - assigned
-    elif container_id is None:
-        available = await inventory_service.available_quantity_at_location(
-            session,
-            tenant_id,
-            product.id,
-            location.id,
-        )
-    else:
-        # Внутри тары брони не живут: резерв стоит на месте целиком.
-        available = await inventory_service.physical_on_hand_in_container(
-            session,
-            tenant_id,
-            product.id,
-            location.id,
-            container_kind,
-            container_id,
-        )
+    # Serialize source assignment against other picks and order reservations.
+    await inventory_service.lock_stock_product(session, tenant_id, product.id)
+    available = await pick_location_svc.available_pick_source_quantity(
+        session,
+        tenant_id,
+        product.id,
+        location.id,
+        container_kind,
+        container_id,
+    )
     movement_id: uuid.UUID | None = None
-    if (
-        supply.marketplace != "wb"
-        and available >= 1
-        and location.id != sorting_location.id
-    ):
+    if supply.marketplace != "wb" and available >= 1 and location.id != sorting_location.id:
         try:
             transfer_group_id = await inventory_service.transfer_on_hand_between_locations(
                 session,
@@ -1327,6 +1238,7 @@ async def undo_pick(
     *,
     idempotency_key: str,
     actor: User,
+    original_pick_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     supply = await _load_supply(session, tenant_id, supply_id)
     order = next((o for o in supply.orders if o.id == order_id), None)
@@ -1372,6 +1284,7 @@ async def undo_pick(
                 FbsOrderProductPick.fbs_supply_id == supply_id,
                 FbsOrderProduct.order_id == order.id,
                 FbsOrderProductPick.undone_at.is_(None),
+                *([FbsOrderProductPick.id == original_pick_id] if original_pick_id else []),
             )
             .order_by(FbsOrderProductPick.picked_at.desc())
         )
@@ -1381,14 +1294,15 @@ async def undo_pick(
                 "Заказ ещё не подобран.",
                 context={"order_id": str(order_id)},
             )
-        original_movement_type = None
+        original_movement = None
         if position_pick.inventory_movement_id is not None:
-            original_movement_type = await session.scalar(
-                select(InventoryMovement.movement_type).where(
+            original_movement = await session.scalar(
+                select(InventoryMovement).where(
                     InventoryMovement.id == position_pick.inventory_movement_id,
                     InventoryMovement.tenant_id == tenant_id,
                 )
             )
+        original_movement_type = original_movement.movement_type if original_movement else None
         if original_movement_type == "fbs_order_pick":
             await inventory_service.record_movement_and_adjust_balance(
                 session,
@@ -1408,6 +1322,10 @@ async def undo_pick(
                 product_id=position_pick.product_id,
                 quantity=1,
                 actor_user_id=actor.id,
+                to_container_kind=cast(ContainerKind | None, original_movement.container_kind)
+                if original_movement
+                else None,
+                to_container_id=original_movement.container_id if original_movement else None,
             )
         position_pick.undo_idempotency_key = idempotency_key
         position_pick.undone_at = datetime.now(tz=UTC)

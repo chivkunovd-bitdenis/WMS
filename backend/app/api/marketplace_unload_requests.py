@@ -230,6 +230,7 @@ class MarketplaceUnloadPickContainerPathItemOut(BaseModel):
 
 class MarketplaceUnloadPickOptionSourceOut(BaseModel):
     quantity: int
+    available: int
     picked: int
     is_loose: bool
     source_label: str
@@ -1248,6 +1249,8 @@ async def get_marketplace_unload_pick_options(
                     sources=[
                         MarketplaceUnloadPickOptionSourceOut(
                             quantity=source.quantity,
+                            available=(source.available
+                                       if source.available is not None else source.quantity),
                             picked=source.picked,
                             is_loose=source.is_loose,
                             source_label=source.source_label,
