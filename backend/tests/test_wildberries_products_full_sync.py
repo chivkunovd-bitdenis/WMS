@@ -36,7 +36,9 @@ async def test_products_import_all_pages_then_existing_order_maps_and_reserves_o
     warehouse = Warehouse(tenant_id=tenant.id, name="Warehouse", code="277")
     session.add_all([seller, warehouse])
     await session.flush()
-    location = StorageLocation(tenant_id=tenant.id, warehouse_id=warehouse.id, code="A", barcode="A")
+    location = StorageLocation(
+        tenant_id=tenant.id, warehouse_id=warehouse.id, code="A", barcode="A",
+    )
     session.add(location)
     await session.commit()
     row = {
