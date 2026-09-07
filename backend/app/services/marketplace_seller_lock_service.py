@@ -35,7 +35,14 @@ async def acquire_marketplace_seller_lock(
     *,
     wait_timeout_sec: float = 0.0,
     poll_interval_sec: float = 0.25,
+    release_connection_while_waiting: bool = False,
 ) -> int | None:
+    """Acquire the seller lock; opt-in callers must have only read-only work pending.
+
+    A failed try-lock owns no advisory lock, so those callers can end their
+    read transaction before sleeping. Once acquired, the connection must stay
+    checked out until release_marketplace_seller_lock unlocks that same session.
+    """
     lock_key = marketplace_seller_lock_key(seller_id, marketplace)
     if not await _session_uses_postgresql(session):
         return lock_key
@@ -47,6 +54,8 @@ async def acquire_marketplace_seller_lock(
         )
         if acquired:
             return lock_key
+        if release_connection_while_waiting:
+            await session.rollback()
         remaining = deadline - monotonic()
         if remaining <= 0:
             return None
@@ -69,12 +78,14 @@ async def marketplace_seller_lock(
     marketplace: str,
     *,
     wait_timeout_sec: float = 0.0,
+    release_connection_while_waiting: bool = False,
 ) -> AsyncIterator[bool]:
     lock_key = await acquire_marketplace_seller_lock(
         session,
         seller_id,
         marketplace,
         wait_timeout_sec=wait_timeout_sec,
+        release_connection_while_waiting=release_connection_while_waiting,
     )
     try:
         yield lock_key is not None
