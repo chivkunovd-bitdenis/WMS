@@ -46,6 +46,7 @@ from app.services.fbs_stock_sync_service import (
     NoopStockSyncRateLimiter,
     _build_publish_plan,
     _try_acquire_lease,
+    publish_explicit_zero_for_binding,
     sync_binding_stocks,
 )
 from app.services.integration_fernet import encrypt_secret
@@ -1603,3 +1604,71 @@ async def test_try_acquire_lease_atomic_under_concurrency(
         binding = await session.get(FbsWarehouseBinding, binding_id)
         assert binding is not None
         assert binding.lease_until is not None
+
+
+@pytest.mark.asyncio
+async def test_farewell_zero_skips_cards_we_never_published(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-376: обнуляем только то, куда сами клали положительное число.
+
+    Строки `fbs_stock_sync_items` заводятся ещё до отправки и остаются после
+    ошибки WB, конфликта или блокировки. Слать по ним ноль значило бы обнулять
+    карточку, которой мы никогда не управляли — на бою таких строк 129 из 267.
+    """
+    ctx = await _seed_binding(db_session)
+    published = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=9401,
+        sku_suffix="was-published",
+        fbs_percent=50,
+    )
+    never = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=9402,
+        sku_suffix="never-published",
+        fbs_percent=50,
+    )
+    db_session.add_all(
+        [
+            published,
+            never,
+            FbsStockSyncItem(
+                binding_id=ctx.binding.id,
+                chrt_id=9401,
+                product_id=published.id,
+                last_target_amount=12,
+                last_confirmed_amount=12,
+                status="confirmed",
+            ),
+            # Строка есть, но подтверждённого числа нет: отправка не удалась.
+            FbsStockSyncItem(
+                binding_id=ctx.binding.id,
+                chrt_id=9402,
+                product_id=never.id,
+                last_target_amount=7,
+                last_confirmed_amount=None,
+                status="error",
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    transport = _MockStocksTransport()
+    transport.stored[9401] = 12
+    transport.stored[9402] = 33  # чужое число, трогать его мы не вправе
+    async with _client(transport) as http_client:
+        result = await publish_explicit_zero_for_binding(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            ctx.binding,
+            http_client,
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert result.products_zeroed == 1
+    assert transport.stored[9401] == 0
+    assert transport.stored[9402] == 33

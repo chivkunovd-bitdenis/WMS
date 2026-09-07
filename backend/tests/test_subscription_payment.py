@@ -233,6 +233,64 @@ async def test_payment_is_scoped_to_its_tenant(
 
 
 @pytest.mark.asyncio
+async def test_paid_invoice_counts_even_when_a_newer_one_hangs(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch, yookassa_keys: Any
+) -> None:
+    """Оплаченный счёт засчитывается, даже если после него создали второй.
+
+    Человек нажал «Продлить» дважды и оплатил первый счёт. Раньше опрос смотрел
+    только на самый свежий платёж, видел «ещё не оплачен» и отвечал «новых оплат
+    не найдено»: деньги ушли, а срок остался прежним.
+    """
+    headers = await _register_admin(async_client, "pay-two-invoices")
+    email = "admin-pay-two-invoices@example.com"
+
+    class _TwoInvoices(_FakeYooKassa):
+        def __init__(self) -> None:
+            super().__init__()
+            self.created_ids: list[str] = []
+
+        async def post(self, url: str, **kwargs: Any) -> httpx.Response:
+            payment_id = f"invoice-{len(self.created_ids) + 1}"
+            self.created_ids.append(payment_id)
+            return httpx.Response(
+                200,
+                json={
+                    "id": payment_id,
+                    "status": "pending",
+                    "confirmation": {"confirmation_url": "https://yoomoney.test/checkout"},
+                },
+                request=httpx.Request("POST", url),
+            )
+
+        async def get(self, url: str, **kwargs: Any) -> httpx.Response:
+            # Оплачен только первый счёт, второй так и висит.
+            paid = url.endswith("invoice-1")
+            return httpx.Response(
+                200,
+                json={
+                    "id": url.rsplit("/", 1)[-1],
+                    "status": "succeeded" if paid else "pending",
+                    "paid": paid,
+                },
+                request=httpx.Request("GET", url),
+            )
+
+    fake = _TwoInvoices()
+    monkeypatch.setattr(httpx, "AsyncClient", fake.client_factory)
+
+    assert (await async_client.post("/subscription/pay", headers=headers)).status_code == 200
+    assert (await async_client.post("/subscription/pay", headers=headers)).status_code == 200
+
+    synced = await async_client.post("/subscription/sync", headers=headers)
+    assert synced.status_code == 200, synced.text
+    assert synced.json()["activated"] is True
+
+    tenant = await _tenant_by_admin(email)
+    assert tenant.subscription_paid_until == svc.today_msk() + timedelta(days=30)
+
+
+@pytest.mark.asyncio
 async def test_seller_cannot_start_payment(
     async_client: AsyncClient, yookassa_keys: Any
 ) -> None:

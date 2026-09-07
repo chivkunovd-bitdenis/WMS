@@ -410,13 +410,17 @@ async def get_rule_view(
             message="У товара нет продавца, поэтому складов WB для него тоже нет.",
         )
     bindings = await _seller_bindings(session, tenant_id, product.seller_id, publishing_only=False)
-    served = [binding for binding in bindings if binding.served]
+    # WMS-376. Число на экране обязано считаться по тому же множеству, по
+    # которому считает публикация, — по транслирующим привязкам. Раньше здесь
+    # стояли обслуживаемые, и после развязки галок оператор видел бы одно, а в
+    # кабинет уезжало другое.
+    publishing = [binding for binding in bindings if binding.stock_sync_enabled]
     pool_rows = await _pool_rows(session, product_id, [b.id for b in bindings])
     rule = rule_from_product(product, pool_rows, bindings)
     on_hand, reserved, free = await _free_stock_for_bindings(
         session, tenant_id, product_id, bindings
     )
-    amounts = split_amounts(rule, free, served, pool_rows=pool_rows)
+    amounts = split_amounts(rule, free, publishing, pool_rows=pool_rows)
     return FbsRuleView(
         rule=rule,
         on_hand=on_hand,
@@ -469,7 +473,6 @@ async def get_rule_views(
     views: dict[uuid.UUID, FbsRuleView] = {}
     for seller_id, seller_products in products_by_seller.items():
         bindings = await _seller_bindings(session, tenant_id, seller_id, publishing_only=False)
-        served = [binding for binding in bindings if binding.served]
         binding_ids = [binding.id for binding in bindings]
         seller_product_ids = [product.id for product in seller_products]
 
@@ -515,11 +518,13 @@ async def get_rule_views(
             totals[1] += direction_reserved
             totals[2] = max(0, totals[2] - direction_reserved)
 
+        publishing = [binding for binding in bindings if binding.stock_sync_enabled]
         for product in seller_products:
             pool_rows = pools_by_product[product.id]
             rule = rule_from_product(product, pool_rows, bindings)
             on_hand, reserved, free = stock_by_product[product.id]
-            amounts = split_amounts(rule, free, served, pool_rows=pool_rows)
+            # То же, что и в get_rule_view: экран считает по публикующим.
+            amounts = split_amounts(rule, free, publishing, pool_rows=pool_rows)
             views[product.id] = FbsRuleView(
                 rule=rule,
                 on_hand=on_hand,

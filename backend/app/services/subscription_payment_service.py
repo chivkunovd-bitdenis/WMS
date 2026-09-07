@@ -166,38 +166,44 @@ async def sync_pending_payment(session: AsyncSession, *, tenant: Tenant) -> bool
         )
         .order_by(SubscriptionPayment.created_at.desc())
     )
-    payment = (await session.execute(stmt)).scalars().first()
-    if payment is None:
+    # Спрашиваем про ВСЕ незакрытые платежи, а не только про свежий. Человек мог
+    # нажать «Продлить» дважды и оплатить первый счёт: если смотреть только на
+    # последний, деньги ушли бы, а срок остался прежним до тех пор, пока ЮKassa
+    # не протухнет второй счёт сама.
+    payments = list((await session.execute(stmt)).scalars().all())
+    if not payments:
         return False
 
-    try:
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
-            response = await client.get(
-                _payments_url(payment.provider_payment_id), auth=_auth()
+    activated = False
+    for payment in payments:
+        try:
+            async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
+                response = await client.get(
+                    _payments_url(payment.provider_payment_id), auth=_auth()
+                )
+                response.raise_for_status()
+                data = response.json()
+        except httpx.HTTPError as exc:
+            logger.warning("yookassa get payment failed: %s", exc)
+            raise SubscriptionPaymentError("payments_unavailable") from exc
+
+        status = str(data.get("status") or "")
+        if status == "succeeded" and bool(data.get("paid")):
+            payment.status = "succeeded"
+            payment.paid_at = datetime.now(tz=UTC)
+            extend_paid_until(tenant)
+            activated = True
+            logger.info(
+                "subscription extended: tenant=%s until=%s payment=%s",
+                tenant.id,
+                tenant.subscription_paid_until,
+                payment.provider_payment_id,
             )
-            response.raise_for_status()
-            data = response.json()
-    except httpx.HTTPError as exc:
-        logger.warning("yookassa get payment failed: %s", exc)
-        raise SubscriptionPaymentError("payments_unavailable") from exc
+            continue
+        if status == "canceled":
+            payment.status = "canceled"
+        elif status:
+            payment.status = status
 
-    status = str(data.get("status") or "")
-    if status == "succeeded" and bool(data.get("paid")):
-        payment.status = "succeeded"
-        payment.paid_at = datetime.now(tz=UTC)
-        extend_paid_until(tenant)
-        await session.commit()
-        logger.info(
-            "subscription extended: tenant=%s until=%s payment=%s",
-            tenant.id,
-            tenant.subscription_paid_until,
-            payment.provider_payment_id,
-        )
-        return True
-
-    if status == "canceled":
-        payment.status = "canceled"
-    elif status:
-        payment.status = status
     await session.commit()
-    return False
+    return activated

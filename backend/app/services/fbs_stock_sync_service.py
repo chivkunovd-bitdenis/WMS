@@ -773,7 +773,18 @@ async def publish_explicit_zero_for_binding(
             await session.commit()
             return FbsStockSyncResult(errors=1, error_code=exc.code)
 
-        existing_items = await _load_existing_sync_items(session, binding.id)
+        all_items = await _load_existing_sync_items(session, binding.id)
+        # WMS-376. Обнуляем только то, куда сами когда-то положили положительное
+        # число. Строки заводятся ещё до отправки — и остаются после ошибки WB, и
+        # после конфликта, и после блокировки. Слать по ним ноль значило бы
+        # обнулять карточку, которой мы никогда не управляли: на бою таких строк
+        # 129 из 267. Ровно этого владелец и не хочет — «что стоит в кабинете, не
+        # наше дело, пока мы туда не писали».
+        existing_items = {
+            chrt_id: item
+            for chrt_id, item in all_items.items()
+            if int(item.last_confirmed_amount or 0) > 0
+        }
         if not existing_items:
             result.bindings_processed = 1
             return result
