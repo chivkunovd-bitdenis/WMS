@@ -28,6 +28,53 @@ class WildberriesSyncError(Exception):
         super().__init__(code)
 
 
+async def fetch_all_cards(
+    http_client: httpx.AsyncClient,
+    *,
+    api_token: str,
+) -> tuple[list[Any], bool]:
+    """Shared complete-page fetch for card snapshots and Product imports."""
+    card_list: list[Any] = []
+    updated_at: str | None = None
+    nm_id: int | None = None
+    seen: set[tuple[str, int]] = set()
+    cursor_present = False
+    while True:
+        data = await fetch_cards_list(
+            http_client,
+            api_token=api_token,
+            limit=100,
+            cursor_updated_at=updated_at,
+            cursor_nm_id=nm_id,
+        )
+        cards = data.get("cards")
+        if not isinstance(cards, list):
+            raise WildberriesClientError("invalid_response")
+        card_list.extend(cards)
+        cursor = data.get("cursor")
+        cursor_present = cursor_present or cursor is not None
+        # WB's cursor.total counts THIS page, not the entire catalogue.
+        if len(cards) < 100:
+            break
+        if not isinstance(cursor, dict):
+            raise WildberriesClientError("invalid_response")
+        next_updated_at, next_nm_id = cursor.get("updatedAt"), cursor.get("nmID")
+        if (
+            not isinstance(next_updated_at, str)
+            or not next_updated_at.strip()
+            or not isinstance(next_nm_id, int)
+            or isinstance(next_nm_id, bool)
+        ):
+            raise WildberriesClientError("invalid_response")
+        next_cursor = (next_updated_at, next_nm_id)
+        if next_cursor in seen:
+            raise WildberriesClientError("pagination_stalled")
+        seen.add(next_cursor)
+        updated_at, nm_id = next_cursor
+        await asyncio.sleep(0.6)  # WB Content: 100 requests/minute.
+    return card_list, cursor_present
+
+
 async def sync_cards_list(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -41,45 +88,8 @@ async def sync_cards_list(
     content_token, _supplies = pair
     if not content_token:
         raise WildberriesSyncError("missing_content_token")
-    card_list: list[Any] = []
-    updated_at: str | None = None
-    nm_id: int | None = None
-    seen: set[tuple[str, int]] = set()
-    cursor_present = False
     try:
-        while True:
-            data = await fetch_cards_list(
-                http_client,
-                api_token=content_token,
-                limit=100,
-                cursor_updated_at=updated_at,
-                cursor_nm_id=nm_id,
-            )
-            cards = data.get("cards")
-            if not isinstance(cards, list):
-                raise WildberriesClientError("invalid_response")
-            card_list.extend(cards)
-            cursor = data.get("cursor")
-            cursor_present = cursor_present or cursor is not None
-            # WB's cursor.total counts THIS page, not the entire catalogue.
-            if len(cards) < 100:
-                break
-            if not isinstance(cursor, dict):
-                raise WildberriesClientError("invalid_response")
-            next_updated_at, next_nm_id = cursor.get("updatedAt"), cursor.get("nmID")
-            if (
-                not isinstance(next_updated_at, str)
-                or not next_updated_at.strip()
-                or not isinstance(next_nm_id, int)
-                or isinstance(next_nm_id, bool)
-            ):
-                raise WildberriesClientError("invalid_response")
-            next_cursor = (next_updated_at, next_nm_id)
-            if next_cursor in seen:
-                raise WildberriesClientError("pagination_stalled")
-            seen.add(next_cursor)
-            updated_at, nm_id = next_cursor
-            await asyncio.sleep(0.6)  # WB Content: 100 requests/minute.
+        card_list, cursor_present = await fetch_all_cards(http_client, api_token=content_token)
     except WildberriesClientError as exc:
         suffix = f"_{exc.status_code}" if exc.status_code else ""
         raise WildberriesSyncError(f"wb_{exc.code}{suffix}") from exc
