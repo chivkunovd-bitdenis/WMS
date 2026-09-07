@@ -20,8 +20,8 @@ class BillingConfigurationError(ValueError):
 
 
 _SERVICE_UNITS: dict[str, frozenset[str]] = {
-    "inbound": frozenset({"document", "item"}),
-    "marketplace_outbound": frozenset({"document", "item"}),
+    "inbound": frozenset({"item"}),
+    "marketplace_outbound": frozenset({"item"}),
     "storage_liter_day": frozenset({"liter_day"}),
 }
 
@@ -209,7 +209,7 @@ async def create_tariff(
             fact_date = entry.occurred_at.astimezone(ZoneInfo("Europe/Moscow")).date()
         if fact_date < valid_from:
             continue
-        quantity = Decimal("1") if unit == "document" else entry.quantity
+        quantity = entry.quantity
         repriced_amount = int(
             (Decimal(amount_kopecks) * quantity).quantize(
                 Decimal("1"), rounding=ROUND_HALF_UP
