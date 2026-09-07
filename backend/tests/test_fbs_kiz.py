@@ -3817,6 +3817,11 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
         (order.wb_order_id, value, "pending"),
     ]:
         remote_order_id, remote_value, remote_decision = snapshot
+        validated = await async_client.post(
+            "/operations/fbs-orders/kiz/validate", headers=headers,
+            json={"order_id": str(order.order_id), "value": value},
+        )
+        assert validated.status_code == 200, validated.text
         retry = await async_client.post(
             "/operations/fbs-orders/kiz/commit", headers=headers, json=payload
         )
@@ -3837,6 +3842,13 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
         assert retry.json()[0]["code"] == (
             "ok" if resolution == "filled" else "meta_validation_fail"
         )
+    if resolution == "filled":
+        duplicate = await async_client.post(
+            "/operations/fbs-orders/kiz/validate", headers=headers,
+            json={"order_id": str(order.order_id), "value": value},
+        )
+        assert duplicate.status_code == 409, duplicate.text
+        assert duplicate.json()["detail"]["code"] == "duplicate_kiz"
     assert calls.count("put") == 1
     async with SessionLocal() as session:
         operation = await session.get(FbsWbOperation, operation_id)
