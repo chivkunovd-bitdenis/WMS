@@ -13,11 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import SessionLocal
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
-from app.services.wildberries_client import WildberriesClientError, fetch_cards_list
+from app.services.wildberries_client import WildberriesClientError
 from app.services.wildberries_credentials_service import get_decrypted_tokens_for_seller
 from app.services.wildberries_import_cards_service import upsert_imported_cards
 from app.services.wildberries_product_import_service import upsert_products_from_wb_cards
-from app.services.wildberries_sync_service import WildberriesSyncError
+from app.services.wildberries_sync_service import WildberriesSyncError, fetch_all_cards
 
 logger = logging.getLogger(__name__)
 
@@ -27,45 +27,9 @@ async def fetch_all_wb_cards(
     *,
     api_token: str,
 ) -> list[dict[str, Any]]:
-    """Paginate ``POST /content/v2/get/cards/list`` until cursor exhausted."""
-    total_cards: list[dict[str, Any]] = []
-    updated_at: str | None = None
-    nm_id: int | None = None
-    total_hint: int | None = None
-    seen: set[tuple[str | None, int | None]] = set()
-    for _ in range(250):
-        seen_key = (updated_at, nm_id)
-        if seen_key in seen:
-            break
-        seen.add(seen_key)
-        data = await fetch_cards_list(
-            http_client,
-            api_token=api_token,
-            limit=100,
-            cursor_updated_at=updated_at,
-            cursor_nm_id=nm_id,
-        )
-        cards = data.get("cards") if isinstance(data, dict) else None
-        batch = cards if isinstance(cards, list) else []
-        if not batch:
-            break
-        for item in batch:
-            if isinstance(item, dict):
-                total_cards.append(item)
-        cur = data.get("cursor") if isinstance(data, dict) else None
-        if isinstance(cur, dict):
-            ua = cur.get("updatedAt")
-            if isinstance(ua, str) and ua.strip():
-                updated_at = ua
-            cid = cur.get("nmID")
-            if isinstance(cid, int):
-                nm_id = cid
-            th = cur.get("total")
-            if isinstance(th, int):
-                total_hint = th
-        if total_hint is not None and len(total_cards) >= total_hint:
-            break
-    return total_cards
+    """Use the same complete-page fetch as the fulfillment card import."""
+    cards, _cursor_present = await fetch_all_cards(http_client, api_token=api_token)
+    return [card for card in cards if isinstance(card, dict)]
 
 
 async def sync_wb_products_for_seller(
