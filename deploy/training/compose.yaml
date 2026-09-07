@@ -1,0 +1,108 @@
+name: wms-training
+
+services:
+  db:
+    image: ghcr.io/railwayapp-templates/postgres-ssl:18@sha256:e617e80d34d40def28ab197662197acc5cd6c1dc120db9cf38d835a2386c226c
+    environment:
+      POSTGRES_DB: wms
+      POSTGRES_USER: wms
+      POSTGRES_PASSWORD: ${TRAINING_DB_PASSWORD:?set a separate training database password}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - database:/var/lib/postgresql/data
+    networks: [private]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U wms -d wms"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  wb-emulator:
+    build:
+      context: ./src/emulator
+      dockerfile: wb_emulator/Dockerfile
+    labels:
+      org.opencontainers.image.revision: 520fac16f6fabaaa229883e03dd50c5a1a71ab87
+    environment:
+      WB_EMULATOR_DB_PATH: /data/wb_emulator.sqlite
+      WB_EMULATOR_TOKEN_MAP_FILE: /training/emulator-tokens.json
+      WB_EMULATOR_ADMIN_TOKEN: ${TRAINING_EMULATOR_ADMIN_TOKEN:?set a separate training emulator admin token}
+    volumes:
+      - emulator:/data
+      - ./private/emulator-tokens.json:/training/emulator-tokens.json:ro
+    networks: [private]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  api:
+    build:
+      context: ./src/wms/backend
+      dockerfile: Dockerfile.railway
+    labels:
+      org.opencontainers.image.revision: 6afa60e7f8ea72531fb6f541ff1eb159b732ace6
+    environment:
+      APP_ENV: staging
+      PORT: "8000"
+      DATABASE_URL: postgresql+psycopg_async://wms:${TRAINING_DB_PASSWORD:?set a separate training database password}@db:5432/wms
+      JWT_SECRET_KEY: ${TRAINING_JWT_SECRET:?set a separate training signing secret}
+      WMS_SECRETS_FERNET_KEY: ${TRAINING_FERNET_KEY:?set a separate training encryption key}
+      WMS_PUBLIC_BASE_URL: ${TRAINING_PUBLIC_URL:?set the training URL}
+      WMS_ALLOW_PUBLIC_REGISTRATION: "false"
+      WMS_MARKING_IMPORT_LOCAL_STORAGE: "true"
+      WILDBERRIES_CONTENT_API_BASE: http://wb-emulator:8000
+      WILDBERRIES_SUPPLIES_API_BASE: http://wb-emulator:8000
+      WILDBERRIES_MARKETPLACE_API_BASE: http://wb-emulator:8000
+      WILDBERRIES_MARKETPLACE_WAREHOUSE_API_BASE: http://wb-emulator:8000
+      WMS_OZON_LIVE_API: "false"
+      WMS_OZON_SELLER_API_BASE: http://127.0.0.1:9
+      WMS_SMTP_HOST: ""
+      WMS_YOOKASSA_SHOP_ID: ""
+      WMS_YOOKASSA_SECRET_KEY: ""
+      WMS_DADATA_TOKEN: ""
+    volumes:
+      - files:/app/var
+    networks: [private]
+    depends_on:
+      db:
+        condition: service_healthy
+      wb-emulator:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  web:
+    build:
+      context: ./src/wms/frontend
+      dockerfile: Dockerfile.railway
+    labels:
+      org.opencontainers.image.revision: 6afa60e7f8ea72531fb6f541ff1eb159b732ace6
+    environment:
+      PORT: "8080"
+      WMS_API_UPSTREAM: http://api:8000
+    ports:
+      - "${TRAINING_BIND_ADDRESS:-127.0.0.1}:${TRAINING_HTTP_PORT:-8088}:8080"
+    networks: [private, public]
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  private:
+    internal: true
+  public: {}
+
+volumes:
+  database: {}
+  emulator: {}
+  files: {}

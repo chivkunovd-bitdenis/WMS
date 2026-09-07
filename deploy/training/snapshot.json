@@ -1,0 +1,9 @@
+{
+  "task": "WMS-387",
+  "verified_at": "2026-09-07",
+  "application_commit": "6afa60e7f8ea72531fb6f541ff1eb159b732ace6",
+  "emulator_commit": "520fac16f6fabaaa229883e03dd50c5a1a71ab87",
+  "postgres_image": "ghcr.io/railwayapp-templates/postgres-ssl:18@sha256:e617e80d34d40def28ab197662197acc5cd6c1dc120db9cf38d835a2386c226c",
+  "source": "Railway active deployments: WMS, web, wb-emulator, Postgres",
+  "data_snapshot": "pending"
+}
