@@ -23,7 +23,7 @@ def test_validate_inn_rejects_invalid_twelve_digit_inn_with_domain_error() -> No
 
 
 @pytest.mark.asyncio
-async def test_tariff_versions_cannot_overlap_by_unit() -> None:
+async def test_tariff_versions_cannot_overlap() -> None:
     session = AsyncMock()
     session.add = Mock()
     tenant_id = uuid4()
@@ -40,7 +40,7 @@ async def test_tariff_versions_cannot_overlap_by_unit() -> None:
         tenant_id=tenant_id,
         seller_id=None,
         service_code="inbound",
-        unit="document",
+        unit="item",
         amount=Decimal("10.00"),
         valid_from=start,
     )
@@ -119,3 +119,20 @@ async def test_ff_profile_rejects_whitespace_only_bank_details() -> None:
             settlement_account="40702810000000000001",
             correspondent_account="30101810400000000225",
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("service_code", ["inbound", "marketplace_outbound"])
+async def test_document_tariff_is_rejected_before_any_database_access(service_code: str) -> None:
+    session = AsyncMock()
+    with pytest.raises(BillingConfigurationError, match="Недопустимая единица расчёта"):
+        await create_tariff(
+            session,
+            tenant_id=uuid4(),
+            seller_id=None,
+            service_code=service_code,
+            unit="document",
+            amount=Decimal("220.00"),
+            valid_from=date(2026, 9, 1),
+        )
+    assert session.mock_calls == []

@@ -90,7 +90,7 @@ async def test_billing_configuration_api_validates_profiles_tariffs_and_tenant_b
 
     tariff = {
         "service_code": "inbound",
-        "unit": "document",
+        "unit": "item",
         "amount": "0.00",
         "valid_from": "2026-09-01",
     }
@@ -593,13 +593,13 @@ async def test_creating_covering_tariffs_reprices_unpriced_entries_in_kopecks(
         )
         assert tenant_id is not None
         entries = {
-            "document": BillingLedgerEntry(
+            "inbound": BillingLedgerEntry(
                 tenant_id=tenant_id,
                 service_code="inbound",
                 source="inbound",
-                source_type="repricing-document",
+                source_type="repricing-inbound",
                 source_id=uuid.uuid4(),
-                unit="document",
+                unit="item",
                 quantity=Decimal("7"),
                 occurred_at=datetime(2026, 9, 2, 12, tzinfo=UTC),
             ),
@@ -630,7 +630,7 @@ async def test_creating_covering_tariffs_reprices_unpriced_entries_in_kopecks(
         entry_ids = {name: entry.id for name, entry in entries.items()}
 
     tariffs = (
-        ("inbound", "document", "45.00", None),
+        ("inbound", "item", "45.00", None),
         ("marketplace_outbound", "item", "12.34", None),
         ("storage_liter_day", "liter_day", "0.15", warehouse_id),
     )
@@ -648,7 +648,7 @@ async def test_creating_covering_tariffs_reprices_unpriced_entries_in_kopecks(
             },
         )
         assert response.status_code == 201, response.text
-        tariff_ids[unit] = uuid.UUID(response.json()["id"])
+        tariff_ids[service_code] = uuid.UUID(response.json()["id"])
 
     async with SessionLocal() as session:
         repriced = {
@@ -657,17 +657,17 @@ async def test_creating_covering_tariffs_reprices_unpriced_entries_in_kopecks(
         }
         await session.flush()
 
-    document = repriced["document"]
-    assert document is not None
-    assert document.tariff_version_id == tariff_ids["document"]
-    assert document.unit == "document"
-    assert document.quantity == Decimal("1")
-    assert isinstance(document.rate, int) and document.rate == 4500
-    assert isinstance(document.amount, int) and document.amount == 4500
+    inbound = repriced["inbound"]
+    assert inbound is not None
+    assert inbound.tariff_version_id == tariff_ids["inbound"]
+    assert inbound.unit == "item"
+    assert inbound.quantity == Decimal("7")
+    assert isinstance(inbound.rate, int) and inbound.rate == 4500
+    assert isinstance(inbound.amount, int) and inbound.amount == 31500
 
     item = repriced["item"]
     assert item is not None
-    assert item.tariff_version_id == tariff_ids["item"]
+    assert item.tariff_version_id == tariff_ids["marketplace_outbound"]
     assert item.unit == "item"
     assert item.quantity == Decimal("2.5")
     assert isinstance(item.rate, int) and item.rate == 1234
@@ -675,7 +675,7 @@ async def test_creating_covering_tariffs_reprices_unpriced_entries_in_kopecks(
 
     liter_day = repriced["liter_day"]
     assert liter_day is not None
-    assert liter_day.tariff_version_id == tariff_ids["liter_day"]
+    assert liter_day.tariff_version_id == tariff_ids["storage_liter_day"]
     assert liter_day.unit == "liter_day"
     assert liter_day.quantity == Decimal("12.5")
     assert isinstance(liter_day.rate, int) and liter_day.rate == 15
@@ -693,7 +693,7 @@ async def test_tariff_and_repricing_overflow_are_rejected_without_partial_state(
         headers=rate_headers,
         json={
             "service_code": "inbound",
-            "unit": "document",
+            "unit": "item",
             "amount": "21474836.47",
             "valid_from": "2026-09-01",
         },
@@ -706,7 +706,7 @@ async def test_tariff_and_repricing_overflow_are_rejected_without_partial_state(
         headers=rate_headers,
         json={
             "service_code": "marketplace_outbound",
-            "unit": "document",
+            "unit": "item",
             "amount": "21474836.48",
             "valid_from": "2026-09-01",
         },
@@ -764,3 +764,37 @@ async def test_tariff_and_repricing_overflow_are_rejected_without_partial_state(
     assert unchanged_tenant is not None
     assert unchanged_tenant.billing_enabled_from is None
     assert tariffs == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("service_code", ["inbound", "marketplace_outbound"])
+async def test_document_tariff_api_rejection_does_not_activate_or_change_billing(
+    async_client: AsyncClient, service_code: str,
+) -> None:
+    headers = await _register_admin(async_client, "document-rejected")
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(me.json()["tenant_id"])
+    draft = {
+        "service_code": service_code, "unit": "document", "amount": "220.00",
+        "valid_from": "2026-09-01",
+    }
+    for _ in range(2):
+        rejected = await async_client.post("/billing/tariffs", headers=headers, json=draft)
+        assert rejected.status_code == 400, rejected.text
+        assert rejected.json()["detail"] == "Недопустимая единица расчёта"
+    assert (await async_client.get("/billing/tariffs", headers=headers)).json() == []
+    async with SessionLocal() as session:
+        tenant = await session.get(Tenant, tenant_id)
+        assert tenant is not None and tenant.billing_enabled_from is None
+
+    # Rejecting a later document rate must not close the valid piece-rate period.
+    accepted = await async_client.post(
+        "/billing/tariffs", headers=headers, json={**draft, "unit": "item"},
+    )
+    assert accepted.status_code == 201, accepted.text
+    before = (await async_client.get("/billing/tariffs", headers=headers)).json()
+    rejected = await async_client.post(
+        "/billing/tariffs", headers=headers, json={**draft, "valid_from": "2026-10-01"},
+    )
+    assert rejected.status_code == 400
+    assert (await async_client.get("/billing/tariffs", headers=headers)).json() == before
