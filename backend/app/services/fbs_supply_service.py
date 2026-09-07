@@ -583,15 +583,16 @@ async def create_supply_from_orders(
             http_status=409,
         )
 
-    # Порядок важен: сначала встаём в очередь к WB по селлеру, и только потом берём
-    # строки заказов на запись. Иначе ожидание очереди (до полутора минут) держало бы
-    # заблокированными строки заказов и соединение с базой — как раз в момент, когда
-    # несколько операторов жмут «Создать поставку» одновременно.
+    # До очереди выполнен только read-only preview. При занятом WB lock можно
+    # завершить эту транзакцию и вернуть соединение в пул на время ожидания.
+    # После захвата заново читаем и блокируем заказы; соединение владельца lock
+    # остаётся занятым до штатного unlock, в том числе во время HTTP-запросов.
     async with marketplace_seller_lock(
         session,
         seller_id,
         marketplace,
         wait_timeout_sec=WB_LOCK_WAIT_FOR_OPERATOR_SEC,
+        release_connection_while_waiting=marketplace == "wb",
     ) as provider_lock_acquired:
         if not provider_lock_acquired:
             raise FbsSupplyError(
