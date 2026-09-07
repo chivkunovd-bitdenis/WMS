@@ -3663,3 +3663,198 @@ def test_gs_restore_refuses_rather_than_guesses_unknown_kiz_shapes(
 
     assert value == raw, case
     assert hints == ["gs_unrestorable"], case
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("failure", "resolution"),
+    [
+        ("transport", "filled"),
+        ("503", "filled"),
+        ("read", "filled"),
+        ("403", "refused"),
+        ("transport", "invalid"),
+        ("transport", "cancel"),
+    ],
+)
+async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_rewrite(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+    resolution: str,
+) -> None:
+    from app.models.fbs_wb_operation import FbsWbOperation
+
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id, suffix=suffix
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=982001,
+        sticker_code="UNCERTAIN-KIZ",
+        wb_barcode="UNCERTAIN-BAR",
+        with_packaging=True,
+    )
+    value = _cis("UNCERTAIN")
+    if failure != "read":
+        async with SessionLocal() as session:
+            session.add(MarkingCode(
+                tenant_id=tenant_id, seller_id=seller_id, product_id=order.product_id,
+                cis_code=value, source="pool", status=STATUS_AVAILABLE,
+            ))
+            await session.commit()
+    calls: list[str] = []
+    remote_decision = "filled"
+    remote_value = value
+    remote_order_id = order.wb_order_id
+    fail_read = failure == "read"
+
+    async def fake_put(*args: Any, **kwargs: Any) -> None:
+        calls.append("put")
+        assert kwargs["value"] == value
+        if failure == "transport":
+            raise WildberriesClientError("transport_error")
+        if failure == "503":
+            raise WildberriesClientError("upstream_error", status_code=503)
+        if failure == "403":
+            raise WildberriesClientError("upstream_error", status_code=403)
+
+    async def fake_get(*args: Any, **kwargs: Any) -> list[MarketplaceOrderMetaRow]:
+        calls.append("get")
+        assert kwargs["order_ids"] == [order.wb_order_id]
+        if fail_read:
+            raise WildberriesClientError("transport_error")
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=remote_order_id,
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key="sgtin", value=remote_value, decision=remote_decision
+                    ),
+                ),
+                meta={},
+            )
+        ]
+
+    async def fake_delete(*args: Any, **kwargs: Any) -> None:
+        calls.append("delete")
+
+    monkeypatch.setattr(fbs_marking_svc, "put_marketplace_order_meta", fake_put)
+    monkeypatch.setattr(fbs_marking_svc, "fetch_marketplace_orders_meta_batch", fake_get)
+    monkeypatch.setattr(kiz_svc, "delete_marketplace_order_meta", fake_delete)
+    payload = {
+        "idempotency_key": "uncertain-binding",
+        "pairs": [{"order_id": str(order.order_id), "value": value, "confirmed": False}],
+    }
+    response = await async_client.post(
+        "/operations/fbs-orders/kiz/commit", headers=headers, json=payload
+    )
+    assert response.status_code == 200, response.text
+    if resolution == "refused":
+        assert response.json()[0]["code"] == "wb_upstream_error_403"
+        assert await _marking_row_counts(tenant_id) == (0, 1)
+        async with SessionLocal() as session:
+            assert await session.scalar(select(func.count(FbsWbOperation.id))) == 0
+            assert await session.scalar(select(MarkingCode.status)) == STATUS_AVAILABLE
+        return
+    assert response.json()[0]["code"] == "wb_pending_confirmation"
+    assert "сверка" in response.json()[0]["message"]
+    async with SessionLocal() as session:
+        marking = (
+            await session.scalars(
+                select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.order_id)
+            )
+        ).one()
+        assert marking.meta_status == META_STATUS_UNKNOWN
+        assert marking.reason and "сверка" in marking.reason
+        code = await session.get(MarkingCode, marking.marking_code_id)
+        assert code is not None
+        assert code.status == (STATUS_APPLIED if failure == "read" else STATUS_RESERVED)
+        assert code.source == ("external_fbs" if failure == "read" else "pool")
+        operation = (await session.scalars(select(FbsWbOperation))).one()
+        assert operation.state == "pending_confirmation"
+        assert operation.local_entity_id == marking.id
+        operation_id = operation.id
+        foreign = FbsWbOperation(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            operation_kind="supply_deliver",
+            idempotency_key="foreign-marking-operation",
+            local_entity_type="fbs_order_marking",
+            local_entity_id=marking.id,
+            state="pending_confirmation",
+        )
+        session.add(foreign)
+        await session.commit()
+        foreign_id = foreign.id
+
+    if failure == "transport" and resolution == "filled":
+        other = await _create_order(
+            tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+            supply_id=supply_id, suffix=suffix, wb_order_id=982002,
+            sticker_code="OTHER-ORDER", wb_barcode="OTHER-BAR",
+        )
+        duplicate = await async_client.post(
+            "/operations/fbs-orders/kiz/validate", headers=headers,
+            json={"order_id": str(other.order_id), "value": value},
+        )
+        assert duplicate.status_code == 409, duplicate.text
+        assert duplicate.json()["detail"]["code"] == "duplicate_kiz"
+
+    # A fresh GET may still be incomplete, refer to another order/code, or be pending.
+    fail_read = False
+    for snapshot in [
+        (order.wb_order_id + 1, value, "filled"),
+        (order.wb_order_id, _cis("OTHER"), "filled"),
+        (order.wb_order_id, "", "required"),
+        (order.wb_order_id, value, "pending"),
+    ]:
+        remote_order_id, remote_value, remote_decision = snapshot
+        retry = await async_client.post(
+            "/operations/fbs-orders/kiz/commit", headers=headers, json=payload
+        )
+        assert retry.json()[0]["code"] == "wb_pending_confirmation", retry.text
+        async with SessionLocal() as session:
+            operation = await session.get(FbsWbOperation, operation_id)
+            assert operation is not None and operation.state == "pending_confirmation"
+    if resolution == "cancel":
+        cancelled = await async_client.delete(
+            f"/operations/fbs-orders/{order.order_id}/kiz", headers=headers
+        )
+        assert cancelled.status_code == 204, cancelled.text
+    else:
+        remote_order_id, remote_value, remote_decision = order.wb_order_id, value, resolution
+        retry = await async_client.post(
+            "/operations/fbs-orders/kiz/commit", headers=headers, json=payload
+        )
+        assert retry.json()[0]["code"] == (
+            "ok" if resolution == "filled" else "meta_validation_fail"
+        )
+    assert calls.count("put") == 1
+    async with SessionLocal() as session:
+        operation = await session.get(FbsWbOperation, operation_id)
+        foreign = await session.get(FbsWbOperation, foreign_id)
+        assert operation is not None and operation.state == (
+            "confirmed" if resolution == "filled" else "failed"
+        )
+        assert foreign is not None and foreign.state == "pending_confirmation"
+        line = await session.get(PackagingTaskLine, order.packaging_task_line_id)
+        assert line is not None
+        assert line.qty_marking_printed == (0 if failure == "read" else 1)
+        assert line.qty_marking_external == (1 if failure == "read" else 0)
+        assert line.qty_confirmed_packed == 0
+        assert (
+            await session.scalar(
+                select(func.count(MarkingCodeEvent.id)).where(
+                    MarkingCodeEvent.event_type == EVENT_APPLIED
+                )
+            )
+            == 1
+        )
