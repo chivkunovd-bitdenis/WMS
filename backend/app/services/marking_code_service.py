@@ -13,6 +13,7 @@ from typing import Any, cast
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
@@ -3427,3 +3428,228 @@ async def list_pending_marking_lines(
             )
         )
     return rows, total
+
+
+def _decode_restore_payloads(pdf: bytes) -> set[str]:
+    import fitz
+
+    from app.services.marking_datamatrix_service import (
+        decode_datamatrix_codes_on_pdf_page,
+    )
+
+    with fitz.open(stream=pdf, filetype="pdf") as doc:
+        return {
+            item.value
+            for page in doc
+            for item in decode_datamatrix_codes_on_pdf_page(page)
+        }
+
+
+async def _restore_code_scope_error(
+    session: AsyncSession,
+    code: MarkingCode,
+    gtin: str,
+) -> str | None:
+    from app.models.fbs_order import FbsOrderMarking
+
+    seller = await session.get(Seller, code.seller_id)
+    batch = await session.get(MarkingCodeImport, code.import_batch_id)
+    if (
+        seller is None
+        or seller.tenant_id != code.tenant_id
+        or batch is None
+        or batch.tenant_id != code.tenant_id
+        or batch.seller_id != code.seller_id
+    ):
+        return "owner_mismatch"
+    if code.gtin and code.gtin != gtin:
+        return "gtin_mismatch"
+    if code.pool_id is not None:
+        pool = await session.get(MarkingPool, code.pool_id)
+        if (
+            pool is None
+            or pool.tenant_id != code.tenant_id
+            or pool.seller_id != code.seller_id
+            or pool.gtin != gtin
+        ):
+            return "pool_mismatch"
+    if code.product_id is not None:
+        product = await session.get(Product, code.product_id)
+        if (
+            product is None
+            or product.tenant_id != code.tenant_id
+            or product.seller_id != code.seller_id
+        ):
+            return "product_mismatch"
+        if product.wb_barcode and product.wb_barcode not in _gtin_lookup_variants(gtin):
+            return "product_mismatch"
+    if code.packaging_task_line_id is not None:
+        return "linked_code"
+    linked = await session.scalar(
+        select(FbsOrderMarking.id)
+        .where(
+            FbsOrderMarking.tenant_id == code.tenant_id,
+            or_(
+                FbsOrderMarking.marking_code_id == code.id,
+                FbsOrderMarking.value == code.cis_code,
+            ),
+        )
+        .limit(1)
+    )
+    return "linked_code" if linked is not None else None
+
+
+async def restore_truncated_pool_cis_codes(
+    *,
+    tenant_id: uuid.UUID,
+    apply: bool = False,
+    code_ids: list[uuid.UUID] | None = None,
+) -> dict[str, Any]:
+    """Restore only a proven extension of the stored identifier from its own PDF.
+
+    This is an admin operation. Decoding runs outside DB sessions and row locks;
+    each apply rereads and locks the source, and commits just that one code.
+    No statement about WB validity is inferred from a length or an AI number.
+    """
+    from app.db.session import SessionLocal
+    from app.models.fbs_order import FbsOrderMarking
+
+    async with SessionLocal() as session:
+        stmt = (
+            select(MarkingCode.id)
+            .where(
+                MarkingCode.tenant_id == tenant_id,
+                MarkingCode.source == "pool",
+                MarkingCode.import_batch_id.is_not(None),
+            )
+            .order_by(MarkingCode.id)
+        )
+        if code_ids is not None:
+            stmt = stmt.where(MarkingCode.id.in_(code_ids))
+        ids = list((await session.scalars(stmt)).all())
+    rows: list[dict[str, Any]] = []
+    for code_id in ids:
+        async with SessionLocal() as session:
+            original = await session.get(MarkingCode, code_id)
+        if original is None or original.tenant_id != tenant_id:
+            continue
+        row: dict[str, Any] = {
+            "code_id": str(code_id),
+            "old_length": len(original.cis_code),
+        }
+        rows.append(row)
+        if original.status != STATUS_AVAILABLE:
+            row["outcome"] = "not_available"
+            continue
+        prefix = original.cis_code.rstrip("\x1d")
+        if not re.fullmatch(r"01[0-9]{14}21[^\x1d]+", prefix):
+            row["outcome"] = "outside_prefix_shape"
+            continue
+        if not original.label_artifact_pdf:
+            row["outcome"] = "missing_artifact"
+            continue
+        try:
+            values = await asyncio.to_thread(
+                _decode_restore_payloads, original.label_artifact_pdf
+            )
+        except Exception:
+            row["outcome"] = "unreadable_artifact"
+            continue
+        matches = {
+            value
+            for value in values
+            if value.startswith(prefix + "\x1d") and len(value) > len(prefix) + 1
+        }
+        if original.cis_code in values and not matches:
+            row["outcome"] = "unchanged"
+            continue
+        if len(matches) != 1:
+            row["outcome"] = (
+                "ambiguous_artifact" if len(matches) > 1 else "prefix_mismatch"
+            )
+            continue
+        full = matches.pop()
+        if len(full) > _CIS_MAX_LEN:
+            row["outcome"] = "payload_too_long"
+            continue
+        row["new_length"] = len(full)
+        async with SessionLocal() as session:
+            current_stmt = (
+                select(MarkingCode)
+                .where(
+                    MarkingCode.id == code_id,
+                    MarkingCode.tenant_id == tenant_id,
+                )
+                .execution_options(populate_existing=True)
+            )
+            if apply:
+                current_stmt = current_stmt.with_for_update()
+            current = await session.scalar(current_stmt)
+            if current is None or current.status != STATUS_AVAILABLE:
+                row["outcome"] = "not_available"
+                continue
+            source_fields = (
+                "cis_code",
+                "label_artifact_pdf",
+                "seller_id",
+                "product_id",
+                "pool_id",
+                "import_batch_id",
+                "source",
+                "gtin",
+                "serial",
+            )
+            if any(
+                getattr(current, field) != getattr(original, field)
+                for field in source_fields
+            ):
+                row["outcome"] = "source_changed"
+                continue
+            reason = await _restore_code_scope_error(session, current, prefix[2:16])
+            if reason is not None:
+                row["outcome"] = reason
+                continue
+            if current.serial and current.serial != prefix[18:]:
+                row["outcome"] = "serial_mismatch"
+                continue
+            conflict = await session.scalar(
+                select(MarkingCode.id)
+                .where(
+                    MarkingCode.tenant_id == tenant_id,
+                    MarkingCode.cis_code == full,
+                    MarkingCode.id != code_id,
+                )
+                .limit(1)
+            )
+            binding = await session.scalar(
+                select(FbsOrderMarking.id)
+                .where(
+                    FbsOrderMarking.tenant_id == tenant_id,
+                    FbsOrderMarking.value == full,
+                )
+                .limit(1)
+            )
+            if conflict is not None or binding is not None:
+                row["outcome"] = "target_conflict"
+                continue
+            if not apply:
+                row["outcome"] = "would_restore"
+                continue
+            current.cis_code = full
+            try:
+                await session.commit()
+            except IntegrityError:
+                await session.rollback()
+                row["outcome"] = "target_conflict"
+            else:
+                row["outcome"] = "restored"
+    counts: dict[str, int] = {}
+    for row in rows:
+        counts[row["outcome"]] = counts.get(row["outcome"], 0) + 1
+    return {
+        "tenant_id": str(tenant_id),
+        "dry_run": not apply,
+        "scanned": len(rows),
+        "by_outcome": counts,
+        "rows": rows,
+    }
