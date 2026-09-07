@@ -1637,8 +1637,12 @@ async def print_codes_for_packaging_line(
         stmt = (
             select(MarkingCode)
             .where(
+                MarkingCode.tenant_id == tenant_id,
                 MarkingCode.packaging_task_line_id == line.id,
-                MarkingCode.status == STATUS_PRINTED,
+                or_(
+                    MarkingCode.status == STATUS_PRINTED,
+                    (MarkingCode.status == STATUS_APPLIED) & MarkingCode.printed_at.is_not(None),
+                ),
             )
             .order_by(MarkingCode.created_at.asc())
         )
@@ -2967,7 +2971,10 @@ async def list_printed_codes_for_packaging_line(
         .where(
             MarkingCode.tenant_id == tenant_id,
             MarkingCode.packaging_task_line_id == line_id,
-            MarkingCode.status == STATUS_PRINTED,
+            or_(
+                MarkingCode.status == STATUS_PRINTED,
+                (MarkingCode.status == STATUS_APPLIED) & MarkingCode.printed_at.is_not(None),
+            ),
         )
         .order_by(MarkingCode.printed_at.asc(), MarkingCode.created_at.asc())
     )

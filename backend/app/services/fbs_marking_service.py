@@ -42,6 +42,7 @@ from app.models.fbs_wb_operation import (
 from app.models.marking_code import (
     EVENT_WB_ORPHANED,
     STATUS_AVAILABLE,
+    STATUS_PRINTED,
     STATUS_RESERVED,
     MarkingCode,
     MarkingCodeEvent,
@@ -567,6 +568,7 @@ async def _claim_pool_code_if_present(
     tenant_id: uuid.UUID,
     order: FbsOrder,
     cis_raw: str,
+    printed_for_line_id: uuid.UUID | None = None,
 ) -> MarkingCode | None:
     code = await _lookup_marking_code_in_tenant(
         session,
@@ -583,10 +585,19 @@ async def _claim_pool_code_if_present(
         and code.product_id != order.product_id
     ):
         raise FbsMarkingError("code_product_mismatch")
-    stmt = select(MarkingCode).where(MarkingCode.id == code.id).with_for_update()
+    stmt = (
+        select(MarkingCode).where(MarkingCode.id == code.id)
+        .execution_options(populate_existing=True).with_for_update()
+    )
     locked = (await session.execute(stmt)).scalar_one_or_none()
     if locked is None:
         return None
+    if (
+        locked.status == STATUS_PRINTED
+        and printed_for_line_id is not None
+        and locked.packaging_task_line_id == printed_for_line_id
+    ):
+        return locked
     if locked.status != STATUS_AVAILABLE:
         raise FbsMarkingError("duplicate_kiz")
     locked.status = STATUS_RESERVED
