@@ -71,6 +71,8 @@ const REJECTION_MESSAGES: Record<string, string> = {
   standalone_reversal: 'Сторно нельзя выставить отдельно от своего начисления',
   selected_source_outside_period: 'Выбранная операция не входит в период отчёта',
   selected_source_not_found: 'Выбранная операция больше не доступна. Обновите отчёт',
+  selected_source_already_invoiced:
+    'Среди выбранных операций есть уже включённая в действующий счёт. Уберите её из выбора или отмените прежний счёт',
   manual_line_count: `Ручной счёт содержит от одной до ${MANUAL_LINE_LIMIT} строк`,
   manual_description_required: 'У каждой строки должно быть название услуги',
   invalid_decimal_amount: 'Сумма указывается с точностью до копеек',

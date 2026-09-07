@@ -317,6 +317,27 @@ async def _preview_selected_operations(
                     selected[member.id] = member
                     next_frontier.add(member.id)
             frontier = next_frontier - set(selected)
+    # История отменённого счёта остаётся неизменной, но не занимает операции.
+    # Проверяем всю выбранную цепочку; частичный счёт вместо запрошенного
+    # молча не собираем.
+    already_invoiced = await session.scalar(
+        select(BillingInvoiceV2Source.id)
+        .join(
+            BillingInvoiceV2Line,
+            BillingInvoiceV2Source.invoice_line_id == BillingInvoiceV2Line.id,
+        )
+        .join(BillingInvoiceV2, BillingInvoiceV2Line.invoice_id == BillingInvoiceV2.id)
+        .where(
+            BillingInvoiceV2Source.tenant_id == tenant_id,
+            BillingInvoiceV2Line.tenant_id == tenant_id,
+            BillingInvoiceV2.tenant_id == tenant_id,
+            BillingInvoiceV2.status != "cancelled",
+            BillingInvoiceV2Source.billing_ledger_entry_id.in_(selected),
+        )
+        .limit(1)
+    )
+    if already_invoiced is not None:
+        raise BillingInvoiceV2Error("selected_source_already_invoiced")
     grouped: dict[str, list[BillingLedgerEntry]] = {}
     for entry in selected.values():
         grouped.setdefault(entry.service_code, []).append(entry)
@@ -383,6 +404,19 @@ async def create_invoice_v2(
 ) -> BillingInvoiceV2:
     if not idempotency_key.strip():
         raise BillingInvoiceV2Error("idempotency_key_required")
+    if request.get("creation_mode") == "selected_operations" and request.get("selected_root_ids"):
+        # Оба запроса одного селлера проходят проверку последовательно, до
+        # записи счёта и до проверки повторного ключа. В PostgreSQL блокировка
+        # живёт до commit вызывающего API; следующий запрос увидит его счёт.
+        # NO KEY UPDATE не мешает обычным вставкам со ссылкой на селлера.
+        seller_id = uuid.UUID(str(request["seller_id"]))
+        seller = await session.scalar(
+            select(Seller.id)
+            .where(Seller.tenant_id == tenant_id, Seller.id == seller_id)
+            .with_for_update(key_share=True)
+        )
+        if seller is None:
+            raise BillingInvoiceV2Error("seller_not_found")
     canonical = _canonical(request)
     request_hash = hashlib.sha256(canonical.encode()).hexdigest()
     existing = await session.scalar(
