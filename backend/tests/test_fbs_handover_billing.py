@@ -17,15 +17,17 @@ from app.db.session import SessionLocal
 from app.models.billing import BillingLedgerEntry
 from app.models.fbs_order import FbsOrder, FbsOrderProduct
 from app.models.fbs_supply import FbsSupply
+from app.models.fbs_wb_operation import FbsWbOperation
 from app.models.operation_fact import OperationFact
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.services import fbs_order_billing_service as billing
+from app.services import fbs_shipment_service as shipment
 from app.services.fbs_cancellation_service import reverse_fbs_order_billing
 from app.services.wildberries_client import WildberriesClientError
 from tests.test_fbs_shipment_warehouse_sc import (
-    _deliver_with_preflight,
+    _delivery_preflight,
     _prepare_supply_with_orders,
     _register_ff_admin,
     _setup_seller_with_token,
@@ -33,7 +35,9 @@ from tests.test_fbs_shipment_warehouse_sc import (
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("outcome", ["success", "marketplace_error", "billing_error", "timeout"])
+@pytest.mark.parametrize(
+    "outcome", ["success", "marketplace_error", "billing_error", "timeout", "local_error"]
+)
 async def test_deliver_api_records_work_before_marketplace_sorting(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch, outcome: str
 ) -> None:
@@ -74,9 +78,29 @@ async def test_deliver_api_records_work_before_marketplace_sorting(
             "app.services.fbs_shipment_service.deliver_marketplace_supply", fail_marketplace
         )
     key = str(uuid.uuid4())
-    response = await _deliver_with_preflight(
-        async_client, headers, supply["id"], idempotency_key=key
-    )
+    preflight = await _delivery_preflight(async_client, headers, supply["id"])
+    payload = {"idempotency_key": key, "confirmed_preflight_version": preflight["version"]}
+    url = f"/operations/fbs-supplies/{supply['id']}/deliver"
+    confirmed_at = None
+    if outcome == "local_error":
+        write_off = shipment._write_off_delivered_orders_once
+
+        async def fail_local(*args: object, **kwargs: object) -> None:
+            raise RuntimeError("local stock write failed after marketplace confirmation")
+
+        monkeypatch.setattr(shipment, "_write_off_delivered_orders_once", fail_local)
+        with pytest.raises(RuntimeError, match="local stock write failed"):
+            await async_client.post(url, headers=headers, json=payload)
+        async with SessionLocal() as session:
+            operation = await session.scalar(
+                select(FbsWbOperation).where(FbsWbOperation.idempotency_key == key)
+            )
+            assert operation is not None and operation.state == "confirmed"
+            confirmed_at = operation.confirmed_at
+            assert confirmed_at is not None
+            assert list(await session.scalars(select(BillingLedgerEntry))) == []
+        monkeypatch.setattr(shipment, "_write_off_delivered_orders_once", write_off)
+    response = await async_client.post(url, headers=headers, json=payload)
     if outcome in {"marketplace_error", "timeout"}:
         assert response.status_code == (504 if outcome == "timeout" else 502), response.text
         async with SessionLocal() as session:
@@ -115,6 +139,8 @@ async def test_deliver_api_records_work_before_marketplace_sorting(
         ]
         assert len(facts) == 1
         assert facts[0].occurred_at == saved_supply.delivered_at
+        if confirmed_at is not None:
+            assert facts[0].occurred_at == confirmed_at
         entries = list(await session.scalars(select(BillingLedgerEntry)))
         assert {entry.service_code for entry in entries} == {"fbs_order", "packing"}
         assert all(entry.quantity == Decimal(1) for entry in entries)
