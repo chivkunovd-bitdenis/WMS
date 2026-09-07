@@ -292,6 +292,7 @@ class DeliveryPreflightResult:
     version: str
     checked_at: datetime
     checks: tuple[DeliveryCheck, ...]
+    cancelled_orders: tuple[dict[str, Any], ...] = ()
 
 
 def _wb_error_code(exc: WildberriesClientError) -> str:
@@ -1168,11 +1169,14 @@ async def preflight_delivery(
         source_plan=source_plan,
     )
     can_deliver = _checks_allow_delivery(checks)
+    from app.services.fbs_cancelled_after_pack_service import delivery_cancelled_orders
+
     return DeliveryPreflightResult(
         can_deliver=can_deliver,
         version=version,
         checked_at=checked_at,
         checks=tuple(checks),
+        cancelled_orders=tuple(await delivery_cancelled_orders(session, supply)),
     )
 
 
@@ -1182,6 +1186,7 @@ def delivery_preflight_to_dict(result: DeliveryPreflightResult) -> dict[str, Any
         "version": result.version,
         "checked_at": result.checked_at.isoformat(),
         "checks": _checks_to_payload(list(result.checks)),
+        "cancelled_orders": list(result.cancelled_orders),
     }
 
 
@@ -2437,6 +2442,9 @@ async def deliver_supply(
             confirmed_preflight_version=confirmed_preflight_version,
             actor_user_id=actor_user_id,
         )
+        from app.services.fbs_cancelled_after_pack_service import exclude_cancelled_delivery_orders
+
+        await exclude_cancelled_delivery_orders(session, supply)
         operation = await create_pending_deliver_operation(
             session,
             tenant_id=tenant_id,

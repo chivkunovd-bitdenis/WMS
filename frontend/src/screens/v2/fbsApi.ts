@@ -450,6 +450,13 @@ export type FbsDeliveryPreflight = {
   can_deliver: boolean
   version: string
   checked_at: string
+  cancelled_orders?: Array<{
+    order_id: string
+    wb_order_id: number
+    article: string | null
+    product_name: string | null
+    boxes: Array<{ box_id: string; box_number: number; box_barcode: string }>
+  }>
   checks: Array<{
     code: string
     message: string
