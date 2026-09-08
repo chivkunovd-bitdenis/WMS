@@ -9,8 +9,10 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
 from app.db.session import SessionLocal
+from app.models.fbs_order_pick import FbsOrderPick
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
     FBS_SUPPLY_STATUS_DRAFT,
@@ -511,3 +513,66 @@ async def test_fbs_pick_options_returns_empty_list_for_empty_supply(
 
     assert response.status_code == 200, response.text
     assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_product_scan_finds_packed_only_container_without_address_storage(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
+        async_client, headers, suffix
+    )
+    barcode = f"PACKED-ONLY-{suffix[-8:]}"
+    product_id = await _create_product(
+        async_client, headers, seller_id, sku=f"PACKED-{suffix}", barcode=barcode
+    )
+    supply_id, order_ids, _ = await _seed_pick_supply(
+        async_client, headers, tenant_id, seller_id, warehouse_id, location_id,
+        product_id, stock_qty=0,
+        order_specs=[(1, timedelta(hours=24))], barcode=barcode,
+    )
+    async with SessionLocal() as session:
+        box = WarehouseBox(
+            tenant_id=tenant_id, warehouse_id=warehouse_id,
+            storage_location_id=location_id, internal_barcode=f"BOX-{suffix[-8:]}",
+            container_kind="box",
+        )
+        session.add(box)
+        await session.flush()
+        balance = InventoryBalance(
+            tenant_id=tenant_id, storage_location_id=location_id, product_id=product_id,
+            container_kind="box", container_id=box.id,
+            quantity=2, quantity_unpacked=0, quantity_packed=2,
+        )
+        session.add(balance)
+        await session.commit()
+        box_id, balance_id = box.id, balance.id
+
+    # With addresses enabled, historical packing must not hide the real cell.
+    enabled = await async_client.patch(
+        "/tenant/settings", headers=headers, json={"address_storage_enabled": True}
+    )
+    assert enabled.status_code == 200, enabled.text
+    workspace = await async_client.get(f"{BASE}/{supply_id}/workspace", headers=headers)
+    assert workspace.status_code == 200, workspace.text
+    assert workspace.json()["picking_auto_passed_reason"] is None
+
+    disabled = await async_client.patch(
+        "/tenant/settings", headers=headers, json={"address_storage_enabled": False}
+    )
+    assert disabled.status_code == 200, disabled.text
+    response = await async_client.post(
+        f"{BASE}/{supply_id}/pick/scan", headers=headers, json={"barcode": barcode}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["picked_qty"] == 1
+    async with SessionLocal() as session:
+        picked = await session.scalar(
+            select(FbsOrderPick).where(FbsOrderPick.fbs_order_id == order_ids[0])
+        )
+        balance = await session.get(InventoryBalance, balance_id)
+        assert picked is not None and balance is not None
+        assert picked.source_container_kind == "box"
+        assert picked.source_container_id == box_id
+        assert (balance.quantity, balance.quantity_unpacked, balance.quantity_packed) == (2, 0, 2)

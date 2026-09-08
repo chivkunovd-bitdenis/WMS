@@ -182,7 +182,14 @@ async def test_ozon_missing_product_fails_before_any_provider_handoff(
 
 
 @pytest.mark.asyncio
-async def test_ozon_complete_fulfillment_keeps_its_exact_source(db_session: AsyncSession) -> None:
+async def test_ozon_legacy_packing_fact_cannot_override_sorting_container_source(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-043: a packing location is not the physical source of the shipped units."""
+    from app.models.inventory_movement import InventoryMovement
+    from app.models.warehouse_box import WarehouseBox
+    from app.services.sorting_location_service import get_or_create_sorting_location
+
     tenant, _, warehouse, product, order, supply = await _seed_ozon_supply_case(
         db_session,
         packed=True,
@@ -200,28 +207,103 @@ async def test_ozon_complete_fulfillment_keeps_its_exact_source(db_session: Asyn
     await db_session.commit()
     await _seed_physical_ozon_packaging(db_session, order, supply, [(product, 2)])
     await db_session.refresh(order, attribute_names=["product_positions"])
-    fulfillment = await db_session.scalar(
-        select(FbsPackagingFulfillment).where(
-            FbsPackagingFulfillment.fbs_order_id == order.id,
+    legacy_balance = await db_session.scalar(
+        select(InventoryBalance).where(
+            InventoryBalance.product_id == product.id,
         )
     )
-    assert fulfillment is not None and fulfillment.ozon_packed_units_json
-    expected_location = fulfillment.ozon_packed_units_json[0]["storage_location_id"]
+    assert legacy_balance is not None
+    # Preserve the old fact's location, but put the actual two units in a box on sorting.
+    legacy_balance.quantity = 0
+    legacy_balance.quantity_unpacked = 0
+    legacy_balance.quantity_packed = 0
+    sorting = await get_or_create_sorting_location(db_session, tenant.id, warehouse.id)
+    container = WarehouseBox(
+        tenant_id=tenant.id,
+        warehouse_id=warehouse.id,
+        storage_location_id=sorting.id,
+        internal_barcode=f"OZON-SORTING-{uuid.uuid4().hex}",
+    )
+    db_session.add(container)
+    await db_session.flush()
+    container_balance = InventoryBalance(
+        tenant_id=tenant.id,
+        product_id=product.id,
+        storage_location_id=sorting.id,
+        container_kind="box",
+        container_id=container.id,
+        quantity=2,
+        quantity_unpacked=0,
+        quantity_packed=2,
+    )
+    db_session.add(container_balance)
+    await db_session.commit()
+    await seed_boxes(db_session, order, supply)
+
     ledgers = await prepare_shipment_sources(
         db_session,
         tenant_id=tenant.id,
         warehouse_id=warehouse.id,
         orders=[order],
     )
-    assert [{key: row[key] for key in ("product_id", "storage_location_id", "quantity")}
-            for row in ledgers[0].ozon_positions_json or []] == [
-        {
-            "product_id": str(product.id),
-            "storage_location_id": expected_location,
-            "quantity": 2,
-        }
-    ]
+    recipe = ledgers[0].ozon_positions_json or []
+    assert recipe
+    assert sum(int(row["quantity"]) for row in recipe) == 2
+    assert all(
+        row["storage_location_id"] == str(sorting.id)
+        and row["container_kind"] == "box"
+        and row["container_id"] == str(container.id)
+        and row["source_mode"] == "sorting_container"
+        and row["negative_quantity"] == 0
+        for row in recipe
+    )
     assert ledgers[0].shipment_movement_id is None
+    await db_session.commit()
+    transport = FakeMarketplaceTransport(
+        endpoint_responses=_ozon_handoff_responses(),
+        endpoint_response_queues={"/v1/carriage/get": [{"carriage_id": 901, "status": "new"}]},
+    )
+    for _ in range(2):
+        delivered = await shipment_svc.deliver_supply(
+            db_session,
+            tenant.id,
+            supply.id,
+            AsyncMock(),
+            idempotency_key="ozon-sorting-container",
+            actor_user_id=None,
+            ozon_provider=OzonMarketplaceProvider(transport=transport),
+        )
+        assert delivered.status == "in_delivery"
+    await db_session.refresh(container_balance)
+    await db_session.refresh(legacy_balance)
+    assert (
+        container_balance.quantity,
+        container_balance.quantity_unpacked,
+        container_balance.quantity_packed,
+    ) == (0, 0, 0)
+    assert (
+        legacy_balance.quantity,
+        legacy_balance.quantity_unpacked,
+        legacy_balance.quantity_packed,
+    ) == (0, 0, 0)
+    movements = list(
+        (
+            await db_session.scalars(
+                select(InventoryMovement).where(
+                    InventoryMovement.product_id == product.id,
+                )
+            )
+        ).all()
+    )
+    assert sum(row.quantity_delta for row in movements) == -2
+    assert all(
+        row.movement_type == "fbs_shipment"
+        and row.storage_location_id == sorting.id
+        and row.container_kind == "box"
+        and row.container_id == container.id
+        for row in movements
+    )
+    assert sum(path == "/v1/carriage/approve" for path, _ in transport.endpoint_calls) == 1
 
 
 @pytest.mark.asyncio

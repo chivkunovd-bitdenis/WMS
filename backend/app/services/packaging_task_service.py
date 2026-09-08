@@ -769,11 +769,15 @@ async def confirm_line_packed_from_shelf(
     confirmed = int(line.qty_suggested_packed if qty is None else qty)
     if confirmed < 0 or confirmed > line.qty_total:
         raise PackagingTaskServiceError("invalid_qty")
-    _, packed_on_hand = await _get_balance_split(
-        session, tenant_id, line.product_id, line.storage_location_id
-    )
-    if confirmed > packed_on_hand:
-        raise PackagingTaskServiceError("invalid_qty")
+    from app.services.fbs_packaging_integration_service import get_supply_for_packaging_task
+
+    fbs_supply = await get_supply_for_packaging_task(session, tenant_id, task_id)
+    if fbs_supply is None:
+        _, packed_on_hand = await _get_balance_split(
+            session, tenant_id, line.product_id, line.storage_location_id
+        )
+        if confirmed > packed_on_hand:
+            raise PackagingTaskServiceError("invalid_qty")
     line.qty_confirmed_packed = confirmed
     _touch_task(task)
     if acting_user_id is not None:
@@ -1356,12 +1360,6 @@ async def pack_all_and_complete_fbs_task(
                     remaining,
                     acting_user_id=acting_user_id,
                     idempotency_key=f"pack-all:{task.id}:{line.id}",
-                    # Physical packing must not dead-end because the sorting
-                    # balance is already inconsistent. Keep the operator flow
-                    # moving, but do not silently consume stock from another
-                    # warehouse to compensate for the mismatch.
-                    fail_on_insufficient_stock=False,
-                    allow_alternative_sorting_fallback=False,
                 )
             except FbsPackagingIntegrationError as exc:
                 raise PackagingTaskServiceError(exc.code, message=exc.message) from exc

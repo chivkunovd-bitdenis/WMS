@@ -1,0 +1,34 @@
+{
+  "unchanged_tables": [
+    "inventory_balances",
+    "inventory_movements",
+    "inventory_reservations",
+    "fbs_order_reservations",
+    "fbs_order_product_reservations",
+    "fbs_order_products",
+    "warehouse_boxes"
+  ],
+  "changed_tables": [
+    "packaging_task_lines",
+    "fbs_packaging_fulfillments",
+    "fbs_orders"
+  ],
+  "line_changes": [
+    {
+      "qty_packed_in_task": [
+        0,
+        1
+      ]
+    },
+    {
+      "qty_packed_in_task": [
+        0,
+        2
+      ]
+    }
+  ],
+  "order_pack_status": [
+    "pending",
+    "packed"
+  ]
+}

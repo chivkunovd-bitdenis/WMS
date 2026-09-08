@@ -3443,3 +3443,140 @@ async def test_ozon_live_owner_blocks_retry_before_external_calls(
             ozon_provider=OzonMarketplaceProvider(transport=transport),
         )
     assert transport.endpoint_calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("packed_stock", [False, True], ids=["unpacked", "legacy-packed-only"])
+@pytest.mark.parametrize("pack_action", ["line", "all", "confirm_shelf"])
+async def test_ozon_pack_is_only_fact_with_nonzero_reservation(
+    db_session: AsyncSession, packed_stock: bool, pack_action: str
+) -> None:
+    """WMS-043: packing entry points cannot mutate physical stock or reserves."""
+    from app.models.inventory_movement import InventoryMovement
+    from app.services import fbs_packaging_integration_service as packaging_svc
+    from app.services import packaging_task_service as task_svc
+
+    tenant, _, warehouse, product, order, supply = await _seed_ozon_supply_case(
+        db_session, packed=True
+    )
+    assert supply is not None
+    supply.status = "assembling"
+    order.status = "assembling"
+    order.pack_status = "pending"
+    order.pick_status = "picked"
+    position = FbsOrderProduct(
+        order_id=order.id,
+        product_id=product.id,
+        ozon_sku=3001,
+        position_index=0,
+        quantity=2,
+        reserved_quantity=2,
+        picked_quantity=2,
+    )
+    db_session.add(position)
+    await db_session.flush()
+    reservation = FbsOrderProductReservation(
+        tenant_id=tenant.id,
+        order_product_id=position.id,
+        product_id=product.id,
+        warehouse_id=warehouse.id,
+        quantity=2,
+    )
+    db_session.add(reservation)
+    await db_session.commit()
+    task = await packaging_svc.create_packaging_task_for_supply(db_session, tenant.id, supply.id)
+    line = task.lines[0]
+    db_session.add(
+        InventoryBalance(
+            tenant_id=tenant.id,
+            product_id=product.id,
+            storage_location_id=line.storage_location_id,
+            quantity=3,
+            quantity_unpacked=0 if packed_stock else 3,
+            quantity_packed=3 if packed_stock else 0,
+        )
+    )
+    await db_session.commit()
+
+    async def warehouse_snapshot() -> tuple[list[dict[str, Any]], ...]:
+        async with SessionLocal() as reader:
+            return (
+                [
+                    dict(row)
+                    for row in (
+                        await reader.execute(
+                            select(InventoryBalance.__table__).order_by(InventoryBalance.id)
+                        )
+                    )
+                    .mappings()
+                    .all()
+                ],
+                [
+                    dict(row)
+                    for row in (
+                        await reader.execute(
+                            select(InventoryMovement.__table__).order_by(InventoryMovement.id)
+                        )
+                    )
+                    .mappings()
+                    .all()
+                ],
+                [
+                    dict(row)
+                    for row in (
+                        await reader.execute(
+                            select(FbsOrderProductReservation.__table__).order_by(
+                                FbsOrderProductReservation.id
+                            )
+                        )
+                    )
+                    .mappings()
+                    .all()
+                ],
+                [
+                    dict(row)
+                    for row in (
+                        await reader.execute(
+                            select(FbsOrderProduct.__table__).order_by(FbsOrderProduct.id)
+                        )
+                    )
+                    .mappings()
+                    .all()
+                ],
+            )
+
+    reserve_status_before = order.reserve_status
+    before = await warehouse_snapshot()
+    assert before[2][0]["quantity"] == 2
+    for scan_index in range(2):
+        if pack_action == "all":
+            await task_svc.pack_all_and_complete_fbs_task(
+                db_session, tenant.id, task.id, acting_user_id=None
+            )
+        elif pack_action == "confirm_shelf":
+            await task_svc.confirm_line_packed_from_shelf(
+                db_session, tenant.id, task.id, line.id, 2, acting_user_id=None
+            )
+        else:
+            await task_svc.record_pack_progress(
+                db_session,
+                tenant.id,
+                task.id,
+                line.id,
+                1,
+                order_id=order.id,
+                idempotency_key=f"ozon-fact-only-{scan_index}",
+                acting_user_id=None,
+            )
+        await db_session.commit()
+        assert await warehouse_snapshot() == before
+    await db_session.refresh(line)
+    await db_session.refresh(order)
+    if pack_action == "confirm_shelf":
+        assert line.qty_confirmed_packed == 2
+        assert line.qty_packed_in_task == 0
+        assert order.pack_status == "pending"
+    else:
+        assert line.qty_packed_in_task == 2
+        assert order.pack_status == "packed"
+    assert order.reserve_status == reserve_status_before
