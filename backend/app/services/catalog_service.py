@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -1235,6 +1237,53 @@ async def bulk_update_products_requires_honest_sign(
     return updated_count
 
 
+@asynccontextmanager
+async def _legacy_wb_publication_update(
+    session: AsyncSession, products: list[Product], *, enabled: bool, lock_held: bool = False,
+) -> AsyncIterator[None]:
+    """Keep the existing WB-only endpoints within their marketplace boundary."""
+    from app.services.fbs_stock_rule_service import FbsStockRuleError, _clear_product_publication
+    from app.services.marketplace_seller_lock_service import marketplace_seller_lock
+
+    if lock_held:
+        yield
+        return
+
+    seller_ids = {p.seller_id for p in products if p.seller_id is not None}
+    if len(seller_ids) > 1:
+        raise CatalogError("mixed_sellers")
+    seller_id = next(iter(seller_ids), None)
+    async with AsyncSession(bind=session.bind) as lock_session, marketplace_seller_lock(
+        lock_session, seller_id or uuid.UUID(int=0), "wb", wait_timeout_sec=30,
+    ) as acquired:
+        if not acquired:
+            raise CatalogError("stock_sync_busy")
+        products = list((await session.scalars(
+            select(Product).where(Product.id.in_([p.id for p in products]))
+            .order_by(Product.id).with_for_update()
+            .execution_options(populate_existing=True)
+        )).all())
+        disabled = {p.id for p in products if p.fbs_stock_sync_enabled and not enabled}
+        if disabled:
+            bindings = (await session.scalars(select(FbsWarehouseBinding).where(
+                FbsWarehouseBinding.tenant_id == products[0].tenant_id,
+                FbsWarehouseBinding.seller_id == seller_id,
+                FbsWarehouseBinding.marketplace == "wb",
+                FbsWarehouseBinding.is_active.is_(True),
+                FbsWarehouseBinding.served.is_(True),
+                FbsWarehouseBinding.stock_sync_enabled.is_(True),
+            ))).all()
+            try:
+                for binding in bindings:
+                    await _clear_product_publication(session, binding, disabled)
+            except FbsStockRuleError as exc:
+                raise CatalogError(exc.code) from exc
+        for product in products:
+            if product.fbs_ozon_stock_sync_enabled is None:
+                product.fbs_ozon_stock_sync_enabled = product.fbs_stock_sync_enabled
+        yield
+
+
 async def update_product_fbs_stock_sync(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1243,6 +1292,7 @@ async def update_product_fbs_stock_sync(
     fbs_stock_sync_enabled: bool | _SkipSentinel = SKIP,
     fbs_stock_limit: int | _SkipSentinel | None = SKIP,
     commit: bool = True,
+    _publication_lock_held: bool = False,
 ) -> Product:
     enabled_given = not isinstance(fbs_stock_sync_enabled, _SkipSentinel)
     limit_given = not isinstance(fbs_stock_limit, _SkipSentinel)
@@ -1254,40 +1304,48 @@ async def update_product_fbs_stock_sync(
     p = await get_product(session, tenant_id, product_id)
     if p is None:
         raise CatalogError("product_not_found")
-    if enabled_given:
-        # Явно переданный флаг продолжаем уважать — его шлют старые вызовы и тесты.
-        p.fbs_stock_sync_enabled = bool(fbs_stock_sync_enabled)
-    elif limit_given:
-        # Отдельного тумблера больше нет: участие в FBS выводится из наличия
-        # остатка. Задали число — включились; очистили — флаг всё равно
-        # остаётся True (см. ниже), чтобы товар не выпал из выгрузки и WB
-        # получил честный ноль, а не застрял на последнем опубликованном остатке.
-        p.fbs_stock_sync_enabled = True
-    if limit_given:
-        p.fbs_stock_limit = limit_value if isinstance(limit_value, int) else None
-        if limit_value is None and not enabled_given:
-            # Лимит очистили руками (не через explicit-флаг) — обнуляем
-            # распределение по складам, а не удаляем строки: их наличие с
-            # quantity=0 — это осознанный ноль, он проходит через zero-guard.
-            zero_pool_stmt = (
-                update(FbsBindingStockPool)
-                .where(
-                    FbsBindingStockPool.tenant_id == tenant_id,
-                    FbsBindingStockPool.product_id == p.id,
+    async with _legacy_wb_publication_update(
+        session, [p], enabled=bool(fbs_stock_sync_enabled) if enabled_given else True,
+        lock_held=_publication_lock_held,
+    ):
+        if enabled_given:
+            # Явно переданный флаг продолжаем уважать — его шлют старые вызовы и тесты.
+            p.fbs_stock_sync_enabled = bool(fbs_stock_sync_enabled)
+        elif limit_given:
+            # Отдельного тумблера больше нет: участие в FBS выводится из наличия
+            # остатка. Задали число — включились; очистили — флаг всё равно
+            # остаётся True (см. ниже), чтобы товар не выпал из выгрузки и WB
+            # получил честный ноль, а не застрял на последнем опубликованном остатке.
+            p.fbs_stock_sync_enabled = True
+        if limit_given:
+            p.fbs_stock_limit = limit_value if isinstance(limit_value, int) else None
+            if limit_value is None and not enabled_given:
+                # Лимит очистили руками (не через explicit-флаг) — обнуляем
+                # распределение по складам, а не удаляем строки: их наличие с
+                # quantity=0 — это осознанный ноль, он проходит через zero-guard.
+                zero_pool_stmt = (
+                    update(FbsBindingStockPool)
+                    .where(
+                        FbsBindingStockPool.tenant_id == tenant_id,
+                        FbsBindingStockPool.product_id == p.id,
+                        FbsBindingStockPool.binding_id.in_(select(FbsWarehouseBinding.id).where(
+                            FbsWarehouseBinding.marketplace == "wb",
+                        )),
+                    )
+                    .values(quantity=0)
                 )
-                .values(quantity=0)
-            )
-            await session.execute(zero_pool_stmt)
-    # Именно в момент переключения новая цифра должна уехать в кабинет WB:
-    # включили — кабинет видит остаток фулфилмента, выключили — получает ноль.
-    # Ждать ближайшего движения товара или фоновой сверки здесь нельзя.
-    schedule_seller_stock_publish(session, tenant_id, p.seller_id)
-    if commit:
-        await session.commit()
-        await session.refresh(p, attribute_names=["seller"])
-    else:
-        await session.flush()
-    return p
+                await session.execute(zero_pool_stmt)
+        # Именно в момент переключения новая цифра должна уехать в кабинет WB:
+        # включили — кабинет видит остаток фулфилмента, выключили — получает ноль.
+        # Ждать ближайшего движения товара или фоновой сверки здесь нельзя.
+        if p.fbs_stock_sync_enabled:
+            schedule_seller_stock_publish(session, tenant_id, p.seller_id, "wb")
+        if commit:
+            await session.commit()
+            await session.refresh(p, attribute_names=["seller"])
+        else:
+            await session.flush()
+        return p
 
 
 async def bulk_update_products_fbs_stock_sync(
@@ -1303,28 +1361,27 @@ async def bulk_update_products_fbs_stock_sync(
     limit_value = fbs_stock_limit if limit_given else None
     if isinstance(limit_value, int) and limit_value < 0:
         raise CatalogError("invalid_fbs_stock_limit")
-    values: dict[str, object] = {"fbs_stock_sync_enabled": fbs_stock_sync_enabled}
-    # Лимит трогаем только когда он явно передан. Иначе «включить всем» стёрло бы
-    # лимиты, которые селлер расставил поштучно.
-    if limit_given:
-        values["fbs_stock_limit"] = limit_value if isinstance(limit_value, int) else None
-    stmt = (
-        update(Product)
-        .where(
-            Product.tenant_id == tenant_id,
-            Product.seller_id == seller_id,
-        )
-        .values(**values)
-    )
+    stmt = select(Product).where(
+        Product.tenant_id == tenant_id, Product.seller_id == seller_id,
+    ).order_by(Product.id)
     if product_ids is not None:
         if not product_ids:
             return 0
         stmt = stmt.where(Product.id.in_(product_ids))
-    result = await session.execute(stmt)
-    updated_count = int(getattr(result, "rowcount", 0) or 0)
-    schedule_seller_stock_publish(session, tenant_id, seller_id)
-    await session.commit()
-    return updated_count
+    products = list((await session.scalars(stmt)).all())
+    if not products:
+        return 0
+    async with _legacy_wb_publication_update(
+        session, products, enabled=fbs_stock_sync_enabled,
+    ):
+        for product in products:
+            product.fbs_stock_sync_enabled = fbs_stock_sync_enabled
+            if limit_given:
+                product.fbs_stock_limit = limit_value if isinstance(limit_value, int) else None
+        if fbs_stock_sync_enabled:
+            schedule_seller_stock_publish(session, tenant_id, seller_id, "wb")
+        await session.commit()
+    return len(products)
 
 
 @dataclass(frozen=True)
@@ -1436,28 +1493,32 @@ async def apply_products_fbs_stock_limit_from_balance(
         for pid, qty in per_warehouse.items():
             available_by_product[pid] = available_by_product.get(pid, 0) + qty
 
-    for pid in found_ids:
-        available_qty = available_by_product.get(pid, 0)
-        await update_product_fbs_stock_sync(
-            session,
-            tenant_id,
-            pid,
-            fbs_stock_limit=available_qty,
-            commit=False,
-        )
-        reset_warehouses_count = await _reset_fbs_binding_stock_pools_for_product(
-            session, tenant_id, seller_id, pid
-        )
-        updated.append(
-            FbsStockLimitFromBalanceUpdated(
-                product_id=pid,
+    async with _legacy_wb_publication_update(
+        session, [products_by_id[pid] for pid in found_ids], enabled=True,
+    ):
+        for pid in found_ids:
+            available_qty = available_by_product.get(pid, 0)
+            await update_product_fbs_stock_sync(
+                session,
+                tenant_id,
+                pid,
                 fbs_stock_limit=available_qty,
-                reset_warehouses_count=reset_warehouses_count,
+                commit=False,
+                _publication_lock_held=True,
             )
-        )
+            reset_warehouses_count = await _reset_fbs_binding_stock_pools_for_product(
+                session, tenant_id, seller_id, pid
+            )
+            updated.append(
+                FbsStockLimitFromBalanceUpdated(
+                    product_id=pid,
+                    fbs_stock_limit=available_qty,
+                    reset_warehouses_count=reset_warehouses_count,
+                )
+            )
 
-    if updated:
-        await session.commit()
+        if updated:
+            await session.commit()
 
     reset_products_count = sum(1 for item in updated if item.reset_warehouses_count > 0)
     return FbsStockLimitFromBalanceResult(

@@ -49,7 +49,7 @@ from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.fbs_wb_operation import FbsWbOperation
 from app.models.inventory_balance import InventoryBalance
 from app.models.marketplace_account import MarketplaceAccount
-from app.models.marking_code import MarkingCodeEvent
+from app.models.marking_code import MarkingCode, MarkingCodeEvent
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
@@ -572,19 +572,20 @@ async def test_ozon_stock_dispatch_uses_binding_pool_with_fake_transport(
     )
 
     assert result.bindings_processed == 1
-    assert result.products_targeted == 1
-    assert result.products_confirmed == 1
-    assert transport.calls == [("publish_stocks", "ozon-client")]
+    # Off is omitted from polling; the final zero belongs to the save operation.
+    assert result.products_targeted == int(publish)
+    assert result.products_confirmed == int(publish)
+    assert transport.calls == ([("publish_stocks", "ozon-client")] if publish else [])
     # В поле `product_id` уходит именно product_id Ozon, а не SKU: раньше туда
     # клали SKU и остаток подписывался чужим идентификатором.
-    assert transport.published_stocks == [
+    assert transport.published_stocks == ([
         {
             "warehouse_id": 900001,
             "offer_id": "offer-1",
             "product_id": 6001,
             "stock": expected,
         }
-    ]
+    ] if publish else [])
 
 
 @pytest.mark.asyncio
@@ -607,6 +608,7 @@ async def test_ozon_partial_stock_confirmation_counts_only_what_ozon_confirmed(
             name=f"Product {index}",
             sku_code=f"sku-{uuid.uuid4().hex[:8]}",
             fbs_units_mode=True,
+            fbs_ozon_stock_sync_enabled=True,
         )
         for index in range(2)
     ]
@@ -717,11 +719,12 @@ async def test_ozon_publish_respects_configured_products_and_all_binding_flags(
     configured: bool,
     expected_targets: int,
 ) -> None:
-    """WMS-375: no rule means no write; a disabled configured product sends zero."""
+    """WMS-375: no rule means no write; an enabled rule on empty stock sends zero."""
     tenant, seller, _warehouse, _provider = await _seed_ozon_scope_case(
         db_session, published=False, served=served
     )
     product = (await db_session.scalars(select(Product))).one()
+    product.fbs_ozon_stock_sync_enabled = True
     product.fbs_percent = 50 if configured else None
     binding = (await db_session.scalars(select(FbsWarehouseBinding))).one()
     binding.is_active = active
@@ -729,10 +732,12 @@ async def test_ozon_publish_respects_configured_products_and_all_binding_flags(
     link = (await db_session.scalars(select(ProductMarketplaceLink))).one()
     link.external_offer_id = "configured-ozon"
     unrelated_wb = Product(
-        tenant=tenant, seller=seller, name="WB only, no rule", sku_code="wb-no-rule"
+        tenant=tenant, seller=seller, name="WB only, no rule", sku_code="wb-no-rule",
+        fbs_ozon_stock_sync_enabled=True,
     )
     unrelated_ozon = Product(
-        tenant=tenant, seller=seller, name="Ozon, no rule", sku_code="ozon-no-rule"
+        tenant=tenant, seller=seller, name="Ozon, no rule", sku_code="ozon-no-rule",
+        fbs_ozon_stock_sync_enabled=True,
     )
     db_session.add_all([unrelated_wb, unrelated_ozon])
     await db_session.flush()
@@ -2355,9 +2360,13 @@ async def test_ozon_marking_targets_its_exact_multi_product_position(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("use_pool", [False, True])
+@pytest.mark.parametrize("initial_status", ["ship_available", "validation_in_process"])
 async def test_ozon_scanner_binds_every_required_code_without_wb_path(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
+    use_pool: bool,
+    initial_status: str,
 ) -> None:
     """TC-S03-OZON-033: scanner maps positions and quantity while WB stays untouched."""
     first_gtin = "04601234567890"
@@ -2441,7 +2450,7 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
             "/v6/fbs/posting/product/exemplar/set": {},
             "/v5/fbs/posting/product/exemplar/status": {
                 "posting_number": order.external_order_id,
-                "status": "ship_available",
+                "status": initial_status,
                 "products": [],
             },
         }
@@ -2449,8 +2458,8 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
     provider = OzonMarketplaceProvider(transport=transport)
     real_commit = ozon_kiz_svc.commit_ozon_kiz
 
-    async def injected_commit(*args: object) -> None:
-        await real_commit(*args, provider=provider)  # type: ignore[arg-type]
+    async def injected_commit(*args: object) -> str:
+        return await real_commit(*args, provider=provider)  # type: ignore[arg-type]
 
     monkeypatch.setattr(kiz_svc, "commit_ozon", injected_commit)
     wb_token = AsyncMock(side_effect=AssertionError("WB token must not be read for Ozon"))
@@ -2462,7 +2471,25 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
         f"01{second_gtin}21SECOND-A",
         f"01{second_gtin}21SECOND-B",
     ]
-    for value in values:
+    if use_pool:
+        db_session.add_all(
+            [
+                MarkingCode(
+                    tenant_id=order.tenant_id,
+                    seller_id=order.seller_id,
+                    product_id=products[0 if index == 0 else 1].id,
+                    cis_code=value,
+                    source="import",
+                    status="available",
+                )
+                for index, value in enumerate(values)
+            ]
+        )
+        await db_session.flush()
+    scan_started_at = datetime.now(UTC)
+    for scan_index, value in enumerate(values):
+        # The UI validates before commit; direct commit alone missed the second-product bug.
+        assert (await kiz_svc.validate_kiz_pair(db_session, order.tenant_id, order.id, value)).ok
         await kiz_svc._commit_one_kiz_pair(
             db_session,
             order.tenant_id,
@@ -2471,6 +2498,15 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
             AsyncMock(),
             f"ozon-scan:{value}",
         )
+        scanned = await db_session.scalar(
+            select(FbsOrderMarking).where(
+                FbsOrderMarking.order_id == order.id, FbsOrderMarking.value == value
+            )
+        )
+        assert scanned is not None
+        # SQLite defaults have second precision; represent separate operator scans explicitly.
+        scanned.created_at = scan_started_at + timedelta(seconds=scan_index)
+        await db_session.flush()
 
     markings = list(
         (
@@ -2491,8 +2527,61 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
         order.product_positions[1].id: 2,
     }
     assert sorted(marking.meta_details_json["exemplar_id"] for marking in markings) == [81, 82, 83]
-    assert [line.qty_marking_external for line in lines] == [1, 2]
-    assert order.metadata_delivery_allowed is True
+    assert [
+        getattr(line, "qty_marking_printed" if use_pool else "qty_marking_external")
+        for line in lines
+    ] == [1, 2]
+    expected_status = "accepted" if initial_status == "ship_available" else "pending"
+    assert order.metadata_delivery_allowed is (expected_status == "accepted")
+    metadata = marking_svc.build_order_metadata(order, markings)
+    assert len(metadata["states"]) == 3
+    await db_session.commit()
+    async with SessionLocal() as workspace_session:
+        workspace = await workspace_svc.get_supply_workspace(
+            workspace_session, order.tenant_id, supply.id
+        )
+    assert len(workspace["orders"][0]["metadata"]["states"]) == 3
+    assert sorted(
+        workspace["orders"][0]["metadata"]["states"], key=lambda row: row["value_tail"]
+    ) == sorted(
+        metadata["states"], key=lambda row: row["value_tail"]
+    )
+    assert all(state["status"] == expected_status for state in metadata["states"])
+    # Re-reading an already entered own code is safe and does not submit it again.
+    calls_before_repeat = len(transport.endpoint_calls)
+    assert (await kiz_svc.validate_kiz_pair(db_session, order.tenant_id, order.id, values[-1])).ok
+    assert (
+        await kiz_svc._commit_one_kiz_pair(
+            db_session,
+            order.tenant_id,
+            None,
+            kiz_svc.FbsKizCommitPair(order.id, values[-1], False),
+            AsyncMock(),
+            "ozon-repeat",
+        )
+        == expected_status
+    )
+    assert len(transport.endpoint_calls) == calls_before_repeat
+    if expected_status == "pending":
+        transport.endpoint_responses["/v5/fbs/posting/product/exemplar/status"]["status"] = (
+            "ship_available"
+        )
+        await marking_svc.sync_order_marking_statuses(
+            db_session,
+            order.tenant_id,
+            order.id,
+            AsyncMock(),
+            actor_user_id=None,
+            ozon_provider=provider,
+        )
+        assert order.metadata_delivery_allowed is True
+        assert all(
+            row["status"] == "accepted"
+            for row in marking_svc.build_order_metadata(order, markings)["states"]
+        )
+        assert [path for path, _ in transport.endpoint_calls[calls_before_repeat:]] == [
+            "/v5/fbs/posting/product/exemplar/status"
+        ]
 
     # TC-S03-OZON-034: лента расхода КМ должна показывать номер упаковочного
     # документа, а не `wb_order_id` — у заказа Ozon это синтезированный
@@ -2564,6 +2653,35 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
     )
     wb_token.assert_not_awaited()
     wb_delete.assert_not_awaited()
+
+    # The merged shipment checks refresh the order; explicitly reload positions.
+    await db_session.refresh(order, attribute_names=["product_positions"])
+    # Confirmed replacement keeps exactly one mandatory code for the same exemplar.
+    order.status = "assembling"
+    replacing = (await ozon_kiz_svc._active_position_markings(
+        db_session, order.id, order.product_positions[1].id
+    ))[-1]
+    previous_value = replacing.value
+    assert previous_value == values[-1]
+    replacement = f"01{second_gtin}21REPLACEMENT"
+    await kiz_svc._commit_one_kiz_pair(
+        db_session,
+        order.tenant_id,
+        None,
+        kiz_svc.FbsKizCommitPair(order.id, replacement, True),
+        AsyncMock(),
+        "ozon-replace",
+    )
+    payload = [body for path, body in transport.endpoint_calls if path.endswith("/set")][-1]
+    sent = [
+        mark["mark"]
+        for product in payload["products"]
+        for exemplar in product["exemplars"]
+        for mark in exemplar["marks"]
+    ]
+    assert sorted(sent) == sorted(
+        [value for value in values if value != previous_value] + [replacement]
+    )
 
 
 @pytest.mark.asyncio
@@ -3333,3 +3451,140 @@ async def test_ozon_live_owner_blocks_retry_before_external_calls(
             ozon_provider=OzonMarketplaceProvider(transport=transport),
         )
     assert transport.endpoint_calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("packed_stock", [False, True], ids=["unpacked", "legacy-packed-only"])
+@pytest.mark.parametrize("pack_action", ["line", "all", "confirm_shelf"])
+async def test_ozon_pack_is_only_fact_with_nonzero_reservation(
+    db_session: AsyncSession, packed_stock: bool, pack_action: str
+) -> None:
+    """WMS-043: packing entry points cannot mutate physical stock or reserves."""
+    from app.models.inventory_movement import InventoryMovement
+    from app.services import fbs_packaging_integration_service as packaging_svc
+    from app.services import packaging_task_service as task_svc
+
+    tenant, _, warehouse, product, order, supply = await _seed_ozon_supply_case(
+        db_session, packed=True
+    )
+    assert supply is not None
+    supply.status = "assembling"
+    order.status = "assembling"
+    order.pack_status = "pending"
+    order.pick_status = "picked"
+    position = FbsOrderProduct(
+        order_id=order.id,
+        product_id=product.id,
+        ozon_sku=3001,
+        position_index=0,
+        quantity=2,
+        reserved_quantity=2,
+        picked_quantity=2,
+    )
+    db_session.add(position)
+    await db_session.flush()
+    reservation = FbsOrderProductReservation(
+        tenant_id=tenant.id,
+        order_product_id=position.id,
+        product_id=product.id,
+        warehouse_id=warehouse.id,
+        quantity=2,
+    )
+    db_session.add(reservation)
+    await db_session.commit()
+    task = await packaging_svc.create_packaging_task_for_supply(db_session, tenant.id, supply.id)
+    line = task.lines[0]
+    db_session.add(
+        InventoryBalance(
+            tenant_id=tenant.id,
+            product_id=product.id,
+            storage_location_id=line.storage_location_id,
+            quantity=3,
+            quantity_unpacked=0 if packed_stock else 3,
+            quantity_packed=3 if packed_stock else 0,
+        )
+    )
+    await db_session.commit()
+
+    async def warehouse_snapshot() -> tuple[list[dict[str, Any]], ...]:
+        async with SessionLocal() as reader:
+            return (
+                [
+                    dict(row)
+                    for row in (
+                        await reader.execute(
+                            select(InventoryBalance.__table__).order_by(InventoryBalance.id)
+                        )
+                    )
+                    .mappings()
+                    .all()
+                ],
+                [
+                    dict(row)
+                    for row in (
+                        await reader.execute(
+                            select(InventoryMovement.__table__).order_by(InventoryMovement.id)
+                        )
+                    )
+                    .mappings()
+                    .all()
+                ],
+                [
+                    dict(row)
+                    for row in (
+                        await reader.execute(
+                            select(FbsOrderProductReservation.__table__).order_by(
+                                FbsOrderProductReservation.id
+                            )
+                        )
+                    )
+                    .mappings()
+                    .all()
+                ],
+                [
+                    dict(row)
+                    for row in (
+                        await reader.execute(
+                            select(FbsOrderProduct.__table__).order_by(FbsOrderProduct.id)
+                        )
+                    )
+                    .mappings()
+                    .all()
+                ],
+            )
+
+    reserve_status_before = order.reserve_status
+    before = await warehouse_snapshot()
+    assert before[2][0]["quantity"] == 2
+    for scan_index in range(2):
+        if pack_action == "all":
+            await task_svc.pack_all_and_complete_fbs_task(
+                db_session, tenant.id, task.id, acting_user_id=None
+            )
+        elif pack_action == "confirm_shelf":
+            await task_svc.confirm_line_packed_from_shelf(
+                db_session, tenant.id, task.id, line.id, 2, acting_user_id=None
+            )
+        else:
+            await task_svc.record_pack_progress(
+                db_session,
+                tenant.id,
+                task.id,
+                line.id,
+                1,
+                order_id=order.id,
+                idempotency_key=f"ozon-fact-only-{scan_index}",
+                acting_user_id=None,
+            )
+        await db_session.commit()
+        assert await warehouse_snapshot() == before
+    await db_session.refresh(line)
+    await db_session.refresh(order)
+    if pack_action == "confirm_shelf":
+        assert line.qty_confirmed_packed == 2
+        assert line.qty_packed_in_task == 0
+        assert order.pack_status == "pending"
+    else:
+        assert line.qty_packed_in_task == 2
+        assert order.pack_status == "packed"
+    assert order.reserve_status == reserve_status_before

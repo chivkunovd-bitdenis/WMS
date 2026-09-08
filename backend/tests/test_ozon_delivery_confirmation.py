@@ -49,8 +49,8 @@ async def test_ozon_known_shortage_requires_confirmation_and_uses_staged_or_sort
     assert balance is not None
     source_id = balance.storage_location_id
     if not staged:
-        # WMS-392: a packaging fact does not select the shipment source. With
-        # no physical pick or positive stock, the confirmed minus uses sorting.
+        # Without a persisted shipment source, a packing fact must not select
+        # a now-empty shelf. The existing shortage policy uses system sorting.
         sorting = await get_or_create_sorting_location(db_session, tenant.id, warehouse.id)
         source_id = sorting.id
     balance.quantity = 0
@@ -95,16 +95,17 @@ async def test_ozon_known_shortage_requires_confirmation_and_uses_staged_or_sort
     assert ledger.negative_quantity == 1
     row = ledger.ozon_positions_json[0]
     assert row["storage_location_id"] == str(source_id)
-    if not staged:
-        assert row["source_mode"] == "forced_negative"
+    assert row["source_mode"] == ("storage_loose" if staged else "forced_negative")
     movement = await db_session.get(InventoryMovement, uuid.UUID(str(row["movement_id"])))
     assert movement is not None and movement.quantity_delta == -1
     assert movement.storage_location_id == source_id
     await db_session.refresh(balance)
     assert balance.quantity == (-1 if staged else 0)
-    assert await db_session.scalar(select(func.sum(InventoryBalance.quantity)).where(
+    source_balance = await db_session.scalar(select(InventoryBalance).where(
         InventoryBalance.product_id == product.id,
-    )) == -1
+        InventoryBalance.storage_location_id == source_id,
+    ))
+    assert source_balance is not None and source_balance.quantity == -1
     assert sum(path == "/v1/carriage/create" for path, _ in transport.endpoint_calls) == 1
 
 

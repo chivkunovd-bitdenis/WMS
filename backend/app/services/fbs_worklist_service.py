@@ -437,6 +437,13 @@ async def _load_worklist_context(
     warehouses = await _load_warehouses(session, tenant_id, warehouse_ids)
     wb_names = await _load_wb_warehouse_names(session, tenant_id, wb_wh_ids)
     positions = await _load_order_positions(session, order_ids)
+    # Reuse the positions already fetched for the projection; metadata must not
+    # trigger lazy SQL from its synchronous Ozon serializer.
+    from sqlalchemy.orm.attributes import set_committed_value
+
+    for order in orders:
+        if order.marketplace == "ozon":
+            set_committed_value(order, "product_positions", positions.get(order.id, []))
     product_ids.update(
         position.product_id
         for order_positions in positions.values()
@@ -620,7 +627,7 @@ async def _load_location_balances(
                 InventoryBalance.product_id,
                 StorageLocation.id,
                 StorageLocation.code,
-                InventoryBalance.quantity_unpacked,
+                InventoryBalance.quantity,
             )
             .join(
                 StorageLocation,
@@ -631,7 +638,7 @@ async def _load_location_balances(
                 StorageLocation.tenant_id == tenant_id,
                 StorageLocation.warehouse_id == wh_id,
                 InventoryBalance.product_id.in_(pid_list),
-                InventoryBalance.quantity_unpacked > 0,
+                InventoryBalance.quantity > 0,
             )
             .order_by(StorageLocation.code.asc())
         )
@@ -669,8 +676,8 @@ async def _load_location_balances(
         reserved: dict[tuple[uuid.UUID, uuid.UUID], int] = {
             (pid, loc_id): int(qty or 0) for pid, loc_id, qty in rsv_res.all()
         }
-        for pid, loc_id, code, unpacked in balance_rows:
-            avail = max(0, int(unpacked) - reserved.get((pid, loc_id), 0))
+        for pid, loc_id, code, quantity in balance_rows:
+            avail = max(0, int(quantity) - reserved.get((pid, loc_id), 0))
             if avail <= 0:
                 continue
             key = (wh_id, pid)
@@ -992,6 +999,10 @@ def _build_metadata(
     order: FbsOrder,
     markings: list[FbsOrderMarking],
 ) -> dict[str, Any]:
+    if order.marketplace == "ozon":
+        from app.services.fbs_marking_service import build_order_metadata
+
+        return build_order_metadata(order, markings)
     required = list(order.required_meta_json or [])
     optional = list(order.optional_meta_json or [])
     states: list[dict[str, Any]] = []

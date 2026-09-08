@@ -31,6 +31,7 @@ export type ApiCatalogRow = {
 
 export type ApiRule = {
   publish: boolean
+  publish_ozon?: boolean | null
   same_everywhere: boolean
   percent: number
   by_warehouse: Record<string, number>
@@ -80,6 +81,7 @@ export function toRule(productId: string, rule: ApiRule | undefined): FbsRule {
   return {
     productId,
     publish: rule?.publish ?? false,
+    publishOzon: rule?.publish_ozon ?? rule?.publish ?? false,
     sameEverywhere: rule?.same_everywhere ?? true,
     percent: rule?.percent ?? 0,
     byWarehouse: rule?.by_warehouse ?? {},
@@ -190,7 +192,10 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
   async function saveRule(productIds: string[], rule: FbsRule): Promise<string | null> {
     setError(null)
     const body = {
-      publish: rule.publish,
+      publish: rule.changedPublication && !rule.changedPublication.includes("wb")
+                          ? undefined : rule.publish,
+      publish_ozon: rule.changedPublication && !rule.changedPublication.includes("ozon")
+                          ? undefined : (rule.publishOzon ?? rule.publish),
       same_everywhere: rule.sameEverywhere,
       percent: rule.percent,
       by_warehouse: rule.byWarehouse,

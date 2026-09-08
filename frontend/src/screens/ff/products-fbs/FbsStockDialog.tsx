@@ -18,6 +18,7 @@ import {
   MARKETPLACE_NAMES,
   onHandTotal,
   publishedQty,
+  publishesTo,
   reservedTotal,
   servedWarehouses,
   splitAmounts,
@@ -130,7 +131,7 @@ function FbsStockDialogBody({
   // при одном складе черновик всегда считается по общему проценту: что оператор
   // видит на ползунке, то и уезжает.
   const [draft, setDraft] = useState<FbsRule>(
-    single ? { ...rule, sameEverywhere: true } : rule,
+    { ...rule, ...(single ? { sameEverywhere: true } : {}), changedPublication: [] },
   )
 
   const many = products.length > 1
@@ -140,7 +141,7 @@ function FbsStockDialogBody({
   const onHand = products.reduce((sum, product) => sum + onHandTotal(product), 0)
   const reserved = products.reduce((sum, product) => sum + reservedTotal(product), 0)
 
-  const spent = served.reduce(
+  const spent = served.filter((one) => publishesTo(draft, warehouseMarketplace(one))).reduce(
     (sum, warehouse) => sum + (draft.byWarehouse[warehouse.id] ?? 0),
     0,
   )
@@ -153,11 +154,20 @@ function FbsStockDialogBody({
   // Сумма долей так, как её считает сервер. При галке «одинаково» доля идёт
   // КАЖДОМУ складу, поэтому 50% на четырёх складах — это 200%, и сохранение
   // отобьётся. Раньше окно про это не знало и узнавало от сервера уже отказом.
-  const percentSum = totalPercent(draft, served.length)
+  const enabledServed = served.filter((one) => publishesTo(draft, warehouseMarketplace(one)))
+  const enabledRule = { ...draft, byWarehouse: Object.fromEntries(
+    enabledServed.map((one) => [one.id, draft.byWarehouse[one.id] ?? 0]),
+  ) }
+  const percentSum = totalPercent(enabledRule, enabledServed.length)
+  const publishesAny = draft.publish || (draft.publishOzon ?? draft.publish)
   // В режиме штук ограничение то же самое, только в единицах: склады делят один
   // и тот же физический остаток, поэтому в сумме больше свободного не раздать.
-  const unitsSum = totalUnits(draft, served)
-  const overAllocated = draft.publish && (
+  const unitsSum = totalUnits(draft, enabledServed)
+  const enabledPlacesLabel = [
+    draft.publish ? MARKETPLACE_NAMES.wb : null,
+    (draft.publishOzon ?? draft.publish) ? MARKETPLACE_NAMES.ozon : null,
+  ].filter(Boolean).join(" и ")
+  const overAllocated = publishesAny && (
     draft.unitsMode ? unitsSum > base : percentSum > 100
   )
   // Раскладка по складам — то же самое, что уедет в WB, склад за складом.
@@ -250,13 +260,31 @@ function FbsStockDialogBody({
         ) : null}
 
         <CheckboxInput
-          label={`Передавать остаток в ${placesLabel}`}
+          label="Передавать остаток в Wildberries"
           checked={draft.publish}
-          onChange={(publish) => setDraft((one) => ({ ...one, publish }))}
+          onChange={(publish) => setDraft((one) => ({
+            ...one, publish,
+            changedPublication: [...new Set([...(one.changedPublication ?? []), 'wb' as const])],
+          }))}
           disabledReason={
-            noneServed ? `Сначала выберите хотя бы один склад ${placesLabel}` : undefined
+            !served.some((one) => warehouseMarketplace(one) === 'wb') && !draft.publish
+              ? 'Сначала выберите хотя бы один склад Wildberries' : undefined
           }
           testId="fbs-stock-publish"
+        />
+        <CheckboxInput
+          label="Передавать остаток в Ozon"
+          checked={draft.publishOzon ?? draft.publish}
+          onChange={(publishOzon) => setDraft((one) => ({
+            ...one, publishOzon,
+            changedPublication: [...new Set([...(one.changedPublication ?? []), 'ozon' as const])],
+          }))}
+          disabledReason={
+            !served.some((one) => warehouseMarketplace(one) === 'ozon')
+              && !(draft.publishOzon ?? draft.publish)
+              ? 'Сначала выберите хотя бы один склад Ozon' : undefined
+          }
+          testId="fbs-stock-publish-ozon"
         />
 
         {/* Режим. Доля хороша, когда остаток дышит: приехала партия — в кабинете
@@ -317,7 +345,7 @@ function FbsStockDialogBody({
               // Доля применяется к каждому складу отдельно, а не делится между
               // ними. Из старой подписи это не читалось, и оператор, поставив
               // «половину» на два склада, отдавал в WB весь остаток.
-              helperText={`Доля уйдёт на КАЖДЫЙ из ${served.length} складов ${placesLabel} — в сумме ${percentSum}%. Выключите, чтобы задать свою долю каждому`}
+              helperText={`Доля уйдёт на КАЖДЫЙ из ${enabledServed.length} складов ${enabledPlacesLabel} — в сумме ${percentSum}%. Выключите, чтобы задать свою долю каждому`}
               testId="fbs-stock-same"
             />
           </>
@@ -490,7 +518,7 @@ function FbsStockDialogBody({
                   testId={`fbs-stock-percent-${warehouse.id}`}
                 />
               ) : null}
-              {warehouse.fbsEnabled && (draft.unitsMode || !single) && draft.publish ? (
+              {warehouse.fbsEnabled && (draft.unitsMode || !single) && publishesTo(draft, warehouseMarketplace(warehouse)) ? (
                 <Typography
                   variant="body2"
                   color="text.secondary"
@@ -515,13 +543,13 @@ function FbsStockDialogBody({
           <Typography variant="body2" color="text.secondary">
             {noneServed
               ? `ни один склад ${placesLabel} не выбран — отправлять некуда`
-              : draft.publish
-                ? `уйдёт в ${placesLabel} прямо сейчас и будет пересчитываться само`
+              : publishesAny
+                ? `уйдёт в ${enabledPlacesLabel} прямо сейчас и будет пересчитываться само`
                 : `передача выключена — в ${placesLabel} не уйдёт ничего`}
           </Typography>
         </Stack>
 
-        {unbound.length > 0 && draft.publish ? (
+        {unbound.length > 0 && publishesAny ? (
           <Typography variant="body2" color="text.secondary">
             По складам {unbound.map((one) => one.name).join(', ')} остаток не уйдёт, пока они не
             сопоставлены с физическими складами WMS.

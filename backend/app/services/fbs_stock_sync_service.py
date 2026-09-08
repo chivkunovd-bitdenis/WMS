@@ -229,10 +229,20 @@ def _build_publish_plan(
     calculated mapping, its rule is not configured, so it is skipped. A configured
     disabled rule remains in the mapping as an explicit zero.
     """
+    # WMS-351 excludes disabled products from routine provider publication.
+    # WMS-376 still clears a previously confirmed WB positive once on legacy off.
+    publish_quantities = dict(publish_quantities)
+    for product in products:
+        item = existing_items.get(int(product.wb_chrt_id or 0))
+        if (not product.fbs_stock_sync_enabled and item is not None
+                and int(item.last_confirmed_amount or 0) > 0):
+            publish_quantities.setdefault(product.id, 0)
     skipped_missing: list[uuid.UUID] = []
     block_errors = product_block_errors or {}
     chrt_to_products: dict[int, list[Product]] = {}
     for product in products:
+        if product.id not in publish_quantities:
+            continue
         if product.wb_chrt_id is None:
             skipped_missing.append(product.id)
             continue
@@ -742,6 +752,7 @@ async def publish_explicit_zero_for_binding(
     *,
     rate_limiter: StockSyncRateLimiter | None = None,
     marketplace_api_base: str | None = None,
+    product_ids: set[uuid.UUID] | None = None,
 ) -> FbsStockSyncResult:
     """Explicitly publish zero for every chrt_id currently tracked on this binding.
 
@@ -764,6 +775,19 @@ async def publish_explicit_zero_for_binding(
 
     result = FbsStockSyncResult()
     try:
+        existing_items = await _load_existing_sync_items(session, binding.id)
+        if product_ids is not None:
+            existing_items = {
+                chrt: item
+                for chrt, item in existing_items.items()
+                if item.product_id in product_ids
+            }
+        # Only clear this selection's previously confirmed positive publication.
+        existing_items = {chrt: item for chrt, item in existing_items.items()
+                          if int(item.last_confirmed_amount or 0) > 0}
+        if not existing_items:
+            result.bindings_processed = 1
+            return result
         try:
             api_token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
         except FbsStockSyncError as exc:
@@ -772,22 +796,6 @@ async def publish_explicit_zero_for_binding(
             binding.last_error_code = exc.code
             await session.commit()
             return FbsStockSyncResult(errors=1, error_code=exc.code)
-
-        all_items = await _load_existing_sync_items(session, binding.id)
-        # WMS-376. Обнуляем только то, куда сами когда-то положили положительное
-        # число. Строки заводятся ещё до отправки — и остаются после ошибки WB, и
-        # после конфликта, и после блокировки. Слать по ним ноль значило бы
-        # обнулять карточку, которой мы никогда не управляли: на бою таких строк
-        # 129 из 267. Ровно этого владелец и не хочет — «что стоит в кабинете, не
-        # наше дело, пока мы туда не писали».
-        existing_items = {
-            chrt_id: item
-            for chrt_id, item in all_items.items()
-            if int(item.last_confirmed_amount or 0) > 0
-        }
-        if not existing_items:
-            result.bindings_processed = 1
-            return result
 
         targets = [
             _PublishTarget(
