@@ -32,6 +32,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import { FfUnloadPickPage } from '../ff/unload-pick/FfUnloadPickPage'
 import CloseIcon from '@mui/icons-material/Close'
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlined'
@@ -2031,7 +2032,7 @@ export function FfFbsSupplyWorkspace({
                             px: 2,
                             py: 1.25,
                             bgcolor: markingView.tone === 'error'
-                              ? 'error.light'
+                              ? (theme) => alpha(theme.palette.error.main, 0.08)
                               : kizRowActive ? 'info.light'
                                 : markingView.tone === 'success' ? 'success.light'
                                   : (printed ? 'action.hover' : 'background.paper'),
