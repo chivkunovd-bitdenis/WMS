@@ -447,21 +447,24 @@ def build_order_metadata(
     optional = list(order.optional_meta_json or [])
     states: list[dict[str, Any]] = []
     for kind in required + [k for k in optional if k not in required]:
-        mark = current_order_marking(markings, kind, include_rejected=True)
-        if mark is not None:
+        if order.marketplace == "ozon":
+            current = [
+                row for row in ozon_gate_svc.current_markings(order, markings) if row.kind == kind
+            ]
+        else:
+            mark = current_order_marking(markings, kind, include_rejected=True)
+            current = [mark] if mark is not None else []
+        for mark in current:
             states.append(
                 {
                     "kind": kind,
                     "status": mark.meta_status,
                     "reason": mark.reason,
                     "source": mark.source,
-                    # Хвост кода — чтобы оператор глазами сверил строку на экране
-                    # с тем, что напечатано на этикетке. Весь код не отдаём: он
-                    # длинный и в таблицу не помещается.
                     "value_tail": _marking_value_tail(mark.value),
                 }
             )
-        else:
+        if not current:
             states.append(
                 {
                     "kind": kind,
@@ -525,10 +528,14 @@ async def _get_order(
     *,
     for_update: bool = False,
 ) -> FbsOrder | None:
-    stmt = select(FbsOrder).where(
-        FbsOrder.id == order_id,
-        FbsOrder.tenant_id == tenant_id,
-    ).options(selectinload(FbsOrder.product_positions))
+    stmt = (
+        select(FbsOrder)
+        .where(
+            FbsOrder.id == order_id,
+            FbsOrder.tenant_id == tenant_id,
+        )
+        .options(selectinload(FbsOrder.product_positions))
+    )
     if for_update:
         stmt = stmt.with_for_update()
     result = await session.execute(stmt)
@@ -738,9 +745,7 @@ async def _sync_order_meta_from_wb(
             decision = meta_detail.decision.strip().lower()
             if decision == "required" and not meta_detail.value:
                 marking.meta_status = META_STATUS_MISSING
-            elif meta_detail.value and not _same_marking_value(
-                marking.value, meta_detail.value
-            ):
+            elif meta_detail.value and not _same_marking_value(marking.value, meta_detail.value):
                 marking.meta_status = META_STATUS_REPLACEMENT_REQUIRED
             elif map_wb_decision_to_meta_status(meta_detail.decision) is None:
                 marking.meta_status = META_STATUS_UNKNOWN

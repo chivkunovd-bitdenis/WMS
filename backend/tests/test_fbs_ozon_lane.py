@@ -49,7 +49,7 @@ from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.fbs_wb_operation import FbsWbOperation
 from app.models.inventory_balance import InventoryBalance
 from app.models.marketplace_account import MarketplaceAccount
-from app.models.marking_code import MarkingCodeEvent
+from app.models.marking_code import MarkingCode, MarkingCodeEvent
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
@@ -2357,9 +2357,13 @@ async def test_ozon_marking_targets_its_exact_multi_product_position(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("use_pool", [False, True])
+@pytest.mark.parametrize("initial_status", ["ship_available", "validation_in_process"])
 async def test_ozon_scanner_binds_every_required_code_without_wb_path(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
+    use_pool: bool,
+    initial_status: str,
 ) -> None:
     """TC-S03-OZON-033: scanner maps positions and quantity while WB stays untouched."""
     first_gtin = "04601234567890"
@@ -2443,7 +2447,7 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
             "/v6/fbs/posting/product/exemplar/set": {},
             "/v5/fbs/posting/product/exemplar/status": {
                 "posting_number": order.external_order_id,
-                "status": "ship_available",
+                "status": initial_status,
                 "products": [],
             },
         }
@@ -2451,8 +2455,8 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
     provider = OzonMarketplaceProvider(transport=transport)
     real_commit = ozon_kiz_svc.commit_ozon_kiz
 
-    async def injected_commit(*args: object) -> None:
-        await real_commit(*args, provider=provider)  # type: ignore[arg-type]
+    async def injected_commit(*args: object) -> str:
+        return await real_commit(*args, provider=provider)  # type: ignore[arg-type]
 
     monkeypatch.setattr(kiz_svc, "commit_ozon", injected_commit)
     wb_token = AsyncMock(side_effect=AssertionError("WB token must not be read for Ozon"))
@@ -2464,7 +2468,24 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
         f"01{second_gtin}21SECOND-A",
         f"01{second_gtin}21SECOND-B",
     ]
+    if use_pool:
+        db_session.add_all(
+            [
+                MarkingCode(
+                    tenant_id=order.tenant_id,
+                    seller_id=order.seller_id,
+                    product_id=products[0 if index == 0 else 1].id,
+                    cis_code=value,
+                    source="import",
+                    status="available",
+                )
+                for index, value in enumerate(values)
+            ]
+        )
+        await db_session.flush()
     for value in values:
+        # The UI validates before commit; direct commit alone missed the second-product bug.
+        assert (await kiz_svc.validate_kiz_pair(db_session, order.tenant_id, order.id, value)).ok
         await kiz_svc._commit_one_kiz_pair(
             db_session,
             order.tenant_id,
@@ -2492,8 +2513,49 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
         order.product_positions[1].id: 2,
     }
     assert sorted(marking.meta_details_json["exemplar_id"] for marking in markings) == [81, 82, 83]
-    assert [line.qty_marking_external for line in lines] == [1, 2]
-    assert order.metadata_delivery_allowed is True
+    assert [
+        getattr(line, "qty_marking_printed" if use_pool else "qty_marking_external")
+        for line in lines
+    ] == [1, 2]
+    expected_status = "accepted" if initial_status == "ship_available" else "pending"
+    assert order.metadata_delivery_allowed is (expected_status == "accepted")
+    metadata = marking_svc.build_order_metadata(order, markings)
+    assert len(metadata["states"]) == 3
+    assert all(state["status"] == expected_status for state in metadata["states"])
+    # Re-reading an already entered own code is safe and does not submit it again.
+    calls_before_repeat = len(transport.endpoint_calls)
+    assert (await kiz_svc.validate_kiz_pair(db_session, order.tenant_id, order.id, values[-1])).ok
+    assert (
+        await kiz_svc._commit_one_kiz_pair(
+            db_session,
+            order.tenant_id,
+            None,
+            kiz_svc.FbsKizCommitPair(order.id, values[-1], False),
+            AsyncMock(),
+        )
+        == expected_status
+    )
+    assert len(transport.endpoint_calls) == calls_before_repeat
+    if expected_status == "pending":
+        transport.endpoint_responses["/v5/fbs/posting/product/exemplar/status"]["status"] = (
+            "ship_available"
+        )
+        await marking_svc.sync_order_marking_statuses(
+            db_session,
+            order.tenant_id,
+            order.id,
+            AsyncMock(),
+            actor_user_id=None,
+            ozon_provider=provider,
+        )
+        assert order.metadata_delivery_allowed is True
+        assert all(
+            row["status"] == "accepted"
+            for row in marking_svc.build_order_metadata(order, markings)["states"]
+        )
+        assert [path for path, _ in transport.endpoint_calls[calls_before_repeat:]] == [
+            "/v5/fbs/posting/product/exemplar/status"
+        ]
 
     # TC-S03-OZON-034: лента расхода КМ должна показывать номер упаковочного
     # документа, а не `wb_order_id` — у заказа Ozon это синтезированный
@@ -2565,6 +2627,25 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
     )
     wb_token.assert_not_awaited()
     wb_delete.assert_not_awaited()
+
+    # Confirmed replacement keeps exactly one mandatory code for the same exemplar.
+    order.status = "assembling"
+    replacement = f"01{second_gtin}21REPLACEMENT"
+    await kiz_svc._commit_one_kiz_pair(
+        db_session,
+        order.tenant_id,
+        None,
+        kiz_svc.FbsKizCommitPair(order.id, replacement, True),
+        AsyncMock(),
+    )
+    payload = [body for path, body in transport.endpoint_calls if path.endswith("/set")][-1]
+    sent = [
+        mark["mark"]
+        for product in payload["products"]
+        for exemplar in product["exemplars"]
+        for mark in exemplar["marks"]
+    ]
+    assert sorted(sent) == sorted([values[0], values[1], replacement])
 
 
 @pytest.mark.asyncio

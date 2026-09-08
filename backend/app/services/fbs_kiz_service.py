@@ -46,6 +46,10 @@ from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.marketplace_scope import is_wildberries
 from app.services.ozon_kiz_service import OzonKizError
 from app.services.ozon_kiz_service import commit_ozon_kiz as commit_ozon
+from app.services.ozon_marking_position_service import (
+    OzonMarkingPositionError,
+    resolve_marking_position,
+)
 from app.services.wb_card_enrichment import first_photo_url_from_card
 from app.services.wildberries_client import put_marketplace_order_meta
 from app.services.wildberries_errors import WildberriesClientError
@@ -138,9 +142,7 @@ _KEYBOARD_LAYOUT_MAP = {
 }
 _KEYBOARD_LAYOUT_TRANSLATION = str.maketrans(_KEYBOARD_LAYOUT_MAP)
 _KEYBOARD_LAYOUT_MARKERS = frozenset(
-    char
-    for char in _KEYBOARD_LAYOUT_MAP
-    if "\u0400" <= char <= "\u04ff" or char == "\u2116"
+    char for char in _KEYBOARD_LAYOUT_MAP if "\u0400" <= char <= "\u04ff" or char == "\u2116"
 )
 
 
@@ -184,6 +186,8 @@ class FbsKizLookup:
     needs_confirmation: bool
     can_bind: bool
     block_reason: str | None
+    marketplace: str = "wb"
+    external_order_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -205,6 +209,7 @@ class FbsKizCommitRow:
     status: str
     code: str
     message: str
+    meta_status: str | None = None
 
 
 @dataclass(frozen=True)
@@ -263,10 +268,7 @@ def _match_gs_substitute(value: str, position: int) -> str | None:
 
 
 def _is_expected_next_ai(current_ai: str, next_ai: str) -> bool:
-    if (
-        current_ai in _GS1_INTERNAL_VARIABLE_AIS
-        and next_ai in _GS1_INTERNAL_VARIABLE_AIS
-    ):
+    if current_ai in _GS1_INTERNAL_VARIABLE_AIS and next_ai in _GS1_INTERNAL_VARIABLE_AIS:
         return int(next_ai) > int(current_ai)
     return next_ai != current_ai
 
@@ -533,21 +535,33 @@ def _normalized_optional(raw: object) -> str | None:
 
 
 def _find_order_by_sticker(orders: list[FbsOrder], sticker: str) -> FbsOrder | None:
-    # Сначала — технический код стикера. Именно он закодирован во все QR и штрихкоды
-    # печатной этикетки WB, и именно его выдаёт сканер (вид «*DUIkWJJF»). Проверено
-    # 20.08.2026 декодированием реальной этикетки: раньше поиск шёл только по
-    # человеческому номеру partA/partB, поэтому скан не находил заказ никогда.
+    def unique(matches: list[FbsOrder]) -> FbsOrder | None:
+        if len(matches) > 1:
+            raise FbsKizError(
+                "sticker_ambiguous",
+                message="Скан совпал с несколькими заказами. Введите номер отправления.",
+            )
+        return matches[0] if matches else None
+
+    # Ozon's posting number is available before assembly and label generation.
+    matching_postings = []
     for order in orders:
-        if _normalized_optional(order.sticker_barcode) == sticker:
-            return order
-    # Человеческий номер («5694425 3074») — если оператор вводит его руками с этикетки.
-    for order in orders:
-        if _normalized_optional(order.sticker_code) == sticker:
-            return order
-    # Штрихкод товара — запасной путь, когда стикер заказа ещё не получен.
-    for order in orders:
-        if _normalized_optional(order.wb_barcode) == sticker:
-            return order
+        if order.marketplace != "ozon":
+            continue
+        assembly = (order.meta_details_json or {}).get("ozon_assembly")
+        children = assembly.get("posting_numbers", []) if isinstance(assembly, dict) else []
+        identifiers = [order.external_order_id, *(children if isinstance(children, list) else [])]
+        if any(_normalized_optional(value) == sticker for value in identifiers):
+            matching_postings.append(order)
+    if matching_postings:
+        return unique(matching_postings)
+    # Preserve WB's technical sticker -> printed number -> barcode priority.
+    for field in ("sticker_barcode", "sticker_code", "wb_barcode"):
+        matches = [
+            order for order in orders if _normalized_optional(getattr(order, field)) == sticker
+        ]
+        if matches:
+            return unique(matches) if matches[0].marketplace == "ozon" else matches[0]
     return None
 
 
@@ -606,11 +620,7 @@ def _product_payload(order: FbsOrder, image_url: str | None) -> FbsKizProduct:
     # иначе оператор видит внутренний код WB вместо штрихкода с коробки.
     barcode = (product.wb_barcode if product is not None else None) or order.wb_barcode
     seller_article = product.sku_code if product is not None else order.wb_article
-    name = (
-        product.name
-        if product is not None
-        else order.wb_article or _MISSING_PRODUCT_NAME
-    )
+    name = product.name if product is not None else order.wb_article or _MISSING_PRODUCT_NAME
     return FbsKizProduct(
         name=name,
         image_url=image_url,
@@ -677,9 +687,12 @@ async def lookup_order_by_sticker(
         wb_order_id=int(order.wb_order_id),
         product=_product_payload(order, image_url),
         current_kiz=current_out,
-        needs_confirmation=current_out is not None,
+        # Ozon replacement is decided after resolving the scanned code to a position.
+        needs_confirmation=current_out is not None and order.marketplace != "ozon",
         can_bind=True,
         block_reason=None,
+        marketplace=order.marketplace or "wb",
+        external_order_id=order.external_order_id,
     )
 
 
@@ -785,11 +798,25 @@ async def _ensure_kiz_not_occupied_in_pool(
         return
     if code.seller_id != order.seller_id:
         raise FbsKizError("cross_seller_code")
-    if (
-        order.product_id is not None
-        and code.product_id is not None
-        and code.product_id != order.product_id
-    ):
+    product_id = order.product_id
+    if order.marketplace == "ozon":
+        try:
+            position = await resolve_marking_position(session, order, value)
+        except OzonMarkingPositionError as exc:
+            raise FbsKizError(exc.code, message=exc.message) from exc
+        product_id = position.product_id
+        own_marking = await session.scalar(
+            select(FbsOrderMarking.id).where(
+                FbsOrderMarking.order_id == order.id,
+                FbsOrderMarking.order_product_id == position.id,
+                FbsOrderMarking.value == value,
+                FbsOrderMarking.marking_code_id == code.id,
+                FbsOrderMarking.meta_status != META_STATUS_REJECTED,
+            )
+        )
+        if own_marking is not None:
+            return
+    if product_id is not None and code.product_id is not None and code.product_id != product_id:
         raise FbsKizError("code_product_mismatch")
     if code.status != STATUS_AVAILABLE:
         raise FbsKizError(
@@ -1090,8 +1117,7 @@ async def _persist_failed_replacement_state(
     if current is None:
         raise FbsKizError("kiz_not_found", context={"order_id": str(order.id)})
     reason = (
-        "replacement_failed_and_restore_failed: "
-        f"new={new_error_code}; restore={restore_error_code}"
+        f"replacement_failed_and_restore_failed: new={new_error_code}; restore={restore_error_code}"
     )
     current.meta_status = META_STATUS_REPLACEMENT_REQUIRED
     current.reason = reason
@@ -1141,7 +1167,7 @@ async def _commit_one_kiz_pair(
     actor_user_id: uuid.UUID | None,
     pair: FbsKizCommitPair,
     http_client: httpx.AsyncClient,
-) -> None:
+) -> str | None:
     validated = await _validate_kiz_pair(
         session,
         tenant_id,
@@ -1153,19 +1179,18 @@ async def _commit_one_kiz_pair(
     order = validated.order
     if order.marketplace == "ozon":
         try:
-            await commit_ozon(
+            return await commit_ozon(
                 session, order, validated.value, pair.confirmed, actor_user_id, http_client
             )
         except OzonKizError as exc:
             raise FbsKizError(exc.code, message=exc.message) from exc
-        return
     current = await _current_sgtin_marking_for_update(session, order.id)
     if (
         current is not None
         and current.value == validated.value
         and current.meta_status != META_STATUS_REJECTED
     ):
-        return
+        return None
     if current is not None and not pair.confirmed:
         raise FbsKizError("needs_confirmation", context={"current_kiz": _mask_kiz(current.value)})
     line_ref = await _packaging_line_for_order(session, tenant_id, order)
@@ -1259,14 +1284,16 @@ async def _commit_one_kiz_pair(
     elif not previous_was_pool:
         line_ref.line.qty_marking_external = int(line_ref.line.qty_marking_external) + 1
     await session.flush()
+    return None
 
 
-def _ok_commit_row(order_id: uuid.UUID) -> FbsKizCommitRow:
+def _ok_commit_row(order_id: uuid.UUID, meta_status: str | None = None) -> FbsKizCommitRow:
     return FbsKizCommitRow(
         order_id=order_id,
         status="ok",
         code="ok",
         message="ok",
+        meta_status=meta_status,
     )
 
 
@@ -1293,7 +1320,7 @@ async def commit_kiz_pairs(
     rows: list[FbsKizCommitRow] = []
     for pair in pairs:
         try:
-            await _commit_one_kiz_pair(
+            meta_status = await _commit_one_kiz_pair(
                 session,
                 tenant_id,
                 actor_user_id,
@@ -1316,6 +1343,6 @@ async def commit_kiz_pairs(
                 await session.rollback()
             rows.append(_error_commit_row(pair.order_id, exc))
         else:
-            rows.append(_ok_commit_row(pair.order_id))
+            rows.append(_ok_commit_row(pair.order_id, meta_status))
 
     return rows

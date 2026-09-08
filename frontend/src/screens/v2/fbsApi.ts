@@ -1149,6 +1149,8 @@ export async function fetchFbsTrbxStickers(
 // Сопоставление идёт ТОЛЬКО по стикеру: QR даёт заказ, КИЗ вешается на этот заказ.
 
 export type FbsKizLookup = {
+  marketplace?: string
+  external_order_id?: string | null
   order_id: string
   wb_order_id: number
   product: {
@@ -1171,6 +1173,7 @@ export type FbsKizValidateResult = {
 }
 
 export type FbsKizCommitResult = {
+  meta_status?: string | null
   order_id: string
   status: 'ok' | 'error'
   code: string | null
@@ -1600,4 +1603,14 @@ export async function cancelFbsOrder(
     body: JSON.stringify({}),
   })
   return await jsonOrThrow<FbsOrderRow>(res)
+}
+
+export function fbsKizOrderNumber(order: FbsKizLookup): string {
+  return order.marketplace === 'ozon' ? order.external_order_id ?? '—' : String(order.wb_order_id)
+}
+
+export async function syncFbsOrderMarkings(token: string, ah: AuthHeaders, orderId: string): Promise<void> {
+  await jsonOrThrow<unknown>(await fetch(apiUrl(`/operations/fbs-orders/${orderId}/markings/sync`), {
+    method: 'POST', headers: ah(token),
+  }))
 }
