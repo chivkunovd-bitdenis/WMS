@@ -265,6 +265,34 @@ async def test_tape_uncertain_wb_write_keeps_code_and_retries_get_only(
             == "printed"
         )
         assert await session.scalar(select(FbsWbOperation.state)) == "confirmed"
+        fail = True
+        repeated = await print_tape(session, async_client, seed)
+        assert repeated.orders and not repeated.order_errors
+        assert repeated.orders[0].codes == recovered.orders[0].codes
+        assert calls.count("put") == 1
+        operation_id = await session.scalar(select(FbsWbOperation.id))
+        # A later incomplete WB response invalidates the local positive verdict.
+        monkeypatch.setattr(
+            tape.marking_svc, "fetch_marketplace_orders_meta_batch", AsyncMock(return_value=[]),
+        )
+        await tape.marking_svc.sync_order_marking_statuses(
+            session, seed.tenant_id, seed.order_ids[0], async_client, actor_user_id=seed.user_id,
+        )
+        await session.commit()
+        monkeypatch.setattr(tape.marking_svc, "fetch_marketplace_orders_meta_batch", get)
+        second_uncertain = await print_tape(session, async_client, seed)
+        assert second_uncertain.order_errors[0].code == "wb_pending_confirmation"
+        operation = await session.scalar(select(FbsWbOperation))
+        assert operation.id == operation_id and operation.state == "pending_confirmation"
+        assert operation.confirmed_at is None and operation.failed_at is None
+        fail = False
+        second_recovery = await print_tape(session, async_client, seed)
+        assert second_recovery.orders and not second_recovery.order_errors
+        assert second_recovery.orders[0].codes == recovered.orders[0].codes
+        assert calls.count("put") == 2
+        assert await session.scalar(select(func.count()).select_from(FbsWbOperation)) == 1
+        assert await session.scalar(select(func.count()).select_from(FbsOrderMarking)) == 1
+        assert operation.state == "confirmed"
 
 
 @pytest.mark.asyncio
@@ -367,10 +395,15 @@ async def test_metadata_get_does_not_overwrite_a_new_binding_after_http(
     seed = await seed_tape(async_client, monkeypatch, 2)
     async with SessionLocal() as initial:
         assert (await print_tape(initial, async_client, seed)).orders
+        printed_wb_id = await initial.scalar(select(FbsOrder.wb_order_id).where(
+            FbsOrder.id == seed.order_ids[0],
+        ))
     fetching, proceed = asyncio.Event(), asyncio.Event()
     original_get = tape.marking_svc.fetch_marketplace_orders_meta_batch
 
     async def delayed(*args, **kwargs):
+        # The single-order WB fake must target the printed order in a batch too.
+        kwargs["order_ids"] = [printed_wb_id]
         result = await original_get(*args, **kwargs)
         fetching.set()
         await proceed.wait()
@@ -439,3 +472,98 @@ async def test_metadata_get_does_not_overwrite_a_new_binding_after_http(
             ).all()
         )
         assert statuses == {"void": 1, "printed": 1}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("new_status", ["ship_available", "validation_in_process"])
+async def test_ozon_delayed_status_preserves_replacement(
+    db_session, monkeypatch, new_status,
+):
+    from test_fbs_ozon_lane import _seed_ozon_supply_case, _seed_physical_ozon_packaging
+
+    from app.models.fbs_order import FbsOrderProduct
+    from app.services import fbs_kiz_service as kiz
+    from app.services import ozon_kiz_service as ozon_kiz
+    from app.services.marketplace_provider import FakeMarketplaceTransport, OzonMarketplaceProvider
+
+    if engine.dialect.name != "postgresql":
+        pytest.skip("Requires independent PostgreSQL transactions")
+    tenant, _, _, product, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    await _seed_physical_ozon_packaging(db_session, order, supply, [(product, 1)])
+    order.required_meta_json = ["sgtin"]
+    position = FbsOrderProduct(
+        order_id=order.id, product_id=product.id,
+        position_index=0, ozon_sku=3001, quantity=1,
+    )
+    db_session.add(position)
+    await db_session.commit()
+    transport = FakeMarketplaceTransport(endpoint_responses={
+        "/v6/fbs/posting/product/exemplar/create-or-get": {
+            "posting_number": order.external_order_id,
+            "products": [{"product_id": 3001, "exemplars": [{"exemplar_id": 81}]}],
+        },
+        "/v5/fbs/posting/product/exemplar/validate": {
+            "products": [{"product_id": 3001, "valid": True, "exemplars": []}],
+        },
+        "/v6/fbs/posting/product/exemplar/set": {},
+        "/v5/fbs/posting/product/exemplar/status": {
+            "posting_number": order.external_order_id,
+            "status": "ship_available", "products": [],
+        },
+    })
+    provider = OzonMarketplaceProvider(transport=transport)
+    await ozon_kiz.commit_ozon_kiz(
+        db_session, order, "010460123456789021OLD", False, None, AsyncMock(), provider,
+    )
+    await db_session.commit()
+    stale_status = "validation_in_process" if new_status == "ship_available" else "ship_available"
+    stale_provider = OzonMarketplaceProvider(transport=FakeMarketplaceTransport(
+        endpoint_responses={"/v5/fbs/posting/product/exemplar/status": {
+            "posting_number": order.external_order_id, "status": stale_status, "products": [],
+        }},
+    ))
+    fetching, proceed = asyncio.Event(), asyncio.Event()
+    original_read = tape.marking_svc.read_marking_status
+
+    async def delayed(**kwargs):
+        result = await original_read(**kwargs)
+        fetching.set()
+        await proceed.wait()
+        return result
+
+    monkeypatch.setattr(tape.marking_svc, "read_marking_status", delayed)
+    async with SessionLocal() as reader, SessionLocal() as writer:
+        reading = asyncio.create_task(tape.marking_svc.sync_order_marking_statuses(
+            reader, tenant.id, order.id, AsyncMock(), actor_user_id=None,
+            ozon_provider=stale_provider,
+        ))
+        try:
+            await asyncio.wait_for(fetching.wait(), 5)
+            transport.endpoint_responses["/v5/fbs/posting/product/exemplar/status"] = {
+                "posting_number": order.external_order_id, "status": new_status, "products": [],
+            }
+            current_order = await kiz._get_order_for_kiz(
+                writer, tenant.id, order.id, for_update=True,
+            )
+            await asyncio.wait_for(ozon_kiz.commit_ozon_kiz(
+                writer, current_order, "010460123456789021NEW", True, None, AsyncMock(), provider,
+            ), 5)
+            await writer.commit()
+            replacement = await writer.scalar(select(FbsOrderMarking).where(
+                FbsOrderMarking.order_id == order.id,
+            ))
+            replacement_id = replacement.id
+            expected = "accepted" if new_status == "ship_available" else "pending"
+            assert replacement.meta_status == expected
+            proceed.set()
+            rows = await asyncio.wait_for(reading, 5)
+            assert [(row.id, row.meta_status) for row in rows] == [(replacement_id, expected)]
+            await reader.commit()
+        finally:
+            proceed.set()
+            if not reading.done():
+                reading.cancel()
+            await asyncio.gather(reading, return_exceptions=True)
+    async with SessionLocal() as check:
+        refreshed = await check.get(FbsOrder, order.id)
+        assert refreshed.metadata_delivery_allowed is (new_status == "ship_available")
