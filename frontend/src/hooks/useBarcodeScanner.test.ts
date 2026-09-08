@@ -426,3 +426,19 @@ describe('createScannerListener — meta/alt игнорируются', () => {
     expect(onScan).toHaveBeenCalledWith('12345')
   })
 })
+
+// WMS-396: Ctrl+] is retained in the KIZ payload, but never inserted in input.
+it('removes focused input KIZ text while preserving GS in dispatched code', () => {
+  const onScan = vi.fn()
+  const prefix = '010460123456789021SERIAL'
+  const suffix = '91abcd'
+  const el = { tagName: 'INPUT', value: '7' + prefix + suffix, dispatchEvent: vi.fn() }
+  const { listener, tick } = makeListener(onScan, { activeElement: el })
+  sendChars(listener, asChars(prefix), tick, 10)
+  listener(makeEvent(']', { code: 'BracketRight', ctrlKey: true }))
+  tick(10)
+  sendChars(listener, asChars(suffix), tick, 10)
+  sendEnter(listener)
+  expect(onScan).toHaveBeenCalledExactlyOnceWith(prefix + '\x1d' + suffix)
+  expect(el.value).toBe('7')
+})

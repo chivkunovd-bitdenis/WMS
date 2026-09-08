@@ -18,6 +18,7 @@ type BufferChar = {
   raw: string
   code: string
   shift: boolean
+  prevented?: boolean
 }
 
 // ─── Маппинг физических клавиш → латиница (US-раскладка) ────────────────────
@@ -180,7 +181,7 @@ export function createScannerListener(opts: ScannerListenerOptions) {
       } else if (gsGap > opts.maxIntervalMs) {
         slowGaps += 1
       }
-      buffer.push({ raw: '\x1D', code: e.code, shift: false })
+      buffer.push({ raw: '\x1D', code: e.code, shift: false, prevented: true })
       lastTime = now
       return
     }
@@ -227,7 +228,8 @@ export function createScannerListener(opts: ScannerListenerOptions) {
           (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') &&
           typeof el.value === 'string'
         ) {
-          const rawTail = buffer.map(c => c.raw).join('')
+          // Ctrl+] was prevented: GS belongs to the payload, not the input value.
+          const rawTail = buffer.filter(c => !c.prevented).map(c => c.raw).join('')
           if (rawTail.length > 0 && el.value.endsWith(rawTail)) {
             setNativeInputValue(el, el.value.slice(0, -rawTail.length))
             const inputEl = el as unknown as EventTarget
