@@ -698,18 +698,32 @@ async def record_pending_kiz_operation(
     marking.meta_status = META_STATUS_UNKNOWN
     marking.check_status = CHECK_STATUS_ERROR
     marking.reason = "Wildberries не подтвердил результат; нужна сверка."
-    session.add(FbsWbOperation(
-        tenant_id=order.tenant_id, seller_id=order.seller_id,
-        operation_kind=OPERATION_KIND_ORDER_KIZ_BIND,
-        idempotency_key=hashlib.sha256(
-            f"{idempotency_key}:{order.id}:{marking.id}".encode()
-        ).hexdigest(),
-        request_hash=hashlib.sha256(marking.value.encode()).hexdigest(),
-        local_entity_type="fbs_order_marking", local_entity_id=marking.id,
-        wb_object_kind="order", wb_object_id=str(order.wb_order_id),
-        state=WB_OPERATION_STATE_PENDING_CONFIRMATION,
-        error_code=error_code, created_by_user_id=actor_user_id,
-    ))
+    operation_key = hashlib.sha256(
+        f"{idempotency_key}:{order.id}:{marking.id}".encode()
+    ).hexdigest()
+    operation = await session.scalar(select(FbsWbOperation).where(
+        FbsWbOperation.tenant_id == order.tenant_id,
+        FbsWbOperation.seller_id == order.seller_id,
+        FbsWbOperation.operation_kind == OPERATION_KIND_ORDER_KIZ_BIND,
+        FbsWbOperation.idempotency_key == operation_key,
+    ).with_for_update())
+    if operation is None:
+        operation = FbsWbOperation(
+            tenant_id=order.tenant_id, seller_id=order.seller_id,
+            operation_kind=OPERATION_KIND_ORDER_KIZ_BIND,
+            idempotency_key=operation_key,
+            request_hash=hashlib.sha256(marking.value.encode()).hexdigest(),
+            local_entity_type="fbs_order_marking", local_entity_id=marking.id,
+            wb_object_kind="order", wb_object_id=str(order.wb_order_id),
+            created_by_user_id=actor_user_id,
+        )
+        session.add(operation)
+    # A later uncertain retry for the same binding reuses its existing key.
+    operation.state = WB_OPERATION_STATE_PENDING_CONFIRMATION
+    operation.error_code = error_code
+    operation.error_context_json = None
+    operation.confirmed_at = None
+    operation.failed_at = None
 
 
 async def pending_kiz_operation(
@@ -1027,6 +1041,7 @@ async def sync_order_marking_statuses(
         return markings
 
     if order.marketplace == "ozon":
+        before_ids = {marking.id for marking in markings}
         try:
             client_id, api_key = await MarketplaceAccountService(session).stored_credentials(
                 tenant_id, order.seller_id
@@ -1045,6 +1060,9 @@ async def sync_order_marking_statuses(
             raise FbsMarkingError("order_not_found")
         order = refreshed
         markings = await list_order_markings(session, tenant_id, order_id)
+        if {marking.id for marking in markings} != before_ids:
+            # This posting-level response predates the operator's replacement.
+            return markings
         ozon_gate_svc.apply_status(
             order,
             markings,

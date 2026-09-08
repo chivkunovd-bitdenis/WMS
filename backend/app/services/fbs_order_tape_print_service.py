@@ -432,6 +432,10 @@ async def _send_or_reconcile_printed_marking(
     actor_user_id: uuid.UUID,
 ) -> None:
     operation = await marking_svc.pending_kiz_operation(session, marking)
+    if (order.marketplace == "wb" and operation is None
+            and marking.meta_status in marking_svc._META_DELIVERY_OK):
+        # Reprinting the same accepted binding does not change WB metadata.
+        return
     error: marking_svc.FbsMarkingError | None = None
     try:
         if operation is not None:
