@@ -939,8 +939,10 @@ export function FfFbsSupplyWorkspace({
   }, [workspace?.supply.packaging_task_id, token, authHeaders, load])
 
   const requiresOrderHonestSign = (order: FbsWorkspace['orders'][number]) => {
-    // Если поставка помечена как честный знак пропущен, требование снято со всей поставки.
-    if (workspace?.supply.honest_sign_skipped) return false
+    // Пропуск снимает выдачу новых ЧЗ, но сохранённый код можно печатать повторно.
+    if (workspace?.supply.honest_sign_skipped) {
+      return order.metadata.states.some((state) => state.kind === 'sgtin' && Boolean(state.value_tail))
+    }
     const line = order.product.id ? packLineByProduct.get(order.product.id) : undefined
     return Boolean(line?.requires_honest_sign || order.metadata.required.includes('sgtin'))
   }
