@@ -40,6 +40,7 @@ import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined'
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined'
 import { DeadlinePill, FbsStatusChip } from '../../components/fbs/FbsChips'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
+import { FbsCancelledAfterPackDialog } from './FbsCancelledAfterPackDialog'
 import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
@@ -555,6 +556,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   // WMS-360: отмена заказа Ozon. Обычное подтверждение перед необратимым
   // действием — отменённое отправление Ozon восстановить нельзя.
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelledAfterPackOpen, setCancelledAfterPackOpen] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
@@ -1174,6 +1176,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       </Stack>
 
       <FfFbsSectionNav />
+      <FbsCancelledAfterPackDialog
+        open={cancelledAfterPackOpen} token={token} authHeaders={authHeaders}
+        sellerId={sellerId === '__all__' ? undefined : sellerId}
+        onClose={() => setCancelledAfterPackOpen(false)}
+        onOpenSupply={(id) => { setWorkspaceId(id); setWorkspaceSeed(null); setWorkspaceOpen(true) }}
+      />
 
       {/* Среднее время сборки крупной цифрой над таблицей — согласованный блок.
           До сих пор он жил только в макете: экран его не показывал. */}
@@ -1215,6 +1223,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
             />
           ))}
         </Tabs>
+
+        {statusGroup === 'cancelled' && marketplace !== 'ozon' ? (
+          <Button sx={{ m: 2, mb: 0 }} variant="outlined" onClick={() => setCancelledAfterPackOpen(true)} data-testid="fbs-cancelled-after-pack-open">
+            К вскрытию · Wildberries
+          </Button>
+        ) : null}
 
         <Stack
           direction={{ xs: 'column', md: 'row' }}

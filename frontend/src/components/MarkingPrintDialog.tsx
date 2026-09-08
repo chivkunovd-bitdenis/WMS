@@ -963,7 +963,12 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         setError(
           `Напечатано заказов: ${result.orders.length - clientErrors.length} из ${result.orders.length + result.order_errors.length}. ` +
           `Не попали в ленту: ${numbers}${tail}. Причина по первому: ${allErrors[0].message}. ` +
-          'Повторите печать по этим заказам.',
+          (result.order_errors.some((item) => item.code === 'order_cancelled')
+            ? 'Отменённые заказы не печатаются.' + (
+              clientErrors.length || result.order_errors.some((item) => item.code !== 'order_cancelled')
+                ? ' Повторите печать только по остальным ошибкам.' : ''
+            )
+            : 'Повторите печать по этим заказам.'),
         )
         return false
       }

@@ -58,6 +58,10 @@ class ScanPackIn(BaseModel):
     barcode: str = Field(min_length=1, max_length=128)
 
 
+class PackAllIn(BaseModel):
+    order_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
 class CompletePackagingIn(BaseModel):
     acknowledge_all_packed: bool = False
 
@@ -640,6 +644,7 @@ async def pack_all_and_complete_fbs_task(
     task_id: uuid.UUID,
     user: Annotated[User, Depends(require_packaging_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    body: PackAllIn | None = None,
 ) -> PackProgressOut:
     try:
         result = await pkg_svc.pack_all_and_complete_fbs_task(
@@ -647,6 +652,7 @@ async def pack_all_and_complete_fbs_task(
             user.tenant_id,
             task_id,
             acting_user_id=user.id,
+            requested_order_ids=body.order_ids if body is not None else None,
         )
     except pkg_svc.PackagingTaskServiceError as exc:
         # Keep the status-code mapping used by packaging endpoints, while the

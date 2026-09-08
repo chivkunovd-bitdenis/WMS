@@ -205,6 +205,7 @@ async def get_fbs_cancelled_after_pack(
     cancelled_to: Annotated[datetime | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
+    search: Annotated[str | None, Query(max_length=200)] = None,
 ) -> FbsCancelledAfterPackPageOut:
     filter_seller = seller_id if seller_id is not None else effective_seller_id
     if filter_seller is not None:
@@ -221,6 +222,7 @@ async def get_fbs_cancelled_after_pack(
             cancelled_to=cancelled_to,
             limit=limit,
             offset=offset,
+            search=search,
         )
     except ValueError as exc:
         code = str(exc)

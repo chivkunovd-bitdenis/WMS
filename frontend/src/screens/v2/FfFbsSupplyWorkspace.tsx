@@ -1058,7 +1058,8 @@ export function FfFbsSupplyWorkspace({
     try {
       const done = await fetch(apiUrl(`/operations/packaging-tasks/${packagingTask.id}/pack-all-and-complete`), {
         method: 'POST',
-        headers: authHeaders(token),
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_ids: packingOrders.map((order) => order.id) }),
       })
       if (!done.ok) {
         setError(fbsErrorText(await readApiErrorMessage(done)))
