@@ -61,3 +61,7 @@ Commit Ozon возвращает фактический meta_status. API сох�
 Локальные материалы для воспроизведения находятся в постоянном worktree `/Users/deniscivkunov/Projects/WMS/.worktrees/hotfix-ozon-kiz/tmp/`: `ozon_kiz_browser.py` (fixture и сервер с запретом внешнего HTTP), `ozon_kiz_snapshot.py`, `ozon-kiz-browser-manifest.json`, `ozon-kiz-browser.sqlite`, `ozon-kiz-before-scan.json`, `ozon-kiz-after-three-scans.json`, `ozon-kiz-after-replacement.json`, `ozon-kiz-after-status-rejection.json`, `ozon-kiz-fake-calls.json`. Сводное доказательство сохранено в Git рядом с этим отчётом; SQLite и локальные runtime-файлы в production diff не включаются.
 
 Итог относится только к уточнению ЧЗ от 08.09.2026. WMS-357 в целом остаётся ЧАСТИЧНО. Реальные Ozon/WB вызовы, физический сканер, печать и production-деплой этим отчётом не подтверждаются.
+
+Последующая выкладка root 08.09.2026 подтверждена отдельно:
+[протокол production](2026-09-08-wms357-production.md). Этот локальный отчёт
+сохраняет границы именно описанного выше браузерного сценария.
