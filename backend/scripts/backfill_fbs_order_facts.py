@@ -22,14 +22,18 @@
     3. владелец заводит тарифы и дату начала биллинга
     4. python -m scripts.backfill_billing_charges --from … --to … --tenant <id> --apply
 
-Дата работы берётся из самого заказа: когда упаковали, иначе когда подобрали,
-иначе когда заказ появился у маркетплейса. Первые два — это и есть работа
+Дата работы берётся из сохранённого подтверждения передачи поставки. Если его
+нет у исторического sorted/done, используем сам заказ: когда упаковали, иначе когда подобрали,
+иначе когда заказ появился у маркетплейса. Импортированный in_delivery без
+подтверждения передачи пропускается. Первые два — это и есть работа
 склада; третий заполнен всегда и отличается от неё на день-два.
 
 Безопасность:
   * по умолчанию — сухой прогон, ничего не пишется;
   * повторный запуск не задваивает: факт идемпотентен по ключу `fbs-order:<id>`;
   * складских таблиц скрипт не касается вовсе — только летопись операций;
+  * даты фактов с начислениями или ссылкой из счёта не меняются: сохранённое
+    денежное основание требует отдельной сверки, а не автоматической передатировки;
   * дата правится только у фактов заказов FBS и только если она расходится с
     датой работы больше чем на сутки: у нормально записанных фактов расхождение
     в минуты, и трогать их незачем.
@@ -41,15 +45,16 @@ import argparse
 import asyncio
 import uuid
 from collections import defaultdict
-from datetime import UTC, date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
-from app.models.billing import BillingLedgerEntry
-from app.models.fbs_order import FbsOrder, FbsOrderProduct
+from app.models.billing import BillingInvoiceV2Source, BillingLedgerEntry
+from app.models.fbs_order import FBS_ORDER_STATUS_IN_DELIVERY, FbsOrder, FbsOrderProduct
+from app.models.fbs_supply import FbsSupply
 from app.models.operation_fact import OperationFact
 from app.models.product import Product
 from app.models.seller import Seller
@@ -107,7 +112,8 @@ async def main() -> None:
     skipped_early = 0
     failed = 0
     redated = 0
-    redated_charges = 0
+    skipped_accounted = 0
+    skipped_unconfirmed = 0
     by_day: dict[date, int] = defaultdict(int)
 
     async with SessionLocal() as session:
@@ -162,9 +168,32 @@ async def main() -> None:
                 ).all()
             }
 
+        supply_ids = {order.supply_id for order in orders if order.supply_id is not None}
+        handed_over_at: dict[uuid.UUID, datetime] = {}
+        if supply_ids:
+            handed_over_at = {
+                supply_id: delivered_at
+                for supply_id, delivered_at in (
+                    await session.execute(
+                        select(FbsSupply.id, FbsSupply.delivered_at).where(
+                            FbsSupply.tenant_id == tenant_id,
+                            FbsSupply.id.in_(supply_ids),
+                            FbsSupply.delivered_at.is_not(None),
+                        )
+                    )
+                ).all()
+                if delivered_at is not None
+            }
+
         pending = 0
         for order in orders:
-            moment = order_work_moment(order)
+            handover = handed_over_at.get(order.supply_id) if order.supply_id else None
+            if order.status == FBS_ORDER_STATUS_IN_DELIVERY and handover is None:
+                skipped_unconfirmed += 1
+                continue
+            moment = handover or order_work_moment(order)
+            if moment.tzinfo is None:
+                moment = moment.replace(tzinfo=UTC)
             work_day = moment.astimezone(MOSCOW).date()
             if since is not None and work_day < since:
                 skipped_early += 1
@@ -178,28 +207,31 @@ async def main() -> None:
                 stored = occurred_at if occurred_at.tzinfo else occurred_at.replace(tzinfo=UTC)
                 if abs(stored - moment) <= DATE_DRIFT_TOLERANCE:
                     continue
+                # Ledger entries are immutable. This also covers legacy invoices,
+                # which keep entry IDs in their JSON snapshot, and cancelled invoices.
+                # A v2 invoice can additionally reference the fact directly.
+                charged = await session.scalar(
+                    select(BillingLedgerEntry.id).where(
+                        BillingLedgerEntry.tenant_id == tenant_id,
+                        BillingLedgerEntry.source_type == SOURCE_TYPE,
+                        BillingLedgerEntry.source_id == order.id,
+                    ).limit(1)
+                )
+                invoiced_fact = await session.scalar(
+                    select(BillingInvoiceV2Source.id).where(
+                        BillingInvoiceV2Source.tenant_id == tenant_id,
+                        BillingInvoiceV2Source.operation_fact_id == fact_id,
+                    ).limit(1)
+                )
+                if charged is not None or invoiced_fact is not None:
+                    skipped_accounted += 1
+                    continue
                 redated += 1
                 by_day[work_day] += 1
                 if args.apply:
                     fact = await session.get(OperationFact, fact_id)
                     if fact is not None:
                         fact.occurred_at = moment
-                        pending += 1
-                    # Если по этому документу деньги уже начислены, дату надо
-                    # переставить и им: счёт собирается из начислений и берёт
-                    # период по их дате, а не по дате факта. Иначе факт стоял бы
-                    # верным числом, а деньги — днём пакетного опроса.
-                    for entry in (
-                        await session.scalars(
-                            select(BillingLedgerEntry).where(
-                                BillingLedgerEntry.tenant_id == tenant_id,
-                                BillingLedgerEntry.source_type == SOURCE_TYPE,
-                                BillingLedgerEntry.source_id == order.id,
-                            )
-                        )
-                    ).all():
-                        entry.occurred_at = moment
-                        redated_charges += 1
                         pending += 1
                 continue
 
@@ -259,8 +291,10 @@ async def main() -> None:
             print("сухой прогон: ничего не записано, повторите с --apply")
 
     print(f"фактов создано: {created}, дат исправлено: {redated}")
-    if redated_charges:
-        print(f"переставлено дат у уже созданных начислений: {redated_charges}")
+    if skipped_accounted:
+        print(f"даты сохранены: есть начисление или ссылка из счёта: {skipped_accounted}")
+    if skipped_unconfirmed:
+        print(f"пропущено in_delivery без подтверждения передачи: {skipped_unconfirmed}")
     if skipped_no_seller:
         print(f"пропущено без селлера: {skipped_no_seller}")
     if skipped_early:
