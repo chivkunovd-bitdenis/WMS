@@ -2138,6 +2138,16 @@ async def _finish_ozon_delivery(
     actor_user_id: uuid.UUID | None,
 ) -> FbsSupply:
     """Локальная часть уже состоявшейся передачи Ozon."""
+    # External checkpoints commit and release the initial row locks. Reacquire
+    # supply -> orders and refresh stale identity-map objects before write-off,
+    # matching picking/cancellation without holding a row lock across HTTP.
+    with session.no_autoflush:
+        await session.refresh(supply, with_for_update=True)
+    orders = list((await session.scalars(
+        _supply_orders_stmt(supply.tenant_id, supply.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )).all())
     supply.external_supply_id = str(result.carriage_id) if result.carriage_id is not None else None
     supply.document_number = str(result.carriage_id) if result.carriage_id is not None else None
     supply.display_number = result.barcode_text
