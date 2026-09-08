@@ -27,7 +27,14 @@ from app.models.fbs_order_pick import (
     FbsOrderPickEvent,
 )
 from app.models.fbs_supply import (
+    FBS_SUPPLY_STATUS_DONE,
+    FBS_SUPPLY_STATUS_IN_DELIVERY,
     FbsSupply,
+)
+from app.models.fbs_wb_operation import (
+    WB_OPERATION_STATE_CONFIRMED,
+    WB_OPERATION_STATE_PENDING,
+    WB_OPERATION_STATE_PENDING_CONFIRMATION,
 )
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
@@ -41,6 +48,7 @@ from app.services.fbs_cancelled_after_pack_service import (
     cancelled_operation_message,
     order_belonged_to_supply,
 )
+from app.services.fbs_supply_reconcile_service import list_deliver_operations_for_supply
 from app.services.fbs_workspace_service import FbsWorkspaceError, get_supply_workspace
 from app.services.inventory_container_service import (
     ContainerKind,
@@ -49,6 +57,7 @@ from app.services.inventory_container_service import (
     validate_container,
 )
 from app.services.operation_fact_service import record_fbs_pick
+from app.services.ozon_fbs_process_service import OzonHandoffProgress
 from app.services.pick_option_location_service import PickOptionLocation
 from app.services.sorting_location_service import (
     get_or_create_sorting_location,
@@ -452,18 +461,8 @@ async def set_pick_quantity(
             http_status=422,
         )
 
-    locked_supply_id = await session.scalar(
-        select(FbsSupply.id)
-        .where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)
-        .with_for_update()
-    )
-    if locked_supply_id is None:
-        raise FbsPickingError(
-            "supply_not_found",
-            "Поставка не найдена.",
-            http_status=404,
-        )
-    supply = await _load_supply(session, tenant_id, supply_id)
+    supply = await _load_supply(session, tenant_id, supply_id, for_update=True)
+    await _ensure_ozon_pick_editable(session, supply)
 
     product = await session.get(Product, product_id)
     if product is None or product.tenant_id != tenant_id:
@@ -926,11 +925,11 @@ async def scan_pick_product(
     container_kind: ContainerKind | None = None,
     container_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
+    supply = await _load_supply(session, tenant_id, supply_id, for_update=True)
     existing = await _find_pick_by_scan_idempotency(session, tenant_id, supply_id, idempotency_key)
     if existing is not None:
         return await get_supply_workspace(session, tenant_id, supply_id)
 
-    supply = await _load_supply(session, tenant_id, supply_id)
     if order_id is not None:
         requested_order = await session.get(FbsOrder, order_id)
         if (
@@ -955,6 +954,7 @@ async def scan_pick_product(
         )
         if existing_position_pick is not None:
             return await get_supply_workspace(session, tenant_id, supply_id)
+    await _ensure_ozon_pick_editable(session, supply)
     location = await session.get(StorageLocation, location_id)
     if (
         location is None
@@ -1266,7 +1266,7 @@ async def undo_pick(
     actor: User,
     original_pick_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
-    supply = await _load_supply(session, tenant_id, supply_id)
+    supply = await _load_supply(session, tenant_id, supply_id, for_update=True)
     order = next((o for o in supply.orders if o.id == order_id), None)
     if order is None:
         raise FbsPickingError(
@@ -1299,6 +1299,7 @@ async def undo_pick(
                     context={"idempotency_key": idempotency_key},
                 )
             return await get_supply_workspace(session, tenant_id, supply_id)
+        await _ensure_ozon_pick_editable(session, supply)
         position_pick = await session.scalar(
             select(FbsOrderProductPick)
             .join(
@@ -1502,6 +1503,8 @@ async def _load_supply(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
+    *,
+    for_update: bool = False,
 ) -> FbsSupply:
     stmt = (
         select(FbsSupply)
@@ -1512,6 +1515,10 @@ async def _load_supply(
         )
         .where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)
     )
+    if for_update:
+        # Delivery and cancellation also lock the supply first. Refresh both
+        # the parent and select-in-loaded orders after waiting for that lock.
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
     supply = (await session.execute(stmt)).scalar_one_or_none()
     if supply is None:
         raise FbsPickingError(
@@ -1520,6 +1527,41 @@ async def _load_supply(
             http_status=404,
         )
     return supply
+
+
+async def _ensure_ozon_pick_editable(session: AsyncSession, supply: FbsSupply) -> None:
+    """Guard stock mutations under the supply lock, never workspace navigation."""
+    if supply.marketplace != "ozon":
+        return
+    if supply.delivered_at is not None or supply.status in {
+        FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE,
+    }:
+        raise FbsPickingError(
+            "supply_already_submitted", "Поставка уже передана: менять подбор нельзя.",
+        )
+    # Ozon checkpoints commit before HTTP calls. The existing operation bridges
+    # those unlocked intervals, including an ambiguous or failed local finish.
+    for operation in await list_deliver_operations_for_supply(
+        session, tenant_id=supply.tenant_id, seller_id=supply.seller_id,
+        local_supply_id=supply.id,
+    ):
+        if operation.state == WB_OPERATION_STATE_CONFIRMED:
+            raise FbsPickingError(
+                "supply_already_submitted", "Поставка уже передана: менять подбор нельзя.",
+            )
+        progress = OzonHandoffProgress.from_json(
+            (operation.request_summary_json or {}).get("ozon_handoff_progress"),
+        )
+        if operation.state in {
+            WB_OPERATION_STATE_PENDING, WB_OPERATION_STATE_PENDING_CONFIRMATION,
+        } or (progress.carriage_create_started or progress.carriage_id is not None
+              or progress.carriage_approved or progress.used_fallback):
+            raise FbsPickingError(
+                "operation_in_progress",
+                "Передача в Ozon начата. Завершите проверку её результата "
+                "перед изменением подбора.",
+                retryable=True,
+            )
 
 
 async def _resolve_storage_location(
