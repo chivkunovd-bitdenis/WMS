@@ -249,3 +249,134 @@ async def test_cancelled_after_pack_is_tenant_scoped_and_filters_seller_period(
     own_b = await async_client.get("/fbs/cancelled-after-pack", headers=headers_b)
     assert own_b.status_code == 200, own_b.text
     assert [item["order_id"] for item in own_b.json()["items"]] == [str(foreign_id)]
+
+
+@pytest.mark.asyncio
+async def test_cancelled_list_searches_boxes_before_pagination_without_writes(
+    async_client: AsyncClient,
+) -> None:
+    from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
+    from app.models.warehouse_box import WarehouseBox
+    from tests.test_packaging_fact_contract import stock_snapshot
+
+    headers, tenant_id, seller_id, warehouse_id, product_id, supply = await _seed_list_scope(
+        async_client
+    )
+    ids = [await _seed_cancelled_order(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+        product_id=product_id, wb_order_id=115001 + index,
+        cancelled_at=datetime.now(UTC), assembled=False, supply=supply,
+    ) for index in range(2)]
+    async with SessionLocal() as session:
+        for index, order_id in enumerate(ids):
+            box = WarehouseBox(
+                tenant_id=tenant_id, warehouse_id=warehouse_id,
+                internal_barcode=f"WMS115-BOX-{index}",
+            )
+            session.add(box)
+            await session.flush()
+            packing_box = FbsPackingBox(
+                tenant_id=tenant_id, supply_id=supply.id,
+                warehouse_box_id=box.id, box_number=index + 7,
+            )
+            session.add(packing_box)
+            await session.flush()
+            session.add(FbsPackingBoxItem(
+                tenant_id=tenant_id, box_id=packing_box.id, fbs_order_id=order_id,
+            ))
+        await session.commit()
+        before = await stock_snapshot(session)
+    for term in ('115001', 'WMS115-BOX-0', '7'):
+        response = await async_client.get('/fbs/cancelled-after-pack', headers=headers,
+                                          params={'search': term, 'limit': 1})
+        assert response.status_code == 200, response.text
+        assert response.json()['total'] == 1
+        row = response.json()['items'][0]
+        assert row['order_id'] == str(ids[0])
+        assert row['cargo_places'][0]['box_barcode'] == 'WMS115-BOX-0'
+    for term, expected in (('6020-4R/31', 2), ('Туфли', 2), ('%', 0), ('missing', 0)):
+        response = await async_client.get('/fbs/cancelled-after-pack', headers=headers,
+                                          params={'search': term, 'limit': 1, 'offset': 1})
+        assert response.status_code == 200, response.text
+        assert response.json()['total'] == expected
+        assert len(response.json()['items']) == (1 if expected else 0)
+    async with SessionLocal() as session:
+        assert await stock_snapshot(session) == before
+
+
+@pytest.mark.asyncio
+async def test_pack_all_warns_only_requested_cancelled_and_never_changes_stock(
+    async_client: AsyncClient,
+) -> None:
+    from sqlalchemy import select
+
+    from app.models.fbs_order import FbsOrderReservation
+    from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
+    from app.models.inventory_balance import InventoryBalance
+    from app.models.packaging_task import PackagingTask, PackagingTaskLine
+    from app.services.sorting_location_service import get_or_create_sorting_location
+    from tests.test_packaging_fact_contract import stock_snapshot
+
+    headers, tenant_id, seller_id, warehouse_id, product_id, supply = await _seed_list_scope(
+        async_client
+    )
+    ids = [await _seed_cancelled_order(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+        product_id=product_id, wb_order_id=115101 + index,
+        cancelled_at=datetime.now(UTC), assembled=False, supply=supply,
+    ) for index in range(3)]
+    async with SessionLocal() as session:
+        location = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+        task = PackagingTask(tenant_id=tenant_id, warehouse_id=warehouse_id, status='draft')
+        session.add(task)
+        await session.flush()
+        task_id = task.id
+        session.add(PackagingTaskLine(
+            task_id=task.id, product_id=product_id, storage_location_id=location.id, qty_total=1,
+        ))
+        loaded_supply = await session.get(FbsSupply, supply.id)
+        assert loaded_supply is not None
+        loaded_supply.packaging_task_id = task.id
+        loaded_supply.status = 'assembling'
+        active = await session.get(FbsOrder, ids[0])
+        assert active is not None
+        active.status = 'assembling'
+        active.supplier_status = 'confirm'
+        active.supply_id = supply.id
+        session.add(InventoryBalance(
+            tenant_id=tenant_id, product_id=product_id, storage_location_id=location.id,
+            quantity=3, quantity_unpacked=3, quantity_packed=0,
+        ))
+        session.add(FbsOrderReservation(
+            tenant_id=tenant_id, fbs_order_id=active.id, product_id=product_id,
+            warehouse_id=warehouse_id, quantity=1,
+        ))
+        await session.commit()
+        before = await stock_snapshot(session)
+    for _ in range(2):
+        response = await async_client.post(
+            f'/operations/packaging-tasks/{task_id}/pack-all-and-complete', headers=headers,
+            json={'order_ids': [str(ids[0]), str(ids[1])]},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()['packaging_task']['status'] == 'done'
+        assert len(response.json()['warnings']) == 1
+        assert '115102' in response.json()['warnings'][0]
+        assert '115103' not in str(response.json()['warnings'])
+        async with SessionLocal() as session:
+            assert await stock_snapshot(session) == before
+            fulfilled = list((await session.scalars(select(FbsPackagingFulfillment))).all())
+            assert [item.fbs_order_id for item in fulfilled] == [ids[0]]
+    printed = await async_client.post(
+        f'/operations/fbs-supplies/{supply.id}/order-print-tape', headers=headers,
+        json={'order_ids': [str(ids[0]), str(ids[1])],
+              'layout_json': {'units': [{'block': 'label', 'copies': 1}]},
+              'allow_partial': True, 'include_order_qr': False, 'reprint': False},
+    )
+    assert printed.status_code == 200, printed.text
+    assert [row['order_id'] for row in printed.json()['orders']] == [str(ids[0])]
+    assert [(row['order_id'], row['code']) for row in printed.json()['order_errors']] == [
+        (str(ids[1]), 'order_cancelled'),
+    ]
+    async with SessionLocal() as session:
+        assert await stock_snapshot(session) == before

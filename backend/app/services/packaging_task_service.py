@@ -1211,6 +1211,7 @@ async def pack_all_and_complete_fbs_task(
     task_id: uuid.UUID,
     *,
     acting_user_id: uuid.UUID | None,
+    requested_order_ids: list[uuid.UUID] | None = None,
 ) -> PackProgressResult:
     """Atomically finish an FBS packaging task from the server-side fresh state.
 
@@ -1260,8 +1261,29 @@ async def pack_all_and_complete_fbs_task(
         task = await get_task(session, tenant_id, task_id)
         if task is None:
             raise PackagingTaskServiceError("not_found")
+        warnings: list[str] = []
+        # Only warn about the operator's actual snapshot, including orders detached
+        # by a status sync since the screen loaded. This is informational only.
+        if supply.marketplace == "wb" and requested_order_ids:
+            from app.services.fbs_cancelled_after_pack_service import (
+                cancellation_reason,
+                order_belonged_to_supply,
+            )
+
+            cancelled_orders = (await session.scalars(select(FbsOrder).where(
+                FbsOrder.tenant_id == tenant_id,
+                FbsOrder.seller_id == supply.seller_id,
+                FbsOrder.id.in_(requested_order_ids),
+                FbsOrder.status == "cancelled",
+            ).order_by(FbsOrder.wb_order_id))).all()
+            for order in cancelled_orders:
+                if await order_belonged_to_supply(session, order, supply):
+                    warnings.append(
+                        f"Заказ №{order.wb_order_id}: {cancellation_reason(order)}. "
+                        "Не включён в упаковку."
+                    )
         if task.status == STATUS_DONE:
-            return PackProgressResult(task=task)
+            return PackProgressResult(task=task, warnings=warnings)
         if task.status == STATUS_CANCELLED:
             raise PackagingTaskServiceError("bad_status")
         if not task.lines:
@@ -1272,7 +1294,6 @@ async def pack_all_and_complete_fbs_task(
         if supply.marketplace != "wb" and supply.honest_sign_skipped_at is None:
             await _assert_marking_ready_for_full_completion(session, tenant_id, task)
 
-        warnings: list[str] = []
         for line in task.lines:
             remaining = qty_need_pack(line) - int(line.qty_packed_in_task)
             if remaining <= 0:

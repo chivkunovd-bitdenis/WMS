@@ -1613,3 +1613,29 @@ export async function cancelFbsOrder(
   })
   return await jsonOrThrow<FbsOrderRow>(res)
 }
+
+export type FbsCancelledAfterPackOrder = {
+  order_id: string
+  wb_order_id: number
+  product: { id: string | null; name: string; article: string | null; size: string | null }
+  seller: { id: string; name: string }
+  supply: { id: string | null; wb_supply_id: string | null; name: string | null }
+  cargo_places: Array<{ box_id: string; box_number: number; box_barcode: string; wb_trbx_id: string | null }>
+  cancelled_at: string
+  cancellation_reason: string
+  supply_departed: boolean | null
+}
+
+export async function fetchFbsCancelledAfterPack(
+  token: string,
+  authHeaders: (t: string) => Record<string, string>,
+  params: { sellerId?: string; search: string; limit: number; offset: number },
+): Promise<{ items: FbsCancelledAfterPackOrder[]; total: number }> {
+  const qs = new URLSearchParams({
+    search: params.search, limit: String(params.limit), offset: String(params.offset),
+  })
+  if (params.sellerId) qs.set('seller_id', params.sellerId)
+  return jsonOrThrow(await fetch(apiUrl(`/fbs/cancelled-after-pack?${qs}`), {
+    headers: authHeaders(token),
+  }))
+}
