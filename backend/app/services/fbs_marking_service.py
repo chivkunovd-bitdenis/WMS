@@ -112,16 +112,19 @@ def parse_meta_kinds_from_wb_row(row: dict[str, Any]) -> tuple[list[str], list[s
                     out.append(kind)
         return out
 
-    required = _norm_list(row.get("requiredMeta") or row.get("required_meta"))
-    optional = _norm_list(row.get("optionalMeta") or row.get("optional_meta"))
+    required = _norm_list(row.get("requiredMeta", row.get("required_meta")))
+    optional = _norm_list(row.get("optionalMeta", row.get("optional_meta")))
     return required, optional
 
 
 def apply_wb_meta_requirements_to_order(order: FbsOrder, row: dict[str, Any]) -> None:
     required, optional = parse_meta_kinds_from_wb_row(row)
-    if required:
+    # /orders/new supplies these lists; historical /orders may omit them.
+    # An explicit empty list is a fresh WB snapshot and must clear the old list.
+    # Missing or non-list fields do not overwrite previously received facts.
+    if isinstance(row.get("requiredMeta", row.get("required_meta")), list):
         order.required_meta_json = required
-    if optional:
+    if isinstance(row.get("optionalMeta", row.get("optional_meta")), list):
         order.optional_meta_json = optional
 
 
