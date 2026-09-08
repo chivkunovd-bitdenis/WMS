@@ -925,11 +925,13 @@ async def scan_pick_product(
     container_kind: ContainerKind | None = None,
     container_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
-    supply = await _load_supply(session, tenant_id, supply_id, for_update=True)
     existing = await _find_pick_by_scan_idempotency(session, tenant_id, supply_id, idempotency_key)
     if existing is not None:
         return await get_supply_workspace(session, tenant_id, supply_id)
 
+    supply = await _load_supply(session, tenant_id, supply_id)
+    if supply.marketplace == "ozon":
+        supply = await _load_supply(session, tenant_id, supply_id, for_update=True)
     if order_id is not None:
         requested_order = await session.get(FbsOrder, order_id)
         if (
@@ -1266,7 +1268,9 @@ async def undo_pick(
     actor: User,
     original_pick_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
-    supply = await _load_supply(session, tenant_id, supply_id, for_update=True)
+    supply = await _load_supply(session, tenant_id, supply_id)
+    if supply.marketplace == "ozon":
+        supply = await _load_supply(session, tenant_id, supply_id, for_update=True)
     order = next((o for o in supply.orders if o.id == order_id), None)
     if order is None:
         raise FbsPickingError(
