@@ -2591,7 +2591,7 @@ export function FfInboundRequestView({
                         ...(badCodes.length > 0 ? {
                           backgroundColor: (theme) => alpha(theme.palette.error.main, 0.12),
                           boxShadow: 'none',
-                          '&:hover': { backgroundColor: (theme) => alpha(theme.palette.error.main, 0.16) },
+                          '&&:hover': { backgroundColor: (theme) => alpha(theme.palette.error.main, 0.16) },
                         } : null),
                       }}
                     >
