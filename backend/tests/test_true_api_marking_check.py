@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
+from app.models.background_job import BackgroundJob
 from app.models.product import Product
 from app.models.seller_marking_credentials import SellerMarkingCredentials
 from app.services import inbound_marking_service as receiving
@@ -224,3 +228,102 @@ async def test_receiving_batches_two_pending_codes_and_preserves_full_values(
         assert not listed["checking"]
         assert {item["cis_code"] for item in listed["items"]} == set(CODES)
         assert all(item["cz_status"] == "introduced" for item in listed["items"])
+
+
+@pytest.mark.asyncio
+async def test_expired_worker_cannot_overwrite_retry_while_saving_response(
+    async_client: httpx.AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async with SessionLocal() as session:
+        if session.bind is None or session.bind.dialect.name != "postgresql":
+            pytest.skip("Requires PostgreSQL row locks")
+    tenant, user, req, line = await _setup(async_client)
+    async with SessionLocal() as session:
+        await receiving.attach_code(
+            session, tenant, req, line_id=line, cis_code=CIS, actor_user_id=user
+        )
+        old_id = await receiving.schedule_check(session, tenant, req)
+        old = await session.get(BackgroundJob, old_id)
+        old.created_at = datetime.now(UTC) - timedelta(days=1)
+        await session.commit()
+    response_ready = asyncio.Event()
+    release_response = asyncio.Event()
+    retry_prepared = asyncio.Event()
+    release_retry_commit = asyncio.Event()
+    calls = []
+
+    async def check_batch(_client: Any, codes: list[str], _token: str | None) -> Any:
+        calls.append(codes)
+        if len(calls) == 1:
+            response_ready.set()
+            await release_response.wait()
+            return {CIS: {**api.unavailable(), "status": "introduced", "reason": "old response"}}
+        return {CIS: {**api.unavailable(), "status": "problem", "reason": "fresh retry response"}}
+
+    monkeypatch.setattr(api, "check_batch", check_batch)
+    old_task = asyncio.create_task(receiving.run_check_job(old_id))
+    retry_task = None
+    try:
+        await asyncio.wait_for(response_ready.wait(), 5)
+        async with SessionLocal() as retry_session:
+            real_commit = AsyncSession.commit
+
+            async def pause_retry_commit(self: AsyncSession) -> None:
+                if self is retry_session:
+                    # Real schedule_check already holds the receipt row. Flush its
+                    # replacement job and pending snapshot, but pause before commit.
+                    await self.flush()
+                    retry_prepared.set()
+                    await release_retry_commit.wait()
+                await real_commit(self)
+
+            monkeypatch.setattr(AsyncSession, "commit", pause_retry_commit)
+            retry_task = asyncio.create_task(
+                receiving.schedule_check(retry_session, tenant, req, force=True)
+            )
+            await asyncio.wait_for(retry_prepared.wait(), 5)
+            release_response.set()
+            # Old code waits on the event after caching running; fixed code waits
+            # on the receipt before rereading the job. Both are actual PG waits.
+            async with SessionLocal() as observer:
+                for _ in range(250):
+                    waiting = await observer.scalar(
+                        text(
+                            "SELECT count(*) FROM pg_stat_activity "
+                            "WHERE datname=current_database() AND pid<>pg_backend_pid() "
+                            "AND wait_event_type='Lock'"
+                        )
+                    )
+                    await observer.rollback()
+                    if waiting:
+                        break
+                    assert not old_task.done(), (
+                        "Worker did not wait for the replacement transaction"
+                    )
+                    await asyncio.sleep(0.02)
+                else:
+                    pytest.fail("Worker never reached a PostgreSQL row-lock wait")
+            release_retry_commit.set()
+            new_id = await asyncio.wait_for(retry_task, 5)
+            assert new_id is not None and new_id != old_id
+        await asyncio.wait_for(old_task, 5)
+        async with SessionLocal() as session:
+            assert (await session.get(BackgroundJob, old_id)).status == "failed"
+            assert (await session.get(BackgroundJob, new_id)).status == "pending"
+            listed = await receiving.list_codes(session, tenant, req)
+            assert listed["items"][0]["cz_status"] == "pending"
+        await receiving.run_check_job(new_id)
+        assert calls == [[CIS], [CIS]]
+        async with SessionLocal() as session:
+            listed = await receiving.list_codes(session, tenant, req)
+            assert listed["items"][0]["cz_reason"] == "fresh retry response"
+            assert not listed["checking"]
+    finally:
+        release_response.set()
+        release_retry_commit.set()
+        tasks = [old_task, *([retry_task] if retry_task is not None else [])]
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
