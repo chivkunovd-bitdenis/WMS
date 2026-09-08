@@ -419,7 +419,6 @@ async def test_receiving_code_binds_as_external_once_and_cannot_be_printed(
     "source,status,error",
     [
         ("pool", "available", "marking_code_in_pool"),
-        ("pool", "printed", "marking_code_in_pool"),
         ("external_fbs", "applied", "marking_code_already_used"),
         ("external_fbs", "shipped", "marking_code_already_used"),
         ("external_fbs", "void", "marking_code_already_used"),
@@ -518,3 +517,339 @@ async def test_concurrent_receipt_scan_serializes_capacity_and_duplicate(
         assert await session.scalar(select(func.count(MarkingCode.id))) == 1
         assert await session.scalar(select(func.count(MarkingCodeEvent.id))) == 1
         assert await session.scalar(select(func.count(InventoryMovement.id))) == 0
+
+
+@pytest.mark.parametrize("resolved", [None, {}, {"verified": None}, {"verified": 1}])
+def test_green_requires_explicit_verified_true(resolved: Any) -> None:
+    assert (
+        svc.interpret_check(
+            {"outerStatus": "INTRODUCED", "checkResult": True, "codeResolveData": resolved}
+        )["status"]
+        == "unavailable"
+    )
+
+
+@pytest.mark.asyncio
+async def test_failed_job_is_persisted_when_receipt_was_deleted(
+    async_client: httpx.AsyncClient,
+) -> None:
+    from app.models.background_job import BackgroundJob
+
+    tenant, _, _, _ = await _setup(async_client)
+    async with SessionLocal() as session:
+        job = BackgroundJob(
+            tenant_id=tenant,
+            job_type=svc.JOB_TYPE,
+            status="pending",
+            payload_json={"request_id": str(uuid.uuid4())},
+        )
+        session.add(job)
+        await session.commit()
+        job_id = job.id
+    await svc.run_check_job(job_id)
+    async with SessionLocal() as session:
+        saved = await session.get(BackgroundJob, job_id)
+        assert saved.status == "failed" and saved.error_message == "check_interrupted"
+        assert saved.finished_at is not None
+
+
+@pytest.mark.asyncio
+async def test_automatic_check_preserves_finished_answers_manual_check_rechecks(
+    async_client: httpx.AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant, user, req, line = await _setup(async_client)
+    calls = []
+
+    async def fake_post(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
+        calls.append(kwargs["json"]["code"])
+        return httpx.Response(
+            200,
+            request=httpx.Request("POST", url),
+            json={
+                "outerStatus": "INTRODUCED",
+                "checkResult": True,
+                "codeResolveData": {"verified": True},
+            },
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    async with SessionLocal() as session:
+        await svc.attach_code(session, tenant, req, line_id=line, cis_code=CIS, actor_user_id=user)
+        job_id = await svc.schedule_check(session, tenant, req)
+    await svc.run_check_job(job_id)
+    async with SessionLocal() as session:
+        original = (await svc.list_codes(session, tenant, req))["items"][0]
+        assert await svc.schedule_check(session, tenant, req) is None
+        assert (await svc.list_codes(session, tenant, req))["items"][0] == original
+        await svc.attach_code(
+            session,
+            tenant,
+            req,
+            line_id=line,
+            cis_code=CIS.replace("SERIAL", "SECOND"),
+            actor_user_id=user,
+        )
+        job_id = await svc.schedule_check(session, tenant, req)
+    await svc.run_check_job(job_id)
+    assert calls == [CIS, CIS.replace("SERIAL", "SECOND")]
+    async with SessionLocal() as session:
+        job_id = await svc.schedule_check(session, tenant, req, force=True)
+    await svc.run_check_job(job_id)
+    assert len(calls) == 4
+
+
+@pytest.mark.asyncio
+async def test_delete_wrong_input_releases_capacity_and_allows_correct_product(
+    async_client: httpx.AsyncClient,
+) -> None:
+    tenant, user, req, line = await _setup(async_client)
+    async with SessionLocal() as session:
+        await intake.set_line_actual_qty(session, tenant, req, line, actual_qty=1)
+        wrong = await svc.attach_code(
+            session, tenant, req, line_id=line, cis_code=CIS, actor_user_id=user
+        )
+        await svc.delete_code(session, tenant, req, uuid.UUID(wrong["id"]))
+        assert (await svc.list_codes(session, tenant, req))["items"] == []
+        corrected = await svc.attach_code(
+            session,
+            tenant,
+            req,
+            line_id=line,
+            cis_code=CIS.replace("SERIAL", "SECOND"),
+            actor_user_id=user,
+        )
+        assert corrected["id"] != wrong["id"]
+        product = await session.get(Product, uuid.UUID(corrected["product_id"]))
+        other = Product(
+            tenant_id=tenant, seller_id=product.seller_id, name="Right product", sku_code="RIGHT396"
+        )
+        session.add(other)
+        await session.commit()
+        other_line = await intake.add_or_increment_received_product(
+            session, tenant, req, product_id=other.id, actual_qty=1
+        )
+        restored = await svc.attach_code(
+            session, tenant, req, line_id=other_line.id, cis_code=CIS, actor_user_id=user
+        )
+        assert restored["product_id"] == str(other.id)
+        assert await session.scalar(select(func.count(InventoryMovement.id))) == 0
+
+
+@pytest.mark.asyncio
+async def test_deletion_during_check_and_rescan_are_drained_without_stuck_job(
+    async_client: httpx.AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.models.background_job import BackgroundJob
+
+    tenant, user, req, line = await _setup(async_client)
+    async with SessionLocal() as session:
+        first = await svc.attach_code(
+            session, tenant, req, line_id=line, cis_code=CIS, actor_user_id=user
+        )
+        job_id = await svc.schedule_check(session, tenant, req)
+    calls = []
+
+    async def fake_post(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
+        calls.append(kwargs["json"]["code"])
+        if len(calls) == 1:
+            async with SessionLocal() as session:
+                await svc.delete_code(session, tenant, req, uuid.UUID(first["id"]))
+                await svc.attach_code(
+                    session,
+                    tenant,
+                    req,
+                    line_id=line,
+                    cis_code=CIS.replace("SERIAL", "SECOND"),
+                    actor_user_id=user,
+                )
+                # The automatic posting trigger meets the currently running job.
+                assert await svc.schedule_check(session, tenant, req) is None
+        return httpx.Response(
+            200,
+            request=httpx.Request("POST", url),
+            json={"outerStatus": "APPLIED", "checkResult": False},
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    await svc.run_check_job(job_id)
+    async with SessionLocal() as session:
+        assert (await session.get(BackgroundJob, job_id)).status == "done"
+        items = (await svc.list_codes(session, tenant, req))["items"]
+        assert len(items) == 1 and items[0]["cz_status"] == "problem"
+        assert items[0]["cis_code"] == CIS.replace("SERIAL", "SECOND")
+    assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("alteration", ["history", "printed", "shipped", "other_receipt", "posted"])
+async def test_delete_preserves_existing_history_and_scope(
+    async_client: httpx.AsyncClient,
+    alteration: str,
+) -> None:
+    tenant, user, req, line = await _setup(async_client)
+    async with SessionLocal() as session:
+        item = await svc.attach_code(
+            session, tenant, req, line_id=line, cis_code=CIS, actor_user_id=user
+        )
+        code_id = uuid.UUID(item["id"])
+        code = await session.get(MarkingCode, code_id)
+        if alteration == "history":
+            session.add(
+                MarkingCodeEvent(
+                    tenant_id=tenant,
+                    seller_id=code.seller_id,
+                    code_id=code_id,
+                    event_type="applied",
+                )
+            )
+        elif alteration in {"printed", "shipped"}:
+            code.status = alteration
+        elif alteration == "posted":
+            (await svc._request(session, tenant, req)).status = "sorting"
+        else:
+            event = await session.scalar(
+                select(MarkingCodeEvent).where(MarkingCodeEvent.code_id == code_id)
+            )
+            meta = json.loads(event.meta_json)
+            meta["request_id"] = str(uuid.uuid4())
+            event.meta_json = json.dumps(meta)
+        await session.commit()
+        with pytest.raises(intake.InboundIntakeError):
+            await svc.delete_code(session, tenant, req, code_id)
+        assert await session.get(MarkingCode, code_id) is not None
+        with pytest.raises(intake.InboundIntakeError, match="request_not_found"):
+            await svc.delete_code(session, uuid.uuid4(), req, code_id)
+
+
+@pytest.mark.asyncio
+async def test_printed_pool_inspection_and_removal_preserve_original_code_and_history(
+    async_client: httpx.AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datetime import UTC, datetime
+
+    tenant, user, req, line_id = await _setup(async_client)
+    async with SessionLocal() as session:
+        line = await session.get(InboundIntakeLine, line_id)
+        product = await session.get(Product, line.product_id)
+        code = MarkingCode(
+            tenant_id=tenant,
+            seller_id=product.seller_id,
+            product_id=None,
+            cis_code=CIS,
+            source="pool",
+            status="printed",
+            printed_at=datetime.now(UTC),
+            label_artifact_pdf=b"existing-label",
+        )
+        session.add(code)
+        await session.flush()
+        code_id = code.id
+        original = MarkingCodeEvent(
+            tenant_id=tenant, seller_id=product.seller_id, code_id=code_id, event_type="printed"
+        )
+        session.add(original)
+        await session.commit()
+        original_id = original.id
+        await svc.attach_code(
+            session, tenant, req, line_id=line_id, cis_code=CIS, actor_user_id=user
+        )
+        assert code.source == "pool" and code.status == "printed" and code.product_id is None
+        listed = await svc.list_codes(session, tenant, req)
+        assert listed["items"][0]["product_id"] == str(product.id)
+        job_id = await svc.schedule_check(session, tenant, req)
+
+    async def fake_post(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
+        return httpx.Response(
+            200,
+            request=httpx.Request("POST", url),
+            json={"outerStatus": "APPLIED", "checkResult": False},
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    await svc.run_check_job(job_id)
+    async with SessionLocal() as session:
+        listed = await svc.list_codes(session, tenant, req)
+        assert listed["items"][0]["cz_status"] == "problem"
+        sheet = load_workbook(io.BytesIO(svc.export_problems(listed["items"]))).active
+        assert sheet.max_row == 2 and sheet["A2"].value == product.sku_code
+        await svc.delete_code(session, tenant, req, code_id)
+        code = await session.get(MarkingCode, code_id)
+        assert code.status == "printed" and code.source == "pool" and code.product_id is None
+        assert code.printed_at is not None and code.label_artifact_pdf == b"existing-label"
+        assert await session.get(MarkingCodeEvent, original_id) is not None
+        assert await session.scalar(select(func.count(MarkingCodeEvent.id))) == 1
+        assert (await svc.list_codes(session, tenant, req))["items"] == []
+        assert await session.scalar(select(func.count(InventoryMovement.id))) == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_never_erases_code_referenced_by_fbs_order(
+    async_client: httpx.AsyncClient,
+) -> None:
+    from app.models.fbs_order import FbsOrderMarking
+    from app.models.inbound_intake import InboundIntakeRequest
+
+    tenant, user, req, line = await _setup(async_client)
+    async with SessionLocal() as session:
+        item = await svc.attach_code(
+            session, tenant, req, line_id=line, cis_code=CIS, actor_user_id=user
+        )
+        code = await session.get(MarkingCode, uuid.UUID(item["id"]))
+        receipt = await session.get(InboundIntakeRequest, req)
+        # A minimal persisted FBS order uses the same synthetic seller and warehouse.
+        from datetime import UTC, datetime
+
+        order = FbsOrder(
+            tenant_id=tenant,
+            seller_id=code.seller_id,
+            warehouse_id=receipt.warehouse_id,
+            product_id=code.product_id,
+            wb_order_id=396990,
+            wb_rid="396990",
+            mapping_status="mapped",
+            reserve_status="reserved",
+            deadline_at=datetime.now(UTC),
+            status="assembling",
+            created_at_wb=datetime.now(UTC),
+        )
+        session.add(order)
+        await session.flush()
+        binding = FbsOrderMarking(
+            tenant_id=tenant,
+            order_id=order.id,
+            kind="sgtin",
+            value=CIS,
+            marking_code_id=code.id,
+            source="operator",
+            meta_status="rejected",
+        )
+        session.add(binding)
+        await session.commit()
+        binding_id = binding.id
+        with pytest.raises(intake.InboundIntakeError, match="marking_code_already_used"):
+            await svc.delete_code(session, tenant, req, code.id)
+        assert (await session.get(FbsOrderMarking, binding_id)).marking_code_id == code.id
+
+
+@pytest.mark.asyncio
+async def test_delete_api_is_authenticated_and_returns_no_content(
+    async_client: httpx.AsyncClient,
+) -> None:
+    from app.models.user import User
+
+    tenant, user_id, req, line = await _setup(async_client)
+    async with SessionLocal() as session:
+        item = await svc.attach_code(
+            session, tenant, req, line_id=line, cis_code=CIS, actor_user_id=user_id
+        )
+        email = (await session.get(User, user_id)).email
+    url = f"/operations/inbound-intake-requests/{req}/marking-codes/{item['id']}"
+    assert (await async_client.delete(url)).status_code == 401
+    login = await async_client.post("/auth/login", json={"email": email, "password": "password123"})
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    response = await async_client.delete(url, headers=headers)
+    assert response.status_code == 204 and response.content == b""
+    assert (await async_client.delete(url, headers=headers)).status_code == 404

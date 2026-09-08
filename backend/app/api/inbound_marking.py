@@ -25,7 +25,12 @@ class ScanBody(BaseModel):
 
 
 def _error(exc: InboundIntakeError) -> HTTPException:
-    code = 404 if exc.code in {"request_not_found", "line_not_found", "product_not_found"} else 409
+    code = (
+        404
+        if exc.code
+        in {"request_not_found", "line_not_found", "product_not_found", "marking_code_not_found"}
+        else 409
+    )
     if exc.code == "marking_invalid_code":
         code = 422
     return HTTPException(status_code=code, detail=exc.code)
@@ -43,9 +48,14 @@ async def schedule_after_posting(
 
 
 async def _schedule(
-    session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID, tasks: BackgroundTasks
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    tasks: BackgroundTasks,
+    *,
+    force: bool = False,
 ) -> None:
-    job_id = await svc.schedule_check(session, tenant_id, request_id)
+    job_id = await svc.schedule_check(session, tenant_id, request_id, force=force)
     if job_id is None:
         return
     if settings.celery_broker_url:
@@ -100,7 +110,7 @@ async def check_codes(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     try:
-        await _schedule(session, user.tenant_id, request_id, background_tasks)
+        await _schedule(session, user.tenant_id, request_id, background_tasks, force=True)
         result = await svc.list_codes(session, user.tenant_id, request_id)
         return {"checking": result["checking"]}
     except InboundIntakeError as exc:
@@ -124,3 +134,17 @@ async def export_codes(
             "Content-Disposition": f'attachment; filename="marking-problems-{request_id}.xlsx"'
         },
     )
+
+
+@router.delete("/{request_id}/marking-codes/{code_id}", status_code=204)
+async def delete_code(
+    request_id: uuid.UUID,
+    code_id: uuid.UUID,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    try:
+        await svc.delete_code(session, user.tenant_id, request_id, code_id)
+    except InboundIntakeError as exc:
+        raise _error(exc) from None
+    return Response(status_code=204)
