@@ -635,8 +635,27 @@ export function FfFbsSupplyWorkspace({
     [kizScanActive, token, authHeaders, refocusKizInput, load],
   )
 
+  // WMS-392: активный заказ снимался только успешной привязкой. Любая ошибка
+  // коммита (код уже привязан, дубль, отказ WB) оставляла строку выделенной, и
+  // следующий скан — включая стикер другого заказа — уходил в неё как КИЗ и
+  // падал снова. Выхода из этого состояния на экране не было: оператор мог
+  // только перезакрыть поставку или перезагрузить страницу.
+  const dropKizScanActive = useCallback(() => {
+    setKizScanActive(null)
+    setKizScanValue('')
+    setKizScanError(null)
+    setKizScanHints([])
+    setKizScanDebugOpen(false)
+    refocusKizInput()
+  }, [refocusKizInput])
+
   const onKizScanEnter = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === 'Escape' && kizScanActive) {
+        event.preventDefault()
+        dropKizScanActive()
+        return
+      }
       if (event.key !== 'Enter' || kizScanBusy) return
       event.preventDefault()
       const raw = kizScanValue.trim()
@@ -644,7 +663,7 @@ export function FfFbsSupplyWorkspace({
       if (kizScanActive) void scanKizCode(raw)
       else void scanKizSticker(raw)
     },
-    [kizScanBusy, kizScanValue, kizScanActive, scanKizCode, scanKizSticker],
+    [kizScanBusy, kizScanValue, kizScanActive, scanKizCode, scanKizSticker, dropKizScanActive],
   )
 
   const requestPrintBatch = async (orderIds?: string[], retryMissing = false) => {
@@ -1787,6 +1806,15 @@ export function FfFbsSupplyWorkspace({
                                 № {kizScanActive.wb_order_id}
                               </Typography>
                             </Box>
+                            <Button
+                              size="small"
+                              startIcon={<CloseIcon fontSize="small" />}
+                              onClick={dropKizScanActive}
+                              disabled={kizScanBusy}
+                              data-testid="fbs-kiz-scan-reset"
+                            >
+                              Сбросить
+                            </Button>
                           </Stack>
                         ) : null}
                       </Stack>
@@ -1797,7 +1825,7 @@ export function FfFbsSupplyWorkspace({
                         data-testid="fbs-kiz-scan-message"
                       >
                         {kizScanActive
-                          ? `Заказ № ${kizScanActive.wb_order_id} активен — сканируйте Честный знак, код привяжется и уйдёт в WB.`
+                          ? `Заказ № ${kizScanActive.wb_order_id} активен — сканируйте Честный знак, код привяжется и уйдёт в WB. Не тот заказ или код не идёт — «Сбросить» или Esc, и можно сканировать следующий стикер.`
                           : 'Сканируйте QR стикера заказа — его строка станет активной, затем сканируйте Честный знак.'}
                       </Typography>
                       {kizScanHints.length > 0 ? (
