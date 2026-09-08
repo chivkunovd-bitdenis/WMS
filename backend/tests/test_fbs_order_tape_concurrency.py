@@ -230,6 +230,15 @@ async def test_postgres_order_tape_reuses_binding_after_wait(
         pytest.skip("Requires PostgreSQL row locks")
     seed = await seed_tape(async_client, monkeypatch, code_count)
     before = await stock_snapshot()
+    allocated, proceed = asyncio.Event(), asyncio.Event()
+    original_assign = tape._assign_printed_code_to_order
+
+    async def pause_assignment(session, order, code):
+        await original_assign(session, order, code)
+        allocated.set()
+        await proceed.wait()
+
+    monkeypatch.setattr(tape, "_assign_printed_code_to_order", pause_assignment)
     async with SessionLocal() as first, SessionLocal() as second:
         # Both identity maps contain the very same order with an empty collection.
         stmt = (
@@ -242,18 +251,20 @@ async def test_postgres_order_tape_reuses_binding_after_wait(
         a, b = await first.scalar(stmt), await second.scalar(stmt)
         assert a and b and a.markings == b.markings == []
         pid = await second.scalar(text("select pg_backend_pid()"))
-        printed = await print_tape(first, async_client, seed)
-        assert len(printed.orders) == 1 and not printed.order_errors
+        printing = asyncio.create_task(print_tape(first, async_client, seed))
+        await asyncio.wait_for(allocated.wait(), 5)
         pending = asyncio.create_task(print_tape(second, async_client, seed))
         try:
             await wait_for_row_lock(pid)
-            await first.commit()
-            repeated = await asyncio.wait_for(pending, 5)
-            await second.commit()
+            proceed.set()
+            printed, repeated = await asyncio.wait_for(asyncio.gather(printing, pending), 5)
+            assert len(printed.orders) == 1 and not printed.order_errors
         finally:
-            if not pending.done():
-                pending.cancel()
-                await asyncio.gather(pending, return_exceptions=True)
+            proceed.set()
+            for running in (printing, pending):
+                if not running.done():
+                    running.cancel()
+            await asyncio.gather(printing, pending, return_exceptions=True)
         assert repeated.shortage == 0 and not repeated.order_errors
         assert repeated.orders[0].codes == printed.orders[0].codes
         assert len(b.markings) == 1

@@ -16,7 +16,6 @@ from sqlalchemy.orm import selectinload
 
 from app.core.settings import settings
 from app.models.fbs_order import (
-    CHECK_STATUS_ERROR,
     CHECK_STATUS_NEW,
     FBS_ORDER_MARKING_FROZEN_STATUSES,
     FBS_ORDER_MARKING_WRITE_STATUSES,
@@ -25,7 +24,6 @@ from app.models.fbs_order import (
     META_STATUS_REJECTED,
     META_STATUS_REPLACEMENT_REQUIRED,
     META_STATUS_SENDING,
-    META_STATUS_UNKNOWN,
     FbsOrder,
     FbsOrderMarking,
     current_order_marking,
@@ -35,7 +33,6 @@ from app.models.fbs_supply import FbsSupply
 from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_FAILED,
     WB_OPERATION_STATE_PENDING_CONFIRMATION,
-    FbsWbOperation,
 )
 from app.models.marking_code import (
     EVENT_APPLIED,
@@ -1339,27 +1336,9 @@ async def _commit_one_kiz_pair(
         )
         if not ambiguous:
             raise new_error
-        marking.meta_status = META_STATUS_UNKNOWN
-        marking.check_status = CHECK_STATUS_ERROR
-        marking.reason = "Wildberries не подтвердил результат; нужна сверка."
-        session.add(
-            FbsWbOperation(
-                tenant_id=tenant_id,
-                seller_id=order.seller_id,
-                operation_kind=marking_svc.OPERATION_KIND_ORDER_KIZ_BIND,
-                # The batch key is shared by several orders; each binding is one attempt.
-                idempotency_key=hashlib.sha256(
-                    f"{idempotency_key}:{order.id}:{marking.id}".encode()
-                ).hexdigest(),
-                request_hash=hashlib.sha256(marking.value.encode()).hexdigest(),
-                local_entity_type="fbs_order_marking",
-                local_entity_id=marking.id,
-                wb_object_kind="order",
-                wb_object_id=str(order.wb_order_id),
-                state=WB_OPERATION_STATE_PENDING_CONFIRMATION,
-                error_code=new_error.code,
-                created_by_user_id=actor_user_id,
-            )
+        await marking_svc.record_pending_kiz_operation(
+            session, order, marking, error_code=new_error.code,
+            actor_user_id=actor_user_id, idempotency_key=idempotency_key,
         )
         pending_error = FbsKizError("wb_pending_confirmation", persist_failure_state=True)
     elif new_error is not None and current is not None:

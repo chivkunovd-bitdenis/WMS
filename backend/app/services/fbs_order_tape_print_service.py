@@ -17,11 +17,16 @@ from app.models.fbs_order import (
     MARKING_KIND_SGTIN,
     META_STATUS_ASSIGNED,
     META_STATUS_PENDING,
+    META_STATUS_SENDING,
     FbsOrder,
     FbsOrderMarking,
     current_order_marking,
 )
 from app.models.fbs_supply import FBS_SUPPLY_STATUS_DONE, FBS_SUPPLY_STATUS_IN_DELIVERY, FbsSupply
+from app.models.fbs_wb_operation import (
+    WB_OPERATION_STATE_FAILED,
+    WB_OPERATION_STATE_PENDING_CONFIRMATION,
+)
 from app.models.marking_code import EVENT_REPRINTED, STATUS_PRINTED, MarkingCode
 from app.models.packaging_task import PackagingTaskLine
 from app.services import fbs_marking_service as marking_svc
@@ -38,6 +43,7 @@ from app.services.fbs_print_asset_service import (
     request_supply_print_batch,
 )
 from app.services.print_template_service import PrintLayout, PrintTemplateServiceError, parse_layout
+from app.services.wildberries_errors import WildberriesClientError
 
 
 class FbsOrderTapePrintError(Exception):
@@ -105,7 +111,49 @@ async def print_fbs_order_tape(
             print_layout = parse_layout(layout or {"units": [{"block": "cz", "copies": 1}]})
         except PrintTemplateServiceError as exc:
             raise FbsOrderTapePrintError(exc.code) from exc
-    supply = await _load_supply(session, tenant_id, supply_id)
+    # Stickers do not allocate marking codes. Fetch them before packaging locks.
+    batch: PrintBatchResult | None = None
+    qr_asset_by_order: dict[uuid.UUID, uuid.UUID] = {}
+    errors: list[FbsOrderTapeError] = []
+    if include_order_qr:
+        try:
+            batch = await request_supply_print_batch(
+                session,
+                tenant_id,
+                supply_id,
+                kind="order_sticker",
+                order_ids=order_ids,
+                # L8 (21.08.2026): лента печаталась короче листа подбора. Причина —
+                # False здесь означает «перезапросить у WB стикеры по ВСЕМ заказам
+                # заново». На полутора сотнях заказов любая осечка WB на одном куске
+                # (лимит запросов, таймаут) выбивала эти заказы из ленты молча.
+                # True — переиспользуем уже полученные стикеры и просим только то,
+                # чего не хватает.
+                retry_missing=True,
+                http_client=http_client,
+            )
+        except FbsPrintAssetError as exc:
+            raise FbsOrderTapePrintError(exc.code) from exc
+        # Sticker persistence may update its order. Release that lock before
+        # taking supply parents for a mixed QR + CZ tape.
+        await session.commit()
+        qr_asset_by_order = {
+            asset.fbs_order_id: asset.id
+            for asset in batch.assets
+            if asset.fbs_order_id is not None and asset.status == "ready"
+        }
+        errors.extend(
+            FbsOrderTapeError(
+                order_id=err.order_id,
+                wb_order_id=err.wb_order_id,
+                code=err.code,
+                message=err.message,
+            )
+            for err in batch.order_errors
+        )
+
+    prints_honest_sign = any(unit.block == "cz" and unit.copies > 0 for unit in print_layout.units)
+    supply = await _load_supply(session, tenant_id, supply_id, for_update=prints_honest_sign)
     if supply is None:
         raise FbsOrderTapePrintError("supply_not_found")
     provider_name = "Ozon" if getattr(supply, "marketplace", "wb") == "ozon" else "Wildberries"
@@ -151,7 +199,6 @@ async def print_fbs_order_tape(
     }:
         ordered.sort(key=picking_list_order_key)
     line_by_product = await _line_by_product(session, tenant_id, supply)
-    prints_honest_sign = any(unit.block == "cz" and unit.copies > 0 for unit in print_layout.units)
     if (
         prints_honest_sign and not reprint and not allow_partial
         and supply.honest_sign_skipped_at is None
@@ -165,9 +212,6 @@ async def print_fbs_order_tape(
                 shortage=preflight_shortage,
             )
 
-    batch: PrintBatchResult | None = None
-    qr_asset_by_order: dict[uuid.UUID, uuid.UUID] = {}
-    errors: list[FbsOrderTapeError] = []
     if not include_order_qr:
         errors.extend(
             FbsOrderTapeError(
@@ -178,41 +222,8 @@ async def print_fbs_order_tape(
             )
             for order in cancelled_orders
         )
-    if include_order_qr:
-        try:
-            batch = await request_supply_print_batch(
-                session,
-                tenant_id,
-                supply_id,
-                kind="order_sticker",
-                order_ids=order_ids,
-                # L8 (21.08.2026): лента печаталась короче листа подбора. Причина —
-                # False здесь означает «перезапросить у WB стикеры по ВСЕМ заказам
-                # заново». На полутора сотнях заказов любая осечка WB на одном куске
-                # (лимит запросов, таймаут) выбивала эти заказы из ленты молча.
-                # True — переиспользуем уже полученные стикеры и просим только то,
-                # чего не хватает.
-                retry_missing=True,
-                http_client=http_client,
-            )
-        except FbsPrintAssetError as exc:
-            raise FbsOrderTapePrintError(exc.code) from exc
-        qr_asset_by_order = {
-            asset.fbs_order_id: asset.id
-            for asset in batch.assets
-            if asset.fbs_order_id is not None and asset.status == "ready"
-        }
-        errors.extend(
-            FbsOrderTapeError(
-                order_id=err.order_id,
-                wb_order_id=err.wb_order_id,
-                code=err.code,
-                message=err.message,
-            )
-            for err in batch.order_errors
-        )
-
     result_orders: list[FbsOrderTapeOrder] = []
+    bindings_to_send: dict[uuid.UUID, uuid.UUID] = {}
     shortage_total = 0
     for order in ordered:
         qr_asset_id = qr_asset_by_order.get(order.id)
@@ -333,31 +344,10 @@ async def print_fbs_order_tape(
         shortage_total += printed.shortage or 0
         if (printed.shortage or 0) > 0 and not allow_partial:
             continue
-        code_value = printed.codes[0] if printed.codes else None
-        if code_value:
-            try:
-                marking = _existing_sgtin_marking(order)
-                if marking is None:
-                    raise marking_svc.FbsMarkingError("order_marking_not_found")
-                await marking_svc.attach_order_meta_to_wb_and_sync(
-                    session,
-                    tenant_id,
-                    order,
-                    marking,
-                    http_client,
-                    actor_user_id=actor_user_id,
-                )
-            except marking_svc.FbsMarkingError as exc:
-                await _mark_printed_sgtin_not_sent(session, order)
-                errors.append(
-                    FbsOrderTapeError(
-                        order_id=order.id,
-                        wb_order_id=int(order.wb_order_id),
-                        code=exc.code,
-                        message=exc.code,
-                    )
-                )
-                continue
+        if printed.codes:
+            marking = _existing_sgtin_marking(order)
+            if marking is not None:
+                bindings_to_send[order.id] = marking.id
         result_orders.append(
             FbsOrderTapeOrder(
                 order_id=order.id,
@@ -386,7 +376,38 @@ async def print_fbs_order_tape(
             shortage=shortage_total,
         )
 
-    await session.flush()
+    # The tape owns this transaction: every selected code and binding is durable
+    # together before HTTP. Network confirmation locks only its current order.
+    await session.commit()
+    failed_ids: set[uuid.UUID] = set()
+    for order_id, marking_id in bindings_to_send.items():
+        order = await session.scalar(select(FbsOrder).where(
+            FbsOrder.tenant_id == tenant_id, FbsOrder.id == order_id,
+        ).options(
+            selectinload(FbsOrder.markings).selectinload(FbsOrderMarking.marking_code),
+        ).with_for_update().execution_options(populate_existing=True))
+        if order is None:
+            continue
+        try:
+            marking = _existing_sgtin_marking(order)
+            if marking is None or marking.id != marking_id:
+                raise marking_svc.FbsMarkingError("order_marking_not_found")
+            if order.status == FBS_ORDER_STATUS_CANCELLED:
+                raise marking_svc.FbsMarkingError("order_cancelled")
+            await _send_or_reconcile_printed_marking(
+                session, tenant_id, order, marking, http_client, actor_user_id,
+            )
+        except marking_svc.FbsMarkingError as exc:
+            if (marking is not None and marking.id == marking_id
+                    and exc.code != "wb_pending_confirmation"):
+                await _mark_printed_sgtin_not_sent(session, order)
+            failed_ids.add(order.id)
+            errors.append(FbsOrderTapeError(
+                order_id=order.id, wb_order_id=int(order.wb_order_id),
+                code=exc.code, message=exc.code,
+            ))
+        await session.commit()
+    result_orders = [row for row in result_orders if row.order_id not in failed_ids]
     if getattr(supply, "marketplace", "wb") != "wb":
         await pack_int_svc.try_promote_fbs_supply_if_ready(
             session,
@@ -402,16 +423,65 @@ async def print_fbs_order_tape(
     )
 
 
+async def _send_or_reconcile_printed_marking(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order: FbsOrder,
+    marking: FbsOrderMarking,
+    http_client: httpx.AsyncClient,
+    actor_user_id: uuid.UUID,
+) -> None:
+    operation = await marking_svc.pending_kiz_operation(session, marking)
+    error: marking_svc.FbsMarkingError | None = None
+    try:
+        if operation is not None:
+            token = await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
+            await marking_svc._sync_order_meta_from_wb(session, order, http_client, token)
+            if operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
+                raise marking_svc.FbsMarkingError("wb_pending_confirmation")
+            if operation.state == WB_OPERATION_STATE_FAILED:
+                raise marking_svc.FbsMarkingError("meta_validation_fail")
+        else:
+            await marking_svc.attach_order_meta_to_wb_and_sync(
+                session, tenant_id, order, marking, http_client,
+                actor_user_id=actor_user_id, notify_supply=False,
+            )
+    except marking_svc.FbsMarkingError as exc:
+        error = exc
+    except WildberriesClientError as exc:
+        error = marking_svc.FbsMarkingError(marking_svc._wb_error_code(exc))
+    if error is None:
+        return
+    if operation is not None and operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
+        raise marking_svc.FbsMarkingError("wb_pending_confirmation") from error
+    ambiguous = (
+        error.code == "wb_transport_error" or error.code == "wb_upstream_error_408"
+        or error.code.startswith("wb_upstream_error_5")
+        or marking.meta_status == META_STATUS_SENDING
+    )
+    if order.marketplace == "wb" and operation is None and ambiguous:
+        await marking_svc.record_pending_kiz_operation(
+            session, order, marking, error_code=error.code,
+            actor_user_id=actor_user_id, idempotency_key=f"tape:{marking.id}",
+        )
+        order.metadata_delivery_allowed = False
+        raise marking_svc.FbsMarkingError("wb_pending_confirmation") from error
+    raise error
+
+
 async def _load_supply(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
+    *,
+    for_update: bool = True,
 ) -> FbsSupply | None:
-    await pack_int_svc.lock_packaging_rows(session, tenant_id, supply_id=supply_id)
-    # Stable lock order is independent from the requested label order.
-    await session.execute(select(FbsOrder.id).where(
-        FbsOrder.tenant_id == tenant_id, FbsOrder.supply_id == supply_id,
-    ).order_by(FbsOrder.id).with_for_update())
+    if for_update:
+        await pack_int_svc.lock_packaging_rows(session, tenant_id, supply_id=supply_id)
+        # Stable lock order is independent from the requested label order.
+        await session.execute(select(FbsOrder.id).where(
+            FbsOrder.tenant_id == tenant_id, FbsOrder.supply_id == supply_id,
+        ).order_by(FbsOrder.id).with_for_update())
     stmt = (
         select(FbsSupply)
         .where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)

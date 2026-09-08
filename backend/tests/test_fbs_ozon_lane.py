@@ -2469,6 +2469,7 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
             None,
             kiz_svc.FbsKizCommitPair(order.id, value, False),
             AsyncMock(),
+            f"ozon-scan:{value}",
         )
 
     markings = list(
