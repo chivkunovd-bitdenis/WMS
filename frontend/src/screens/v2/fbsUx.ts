@@ -1,3 +1,5 @@
+import type { FbsOrderMetadata } from './fbsApi'
+
 export type FbsMarketplace = 'wb' | 'ozon'
 
 export function buildFbsSyncTargets(
@@ -133,6 +135,7 @@ const FBS_ERROR_TEXT: Record<string, string> = {
   sgtinappliednotpaid: 'Код не оплачен в Честном знаке. Передайте вопрос селлеру.',
   sgtinnogs: 'Код без разделителей — отсканируйте Честный знак заново целиком.',
   sgtinnotfound: 'Честный знак не знает такого кода. Проверьте этикетку и обратитесь к селлеру.',
+  sgtinretired: 'Код Честного знака выведен из оборота. Замените его на упаковке.',
   sgtinwrittenoff: 'Код уже выведен из оборота. Попросите селлера проверить маркировку товара.',
   sgtinwithdrawn: 'Код отозван в Честном знаке. Попросите селлера проверить маркировку товара.',
   sgtininvalidformat: 'Неверный формат кода маркировки. Отсканируйте код заново целиком.',
@@ -389,4 +392,35 @@ export function summarizeDeliveryChecks(
     })
   }
   return { blockers: collect('blocker'), warnings: collect('warning') }
+}
+
+/** Only the confirmed remote status is an acceptance; no UI navigation gates. */
+export function fbsOrderMarkingAccepted(metadata: FbsOrderMetadata): boolean {
+  const kinds = [...new Set([...metadata.required, ...metadata.states.filter((state) => state.value_tail).map((state) => state.kind)])]
+  return kinds.every((kind) => metadata.states.some((state) =>
+    state.kind === kind && state.status === 'accepted' && !state.reason?.trim(),
+  ))
+}
+
+export function fbsMarkingPresentation(
+  state: FbsOrderMetadata['states'][number] | undefined,
+  provider = 'WB',
+): { tone: 'success' | 'error' | 'neutral'; label: string | null; reason: string | null } {
+  if (!state) return { tone: 'neutral', label: null, reason: null }
+  const reason = state.reason?.trim()
+  if (state.status === 'rejected' || state.status === 'replacement_required'
+    || (state.status === 'accepted' && reason)) {
+    const decisionReason = /^sgtin/i.test(state.decision ?? '') ? state.decision : null
+    return {
+      tone: 'error',
+      label: state.status === 'replacement_required' ? 'ЧЗ требует замены' : `${provider} не принял ЧЗ`,
+      reason: reason ? fbsErrorText(reason) : decisionReason ? fbsErrorText(decisionReason) : null,
+    }
+  }
+  if (state.status === 'accepted') return { tone: 'success', label: `ЧЗ принят ${provider}`, reason: null }
+  if (state.status === 'allowed_without_check') {
+    return { tone: 'neutral', label: `${provider}: проверка ЧЗ не требуется`, reason: null }
+  }
+  if (state.status === 'missing') return { tone: 'neutral', label: 'ЧЗ не внесён', reason: null }
+  return { tone: 'neutral', label: `${provider} ещё не подтвердил ЧЗ`, reason: null }
 }

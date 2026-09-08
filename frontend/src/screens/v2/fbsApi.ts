@@ -163,7 +163,9 @@ export type FbsOrderMetadata = {
       | 'allowed_without_check'
       | 'rejected'
       | 'replacement_required'
+      | 'unknown'
     reason: string | null
+    decision?: string | null
     source?: 'pool' | 'operator'
     /** Последние символы кода маркировки — чтобы оператор сверил строку с этикеткой. */
     value_tail?: string | null

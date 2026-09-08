@@ -53,6 +53,8 @@ import {
   buildFbsPickingListPrintHtml,
   fbsAccessibleStageIndex,
   fbsErrorText,
+  fbsOrderMarkingAccepted,
+  fbsMarkingPresentation,
   fbsBoxEditingDisabled,
   fbsBoxOperationsDisabled,
   fbsDeliveryErrorKeepsIdempotencyKey,
@@ -148,14 +150,7 @@ function visualStage(stage: FbsWorkspace['stage']): StageKey {
   return stage
 }
 
-const MARKING_ACCEPTED_STATUSES = ['accepted', 'assigned', 'pending', 'allowed_without_check', 'ok']
 const STICKER_PRINTED_STATUSES = ['print_opened', 'applied']
-
-function isOrderMarkingReady(order: FbsWorkspace['orders'][number]) {
-  if (order.metadata.required.length === 0) return true
-  const accepted = order.metadata.states.filter((state) => MARKING_ACCEPTED_STATUSES.includes(state.status))
-  return accepted.length >= order.metadata.required.length
-}
 
 // КИЗ, внесённый оператором со стикера, — в отличие от напечатанного нами из пула.
 /** Хвост внесённого Честного знака — пустой, значит заказ ещё не сканировали. */
@@ -623,6 +618,7 @@ export function FfFbsSupplyWorkspace({
             debug: null,
           })
           setKizScanValue('')
+          await load(true)
           return
         }
         setKizScanActive(null)
@@ -631,6 +627,7 @@ export function FfFbsSupplyWorkspace({
       } catch (cause) {
         setKizScanError({ text: kizErrorText(cause), debug: kizScannerDebug(cause) })
         setKizScanValue('')
+        await load(true)
       } finally {
         setKizScanBusy(false)
         refocusKizInput()
@@ -1251,7 +1248,7 @@ export function FfFbsSupplyWorkspace({
   const orderPrintDone = useCallback(
     (order: FbsWorkspace['orders'][number]) =>
       (Boolean(order.sticker.applied_at) || STICKER_PRINTED_STATUSES.includes(order.sticker.status)) &&
-      isOrderMarkingReady(order),
+      fbsOrderMarkingAccepted(order.metadata),
     [],
   )
 
@@ -1930,10 +1927,12 @@ export function FfFbsSupplyWorkspace({
                         order.product.barcode,
                         isOzonSupply ? `заказ Ozon ${order.external_order_id ?? '—'}` : `заказ ${order.wb_order_id}`,
                       ].filter(Boolean).join(' · ')
-                      // Пустая колонка ЧЗ = заказ ещё не сканировали. Внесённый код
-                      // красит строку зелёным, активную (только что отсканированный
-                      // стикер) — голубым: оператор видит, куда сейчас ляжет код.
-                      const tail = kizTail(order)
+                      const markingState = order.metadata.states.find((state) => state.kind === 'sgtin')
+                      const markingView = fbsMarkingPresentation(markingState, providerName)
+                      const markingColor = markingView.tone === 'success' ? 'success.dark'
+                        : markingView.tone === 'error' ? 'error.main' : 'text.secondary'
+                      // The code identifies the label; only WB's verdict determines its colour.
+                      const tail = markingState?.value_tail ?? null
                       const stickerParts = stickerCodeParts(order.sticker.code)
                       return (
                         <Stack
@@ -1945,16 +1944,18 @@ export function FfFbsSupplyWorkspace({
                             alignItems: 'center',
                             px: 2,
                             py: 1.25,
-                            bgcolor: kizRowActive
-                              ? 'info.light'
-                              : tail
-                                ? 'success.light'
-                                : (printed ? 'action.hover' : 'background.paper'),
+                            bgcolor: markingView.tone === 'error'
+                              ? 'error.light'
+                              : kizRowActive ? 'info.light'
+                                : markingView.tone === 'success' ? 'success.light'
+                                  : (printed ? 'action.hover' : 'background.paper'),
                             borderLeft: '4px solid',
-                            borderLeftColor: markingShortage ? 'error.main' : kizRowActive ? 'info.main' : (tail ? 'success.main' : 'transparent'),
+                            borderLeftColor: markingShortage || markingView.tone === 'error' ? 'error.main'
+                              : kizRowActive ? 'info.main' : markingView.tone === 'success' ? 'success.main' : 'transparent',
                           }}
                           data-testid={kizRowActive ? 'fbs-kiz-row-active' : undefined}
                           data-kiz-tail={tail ?? ''}
+                          data-marking-tone={markingView.tone}
                           data-order-id={order.id}
                         >
                           <Checkbox
@@ -1978,6 +1979,11 @@ export function FfFbsSupplyWorkspace({
                               {ids}
                               {markingShortOrderIds.has(order.id) ? <Box component="span" sx={{ color: 'error.main' }}> · ЧЗ не хватило</Box> : null}
                             </Typography>
+                            {markingView.label ? (
+                              <Typography variant="caption" sx={{ display: 'block', color: markingColor }} data-testid="fbs-packing-marking-status">
+                                {markingView.label}{markingView.reason ? `: ${markingView.reason}` : ''}
+                              </Typography>
+                            ) : null}
                           </Box>
                           {needsHonestSign ? (
                             <Box sx={{ width: 118, flexShrink: 0, textAlign: 'right', color: markingShortage ? 'error.main' : 'text.secondary' }} data-testid="fbs-packing-marking-available">
@@ -2009,7 +2015,7 @@ export function FfFbsSupplyWorkspace({
                             </Typography>
                             {tail ? (
                               <Typography
-                                sx={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 15, color: 'success.dark' }}
+                                sx={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 15, color: markingColor }}
                                 data-testid="fbs-kiz-tail"
                               >
                                 {tail}
