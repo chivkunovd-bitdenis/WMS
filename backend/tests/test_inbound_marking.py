@@ -274,3 +274,178 @@ async def test_failed_check_scheduling_cannot_undo_posting(
         assert (await svc.list_codes(session, tenant, req))["items"][0][
             "cz_status"
         ] == "unavailable"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("marketplace", ["wb", "ozon"])
+async def test_receiving_code_binds_as_external_once_and_cannot_be_printed(
+    async_client: httpx.AsyncClient,
+    marketplace: str,
+) -> None:
+    from app.models.packaging_task import PackagingTaskLine
+    from app.services.fbs_kiz_service import _prepare_code_for_binding
+    from app.services.ozon_kiz_service import OzonKizError, _claim_or_create_code
+    from tests.test_fbs_kiz import (
+        _create_order,
+        _create_supply,
+        _register_ff_admin,
+        _setup_seller_warehouse,
+    )
+
+    headers, suffix = await _register_ff_admin(async_client)
+    seller, warehouse, tenant = await _setup_seller_warehouse(async_client, headers, suffix)
+    supply = await _create_supply(
+        tenant_id=tenant, seller_id=seller, warehouse_id=warehouse, suffix=suffix
+    )
+    seeded = await _create_order(
+        tenant_id=tenant,
+        seller_id=seller,
+        warehouse_id=warehouse,
+        supply_id=supply,
+        suffix=suffix,
+        wb_order_id=396001,
+        sticker_code="RCPT396",
+        wb_barcode="RCPT396",
+        with_packaging=True,
+    )
+    async with SessionLocal() as session:
+        req = await intake.create_request(session, tenant, warehouse_id=warehouse)
+        req_id = req.id
+        await intake.add_line(session, tenant, req_id, product_id=seeded.product_id, expected_qty=1)
+        req = await intake.get_request(session, tenant, req_id)
+        await session.refresh(req, attribute_names=["lines"])
+        req.status = "receiving"
+        req.lines[0].actual_qty = 1
+        await session.commit()
+        user = (await async_client.get("/auth/me", headers=headers)).json()
+        item = await svc.attach_code(
+            session,
+            tenant,
+            req_id,
+            line_id=req.lines[0].id,
+            cis_code=CIS,
+            actor_user_id=uuid.UUID(user["id"]),
+        )
+        code = await session.get(MarkingCode, uuid.UUID(item["id"]))
+        assert await marking.count_available_for_product(session, tenant, seeded.product_id) == 0
+        order = await session.get(FbsOrder, seeded.order_id)
+        line = await session.get(PackagingTaskLine, seeded.packaging_task_line_id)
+        if marketplace == "wb":
+            bound, from_pool = await _prepare_code_for_binding(session, tenant, order, CIS, line)
+        else:
+            bound, from_pool = await _claim_or_create_code(
+                session, order, seeded.product_id, CIS, line
+            )
+        assert bound.id == code.id and not from_pool
+        assert code.status == "applied" and code.packaging_task_line_id == line.id
+        await session.commit()
+        assert not await marking.is_unbound_received_code(session, code)
+        with pytest.raises(OzonKizError, match="duplicate_kiz"):
+            await _claim_or_create_code(session, order, seeded.product_id, CIS, line)
+        assert await session.scalar(select(func.count(InventoryMovement.id))) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "source,status,error",
+    [
+        ("pool", "available", "marking_code_in_pool"),
+        ("pool", "printed", "marking_code_in_pool"),
+        ("external_fbs", "applied", "marking_code_already_used"),
+        ("external_fbs", "shipped", "marking_code_already_used"),
+        ("external_fbs", "void", "marking_code_already_used"),
+    ],
+)
+async def test_existing_lifecycle_is_rejected_without_silent_reassignment(
+    async_client: httpx.AsyncClient,
+    source: str,
+    status: str,
+    error: str,
+) -> None:
+    tenant, user, req, line_id = await _setup(async_client)
+    async with SessionLocal() as session:
+        line = await session.get(InboundIntakeLine, line_id)
+        product = await session.get(Product, line.product_id)
+        code = MarkingCode(
+            tenant_id=tenant,
+            seller_id=product.seller_id,
+            product_id=product.id,
+            cis_code=CIS,
+            source=source,
+            status=status,
+        )
+        session.add(code)
+        await session.commit()
+        with pytest.raises(intake.InboundIntakeError, match=error):
+            await svc.attach_code(
+                session, tenant, req, line_id=line_id, cis_code=CIS, actor_user_id=user
+            )
+        assert code.status == status and code.source == source
+        assert await session.scalar(select(func.count(MarkingCodeEvent.id))) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("same_code", [True, False])
+async def test_concurrent_receipt_scan_serializes_capacity_and_duplicate(
+    async_client: httpx.AsyncClient,
+    same_code: bool,
+) -> None:
+    import asyncio
+
+    from sqlalchemy import text
+
+    from app.db.session import engine
+
+    if engine.dialect.name != "postgresql":
+        pytest.skip("PostgreSQL row locks required")
+    tenant, user, req, line = await _setup(async_client)
+    async with SessionLocal() as setup:
+        await intake.set_line_actual_qty(setup, tenant, req, line, actual_qty=1)
+    async with SessionLocal() as first, SessionLocal() as second:
+        await svc._request(first, tenant, req, lock=True)
+        second_pid = await second.scalar(text("SELECT pg_backend_pid()"))
+
+        async def scan_second() -> str:
+            try:
+                result = await svc.attach_code(
+                    second,
+                    tenant,
+                    req,
+                    line_id=line,
+                    cis_code=CIS if same_code else CIS.replace("SERIAL", "SECOND"),
+                    actor_user_id=user,
+                )
+                return str(result["id"])
+            except intake.InboundIntakeError as exc:
+                await second.rollback()
+                return exc.code
+
+        pending = asyncio.create_task(scan_second())
+        try:
+            async with SessionLocal() as observer:
+                async with asyncio.timeout(10):
+                    while True:
+                        waiting = await observer.scalar(
+                            text("SELECT wait_event_type FROM pg_stat_activity WHERE pid = :pid"),
+                            {"pid": second_pid},
+                        )
+                        await observer.rollback()
+                        if waiting == "Lock":
+                            break
+                        assert not pending.done(), "Receipt scan bypassed request row lock"
+                        await asyncio.sleep(0.01)
+            result = await svc.attach_code(
+                first, tenant, req, line_id=line, cis_code=CIS, actor_user_id=user
+            )
+            assert await asyncio.wait_for(pending, 10) == (
+                result["id"] if same_code else "marking_quantity_exceeded"
+            )
+        finally:
+            await first.rollback()
+            if not pending.done():
+                pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)
+    async with SessionLocal() as session:
+        assert await session.scalar(select(func.count(MarkingCode.id))) == 1
+        assert await session.scalar(select(func.count(MarkingCodeEvent.id))) == 1
+        assert await session.scalar(select(func.count(InventoryMovement.id))) == 0

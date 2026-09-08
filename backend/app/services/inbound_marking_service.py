@@ -22,7 +22,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
 from app.models.background_job import BackgroundJob
-from app.models.fbs_order import FbsOrderMarking
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.marking_code import EVENT_IMPORTED, STATUS_APPLIED, MarkingCode, MarkingCodeEvent
 from app.models.product import Product
@@ -226,20 +225,9 @@ async def attach_code(
     if count >= actual:
         raise InboundIntakeError("marking_quantity_exceeded")
     if code is not None:
-        occupied = await session.scalar(
-            select(FbsOrderMarking.id)
-            .where(
-                FbsOrderMarking.tenant_id == tenant_id,
-                FbsOrderMarking.marking_code_id == code.id,
-            )
-            .limit(1)
-        )
-        if (
-            occupied is not None
-            or code.packaging_task_line_id is not None
-            or code.status not in {"available", "printed", "applied", "introduced"}
-        ):
-            raise InboundIntakeError("marking_code_already_used")
+        if code.source == "pool" or code.pool_id is not None:
+            raise InboundIntakeError("marking_code_in_pool")
+        raise InboundIntakeError("marking_code_already_used")
     if code is None:
         try:
             async with session.begin_nested():
