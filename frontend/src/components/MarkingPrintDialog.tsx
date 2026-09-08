@@ -104,6 +104,8 @@ type FbsTapePrintResult = {
 
 type FbsTapeContext = {
   orders: FbsTapeOrderContext[]
+  /** New codes missing per SKU; already bound codes are reused by FBS. */
+  markingShortage?: number
   includeOrderQr: boolean
   print: (args: { layout: PrintLayout; allowPartial: boolean; reprint: boolean }) => Promise<FbsTapePrintResult>
   confirmQrApplied: (asset: FbsTapeAsset) => Promise<void>
@@ -677,8 +679,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     : isCatalogSource
       ? `К печати: ${totalWbLabels}`
       : `К упаковке: ${qtyNeed}`
-  const shortage = requiresHonestSign && !qrOnlyTape && !effectiveReprint && available < qtyNeed
-    ? qtyNeed - available
+  const shortage = requiresHonestSign && !qrOnlyTape && !effectiveReprint
+    ? ctx?.fbsTape?.markingShortage ?? Math.max(0, qtyNeed - available)
     : 0
   /**
    * PRN-02: перепечатка ленты FBS не строится по выбору конкретных КМ
