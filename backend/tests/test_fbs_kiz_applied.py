@@ -126,7 +126,15 @@ async def test_scan_known_code_records_application_once_without_reprinting(
         code = await session.get(MarkingCode, code_id)
         assert code and code.status == "applied" and code.applied_at is not None
         assert code.source == ("external_fbs" if mode == "available_external" else "pool")
-        assert code.printed_at == printed_at
+        # SQLite returns a naive UTC datetime; compare the preserved instant.
+        actual_printed_at = code.printed_at
+        if actual_printed_at is not None:
+            actual_printed_at = (
+                actual_printed_at.replace(tzinfo=UTC)
+                if actual_printed_at.tzinfo is None
+                else actual_printed_at.astimezone(UTC)
+            )
+        assert actual_printed_at == printed_at
         assert code.label_artifact_pdf == b"retained-artifact"
         line = await session.get(PackagingTaskLine, order.packaging_task_line_id)
         assert line and line.qty_marking_printed == 1 and line.qty_marking_external == 0
