@@ -11,7 +11,15 @@ from sqlalchemy import select
 from app.db.session import SessionLocal
 from app.models.tenant import Tenant
 from app.models.user import User
+from app.services import subscription_service
 from app.services.subscription_service import subscription_state
+
+
+@pytest.fixture
+def subscription_today(monkeypatch: pytest.MonkeyPatch) -> date:
+    today = date(2026, 9, 9)
+    monkeypatch.setattr(subscription_service, "today_msk", lambda: today)
+    return today
 
 
 async def _register(client: AsyncClient, slug: str) -> dict[str, str]:
@@ -66,7 +74,10 @@ def test_state_counts_days_and_blocks_after_last_day() -> None:
 
 
 @pytest.mark.asyncio
-async def test_subscription_endpoint_reports_days_left(async_client: AsyncClient) -> None:
+async def test_subscription_endpoint_reports_days_left(
+    async_client: AsyncClient,
+    subscription_today: date,
+) -> None:
     headers = await _register(async_client, "sub-days")
     email = "admin-sub-days@example.com"
 
@@ -75,7 +86,7 @@ async def test_subscription_endpoint_reports_days_left(async_client: AsyncClient
     assert before.json()["enabled"] is False
     assert before.json()["price_rub"] == 10000
 
-    await _set_paid_until(email, date.today() + timedelta(days=12))
+    await _set_paid_until(email, subscription_today + timedelta(days=12))
     after = await async_client.get("/subscription", headers=headers)
     assert after.status_code == 200, after.text
     body = after.json()
@@ -87,6 +98,7 @@ async def test_subscription_endpoint_reports_days_left(async_client: AsyncClient
 @pytest.mark.asyncio
 async def test_expired_subscription_blocks_work_but_not_login(
     async_client: AsyncClient,
+    subscription_today: date,
 ) -> None:
     headers = await _register(async_client, "sub-blocked")
     email = "admin-sub-blocked@example.com"
@@ -94,7 +106,7 @@ async def test_expired_subscription_blocks_work_but_not_login(
     working = await async_client.get("/sellers", headers=headers)
     assert working.status_code == 200, working.text
 
-    await _set_paid_until(email, date.today() - timedelta(days=1))
+    await _set_paid_until(email, subscription_today - timedelta(days=1))
 
     blocked = await async_client.get("/sellers", headers=headers)
     assert blocked.status_code == 402
@@ -115,10 +127,13 @@ async def test_expired_subscription_blocks_work_but_not_login(
 @pytest.mark.asyncio
 async def test_subscription_of_one_tenant_does_not_touch_another(
     async_client: AsyncClient,
+    subscription_today: date,
 ) -> None:
     first = await _register(async_client, "sub-tenant-one")
     second = await _register(async_client, "sub-tenant-two")
-    await _set_paid_until("admin-sub-tenant-one@example.com", date.today() - timedelta(days=5))
+    await _set_paid_until(
+        "admin-sub-tenant-one@example.com", subscription_today - timedelta(days=5),
+    )
 
     assert (await async_client.get("/sellers", headers=first)).status_code == 402
     assert (await async_client.get("/sellers", headers=second)).status_code == 200
