@@ -24,6 +24,7 @@ export const LEDGER_EVENT_LABELS: Record<string, string> = {
   defective: 'Брак',
   replaced: 'Замена',
   voided: 'Аннулирование',
+  wb_orphaned: 'Расхождение с WB',
 }
 
 export function codeStatusLabel(status: string): string {

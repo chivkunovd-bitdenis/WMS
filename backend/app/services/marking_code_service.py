@@ -1166,7 +1166,9 @@ async def _code_filter_for_product(
     pool_ids = await _pool_ids_for_product(session, tenant_id, product_id)
     code_filter: ColumnElement[bool]
     if pool_ids:
-        code_filter = MarkingCode.pool_id.in_(pool_ids)
+        code_filter = MarkingCode.pool_id.in_(pool_ids) & or_(
+            MarkingCode.product_id.is_(None), MarkingCode.product_id == product.id
+        )
     else:
         code_filter = MarkingCode.product_id == product.id
     return code_filter, product
@@ -1529,6 +1531,7 @@ async def count_available_for_products_batch(
             MarkingPoolProduct.product_id.in_(product_ids),
             MarkingCode.status == STATUS_AVAILABLE,
             MarkingCode.seller_id == Product.seller_id,
+            or_(MarkingCode.product_id.is_(None), MarkingCode.product_id == Product.id),
         )
         .group_by(MarkingPoolProduct.product_id)
     )
@@ -2676,8 +2679,10 @@ def _collapse_ledger_rows(raw_rows: list[_LedgerRawRow]) -> list[LedgerEventRow]
         cis = head[1]
         gtin = head[2]
         pool_title = head[3]
-        product_name = head[4]
-        product_sku = head[5]
+        # An import batch may contain codes for different products. Do not attribute
+        # the whole batch to whichever code happened to be returned first.
+        product_name = head[4] if all(row[4:6] == head[4:6] for row in group) else None
+        product_sku = head[5] if all(row[4:6] == head[4:6] for row in group) else None
         seller_name = head[6]
         actor_email = head[7]
         import_batch_id = head[8]
@@ -2750,7 +2755,8 @@ def _ledger_filtered_stmt(
         stmt = stmt.where(
             or_(
                 MarkingCode.product_id == product_id,
-                MarkingCodeEvent.pool_id.in_(pool_for_product),
+                MarkingCode.product_id.is_(None)
+                & MarkingCodeEvent.pool_id.in_(pool_for_product),
             )
         )
     if document_number:
@@ -3184,6 +3190,7 @@ async def replace_reprint_request(
             MarkingCode.seller_id == product.seller_id,
             MarkingCode.status == STATUS_AVAILABLE,
             pool_filter,
+            or_(MarkingCode.product_id.is_(None), MarkingCode.product_id == product.id),
         )
         .order_by(MarkingCode.created_at.asc())
         .limit(1)

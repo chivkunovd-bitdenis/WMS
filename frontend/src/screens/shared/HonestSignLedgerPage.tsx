@@ -25,7 +25,7 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { PageHeader } from '../../ui/PageHeader'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { MarkingSellerPicker } from './MarkingSellerPicker'
-import { ledgerEventLabel } from '../../utils/markingStatus'
+import { LEDGER_EVENT_LABELS, ledgerEventLabel } from '../../utils/markingStatus'
 
 const TEXT_FILTER_DEBOUNCE_MS = 400
 
@@ -53,7 +53,7 @@ type Props = {
   onSelectedSellerIdChange?: (id: string | null) => void
 }
 
-const EVENT_TYPES = ['', 'imported', 'printed', 'applied', 'shipped', 'voided', 'defective']
+const EVENT_TYPES = ['', ...Object.keys(LEDGER_EVENT_LABELS)]
 
 function toDateFromParam(isoDate: string): string {
   return `${isoDate}T00:00:00`
@@ -354,26 +354,27 @@ export function HonestSignLedgerPage({
         <Table size="small" data-testid={`${testIdPrefix}-table`}>
           <TableHead>
             <TableRow>
-              <TableCell>Время</TableCell>
+              <TableCell>Товар / артикул</TableCell>
+              <TableCell>Тип документа / место печати</TableCell>
+              <TableCell>Номер документа</TableCell>
+              <TableCell>Сотрудник</TableCell>
+              <TableCell>Дата и время</TableCell>
               <TableCell>Событие</TableCell>
               <TableCell>КМ</TableCell>
-              <TableCell>Пул / товар</TableCell>
+              <TableCell>Пул</TableCell>
               <TableCell>Селлер</TableCell>
-              <TableCell>Документ</TableCell>
-              <TableCell>Источник</TableCell>
-              <TableCell>Пользователь</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {busy ? (
               <TableRow>
-                <TableCell colSpan={8}>
+                <TableCell colSpan={9}>
                   <Skeleton height={32} />
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8}>
+                <TableCell colSpan={9}>
                   <Typography variant="body2" color="text.secondary">
                     События не найдены.
                   </Typography>
@@ -382,6 +383,19 @@ export function HonestSignLedgerPage({
             ) : (
               rows.map((row) => (
                 <TableRow key={row.id} data-testid={`${testIdPrefix}-row-${row.id}`}>
+                  <TableCell>
+                    {row.product_name ?? '—'}
+                    {row.product_sku ? (
+                      <Typography variant="body2" color="text.secondary">
+                        {row.product_sku}
+                      </Typography>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>
+                    {row.event_type === 'imported' ? 'Загрузка КМ' : row.source_process_label ?? '—'}
+                  </TableCell>
+                  <TableCell>{row.document_number ?? '—'}</TableCell>
+                  <TableCell>{row.actor_email ?? '—'}</TableCell>
                   <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
                   <TableCell>
                     <Chip size="small" label={ledgerEventLabel(row.event_type)} />
@@ -389,14 +403,8 @@ export function HonestSignLedgerPage({
                   <TableCell sx={{ wordBreak: 'break-all' }}>
                     {row.cis_code ?? row.cis_masked ?? '—'}
                   </TableCell>
-                  <TableCell>
-                    {row.pool_title ?? '—'}
-                    {row.product_sku ? ` / ${row.product_sku}` : ''}
-                  </TableCell>
+                  <TableCell>{row.pool_title ?? '—'}</TableCell>
                   <TableCell>{row.seller_name ?? '—'}</TableCell>
-                  <TableCell>{row.document_number ?? '—'}</TableCell>
-                  <TableCell>{row.source_process_label ?? '—'}</TableCell>
-                  <TableCell>{row.actor_email ?? '—'}</TableCell>
                 </TableRow>
               ))
             )}

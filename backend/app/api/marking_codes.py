@@ -967,6 +967,8 @@ async def list_marking_ledger(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> LedgerPageOut:
+    if user.role != FULFILLMENT_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     scope = _resolve_marking_seller_scope(user, effective_seller_id, seller_id)
     page = await mc_svc.list_ledger(
         session,
@@ -1021,6 +1023,8 @@ async def export_marking_ledger(
     date_from: Annotated[datetime | None, Query()] = None,
     date_to: Annotated[datetime | None, Query()] = None,
 ) -> Response:
+    if user.role != FULFILLMENT_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     scope = _resolve_marking_seller_scope(user, effective_seller_id, seller_id)
     try:
         csv_text = await mc_svc.export_ledger_csv(
