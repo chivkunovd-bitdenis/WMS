@@ -384,6 +384,7 @@ async def get_request(
     request_id: uuid.UUID,
     *,
     seller_product_owner_id: uuid.UUID | None = None,
+    for_update: bool = False,
 ) -> InboundIntakeRequest | None:
     stmt = (
         select(InboundIntakeRequest)
@@ -407,6 +408,8 @@ async def get_request(
             .selectinload(InboundIntakeCargoPlaceLine.product),
         )
     )
+    if for_update:
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
     res = await session.execute(stmt)
     req = res.scalar_one_or_none()
     if req is None:
@@ -1185,7 +1188,8 @@ async def complete_receiving(
     *,
     actor_user_id: uuid.UUID | None,
 ) -> InboundIntakeRequest:
-    req = await get_request(session, tenant_id, request_id)
+    # Serialize completion before reading status, including an already-loaded ORM instance.
+    req = await get_request(session, tenant_id, request_id, for_update=True)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.status not in RECEIVING_STATUSES:

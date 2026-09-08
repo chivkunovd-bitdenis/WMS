@@ -21,6 +21,8 @@ async def test_seller_wb_catalog_enriched_from_imported_card(
         api_token: str,
         content_api_base: str | None = None,
         limit: int = 100,
+        cursor_updated_at: str | None = None,
+        cursor_nm_id: int | None = None,
     ) -> dict[str, object]:
         return {
             "cards": [
@@ -75,6 +77,7 @@ async def test_seller_wb_catalog_enriched_from_imported_card(
         jr = await async_client.get(f"/operations/background-jobs/{jid}", headers=ah)
         if jr.json()["status"] == "done":
             break
+    assert jr.json()["status"] == "done", jr.text
     pr = await async_client.post(
         "/products",
         headers=ah,
@@ -151,6 +154,8 @@ async def test_ff_catalog_lists_all_tenant_products(
         api_token: str,
         content_api_base: str | None = None,
         limit: int = 100,
+        cursor_updated_at: str | None = None,
+        cursor_nm_id: int | None = None,
     ) -> dict[str, object]:
         return {
             "cards": [
@@ -204,6 +209,7 @@ async def test_ff_catalog_lists_all_tenant_products(
         jr = await async_client.get(f"/operations/background-jobs/{jid}", headers=ah)
         if jr.json()["status"] == "done":
             break
+    assert jr.json()["status"] == "done", jr.text
 
     product_a = await async_client.post(
         "/products",
@@ -380,6 +386,8 @@ async def test_linked_wb_catalog_before_stock_movement(
         api_token: str,
         content_api_base: str | None = None,
         limit: int = 100,
+        cursor_updated_at: str | None = None,
+        cursor_nm_id: int | None = None,
     ) -> dict[str, object]:
         return {
             "cards": [
@@ -426,6 +434,7 @@ async def test_linked_wb_catalog_before_stock_movement(
         jr = await async_client.get(f"/operations/background-jobs/{jid}", headers=ah)
         if jr.json()["status"] == "done":
             break
+    assert jr.json()["status"] == "done", jr.text
 
     pr = await async_client.post(
         "/products",

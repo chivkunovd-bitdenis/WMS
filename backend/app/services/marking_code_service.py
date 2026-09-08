@@ -13,6 +13,7 @@ from typing import Any, cast
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
@@ -43,6 +44,7 @@ from app.models.marking_code import (
     MarkingReprintRequest,
 )
 from app.models.packaging_task import (
+    STATUS_DONE,
     STATUS_DRAFT,
     STATUS_IN_PROGRESS,
     PackagingTask,
@@ -308,14 +310,18 @@ def cz_copies_from_layout(layout: PrintLayout) -> int:
     return total if total > 0 else 1
 
 
-def _printed_code_infos(codes: list[MarkingCode]) -> tuple[PrintedCodeInfo, ...]:
+async def _printed_code_infos(codes: list[MarkingCode]) -> tuple[PrintedCodeInfo, ...]:
+    printable = await asyncio.to_thread(
+        _label_artifact_flags,
+        [(code.label_artifact_pdf, code.cis_code) for code in codes],
+    )
     return tuple(
         PrintedCodeInfo(
             id=code.id,
             cis_code=code.cis_code,
-            has_label_artifact=is_printable_label_artifact(code.label_artifact_pdf, code.cis_code),
+            has_label_artifact=has_artifact,
         )
-        for code in codes
+        for code, has_artifact in zip(codes, printable, strict=True)
     )
 
 
@@ -551,8 +557,9 @@ def _parse_csv_rows(content: bytes) -> list[dict[str, str]]:
                 )
         if rows:
             return rows
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    if len(lines) > 1 and not any(sep in lines[0] for sep in (",", ";", "\t")):
+    # GS is a field separator inside a KIZ, not a record boundary.
+    lines = [ln.strip() for ln in re.split(r"[\r\n]+", text) if ln.strip()]
+    if lines and not any(sep in lines[0] for sep in (",", ";", "\t")):
         return [{"cis": ln, "gtin": "", "sku": ""} for ln in lines]
     return []
 
@@ -599,9 +606,11 @@ def _parse_pdf_label_rows(content: bytes) -> list[dict[str, str | bytes]]:
         raise MarkingCodeServiceError("pdf_support_unavailable") from exc
     rows: list[dict[str, str | bytes]] = []
     seen: set[str] = set()
+    if not artifacts:
+        raise MarkingCodeServiceError("no_valid_codes")
     for artifact in artifacts:
-        cis = normalize_cis(artifact.cis)
-        if cis is None or cis in seen:
+        cis = artifact.cis
+        if cis in seen:
             continue
         seen.add(cis)
         rows.append(
@@ -629,16 +638,47 @@ def is_printable_label_artifact(pdf_bytes: bytes | None, cis_code: str | None = 
     try:
         for page_index in range(doc.page_count):
             _extract_cis_codes_from_text(doc[page_index].get_text("text"), seen)
+        if len(seen) == 1 and (expected is None or expected in seen):
+            return True
+        # Full imported codes need not appear in the human-readable PDF caption.
+        from app.services.marking_datamatrix_service import decode_datamatrix_codes_on_pdf_page
+
+        decoded = {
+            item.value
+            for page in doc
+            for item in decode_datamatrix_codes_on_pdf_page(page)
+        }
+        return len(decoded) == 1 and (cis_code is None or cis_code in decoded)
     except Exception:
         return False
     finally:
         doc.close()
-    if expected is not None and expected not in seen:
-        return False
-    return len(seen) == 1
 
 
 _MAX_LABEL_ARTIFACT_TAPE = 500
+
+
+def _label_artifact_flags(artifacts: list[tuple[bytes | None, str]]) -> list[bool]:
+    """Validate a batch of immutable payloads without taking ORM objects into a worker."""
+    return [is_printable_label_artifact(pdf, cis) for pdf, cis in artifacts]
+
+
+def _validated_label_artifact_tape(
+    artifacts: list[tuple[bytes | None, str] | None],
+    page_width_mm: float | None,
+    page_height_mm: float | None,
+) -> bytes:
+    from app.services.marking_label_artifact_service import merge_label_artifact_pdfs_for_print
+
+    parts: list[bytes] = []
+    for artifact in artifacts:
+        if artifact is None:
+            raise MarkingCodeServiceError("code_not_found")
+        pdf_bytes, cis_code = artifact
+        if not pdf_bytes or not is_printable_label_artifact(pdf_bytes, cis_code):
+            raise MarkingCodeServiceError("label_artifact_missing")
+        parts.append(pdf_bytes)
+    return merge_label_artifact_pdfs_for_print(parts, page_width_mm, page_height_mm)
 
 
 async def build_label_artifact_tape_pdf(
@@ -654,22 +694,18 @@ async def build_label_artifact_tape_pdf(
     if len(code_ids) > _MAX_LABEL_ARTIFACT_TAPE:
         raise MarkingCodeServiceError("too_many_codes")
 
-    from app.services.marking_label_artifact_service import merge_label_artifact_pdfs_for_print
-
-    parts: list[bytes] = []
+    artifacts: list[tuple[bytes | None, str] | None] = []
     for code_id in code_ids:
         code = await session.get(MarkingCode, code_id)
-        if code is None or code.tenant_id != tenant_id:
-            raise MarkingCodeServiceError("code_not_found")
-        pdf_bytes = code.label_artifact_pdf
-        if not pdf_bytes or not is_printable_label_artifact(pdf_bytes, code.cis_code):
-            raise MarkingCodeServiceError("label_artifact_missing")
-        parts.append(pdf_bytes)
-    # PyMuPDF is CPU-bound. Keep it outside the API event-loop thread so a
-    # large tape does not pause unrelated operator requests.
+        artifacts.append(
+            None if code is None or code.tenant_id != tenant_id
+            else (code.label_artifact_pdf, code.cis_code)
+        )
+    # Both PDF/DataMatrix validation and merging are CPU-bound. Transfer bytes
+    # once for the whole tape; keep database access and ORM objects on this thread.
     return await asyncio.to_thread(
-        merge_label_artifact_pdfs_for_print,
-        parts,
+        _validated_label_artifact_tape,
+        artifacts,
         page_width_mm,
         page_height_mm,
     )
@@ -689,6 +725,19 @@ def parse_import_file(filename: str, content: bytes) -> list[dict[str, str | byt
     if lower.endswith((".csv", ".txt", ".tsv")):
         return [{**row, "label_pdf": b""} for row in _parse_csv_rows(content)]
     raise MarkingCodeServiceError("unsupported_file_type")
+
+
+def _parse_import_files(files: list[tuple[str, bytes]]) -> list[dict[str, str | bytes]]:
+    parsed_rows: list[dict[str, str | bytes]] = []
+    for filename, content in files:
+        try:
+            rows = parse_import_file(filename, content)
+        except MarkingCodeServiceError:
+            raise
+        except (UnicodeError, OSError, ValueError) as exc:
+            raise MarkingCodeServiceError("parse_failed") from exc
+        parsed_rows.extend(rows)
+    return parsed_rows
 
 
 async def _resolve_product_for_row(
@@ -915,7 +964,9 @@ def _group_cis_codes_from_rows(
     invalid_count = 0
     duplicate_count = 0
     for row in parsed_rows:
-        cis = normalize_cis(str(row.get("cis", "")))
+        raw_cis = str(row.get("cis", ""))
+        # Decoded PDF payloads are already validated; retain the original bytes.
+        cis = raw_cis if row.get("label_pdf") else normalize_cis(raw_cis)
         if cis is None:
             invalid_count += 1
             continue
@@ -1036,15 +1087,7 @@ async def preview_marking_import(
     if not files:
         raise MarkingCodeServiceError("empty_file")
 
-    parsed_rows: list[dict[str, str | bytes]] = []
-    for filename, content in files:
-        try:
-            rows = parse_import_file(filename, content)
-        except MarkingCodeServiceError:
-            raise
-        except (UnicodeError, OSError, ValueError) as exc:
-            raise MarkingCodeServiceError("parse_failed") from exc
-        parsed_rows.extend(rows)
+    parsed_rows = await asyncio.to_thread(_parse_import_files, files)
 
     if not parsed_rows:
         raise MarkingCodeServiceError("empty_file")
@@ -1152,7 +1195,9 @@ async def _code_filter_for_product(
     pool_ids = await _pool_ids_for_product(session, tenant_id, product_id)
     code_filter: ColumnElement[bool]
     if pool_ids:
-        code_filter = MarkingCode.pool_id.in_(pool_ids)
+        code_filter = MarkingCode.pool_id.in_(pool_ids) & or_(
+            MarkingCode.product_id.is_(None), MarkingCode.product_id == product.id
+        )
     else:
         code_filter = MarkingCode.product_id == product.id
     return code_filter, product
@@ -1173,17 +1218,8 @@ async def import_marking_codes(
     if not files:
         raise MarkingCodeServiceError("empty_file")
 
-    parsed_rows: list[dict[str, str | bytes]] = []
-    filenames: list[str] = []
-    for filename, content in files:
-        try:
-            rows = parse_import_file(filename, content)
-        except MarkingCodeServiceError:
-            raise
-        except (UnicodeError, OSError, ValueError) as exc:
-            raise MarkingCodeServiceError("parse_failed") from exc
-        parsed_rows.extend(rows)
-        filenames.append(filename)
+    parsed_rows = await asyncio.to_thread(_parse_import_files, files)
+    filenames = [filename for filename, _content in files]
 
     if not parsed_rows:
         raise MarkingCodeServiceError("empty_file")
@@ -1459,15 +1495,19 @@ async def list_product_codes(
         .order_by(MarkingCode.created_at.desc())
     )
     codes = list((await session.execute(stmt)).scalars().all())
+    printable = await asyncio.to_thread(
+        _label_artifact_flags,
+        [(code.label_artifact_pdf, code.cis_code) for code in codes],
+    )
     return [
         ProductMarkingCodeRow(
             id=code.id,
             cis_code=code.cis_code,
             status=code.status,
             created_at=code.created_at,
-            has_label_artifact=is_printable_label_artifact(code.label_artifact_pdf, code.cis_code),
+            has_label_artifact=has_artifact,
         )
-        for code in codes
+        for code, has_artifact in zip(codes, printable, strict=True)
     ]
 
 
@@ -1515,6 +1555,7 @@ async def count_available_for_products_batch(
             MarkingPoolProduct.product_id.in_(product_ids),
             MarkingCode.status == STATUS_AVAILABLE,
             MarkingCode.seller_id == Product.seller_id,
+            or_(MarkingCode.product_id.is_(None), MarkingCode.product_id == Product.id),
         )
         .group_by(MarkingPoolProduct.product_id)
     )
@@ -1561,10 +1602,21 @@ async def print_codes_for_packaging_line(
     print_layout = resolve_print_layout(layout, duplicate_copies=duplicate_copies)
     event_copies = cz_copies_from_layout(print_layout)
 
+    from app.services.fbs_packaging_integration_service import lock_packaging_rows
+
+    task_id = await session.scalar(select(PackagingTaskLine.task_id).where(
+        PackagingTaskLine.id == task_line_id,
+    ))
+    if task_id is not None:
+        await lock_packaging_rows(session, tenant_id, task_ids={task_id})
+
+    # После ожидания чужой печати перечитываем потребность даже у уже загруженной строки.
     line_stmt = (
         select(PackagingTaskLine)
         .where(PackagingTaskLine.id == task_line_id)
         .options(selectinload(PackagingTaskLine.task))
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     line = (await session.execute(line_stmt)).scalar_one_or_none()
     if line is None:
@@ -1572,7 +1624,7 @@ async def print_codes_for_packaging_line(
     task = line.task
     if task.tenant_id != tenant_id:
         raise MarkingCodeServiceError("line_not_found")
-    if task.status not in (STATUS_DRAFT, STATUS_IN_PROGRESS):
+    if task.status not in (STATUS_DRAFT, STATUS_IN_PROGRESS, STATUS_DONE):
         raise MarkingCodeServiceError("task_not_active")
 
     product = await get_product(session, tenant_id, line.product_id)
@@ -1597,8 +1649,12 @@ async def print_codes_for_packaging_line(
         stmt = (
             select(MarkingCode)
             .where(
+                MarkingCode.tenant_id == tenant_id,
                 MarkingCode.packaging_task_line_id == line.id,
-                MarkingCode.status == STATUS_PRINTED,
+                or_(
+                    MarkingCode.status == STATUS_PRINTED,
+                    (MarkingCode.status == STATUS_APPLIED) & MarkingCode.printed_at.is_not(None),
+                ),
             )
             .order_by(MarkingCode.created_at.asc())
         )
@@ -1634,7 +1690,7 @@ async def print_codes_for_packaging_line(
             is_reprint=True,
             codes=[c.cis_code for c in codes],
             layout=print_layout,
-            printed_codes=_printed_code_infos(codes),
+            printed_codes=await _printed_code_infos(codes),
         )
 
     already_printed = int(line.qty_marking_printed)
@@ -1744,7 +1800,7 @@ async def print_codes_for_packaging_line(
         codes=[c.cis_code for c in printed_slice],
         layout=print_layout,
         shortage=shortage if shortage > 0 else None,
-        printed_codes=_printed_code_infos(printed_slice),
+        printed_codes=await _printed_code_infos(printed_slice),
     )
 
 
@@ -1861,7 +1917,7 @@ async def print_codes_for_product(
         codes=[c.cis_code for c in printed_slice],
         layout=print_layout,
         shortage=shortage if shortage > 0 else None,
-        printed_codes=_printed_code_infos(printed_slice),
+        printed_codes=await _printed_code_infos(printed_slice),
     )
 
 
@@ -2655,8 +2711,10 @@ def _collapse_ledger_rows(raw_rows: list[_LedgerRawRow]) -> list[LedgerEventRow]
         cis = head[1]
         gtin = head[2]
         pool_title = head[3]
-        product_name = head[4]
-        product_sku = head[5]
+        # An import batch may contain codes for different products. Do not attribute
+        # the whole batch to whichever code happened to be returned first.
+        product_name = head[4] if all(row[4:6] == head[4:6] for row in group) else None
+        product_sku = head[5] if all(row[4:6] == head[4:6] for row in group) else None
         seller_name = head[6]
         actor_email = head[7]
         import_batch_id = head[8]
@@ -2715,7 +2773,6 @@ def _ledger_filtered_stmt(
         .outerjoin(User, User.id == MarkingCodeEvent.actor_user_id)
         .where(
             MarkingCodeEvent.tenant_id == tenant_id,
-            MarkingCode.source == "pool",
         )
     )
     if seller_id is not None:
@@ -2730,7 +2787,8 @@ def _ledger_filtered_stmt(
         stmt = stmt.where(
             or_(
                 MarkingCode.product_id == product_id,
-                MarkingCodeEvent.pool_id.in_(pool_for_product),
+                MarkingCode.product_id.is_(None)
+                & MarkingCodeEvent.pool_id.in_(pool_for_product),
             )
         )
     if document_number:
@@ -2927,7 +2985,10 @@ async def list_printed_codes_for_packaging_line(
         .where(
             MarkingCode.tenant_id == tenant_id,
             MarkingCode.packaging_task_line_id == line_id,
-            MarkingCode.status == STATUS_PRINTED,
+            or_(
+                MarkingCode.status == STATUS_PRINTED,
+                (MarkingCode.status == STATUS_APPLIED) & MarkingCode.printed_at.is_not(None),
+            ),
         )
         .order_by(MarkingCode.printed_at.asc(), MarkingCode.created_at.asc())
     )
@@ -2972,7 +3033,9 @@ async def create_defect_reprint_request(
     )
     if (await session.execute(pending_stmt)).scalar_one_or_none() is not None:
         raise MarkingCodeServiceError("reprint_already_pending")
-    if code.status != STATUS_PRINTED:
+    if code.status != STATUS_PRINTED and not (
+        code.status == STATUS_APPLIED and code.printed_at is not None
+    ):
         raise MarkingCodeServiceError("code_not_printed")
 
     reason_text = reason.strip() if reason and reason.strip() else None
@@ -3161,6 +3224,7 @@ async def replace_reprint_request(
             MarkingCode.seller_id == product.seller_id,
             MarkingCode.status == STATUS_AVAILABLE,
             pool_filter,
+            or_(MarkingCode.product_id.is_(None), MarkingCode.product_id == product.id),
         )
         .order_by(MarkingCode.created_at.asc())
         .limit(1)
@@ -3411,3 +3475,256 @@ async def list_pending_marking_lines(
             )
         )
     return rows, total
+
+
+def _decode_restore_payloads(pdf: bytes) -> set[str]:
+    import fitz
+
+    from app.services.marking_datamatrix_service import (
+        decode_datamatrix_codes_on_pdf_page,
+    )
+
+    with fitz.open(stream=pdf, filetype="pdf") as doc:
+        return {
+            item.value
+            for page in doc
+            for item in decode_datamatrix_codes_on_pdf_page(page)
+        }
+
+
+async def _restore_code_scope_error(
+    session: AsyncSession,
+    code: MarkingCode,
+    gtin: str,
+) -> str | None:
+    from app.models.fbs_order import FbsOrderMarking
+
+    seller = await session.get(Seller, code.seller_id)
+    batch = await session.get(MarkingCodeImport, code.import_batch_id)
+    if (
+        seller is None
+        or seller.tenant_id != code.tenant_id
+        or batch is None
+        or batch.tenant_id != code.tenant_id
+        or batch.seller_id != code.seller_id
+    ):
+        return "owner_mismatch"
+    if code.gtin and code.gtin != gtin:
+        return "gtin_mismatch"
+    if code.pool_id is not None:
+        pool = await session.get(MarkingPool, code.pool_id)
+        if (
+            pool is None
+            or pool.tenant_id != code.tenant_id
+            or pool.seller_id != code.seller_id
+            or pool.gtin != gtin
+        ):
+            return "pool_mismatch"
+    if code.product_id is not None:
+        product = await session.get(Product, code.product_id)
+        if (
+            product is None
+            or product.tenant_id != code.tenant_id
+            or product.seller_id != code.seller_id
+        ):
+            return "product_mismatch"
+        if product.wb_barcode and product.wb_barcode not in _gtin_lookup_variants(gtin):
+            return "product_mismatch"
+    if code.packaging_task_line_id is not None:
+        return "linked_code"
+    linked = await session.scalar(
+        select(FbsOrderMarking.id)
+        .where(
+            FbsOrderMarking.tenant_id == code.tenant_id,
+            or_(
+                FbsOrderMarking.marking_code_id == code.id,
+                FbsOrderMarking.value == code.cis_code,
+            ),
+        )
+        .limit(1)
+    )
+    return "linked_code" if linked is not None else None
+
+
+async def restore_truncated_pool_cis_codes(
+    *,
+    tenant_id: uuid.UUID,
+    apply: bool = False,
+    code_ids: list[uuid.UUID] | None = None,
+) -> dict[str, Any]:
+    """Restore only a proven extension of the stored identifier from its own PDF.
+
+    This is an admin operation. Decoding runs outside DB sessions and row locks;
+    each apply rereads and locks the source, and commits just that one code.
+    No statement about WB validity is inferred from a length or an AI number.
+    """
+    from app.db.session import SessionLocal
+    from app.models.fbs_order import FbsOrderMarking
+
+    async with SessionLocal() as session:
+        stmt = (
+            select(MarkingCode.id)
+            .where(
+                MarkingCode.tenant_id == tenant_id,
+                MarkingCode.source == "pool",
+                MarkingCode.import_batch_id.is_not(None),
+            )
+            .order_by(MarkingCode.id)
+        )
+        if code_ids is not None:
+            stmt = stmt.where(MarkingCode.id.in_(code_ids))
+        ids = list((await session.scalars(stmt)).all())
+    rows: list[dict[str, Any]] = []
+    for code_id in ids:
+        async with SessionLocal() as session:
+            original = await session.get(MarkingCode, code_id)
+        if original is None or original.tenant_id != tenant_id:
+            continue
+        row: dict[str, Any] = {
+            "code_id": str(code_id),
+            "old_length": len(original.cis_code),
+        }
+        rows.append(row)
+        if original.status != STATUS_AVAILABLE:
+            row["outcome"] = "not_available"
+            continue
+        prefix = original.cis_code.rstrip("\x1d")
+        if not re.fullmatch(r"01[0-9]{14}21[^\x1d]+", prefix):
+            row["outcome"] = "outside_prefix_shape"
+            continue
+        if not original.label_artifact_pdf:
+            row["outcome"] = "missing_artifact"
+            continue
+        try:
+            values = await asyncio.to_thread(
+                _decode_restore_payloads, original.label_artifact_pdf
+            )
+        except Exception:
+            row["outcome"] = "unreadable_artifact"
+            continue
+        matches = {
+            value
+            for value in values
+            if value.startswith(prefix + "\x1d") and len(value) > len(prefix) + 1
+        }
+        if original.cis_code in values and not matches:
+            row["outcome"] = "unchanged"
+            continue
+        if len(matches) != 1:
+            row["outcome"] = (
+                "ambiguous_artifact" if len(matches) > 1 else "prefix_mismatch"
+            )
+            continue
+        full = matches.pop()
+        if len(full) > _CIS_MAX_LEN:
+            row["outcome"] = "payload_too_long"
+            continue
+        row["new_length"] = len(full)
+        async with SessionLocal() as session:
+            current_stmt = (
+                select(MarkingCode)
+                .where(
+                    MarkingCode.id == code_id,
+                    MarkingCode.tenant_id == tenant_id,
+                )
+                .execution_options(populate_existing=True)
+            )
+            if apply:
+                current_stmt = current_stmt.with_for_update()
+            current = await session.scalar(current_stmt)
+            if current is None or current.status != STATUS_AVAILABLE:
+                row["outcome"] = "not_available"
+                continue
+            source_fields = (
+                "cis_code",
+                "label_artifact_pdf",
+                "seller_id",
+                "product_id",
+                "pool_id",
+                "import_batch_id",
+                "source",
+                "gtin",
+                "serial",
+            )
+            if any(
+                getattr(current, field) != getattr(original, field)
+                for field in source_fields
+            ):
+                row["outcome"] = "source_changed"
+                continue
+            reason = await _restore_code_scope_error(session, current, prefix[2:16])
+            if reason is not None:
+                row["outcome"] = reason
+                continue
+            if current.serial and current.serial != prefix[18:]:
+                row["outcome"] = "serial_mismatch"
+                continue
+            conflict = await session.scalar(
+                select(MarkingCode.id)
+                .where(
+                    MarkingCode.tenant_id == tenant_id,
+                    MarkingCode.cis_code == full,
+                    MarkingCode.id != code_id,
+                )
+                .limit(1)
+            )
+            binding = await session.scalar(
+                select(FbsOrderMarking.id)
+                .where(
+                    FbsOrderMarking.tenant_id == tenant_id,
+                    FbsOrderMarking.value == full,
+                )
+                .limit(1)
+            )
+            if conflict is not None or binding is not None:
+                row["outcome"] = "target_conflict"
+                continue
+            if not apply:
+                row["outcome"] = "would_restore"
+                continue
+            current.cis_code = full
+            try:
+                await session.commit()
+            except IntegrityError:
+                await session.rollback()
+                row["outcome"] = "target_conflict"
+            else:
+                row["outcome"] = "restored"
+    counts: dict[str, int] = {}
+    for row in rows:
+        counts[row["outcome"]] = counts.get(row["outcome"], 0) + 1
+    return {
+        "tenant_id": str(tenant_id),
+        "dry_run": not apply,
+        "scanned": len(rows),
+        "by_outcome": counts,
+        "rows": rows,
+    }
+
+
+async def is_unbound_received_code(session: AsyncSession, code: MarkingCode) -> bool:
+    """A physically applied receipt code may be bound once without entering print pools."""
+    from app.models.fbs_order import FbsOrderMarking
+
+    if (code.source != "external_fbs" or code.status != STATUS_APPLIED
+            or code.packaging_task_line_id is not None or code.pool_id is not None):
+        return False
+    # Historical/rejected/cancelled bindings are not released by a receipt scan.
+    if await session.scalar(select(FbsOrderMarking.id).where(
+        FbsOrderMarking.tenant_id == code.tenant_id,
+        FbsOrderMarking.marking_code_id == code.id,
+    ).limit(1)) is not None:
+        return False
+    events = (await session.scalars(select(MarkingCodeEvent).where(
+        MarkingCodeEvent.tenant_id == code.tenant_id, MarkingCodeEvent.code_id == code.id,
+        MarkingCodeEvent.event_type == EVENT_IMPORTED,
+    ))).all()
+    for event in events:
+        try:
+            meta = json.loads(event.meta_json or "{}")
+        except ValueError:
+            continue
+        if (isinstance(meta, dict) and meta.get("source_process") == "reception"
+                and meta.get("request_id")):
+            return True
+    return False

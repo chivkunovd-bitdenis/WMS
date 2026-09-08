@@ -5,6 +5,8 @@ import time
 import pytest
 from httpx import AsyncClient
 
+from tests.auth_helpers import set_password_via_link
+
 FF_PERMISSION_DEFAULTS = {
     "settings": False,
     "mp_shipments": False,
@@ -39,10 +41,7 @@ async def _create_ff_staff(
     )
     assert patched.status_code == 200, patched.text
 
-    set_pw = await async_client.post(
-        "/auth/set-initial-password",
-        json={"email": staff_email, "password": "password123"},
-    )
+    set_pw = await set_password_via_link(async_client, staff_email, "password123")
     assert set_pw.status_code == 200, set_pw.text
 
     login = await async_client.post(
@@ -109,10 +108,7 @@ async def test_admin_creates_staff_user_first_login_and_permissions(
     assert need_pw.status_code == 403
     assert need_pw.json()["detail"] == "password_setup_required"
 
-    set_pw = await async_client.post(
-        "/auth/set-initial-password",
-        json={"email": staff_email, "password": "password123"},
-    )
+    set_pw = await set_password_via_link(async_client, staff_email, "password123")
     assert set_pw.status_code == 200, set_pw.text
 
     login = await async_client.post(

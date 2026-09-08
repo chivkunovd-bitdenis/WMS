@@ -370,7 +370,11 @@ async def distributions_by_product(
             quantity_total=total,
             quantity_fbs=fbs,
             quantity_reserved=directions.total,
-            quantity_free_fbo=max(0, total - directions.total - fbs),
+            # Real order reservations hold stock in either publication mode.
+            quantity_free_fbo=max(
+                0, total - directions.total - allocated.get(product_id, 0)
+                - reserved.get(product_id, 0),
+            ),
         )
     return distributions
 

@@ -1,0 +1,196 @@
+{
+  "measurement": "ASGI request entry through response; local PostgreSQL, synthetic tests",
+  "exit_status": 0,
+  "samples": [
+    {
+      "test": "tests/test_inbound_intake.py::test_inbound_receiving_scan_accepts_planned_local_product_without_wb_ids",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/33f35316-47d1-4b53-a0e6-4538c36a5e01/receiving/scan",
+      "status_code": 200,
+      "elapsed_ms": 38.738,
+      "sql_statements": 28,
+      "kind": null,
+      "product_id_supplied": false
+    },
+    {
+      "test": "tests/test_inbound_intake.py::test_inbound_receiving_scan_accepts_planned_local_product_without_wb_ids",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/33f35316-47d1-4b53-a0e6-4538c36a5e01/receiving/scan",
+      "status_code": 200,
+      "elapsed_ms": 24.947,
+      "sql_statements": 22,
+      "kind": null,
+      "product_id_supplied": false
+    },
+    {
+      "test": "tests/test_inbound_box_intake.py::test_inbound_box_intake_manual_qty_and_verify",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/52f5cff0-e752-4ce8-8046-1d1cc76e5ed9/boxes/open",
+      "status_code": 200,
+      "elapsed_ms": 19.039,
+      "sql_statements": 14,
+      "kind": null,
+      "product_id_supplied": false
+    },
+    {
+      "test": "tests/test_inbound_box_intake.py::test_inbound_box_intake_manual_qty_and_verify",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/52f5cff0-e752-4ce8-8046-1d1cc76e5ed9/boxes/open",
+      "status_code": 200,
+      "elapsed_ms": 20.715,
+      "sql_statements": 15,
+      "kind": null,
+      "product_id_supplied": false
+    },
+    {
+      "test": "tests/test_marketplace_unload_tsd_scan_contract.py::test_tsd_box_scan_location_then_product_sequence",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/9a8bcc04-1a26-45ce-9b8a-6c4f6968762d/boxes/open",
+      "status_code": 200,
+      "elapsed_ms": 26.946,
+      "sql_statements": 15,
+      "kind": null,
+      "product_id_supplied": false
+    },
+    {
+      "test": "tests/test_marketplace_unload_tsd_scan_contract.py::test_tsd_box_scan_location_then_product_sequence",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/2dfe8146-491b-4a2e-97b5-ddb7302eb90a/boxes/open",
+      "status_code": 200,
+      "elapsed_ms": 18.676,
+      "sql_statements": 14,
+      "kind": null,
+      "product_id_supplied": false
+    },
+    {
+      "test": "tests/test_marketplace_unload_tsd_scan_contract.py::test_tsd_box_scan_location_then_product_sequence",
+      "method": "POST",
+      "path": "/operations/marketplace-unload-requests/cc2ed1e5-cdc3-4de4-b055-b9b877eac1b9/boxes/a53cec4a-eac5-4b46-b1c5-16b9a0b8e994/scan",
+      "status_code": 200,
+      "elapsed_ms": 9.573,
+      "sql_statements": 8,
+      "kind": "location",
+      "product_id_supplied": false
+    },
+    {
+      "test": "tests/test_marketplace_unload_tsd_scan_contract.py::test_tsd_box_scan_location_then_product_sequence",
+      "method": "POST",
+      "path": "/operations/marketplace-unload-requests/cc2ed1e5-cdc3-4de4-b055-b9b877eac1b9/boxes/a53cec4a-eac5-4b46-b1c5-16b9a0b8e994/scan",
+      "status_code": 200,
+      "elapsed_ms": 106.42,
+      "sql_statements": 67,
+      "kind": "product",
+      "product_id_supplied": true
+    },
+    {
+      "test": "tests/test_marketplace_unload_tsd_scan_contract.py::test_box_scan_product_after_location_mp018",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/6b353b2f-8045-4e15-9a1e-1f0468141e9b/boxes/open",
+      "status_code": 200,
+      "elapsed_ms": 16.503,
+      "sql_statements": 15,
+      "kind": null,
+      "product_id_supplied": false
+    },
+    {
+      "test": "tests/test_marketplace_unload_tsd_scan_contract.py::test_box_scan_product_after_location_mp018",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/7d47a224-c358-4176-b866-822ca6a880f5/boxes/open",
+      "status_code": 200,
+      "elapsed_ms": 17.217,
+      "sql_statements": 14,
+      "kind": null,
+      "product_id_supplied": false
+    },
+    {
+      "test": "tests/test_marketplace_unload_tsd_scan_contract.py::test_box_scan_product_after_location_mp018",
+      "method": "POST",
+      "path": "/operations/marketplace-unload-requests/f6eeae3a-0319-4755-8b28-3a03707bce5d/boxes/4076d1ec-7db1-4160-8c74-bc0cee04f632/scan",
+      "status_code": 200,
+      "elapsed_ms": 9.175,
+      "sql_statements": 8,
+      "kind": "location",
+      "product_id_supplied": false
+    },
+    {
+      "test": "tests/test_marketplace_unload_tsd_scan_contract.py::test_box_scan_product_after_location_mp018",
+      "method": "POST",
+      "path": "/operations/marketplace-unload-requests/f6eeae3a-0319-4755-8b28-3a03707bce5d/boxes/4076d1ec-7db1-4160-8c74-bc0cee04f632/scan",
+      "status_code": 200,
+      "elapsed_ms": 92.472,
+      "sql_statements": 71,
+      "kind": "product",
+      "product_id_supplied": false
+    },
+    {
+      "test": "tests/test_marketplace_unload_tsd_scan_contract.py::test_box_scan_ready_box_into_open_box_mp018",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/770b4003-a240-48db-a276-21747a8bcebb/boxes/open",
+      "status_code": 200,
+      "elapsed_ms": 21.075,
+      "sql_statements": 15,
+      "kind": null,
+      "product_id_supplied": false
+    },
+    {
+      "test": "tests/test_marketplace_unload_tsd_scan_contract.py::test_box_scan_ready_box_into_open_box_mp018",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/08125c39-1578-41bc-9ad5-6195a47af7fe/boxes/open",
+      "status_code": 200,
+      "elapsed_ms": 34.116,
+      "sql_statements": 14,
+      "kind": null,
+      "product_id_supplied": false
+    },
+    {
+      "test": "tests/test_marketplace_unload_tsd_scan_contract.py::test_box_scan_ready_box_into_open_box_mp018",
+      "method": "POST",
+      "path": "/operations/marketplace-unload-requests/d496ffa2-cd60-4706-be00-dad795ee4cf1/boxes/5902d129-12a3-42dd-969b-c991b331a0f3/scan",
+      "status_code": 200,
+      "elapsed_ms": 167.255,
+      "sql_statements": 71,
+      "kind": "ready_box",
+      "product_id_supplied": false
+    },
+    {
+      "test": "tests/test_packaging_tasks.py::test_packaging_scan_manual_undo_and_done_history",
+      "method": "POST",
+      "path": "/operations/inbound-intake-requests/d5d8a6d5-0c99-40f9-bb53-8d4e6d50aec4/boxes/open",
+      "status_code": 200,
+      "elapsed_ms": 20.395,
+      "sql_statements": 15,
+      "kind": null,
+      "product_id_supplied": false
+    },
+    {
+      "test": "tests/test_packaging_tasks.py::test_packaging_scan_manual_undo_and_done_history",
+      "method": "POST",
+      "path": "/operations/packaging-tasks/a9d8508f-e143-4eef-9004-c0e8e9c9038e/scan",
+      "status_code": 409,
+      "elapsed_ms": 15.009,
+      "sql_statements": 8,
+      "kind": null,
+      "product_id_supplied": false
+    },
+    {
+      "test": "tests/test_packaging_tasks.py::test_packaging_scan_manual_undo_and_done_history",
+      "method": "POST",
+      "path": "/operations/packaging-tasks/a9d8508f-e143-4eef-9004-c0e8e9c9038e/scan",
+      "status_code": 200,
+      "elapsed_ms": 50.639,
+      "sql_statements": 37,
+      "kind": null,
+      "product_id_supplied": false
+    },
+    {
+      "test": "tests/test_packaging_tasks.py::test_packaging_scan_manual_undo_and_done_history",
+      "method": "POST",
+      "path": "/operations/packaging-tasks/a9d8508f-e143-4eef-9004-c0e8e9c9038e/scan",
+      "status_code": 409,
+      "elapsed_ms": 14.141,
+      "sql_statements": 8,
+      "kind": null,
+      "product_id_supplied": false
+    }
+  ]
+}

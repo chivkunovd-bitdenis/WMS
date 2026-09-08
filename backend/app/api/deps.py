@@ -5,12 +5,14 @@ from collections.abc import Awaitable, Callable
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.roles import FF_PORTAL_ROLES, FULFILLMENT_ADMIN, FULFILLMENT_SELLER, FULFILLMENT_STAFF
+from app.core.settings import settings
 from app.db.session import get_db
+from app.models.tenant import Tenant
 from app.models.user import User
 from app.services.auth_service import get_user_by_id
 from app.services.seller_shop_service import (
@@ -28,6 +30,7 @@ from app.services.staff_permissions_service import (
     PERM_SHIFT_LEAD,
     get_staff_permissions,
 )
+from app.services.subscription_service import subscription_state
 from app.services.tokens import decode_access_token
 
 _bearer = HTTPBearer(auto_error=False)
@@ -68,7 +71,24 @@ async def resolve_effective_seller_id(
     return active_seller_id
 
 
+# Ручки, которые обязаны работать и при закончившейся подписке: иначе человек не
+# сможет ни увидеть экран «подписка закончилась», ни войти, ни задать пароль.
+_SUBSCRIPTION_FREE_PATHS = frozenset(
+    {
+        "/auth/me",
+        "/auth/login",
+        "/auth/set-password",
+        "/auth/request-password-reset",
+        "/subscription",
+        "/subscription/pay",
+        "/subscription/sync",
+        "/health",
+    }
+)
+
+
 async def get_current_user(
+    request: Request,
     credentials: Annotated[
         HTTPAuthorizationCredentials | None, Depends(_bearer)
     ],
@@ -105,7 +125,24 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="tenant_mismatch",
         )
+    await _assert_subscription_active(request, session, user)
     return user
+
+
+async def _assert_subscription_active(
+    request: Request, session: AsyncSession, user: User
+) -> None:
+    """Закрыть систему, если подписка организации закончилась (WMS-381)."""
+    if request.url.path in _SUBSCRIPTION_FREE_PATHS:
+        return
+    tenant = await session.get(Tenant, user.tenant_id)
+    if tenant is None:
+        return
+    if subscription_state(tenant).blocked:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="subscription_expired",
+        )
 
 
 async def get_effective_seller_id(
@@ -319,3 +356,16 @@ async def seller_line_product_scope(
             )
         return seller_id
     return None
+
+
+def public_base_url(request: Request) -> str:
+    """Адрес, от которого собираются ссылки в письмах.
+
+    На бою задаётся переменной WMS_PUBLIC_BASE_URL. Без неё берём адрес запроса —
+    в разработке этого хватает, но за обратным прокси он врёт, поэтому в проде
+    переменную выставляем обязательно.
+    """
+    configured = settings.public_base_url.strip()
+    if configured:
+        return configured
+    return str(request.base_url).rstrip("/")

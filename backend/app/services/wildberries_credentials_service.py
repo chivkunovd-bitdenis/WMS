@@ -6,6 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import cast
 
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.seller import Seller
@@ -60,6 +61,33 @@ async def get_public_token_status(
         row.updated_at,
         row.marketplace_scope_ok,
     )
+
+
+async def list_public_marketplace_statuses(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_ids: set[uuid.UUID],
+) -> dict[uuid.UUID, tuple[bool, bool | None, datetime | None]]:
+    """Read existing check results without loading or decrypting any token."""
+    if not seller_ids:
+        return {}
+    credentials = SellerWildberriesCredentials
+    rows = await session.execute(
+        select(
+            Seller.id,
+            or_(
+                credentials.content_token_encrypted.isnot(None),
+                credentials.supplies_token_encrypted.isnot(None),
+                credentials.marketplace_token_encrypted.isnot(None),
+            ),
+            credentials.marketplace_scope_ok,
+            credentials.marketplace_scope_checked_at,
+        )
+        .join(credentials, credentials.seller_id == Seller.id)
+        .where(Seller.tenant_id == tenant_id, Seller.id.in_(seller_ids))
+    )
+    return {seller_id: (bool(has_key), scope_ok, checked_at)
+            for seller_id, has_key, scope_ok, checked_at in rows.all()}
 
 
 async def patch_seller_tokens(

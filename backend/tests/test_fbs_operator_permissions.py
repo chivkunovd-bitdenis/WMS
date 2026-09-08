@@ -6,6 +6,8 @@ import uuid
 import pytest
 from httpx import AsyncClient
 
+from tests.auth_helpers import set_password_via_link
+
 
 async def _staff_headers(
     client: AsyncClient,
@@ -47,10 +49,7 @@ async def _staff_headers(
         },
     )
     assert permissions.status_code == 200, permissions.text
-    password = await client.post(
-        "/auth/set-initial-password",
-        json={"email": email, "password": "password123"},
-    )
+    password = await set_password_via_link(client, email, "password123")
     assert password.status_code == 200, password.text
     login = await client.post(
         "/auth/login",

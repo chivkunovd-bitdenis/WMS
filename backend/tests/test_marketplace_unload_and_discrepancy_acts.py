@@ -15,6 +15,7 @@ from inbound_box_intake_helpers import (
 
 from app.services.background_job_service import JOB_TYPE_WILDBERRIES_CARDS_SYNC
 from app.services.box_barcode_service import is_wb_compatible_box_barcode
+from tests.auth_helpers import set_password_via_link
 
 E2E_BARCODE = "2045526738950"
 
@@ -34,6 +35,8 @@ async def _link_product_wb_barcode(
         api_token: str,
         content_api_base: str | None = None,
         limit: int = 100,
+        cursor_updated_at: str | None = None,
+        cursor_nm_id: int | None = None,
     ) -> dict[str, object]:
         return {
             "cards": [
@@ -1196,7 +1199,7 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
         headers=h,
     )
     assert ship_blocked.status_code == 422
-    assert ship_blocked.json()["detail"] == "packaging_not_done"
+    assert ship_blocked.json()["detail"] == "distribution_incomplete"
 
     loc = await async_client.get(f"/warehouses/{wid}/locations", headers=h)
     loc_barcode = next(x for x in loc.json() if x["id"] == loc_id)["barcode"]
@@ -1225,7 +1228,12 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
         )
         assert prod_scan.status_code == 200, prod_scan.text
 
-    await _finish_unload_packaging(async_client, h, mid, auto_collect=False)
+    # WMS-392: filling boxes must allow shipping without completing packaging.
+    packaging = await async_client.get(
+        f"/operations/packaging-tasks/by-unload/{mid}", headers=h
+    )
+    assert packaging.status_code == 200, packaging.text
+    assert packaging.json()["status"] == "in_progress"
 
     detail = await async_client.get(f"/operations/marketplace-unload-requests/{mid}", headers=h)
     assert detail.json()["lines"][0]["picked_qty"] == 3
@@ -1238,12 +1246,29 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
     row_collect = next(x for x in bal_after_collect.json() if x["product_id"] == pid)
     assert row_collect["quantity"] == 7
 
+    movements_after_collect = await async_client.get("/operations/inventory-movements", headers=h)
+    assert movements_after_collect.status_code == 200, movements_after_collect.text
+    collected_movements = movements_after_collect.json()
+    unload_movements = [
+        row for row in collected_movements
+        if row["product_id"] == pid and row["movement_type"] == "marketplace_unload"
+    ]
+    assert len(unload_movements) == 3
+    assert all(row["quantity_delta"] == -1 for row in unload_movements)
+
     ship = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/ship",
         headers=h,
     )
     assert ship.status_code == 200, ship.text
     assert ship.json()["status"] == "shipped"
+
+    packaging_after_ship = await async_client.get(
+        f"/operations/packaging-tasks/by-unload/{mid}", headers=h
+    )
+    assert packaging_after_ship.status_code == 200, packaging_after_ship.text
+    assert packaging_after_ship.json()["id"] == packaging.json()["id"]
+    assert packaging_after_ship.json()["status"] == "in_progress"
 
     bal_after = await async_client.get(
         "/operations/inventory-balances/summary",
@@ -1259,6 +1284,18 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
     )
     assert ship_again.status_code == 409
     assert ship_again.json()["detail"] == "bad_status"
+
+    movements_after_retry = await async_client.get("/operations/inventory-movements", headers=h)
+    assert movements_after_retry.status_code == 200, movements_after_retry.text
+    assert movements_after_retry.json() == collected_movements
+    balance_after_retry = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=h,
+        params={"warehouse_id": wid},
+    )
+    assert balance_after_retry.status_code == 200, balance_after_retry.text
+    row_after_retry = next(row for row in balance_after_retry.json() if row["product_id"] == pid)
+    assert row_after_retry["quantity"] == 7
 
 
 @pytest.mark.asyncio
@@ -2081,10 +2118,7 @@ async def test_marketplace_unload_pick_allocations_admin_only(
             "packaging": False,
         },
     )
-    await async_client.post(
-        "/auth/set-initial-password",
-        json={"email": staff_email, "password": "password123"},
-    )
+    await set_password_via_link(async_client, staff_email, "password123")
     login = await async_client.post(
         "/auth/login",
         json={"email": staff_email, "password": "password123"},
@@ -2910,7 +2944,7 @@ async def test_marketplace_unload_ship_rejects_empty_boxes_only(
         headers=ah,
     )
     assert ship.status_code == 422
-    assert ship.json()["detail"] == "packaging_not_done"
+    assert ship.json()["detail"] == "distribution_incomplete"
 
 
 @pytest.mark.asyncio

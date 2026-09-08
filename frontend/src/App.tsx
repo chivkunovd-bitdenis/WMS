@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { apiUrl } from './api'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { ProfileLoadingScreen } from './screens/ProfileLoadingScreen'
 import { PublicAuthScreen } from './screens/PublicAuthScreen'
+import { SubscriptionBlockedScreen } from './screens/SubscriptionBlockedScreen'
+import { useSubscription } from './hooks/useSubscription'
 import { AuthedAppLayout } from './layouts/AuthedAppLayout'
 import { CatalogSection } from './sections/CatalogSection'
 import { readApiErrorMessage } from './utils/readApiErrorMessage'
@@ -272,15 +274,17 @@ export default function App() {
     portalMismatch,
     loading,
     authBusy,
-    pendingPasswordSetupEmail,
-    onRegister,
+    notice,
     onLogin,
-    onSetInitialPassword,
-    onCancelPasswordSetup,
+    onSetPasswordByLink,
+    onRequestPasswordReset,
+    clearNotice,
     logout,
     reloadMe,
   } = useAuth('fulfillment')
+  const { subscription, reloadSubscription, startPayment, syncPayment } = useSubscription(token)
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const [pendingMpUnloadId, setPendingMpUnloadId] = useState<string | null>(null)
   const [warehouses, setWarehouses] = useState<WarehouseRow[]>([])
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(
@@ -365,6 +369,19 @@ export default function App() {
   const [wbSuppliesJobStatus, setWbSuppliesJobStatus] = useState<string | null>(null)
   const [wbSuppliesJobResult, setWbSuppliesJobResult] = useState<string | null>(null)
   const [wbLinkBusy, setWbLinkBusy] = useState(false)
+  const wbSyncController = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    wbSyncController.current = controller
+    setWbSyncBusy(false)
+    setWbSuppliesSyncBusy(false)
+    setWbJobStatus(null)
+    setWbSuppliesJobStatus(null)
+    setWbJobResult(null)
+    setWbSuppliesJobResult(null)
+    return () => controller.abort()
+  }, [token, wbSellerId, pathname])
 
   const authHeaders = useCallback(
     (t: string) => ({ Authorization: `Bearer ${t}` }),
@@ -372,18 +389,21 @@ export default function App() {
   )
 
   const refreshWbImportedCards = useCallback(
-    async (t: string, sellerId: string) => {
+    async (t: string, sellerId: string, signal?: AbortSignal) => {
       try {
         const res = await fetch(
           apiUrl(`/integrations/wildberries/sellers/${sellerId}/imported-cards`),
-          { headers: authHeaders(t) },
+          { headers: authHeaders(t), signal },
         )
+        if (signal?.aborted) return
         if (!res.ok) {
           setWbImportedCards([])
           return
         }
-        setWbImportedCards((await res.json()) as WbImportedCardRow[])
+        const rows = (await res.json()) as WbImportedCardRow[]
+        if (!signal?.aborted) setWbImportedCards(rows)
       } catch {
+        if (signal?.aborted) return
         setWbImportedCards([])
       }
     },
@@ -391,18 +411,21 @@ export default function App() {
   )
 
   const refreshWbImportedSupplies = useCallback(
-    async (t: string, sellerId: string) => {
+    async (t: string, sellerId: string, signal?: AbortSignal) => {
       try {
         const res = await fetch(
           apiUrl(`/integrations/wildberries/sellers/${sellerId}/imported-supplies`),
-          { headers: authHeaders(t) },
+          { headers: authHeaders(t), signal },
         )
+        if (signal?.aborted) return
         if (!res.ok) {
           setWbImportedSupplies([])
           return
         }
-        setWbImportedSupplies((await res.json()) as WbImportedSupplyRow[])
+        const rows = (await res.json()) as WbImportedSupplyRow[]
+        if (!signal?.aborted) setWbImportedSupplies(rows)
       } catch {
+        if (signal?.aborted) return
         setWbImportedSupplies([])
       }
     },
@@ -2358,6 +2381,8 @@ export default function App() {
     if (!token || !wbSellerId) {
       return
     }
+    const signal = wbSyncController.current?.signal
+    if (!signal || signal.aborted) return
     setOpsError(null)
     setWbSyncBusy(true)
     setWbJobStatus('pending')
@@ -2365,6 +2390,7 @@ export default function App() {
     try {
       const res = await fetch(apiUrl('/operations/background-jobs'), {
         method: 'POST',
+        signal,
         headers: {
           ...authHeaders(token),
           'Content-Type': 'application/json',
@@ -2374,32 +2400,43 @@ export default function App() {
           seller_id: wbSellerId,
         }),
       })
+      if (signal.aborted) return
       if (!res.ok) {
         setOpsError(await readApiErrorMessage(res))
         setWbJobStatus(null)
         return
       }
       const started = (await res.json()) as { id: string; status: string }
+      if (signal.aborted) return
       const jobId = started.id
       setWbJobStatus(started.status)
-      for (let i = 0; i < 60; i++) {
-        await new Promise((r) => setTimeout(r, 200))
+      let readFailures = 0
+      while (!signal.aborted) {
+        await new Promise((r) => setTimeout(r, 1000))
+        if (signal.aborted) return
         const st = await fetch(apiUrl(`/operations/background-jobs/${jobId}`), {
           headers: authHeaders(token),
+          signal,
         })
+        if (signal.aborted) return
         if (!st.ok) {
+          if (++readFailures >= 60 || st.status === 401 || st.status === 403) {
+            throw new Error('Не удалось проверить результат импорта. Обновите страницу.')
+          }
           continue
         }
+        readFailures = 0
         const j = (await st.json()) as {
           status: string
           result_json: { cards_received?: number } | null
           error_message: string | null
         }
+        if (signal.aborted) return
         setWbJobStatus(j.status)
         if (j.status === 'done') {
           const n = j.result_json?.cards_received ?? 0
           setWbJobResult(`Карточек получено: ${n}`)
-          await refreshWbImportedCards(token, wbSellerId)
+          await refreshWbImportedCards(token, wbSellerId, signal)
           break
         }
         if (j.status === 'failed') {
@@ -2408,12 +2445,13 @@ export default function App() {
         }
       }
     } catch (err) {
+      if (signal.aborted) return
       setOpsError(
         err instanceof Error ? err.message : 'Не удалось запустить синхронизацию WB.',
       )
       setWbJobStatus(null)
     } finally {
-      setWbSyncBusy(false)
+      if (!signal.aborted) setWbSyncBusy(false)
     }
   }
 
@@ -2421,6 +2459,8 @@ export default function App() {
     if (!token || !wbSellerId) {
       return
     }
+    const signal = wbSyncController.current?.signal
+    if (!signal || signal.aborted) return
     setOpsError(null)
     setWbSuppliesSyncBusy(true)
     setWbSuppliesJobStatus('pending')
@@ -2428,6 +2468,7 @@ export default function App() {
     try {
       const res = await fetch(apiUrl('/operations/background-jobs'), {
         method: 'POST',
+        signal,
         headers: {
           ...authHeaders(token),
           'Content-Type': 'application/json',
@@ -2437,22 +2478,32 @@ export default function App() {
           seller_id: wbSellerId,
         }),
       })
+      if (signal.aborted) return
       if (!res.ok) {
         setOpsError(await readApiErrorMessage(res))
         setWbSuppliesJobStatus(null)
         return
       }
       const started = (await res.json()) as { id: string; status: string }
+      if (signal.aborted) return
       const jobId = started.id
       setWbSuppliesJobStatus(started.status)
-      for (let i = 0; i < 60; i++) {
-        await new Promise((r) => setTimeout(r, 200))
+      let readFailures = 0
+      while (!signal.aborted) {
+        await new Promise((r) => setTimeout(r, 1000))
+        if (signal.aborted) return
         const st = await fetch(apiUrl(`/operations/background-jobs/${jobId}`), {
           headers: authHeaders(token),
+          signal,
         })
+        if (signal.aborted) return
         if (!st.ok) {
+          if (++readFailures >= 60 || st.status === 401 || st.status === 403) {
+            throw new Error('Не удалось проверить результат импорта. Обновите страницу.')
+          }
           continue
         }
+        readFailures = 0
         const j = (await st.json()) as {
           status: string
           result_json: {
@@ -2461,12 +2512,13 @@ export default function App() {
           } | null
           error_message: string | null
         }
+        if (signal.aborted) return
         setWbSuppliesJobStatus(j.status)
         if (j.status === 'done') {
           const got = j.result_json?.supplies_received ?? 0
           const saved = j.result_json?.supplies_saved ?? 0
           setWbSuppliesJobResult(`Поставок получено: ${got}, сохранено: ${saved}`)
-          await refreshWbImportedSupplies(token, wbSellerId)
+          await refreshWbImportedSupplies(token, wbSellerId, signal)
           break
         }
         if (j.status === 'failed') {
@@ -2475,6 +2527,7 @@ export default function App() {
         }
       }
     } catch (err) {
+      if (signal.aborted) return
       setOpsError(
         err instanceof Error
           ? err.message
@@ -2482,7 +2535,7 @@ export default function App() {
       )
       setWbSuppliesJobStatus(null)
     } finally {
-      setWbSuppliesSyncBusy(false)
+      if (!signal.aborted) setWbSuppliesSyncBusy(false)
     }
   }
 
@@ -2748,22 +2801,35 @@ export default function App() {
   }, [ffDocDirty, refreshInboundList, token])
 
   const rootElement = (() => {
-    if (!token) {
+    if (!token || location.pathname.endsWith('/set-password')) {
       return (
         <PublicAuthScreen
           variant="fulfillment"
           error={portalMismatch ?? error}
+          notice={notice}
           authBusy={authBusy}
-          pendingPasswordSetupEmail={pendingPasswordSetupEmail}
-          onRegister={(e) => void onRegister(e)}
           onLogin={(e) => void onLogin(e)}
-          onSetInitialPassword={(e) => void onSetInitialPassword(e)}
-          onCancelPasswordSetup={onCancelPasswordSetup}
+          onSetPasswordByLink={(e, linkToken) => void onSetPasswordByLink(e, linkToken)}
+          onRequestPasswordReset={(e) => void onRequestPasswordReset(e)}
+          clearNotice={clearNotice}
         />
       )
     }
     if (token && !me) {
       return <ProfileLoadingScreen loading={loading} onLogout={onLogout} />
+    }
+    // WMS-381: подписка закончилась — дальше работать нельзя, но человек должен
+    // видеть, почему и сколько платить.
+    if (subscription?.blocked) {
+      return (
+        <SubscriptionBlockedScreen
+          subscription={subscription}
+          onLogout={onLogout}
+          onRetry={() => void reloadSubscription()}
+          onPay={startPayment}
+          onCheckPayment={syncPayment}
+        />
+      )
     }
     if (!me) {
       return null

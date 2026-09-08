@@ -1444,10 +1444,6 @@ export function FfSuppliesShipmentsPage({
       setModalError('Добавьте товары в короба перед отгрузкой.')
       return
     }
-    if (!mpPackagingComplete) {
-      setModalError('Завершите упаковку перед отгрузкой.')
-      return
-    }
     if (mpHasDiscrepancy) {
       setMpShipConfirmOpen(true)
       return
@@ -1754,14 +1750,6 @@ export function FfSuppliesShipmentsPage({
     docModal === 'marketplace_unload' && unloadDetail?.status === 'collecting'
   const mpExecutionPhase = mpConfirmed || mpCollecting
   const mpCancellable = mpSubmitted || mpConfirmed || mpCollecting
-  const mpPackagingComplete = useMemo(() => {
-    const task = unloadDetail?.linked_packaging_task
-    if (!task) {
-      return false
-    }
-    return task.status === 'done' || task.is_complete
-  }, [unloadDetail?.linked_packaging_task])
-
   const loadPackagingTask = useCallback(async () => {
     if (!token || !authHeaders || !docModalId || docModal !== 'marketplace_unload') {
       setPackagingTask(null)
@@ -3252,8 +3240,7 @@ export function FfSuppliesShipmentsPage({
                     size="large"
                     disabled={
                       modalBusy ||
-                      (mpCollectSummary?.distributed ?? 0) < 1 ||
-                      !mpPackagingComplete
+                      (mpCollectSummary?.distributed ?? 0) < 1
                     }
                     onClick={() => requestShipMpUnload()}
                     data-testid="ff-mp-ship"

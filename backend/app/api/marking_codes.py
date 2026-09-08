@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import uuid
@@ -967,6 +968,8 @@ async def list_marking_ledger(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> LedgerPageOut:
+    if user.role != FULFILLMENT_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     scope = _resolve_marking_seller_scope(user, effective_seller_id, seller_id)
     page = await mc_svc.list_ledger(
         session,
@@ -1021,6 +1024,8 @@ async def export_marking_ledger(
     date_from: Annotated[datetime | None, Query()] = None,
     date_to: Annotated[datetime | None, Query()] = None,
 ) -> Response:
+    if user.role != FULFILLMENT_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     scope = _resolve_marking_seller_scope(user, effective_seller_id, seller_id)
     try:
         csv_text = await mc_svc.export_ledger_csv(
@@ -1255,12 +1260,14 @@ async def get_marking_code_label_artifact(
     if code is None or code.tenant_id != user.tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="code_not_found")
     pdf_bytes = code.label_artifact_pdf
-    if not pdf_bytes or not mc_svc.is_printable_label_artifact(pdf_bytes, code.cis_code):
+    if not pdf_bytes or not await asyncio.to_thread(
+        mc_svc.is_printable_label_artifact, pdf_bytes, code.cis_code
+    ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="label_artifact_missing")
     if format == "pdf":
         return Response(content=pdf_bytes, media_type="application/pdf")
     try:
-        png_bytes = pdf_bytes_to_png(pdf_bytes)
+        png_bytes = await asyncio.to_thread(pdf_bytes_to_png, pdf_bytes)
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

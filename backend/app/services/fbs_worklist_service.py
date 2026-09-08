@@ -38,6 +38,7 @@ from app.models.fbs_print_asset import (
     PRINT_ASSET_STATUS_READY,
     FbsPrintAsset,
 )
+from app.models.fbs_supply import FbsSupply
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_reservation import InventoryReservation
@@ -109,6 +110,7 @@ class WorklistPage:
     next_cursor: str | None
     server_now: str
     warehouse_options: list[dict[str, Any]]
+    total: int | None = None
 
 
 @dataclass(frozen=True)
@@ -154,7 +156,7 @@ async def fetch_worklist_page(
     cursor: str | None = None,
 ) -> WorklistPage:
     server_now = datetime.now(tz=UTC)
-    orders = await _fetch_orders_page(
+    orders, total = await _fetch_orders_page(
         session,
         tenant_id,
         seller_id=seller_id,
@@ -183,6 +185,66 @@ async def fetch_worklist_page(
         next_cursor=next_cursor,
         server_now=server_now.isoformat(),
         warehouse_options=warehouse_options,
+        total=total,
+    )
+
+
+def supply_number_search_clause(term: str) -> ColumnElement[bool]:
+    return or_(
+        FbsSupply.name.icontains(term, autoescape=True),
+        FbsSupply.display_number.icontains(term, autoescape=True),
+        FbsSupply.wb_supply_id.icontains(term, autoescape=True),
+        FbsSupply.external_supply_id.icontains(term, autoescape=True),
+    )
+
+
+def order_search_clause(term: str) -> ColumnElement[bool]:
+    """Search identifiers and product data without duplicating orders through joins."""
+    return or_(
+        FbsOrder.wb_order_id.cast(String).icontains(term, autoescape=True),
+        FbsOrder.external_order_id.icontains(term, autoescape=True),
+        FbsOrder.wb_supply_id.icontains(term, autoescape=True),
+        FbsOrder.wb_nm_id.cast(String).icontains(term, autoescape=True),
+        FbsOrder.wb_chrt_id.cast(String).icontains(term, autoescape=True),
+        FbsOrder.wb_barcode.icontains(term, autoescape=True),
+        FbsOrder.wb_article.icontains(term, autoescape=True),
+        exists(
+            select(Product.id).where(
+                Product.id == FbsOrder.product_id,
+                Product.tenant_id == FbsOrder.tenant_id,
+                or_(
+                    *[
+                        column.cast(String).icontains(term, autoescape=True)
+                        for column in (
+                            Product.name,
+                            Product.sku_code,
+                            Product.wb_vendor_code,
+                            Product.wb_barcode,
+                            Product.wb_size,
+                            Product.wb_nm_id,
+                            Product.wb_chrt_id,
+                        )
+                    ]
+                ),
+            )
+        ),
+        exists(
+            select(SellerWildberriesImportedCard.id).where(
+                SellerWildberriesImportedCard.tenant_id == FbsOrder.tenant_id,
+                SellerWildberriesImportedCard.seller_id == FbsOrder.seller_id,
+                SellerWildberriesImportedCard.nm_id == FbsOrder.wb_nm_id,
+                or_(
+                    *[
+                        column.cast(String).icontains(term, autoescape=True)
+                        for column in (
+                            SellerWildberriesImportedCard.title,
+                            SellerWildberriesImportedCard.vendor_code,
+                            SellerWildberriesImportedCard.raw_json,
+                        )
+                    ]
+                ),
+            )
+        ),
     )
 
 
@@ -198,7 +260,7 @@ async def _fetch_orders_page(
     limit: int,
     cursor: str | None,
     server_now: datetime,
-) -> list[FbsOrder]:
+) -> tuple[list[FbsOrder], int | None]:
     served_wb_binding = exists(
         select(FbsWarehouseBinding.id).where(
             FbsWarehouseBinding.tenant_id == FbsOrder.tenant_id,
@@ -235,38 +297,24 @@ async def _fetch_orders_page(
         stmt = stmt.where(FbsOrder.wb_warehouse_id == wb_warehouse_id)
     if search and search.strip():
         term = search.strip()
-        stmt = stmt.outerjoin(Product, Product.id == FbsOrder.product_id).outerjoin(
-            SellerWildberriesImportedCard,
-            and_(
-                SellerWildberriesImportedCard.tenant_id == FbsOrder.tenant_id,
-                SellerWildberriesImportedCard.seller_id == FbsOrder.seller_id,
-                SellerWildberriesImportedCard.nm_id == FbsOrder.wb_nm_id,
-            ),
-        )
-        clauses: list[ColumnElement[bool]] = [
-            FbsOrder.wb_barcode.ilike(f"%{term}%"),
-            FbsOrder.wb_article.ilike(f"%{term}%"),
-            Product.name.ilike(f"%{term}%"),
-            Product.sku_code.ilike(f"%{term}%"),
-            Product.wb_vendor_code.ilike(f"%{term}%"),
-            Product.wb_barcode.ilike(f"%{term}%"),
-            Product.wb_size.ilike(f"%{term}%"),
-            SellerWildberriesImportedCard.title.ilike(f"%{term}%"),
-            SellerWildberriesImportedCard.vendor_code.ilike(f"%{term}%"),
-            SellerWildberriesImportedCard.raw_json.cast(String).ilike(f"%{term}%"),
-        ]
-        if term.isdigit():
-            term_num = int(term)
-            clauses.extend(
-                [
-                    FbsOrder.wb_order_id == term_num,
-                    FbsOrder.wb_nm_id == term_num,
-                    FbsOrder.wb_chrt_id == term_num,
-                    Product.wb_nm_id == term_num,
-                    Product.wb_chrt_id == term_num,
-                ]
+        stmt = stmt.where(
+            or_(
+                order_search_clause(term),
+                exists(
+                    select(FbsSupply.id).where(
+                        FbsSupply.id == FbsOrder.supply_id,
+                        FbsSupply.tenant_id == FbsOrder.tenant_id,
+                        supply_number_search_clause(term),
+                    )
+                ),
             )
-        stmt = stmt.where(or_(*clauses))
+        )
+    # Count the same filtered set before pagination, only when the UI searches.
+    total = (
+        int(await session.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
+        if search and search.strip()
+        else None
+    )
     if cursor:
         cursor_deadline, cursor_id = _decode_cursor(cursor)
         stmt = stmt.where(
@@ -280,7 +328,7 @@ async def _fetch_orders_page(
         )
     stmt = stmt.order_by(FbsOrder.deadline_at.asc(), FbsOrder.id.asc()).limit(limit)
     res = await session.execute(stmt)
-    return list(res.scalars().all())
+    return list(res.scalars().all()), total
 
 
 async def _fetch_warehouse_options(
@@ -389,6 +437,13 @@ async def _load_worklist_context(
     warehouses = await _load_warehouses(session, tenant_id, warehouse_ids)
     wb_names = await _load_wb_warehouse_names(session, tenant_id, wb_wh_ids)
     positions = await _load_order_positions(session, order_ids)
+    # Reuse the positions already fetched for the projection; metadata must not
+    # trigger lazy SQL from its synchronous Ozon serializer.
+    from sqlalchemy.orm.attributes import set_committed_value
+
+    for order in orders:
+        if order.marketplace == "ozon":
+            set_committed_value(order, "product_positions", positions.get(order.id, []))
     product_ids.update(
         position.product_id
         for order_positions in positions.values()
@@ -572,7 +627,7 @@ async def _load_location_balances(
                 InventoryBalance.product_id,
                 StorageLocation.id,
                 StorageLocation.code,
-                InventoryBalance.quantity_unpacked,
+                InventoryBalance.quantity,
             )
             .join(
                 StorageLocation,
@@ -583,7 +638,7 @@ async def _load_location_balances(
                 StorageLocation.tenant_id == tenant_id,
                 StorageLocation.warehouse_id == wh_id,
                 InventoryBalance.product_id.in_(pid_list),
-                InventoryBalance.quantity_unpacked > 0,
+                InventoryBalance.quantity > 0,
             )
             .order_by(StorageLocation.code.asc())
         )
@@ -621,8 +676,8 @@ async def _load_location_balances(
         reserved: dict[tuple[uuid.UUID, uuid.UUID], int] = {
             (pid, loc_id): int(qty or 0) for pid, loc_id, qty in rsv_res.all()
         }
-        for pid, loc_id, code, unpacked in balance_rows:
-            avail = max(0, int(unpacked) - reserved.get((pid, loc_id), 0))
+        for pid, loc_id, code, quantity in balance_rows:
+            avail = max(0, int(quantity) - reserved.get((pid, loc_id), 0))
             if avail <= 0:
                 continue
             key = (wh_id, pid)
@@ -944,17 +999,33 @@ def _build_metadata(
     order: FbsOrder,
     markings: list[FbsOrderMarking],
 ) -> dict[str, Any]:
+    if order.marketplace == "ozon":
+        from app.services.fbs_marking_service import build_order_metadata
+
+        return build_order_metadata(order, markings)
     required = list(order.required_meta_json or [])
     optional = list(order.optional_meta_json or [])
     states: list[dict[str, Any]] = []
-    for kind in required + optional:
+    # Observed bindings are facts even when WB omitted requirement flags.
+    for kind in dict.fromkeys(required + optional + [mark.kind for mark in markings]):
         mark = current_order_marking(markings, kind, include_rejected=True)
         if mark is not None:
+            details = mark.meta_details_json if isinstance(mark.meta_details_json, dict) else {}
+            decision = details.get("decision")
+            validation = details.get("meta_validation")
+            if not isinstance(decision, str) and isinstance(validation, list):
+                decision = next((
+                    item.get("decision") for item in validation
+                    if isinstance(item, dict)
+                    and str(item.get("order_id")) == str(order.wb_order_id)
+                    and item.get("kind") == kind
+                ), None)
             states.append(
                 {
                     "kind": kind,
                     "status": mark.meta_status,
                     "reason": mark.reason,
+                    "decision": decision if isinstance(decision, str) else None,
                     "source": mark.source,
                     # Хвост кода: оператор сверяет его глазами с этикеткой на товаре.
                     # Целиком код в строку таблицы не влезает и читать его незачем.

@@ -286,8 +286,24 @@ async def upsert_binding(
         )
 
 
+async def clear_marketplace_stock(
+    session: AsyncSession, binding: FbsWarehouseBinding
+) -> None:
+    """Отдать маркетплейсу ноль по этой привязке один раз.
+
+    Публичная обёртка над обнулением Ozon: у площадки нет следа опубликованного,
+    поэтому единственный честный момент отдать ноль — сам переход «публиковали ->
+    перестали». Для WB та же задача решается фоновой задачей, у неё есть свой
+    след в `fbs_stock_sync_items`.
+    """
+    if binding.marketplace == MARKETPLACE_WB:
+        return
+    await _clear_previous_ozon_stock(session, binding)
+
+
 async def _clear_previous_ozon_stock(
     session: AsyncSession, binding: FbsWarehouseBinding,
+    *, product_ids: set[uuid.UUID] | None = None,
 ) -> None:
     """Clear the known own target before its address/publication flag is lost."""
     from app.services.marketplace_account_service import (
@@ -317,6 +333,8 @@ async def _clear_previous_ozon_stock(
     )).all())
     stocks: list[dict[str, object]] = []
     for link in links:
+        if product_ids is not None and link.product_id not in product_ids:
+            continue
         stock: dict[str, object] = {"warehouse_id": int(external_id), "stock": 0}
         if link.external_offer_id:
             stock["offer_id"] = link.external_offer_id
@@ -403,7 +421,7 @@ async def _upsert_binding(
             raise FbsWarehouseBindingError("active_fbs_reservations")
         if (
             marketplace == MARKETPLACE_OZON
-            and existing.is_active and existing.served and existing.stock_sync_enabled
+            and existing.is_active and existing.stock_sync_enabled
             and (not stock_sync_enabled or existing.external_warehouse_id != external_id)
         ):
             await _clear_previous_ozon_stock(session, existing)
@@ -471,6 +489,47 @@ async def configure_seller_warehouse(
     served: bool | None,
     wms_warehouse_id: uuid.UUID | None,
     marketplace: str = MARKETPLACE_WB,
+    stock_sync_enabled: bool | None = None,
+) -> FbsWarehouseBinding | None:
+    """Keep Ozon publication serialized through confirmed zero and local commit."""
+    if marketplace != MARKETPLACE_OZON:
+        return await _configure_seller_warehouse(
+            session, tenant_id, seller_id, wb_warehouse_id,
+            served=served, wms_warehouse_id=wms_warehouse_id,
+            marketplace=marketplace, stock_sync_enabled=stock_sync_enabled,
+        )
+    from app.services.marketplace_seller_lock_service import marketplace_seller_lock
+
+    # Same publication lock as upsert_binding: an in-flight positive batch must
+    # finish before the final zero, and cannot restart before OFF is committed.
+    async with (
+        AsyncSession(bind=session.bind) as lock_session,
+        marketplace_seller_lock(
+            lock_session, seller_id, MARKETPLACE_OZON, wait_timeout_sec=30,
+        ) as acquired,
+    ):
+        if not acquired:
+            raise FbsWarehouseBindingError(
+                "ozon_stock_cleanup_failed",
+                message="Обновление остатков Ozon ещё выполняется. Повторите изменение склада.",
+            )
+        return await _configure_seller_warehouse(
+            session, tenant_id, seller_id, wb_warehouse_id,
+            served=served, wms_warehouse_id=wms_warehouse_id,
+            marketplace=marketplace, stock_sync_enabled=stock_sync_enabled,
+        )
+
+
+async def _configure_seller_warehouse(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    wb_warehouse_id: int,
+    *,
+    served: bool | None,
+    wms_warehouse_id: uuid.UUID | None,
+    marketplace: str = MARKETPLACE_WB,
+    stock_sync_enabled: bool | None = None,
 ) -> FbsWarehouseBinding | None:
     """Настроить сопоставление и обслуживание внешнего склада независимо.
 
@@ -482,6 +541,12 @@ async def configure_seller_warehouse(
     вайлдберрисовских, и нажатие по озоновской строке не находило её, а заводило
     рядом склад-двойник на Wildberries. Умолчание `wb`: все существующие вызовы
     приходят оттуда, и их поведение не меняется ни на шаг.
+
+    ``stock_sync_enabled`` — тумблер трансляции остатка. Он здесь потому, что
+    экран со старым тумблером снят с маршрутов ещё 31.08.2026, а после развязки
+    галок (WMS-376) выключить публикацию стало нечем: единственный оставшийся
+    писатель этого поля — сохранение правила товара, и оно ставит только `True`.
+    Не передан — галка не меняется.
     """
     if marketplace not in SUPPORTED_BINDING_MARKETPLACES:
         raise FbsWarehouseBindingError("unsupported_marketplace")
@@ -528,21 +593,43 @@ async def configure_seller_warehouse(
             wb_warehouse_id=wb_warehouse_id,
             wms_warehouse_id=wms_warehouse_id,
             is_active=True,
-            stock_sync_enabled=initial_served,
+            # WMS-376. Новая привязка обслуживает склад, но остатки не транслирует,
+            # пока это не включат отдельно. Иначе сопоставление склада само по себе
+            # начинало писать в кабинет продавца: так у ИП Горячкина Т.И. подключение
+            # Ozon 05.09.2026 сразу увело три карточки в ноль.
+            stock_sync_enabled=bool(stock_sync_enabled),
             served=initial_served,
         )
         session.add(existing)
     else:
-        if wms_warehouse_id is not None and existing.wms_warehouse_id != wms_warehouse_id:
-            if await _has_active_fbs_reservations(
+        if (
+            wms_warehouse_id is not None
+            and existing.wms_warehouse_id != wms_warehouse_id
+            and await _has_active_fbs_reservations(
                 session, tenant_id, seller_id, existing.wms_warehouse_id
-            ):
-                raise FbsWarehouseBindingError("active_fbs_reservations")
+            )
+        ):
+            raise FbsWarehouseBindingError("active_fbs_reservations")
+        if (
+            marketplace == MARKETPLACE_OZON
+            and existing.is_active and existing.stock_sync_enabled
+            and stock_sync_enabled is False
+        ):
+            # Keep the old address/flags intact when zero is rejected, so the
+            # same OFF request can retry. Serving orders is an independent flag.
+            await _clear_previous_ozon_stock(session, existing)
+        if wms_warehouse_id is not None:
             existing.wms_warehouse_id = wms_warehouse_id
         existing.is_active = True
         if served is not None:
+            # WMS-376. Обслуживание склада и трансляция остатка — разные решения.
+            # Раньше эта строка гасила публикацию заодно с галкой обслуживания:
+            # оператор снимал «обслуживается», чтобы перестать видеть заказы, и
+            # молча выключал остатки по всему складу, по всем товарам сразу.
+            # Склад отвечает только за то, какие входящие заказы мы видим.
             existing.served = served
-            existing.stock_sync_enabled = served
+        if stock_sync_enabled is not None:
+            existing.stock_sync_enabled = stock_sync_enabled
 
     try:
         await session.commit()

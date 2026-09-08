@@ -162,6 +162,7 @@ class FbsSupplyWorklistItemOut(BaseModel):
 
 
 class FbsSupplyWorklistOut(BaseModel):
+    total: int | None = None
     items: list[FbsSupplyWorklistItemOut]
     server_now: str
 
@@ -187,6 +188,7 @@ class FbsPickContainerPathItemOut(BaseModel):
 
 class FbsPickOptionSourceOut(BaseModel):
     quantity: int
+    available: int
     picked: int
     is_loose: bool
     source_label: str
@@ -548,11 +550,26 @@ class FbsDeliveryCheckOut(BaseModel):
     order_id: str | None
 
 
+class FbsCancelledDeliveryBoxOut(BaseModel):
+    box_id: str
+    box_number: int
+    box_barcode: str
+
+
+class FbsCancelledDeliveryOrderOut(BaseModel):
+    order_id: str
+    wb_order_id: int
+    article: str | None
+    product_name: str | None
+    boxes: list[FbsCancelledDeliveryBoxOut]
+
+
 class FbsDeliveryPreflightOut(BaseModel):
     can_deliver: bool
     version: str
     checked_at: str
     checks: list[FbsDeliveryCheckOut]
+    cancelled_orders: list[FbsCancelledDeliveryOrderOut] = Field(default_factory=list)
 
 
 class FbsSupplyDeliverBody(BaseModel):
@@ -1199,6 +1216,7 @@ async def get_fbs_supplies_worklist(
     marketplace: Annotated[str | None, Query(pattern="^(wb|ozon)$")] = None,
     status_group: Annotated[str, Query()] = "active",
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    search: Annotated[str | None, Query()] = None,
 ) -> FbsSupplyWorklistOut:
     try:
         payload = await supply_svc.list_supply_worklist(
@@ -1208,6 +1226,7 @@ async def get_fbs_supplies_worklist(
             marketplace=marketplace,
             status_group=status_group,
             limit=limit,
+            search=search,
         )
     except supply_svc.FbsSupplyError as exc:
         _raise_from_service(exc)
@@ -1242,6 +1261,8 @@ async def get_fbs_supply_pick_options(
                     sources=[
                         FbsPickOptionSourceOut(
                             quantity=source.quantity,
+                            available=(source.available
+                                       if source.available is not None else source.quantity),
                             picked=source.picked,
                             is_loose=source.is_loose,
                             source_label=source.source_label,

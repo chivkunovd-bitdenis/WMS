@@ -5,6 +5,7 @@ import { apiUrl } from '../../../api'
 import { useMarketplaceProductCatalog } from '../../../hooks/useWbProductCatalog'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { EmptyState, ErrorNotice } from '../../../ui-kit'
+import { resolveProductScanSource, scanSourceKey } from './pickScanSource'
 import { UnloadPickScreen, type UnloadPickScanResult } from './UnloadPickScreen'
 import {
   cellRef,
@@ -66,16 +67,10 @@ type ApiContainerStep = {
   label: string
 }
 
-/**
- * Один физический источник внутри ячейки: короб, грузоместо, палета или россыпь.
- *
- * Сервер не делит по таре агрегаты `quantity`/`reserved`/`available`/`picked` —
- * они остаются на всё место целиком. Поэтому долю каждого источника считаем
- * здесь, а сохраняем по-прежнему сумму на ячейку: ручка `pick/set` принимает
- * только `storage_location_id`.
- */
+/** Физический остаток и доступное количество по конкретной ячейке или таре. */
 type ApiPickSource = {
   quantity: number
+  available?: number
   is_loose: boolean
   source_label: string
   container_path: ApiContainerStep[]
@@ -116,11 +111,6 @@ type ApiScanResult = {
   container_code: string | null
 }
 
-type ApiPickAllocation = {
-  product_id: string
-  storage_location_id: string | null
-  quantity: number
-}
 
 function formatDate(value: string | null): string | null {
   if (!value) return null
@@ -264,7 +254,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
 
     const cellsById = new Map<string, Cell>()
     const objectsById = new Map<string, WarehouseObject>()
-    const stock: GoodsLine[] = []
+    const stock: (GoodsLine & { pickCapacity?: number })[] = []
     const picked: PickedMap = {}
     // Что стоит за каждой строкой места: ячейка и тара, из которой снимаем.
     // Сервер принимает эту пару и списывает остаток именно этой тары.
@@ -284,16 +274,13 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
         })
         const cellHolder = cellRef(location.storage_location_id)
 
-        // Остаток уже уменьшен предыдущими снятиями. Возвращаем picked к
-        // доступному, чтобы поле могло показать и уменьшить сохранённый факт.
-        const pool = location.available + location.picked
-
         // Старый ответ сервера без тары — место остаётся одной строкой на ячейку.
         const sources: ApiPickSource[] = location.sources?.length
           ? location.sources
           : [
               {
-                quantity: pool,
+                quantity: location.quantity,
+                available: location.available,
                 is_loose: true,
                 source_label: 'Россыпью',
                 container_path: [],
@@ -319,16 +306,17 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
             holder = objRef(step.id)
           }
 
-          // Снятое приходит по каждому источнику отдельно, а «сколько можно
-          // снять» — это то, что лежит здесь, плюс уже снятое отсюда же.
+          // «Лежит» показывает физический остаток. Потолок ввода включает
+          // доступное и уже снятое, чтобы сохранённое количество можно было уменьшить.
           const takenHere = source.picked ?? 0
-          const capacity = source.quantity + takenHere
-          if (capacity <= 0) continue
+          const capacity = (source.available ?? source.quantity) + takenHere
+          if (source.quantity <= 0 && takenHere <= 0) continue
 
           stock.push({
             id: `${product.product_id}-${holder}`,
             productId: product.product_id,
-            qty: capacity,
+            qty: source.quantity,
+            pickCapacity: capacity,
             holder,
           })
           picked[pickKey(product.product_id, holder)] = takenHere
@@ -358,34 +346,18 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
     }
   }, [catalogById, detail, pickOptions, source])
 
-  const updateOption = useCallback(
-    (productId: string, locationId: string, quantity: number) => {
-      setPickOptions((current) =>
-        current.map((product) => {
-          if (product.product_id !== productId) return product
-          const location = product.locations.find(
-            (one) => one.storage_location_id === locationId,
-          )
-          if (!location) return product
-          const delta = quantity - location.picked
-          return {
-            ...product,
-            picked_qty: Math.max(0, product.picked_qty + delta),
-            locations: product.locations.map((one) =>
-              one.storage_location_id === locationId
-                ? {
-                    ...one,
-                    picked: quantity,
-                    available: Math.max(0, one.available - delta),
-                  }
-                : one,
-            ),
-          }
-        }),
-      )
-    },
-    [],
-  )
+  const updateOption = useCallback(async () => {
+    if (!requestId) return
+    try {
+      const res = await fetch(apiUrl(`${BASE}/${requestId}/pick-options`), {
+        headers: headers(token),
+      })
+      if (!res.ok) throw new Error(await readApiErrorMessage(res))
+      setPickOptions((await res.json()) as ApiPickProduct[])
+    } catch {
+      setError('Снятие сохранено, список не обновлён. Обновите страницу.')
+    }
+  }, [BASE, requestId, token])
 
   const setPicked = useCallback(
     async (payload: { productId: string; place: { key: string }; quantity: number }) => {
@@ -413,8 +385,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
           }),
         })
         if (!res.ok) throw new Error(await readApiErrorMessage(res))
-        const saved = (await res.json()) as ApiPickAllocation
-        updateOption(payload.productId, locationId, saved.quantity)
+        await updateOption()
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'Не удалось сохранить снятое количество'
@@ -444,24 +415,20 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
       // Тара — источник, из которого спишется товар (§Ж-03): сначала ищем её
       // среди уже известных pick-options источников, затем среди того, что
       // оператор только что отсканировал сам (см. scannedContainers выше).
-      // Если выбрана просто ячейка, а не тара, containerSource останется
-      // пустым — сработает старая адресация по locationId.
-      const containerSource = sourceKey
+      // Для скана товара без выбранного места считаем физические источники
+      // из ответа сервера, а не число ячеек: в одной ячейке бывает несколько коробов.
+      let containerSource = sourceKey
         ? (screenData?.placeSource.get(sourceKey) ?? scannedContainers.current.get(sourceKey))
         : null
       let locationId = containerSource?.locationId ?? sourceLocationId(sourceKey)
-      if (matchedProduct && !locationId) {
+      if (matchedProduct) {
         const option = pickOptions.find((one) => one.product_id === matchedProduct.id)
-        const candidates = option?.locations.filter((one) => one.available > 0) ?? []
-        if (candidates.length === 0) {
-          throw new Error(`${matchedProduct.sku} — этого товара нет на складе`)
-        }
-        if (candidates.length > 1) {
-          throw new Error(
-            `${matchedProduct.sku} лежит в ${candidates.length} местах — уточните место или укажите число руками`,
-          )
-        }
-        locationId = candidates[0].storage_location_id
+        containerSource = resolveProductScanSource(
+          matchedProduct,
+          option?.locations ?? [],
+          containerSource ?? (locationId ? { locationId, containerKind: null, containerId: null } : null),
+        )
+        locationId = containerSource.locationId
       }
 
       setBusy(true)
@@ -521,11 +488,12 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
         ) {
           throw new Error('Сервер не вернул результат снятия товара')
         }
-        if (result.storage_location_id) {
-          updateOption(result.product_id, result.storage_location_id, result.allocation_quantity)
+        if (result.storage_location_id || containerSource) {
+          await updateOption()
         }
         return {
           kind: 'product',
+          sourceKey: containerSource ? scanSourceKey(containerSource) : null,
           storageLocationId: result.storage_location_id,
           productId: result.product_id,
           sku: result.sku_code,

@@ -231,7 +231,7 @@ async def _picking_auto_passed_reason(
             StorageLocation.code != SORTING_LOCATION_CODE,
             InventoryBalance.tenant_id == tenant_id,
             InventoryBalance.product_id.in_(product_ids),
-            InventoryBalance.quantity_unpacked > 0,
+            InventoryBalance.quantity > 0,
         )
         .limit(1)
     )
@@ -259,9 +259,7 @@ async def _inject_order_pick_fallback(
         order = orders_by_id.get(str(item.get("id")))
         if order is None or order.product_id is None:
             continue
-        if order.pick_status == PICK_STATUS_PICKED or (
-            supply.marketplace != "wb" and order.pack_status == PACK_STATUS_PACKED
-        ):
+        if order.pick_status == PICK_STATUS_PICKED:
             continue
         inventory = item.get("inventory")
         if not isinstance(inventory, dict):

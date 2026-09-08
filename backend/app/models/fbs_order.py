@@ -424,6 +424,9 @@ class FbsOrderProductPick(Base):
     source_storage_location_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("storage_locations.id", ondelete="RESTRICT"), nullable=False
     )
+    # The physical source also exists when picking directly in sorting, without a movement.
+    source_container_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    source_container_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     sorting_storage_location_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("storage_locations.id", ondelete="RESTRICT"), nullable=False
     )

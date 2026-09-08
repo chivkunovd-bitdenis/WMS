@@ -386,6 +386,14 @@ async def _full_exemplar_products(
             # Экземпляр без позиции нельзя отнести к товару; молча приписать его
             # к чужому product_id — хуже, чем не отправить.
             continue
+        if (
+            int(sku) == current_product_id
+            and exemplar_id == current_exemplar_id
+            and mark_type == current_mark_type
+        ):
+            # A replacement supplies the new value for this exact exemplar/type.
+            # Other exemplars and other kinds on this exemplar remain in the full set.
+            continue
         _add(int(sku), exemplar_id, row.value, mark_type)
 
     _add(current_product_id, current_exemplar_id, current_marking.value, current_mark_type)
@@ -1099,15 +1107,24 @@ async def handoff_supply(
                 state.carriage_create_started = False
                 await _save()
             raise
-        await _call(
-            provider,
-            client_id=client_id,
-            api_key=api_key,
-            path="/v2/posting/fbs/awaiting-delivery",
-            request=OzonV2MovePostingToAwaitingDeliveryRequest(posting_number=posting_numbers),
-            response_type=OzonPostingBooleanResponse,
-            read=False,
-        )
+        try:
+            await _call(
+                provider,
+                client_id=client_id,
+                api_key=api_key,
+                path="/v2/posting/fbs/awaiting-delivery",
+                request=OzonV2MovePostingToAwaitingDeliveryRequest(posting_number=posting_numbers),
+                response_type=OzonPostingBooleanResponse,
+                read=False,
+            )
+        except MarketplaceProviderError as fallback_error:
+            if fallback_error.status_code in {400, 401, 403, 422, 429}:
+                # Carriage creation was explicitly rejected (404/409), and
+                # fallback was rejected too: no handoff is awaiting recovery.
+                # Keep the marker for transport/5xx ambiguity instead.
+                state.carriage_create_started = False
+                await _save()
+            raise
         state.used_fallback = True
         await _save()
         for order in orders:

@@ -10,7 +10,11 @@ import {
   type KeyboardEvent,
 } from 'react'
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
+import ErrorOutline from '@mui/icons-material/ErrorOutlineOutlined'
+import { inboundMarkingNeedsAttention, inboundMarkingStatusLabel, isInboundMarkingScan } from './inboundMarkingCodes'
+import { useInboundMarkingCodes } from './useInboundMarkingCodes'
 import EditOutlined from '@mui/icons-material/EditOutlined'
+import CloseOutlined from '@mui/icons-material/CloseOutlined'
 import ExpandMoreOutlined from '@mui/icons-material/ExpandMoreOutlined'
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
 import StraightenOutlined from '@mui/icons-material/StraightenOutlined'
@@ -23,6 +27,7 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -217,6 +222,7 @@ type InboundProductLineCellProps = {
   meta: ProductLineDisplayMeta
   productId: string
   printTestId: string
+  markingControl?: React.ReactNode
 }
 
 // memo обязателен: в заявке бывает под триста строк, и без него каждый скан
@@ -225,12 +231,14 @@ const InboundProductLineCell = memo(function InboundProductLineCell({
   meta,
   productId,
   printTestId,
+  markingControl,
 }: InboundProductLineCellProps) {
   const barcode = formatProductBarcodeDisplay(meta)
 
   return (
     <TableCell sx={{ minWidth: 0, overflow: 'hidden' }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+        {markingControl}
         <Box sx={{ flex: '0 0 44px', display: 'flex' }}>
           <ProductPhotoThumb
             src={meta.wb_primary_image_url}
@@ -509,6 +517,18 @@ export function FfInboundRequestView({
   const [discrepancyActsError, setDiscrepancyActsError] = useState<string | null>(null)
   const loadDetailSeq = useRef(0)
   const receivingScanQueue = useRef(createSerialScanQueue()).current
+  const lastProductScan = useRef<string | null>(null)
+  const scanDocument = useRef(requestId)
+  const marking = useInboundMarkingCodes(requestId, token, isFulfillmentAdmin && workspace !== 'sorting', detail?.status)
+  useEffect(() => {
+    scanDocument.current = requestId
+    lastProductScan.current = null
+    setLastScannedLineId(null)
+    return () => { scanDocument.current = ''; lastProductScan.current = null }
+  }, [requestId])
+  useEffect(() => {
+    lastProductScan.current = null
+  }, [boxAddDialogBoxId, cargoAddDialogPlaceId, pickerOpen, detail?.status])
 
   const sortingView = workspace === 'sorting'
 
@@ -543,10 +563,13 @@ export function FfInboundRequestView({
       isFulfillmentAdmin &&
       !sortingView &&
       receivingActive &&
+      !busy &&
       boxAddDialogBoxId == null &&
       cargoAddDialogPlaceId == null &&
       !pickerOpen &&
-      dimensionsLine == null,
+      dimensionsLine == null &&
+      !finishConfirmOpen &&
+      !distOpen,
     onScan: (code) => {
       void receivingScanQueue(() => scanToReceiving(code))
     },
@@ -1667,9 +1690,17 @@ export function FfInboundRequestView({
 
   const scanToReceiving = async (raw?: string) => {
     const code = (raw ?? '').trim()
-    if (!code) return
+    if (!code || scanDocument.current !== requestId) return
     setError(null)
+    setScanAddBarcode(null)
     try {
+      if (isInboundMarkingScan(code)) {
+        await marking.attach(code, lastProductScan.current)
+        return
+      }
+      lastProductScan.current = null
+      receivingScanReconciler.cancel()
+      ++loadDetailSeq.current
       const productId = findInboundScanProductId(code, scanProductByBarcode)
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${requestId}/receiving/scan`),
@@ -1691,6 +1722,9 @@ export function FfInboundRequestView({
       }
       setScanAddBarcode(null)
       const scannedLine = (await res.json()) as InboundLine
+      if (scanDocument.current !== requestId) return
+      ++loadDetailSeq.current
+      lastProductScan.current = scannedLine.id
       setDetail((current) => {
         if (!current) return current
         return {
@@ -1885,6 +1919,9 @@ export function FfInboundRequestView({
     setError(null)
     setFinishConfirmOpen(false)
     try {
+      await receivingScanQueue(async () => undefined)
+      receivingScanReconciler.cancel()
+      ++loadDetailSeq.current
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${requestId}/complete-receiving`),
         { method: 'POST', headers: authHeaders },
@@ -1893,7 +1930,9 @@ export function FfInboundRequestView({
         setError(scanErrorMessageRu(await readApiErrorMessage(res)))
         return
       }
-      setDetail((await res.json()) as InboundDetail)
+      const completed = (await res.json()) as InboundDetail
+      ++loadDetailSeq.current
+      setDetail(completed)
       setDistOpen(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось завершить приёмку.')
@@ -2445,6 +2484,18 @@ export function FfInboundRequestView({
             </>
           ) : null}
 
+          {showInboundLinesTable && isFulfillmentAdmin ? (
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+              {marking.items.some(inboundMarkingNeedsAttention) ? (
+                <Button size="small" variant="outlined" onClick={() => void marking.download()} data-testid="ff-inbound-kiz-export">Проблемные коды ЧЗ в Excel</Button>
+              ) : null}
+              {receptionClosed && marking.items.some((code) => code.cz_status !== 'introduced') ? (
+                <Button size="small" disabled={marking.checking} onClick={() => void marking.recheck()} data-testid="ff-inbound-kiz-recheck">Повторить проверку ЧЗ</Button>
+              ) : null}
+              {marking.checking ? <Typography variant="caption" color="text.secondary">Проверяем коды в Честном знаке…</Typography> : null}
+            </Stack>
+          ) : null}
+          {showInboundLinesTable && marking.error ? <Alert severity="error" sx={{ mb: 1 }}>{marking.error}</Alert> : null}
           {showInboundLinesTable ? (
             <TableContainer
               sx={{
@@ -2504,6 +2555,8 @@ export function FfInboundRequestView({
                     : hasDiscrepancy
                       ? 'ff-inbound-line-row-discrepancy'
                       : 'ff-inbound-line-row'
+                  const lineCodes = marking.items.filter((code) => code.line_id === ln.id)
+                  const badCodes = lineCodes.filter(inboundMarkingNeedsAttention)
                   const manualOpen = manualEditLineId === ln.id
                   const { group: ozonGroup, showHeader: showOzonGroupHeader } =
                     ozonReturnGroupAt(ozonReturn.groups, detail.lines, lineIndex)
@@ -2536,12 +2589,28 @@ export function FfInboundRequestView({
                                 `inset 0 0 0 1px ${alpha(theme.palette.success.main, 0.6)}`,
                             }
                           : null),
+                        ...(badCodes.length > 0 ? {
+                          backgroundColor: (theme) => alpha(theme.palette.error.main, 0.12),
+                          boxShadow: 'none',
+                          '&&:hover': { backgroundColor: (theme) => alpha(theme.palette.error.main, 0.16) },
+                        } : null),
                       }}
                     >
                       <InboundProductLineCell
                         meta={displayMeta}
                         productId={ln.product_id}
                         printTestId={`ff-inbound-line-print-${ln.id}`}
+                        markingControl={lineCodes.length > 0 ? (
+                          <Stack direction="row" sx={{ alignItems: 'center' }}>
+                            <IconButton size="small" aria-label={`Коды ЧЗ: ${ln.sku_code}`} aria-expanded={Boolean(marking.expanded[ln.id])}
+                              onClick={() => marking.setExpanded((current) => ({ ...current, [ln.id]: !current[ln.id] }))} data-testid="ff-inbound-kiz-expand">
+                              <ExpandMoreOutlined fontSize="small" sx={{ transform: marking.expanded[ln.id] ? 'rotate(180deg)' : undefined }} />
+                            </IconButton>
+                            {badCodes.length > 0 ? <Tooltip title={Array.from(new Set(badCodes.map((code) => code.cz_reason))).join(' ')}>
+                              <ErrorOutline tabIndex={0} fontSize="small" color="error" aria-label="Проблема с кодами ЧЗ" data-testid="ff-inbound-kiz-warning" />
+                            </Tooltip> : null}
+                          </Stack>
+                        ) : undefined}
                       />
                       <TableCell sx={{ width: 188, minWidth: 0 }}>
                         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
@@ -2710,6 +2779,36 @@ export function FfInboundRequestView({
                       </TableCell>
                       {isReturnOperation ? <ReturnDefectiveQtyCell lineId={ln.id} defectiveQty={ln.defective_qty ?? 0} acceptedQty={effective} disabled={busy || ln.posted_qty > 0 || isDoneStatus(detail.status)} onSave={ozonReturn.saveDefective} /> : null}
                     </TableRow>
+                    {lineCodes.length > 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={isReturnOperation ? 5 : 4} sx={{ py: '0 !important' }}>
+                          <Collapse in={Boolean(marking.expanded[ln.id])} unmountOnExit>
+                            <Table size="small" aria-label={`Коды ЧЗ: ${ln.sku_code}`} data-testid="ff-inbound-kiz-table" sx={{ my: 1 }}>
+                              <TableHead><TableRow><TableCell>Код Честного знака</TableCell><TableCell sx={{ width: 240 }}>Статус</TableCell></TableRow></TableHead>
+                              <TableBody>{lineCodes.map((code) => (
+                                <TableRow key={code.id} data-testid="ff-inbound-kiz-row" sx={{ backgroundColor: (theme) =>
+                                  code.cz_status === 'introduced' ? alpha(theme.palette.success.main, 0.12) :
+                                  inboundMarkingNeedsAttention(code) ? alpha(theme.palette.error.main, 0.12) : undefined }}>
+                                  <TableCell sx={{ wordBreak: 'break-all', fontFamily: 'monospace' }}>{code.cis_code.replace(/\x1d/g, '␝')}</TableCell>
+                                  <TableCell><Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                                    <Tooltip title={code.cz_reason}><Typography variant="body2" tabIndex={0}>{inboundMarkingStatusLabel(code.cz_status)}</Typography></Tooltip>
+                                    {inboundMarkingNeedsAttention(code) ? <Tooltip title={code.cz_reason}><ErrorOutline tabIndex={0} fontSize="small" color="error" aria-label={code.cz_reason} /></Tooltip> : null}
+                                    {receivingActive && isFulfillmentAdmin ? (
+                                      <Tooltip title="Убрать ошибочно отсканированный код">
+                                        <span><IconButton size="small" aria-label="Убрать код из приёмки" disabled={busy || marking.removingCodeId !== null}
+                                          onClick={() => { void receivingScanQueue(() => marking.remove(code.id)) }}>
+                                          <CloseOutlined fontSize="small" />
+                                        </IconButton></span>
+                                      </Tooltip>
+                                    ) : null}
+                                  </Stack></TableCell>
+                                </TableRow>
+                              ))}</TableBody>
+                            </Table>
+                          </Collapse>
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
                     </Fragment>
                   )
                 })}
@@ -3592,6 +3691,7 @@ export function FfInboundRequestView({
           requestLines={detail?.lines ?? []}
           boxLines={boxAddDialogBox.lines}
           catalogById={catalogById}
+          onMarkingScan={marking.attach}
           onUpdated={async () => {
             await loadDetail()
           }}
@@ -3615,6 +3715,7 @@ export function FfInboundRequestView({
                 requestLines={detail?.lines ?? []}
                 boxLines={place.lines ?? []}
                 catalogById={catalogById}
+                onMarkingScan={marking.attach}
                 onUpdated={async () => {
                   await loadDetail()
                 }}

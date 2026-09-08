@@ -538,7 +538,7 @@ async def test_fbs_and_marketplace_unload_status_sequences(
                 return None
 
             monkeypatch.setattr(
-                "app.services.packaging_task_service.assert_unload_packaging_done",
+                "app.services.packaging_task_service.assert_unload_marking_done",
                 packaging_done,
             )
             await unload_svc.complete_unload(

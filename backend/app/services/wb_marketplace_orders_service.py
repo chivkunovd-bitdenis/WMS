@@ -455,7 +455,7 @@ async def _get_order_by_wb_id(
         FbsOrder.seller_id == seller_id,
         FbsOrder.wb_order_id == wb_order_id,
     )
-    res = await session.execute(stmt)
+    res = await session.execute(stmt.execution_options(populate_existing=True))
     return res.scalar_one_or_none()
 
 
@@ -897,6 +897,7 @@ async def sync_order_statuses(
     actor_user_id: uuid.UUID | None,
 ) -> int:
     updated = 0
+    snapshots: dict[uuid.UUID, dict[str, Any]] = {}
     last_created_at: datetime | None = None
     last_id: uuid.UUID | None = None
     for _batch in range(MAX_SYNC_STATUS_BATCHES):
@@ -920,7 +921,6 @@ async def sync_order_statuses(
             .where(*filters)
             .order_by(FbsOrder.created_at_wb.asc(), FbsOrder.id.asc())
             .limit(SYNC_STATUS_BATCH_SIZE)
-            .with_for_update()
         )
         res = await session.execute(stmt)
         orders = list(res.scalars().all())
@@ -961,26 +961,36 @@ async def sync_order_statuses(
 
         for order in orders:
             status_row = by_id.get(order.wb_order_id)
-            if status_row is None:
-                continue
-            wb_status = _wb_status_from_row(status_row)
-            supplier_status = _supplier_status_from_row(status_row)
-            if wb_status is None and supplier_status is None:
-                continue
-            await _apply_wb_status_to_order(
-                session,
-                order,
-                wb_status,
-                supplier_status=supplier_status,
-                actor_user_id=actor_user_id,
-            )
-            updated += 1
+            if status_row is not None:
+                snapshots[order.id] = status_row
 
         last_row = orders[-1]
         last_created_at = last_row.created_at_wb
         last_id = last_row.id
         if len(orders) < SYNC_STATUS_BATCH_SIZE:
             break
+    # Fetch every page before taking write locks. The caller owns the commit;
+    # all parents must therefore be locked before the first order, across pages.
+    from app.services.fbs_packaging_integration_service import lock_order_batch_packaging_rows
+
+    order_ids = list(snapshots)
+    await lock_order_batch_packaging_rows(session, tenant_id, order_ids)
+    orders = list((await session.scalars(select(FbsOrder).where(
+        FbsOrder.tenant_id == tenant_id, FbsOrder.seller_id == seller_id,
+        FbsOrder.id.in_(order_ids),
+        FbsOrder.status.not_in(tuple(STATUSES_EXCLUDED_FROM_WB_SYNC)),
+    ).order_by(FbsOrder.id).execution_options(populate_existing=True))).all())
+    for order in orders:
+        status_row = snapshots[order.id]
+        wb_status = _wb_status_from_row(status_row)
+        supplier_status = _supplier_status_from_row(status_row)
+        if wb_status is None and supplier_status is None:
+            continue
+        await _apply_wb_status_to_order(
+            session, order, wb_status, supplier_status=supplier_status,
+            actor_user_id=actor_user_id,
+        )
+        updated += 1
     return updated
 
 

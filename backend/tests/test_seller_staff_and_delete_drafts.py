@@ -8,6 +8,7 @@ from httpx import AsyncClient
 from app.db.session import SessionLocal
 from app.models.inbound_intake import InboundIntakeRequest
 from app.models.marketplace_unload import MarketplaceUnloadRequest
+from tests.auth_helpers import set_password_via_link
 
 
 async def _register_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
@@ -105,10 +106,7 @@ async def test_seller_owner_creates_staff_user_and_updates_permissions(
     assert created.json()["permissions"]["documents"] is True
     assert created.json()["permissions"]["products"] is False
 
-    setup = await async_client.post(
-        "/auth/set-initial-password",
-        json={"email": staff_email, "password": "password123"},
-    )
+    setup = await set_password_via_link(async_client, staff_email, "password123")
     assert setup.status_code == 200, setup.text
     staff_headers = await _seller_login_headers(async_client, staff_email)
     me_staff = await async_client.get("/auth/me", headers=staff_headers)

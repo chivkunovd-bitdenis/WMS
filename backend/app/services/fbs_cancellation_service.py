@@ -291,10 +291,14 @@ async def _lock_order(
     tenant_id: uuid.UUID,
     order_id: uuid.UUID,
 ) -> FbsOrder | None:
+    from app.services.fbs_packaging_integration_service import lock_order_packaging_rows
+
+    await lock_order_packaging_rows(session, tenant_id, order_id)
     stmt = (
         select(FbsOrder)
         .where(FbsOrder.id == order_id, FbsOrder.tenant_id == tenant_id)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     return (await session.execute(stmt)).scalar_one_or_none()
 

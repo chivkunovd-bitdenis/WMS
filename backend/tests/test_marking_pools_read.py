@@ -162,8 +162,8 @@ async def test_ledger_filters(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_ledger_excludes_external_fbs_registry_events(async_client: AsyncClient) -> None:
-    # TC-NEW-FBS-KIZ-012: external FBS KIZ events are not pool consumption events.
+async def test_ledger_includes_external_fbs_registry_events(async_client: AsyncClient) -> None:
+    # WMS-084/091: the ledger and CSV include external FBS events without a pool.
     headers, seller_id, _pool_id, product_id, _ = await _seed_pool_with_codes(async_client)
     token = headers["Authorization"].removeprefix("Bearer ")
     tenant_id = uuid.UUID(str(decode_access_token(token)["tenant_id"]))
@@ -195,7 +195,12 @@ async def test_ledger_excludes_external_fbs_registry_events(async_client: AsyncC
         params={"seller_id": seller_id, "event_type": EVENT_APPLIED},
     )
     assert ledger.status_code == 200, ledger.text
-    assert ledger.json() == {"rows": [], "total": 0}
+    assert ledger.json()["total"] == 1
+    row = ledger.json()["rows"][0]
+    assert row["event_type"] == EVENT_APPLIED
+    assert row["cis_code"] == code.cis_code
+    assert row["product_name"] == "Read товар"
+    assert row["pool_title"] is None
 
     export = await async_client.get(
         "/operations/marking-codes/ledger/export",
@@ -203,7 +208,20 @@ async def test_ledger_excludes_external_fbs_registry_events(async_client: AsyncC
         params={"seller_id": seller_id, "event_type": EVENT_APPLIED},
     )
     assert export.status_code == 200, export.text
-    assert len(export.content.decode("utf-8-sig").strip().splitlines()) == 1
+    exported = list(csv.DictReader(io.StringIO(export.content.decode("utf-8-sig"))))
+    assert len(exported) == 1
+    assert exported[0]["event_type"] == EVENT_APPLIED
+    assert exported[0]["cis_code"] == code.cis_code
+    assert exported[0]["product_name"] == row["product_name"]
+    assert exported[0]["pool_title"] == ""
+
+    other_headers = await _register_admin(async_client)
+    other_ledger = await async_client.get(
+        "/operations/marking-codes/ledger", headers=other_headers,
+        params={"event_type": EVENT_APPLIED},
+    )
+    assert other_ledger.status_code == 200, other_ledger.text
+    assert other_ledger.json() == {"rows": [], "total": 0}
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,9 @@
+{
+  "method": "POST",
+  "path": "/operations/packaging-tasks/92e481fc-f9be-4918-b4b8-5beb9aec7126/lines/2e5dee94-4b4c-4064-bb16-5a5272876759/pack",
+  "status": 200,
+  "local_http_ms": 54.755,
+  "qty_before": 0,
+  "qty_after": 1,
+  "measurement": "httpx request to local uvicorn; includes loopback transport and response receipt, excludes browser"
+}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -33,9 +34,16 @@ from app.models.fbs_order import (
     FbsOrderMarking,
     current_order_marking,
 )
+from app.models.fbs_wb_operation import (
+    WB_OPERATION_STATE_CONFIRMED,
+    WB_OPERATION_STATE_FAILED,
+    WB_OPERATION_STATE_PENDING_CONFIRMATION,
+    FbsWbOperation,
+)
 from app.models.marking_code import (
     EVENT_WB_ORPHANED,
     STATUS_AVAILABLE,
+    STATUS_PRINTED,
     STATUS_RESERVED,
     MarkingCode,
     MarkingCodeEvent,
@@ -70,6 +78,8 @@ from app.services.wildberries_fbs_client import (
     MarketplaceOrderMetaRow,
     fetch_marketplace_orders_meta_batch,
 )
+
+OPERATION_KIND_ORDER_KIZ_BIND = "order_kiz_bind"
 
 _META_KIND_FROM_PLURAL: dict[str, str] = {
     "sgtins": MARKING_KIND_SGTIN,
@@ -112,16 +122,19 @@ def parse_meta_kinds_from_wb_row(row: dict[str, Any]) -> tuple[list[str], list[s
                     out.append(kind)
         return out
 
-    required = _norm_list(row.get("requiredMeta") or row.get("required_meta"))
-    optional = _norm_list(row.get("optionalMeta") or row.get("optional_meta"))
+    required = _norm_list(row.get("requiredMeta", row.get("required_meta")))
+    optional = _norm_list(row.get("optionalMeta", row.get("optional_meta")))
     return required, optional
 
 
 def apply_wb_meta_requirements_to_order(order: FbsOrder, row: dict[str, Any]) -> None:
     required, optional = parse_meta_kinds_from_wb_row(row)
-    if required:
+    # /orders/new supplies these lists; historical /orders may omit them.
+    # An explicit empty list is a fresh WB snapshot and must clear the old list.
+    # Missing or non-list fields do not overwrite previously received facts.
+    if isinstance(row.get("requiredMeta", row.get("required_meta")), list):
         order.required_meta_json = required
-    if optional:
+    if isinstance(row.get("optionalMeta", row.get("optional_meta")), list):
         order.optional_meta_json = optional
 
 
@@ -447,21 +460,24 @@ def build_order_metadata(
     optional = list(order.optional_meta_json or [])
     states: list[dict[str, Any]] = []
     for kind in required + [k for k in optional if k not in required]:
-        mark = current_order_marking(markings, kind, include_rejected=True)
-        if mark is not None:
+        if order.marketplace == "ozon":
+            current = [
+                row for row in ozon_gate_svc.current_markings(order, markings) if row.kind == kind
+            ]
+        else:
+            mark = current_order_marking(markings, kind, include_rejected=True)
+            current = [mark] if mark is not None else []
+        for mark in current:
             states.append(
                 {
                     "kind": kind,
                     "status": mark.meta_status,
                     "reason": mark.reason,
                     "source": mark.source,
-                    # Хвост кода — чтобы оператор глазами сверил строку на экране
-                    # с тем, что напечатано на этикетке. Весь код не отдаём: он
-                    # длинный и в таблицу не помещается.
                     "value_tail": _marking_value_tail(mark.value),
                 }
             )
-        else:
+        if not current:
             states.append(
                 {
                     "kind": kind,
@@ -525,12 +541,16 @@ async def _get_order(
     *,
     for_update: bool = False,
 ) -> FbsOrder | None:
-    stmt = select(FbsOrder).where(
-        FbsOrder.id == order_id,
-        FbsOrder.tenant_id == tenant_id,
-    ).options(selectinload(FbsOrder.product_positions))
+    stmt = (
+        select(FbsOrder)
+        .where(
+            FbsOrder.id == order_id,
+            FbsOrder.tenant_id == tenant_id,
+        )
+        .options(selectinload(FbsOrder.product_positions))
+    )
     if for_update:
-        stmt = stmt.with_for_update()
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
 
@@ -559,6 +579,7 @@ async def _claim_pool_code_if_present(
     tenant_id: uuid.UUID,
     order: FbsOrder,
     cis_raw: str,
+    printed_for_line_id: uuid.UUID | None = None,
 ) -> MarkingCode | None:
     code = await _lookup_marking_code_in_tenant(
         session,
@@ -575,10 +596,23 @@ async def _claim_pool_code_if_present(
         and code.product_id != order.product_id
     ):
         raise FbsMarkingError("code_product_mismatch")
-    stmt = select(MarkingCode).where(MarkingCode.id == code.id).with_for_update()
+    stmt = (
+        select(MarkingCode).where(MarkingCode.id == code.id)
+        .execution_options(populate_existing=True).with_for_update()
+    )
     locked = (await session.execute(stmt)).scalar_one_or_none()
     if locked is None:
         return None
+    if (
+        locked.status == STATUS_PRINTED
+        and printed_for_line_id is not None
+        and locked.packaging_task_line_id == printed_for_line_id
+    ):
+        return locked
+    from app.services.marking_code_service import is_unbound_received_code
+
+    if await is_unbound_received_code(session, locked):
+        return locked
     if locked.status != STATUS_AVAILABLE:
         raise FbsMarkingError("duplicate_kiz")
     locked.status = STATUS_RESERVED
@@ -663,6 +697,64 @@ async def _record_wb_orphaned_once(
     )
 
 
+async def record_pending_kiz_operation(
+    session: AsyncSession,
+    order: FbsOrder,
+    marking: FbsOrderMarking,
+    *,
+    error_code: str,
+    actor_user_id: uuid.UUID | None,
+    idempotency_key: str,
+) -> None:
+    marking.meta_status = META_STATUS_UNKNOWN
+    marking.check_status = CHECK_STATUS_ERROR
+    marking.reason = "Wildberries не подтвердил результат; нужна сверка."
+    operation_key = hashlib.sha256(
+        f"{idempotency_key}:{order.id}:{marking.id}".encode()
+    ).hexdigest()
+    operation = await session.scalar(select(FbsWbOperation).where(
+        FbsWbOperation.tenant_id == order.tenant_id,
+        FbsWbOperation.seller_id == order.seller_id,
+        FbsWbOperation.operation_kind == OPERATION_KIND_ORDER_KIZ_BIND,
+        FbsWbOperation.idempotency_key == operation_key,
+    ).with_for_update())
+    if operation is None:
+        operation = FbsWbOperation(
+            tenant_id=order.tenant_id, seller_id=order.seller_id,
+            operation_kind=OPERATION_KIND_ORDER_KIZ_BIND,
+            idempotency_key=operation_key,
+            request_hash=hashlib.sha256(marking.value.encode()).hexdigest(),
+            local_entity_type="fbs_order_marking", local_entity_id=marking.id,
+            wb_object_kind="order", wb_object_id=str(order.wb_order_id),
+            created_by_user_id=actor_user_id,
+        )
+        session.add(operation)
+    # A later uncertain retry for the same binding reuses its existing key.
+    operation.state = WB_OPERATION_STATE_PENDING_CONFIRMATION
+    operation.error_code = error_code
+    operation.error_context_json = None
+    operation.confirmed_at = None
+    operation.failed_at = None
+
+
+async def pending_kiz_operation(
+    session: AsyncSession,
+    marking: FbsOrderMarking,
+) -> FbsWbOperation | None:
+    result = await session.execute(
+        select(FbsWbOperation)
+        .where(
+            FbsWbOperation.tenant_id == marking.tenant_id,
+            FbsWbOperation.operation_kind == OPERATION_KIND_ORDER_KIZ_BIND,
+            FbsWbOperation.local_entity_type == "fbs_order_marking",
+            FbsWbOperation.local_entity_id == marking.id,
+            FbsWbOperation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION,
+        )
+        .with_for_update()
+    )
+    return result.scalar_one_or_none()
+
+
 async def _sync_order_meta_from_wb(
     session: AsyncSession,
     order: FbsOrder,
@@ -670,10 +762,16 @@ async def _sync_order_meta_from_wb(
     token: str,
     *,
     meta_batch: list[MarketplaceOrderMetaRow] | None = None,
+    expected_marking_ids: set[uuid.UUID] | None = None,
 ) -> list[FbsOrderMarking]:
     order_id = order.id
     tenant_id = order.tenant_id
     wb_order_id = int(order.wb_order_id)
+    before_ids = expected_marking_ids
+    if before_ids is None:
+        before_ids = set((await session.scalars(select(FbsOrderMarking.id).where(
+            FbsOrderMarking.order_id == order_id, FbsOrderMarking.tenant_id == tenant_id,
+        ))).all())
     batch = meta_batch
     if batch is None:
         batch = await fetch_marketplace_orders_meta_batch(
@@ -684,7 +782,9 @@ async def _sync_order_meta_from_wb(
     # Network I/O above may have overlapped with an operator changing the KIZ.
     # Lock and reload the current local state before applying the remote snapshot.
     locked_order = await session.scalar(
-        select(FbsOrder).where(FbsOrder.id == order_id).with_for_update()
+        select(FbsOrder).where(FbsOrder.id == order_id)
+        .options(selectinload(FbsOrder.markings).selectinload(FbsOrderMarking.marking_code))
+        .with_for_update().execution_options(populate_existing=True)
     )
     if locked_order is None:
         raise FbsMarkingError("order_not_found")
@@ -698,12 +798,17 @@ async def _sync_order_meta_from_wb(
                     FbsOrderMarking.order_id == order_id,
                 )
                 .order_by(FbsOrderMarking.kind, FbsOrderMarking.value)
+                .options(selectinload(FbsOrderMarking.marking_code))
                 .with_for_update()
+                .execution_options(populate_existing=True)
             )
         )
         .scalars()
         .all()
     )
+    if {marking.id for marking in markings} != before_ids:
+        # The GET describes the previous binding; a completed scan/unbind wins.
+        return markings
     details_by_kind: dict[str, MarketplaceMetaDetail] = {}
     returned_kinds: set[str] = set()
     returned_details: tuple[MarketplaceMetaDetail, ...] = ()
@@ -738,9 +843,7 @@ async def _sync_order_meta_from_wb(
             decision = meta_detail.decision.strip().lower()
             if decision == "required" and not meta_detail.value:
                 marking.meta_status = META_STATUS_MISSING
-            elif meta_detail.value and not _same_marking_value(
-                marking.value, meta_detail.value
-            ):
+            elif meta_detail.value and not _same_marking_value(marking.value, meta_detail.value):
                 marking.meta_status = META_STATUS_REPLACEMENT_REQUIRED
             elif map_wb_decision_to_meta_status(meta_detail.decision) is None:
                 marking.meta_status = META_STATUS_UNKNOWN
@@ -750,6 +853,19 @@ async def _sync_order_meta_from_wb(
             )
             if marking.meta_status in {META_STATUS_MISSING, META_STATUS_REPLACEMENT_REQUIRED}:
                 await _record_wb_orphaned_once(session, marking, reason=marking.reason)
+            # A successful GET alone does not establish which binding WB accepted.
+            if meta_detail.value and _same_marking_value(marking.value, meta_detail.value):
+                operation = await pending_kiz_operation(session, marking)
+                if operation is not None:
+                    if marking.meta_status in _META_DELIVERY_OK:
+                        operation.state = WB_OPERATION_STATE_CONFIRMED
+                        operation.confirmed_at = datetime.now(tz=UTC)
+                        operation.error_code = None
+                        operation.error_context_json = None
+                    elif marking.meta_status == META_STATUS_REJECTED:
+                        operation.state = WB_OPERATION_STATE_FAILED
+                        operation.failed_at = datetime.now(tz=UTC)
+                        operation.error_code = "meta_validation_fail"
 
     if returned_row:
         # Keep the actual WB snapshot, including remote values and keys unknown to
@@ -786,6 +902,7 @@ async def attach_order_meta_to_wb_and_sync(
     actor_user_id: uuid.UUID | None,
     api_token: str | None = None,
     ozon_provider: OzonMarketplaceProvider | None = None,
+    notify_supply: bool = True,
 ) -> list[FbsOrderMarking]:
     marking.meta_status = META_STATUS_SENDING
     await session.flush()
@@ -829,12 +946,10 @@ async def attach_order_meta_to_wb_and_sync(
         )
         order.metadata_last_checked_at = datetime.now(tz=UTC)
         await session.flush()
-        await _notify_supply_marking_update(
-            session,
-            tenant_id,
-            order.id,
-            actor_user_id=actor_user_id,
-        )
+        if notify_supply:
+            await _notify_supply_marking_update(
+                session, tenant_id, order.id, actor_user_id=actor_user_id,
+            )
         return await list_order_markings(session, tenant_id, order.id)
 
     token = api_token or await require_marketplace_token(session, tenant_id, order.seller_id)
@@ -862,12 +977,10 @@ async def attach_order_meta_to_wb_and_sync(
         raise FbsMarkingError(_wb_error_code(exc)) from exc
 
     markings = await _sync_order_meta_from_wb(session, order, http_client, token)
-    await _notify_supply_marking_update(
-        session,
-        tenant_id,
-        order.id,
-        actor_user_id=actor_user_id,
-    )
+    if notify_supply:
+        await _notify_supply_marking_update(
+            session, tenant_id, order.id, actor_user_id=actor_user_id,
+        )
     return markings
 
 
@@ -926,6 +1039,8 @@ async def sync_order_marking_statuses(
     actor_user_id: uuid.UUID | None,
     ozon_provider: OzonMarketplaceProvider | None = None,
 ) -> list[FbsOrderMarking]:
+    from app.services.fbs_packaging_integration_service import lock_order_packaging_rows
+
     order = await _get_order(session, tenant_id, order_id)
     if order is None:
         raise FbsMarkingError("order_not_found")
@@ -935,6 +1050,7 @@ async def sync_order_marking_statuses(
         return markings
 
     if order.marketplace == "ozon":
+        before_ids = {marking.id for marking in markings}
         try:
             client_id, api_key = await MarketplaceAccountService(session).stored_credentials(
                 tenant_id, order.seller_id
@@ -947,6 +1063,15 @@ async def sync_order_marking_statuses(
             )
         except (MarketplaceAccountError, MarketplaceProviderError, OzonFbsProcessError) as exc:
             raise FbsMarkingError(getattr(exc, "code", "ozon_upstream_error")) from exc
+        await lock_order_packaging_rows(session, tenant_id, order_id)
+        refreshed = await _get_order(session, tenant_id, order_id, for_update=True)
+        if refreshed is None:
+            raise FbsMarkingError("order_not_found")
+        order = refreshed
+        markings = await list_order_markings(session, tenant_id, order_id)
+        if {marking.id for marking in markings} != before_ids:
+            # This posting-level response predates the operator's replacement.
+            return markings
         ozon_gate_svc.apply_status(
             order,
             markings,

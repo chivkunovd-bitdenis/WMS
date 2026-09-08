@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -41,20 +42,30 @@ def test_message_names_the_marketplace_and_the_operation() -> None:
     assert "чужой кабинет" in message
 
 
-def _stub_session(order: object) -> object:
-    class _Result:
-        def scalar_one_or_none(self) -> object:
-            return order
+def _stub_order_and_forbid_cancellation(
+    monkeypatch: pytest.MonkeyPatch, order: object,
+) -> object:
+    from app.services import fbs_cancellation_service as cancellation
 
-    class _Session:
-        async def execute(self, *_args: object, **_kwargs: object) -> _Result:
-            return _Result()
-
-    return _Session()
+    # This unit test isolates marketplace dispatch from the real row-lock queries.
+    monkeypatch.setattr(cancellation, "_lock_order", AsyncMock(return_value=order))
+    for name in (
+        "_resolve_marketplace_api_token", "cancel_marketplace_order",
+        "cancel_posting", "_finish_local_cancellation",
+    ):
+        monkeypatch.setattr(cancellation, name, AsyncMock(
+            side_effect=AssertionError(f"Guard must precede {name}"),
+        ))
+    monkeypatch.setattr(cancellation.MarketplaceAccountService, "stored_credentials", AsyncMock(
+        side_effect=AssertionError("Guard must precede Ozon credentials"),
+    ))
+    return object()
 
 
 @pytest.mark.asyncio
-async def test_cancel_refuses_an_unknown_marketplace_before_touching_wildberries() -> None:
+async def test_cancel_refuses_an_unknown_marketplace_before_touching_wildberries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Заказ маркетплейса, которого мы не умеем, останавливается до вызова к WB."""
     from app.models.fbs_order import FbsOrder
     from app.services.fbs_cancellation_service import FbsCancellationError, cancel_order
@@ -70,7 +81,7 @@ async def test_cancel_refuses_an_unknown_marketplace_before_touching_wildberries
 
     with pytest.raises(FbsCancellationError) as exc:
         await cancel_order(
-            _stub_session(order),  # type: ignore[arg-type]
+            _stub_order_and_forbid_cancellation(monkeypatch, order),  # type: ignore[arg-type]
             order.tenant_id,
             order.id,
             None,  # type: ignore[arg-type]
@@ -106,7 +117,7 @@ async def test_cancel_of_an_ozon_order_never_runs_on_the_local_fake(
 
     with pytest.raises(FbsCancellationError) as exc:
         await cancel_order(
-            _stub_session(order),  # type: ignore[arg-type]
+            _stub_order_and_forbid_cancellation(monkeypatch, order),  # type: ignore[arg-type]
             order.tenant_id,
             order.id,
             None,  # type: ignore[arg-type]

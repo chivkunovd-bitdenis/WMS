@@ -26,7 +26,6 @@ from app.models.user import User
 from app.services.seller_staff_permissions_service import PERM_SETTINGS
 from app.services.wildberries_client import (
     WildberriesClientError,
-    fetch_cards_list,
     fetch_marketplace_seller_warehouses,
 )
 from app.services.wildberries_credentials_service import (
@@ -47,6 +46,7 @@ from app.services.wildberries_product_link_service import (
     WildberriesLinkError,
     link_product_to_wb_card,
 )
+from app.services.wildberries_sync_service import fetch_all_cards
 
 router = APIRouter(prefix="/integrations/wildberries", tags=["integrations"])
 logger = logging.getLogger(__name__)
@@ -471,44 +471,11 @@ async def save_and_validate_self_content_token(
             detail="token_empty",
         )
     total_cards: list[object] = []
-    updated_at: str | None = None
-    nm_id: int | None = None
-    total_hint: int | None = None
     validation_error: str | None = None
     marketplace_validation_ok = False
     try:
         async with httpx.AsyncClient() as client:
-            seen: set[tuple[str | None, int | None]] = set()
-            for _ in range(250):
-                seen_key = (updated_at, nm_id)
-                if seen_key in seen:
-                    break
-                seen.add(seen_key)
-                data = await fetch_cards_list(
-                    client,
-                    api_token=token,
-                    limit=100,
-                    cursor_updated_at=updated_at,
-                    cursor_nm_id=nm_id,
-                )
-                cards = data.get("cards") if isinstance(data, dict) else None
-                batch = cards if isinstance(cards, list) else []
-                if not batch:
-                    break
-                total_cards.extend(batch)
-                cur = data.get("cursor") if isinstance(data, dict) else None
-                if isinstance(cur, dict):
-                    ua = cur.get("updatedAt")
-                    if isinstance(ua, str) and ua.strip():
-                        updated_at = ua
-                    cid = cur.get("nmID")
-                    if isinstance(cid, int):
-                        nm_id = cid
-                    th = cur.get("total")
-                    if isinstance(th, int):
-                        total_hint = th
-                if total_hint is not None and len(total_cards) >= total_hint:
-                    break
+            total_cards, _cursor_present = await fetch_all_cards(client, api_token=token)
             try:
                 await fetch_marketplace_seller_warehouses(client, api_token=token)
                 marketplace_validation_ok = True
@@ -625,53 +592,19 @@ async def sync_products_now(
     if not content_token:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="missing_content_token")
 
-    total_cards: list[object] = []
-    updated_at: str | None = None
-    nm_id: int | None = None
-    total_hint: int | None = None
     async with httpx.AsyncClient() as client:
-        seen: set[tuple[str | None, int | None]] = set()
-        for _ in range(250):
-            seen_key = (updated_at, nm_id)
-            if seen_key in seen:
-                break
-            seen.add(seen_key)
-            try:
-                data = await fetch_cards_list(
-                    client,
-                    api_token=content_token,
-                    limit=100,
-                    cursor_updated_at=updated_at,
-                    cursor_nm_id=nm_id,
-                )
-            except WildberriesClientError as exc:
-                if exc.code == "upstream_error" and exc.status_code in (401, 403):
-                    raise HTTPException(
-                        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                        detail="invalid_wb_token",
-                    ) from None
+        try:
+            total_cards, _cursor_present = await fetch_all_cards(client, api_token=content_token)
+        except WildberriesClientError as exc:
+            if exc.code == "upstream_error" and exc.status_code in (401, 403):
                 raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=exc.code,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="invalid_wb_token",
                 ) from None
-            cards = data.get("cards") if isinstance(data, dict) else None
-            batch = cards if isinstance(cards, list) else []
-            if not batch:
-                break
-            total_cards.extend(batch)
-            cur = data.get("cursor") if isinstance(data, dict) else None
-            if isinstance(cur, dict):
-                ua = cur.get("updatedAt")
-                if isinstance(ua, str) and ua.strip():
-                    updated_at = ua
-                cid = cur.get("nmID")
-                if isinstance(cid, int):
-                    nm_id = cid
-                th = cur.get("total")
-                if isinstance(th, int):
-                    total_hint = th
-            if total_hint is not None and len(total_cards) >= total_hint:
-                break
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=exc.code,
+            ) from None
 
     n = len(total_cards)
     saved = await upsert_imported_cards(session, user.tenant_id, effective_seller_id, total_cards)

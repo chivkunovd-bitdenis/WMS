@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import and_, exists, func, or_, select
+from sqlalchemy import String, and_, cast, delete, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -27,6 +27,7 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.fbs_trbx import FbsTrbx
+from app.models.product import Product
 from app.models.warehouse_box import WarehouseBox
 from app.services.wb_marketplace_orders_service import CANCEL_LIKE_WB_STATUSES
 
@@ -95,6 +96,9 @@ def _assembly_trace_condition() -> Any:
         FbsOrder.packed_at.is_not(None),
         FbsOrder.sticker_applied_at.is_not(None),
         FbsOrder.sticker_status.in_((STICKER_STATUS_PRINT_OPENED, STICKER_STATUS_APPLIED)),
+        exists(select(FbsPackingBoxItem.id).where(
+            FbsPackingBoxItem.fbs_order_id == FbsOrder.id,
+        )),
         active_pick,
         active_pack,
         printed_sticker,
@@ -181,6 +185,78 @@ def _supply_filter_condition(supply: FbsSupply) -> Any:
             )
         )
     return or_(*conditions)
+
+
+async def list_cancelled_supply_orders(
+    session: AsyncSession, supply: FbsSupply,
+) -> list[FbsOrder]:
+    """Find WB cancellations even after status sync detached the supply link."""
+    return list((await session.scalars(
+        select(FbsOrder).where(
+            FbsOrder.tenant_id == supply.tenant_id,
+            FbsOrder.seller_id == supply.seller_id,
+            FbsOrder.marketplace == "wb",
+            FbsOrder.status == FBS_ORDER_STATUS_CANCELLED,
+            _supply_filter_condition(supply),
+        ).options(selectinload(FbsOrder.product)).order_by(FbsOrder.wb_order_id)
+    )).all())
+
+
+async def delivery_cancelled_orders(
+    session: AsyncSession, supply: FbsSupply,
+) -> list[dict[str, Any]]:
+    orders = await list_cancelled_supply_orders(session, supply)
+    if not orders:
+        return []
+    cargo: dict[uuid.UUID, list[dict[str, Any]]] = {}
+    rows = (await session.execute(
+        select(FbsPackingBoxItem.fbs_order_id, FbsPackingBox, WarehouseBox.internal_barcode)
+        .join(FbsPackingBox, FbsPackingBox.id == FbsPackingBoxItem.box_id)
+        .join(WarehouseBox, WarehouseBox.id == FbsPackingBox.warehouse_box_id)
+        .where(
+            FbsPackingBoxItem.tenant_id == supply.tenant_id,
+            FbsPackingBox.supply_id == supply.id,
+            FbsPackingBoxItem.fbs_order_id.in_([order.id for order in orders]),
+        ).order_by(FbsPackingBox.box_number)
+    )).all()
+    for order_id, box, barcode in rows:
+        cargo.setdefault(order_id, []).append({
+            "box_id": str(box.id), "box_number": box.box_number, "box_barcode": barcode,
+        })
+    return [{
+        "order_id": str(order.id),
+        "wb_order_id": order.wb_order_id,
+        "article": order.product.sku_code if order.product is not None else order.wb_article,
+        "product_name": order.product.name if order.product is not None else order.wb_article,
+        "boxes": cargo.get(order.id, []),
+    } for order in orders]
+
+
+async def exclude_cancelled_delivery_orders(session: AsyncSession, supply: FbsSupply) -> None:
+    """Remove confirmed logical links only; cancellation never returns physical stock."""
+    from app.services.inventory_service import update_fbs_order_reservation
+
+    orders = await list_cancelled_supply_orders(session, supply)
+    if not orders:
+        return
+    await session.execute(delete(FbsPackingBoxItem).where(
+        FbsPackingBoxItem.tenant_id == supply.tenant_id,
+        FbsPackingBoxItem.fbs_order_id.in_([order.id for order in orders]),
+        FbsPackingBoxItem.box_id.in_(select(FbsPackingBox.id).where(
+            FbsPackingBox.tenant_id == supply.tenant_id,
+            FbsPackingBox.supply_id == supply.id,
+        )),
+    ))
+    trbx_ids = set((await session.scalars(select(FbsTrbx.id).where(
+        FbsTrbx.supply_id == supply.id,
+    ))).all())
+    for order in orders:
+        if order.supply_id == supply.id:
+            order.supply_id = None
+        if order.trbx_id in trbx_ids:
+            order.trbx_id = None
+        await update_fbs_order_reservation(session, order, reserve=False)
+    await session.flush()
 
 
 async def _load_supplemental_rows(
@@ -389,6 +465,7 @@ async def fetch_cancelled_after_pack_page(
     cancelled_to: datetime | None = None,
     limit: int = 100,
     offset: int = 0,
+    search: str | None = None,
 ) -> CancelledAfterPackPage:
     if cancelled_from is not None and cancelled_to is not None and cancelled_from > cancelled_to:
         raise ValueError("invalid_period")
@@ -396,8 +473,34 @@ async def fetch_cancelled_after_pack_page(
     conditions = [
         FbsOrder.tenant_id == tenant_id,
         FbsOrder.status == FBS_ORDER_STATUS_CANCELLED,
+        FbsOrder.marketplace == "wb",
         _assembly_trace_condition(),
     ]
+    if search and search.strip():
+        term = search.strip()
+        box_match = exists(
+            select(FbsPackingBoxItem.id)
+            .join(FbsPackingBox, FbsPackingBox.id == FbsPackingBoxItem.box_id)
+            .join(WarehouseBox, WarehouseBox.id == FbsPackingBox.warehouse_box_id)
+            .outerjoin(FbsTrbx, FbsTrbx.id == FbsPackingBox.trbx_id)
+            .where(
+                FbsPackingBoxItem.fbs_order_id == FbsOrder.id,
+                or_(
+                    WarehouseBox.internal_barcode.icontains(term, autoescape=True),
+                    cast(FbsPackingBox.box_number, String) == term,
+                    FbsTrbx.wb_trbx_id.icontains(term, autoescape=True),
+                ),
+            )
+        )
+        conditions.append(or_(
+            cast(FbsOrder.wb_order_id, String).icontains(term, autoescape=True),
+            FbsOrder.wb_article.icontains(term, autoescape=True),
+            FbsOrder.product.has(or_(
+                Product.sku_code.icontains(term, autoescape=True),
+                Product.name.icontains(term, autoescape=True),
+            )),
+            box_match,
+        ))
     if seller_id is not None:
         conditions.append(FbsOrder.seller_id == seller_id)
     if cancelled_from is not None:

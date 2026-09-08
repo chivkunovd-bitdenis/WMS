@@ -372,7 +372,7 @@ async def test_publish_takes_number_from_rule(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_rule_save_enables_active_served_bindings_and_schedules_publish(
+async def test_disabled_rule_save_does_not_enable_bindings_or_schedule_publish(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -401,8 +401,8 @@ async def test_rule_save_enables_active_served_bindings_and_schedules_publish(
         await db_session.refresh(binding)
         assert binding.is_active is True
         assert binding.served is True
-        assert binding.stock_sync_enabled is True
-    assert scheduled == [(seed.tenant.id, seed.seller.id)]
+        assert binding.stock_sync_enabled is False
+    assert scheduled == []
 
 
 @pytest.mark.asyncio

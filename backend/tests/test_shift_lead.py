@@ -6,6 +6,8 @@ import pytest
 from httpx import AsyncClient
 from test_marking_reprint_defect import _seed_printed_code
 
+from tests.auth_helpers import set_password_via_link
+
 
 async def _register_admin(async_client: AsyncClient) -> tuple[str, dict[str, str]]:
     suffix = str(int(time.time() * 1000))
@@ -54,10 +56,7 @@ async def _create_staff_with_login(
     )
     assert patched.status_code == 200, patched.text
 
-    set_pw = await async_client.post(
-        "/auth/set-initial-password",
-        json={"email": staff_email, "password": "password123"},
-    )
+    set_pw = await set_password_via_link(async_client, staff_email, "password123")
     assert set_pw.status_code == 200
 
     login = await async_client.post(

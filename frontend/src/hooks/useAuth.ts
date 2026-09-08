@@ -54,9 +54,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [authBusy, setAuthBusy] = useState(false)
-  const [pendingPasswordSetupEmail, setPendingPasswordSetupEmail] = useState<
-    string | null
-  >(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const loadMe = useCallback(async (t: string) => {
     setLoading(true)
@@ -133,8 +131,8 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
     setPortalMismatch(null)
   }, [me, portal])
 
-  const onCancelPasswordSetup = useCallback(() => {
-    setPendingPasswordSetupEmail(null)
+  const clearNotice = useCallback(() => {
+    setNotice(null)
     setError(null)
   }, [])
 
@@ -213,7 +211,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
     async (e: RegisterFormEvent) => {
       e.preventDefault()
       setError(null)
-      setPendingPasswordSetupEmail(null)
+      setNotice(null)
       setAuthBusy(true)
       try {
         const fd = new FormData(e.currentTarget)
@@ -233,7 +231,9 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
           try {
             const j = JSON.parse(text) as { detail?: string }
             if (j.detail === 'password_setup_required') {
-              setPendingPasswordSetupEmail(email)
+              setError(
+                'Пароль ещё не задан. Мы отправили ссылку на эту почту — откройте письмо и задайте пароль. Письма нет — нажмите «Забыли пароль».',
+              )
               return
             }
             setError(
@@ -267,13 +267,11 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
     [portal],
   )
 
-  const onSetInitialPassword = useCallback(
-    async (e: RegisterFormEvent) => {
+  const onSetPasswordByLink = useCallback(
+    async (e: RegisterFormEvent, linkToken: string) => {
       e.preventDefault()
-      if (!pendingPasswordSetupEmail) {
-        return
-      }
       setError(null)
+      setNotice(null)
       setAuthBusy(true)
       const fd = new FormData(e.currentTarget)
       const password = String(fd.get('new_password') ?? '')
@@ -287,23 +285,37 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
           setError('Пароли не совпадают.')
           return
         }
-        const res = await fetch(apiUrl('/auth/set-initial-password'), {
+        const res = await fetch(apiUrl('/auth/set-password'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: pendingPasswordSetupEmail,
-            password,
-          }),
+          body: JSON.stringify({ token: linkToken, password }),
         })
         if (!res.ok) {
+          if (res.status === 410) {
+            setError('Ссылка устарела. Запросите новую через «Забыли пароль».')
+            return
+          }
+          if (res.status === 409) {
+            setError('По этой ссылке пароль уже задан. Войдите обычным способом.')
+            return
+          }
+          if (res.status === 400) {
+            setError('Ссылка не подходит. Запросите новую через «Забыли пароль».')
+            return
+          }
           setError(await readApiErrorMessage(res))
           return
         }
         const data = (await res.json()) as { access_token: string }
-        setPendingPasswordSetupEmail(null)
         setStoredToken(data.access_token, portal)
         setPortalMismatch(null)
         setToken(data.access_token)
+        // Человек пришёл на /set-password из письма. Оставить его на этом
+        // адресе нельзя: в приложении такого экрана нет, и он упрётся в «Нет
+        // доступа». Перекладываем на корень своего портала.
+        if (typeof window !== 'undefined') {
+          window.location.replace(portal === 'seller' ? '/seller/' : '/')
+        }
       } catch {
         setError(
           'Сеть: не удалось достучаться до API. Проверьте, что контейнер api запущен.',
@@ -312,8 +324,43 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
         setAuthBusy(false)
       }
     },
-    [pendingPasswordSetupEmail, portal],
+    [portal],
   )
+
+  const onRequestPasswordReset = useCallback(async (e: RegisterFormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setNotice(null)
+    setAuthBusy(true)
+    try {
+      const fd = new FormData(e.currentTarget)
+      const email = String(fd.get('reset_email') ?? '').trim()
+      if (!email) {
+        setError('Укажите email.')
+        return
+      }
+      const res = await fetch(apiUrl('/auth/request-password-reset'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      if (!res.ok && res.status !== 204) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      // Ответ одинаковый для любой почты — намеренно, чтобы форма не работала
+      // как проверялка чужих адресов.
+      setNotice(
+        'Если такая почта есть в системе, письмо со ссылкой уже отправлено. Проверьте входящие и «Спам».',
+      )
+    } catch {
+      setError(
+        'Сеть: не удалось достучаться до API. Проверьте, что контейнер api запущен.',
+      )
+    } finally {
+      setAuthBusy(false)
+    }
+  }, [])
 
   const logout = useCallback(() => {
     setStoredToken(null, portal)
@@ -321,7 +368,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
     setMe(null)
     setError(null)
     setPortalMismatch(null)
-    setPendingPasswordSetupEmail(null)
+    setNotice(null)
   }, [portal])
 
   const applyToken = useCallback(
@@ -352,11 +399,12 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
     error,
     loading,
     authBusy,
-    pendingPasswordSetupEmail,
+    notice,
     onRegister,
     onLogin,
-    onSetInitialPassword,
-    onCancelPasswordSetup,
+    onSetPasswordByLink,
+    onRequestPasswordReset,
+    clearNotice,
     logout,
     applyToken,
     reloadMe,

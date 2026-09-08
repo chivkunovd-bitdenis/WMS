@@ -36,7 +36,7 @@ from app.models.packaging_task import (
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
-from app.services import inventory_service as inv_svc
+from app.models.warehouse import Warehouse
 from app.services import marketplace_unload_service as mu_svc
 from app.services import sorting_location_service as sorting_loc_svc
 from app.services import staff_packaging_billing_service as billing_svc
@@ -392,6 +392,9 @@ async def create_manual_task(
     inbound_intake_request_id: uuid.UUID | None = None,
     created_by_user_id: uuid.UUID | None = None,
 ) -> PackagingTask:
+    warehouse = await session.get(Warehouse, warehouse_id)
+    if warehouse is None or warehouse.tenant_id != tenant_id:
+        raise PackagingTaskServiceError("not_found")
     if not lines:
         raise PackagingTaskServiceError("no_lines")
     product_ids = {product_id for product_id, _location_id, _qty in lines}
@@ -434,9 +437,14 @@ async def create_manual_task(
                 session, tenant_id, warehouse_id
             )
             location_id = loc.id
+        location = await session.get(StorageLocation, location_id)
+        if (
+            location is None
+            or location.tenant_id != tenant_id
+            or location.warehouse_id != warehouse_id
+        ):
+            raise PackagingTaskServiceError("not_found")
         _unpacked, packed = await _get_balance_split(session, tenant_id, product_id, location_id)
-        if qty > _unpacked:
-            raise PackagingTaskServiceError("insufficient_unpacked")
         suggested = min(packed, qty)
         session.add(
             PackagingTaskLine(
@@ -769,11 +777,6 @@ async def confirm_line_packed_from_shelf(
     confirmed = int(line.qty_suggested_packed if qty is None else qty)
     if confirmed < 0 or confirmed > line.qty_total:
         raise PackagingTaskServiceError("invalid_qty")
-    _, packed_on_hand = await _get_balance_split(
-        session, tenant_id, line.product_id, line.storage_location_id
-    )
-    if confirmed > packed_on_hand:
-        raise PackagingTaskServiceError("invalid_qty")
     line.qty_confirmed_packed = confirmed
     _touch_task(task)
     if acting_user_id is not None:
@@ -939,22 +942,8 @@ async def record_pack_progress(
             warnings=pack_result.warnings,
         )
 
-    if _is_mp_unload_task(task):
-        line.qty_packed_in_task = int(line.qty_packed_in_task) + qty
-    else:
-        try:
-            await inv_svc.apply_packaging_convert(
-                session,
-                tenant_id=tenant_id,
-                product_id=line.product_id,
-                storage_location_id=line.storage_location_id,
-                quantity=qty,
-            )
-        except ValueError as exc:
-            if str(exc) == "insufficient_unpacked":
-                raise PackagingTaskServiceError("insufficient_unpacked") from exc
-            raise
-        line.qty_packed_in_task = int(line.qty_packed_in_task) + qty
+    # Packaging records work; it does not convert or validate warehouse stock.
+    line.qty_packed_in_task = int(line.qty_packed_in_task) + qty
     _touch_task(task)
     await _add_task_event(
         session,
@@ -1089,22 +1078,7 @@ async def undo_last_pack_action(
     if int(line.qty_packed_in_task) < qty:
         raise PackagingTaskServiceError("undo_not_available")
 
-    if _is_mp_unload_task(task):
-        line.qty_packed_in_task = int(line.qty_packed_in_task) - qty
-    else:
-        try:
-            await inv_svc.reverse_packaging_convert(
-                session,
-                tenant_id=tenant_id,
-                product_id=line.product_id,
-                storage_location_id=line.storage_location_id,
-                quantity=qty,
-            )
-        except ValueError as exc:
-            if str(exc) == "insufficient_packed":
-                raise PackagingTaskServiceError("undo_not_available") from exc
-            raise
-        line.qty_packed_in_task = int(line.qty_packed_in_task) - qty
+    line.qty_packed_in_task = int(line.qty_packed_in_task) - qty
 
     now = datetime.now(UTC)
     event.reversed_at = now
@@ -1130,49 +1104,6 @@ async def undo_last_pack_action(
     loaded = await get_task(session, tenant_id, task_id)
     assert loaded is not None
     return loaded
-
-
-async def _apply_acknowledge_all_packed(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    task: PackagingTask,
-) -> None:
-    if _is_mp_unload_task(task):
-        for line in task.lines:
-            if is_line_complete(line):
-                continue
-            need = qty_need_pack(line)
-            if need > 0:
-                line.qty_packed_in_task = int(line.qty_packed_in_task) + need
-        return
-    for line in task.lines:
-        if is_line_complete(line):
-            continue
-        unpacked, packed_on_hand = await _get_balance_split(
-            session, tenant_id, line.product_id, line.storage_location_id
-        )
-        shelf_target = min(int(line.qty_total), packed_on_hand)
-        if shelf_target > int(line.qty_confirmed_packed):
-            if shelf_target > packed_on_hand:
-                raise PackagingTaskServiceError("packaging_incomplete")
-            line.qty_confirmed_packed = shelf_target
-        need = qty_need_pack(line)
-        if need > 0:
-            if unpacked < need:
-                raise PackagingTaskServiceError("packaging_incomplete")
-            try:
-                await inv_svc.apply_packaging_convert(
-                    session,
-                    tenant_id=tenant_id,
-                    product_id=line.product_id,
-                    storage_location_id=line.storage_location_id,
-                    quantity=need,
-                )
-            except ValueError as exc:
-                if str(exc) == "insufficient_unpacked":
-                    raise PackagingTaskServiceError("packaging_incomplete") from exc
-                raise
-            line.qty_packed_in_task = int(line.qty_packed_in_task) + need
 
 
 async def _assert_marking_done_for_task(
@@ -1214,6 +1145,9 @@ async def complete_task(
     acknowledge_all_packed: bool = False,
     acting_user_id: uuid.UUID | None,
 ) -> PackagingTask:
+    from app.services.fbs_packaging_integration_service import lock_packaging_rows
+
+    await lock_packaging_rows(session, tenant_id, task_ids={task_id})
     task = await get_task(session, tenant_id, task_id)
     if task is None:
         raise PackagingTaskServiceError("not_found")
@@ -1280,6 +1214,7 @@ async def pack_all_and_complete_fbs_task(
     task_id: uuid.UUID,
     *,
     acting_user_id: uuid.UUID | None,
+    requested_order_ids: list[uuid.UUID] | None = None,
 ) -> PackProgressResult:
     """Atomically finish an FBS packaging task from the server-side fresh state.
 
@@ -1317,11 +1252,13 @@ async def pack_all_and_complete_fbs_task(
         await session.execute(
             select(PackagingTaskLine.id)
             .where(PackagingTaskLine.task_id == task_id)
+            .order_by(PackagingTaskLine.id)
             .with_for_update()
         )
         await session.execute(
             select(FbsOrder.id)
             .where(FbsOrder.tenant_id == tenant_id, FbsOrder.supply_id == supply.id)
+            .order_by(FbsOrder.id)
             .with_for_update()
             .execution_options(populate_existing=True)
         )
@@ -1329,8 +1266,29 @@ async def pack_all_and_complete_fbs_task(
         task = await get_task(session, tenant_id, task_id)
         if task is None:
             raise PackagingTaskServiceError("not_found")
+        warnings: list[str] = []
+        # Only warn about the operator's actual snapshot, including orders detached
+        # by a status sync since the screen loaded. This is informational only.
+        if supply.marketplace == "wb" and requested_order_ids:
+            from app.services.fbs_cancelled_after_pack_service import (
+                cancellation_reason,
+                order_belonged_to_supply,
+            )
+
+            cancelled_orders = (await session.scalars(select(FbsOrder).where(
+                FbsOrder.tenant_id == tenant_id,
+                FbsOrder.seller_id == supply.seller_id,
+                FbsOrder.id.in_(requested_order_ids),
+                FbsOrder.status == "cancelled",
+            ).order_by(FbsOrder.wb_order_id))).all()
+            for order in cancelled_orders:
+                if await order_belonged_to_supply(session, order, supply):
+                    warnings.append(
+                        f"Заказ №{order.wb_order_id}: {cancellation_reason(order)}. "
+                        "Не включён в упаковку."
+                    )
         if task.status == STATUS_DONE:
-            return PackProgressResult(task=task)
+            return PackProgressResult(task=task, warnings=warnings)
         if task.status == STATUS_CANCELLED:
             raise PackagingTaskServiceError("bad_status")
         if not task.lines:
@@ -1341,7 +1299,6 @@ async def pack_all_and_complete_fbs_task(
         if supply.marketplace != "wb" and supply.honest_sign_skipped_at is None:
             await _assert_marking_ready_for_full_completion(session, tenant_id, task)
 
-        warnings: list[str] = []
         for line in task.lines:
             remaining = qty_need_pack(line) - int(line.qty_packed_in_task)
             if remaining <= 0:
@@ -1356,12 +1313,6 @@ async def pack_all_and_complete_fbs_task(
                     remaining,
                     acting_user_id=acting_user_id,
                     idempotency_key=f"pack-all:{task.id}:{line.id}",
-                    # Physical packing must not dead-end because the sorting
-                    # balance is already inconsistent. Keep the operator flow
-                    # moving, but do not silently consume stock from another
-                    # warehouse to compensate for the mismatch.
-                    fail_on_insufficient_stock=False,
-                    allow_alternative_sorting_fallback=False,
                 )
             except FbsPackagingIntegrationError as exc:
                 raise PackagingTaskServiceError(exc.code, message=exc.message) from exc
@@ -1421,14 +1372,14 @@ async def pack_all_and_complete_fbs_task(
         raise
 
 
-async def assert_unload_packaging_done(
+async def assert_unload_marking_done(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     unload_id: uuid.UUID,
 ) -> None:
+    # Shipping does not require a packaging task or its completion. Mandatory
+    # marking remains independent of how many units were marked as packed.
     task = await get_task_for_unload(session, tenant_id, unload_id)
-    if task is None:
-        raise PackagingTaskServiceError("task_not_done")
-    if task.status != STATUS_DONE:
-        raise PackagingTaskServiceError("task_not_done")
-    await _assert_marking_done_for_task(session, tenant_id, task)
+    if task is not None:
+        await _assert_marking_ready_for_full_completion(session, tenant_id, task)
+        return

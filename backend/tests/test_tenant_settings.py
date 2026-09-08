@@ -10,6 +10,7 @@ from app.db.session import SessionLocal
 from app.models.product import Product
 from app.services import inventory_service
 from app.services.sorting_location_service import get_sorting_location
+from tests.auth_helpers import set_password_via_link
 
 
 async def _register_admin(async_client: AsyncClient, slug: str) -> str:
@@ -137,12 +138,8 @@ async def test_tenant_settings_forbidden_for_staff(async_client: AsyncClient) ->
     assert need_pw.status_code == 403
     assert need_pw.json()["detail"] == "password_setup_required"
 
-    setup = await async_client.post(
-        "/auth/set-initial-password",
-        json={
-            "email": "staff-tenant-settings@example.com",
-            "password": "password123",
-        },
+    setup = await set_password_via_link(
+        async_client, "staff-tenant-settings@example.com", "password123"
     )
     assert setup.status_code == 200, setup.text
 

@@ -205,6 +205,7 @@ async def get_fbs_cancelled_after_pack(
     cancelled_to: Annotated[datetime | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
+    search: Annotated[str | None, Query(max_length=200)] = None,
 ) -> FbsCancelledAfterPackPageOut:
     filter_seller = seller_id if seller_id is not None else effective_seller_id
     if filter_seller is not None:
@@ -221,6 +222,7 @@ async def get_fbs_cancelled_after_pack(
             cancelled_to=cancelled_to,
             limit=limit,
             offset=offset,
+            search=search,
         )
     except ValueError as exc:
         code = str(exc)
@@ -297,6 +299,7 @@ class FbsWorklistMetadataStateOut(BaseModel):
     kind: str
     status: str
     reason: str | None
+    decision: str | None = None
     source: str | None = None
     # Хвост кода маркировки для экрана упаковки. Без явного поля pydantic молча
     # выбрасывал его из ответа: сервис клал значение, схема снимала, и колонка «ЧЗ»
@@ -385,6 +388,7 @@ class FbsWorklistWarehouseOptionOut(BaseModel):
 
 
 class FbsWorklistPageOut(BaseModel):
+    total: int | None = None
     items: list[FbsWorklistOrderOut]
     next_cursor: str | None
     server_now: str
@@ -544,6 +548,7 @@ async def get_fbs_orders_worklist(
         raise
     return FbsWorklistPageOut.model_validate(
         {
+            "total": page.total,
             "items": page.items,
             "next_cursor": page.next_cursor,
             "server_now": page.server_now,

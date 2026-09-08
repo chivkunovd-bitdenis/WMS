@@ -27,6 +27,10 @@ from app.services.marketplace_unload_pick_service import (
     PICK_EDITABLE_STATUSES,
     MarketplaceUnloadPickError,
 )
+from app.services.pick_option_location_service import (
+    available_pick_source_quantity,
+    list_pick_option_locations,
+)
 
 
 @dataclass(frozen=True)
@@ -212,14 +216,12 @@ async def resolve_collect_storage_location(
                 session, tenant_id, warehouse_id, storage_location_id
             )
             return storage_location_id
-        rows = await inventory_service.list_location_balances_for_products_in_warehouse(
-            session, tenant_id, warehouse_id, [product_id]
+        rows = await list_pick_option_locations(
+            session, tenant_id, warehouse_id, [product_id], {},
+            marketplace_unload_request_id=request_id,
         )
-        candidates: list[tuple[uuid.UUID, int]] = []
-        for _pid, loc_id, _code, on_hand, rsv in rows:
-            avail = int(on_hand) - int(rsv)
-            if avail >= increment_qty:
-                candidates.append((loc_id, avail))
+        candidates = [(row.storage_location_id, row.available)
+                      for row in rows[product_id] if row.available >= increment_qty]
         if not candidates:
             raise MarketplaceUnloadPickError("insufficient_available")
         candidates.sort(key=lambda x: x[1], reverse=True)
@@ -318,8 +320,10 @@ async def collect_into_box(
     current_pick = int(alloc.quantity) if alloc is not None else 0
     new_pick = current_pick + quantity
 
-    available = await inventory_service.available_at_location(
-        session, tenant_id, product_id, effective_location_id
+    await inventory_service.lock_stock_product(session, tenant_id, product_id)
+    available = await available_pick_source_quantity(
+        session, tenant_id, product_id, effective_location_id,
+        marketplace_unload_request_id=request_id,
     )
     if available < quantity:
         raise MarketplaceUnloadPickError("insufficient_available")
@@ -489,21 +493,11 @@ async def record_pick_allocation(
     current_pick = int(alloc.quantity) if alloc is not None else 0
     new_pick = current_pick + quantity
 
-    if container_id is None:
-        available = await inventory_service.available_at_location(
-            session, tenant_id, product_id, effective_location_id
-        )
-    else:
-        # Внутри тары брони не живут: резерв стоит на месте целиком, поэтому
-        # потолок для короба — то, что в нём физически лежит.
-        available = await inventory_service.physical_on_hand_in_container(
-            session,
-            tenant_id,
-            product_id,
-            effective_location_id,
-            container_kind,
-            container_id,
-        )
+    await inventory_service.lock_stock_product(session, tenant_id, product_id)
+    available = await available_pick_source_quantity(
+        session, tenant_id, product_id, effective_location_id, container_kind, container_id,
+        marketplace_unload_request_id=request_id,
+    )
     if available < quantity:
         raise MarketplaceUnloadPickError("insufficient_available")
 

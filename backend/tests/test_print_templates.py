@@ -10,6 +10,7 @@ from app.db.session import SessionLocal
 from app.models.print_template import LAYOUT_BLOCK_CZ, LAYOUT_BLOCK_LABEL, USER_LAST_LAYOUT_NAME
 from app.services import print_template_service as pt_svc
 from app.services.tokens import decode_access_token
+from tests.auth_helpers import set_password_via_link
 
 
 @pytest.fixture(autouse=True)
@@ -301,10 +302,7 @@ async def test_two_users_get_different_last_layouts(async_client: AsyncClient) -
         },
     )
     assert patched.status_code == 200, patched.text
-    await async_client.post(
-        "/auth/set-initial-password",
-        json={"email": staff_email, "password": "password123"},
-    )
+    await set_password_via_link(async_client, staff_email, "password123")
     login_b = await async_client.post(
         "/auth/login",
         json={"email": staff_email, "password": "password123"},

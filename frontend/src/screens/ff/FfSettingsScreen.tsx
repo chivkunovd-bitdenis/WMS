@@ -21,6 +21,7 @@ import {
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { FfBillingTariffMatrixPanel } from './FfBillingTariffMatrixPanel'
+import { FfSubscriptionPanel } from './FfSubscriptionPanel'
 import {
   FF_STAFF_ACCESS_BLOCKS,
   applyFfStaffAccessChange,
@@ -698,6 +699,7 @@ export function FfSettingsScreen({
           </Snackbar>
         </Box>
       )}
+      <FfSubscriptionPanel token={token} isFulfillmentAdmin={isFulfillmentAdmin} />
       {isFulfillmentAdmin ? <FfBillingTariffMatrixPanel token={token} authHeaders={authHeaders} focusTariffs={typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'tariffs'} onSaved={() => setSuccess('Тарифы сохранены')} employees={rows.map((row) => ({ id: row.id, email: row.email, packaging_rate_rub: row.packaging_rate_rub }))} /> : null}
     </Box>
   )

@@ -1,4 +1,5 @@
 import { apiUrl } from '../../api'
+import { fbsErrorText } from './fbsUx'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 // Реальный backend-контракт (HANDOFF Composer):
@@ -56,7 +57,7 @@ export async function fetchFbsOrders(
     headers: { ...authHeaders(token) },
   })
   if (!res.ok) {
-    throw new Error(await readApiErrorMessage(res))
+    throw new Error(fbsErrorText(await readApiErrorMessage(res)))
   }
   return (await res.json()) as FbsOrderRow[]
 }
@@ -127,7 +128,7 @@ async function jsonOrThrow<T>(res: Response): Promise<T> {
     } catch (error) {
       if (error instanceof FbsApiError) throw error
     }
-    throw new Error(await readApiErrorMessage(res))
+    throw new Error(fbsErrorText(await readApiErrorMessage(res)))
   }
   return (await res.json()) as T
 }
@@ -139,7 +140,7 @@ export class FbsApiError extends Error {
   readonly status: number
 
   constructor(code: string, message: string, context: unknown, retryable: boolean, status: number) {
-    super(message)
+    super(fbsErrorText(message))
     this.name = 'FbsApiError'
     this.code = code
     this.context = context
@@ -162,7 +163,9 @@ export type FbsOrderMetadata = {
       | 'allowed_without_check'
       | 'rejected'
       | 'replacement_required'
+      | 'unknown'
     reason: string | null
+    decision?: string | null
     source?: 'pool' | 'operator'
     /** Последние символы кода маркировки — чтобы оператор сверил строку с этикеткой. */
     value_tail?: string | null
@@ -264,6 +267,7 @@ export type FbsWorklistOrder = {
 }
 
 export type FbsWorklistPage = {
+  total?: number | null
   items: FbsWorklistOrder[]
   next_cursor: string | null
   server_now: string
@@ -323,6 +327,7 @@ export type FbsSupplyWorklistItem = {
 }
 
 export type FbsSupplyWorklistPage = {
+  total?: number | null
   items: FbsSupplyWorklistItem[]
   server_now: string
 }
@@ -447,6 +452,13 @@ export type FbsDeliveryPreflight = {
   can_deliver: boolean
   version: string
   checked_at: string
+  cancelled_orders?: Array<{
+    order_id: string
+    wb_order_id: number
+    article: string | null
+    product_name: string | null
+    boxes: Array<{ box_id: string; box_number: number; box_barcode: string }>
+  }>
   checks: Array<{
     code: string
     message: string
@@ -496,6 +508,7 @@ export type FbsWorkspace = {
     packaging_task_id: string | null
     barcode_asset: FbsPrintAsset | null
     honest_sign_skipped?: boolean
+    boxes_without_distribution?: boolean
   }
   stage:
     | 'composition'
@@ -602,6 +615,7 @@ export async function fetchFbsSupplyWorklist(
     seller_id?: string | null
     marketplace?: 'wb' | 'ozon' | null
     status_group?: string | null
+    search?: string | null
     limit?: number
   } = {},
 ): Promise<FbsSupplyWorklistPage> {
@@ -609,6 +623,7 @@ export async function fetchFbsSupplyWorklist(
   if (params.seller_id) qs.set('seller_id', params.seller_id)
   if (params.marketplace) qs.set('marketplace', params.marketplace)
   if (params.status_group) qs.set('status_group', params.status_group)
+  if (params.search) qs.set('search', params.search)
   return jsonOrThrow<FbsSupplyWorklistPage>(
     await fetch(apiUrl(`/operations/fbs-supplies/worklist?${qs.toString()}`), {
       headers: { ...ah(token) },
@@ -790,6 +805,19 @@ export async function createFbsPackingBoxes(
   return jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes`), {
       method: 'POST', headers: jsonHeaders(token, ah), body: JSON.stringify(body),
+    }),
+  )
+}
+
+export async function setFbsSupplyBoxesWithoutDistribution(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  enabled: boolean,
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes-without-distribution`), {
+      method: 'POST', headers: jsonHeaders(token, ah), body: JSON.stringify({ enabled }),
     }),
   )
 }
@@ -1149,6 +1177,8 @@ export async function fetchFbsTrbxStickers(
 // Сопоставление идёт ТОЛЬКО по стикеру: QR даёт заказ, КИЗ вешается на этот заказ.
 
 export type FbsKizLookup = {
+  marketplace?: string
+  external_order_id?: string | null
   order_id: string
   wb_order_id: number
   product: {
@@ -1171,6 +1201,7 @@ export type FbsKizValidateResult = {
 }
 
 export type FbsKizCommitResult = {
+  meta_status?: string | null
   order_id: string
   status: 'ok' | 'error'
   code: string | null
@@ -1430,7 +1461,7 @@ export async function triggerFbsStockSync(
       wbWarehouseId != null ? { wb_warehouse_id: wbWarehouseId } : {},
     ),
   })
-  if (!res.ok) throw new Error(await readApiErrorMessage(res))
+  if (!res.ok) throw new Error(fbsErrorText(await readApiErrorMessage(res)))
   return (await res.json()) as FbsStockSyncResult | FbsStockSyncJob
 }
 
@@ -1528,7 +1559,7 @@ export async function waitForBackgroundJob(
     const job = await fetchBackgroundJob(token, ah, jobId)
     if (JOB_TERMINAL_STATUSES.has(job.status)) {
       if (JOB_FAILED_STATUSES.has(job.status)) {
-        throw new Error(job.error_message || 'Синхронизация заказов завершилась ошибкой.')
+        throw new Error(fbsErrorText(job.error_message || 'Синхронизация заказов завершилась ошибкой.'))
       }
       return job
     }
@@ -1600,4 +1631,40 @@ export async function cancelFbsOrder(
     body: JSON.stringify({}),
   })
   return await jsonOrThrow<FbsOrderRow>(res)
+}
+
+export type FbsCancelledAfterPackOrder = {
+  order_id: string
+  wb_order_id: number
+  product: { id: string | null; name: string; article: string | null; size: string | null }
+  seller: { id: string; name: string }
+  supply: { id: string | null; wb_supply_id: string | null; name: string | null }
+  cargo_places: Array<{ box_id: string; box_number: number; box_barcode: string; wb_trbx_id: string | null }>
+  cancelled_at: string
+  cancellation_reason: string
+  supply_departed: boolean | null
+}
+
+export async function fetchFbsCancelledAfterPack(
+  token: string,
+  authHeaders: (t: string) => Record<string, string>,
+  params: { sellerId?: string; search: string; limit: number; offset: number },
+): Promise<{ items: FbsCancelledAfterPackOrder[]; total: number }> {
+  const qs = new URLSearchParams({
+    search: params.search, limit: String(params.limit), offset: String(params.offset),
+  })
+  if (params.sellerId) qs.set('seller_id', params.sellerId)
+  return jsonOrThrow(await fetch(apiUrl(`/fbs/cancelled-after-pack?${qs}`), {
+    headers: authHeaders(token),
+  }))
+}
+
+export function fbsKizOrderNumber(order: FbsKizLookup): string {
+  return order.marketplace === 'ozon' ? order.external_order_id ?? '—' : String(order.wb_order_id)
+}
+
+export async function syncFbsOrderMarkings(token: string, ah: AuthHeaders, orderId: string): Promise<void> {
+  await jsonOrThrow<unknown>(await fetch(apiUrl(`/operations/fbs-orders/${orderId}/markings/sync`), {
+    method: 'POST', headers: ah(token),
+  }))
 }

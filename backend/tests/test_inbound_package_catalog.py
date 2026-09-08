@@ -20,6 +20,7 @@ from app.models.product import Product
 from app.models.seller import Seller
 from app.models.warehouse import Warehouse
 from app.services import inbound_package_catalog_service as package_catalog_svc
+from tests.auth_helpers import set_password_via_link
 
 
 async def _register_admin(async_client: AsyncClient, suffix: str) -> dict[str, str]:
@@ -69,9 +70,7 @@ async def _create_staff(
         },
     )
     assert updated.status_code == 200, updated.text
-    password_set = await async_client.post(
-        "/auth/set-initial-password", json={"email": email, "password": "password123"}
-    )
+    password_set = await set_password_via_link(async_client, email, "password123")
     assert password_set.status_code == 200, password_set.text
     login = await async_client.post("/auth/login", json={"email": email, "password": "password123"})
     assert login.status_code == 200, login.text

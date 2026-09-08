@@ -3,17 +3,19 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
     get_current_user,
+    public_base_url,
     require_fulfillment_admin,
     resolve_effective_seller_id,
 )
 from app.core.roles import FULFILLMENT_SELLER
+from app.core.settings import settings
 from app.db.session import get_db
 from app.models.seller import Seller
 from app.models.user import User
@@ -22,7 +24,9 @@ from app.services.auth_service import (
     create_seller_user,
     login,
     register_fulfillment,
-    set_initial_password,
+    request_password_reset,
+    send_auth_link,
+    set_password_by_link,
 )
 from app.services.seller_shop_service import (
     SellerShopError,
@@ -130,9 +134,17 @@ class SellerAccountCreate(BaseModel):
         return s
 
 
-class SetInitialPasswordBody(BaseModel):
-    email: EmailStr
+class SetPasswordByLinkBody(BaseModel):
+    token: str = Field(min_length=16, max_length=4096)
     password: str = Field(min_length=8, max_length=128)
+
+
+class PasswordResetRequestBody(BaseModel):
+    email: EmailStr
+
+
+class ResendInviteBody(BaseModel):
+    user_id: uuid.UUID
 
 
 class SellerAccountOut(BaseModel):
@@ -147,6 +159,14 @@ async def register(
     body: RegisterBody,
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> TokenResponse:
+    # До 06.09.2026 эта ручка была открыта всему интернету: любой человек заводил
+    # себе организацию в боевой системе. Включается только осознанно, переменной
+    # окружения.
+    if not settings.allow_public_registration:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="registration_closed",
+        )
     try:
         user, _tenant = await register_fulfillment(
             session,
@@ -173,6 +193,8 @@ async def register(
 @router.post("/seller-accounts", response_model=SellerAccountOut, status_code=201)
 async def create_seller_account(
     body: SellerAccountCreate,
+    request: Request,
+    background_tasks: BackgroundTasks,
     admin: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> SellerAccountOut:
@@ -203,6 +225,15 @@ async def create_seller_account(
             ) from None
         raise
     assert user.seller_id is not None
+    if user.must_set_password:
+        # Письмо уходит после ответа: почтовый сервер может отвечать долго, а
+        # оператор не должен смотреть на крутилку из-за чужой недоступности.
+        background_tasks.add_task(
+            send_auth_link,
+            user,
+            purpose="invite",
+            base_url=public_base_url(request),
+        )
     return SellerAccountOut(
         id=str(user.id),
         email=user.email,
@@ -234,40 +265,77 @@ async def login_route(
     return TokenResponse(access_token=token)
 
 
-@router.post("/set-initial-password", response_model=TokenResponse)
-async def set_initial_password_route(
-    body: SetInitialPasswordBody,
+@router.post("/set-password", response_model=TokenResponse)
+async def set_password_route(
+    body: SetPasswordByLinkBody,
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> TokenResponse:
+    """Задать пароль по ссылке из письма — приглашение или сброс."""
     try:
-        user = await set_initial_password(
+        _user, token = await set_password_by_link(
             session,
-            email=str(body.email),
+            token=body.token,
             password=body.password,
         )
     except AuthError as exc:
-        code = exc.args[0] if exc.args else ""
-        if code == "forbidden":
+        code = exc.args[0] if exc.args else "link_invalid"
+        if code == "link_expired":
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="forbidden",
+                status_code=status.HTTP_410_GONE,
+                detail="link_expired",
             ) from None
-        if code == "password_already_set":
+        if code == "link_used":
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="password_already_set",
+                detail="link_used",
             ) from None
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="invalid_credentials",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="link_invalid",
         ) from None
-    token = create_access_token(
-        user_id=user.id,
-        tenant_id=user.tenant_id,
-        role=user.role,
-        seller_id=user.seller_id,
-    )
     return TokenResponse(access_token=token)
+
+
+@router.post("/request-password-reset", status_code=204)
+async def request_password_reset_route(
+    body: PasswordResetRequestBody,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    """Запросить ссылку восстановления пароля.
+
+    Ответ всегда одинаковый, есть такая почта в системе или нет: иначе форма
+    превращается в способ перебирать чужие адреса.
+    """
+    await request_password_reset(
+        session,
+        email=str(body.email),
+        base_url=public_base_url(request),
+        background_tasks=background_tasks,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/invites/resend", status_code=204)
+async def resend_invite_route(
+    body: ResendInviteBody,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    admin: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    """Переслать приглашение сотруднику или селлеру своей организации."""
+    user = await session.get(User, body.user_id)
+    if user is None or user.tenant_id != admin.tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user_not_found")
+    background_tasks.add_task(
+        send_auth_link,
+        user,
+        purpose="invite",
+        base_url=public_base_url(request),
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/me", response_model=UserMeResponse)

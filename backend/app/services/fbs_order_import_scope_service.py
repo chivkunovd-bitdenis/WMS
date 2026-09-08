@@ -51,6 +51,19 @@ async def import_wb_order_rows(
             for binding in (await session.execute(stmt)).scalars().all()
         }
 
+    from app.models.fbs_order import FbsOrder
+    from app.services.fbs_packaging_integration_service import lock_order_batch_packaging_rows
+
+    existing_ids = list((await session.scalars(select(FbsOrder.id).where(
+        FbsOrder.tenant_id == tenant_id, FbsOrder.seller_id == seller_id,
+        FbsOrder.wb_order_id.in_([
+            int(row["id"]) for row in rows
+            if row.get("id") is not None
+            and (warehouse_id := _warehouse_id(row)) is not None
+            and scopes.get(warehouse_id) is True
+        ]),
+    ))).all())
+    await lock_order_batch_packaging_rows(session, tenant_id, existing_ids)
     stats.received += len(rows)
     for row in rows:
         warehouse_id = _warehouse_id(row)

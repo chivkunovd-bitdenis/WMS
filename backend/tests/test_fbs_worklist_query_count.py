@@ -24,6 +24,7 @@ from app.models.fbs_order import (
     FbsOrder,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.inventory_balance import InventoryBalance
 from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
@@ -163,16 +164,31 @@ async def _setup_ff_admin_with_stock(
 
 
 @pytest.mark.asyncio
-async def test_fbs_worklist_happy_path(async_client: AsyncClient) -> None:
+@pytest.mark.parametrize("packed_only", [False, True])
+async def test_fbs_worklist_happy_path(
+    async_client: AsyncClient, packed_only: bool
+) -> None:
     """TC-NEW-FBS-WORKLIST-001: enriched worklist item without price."""
     (
         headers,
         seller_id,
         _warehouse_id,
-        _product_id,
-        _location_id,
+        product_id,
+        location_id,
         order_ids,
     ) = await _setup_ff_admin_with_stock(async_client, order_count=1)
+    if packed_only:
+        async with SessionLocal() as session:
+            balance = await session.scalar(
+                select(InventoryBalance).where(
+                    InventoryBalance.product_id == product_id,
+                    InventoryBalance.storage_location_id == location_id,
+                )
+            )
+            assert balance is not None
+            balance.quantity_unpacked = 0
+            balance.quantity_packed = balance.quantity
+            await session.commit()
     resp = await async_client.get(
         "/operations/fbs-orders/worklist",
         headers=headers,
@@ -196,7 +212,8 @@ async def test_fbs_worklist_happy_path(async_client: AsyncClient) -> None:
     assert item["product"]["color"] == "синий"
     assert item["product"]["size"] == "L"
     assert item["inventory"]["available_unpacked"] >= 0
-    assert len(item["inventory"]["locations"]) >= 1
+    assert len(item["inventory"]["locations"]) == 1
+    assert item["inventory"]["locations"][0]["available_unpacked"] == 50
     assert "price" not in item
     assert item["selection_blockers"] == []
     options_by_id = {option["id"]: option for option in body["warehouse_options"]}

@@ -10,6 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 # Before importing app.db.session: same DATABASE_URL for routes and BackgroundTasks.
 os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key-at-least-32-characters-long")
+# Регистрация организации на бою закрыта (WMS-383). Тесты заводят тенанты именно
+# через неё, поэтому в тестовом окружении ручка включена явно.
+os.environ.setdefault("WMS_ALLOW_PUBLIC_REGISTRATION", "true")
 _TEST_RUN_ID = "_".join(
     (
         os.environ.get("PYTEST_XDIST_TESTRUNUID", str(os.getpid())),

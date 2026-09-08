@@ -154,6 +154,115 @@ class Settings(BaseSettings):
             "(in addition to users.can_manage_seller_shops and built-in email markers)."
         ),
     )
+    public_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("WMS_PUBLIC_BASE_URL", "PUBLIC_BASE_URL"),
+        description=(
+            "Публичный адрес системы для ссылок в письмах, например "
+            "https://wms.sellerfocus.pro. Пусто — ссылки собираются от адреса запроса."
+        ),
+    )
+    smtp_host: str = Field(
+        default="",
+        validation_alias=AliasChoices("WMS_SMTP_HOST", "SMTP_HOST"),
+        description=(
+            "Почтовый сервер для писем-приглашений и сброса пароля. "
+            "Пусто — письма не отправляются, ссылка пишется в лог (dev/tests)."
+        ),
+    )
+    smtp_port: int = Field(
+        default=465,
+        ge=1,
+        le=65535,
+        validation_alias=AliasChoices("WMS_SMTP_PORT", "SMTP_PORT"),
+        description="465 — SSL сразу, 587 — STARTTLS.",
+    )
+    smtp_user: str = Field(
+        default="",
+        validation_alias=AliasChoices("WMS_SMTP_USER", "SMTP_USER"),
+    )
+    smtp_password: str = Field(
+        default="",
+        validation_alias=AliasChoices("WMS_SMTP_PASSWORD", "SMTP_PASSWORD"),
+    )
+    mail_from: str = Field(
+        default="",
+        validation_alias=AliasChoices("WMS_MAIL_FROM", "MAIL_FROM"),
+        description="Адрес отправителя. Пусто — берётся smtp_user.",
+    )
+    mail_from_name: str = Field(
+        default="Короб WMS",
+        validation_alias=AliasChoices("WMS_MAIL_FROM_NAME", "MAIL_FROM_NAME"),
+    )
+    smtp_timeout_sec: float = Field(
+        default=10.0,
+        gt=0.0,
+        le=60.0,
+        validation_alias=AliasChoices("WMS_SMTP_TIMEOUT_SEC", "SMTP_TIMEOUT_SEC"),
+    )
+    auth_link_ttl_hours: int = Field(
+        default=72,
+        ge=1,
+        le=720,
+        validation_alias=AliasChoices("WMS_AUTH_LINK_TTL_HOURS", "AUTH_LINK_TTL_HOURS"),
+        description="Сколько живёт ссылка из письма (приглашение и сброс пароля).",
+    )
+    yookassa_shop_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("WMS_YOOKASSA_SHOP_ID", "YOOKASSA_SHOP_ID"),
+        description=(
+            "Магазин ЮKassa для оплаты подписки (WMS-382). Пусто — кнопка оплаты "
+            "не работает, а счётчик дней и блокировка живут своей жизнью."
+        ),
+    )
+    yookassa_secret_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("WMS_YOOKASSA_SECRET_KEY", "YOOKASSA_SECRET_KEY"),
+    )
+    yookassa_vat_code: int = Field(
+        default=1,
+        ge=1,
+        le=6,
+        validation_alias=AliasChoices("WMS_YOOKASSA_VAT_CODE", "YOOKASSA_VAT_CODE"),
+        description=(
+            "Ставка НДС в чеке. 1 — без НДС: решение владельца от 06.09.2026, "
+            "«строго без НДС». Проверено на боевом магазине, менять только по "
+            "его прямому указанию."
+        ),
+    )
+    yookassa_tax_system_code: int | None = Field(
+        default=None,
+        ge=1,
+        le=6,
+        validation_alias=AliasChoices(
+            "WMS_YOOKASSA_TAX_SYSTEM_CODE", "YOOKASSA_TAX_SYSTEM_CODE"
+        ),
+        description=(
+            "Система налогообложения в чеке. Не задана — не отправляем: магазин "
+            "с единственной системой подставляет её сам."
+        ),
+    )
+    yookassa_api_base: str = Field(
+        default="https://api.yookassa.ru",
+        validation_alias=AliasChoices("WMS_YOOKASSA_API_BASE", "YOOKASSA_API_BASE"),
+        description="Хост ЮKassa (подменяется в тестах).",
+    )
+    subscription_price_rub: int = Field(
+        default=10000,
+        ge=0,
+        validation_alias=AliasChoices("WMS_SUBSCRIPTION_PRICE_RUB", "SUBSCRIPTION_PRICE_RUB"),
+        description="Сумма к оплате за месяц подписки, рублей (WMS-381).",
+    )
+    allow_public_registration: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "WMS_ALLOW_PUBLIC_REGISTRATION", "ALLOW_PUBLIC_REGISTRATION"
+        ),
+        description=(
+            "Регистрация организации со страницы входа. Выключена: до 06.09.2026 любой "
+            "человек из интернета заводил себе тенант в боевой системе."
+        ),
+    )
     wms_data_dir: str = Field(
         default="var/wms-data",
         validation_alias=AliasChoices("WMS_DATA_DIR", "wms_data_dir"),

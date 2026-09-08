@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
@@ -20,6 +21,7 @@ from app.models.marking_code import (
     MarkingCode,
     MarkingCodeEvent,
 )
+from tests.auth_helpers import set_password_via_link
 
 
 async def _seed_printed_code(
@@ -117,8 +119,18 @@ async def _seed_printed_code(
 
 
 @pytest.mark.asyncio
-async def test_defect_creates_pending_reprint_request(async_client: AsyncClient) -> None:
+@pytest.mark.parametrize("applied", [False, True])
+async def test_defect_creates_pending_reprint_request(
+    async_client: AsyncClient, applied: bool,
+) -> None:
     admin_h, line_id, code_id = await _seed_printed_code(async_client)
+    if applied:
+        async with SessionLocal() as session:
+            code = await session.get(MarkingCode, uuid.UUID(code_id))
+            assert code and code.printed_at
+            code.status = STATUS_APPLIED
+            code.applied_at = datetime.now(UTC)
+            await session.commit()
 
     created = await async_client.post(
         f"/operations/marking-codes/codes/{code_id}/defect",
@@ -175,10 +187,7 @@ async def test_defect_requires_packaging_access(async_client: AsyncClient) -> No
         json={"email": staff_email},
     )
     staff_id = created.json()["id"]
-    await async_client.post(
-        "/auth/set-initial-password",
-        json={"email": staff_email, "password": "password123"},
-    )
+    await set_password_via_link(async_client, staff_email, "password123")
     await async_client.patch(
         f"/auth/staff-accounts/{staff_id}/permissions",
         headers=h,
@@ -208,8 +217,21 @@ async def test_defect_requires_packaging_access(async_client: AsyncClient) -> No
 
 
 @pytest.mark.asyncio
-async def test_replace_reprint_request_clears_queue(async_client: AsyncClient) -> None:
+@pytest.mark.parametrize("applied", [False, True])
+async def test_replace_reprint_request_clears_queue(
+    async_client: AsyncClient, applied: bool,
+) -> None:
+    from test_fbs_packing_selection import inventory_snapshot
+
     admin_h, line_id, code_id = await _seed_printed_code(async_client)
+    before = await inventory_snapshot()
+    if applied:
+        async with SessionLocal() as session:
+            code = await session.get(MarkingCode, uuid.UUID(code_id))
+            assert code and code.printed_at
+            code.status = STATUS_APPLIED
+            code.applied_at = datetime.now(UTC)
+            await session.commit()
 
     created = await async_client.post(
         f"/operations/marking-codes/codes/{code_id}/defect",
@@ -255,6 +277,7 @@ async def test_replace_reprint_request_clears_queue(async_client: AsyncClient) -
     )
     assert queue.status_code == 200
     assert queue.json()["requests"] == []
+    assert await inventory_snapshot() == before
 
 
 @pytest.mark.asyncio
@@ -281,3 +304,27 @@ async def test_approve_reprint_rejects_non_printed_code(async_client: AsyncClien
     )
     assert approved.status_code == 422
     assert approved.json()["detail"] == "code_not_printed"
+
+
+@pytest.mark.asyncio
+async def test_defect_does_not_include_unprinted_external_code(async_client: AsyncClient) -> None:
+    admin_h, line_id, code_id = await _seed_printed_code(async_client)
+    async with SessionLocal() as session:
+        code = await session.get(MarkingCode, uuid.UUID(code_id))
+        assert code is not None
+        code.status = STATUS_APPLIED
+        code.source = "external_fbs"
+        code.applied_at = datetime.now(UTC)
+        code.printed_at = None
+        await session.commit()
+    listed = await async_client.get(
+        f"/operations/marking-codes/packaging-task-lines/{line_id}/printed-codes",
+        headers=admin_h,
+    )
+    assert listed.json()["codes"] == []
+    response = await async_client.post(
+        f"/operations/marking-codes/codes/{code_id}/defect", headers=admin_h,
+        json={"packaging_task_line_id": line_id},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "code_not_printed"

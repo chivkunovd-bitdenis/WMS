@@ -1370,7 +1370,7 @@ async def test_existing_supply_add_orders_partial_readback_binds_only_confirmed(
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert [row["wb_order_id"] for row in body["orders"]] == [859401, 859402]
+    assert sorted(row["wb_order_id"] for row in body["orders"]) == [859401, 859402]
     assert body["partial_rejection"]["accepted_orders"][0]["wb_order_id"] == 859402
     assert body["partial_rejection"]["rejected_orders"][0]["wb_order_id"] == 859403
 

@@ -9,6 +9,8 @@ import {
   resolveSellerPermissions,
 } from '../../utils/sellerPermissions'
 import { ProfileLoadingScreen } from '../../screens/ProfileLoadingScreen'
+import { SubscriptionBlockedScreen } from '../../screens/SubscriptionBlockedScreen'
+import { useSubscription } from '../../hooks/useSubscription'
 import { PublicAuthScreen } from '../../screens/PublicAuthScreen'
 import { SellerDocumentsScreen } from '../../screens/v2/SellerDocumentsScreen'
 import { SellerInboundDraftScreen } from '../../screens/v2/SellerInboundDraftScreen'
@@ -55,14 +57,16 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
     portalMismatch,
     loading,
     authBusy,
-    pendingPasswordSetupEmail,
+    notice,
     onLogin,
-    onSetInitialPassword,
-    onCancelPasswordSetup,
+    onSetPasswordByLink,
+    onRequestPasswordReset,
+    clearNotice,
     logout,
     applyToken,
     reloadMe,
   } = useAuth('seller')
+  const { subscription, reloadSubscription, syncPayment } = useSubscription(token)
 
   const [shopsBusy, setShopsBusy] = useState(false)
 
@@ -264,9 +268,10 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
   }, [me, refreshInboundList, refreshMpUnloadList, refreshWarehouses, token])
 
   const rootElement = (() => {
-    if (!token) {
+    const isPasswordLink = location.pathname.endsWith('/set-password')
+    if (!token || isPasswordLink) {
       const hasFulfillmentToken = Boolean(getStoredToken('fulfillment'))
-      if (hasFulfillmentToken && location.pathname !== '/') {
+      if (hasFulfillmentToken && location.pathname !== '/' && !isPasswordLink) {
         return (
           <Box sx={{ p: 3 }} data-testid="ff-access-denied" data-task-id="R02-F14">
             <Typography variant="h5" gutterBottom data-task-id="R02-F14">
@@ -290,17 +295,30 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
         <PublicAuthScreen
           variant="seller"
           error={portalMismatch ?? error}
+          notice={notice}
           authBusy={authBusy}
-          pendingPasswordSetupEmail={pendingPasswordSetupEmail}
-          onRegister={(e) => e.preventDefault()}
           onLogin={(e) => void onLogin(e)}
-          onSetInitialPassword={(e) => void onSetInitialPassword(e)}
-          onCancelPasswordSetup={onCancelPasswordSetup}
+          onSetPasswordByLink={(e, linkToken) => void onSetPasswordByLink(e, linkToken)}
+          onRequestPasswordReset={(e) => void onRequestPasswordReset(e)}
+          clearNotice={clearNotice}
         />
       )
     }
     if (token && !me) {
       return <ProfileLoadingScreen loading={loading} onLogout={() => logout()} />
+    }
+    // WMS-381: подписку платит фулфилмент, но система у него и селлера общая.
+    // Кончилась — работа закрыта для всех в организации, и селлер должен видеть
+    // внятный экран, а не сыпь ошибок на каждом разделе.
+    if (subscription?.blocked) {
+      return (
+        <SubscriptionBlockedScreen
+          subscription={subscription}
+          onLogout={() => logout()}
+          onRetry={() => void reloadSubscription()}
+          onCheckPayment={syncPayment}
+        />
+      )
     }
     if (!me) {
       return null

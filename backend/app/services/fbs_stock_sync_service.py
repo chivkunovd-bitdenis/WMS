@@ -229,10 +229,20 @@ def _build_publish_plan(
     calculated mapping, its rule is not configured, so it is skipped. A configured
     disabled rule remains in the mapping as an explicit zero.
     """
+    # WMS-351 excludes disabled products from routine provider publication.
+    # WMS-376 still clears a previously confirmed WB positive once on legacy off.
+    publish_quantities = dict(publish_quantities)
+    for product in products:
+        item = existing_items.get(int(product.wb_chrt_id or 0))
+        if (not product.fbs_stock_sync_enabled and item is not None
+                and int(item.last_confirmed_amount or 0) > 0):
+            publish_quantities.setdefault(product.id, 0)
     skipped_missing: list[uuid.UUID] = []
     block_errors = product_block_errors or {}
     chrt_to_products: dict[int, list[Product]] = {}
     for product in products:
+        if product.id not in publish_quantities:
+            continue
         if product.wb_chrt_id is None:
             skipped_missing.append(product.id)
             continue
@@ -262,6 +272,18 @@ def _build_publish_plan(
             continue
         amount = int(publish_quantities[product.id])
         amount = max(amount, 0)
+        if amount == 0:
+            # WMS-376. Ноль отдаём ОДИН РАЗ — на переходе «публиковали ->
+            # перестали», а не каждый цикл по состоянию «выключено». Признак
+            # перехода уже есть и хранить его отдельно не нужно: пока в кабинете
+            # стоит наше положительное число, ноль имеет смысл; как только он
+            # подтверждён, строка перестаёт удовлетворять условию и замолкает
+            # сама. Раньше этой проверки не было, и снятая галка «Передавать
+            # остаток» гнала ноль каждые пять минут бесконечно.
+            item = existing_items.get(chrt_id)
+            confirmed = int(item.last_confirmed_amount or 0) if item is not None else 0
+            if confirmed <= 0:
+                continue
         # В результирующий словарь попадают только товары с настроенной долей,
         # поэтому amount == 0 здесь означает осознанную нулевую долю.
         targets_by_chrt[chrt_id] = _PublishTarget(
@@ -271,7 +293,6 @@ def _build_publish_plan(
             is_explicit_zero=(amount == 0),
         )
 
-    _ = existing_items
     return list(targets_by_chrt.values()), blocked_targets, skipped_missing, conflict_chrts
 
 
@@ -587,7 +608,8 @@ async def sync_binding_stocks(
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
         raise FbsStockSyncError(ERROR_SELLER_NOT_FOUND)
 
-    if not binding.is_active or not binding.stock_sync_enabled or not binding.served:
+    # WMS-376. `served` — фильтр входящих заказов, а не условие публикации.
+    if not binding.is_active or not binding.stock_sync_enabled:
         return FbsStockSyncResult()
 
     if not await _try_acquire_lease(session, binding):
@@ -730,6 +752,7 @@ async def publish_explicit_zero_for_binding(
     *,
     rate_limiter: StockSyncRateLimiter | None = None,
     marketplace_api_base: str | None = None,
+    product_ids: set[uuid.UUID] | None = None,
 ) -> FbsStockSyncResult:
     """Explicitly publish zero for every chrt_id currently tracked on this binding.
 
@@ -752,6 +775,19 @@ async def publish_explicit_zero_for_binding(
 
     result = FbsStockSyncResult()
     try:
+        existing_items = await _load_existing_sync_items(session, binding.id)
+        if product_ids is not None:
+            existing_items = {
+                chrt: item
+                for chrt, item in existing_items.items()
+                if item.product_id in product_ids
+            }
+        # Only clear this selection's previously confirmed positive publication.
+        existing_items = {chrt: item for chrt, item in existing_items.items()
+                          if int(item.last_confirmed_amount or 0) > 0}
+        if not existing_items:
+            result.bindings_processed = 1
+            return result
         try:
             api_token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
         except FbsStockSyncError as exc:
@@ -760,11 +796,6 @@ async def publish_explicit_zero_for_binding(
             binding.last_error_code = exc.code
             await session.commit()
             return FbsStockSyncResult(errors=1, error_code=exc.code)
-
-        existing_items = await _load_existing_sync_items(session, binding.id)
-        if not existing_items:
-            result.bindings_processed = 1
-            return result
 
         targets = [
             _PublishTarget(

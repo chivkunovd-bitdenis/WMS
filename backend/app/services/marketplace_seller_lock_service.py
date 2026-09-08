@@ -35,18 +35,35 @@ async def acquire_marketplace_seller_lock(
     *,
     wait_timeout_sec: float = 0.0,
     poll_interval_sec: float = 0.25,
+    release_connection_while_waiting: bool = False,
+    transaction_scoped: bool = False,
 ) -> int | None:
+    """Acquire the seller lock; opt-in callers must have only read-only work pending.
+
+    A failed try-lock owns no advisory lock, so those callers can end their
+    read transaction before sleeping. Once acquired, the connection must stay
+    checked out until release_marketplace_seller_lock unlocks that same session.
+    A transaction-scoped claim uses the same key but lasts until commit/rollback;
+    its durable writes and unlock happen atomically, without an explicit unlock.
+    """
     lock_key = marketplace_seller_lock_key(seller_id, marketplace)
     if not await _session_uses_postgresql(session):
         return lock_key
     deadline = monotonic() + max(wait_timeout_sec, 0.0)
     while True:
+        statement = (
+            "select pg_try_advisory_xact_lock(:lock_key)"
+            if transaction_scoped
+            else "select pg_try_advisory_lock(:lock_key)"
+        )
         acquired = await session.scalar(
-            text("select pg_try_advisory_lock(:lock_key)"),
+            text(statement),
             {"lock_key": lock_key},
         )
         if acquired:
             return lock_key
+        if release_connection_while_waiting:
+            await session.rollback()
         remaining = deadline - monotonic()
         if remaining <= 0:
             return None
@@ -69,15 +86,19 @@ async def marketplace_seller_lock(
     marketplace: str,
     *,
     wait_timeout_sec: float = 0.0,
+    release_connection_while_waiting: bool = False,
+    transaction_scoped: bool = False,
 ) -> AsyncIterator[bool]:
     lock_key = await acquire_marketplace_seller_lock(
         session,
         seller_id,
         marketplace,
         wait_timeout_sec=wait_timeout_sec,
+        release_connection_while_waiting=release_connection_while_waiting,
+        transaction_scoped=transaction_scoped,
     )
     try:
         yield lock_key is not None
     finally:
-        if lock_key is not None:
+        if lock_key is not None and not transaction_scoped:
             await release_marketplace_seller_lock(session, lock_key)

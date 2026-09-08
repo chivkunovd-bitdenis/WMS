@@ -46,6 +46,7 @@ from app.services.fbs_stock_sync_service import (
     NoopStockSyncRateLimiter,
     _build_publish_plan,
     _try_acquire_lease,
+    publish_explicit_zero_for_binding,
     sync_binding_stocks,
 )
 from app.services.integration_fernet import encrypt_secret
@@ -246,9 +247,16 @@ def _client(transport: _MockStocksTransport) -> httpx.AsyncClient:
 
 
 @pytest.mark.asyncio
-async def test_sync_publishes_configured_disabled_product_as_explicit_zero(
+async def test_disabled_product_gets_one_farewell_zero_and_then_silence(
     db_session: AsyncSession,
 ) -> None:
+    """WMS-376: ноль уходит ОДИН РАЗ, на переходе, а не каждый цикл.
+
+    Оператор снял галку «Передавать остаток» — маркетплейс не должен вечно
+    хранить последнее положительное число, поэтому один ноль отправляется. Но
+    дальше мы от кабинета отстаём: раньше ноль улетал каждые пять минут
+    бесконечно, и именно так набежали 111 отправок за 13 часов.
+    """
     ctx = await _seed_binding(db_session)
     disabled = _product(
         tenant_id=ctx.tenant.id,
@@ -267,11 +275,23 @@ async def test_sync_publishes_configured_disabled_product_as_explicit_zero(
                 product_id=disabled.id,
                 quantity=57,
             ),
+            # След того, что мы раньше опубликовали положительное число. Именно он
+            # и делает ноль осмысленным — обнулять нечего, если мы туда ничего не
+            # писали.
+            FbsStockSyncItem(
+                binding_id=ctx.binding.id,
+                chrt_id=9101,
+                product_id=disabled.id,
+                last_target_amount=57,
+                last_confirmed_amount=57,
+                status="confirmed",
+            ),
         ]
     )
     await db_session.commit()
 
     transport = _MockStocksTransport()
+    transport.stored[9101] = 57
     async with _client(transport) as http_client:
         result = await sync_binding_stocks(
             db_session,
@@ -285,6 +305,21 @@ async def test_sync_publishes_configured_disabled_product_as_explicit_zero(
     assert result.products_targeted == 1
     assert result.products_confirmed == 1
     assert [[entry.amount for entry in batch] for batch in transport.put_calls] == [[0]]
+    assert transport.stored[9101] == 0
+
+    # Второй цикл: ноль уже подтверждён, отправлять больше нечего.
+    async with _client(transport) as http_client:
+        again = await sync_binding_stocks(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            ctx.binding,
+            http_client,
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert again.products_targeted == 0
+    assert len(transport.put_calls) == 1
 
 
 def test_build_publish_plan_reads_amounts_directly_from_pool() -> None:
@@ -322,7 +357,7 @@ def test_build_publish_plan_reads_amounts_directly_from_pool() -> None:
     assert all(not target.is_explicit_zero for target in targets)
 
 
-def test_build_publish_plan_skips_missing_and_publishes_explicit_zero() -> None:
+def test_build_publish_plan_sends_zero_only_when_something_was_published() -> None:
     tenant_id = uuid.uuid4()
     seller_id = uuid.uuid4()
     missing = _product(
@@ -338,10 +373,28 @@ def test_build_publish_plan_skips_missing_and_publishes_explicit_zero() -> None:
         sku_suffix="explicit-zero",
     )
 
+    # Пусто в кабинете — ноль слать незачем: мы туда ничего не писали.
     targets, blocked_targets, skipped_missing, conflict_chrts = _build_publish_plan(
         [missing, explicit_zero],
         {explicit_zero.id: 0},
         {},
+    )
+    assert targets == []
+
+    # А вот когда наше положительное число там стоит, ноль обязан уйти — один раз.
+    targets, blocked_targets, skipped_missing, conflict_chrts = _build_publish_plan(
+        [missing, explicit_zero],
+        {explicit_zero.id: 0},
+        {
+            9212: FbsStockSyncItem(
+                binding_id=uuid.uuid4(),
+                chrt_id=9212,
+                product_id=explicit_zero.id,
+                last_target_amount=5,
+                last_confirmed_amount=5,
+                status="confirmed",
+            )
+        },
     )
 
     # missing has no row in fbs_binding_stock_pools for this binding — that just
@@ -459,9 +512,15 @@ async def test_sync_skips_product_without_percent_despite_old_pool_number(
 
 
 @pytest.mark.asyncio
-async def test_sync_publishes_explicit_zero_percent_as_zero(
+async def test_zero_percent_means_no_rule_and_nothing_is_published(
     db_session: AsyncSession,
 ) -> None:
+    """WMS-376: ноль процентов — это «правило не задано», а не «ноль штук».
+
+    Раньше такая карточка проходила отбор и получала осознанный ноль каждые пять
+    минут. Так у ИП Горячкина Т.И. три карточки очков ушли в ноль, пока на складе
+    лежали 72 штуки. Теперь товар без правила не попадает в отправку вовсе.
+    """
     ctx = await _seed_binding(db_session)
     product = _product(
         tenant_id=ctx.tenant.id,
@@ -495,16 +554,90 @@ async def test_sync_publishes_explicit_zero_percent_as_zero(
             marketplace_api_base="https://wb-mock.test",
         )
 
-    assert result.products_targeted == 1
-    assert result.products_confirmed == 1
-    assert [[entry.amount for entry in batch] for batch in transport.put_calls] == [[0]]
-    assert transport.stored[332] == 0
+    assert result.products_targeted == 0
+    assert transport.put_calls == []
+    # Прежнее число в кабинете не тронуто: правила нет — значит и команды нет.
+    assert transport.stored[332] == 64
 
 
 @pytest.mark.asyncio
-async def test_sync_skips_binding_not_served_by_us(db_session: AsyncSession) -> None:
+async def test_units_mode_publishes_even_though_percent_is_zero(
+    db_session: AsyncSession,
+) -> None:
+    """У всех 82 поштучных товаров на бою `fbs_percent = 0` — они обязаны жить.
+
+    Наивная проверка «процент равен нулю — правила нет» выбросила бы из
+    публикации живые числа Ловианы, Фэшн и Чжоу. Режим штук доли не использует.
+    """
+    ctx = await _seed_binding(db_session)
+    product = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=336,
+        sku_suffix="units-zero-percent",
+        fbs_percent=0,
+    )
+    product.fbs_units_mode = True
+    db_session.add_all(
+        [
+            product,
+            FbsBindingStockPool(
+                tenant_id=ctx.tenant.id,
+                binding_id=ctx.binding.id,
+                product_id=product.id,
+                quantity=7,
+            ),
+        ]
+    )
+    location = StorageLocation(
+        id=uuid.uuid4(),
+        tenant_id=ctx.tenant.id,
+        warehouse_id=ctx.warehouse.id,
+        code=f"CELL-{uuid.uuid4().hex[:8]}",
+        barcode=f"BC-{uuid.uuid4().hex[:10]}",
+    )
+    db_session.add_all(
+        [
+            location,
+            InventoryBalance(
+                id=uuid.uuid4(),
+                tenant_id=ctx.tenant.id,
+                storage_location_id=location.id,
+                product_id=product.id,
+                quantity=7,
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    transport = _MockStocksTransport()
+    async with _client(transport) as http_client:
+        result = await sync_binding_stocks(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            ctx.binding,
+            http_client,
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert result.products_confirmed == 1
+    assert transport.stored[336] == 7
+
+
+@pytest.mark.asyncio
+async def test_unserved_binding_still_publishes_when_its_own_switch_is_on(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-376: обслуживание склада — фильтр входящих заказов, не условие публикации.
+
+    Раньше снятая галка «обслуживается» глушила и трансляцию остатка: оператор
+    переставал видеть заказы склада и молча выключал остатки по всему складу.
+    Теперь публикацией распоряжается только её собственная галка.
+    """
     ctx = await _seed_binding(db_session)
     ctx.binding.served = False
+    ctx.binding.stock_sync_enabled = True
     product = _product(
         tenant_id=ctx.tenant.id,
         seller_id=ctx.seller.id,
@@ -514,9 +647,46 @@ async def test_sync_skips_binding_not_served_by_us(db_session: AsyncSession) -> 
     )
     db_session.add(product)
     await db_session.commit()
+    # Остаток нужен настоящий: тест про то, что необслуживаемый склад публикует,
+    # а не про поведение нуля.
+    await _configure_rule_amount(db_session, ctx, product, 10)
 
     transport = _MockStocksTransport()
-    transport.stored[334] = 10
+    transport.stored[334] = 0
+    async with _client(transport) as http_client:
+        result = await sync_binding_stocks(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            ctx.binding,
+            http_client,
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert result.products_targeted == 1
+    assert transport.put_calls != []
+
+
+@pytest.mark.asyncio
+async def test_sync_skips_binding_with_publication_switched_off(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-376: выключенная трансляция молчит независимо от обслуживания склада."""
+    ctx = await _seed_binding(db_session)
+    ctx.binding.served = True
+    ctx.binding.stock_sync_enabled = False
+    product = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=337,
+        sku_suffix="publication-off",
+        fbs_percent=100,
+    )
+    db_session.add(product)
+    await db_session.commit()
+
+    transport = _MockStocksTransport()
+    transport.stored[337] = 10
     async with _client(transport) as http_client:
         result = await sync_binding_stocks(
             db_session,
@@ -529,7 +699,7 @@ async def test_sync_skips_binding_not_served_by_us(db_session: AsyncSession) -> 
 
     assert result.products_targeted == 0
     assert transport.put_calls == []
-    assert transport.stored[334] == 10
+    assert transport.stored[337] == 10
 
 
 @pytest.mark.asyncio
@@ -1434,3 +1604,71 @@ async def test_try_acquire_lease_atomic_under_concurrency(
         binding = await session.get(FbsWarehouseBinding, binding_id)
         assert binding is not None
         assert binding.lease_until is not None
+
+
+@pytest.mark.asyncio
+async def test_farewell_zero_skips_cards_we_never_published(
+    db_session: AsyncSession,
+) -> None:
+    """WMS-376: обнуляем только то, куда сами клали положительное число.
+
+    Строки `fbs_stock_sync_items` заводятся ещё до отправки и остаются после
+    ошибки WB, конфликта или блокировки. Слать по ним ноль значило бы обнулять
+    карточку, которой мы никогда не управляли — на бою таких строк 129 из 267.
+    """
+    ctx = await _seed_binding(db_session)
+    published = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=9401,
+        sku_suffix="was-published",
+        fbs_percent=50,
+    )
+    never = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=9402,
+        sku_suffix="never-published",
+        fbs_percent=50,
+    )
+    db_session.add_all(
+        [
+            published,
+            never,
+            FbsStockSyncItem(
+                binding_id=ctx.binding.id,
+                chrt_id=9401,
+                product_id=published.id,
+                last_target_amount=12,
+                last_confirmed_amount=12,
+                status="confirmed",
+            ),
+            # Строка есть, но подтверждённого числа нет: отправка не удалась.
+            FbsStockSyncItem(
+                binding_id=ctx.binding.id,
+                chrt_id=9402,
+                product_id=never.id,
+                last_target_amount=7,
+                last_confirmed_amount=None,
+                status="error",
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    transport = _MockStocksTransport()
+    transport.stored[9401] = 12
+    transport.stored[9402] = 33  # чужое число, трогать его мы не вправе
+    async with _client(transport) as http_client:
+        result = await publish_explicit_zero_for_binding(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            ctx.binding,
+            http_client,
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert result.products_zeroed == 1
+    assert transport.stored[9401] == 0
+    assert transport.stored[9402] == 33

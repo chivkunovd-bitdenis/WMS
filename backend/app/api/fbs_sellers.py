@@ -138,6 +138,10 @@ class FbsWarehouseBindingUpsert(BaseModel):
 
 class FbsSellerWarehouseConfigure(BaseModel):
     served: bool | None = None
+    # Тумблер трансляции остатка. Живёт здесь, а не на отдельном экране: тот снят
+    # с маршрутов 31.08.2026, и после развязки галок выключить публикацию стало
+    # нечем. Не передан — галка не меняется.
+    stock_sync_enabled: bool | None = None
     wms_warehouse_id: uuid.UUID | None = None
     # Площадка склада. Умолчание `wb` — все прежние вызовы приходят оттуда и
     # ничего не присылают, их поведение остаётся прежним.
@@ -293,6 +297,24 @@ async def configure_fbs_seller_warehouse(
     # Финальный ноль — это другое действие: «склад наш, но по этому товару больше
     # не публикуем». Оно живёт на тумблере `stock_sync_enabled` в соседней ручке
     # `/warehouse-bindings/` и там работает.
+    # WB keeps its existing background zero. Ozon confirms zero inside the
+    # service before committing OFF; no after-commit cleanup may lose retries.
+    publication_was_on = False
+    if body.marketplace == "wb" and body.stock_sync_enabled is False:
+        try:
+            before = await binding_svc.get_binding(
+                session,
+                user.tenant_id,
+                seller_id,
+                wb_warehouse_id,
+                marketplace=body.marketplace,
+            )
+            publication_was_on = bool(
+                before is not None and before.is_active and before.stock_sync_enabled
+            )
+        except binding_svc.FbsWarehouseBindingError:
+            publication_was_on = False
+
     try:
         row = await binding_svc.configure_seller_warehouse(
             session,
@@ -302,9 +324,19 @@ async def configure_fbs_seller_warehouse(
             served=body.served,
             wms_warehouse_id=body.wms_warehouse_id,
             marketplace=body.marketplace,
+            stock_sync_enabled=body.stock_sync_enabled,
         )
     except binding_svc.FbsWarehouseBindingError as exc:
         _raise_from_binding_service(exc)
+
+    if row is not None and publication_was_on:
+        # Маркетплейс не должен вечно хранить последнее положительное число после
+        # того, как мы перестали публиковать. Один раз — и молчим.
+        row.last_sync_status = STOCK_SYNC_STATUS_PENDING
+        row.last_error_code = None
+        await session.commit()
+        await session.refresh(row)
+        schedule_explicit_zero_publish(user.tenant_id, seller_id, row.id)
 
     return FbsSellerWarehouseOut(
         id=wb_warehouse_id,
@@ -370,17 +402,18 @@ async def upsert_fbs_warehouse_binding(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsWarehouseBindingOut:
     was_enabled = False
-    try:
-        existing = await binding_svc.get_binding(
-            session,
-            user.tenant_id,
-            seller_id,
-            wb_warehouse_id,
-            marketplace=body.marketplace,
-        )
-        was_enabled = bool(existing.is_active and existing.stock_sync_enabled)
-    except binding_svc.FbsWarehouseBindingError:
-        was_enabled = False
+    if body.marketplace == "wb":
+        try:
+            existing = await binding_svc.get_binding(
+                session,
+                user.tenant_id,
+                seller_id,
+                wb_warehouse_id,
+                marketplace=body.marketplace,
+            )
+            was_enabled = bool(existing.is_active and existing.stock_sync_enabled)
+        except binding_svc.FbsWarehouseBindingError:
+            was_enabled = False
 
     try:
         row = await binding_svc.upsert_binding(
@@ -655,14 +688,24 @@ async def start_fbs_stock_sync(
         response.status_code = status.HTTP_202_ACCEPTED
         return FbsStockSyncJobOut(id=str(job.id), status=job.status)
 
-    async with httpx.AsyncClient() as http_client:
-        result = await sync_seller_stocks(
-            session,
-            user.tenant_id,
-            seller_id,
-            http_client,
-            wb_warehouse_id=body.wb_warehouse_id,
-        )
+    from app.services.marketplace_seller_lock_service import marketplace_seller_lock
+
+    async with (
+        AsyncSession(bind=session.bind) as lock_session,
+        marketplace_seller_lock(
+            lock_session, seller_id, "wb", wait_timeout_sec=30,
+        ) as acquired,
+    ):
+        if not acquired:
+            raise_fbs_http(status.HTTP_409_CONFLICT, "stock_sync_busy")
+        async with httpx.AsyncClient() as http_client:
+            result = await sync_seller_stocks(
+                session,
+                user.tenant_id,
+                seller_id,
+                http_client,
+                wb_warehouse_id=body.wb_warehouse_id,
+            )
     return FbsStockSyncResultOut(
         bindings_processed=result.bindings_processed,
         products_targeted=result.products_targeted,

@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import fitz
 import pytest
 from httpx import AsyncClient
+from marking_datamatrix_test_helpers import encode_datamatrix_png
 from sqlalchemy import select
 from test_packaging_tasks import _register_admin
 
@@ -21,6 +22,7 @@ def _build_label_pdf(cis: str, footer_text: str) -> bytes:
     page.insert_text((12, 24), "Честный знак", fontsize=8)
     page.insert_text((12, 42), cis, fontsize=6)
     page.insert_text((12, 58), footer_text, fontsize=7)
+    page.insert_image(fitz.Rect(60, 64, 106, 110), stream=encode_datamatrix_png(cis))
     pdf_bytes = bytes(doc.tobytes())
     doc.close()
     return pdf_bytes
@@ -33,13 +35,38 @@ def _build_two_label_pdf(cis_a: str, cis_b: str) -> bytes:
     page.insert_text((12, 42), cis_a, fontsize=6)
     page.insert_text((190, 24), "Честный знак", fontsize=8)
     page.insert_text((190, 42), cis_b, fontsize=6)
+    page.insert_image(fitz.Rect(20, 60, 170, 210), stream=encode_datamatrix_png(cis_a))
+    page.insert_image(fitz.Rect(200, 60, 350, 210), stream=encode_datamatrix_png(cis_b))
     pdf_bytes = bytes(doc.tobytes())
     doc.close()
     return pdf_bytes
 
 
 @pytest.mark.asyncio
-async def test_pdf_import_stores_label_artifact_per_cis(async_client: AsyncClient) -> None:
+async def test_pdf_import_stores_label_artifact_per_cis(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.api import marking_codes as api
+    from app.services import marking_code_service as svc
+    from app.services.marking_label_artifact_service import pdf_bytes_to_png
+
+    loop_thread_id = threading.get_ident()
+    checked: set[str] = set()
+
+    def require_worker(name: str, original: object) -> object:
+        def wrapped(*args: object, **kwargs: object) -> object:
+            assert threading.get_ident() != loop_thread_id, name
+            checked.add(name)
+            return original(*args, **kwargs)  # type: ignore[operator]
+        return wrapped
+
+    monkeypatch.setattr(svc, "parse_import_file", require_worker("parse", svc.parse_import_file))
+    monkeypatch.setattr(
+        svc,
+        "is_printable_label_artifact",
+        require_worker("validate", svc.is_printable_label_artifact),
+    )
+    monkeypatch.setattr(api, "pdf_bytes_to_png", require_worker("render", pdf_bytes_to_png))
     h = await _register_admin(async_client)
     seller = await async_client.post(
         "/sellers",
@@ -68,6 +95,14 @@ async def test_pdf_import_stores_label_artifact_per_cis(async_client: AsyncClien
     gtin14 = "04600000000001"
     cis = f"01{gtin14}21{'D' * 20}0001"
     pdf_bytes = _build_label_pdf(cis, "control footer")
+    preview = await async_client.post(
+        "/operations/marking-codes/import/preview",
+        headers=h,
+        data={"seller_id": seller_id},
+        files=[("files", ("labels.pdf", pdf_bytes, "application/pdf"))],
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["total_codes"] == 1
     imp = await async_client.post(
         "/operations/marking-codes/import",
         headers=h,
@@ -113,6 +148,10 @@ async def test_pdf_import_stores_label_artifact_per_cis(async_client: AsyncClien
         ).scalar_one()
         assert code.label_artifact_pdf is not None
         assert code.label_artifact_pdf.startswith(b"%PDF")
+        assert pdf.content == code.label_artifact_pdf
+        infos = await svc._printed_code_infos([code])
+        assert infos[0].has_label_artifact is True
+        assert infos[0].cis_code == cis
 
     from app.models.marking_code import MarkingCodeImportFile
     from app.services.marking_import_storage_service import read_marking_import_source_pdf
@@ -130,6 +169,7 @@ async def test_pdf_import_stores_label_artifact_per_cis(async_client: AsyncClien
         assert source_file.size_bytes == len(pdf_bytes)
         stored_pdf = read_marking_import_source_pdf(source_file.storage_key)
         assert stored_pdf == pdf_bytes
+    assert checked == {"parse", "validate", "render"}
 
 
 @pytest.mark.asyncio
@@ -261,6 +301,7 @@ def _build_seller_style_label_pdf(cis: str) -> bytes:
     page.insert_text((12, 54), "Й цвет черный.белый.тд", fontsize=7)
     page.insert_text((12, 66), "разм L", fontsize=7)
     page.insert_text((12, 90), cis, fontsize=6)
+    page.insert_image(fitz.Rect(118, 10, 164, 65), stream=encode_datamatrix_png(cis))
     pdf_bytes = bytes(doc.tobytes())
     doc.close()
     return pdf_bytes
@@ -343,6 +384,10 @@ def _build_two_line_ai_wrapped_label_pdf(gtin14: str, serial: str) -> bytes:
     page.insert_text((12, 102), f"(21) {serial}", fontsize=6)
     page.insert_text((12, 120), "Состав: внешний слой 100% полиэстер,", fontsize=7)
     page.insert_text((12, 132), "наполнитель 100% био-пух", fontsize=7)
+    page.insert_image(
+        fitz.Rect(40, 142, 120, 222),
+        stream=encode_datamatrix_png(f"01{gtin14}21{serial}"),
+    )
     pdf_bytes = bytes(doc.tobytes())
     doc.close()
     return pdf_bytes
@@ -671,9 +716,11 @@ async def test_label_artifact_tape_merges_outside_event_loop_thread(
     tenant_id = uuid.uuid4()
     loop_thread_id = threading.get_ident()
     merge_thread_ids: list[int] = []
+    validation_thread_ids: list[int] = []
 
     class FakeSession:
         async def get(self, _model: object, _code_id: uuid.UUID) -> object:
+            assert threading.get_ident() == loop_thread_id
             return SimpleNamespace(
                 tenant_id=tenant_id,
                 label_artifact_pdf=b"label-pdf",
@@ -691,7 +738,11 @@ async def test_label_artifact_tape_merges_outside_event_loop_thread(
         merge_thread_ids.append(threading.get_ident())
         return b"merged-pdf"
 
-    monkeypatch.setattr(marking_code_service, "is_printable_label_artifact", lambda *_: True)
+    def validate(*_args: object) -> bool:
+        validation_thread_ids.append(threading.get_ident())
+        return True
+
+    monkeypatch.setattr(marking_code_service, "is_printable_label_artifact", validate)
     monkeypatch.setattr(
         marking_label_artifact_service,
         "merge_label_artifact_pdfs_for_print",
@@ -708,6 +759,7 @@ async def test_label_artifact_tape_merges_outside_event_loop_thread(
 
     assert result == b"merged-pdf"
     assert merge_thread_ids and merge_thread_ids[0] != loop_thread_id
+    assert validation_thread_ids == merge_thread_ids
 
 
 def test_merge_label_artifact_pdfs_empty_raises() -> None:

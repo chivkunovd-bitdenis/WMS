@@ -186,7 +186,7 @@ async def test_seller_single_wb_key_also_enables_marketplace_token(
         return []
 
     monkeypatch.setattr(
-        "app.api.wildberries_integration.fetch_cards_list",
+        "app.services.wildberries_sync_service.fetch_cards_list",
         fake_fetch_cards_list,
     )
     monkeypatch.setattr(
@@ -260,7 +260,7 @@ async def test_self_content_token_does_not_enable_marketplace_without_scope(
         raise WildberriesClientError("upstream_error", status_code=401)
 
     monkeypatch.setattr(
-        "app.api.wildberries_integration.fetch_cards_list",
+        "app.services.wildberries_sync_service.fetch_cards_list",
         fake_fetch_cards_list,
     )
     monkeypatch.setattr(
@@ -305,7 +305,7 @@ async def test_self_content_token_keeps_200_when_marketplace_validation_unavaila
         raise WildberriesClientError("upstream_error", status_code=502)
 
     monkeypatch.setattr(
-        "app.api.wildberries_integration.fetch_cards_list",
+        "app.services.wildberries_sync_service.fetch_cards_list",
         fake_fetch_cards_list,
     )
     monkeypatch.setattr(
@@ -348,7 +348,7 @@ async def test_self_content_token_returns_traced_error_when_task_registration_fa
         raise RuntimeError("background task registration failed")
 
     monkeypatch.setattr(
-        "app.api.wildberries_integration.fetch_cards_list",
+        "app.services.wildberries_sync_service.fetch_cards_list",
         fake_fetch_cards_list,
     )
     monkeypatch.setattr(
@@ -400,7 +400,7 @@ async def test_self_content_token_returns_product_conflict_for_integrity_error(
         raise IntegrityError("INSERT INTO products", {}, RuntimeError("duplicate article"))
 
     monkeypatch.setattr(
-        "app.api.wildberries_integration.fetch_cards_list",
+        "app.services.wildberries_sync_service.fetch_cards_list",
         fake_fetch_cards_list,
     )
     monkeypatch.setattr(
@@ -445,7 +445,7 @@ async def test_self_content_token_maps_invalid_wb_json_to_bad_gateway(
         raise WildberriesClientError("invalid_json")
 
     monkeypatch.setattr(
-        "app.api.wildberries_integration.fetch_cards_list",
+        "app.services.wildberries_sync_service.fetch_cards_list",
         fail_fetch_cards_list,
     )
     headers, _tenant_id, _seller_id = await _create_authenticated_seller(async_client)
@@ -546,7 +546,7 @@ async def test_self_content_token_failed_marketplace_check_preserves_existing_ma
         raise WildberriesClientError("upstream_error", status_code=401)
 
     monkeypatch.setattr(
-        "app.api.wildberries_integration.fetch_cards_list",
+        "app.services.wildberries_sync_service.fetch_cards_list",
         fake_fetch_cards_list,
     )
 

@@ -6,6 +6,8 @@ import pytest
 from httpx import AsyncClient
 from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
 
+from tests.auth_helpers import set_password_via_link
+
 
 @pytest.mark.asyncio
 async def test_seller_sees_only_own_products_and_filtered_inbound(
@@ -122,10 +124,7 @@ async def test_seller_sees_only_own_products_and_filtered_inbound(
     )
     assert bad_guess.status_code == 401
 
-    set_pw = await async_client.post(
-        "/auth/set-initial-password",
-        json={"email": seller_email, "password": "password123"},
-    )
+    set_pw = await set_password_via_link(async_client, seller_email, "password123")
     assert set_pw.status_code == 200, set_pw.text
 
     login = await async_client.post(

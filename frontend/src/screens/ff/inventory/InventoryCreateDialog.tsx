@@ -1,21 +1,30 @@
-import { Stack, Typography } from '@mui/material'
+import { Autocomplete, createFilterOptions, Stack, TextField, Typography } from '@mui/material'
 import { useState } from 'react'
+import type { WbProductPickerCatalogRow } from '../../../components/WbProductPickerDialog'
 import { AppDialog, PrimaryAction, SecondaryAction, SelectInput, TextInput } from '../../../ui-kit'
 
-// Наполнение документа при создании. Владельцу нужны два способа: «взять всё»
-// одной кнопкой и отбор по селлеру с категорией. Третьего пути — набирать строки
-// руками — намеренно нет: инвентаризация начинается с того, что уже числится.
+// Выбранные товары сужают существующий отбор. Пустой выбор берёт всё,
+// что подходит под склад, селлера и категорию.
+export type CreateFill = {
+  seller: string | null
+  category: string | null
+  productIds: string[]
+}
 
-// Отдельной кнопки «весь склад» нет намеренно: не поставил фильтры — значит
-// берём всё. Две кнопки для одного и того же заставляли выбирать там, где
-// выбора нет.
-export type CreateFill = { seller: string | null; category: string | null }
+const filterProducts = createFilterOptions<WbProductPickerCatalogRow>({
+  stringify: (product) => [
+    product.name, product.sku_code, product.wb_vendor_code,
+    product.wb_size, product.seller_name, ...product.wb_barcodes,
+  ].filter(Boolean).join(' '),
+})
 
 type Props = {
   open: boolean
   warehouses: string[]
   sellers: string[]
   categories: string[]
+  products?: WbProductPickerCatalogRow[] | null
+  productsLoading?: boolean
   onClose: () => void
   onCreate: (warehouse: string, fill: CreateFill, comment: string) => void
 }
@@ -25,6 +34,8 @@ export function InventoryCreateDialog({
   warehouses,
   sellers,
   categories,
+  products = [],
+  productsLoading = false,
   onClose,
   onCreate,
 }: Props) {
@@ -32,11 +43,16 @@ export function InventoryCreateDialog({
   const [seller, setSeller] = useState('')
   const [category, setCategory] = useState('')
   const [comment, setComment] = useState('')
+  const [selectedProducts, setSelectedProducts] = useState<WbProductPickerCatalogRow[]>([])
 
-  const narrowed = Boolean(seller || category)
+  const narrowed = Boolean(seller || category || selectedProducts.length)
 
   function submit() {
-    onCreate(warehouse, { seller: seller || null, category: category || null }, comment)
+    onCreate(warehouse, {
+      seller: seller || null,
+      category: category || null,
+      productIds: selectedProducts.map((product) => product.id),
+    }, comment)
   }
 
   return (
@@ -85,6 +101,33 @@ export function InventoryCreateDialog({
           options={categories.map((c) => ({ value: c, label: c }))}
           emptyLabel="Все категории"
           testId="inv-create-category"
+        />
+        <Autocomplete
+          multiple
+          size="small"
+          options={products ?? []}
+          value={selectedProducts}
+          onChange={(_, value) => setSelectedProducts(value)}
+          loading={productsLoading}
+          loadingText="Загрузка товаров…"
+          noOptionsText={products === null ? 'Не удалось загрузить товары' : 'Товары не найдены'}
+          disableCloseOnSelect
+          filterSelectedOptions
+          filterOptions={filterProducts}
+          getOptionKey={(product) => product.id}
+          isOptionEqualToValue={(option, value) => option.id === value.id}
+          getOptionLabel={(product) => [
+            product.name, product.sku_code, product.wb_size, product.seller_name,
+          ].filter(Boolean).join(' · ')}
+          data-testid="inv-create-products"
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="Товары"
+              placeholder={selectedProducts.length ? '' : 'Название, артикул или штрихкод'}
+              helperText="Можно выбрать один или несколько. Пустой выбор — все товары по отбору."
+            />
+          )}
         />
         <TextInput
           label="Комментарий"

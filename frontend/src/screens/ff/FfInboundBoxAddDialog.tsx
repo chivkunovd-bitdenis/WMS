@@ -8,6 +8,7 @@ import {
   type FocusEvent,
   type KeyboardEvent,
 } from 'react'
+import { isInboundMarkingScan } from './inboundMarkingCodes'
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import CloseOutlined from '@mui/icons-material/CloseOutlined'
 import {
@@ -176,6 +177,7 @@ type Props = {
   boxLines: InboundBoxLine[]
   catalogById: Map<string, WbProductCatalogRow>
   onUpdated: () => Promise<void>
+  onMarkingScan?: (code: string, lineId: string | null) => Promise<void>
 }
 
 export function FfInboundBoxAddDialog({
@@ -191,6 +193,7 @@ export function FfInboundBoxAddDialog({
   boxLines,
   catalogById,
   onUpdated,
+  onMarkingScan,
 }: Props) {
   const authHeaders = useMemo(
     () => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }),
@@ -203,7 +206,10 @@ export function FfInboundBoxAddDialog({
   const [lastScannedProductId, setLastScannedProductId] = useState<string | null>(null)
   const [draftQtyByProductId, setDraftQtyByProductId] = useState<Record<string, string>>({})
   const draftQtyRef = useRef(draftQtyByProductId)
+  const lastProductLineId = useRef<string | null>(null)
   const scanQueueRef = useRef<Promise<void>>(Promise.resolve())
+
+  useEffect(() => { lastProductLineId.current = null }, [requestId, boxId, open])
 
   const qtyInBoxByProductId = useMemo(() => {
     const m = new Map<string, number>()
@@ -341,6 +347,13 @@ export function FfInboundBoxAddDialog({
     }
     setError(null)
     try {
+      if (isInboundMarkingScan(raw)) {
+        if (!onMarkingScan) throw new Error('Коды ЧЗ нужно сканировать в документе приёмки.')
+        await onMarkingScan(raw, lastProductLineId.current)
+        setScanBarcode('')
+        return
+      }
+      lastProductLineId.current = null
       const productId = findInboundScanProductId(raw, scanProductByBarcode)
       const res = await fetch(
         apiUrl(
@@ -385,6 +398,7 @@ export function FfInboundBoxAddDialog({
         ...current,
         [scannedLine.product_id]: String(scannedLine.quantity),
       }))
+      lastProductLineId.current = requestLines.find((line) => line.product_id === scannedLine.product_id)?.id ?? null
       setLastScannedProductId(scannedLine.product_id)
       setScanBarcode('')
       // The POST response is authoritative for this box. Refresh the heavy parent

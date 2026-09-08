@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -23,17 +23,27 @@ from app.models.fbs_order import (
     META_STATUS_ASSIGNED,
     META_STATUS_REJECTED,
     META_STATUS_REPLACEMENT_REQUIRED,
+    META_STATUS_SENDING,
     FbsOrder,
     FbsOrderMarking,
     current_order_marking,
 )
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_supply import FbsSupply
+from app.models.fbs_wb_operation import (
+    WB_OPERATION_STATE_FAILED,
+    WB_OPERATION_STATE_PENDING_CONFIRMATION,
+)
 from app.models.marking_code import (
     EVENT_APPLIED,
     EVENT_VOIDED,
     STATUS_APPLIED,
     STATUS_AVAILABLE,
+    STATUS_INTRODUCED,
+    STATUS_PRINTED,
+    STATUS_RESERVED,
+    STATUS_SHIPPED,
+    STATUS_TRANSFERRED,
     STATUS_VOID,
     MarkingCode,
 )
@@ -46,6 +56,10 @@ from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.marketplace_scope import is_wildberries
 from app.services.ozon_kiz_service import OzonKizError
 from app.services.ozon_kiz_service import commit_ozon_kiz as commit_ozon
+from app.services.ozon_marking_position_service import (
+    OzonMarkingPositionError,
+    resolve_marking_position,
+)
 from app.services.wb_card_enrichment import first_photo_url_from_card
 from app.services.wildberries_client import put_marketplace_order_meta
 from app.services.wildberries_errors import WildberriesClientError
@@ -138,9 +152,7 @@ _KEYBOARD_LAYOUT_MAP = {
 }
 _KEYBOARD_LAYOUT_TRANSLATION = str.maketrans(_KEYBOARD_LAYOUT_MAP)
 _KEYBOARD_LAYOUT_MARKERS = frozenset(
-    char
-    for char in _KEYBOARD_LAYOUT_MAP
-    if "\u0400" <= char <= "\u04ff" or char == "\u2116"
+    char for char in _KEYBOARD_LAYOUT_MAP if "\u0400" <= char <= "\u04ff" or char == "\u2116"
 )
 
 
@@ -184,6 +196,8 @@ class FbsKizLookup:
     needs_confirmation: bool
     can_bind: bool
     block_reason: str | None
+    marketplace: str = "wb"
+    external_order_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -205,6 +219,7 @@ class FbsKizCommitRow:
     status: str
     code: str
     message: str
+    meta_status: str | None = None
 
 
 @dataclass(frozen=True)
@@ -263,10 +278,7 @@ def _match_gs_substitute(value: str, position: int) -> str | None:
 
 
 def _is_expected_next_ai(current_ai: str, next_ai: str) -> bool:
-    if (
-        current_ai in _GS1_INTERNAL_VARIABLE_AIS
-        and next_ai in _GS1_INTERNAL_VARIABLE_AIS
-    ):
+    if current_ai in _GS1_INTERNAL_VARIABLE_AIS and next_ai in _GS1_INTERNAL_VARIABLE_AIS:
         return int(next_ai) > int(current_ai)
     return next_ai != current_ai
 
@@ -533,21 +545,33 @@ def _normalized_optional(raw: object) -> str | None:
 
 
 def _find_order_by_sticker(orders: list[FbsOrder], sticker: str) -> FbsOrder | None:
-    # Сначала — технический код стикера. Именно он закодирован во все QR и штрихкоды
-    # печатной этикетки WB, и именно его выдаёт сканер (вид «*DUIkWJJF»). Проверено
-    # 20.08.2026 декодированием реальной этикетки: раньше поиск шёл только по
-    # человеческому номеру partA/partB, поэтому скан не находил заказ никогда.
+    def unique(matches: list[FbsOrder]) -> FbsOrder | None:
+        if len(matches) > 1:
+            raise FbsKizError(
+                "sticker_ambiguous",
+                message="Скан совпал с несколькими заказами. Введите номер отправления.",
+            )
+        return matches[0] if matches else None
+
+    # Ozon's posting number is available before assembly and label generation.
+    matching_postings = []
     for order in orders:
-        if _normalized_optional(order.sticker_barcode) == sticker:
-            return order
-    # Человеческий номер («5694425 3074») — если оператор вводит его руками с этикетки.
-    for order in orders:
-        if _normalized_optional(order.sticker_code) == sticker:
-            return order
-    # Штрихкод товара — запасной путь, когда стикер заказа ещё не получен.
-    for order in orders:
-        if _normalized_optional(order.wb_barcode) == sticker:
-            return order
+        if order.marketplace != "ozon":
+            continue
+        assembly = (order.meta_details_json or {}).get("ozon_assembly")
+        children = assembly.get("posting_numbers", []) if isinstance(assembly, dict) else []
+        identifiers = [order.external_order_id, *(children if isinstance(children, list) else [])]
+        if any(_normalized_optional(value) == sticker for value in identifiers):
+            matching_postings.append(order)
+    if matching_postings:
+        return unique(matching_postings)
+    # Preserve WB's technical sticker -> printed number -> barcode priority.
+    for field in ("sticker_barcode", "sticker_code", "wb_barcode"):
+        matches = [
+            order for order in orders if _normalized_optional(getattr(order, field)) == sticker
+        ]
+        if matches:
+            return unique(matches) if matches[0].marketplace == "ozon" else matches[0]
     return None
 
 
@@ -606,11 +630,7 @@ def _product_payload(order: FbsOrder, image_url: str | None) -> FbsKizProduct:
     # иначе оператор видит внутренний код WB вместо штрихкода с коробки.
     barcode = (product.wb_barcode if product is not None else None) or order.wb_barcode
     seller_article = product.sku_code if product is not None else order.wb_article
-    name = (
-        product.name
-        if product is not None
-        else order.wb_article or _MISSING_PRODUCT_NAME
-    )
+    name = product.name if product is not None else order.wb_article or _MISSING_PRODUCT_NAME
     return FbsKizProduct(
         name=name,
         image_url=image_url,
@@ -677,15 +697,20 @@ async def lookup_order_by_sticker(
         wb_order_id=int(order.wb_order_id),
         product=_product_payload(order, image_url),
         current_kiz=current_out,
-        needs_confirmation=current_out is not None,
+        # Ozon replacement is decided after resolving the scanned code to a position.
+        needs_confirmation=current_out is not None and order.marketplace != "ozon",
         can_bind=True,
         block_reason=None,
+        marketplace=order.marketplace or "wb",
+        external_order_id=order.external_order_id,
     )
 
 
 def _error_message(exc: FbsKizError) -> str:
     if exc.message:
         return exc.message
+    if exc.code == "wb_pending_confirmation":
+        return "Wildberries не подтвердил результат; нужна сверка."
     if exc.code == "meta_validation_fail":
         reasons = exc.context.get("reasons")
         if isinstance(reasons, list) and reasons:
@@ -708,12 +733,16 @@ async def _get_order_for_kiz(
     *,
     for_update: bool = False,
 ) -> FbsOrder:
+    if for_update:
+        from app.services.fbs_packaging_integration_service import lock_order_packaging_rows
+
+        await lock_order_packaging_rows(session, tenant_id, order_id)
     stmt = select(FbsOrder).where(
         FbsOrder.id == order_id,
         FbsOrder.tenant_id == tenant_id,
     )
     if for_update:
-        stmt = stmt.with_for_update()
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
     order = (await session.execute(stmt)).scalar_one_or_none()
     if order is None:
         raise FbsKizError("order_not_found")
@@ -770,7 +799,7 @@ async def _get_marking_code_by_cis(
         MarkingCode.cis_code == value,
     )
     if for_update:
-        stmt = stmt.with_for_update()
+        stmt = stmt.execution_options(populate_existing=True).with_for_update()
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
@@ -785,13 +814,49 @@ async def _ensure_kiz_not_occupied_in_pool(
         return
     if code.seller_id != order.seller_id:
         raise FbsKizError("cross_seller_code")
-    if (
-        order.product_id is not None
-        and code.product_id is not None
-        and code.product_id != order.product_id
-    ):
+    product_id = order.product_id
+    if order.marketplace == "ozon":
+        try:
+            position = await resolve_marking_position(session, order, value)
+        except OzonMarkingPositionError as exc:
+            raise FbsKizError(exc.code, message=exc.message) from exc
+        product_id = position.product_id
+        own_marking = await session.scalar(
+            select(FbsOrderMarking.id).where(
+                FbsOrderMarking.order_id == order.id,
+                FbsOrderMarking.order_product_id == position.id,
+                FbsOrderMarking.value == value,
+                FbsOrderMarking.marking_code_id == code.id,
+                FbsOrderMarking.meta_status != META_STATUS_REJECTED,
+            )
+        )
+        if own_marking is not None:
+            return
+    if product_id is not None and code.product_id is not None and code.product_id != product_id:
         raise FbsKizError("code_product_mismatch")
+    if await marking_code_svc.is_unbound_received_code(session, code):
+        return
     if code.status != STATUS_AVAILABLE:
+        marking = await session.scalar(
+            select(FbsOrderMarking).where(
+                FbsOrderMarking.tenant_id == tenant_id,
+                FbsOrderMarking.order_id == order.id,
+                FbsOrderMarking.kind == MARKING_KIND_SGTIN,
+                FbsOrderMarking.marking_code_id == code.id,
+                FbsOrderMarking.value == value,
+                FbsOrderMarking.meta_status != META_STATUS_REJECTED,
+            )
+        )
+        # UI validation must let an uncertain own binding reach GET-only reconciliation.
+        if marking is not None and (
+            code.status in {STATUS_RESERVED, STATUS_PRINTED}
+            or await marking_svc.pending_kiz_operation(session, marking)
+        ):
+            return
+        if code.status == STATUS_PRINTED:
+            line_ref = await _packaging_line_for_order(session, tenant_id, order)
+            if code.packaging_task_line_id == line_ref.line.id:
+                return
         raise FbsKizError(
             "duplicate_kiz",
             context={"marking_code_id": str(code.id), "status": code.status},
@@ -857,19 +922,23 @@ async def validate_kiz_pair(
 async def _current_sgtin_marking_for_update(
     session: AsyncSession,
     order_id: uuid.UUID,
+    *,
+    include_rejected: bool = False,
 ) -> FbsOrderMarking | None:
     stmt = (
         select(FbsOrderMarking)
         .where(
             FbsOrderMarking.order_id == order_id,
             FbsOrderMarking.kind == MARKING_KIND_SGTIN,
-            FbsOrderMarking.meta_status != META_STATUS_REJECTED,
         )
         .options(selectinload(FbsOrderMarking.marking_code))
         .order_by(FbsOrderMarking.created_at.desc(), FbsOrderMarking.id.desc())
         .limit(1)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
+    if not include_rejected:
+        stmt = stmt.where(FbsOrderMarking.meta_status != META_STATUS_REJECTED)
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
@@ -892,7 +961,8 @@ async def _packaging_line_for_order(
         )
         .order_by(FbsPackagingFulfillment.fulfilled_at.desc())
         .limit(1)
-        .with_for_update()
+        .with_for_update(of=PackagingTaskLine)
+        .execution_options(populate_existing=True)
     )
     fulfilled = (await session.execute(fulfilled_stmt)).first()
     if fulfilled is not None:
@@ -912,7 +982,8 @@ async def _packaging_line_for_order(
         )
         .order_by(PackagingTaskLine.id)
         .limit(1)
-        .with_for_update()
+        .with_for_update(of=PackagingTaskLine)
+        .execution_options(populate_existing=True)
     )
     line = (await session.execute(supply_stmt)).first()
     if line is None:
@@ -959,13 +1030,15 @@ async def _prepare_code_for_binding(
             tenant_id=tenant_id,
             order=order,
             cis_raw=value,
+            printed_for_line_id=line.id,
         )
     except marking_svc.FbsMarkingError as exc:
         raise _marking_error_to_kiz(exc) from exc
     if pool_code is not None:
+        received = await marking_code_svc.is_unbound_received_code(session, pool_code)
         pool_code.packaging_task_line_id = line.id
         await session.flush()
-        return pool_code, True
+        return pool_code, not received
     return (
         await _create_or_apply_external_code(
             session,
@@ -1053,6 +1126,11 @@ async def _void_existing_sgtin_marking_locally(
         if code.source == _EXTERNAL_FBS_MARKING_SOURCE and line is not None:
             line.qty_marking_external = max(0, int(line.qty_marking_external) - 1)
 
+    operation = await marking_svc.pending_kiz_operation(session, marking)
+    if operation is not None:
+        operation.state = WB_OPERATION_STATE_FAILED
+        operation.failed_at = datetime.now(tz=UTC)
+        operation.error_code = "kiz_cancelled"
     await session.delete(marking)
     await session.flush()
 
@@ -1090,8 +1168,7 @@ async def _persist_failed_replacement_state(
     if current is None:
         raise FbsKizError("kiz_not_found", context={"order_id": str(order.id)})
     reason = (
-        "replacement_failed_and_restore_failed: "
-        f"new={new_error_code}; restore={restore_error_code}"
+        f"replacement_failed_and_restore_failed: new={new_error_code}; restore={restore_error_code}"
     )
     current.meta_status = META_STATUS_REPLACEMENT_REQUIRED
     current.reason = reason
@@ -1117,9 +1194,17 @@ async def cancel_order_kiz(
     await session.rollback()
     try:
         order = await _get_order_for_kiz(session, tenant_id, order_id, for_update=True)
-        current = await _current_sgtin_marking_for_update(session, order.id)
+        current = await _current_sgtin_marking_for_update(session, order.id, include_rejected=True)
         if current is None:
             raise FbsKizError("kiz_not_found", context={"order_id": str(order.id)})
+        line = None
+        if current.marking_code is not None and current.marking_code.packaging_task_line_id:
+            line = await session.scalar(
+                select(PackagingTaskLine)
+                .where(PackagingTaskLine.id == current.marking_code.packaging_task_line_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
         await void_existing_sgtin_marking(
             session,
             tenant_id,
@@ -1129,6 +1214,27 @@ async def cancel_order_kiz(
             actor_user_id=actor_user_id,
             reason=_VOID_OPERATOR_CANCEL_REASON,
         )
+        if line is not None:
+            # Cancelled labels no longer cover a unit. Re-read the existing codes
+            # under the same line lock as printing; pool-to-external replacement
+            # can have left its unit in the old printed counter.
+            count_rows = await session.execute(
+                select(MarkingCode.source, func.count(MarkingCode.id))
+                .where(
+                    MarkingCode.tenant_id == tenant_id,
+                    MarkingCode.packaging_task_line_id == line.id,
+                    MarkingCode.status.in_({
+                        STATUS_RESERVED, STATUS_PRINTED, STATUS_APPLIED,
+                        STATUS_INTRODUCED, STATUS_SHIPPED, STATUS_TRANSFERRED,
+                    }),
+                )
+                .group_by(MarkingCode.source)
+            )
+            counts = {source: count for source, count in count_rows}
+            line.qty_marking_external = counts.get(_EXTERNAL_FBS_MARKING_SOURCE, 0)
+            line.qty_marking_printed = sum(
+                count for source, count in counts.items() if source != _EXTERNAL_FBS_MARKING_SOURCE
+            )
         await session.commit()
     except FbsKizError:
         await session.rollback()
@@ -1141,7 +1247,8 @@ async def _commit_one_kiz_pair(
     actor_user_id: uuid.UUID | None,
     pair: FbsKizCommitPair,
     http_client: httpx.AsyncClient,
-) -> None:
+    idempotency_key: str,
+) -> str | None:
     validated = await _validate_kiz_pair(
         session,
         tenant_id,
@@ -1153,19 +1260,43 @@ async def _commit_one_kiz_pair(
     order = validated.order
     if order.marketplace == "ozon":
         try:
-            await commit_ozon(
+            return await commit_ozon(
                 session, order, validated.value, pair.confirmed, actor_user_id, http_client
             )
         except OzonKizError as exc:
             raise FbsKizError(exc.code, message=exc.message) from exc
-        return
     current = await _current_sgtin_marking_for_update(session, order.id)
     if (
         current is not None
         and current.value == validated.value
         and current.meta_status != META_STATUS_REJECTED
     ):
-        return
+        operation = await marking_svc.pending_kiz_operation(session, current)
+        if operation is not None:
+            token = await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
+            try:
+                await marking_svc._sync_order_meta_from_wb(session, order, http_client, token)
+            except WildberriesClientError as exc:
+                raise FbsKizError("wb_pending_confirmation") from exc
+            if operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
+                raise FbsKizError("wb_pending_confirmation", persist_failure_state=True)
+            if operation.state == WB_OPERATION_STATE_FAILED:
+                raise FbsKizError("meta_validation_fail", persist_failure_state=True)
+        code = await _get_marking_code_by_cis(session, tenant_id, validated.value, for_update=True)
+        if (
+            code is not None
+            and current.marking_code_id == code.id
+            and code.status in {STATUS_RESERVED, STATUS_PRINTED}
+        ):
+            line_ref = await _packaging_line_for_order(session, tenant_id, order)
+            code.status = STATUS_APPLIED
+            code.applied_at = datetime.now(UTC)
+            await marking_code_svc.record_event(
+                session, code=code, event_type=EVENT_APPLIED, actor=actor_user_id,
+                document_number=line_ref.document_number, packaging_task=line_ref.line,
+                source_process=marking_code_svc.MARKING_SOURCE_PACKING_FBS_PRINT,
+            )
+        return None
     if current is not None and not pair.confirmed:
         raise FbsKizError("needs_confirmation", context={"current_kiz": _mask_kiz(current.value)})
     line_ref = await _packaging_line_for_order(session, tenant_id, order)
@@ -1176,6 +1307,10 @@ async def _commit_one_kiz_pair(
         validated.value,
         line_ref.line,
     )
+    # A scan records physical application; WB acceptance remains a separate result.
+    was_printed = code.status == STATUS_PRINTED
+    code.status = STATUS_APPLIED
+    code.applied_at = code.applied_at or datetime.now(UTC)
     token = await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
     await marking_code_svc.record_event(
         session,
@@ -1218,9 +1353,23 @@ async def _commit_one_kiz_pair(
         new_error = _marking_error_to_kiz(exc)
     except WildberriesClientError as exc:
         new_error = FbsKizError(marking_svc._wb_error_code(exc))
-    if new_error is not None:
-        if current is None:
+    pending_error: FbsKizError | None = None
+    if new_error is not None and current is None:
+        # A lost PUT response or a failed read after PUT cannot undo the WB write.
+        ambiguous = (
+            new_error.code == "wb_transport_error"
+            or new_error.code == "wb_upstream_error_408"
+            or new_error.code.startswith("wb_upstream_error_5")
+            or marking.meta_status == META_STATUS_SENDING
+        )
+        if not ambiguous:
             raise new_error
+        await marking_svc.record_pending_kiz_operation(
+            session, order, marking, error_code=new_error.code,
+            actor_user_id=actor_user_id, idempotency_key=idempotency_key,
+        )
+        pending_error = FbsKizError("wb_pending_confirmation", persist_failure_state=True)
+    elif new_error is not None and current is not None:
         try:
             await _restore_previous_wb_marking(
                 order,
@@ -1254,19 +1403,23 @@ async def _commit_one_kiz_pair(
         )
     previous_was_pool = current is not None and current.source == _POOL_MARKING_SOURCE
     if from_pool:
-        if not previous_was_pool:
+        if not previous_was_pool and not was_printed:
             line_ref.line.qty_marking_printed = int(line_ref.line.qty_marking_printed) + 1
     elif not previous_was_pool:
         line_ref.line.qty_marking_external = int(line_ref.line.qty_marking_external) + 1
     await session.flush()
+    if pending_error is not None:
+        raise pending_error
+    return None
 
 
-def _ok_commit_row(order_id: uuid.UUID) -> FbsKizCommitRow:
+def _ok_commit_row(order_id: uuid.UUID, meta_status: str | None = None) -> FbsKizCommitRow:
     return FbsKizCommitRow(
         order_id=order_id,
         status="ok",
         code="ok",
         message="ok",
+        meta_status=meta_status,
     )
 
 
@@ -1287,18 +1440,18 @@ async def commit_kiz_pairs(
     idempotency_key: str,
     http_client: httpx.AsyncClient,
 ) -> list[FbsKizCommitRow]:
-    del idempotency_key
     await session.rollback()
 
     rows: list[FbsKizCommitRow] = []
     for pair in pairs:
         try:
-            await _commit_one_kiz_pair(
+            meta_status = await _commit_one_kiz_pair(
                 session,
                 tenant_id,
                 actor_user_id,
                 pair,
                 http_client,
+                idempotency_key,
             )
             await session.commit()
         except IntegrityError:
@@ -1316,6 +1469,6 @@ async def commit_kiz_pairs(
                 await session.rollback()
             rows.append(_error_commit_row(pair.order_id, exc))
         else:
-            rows.append(_ok_commit_row(pair.order_id))
+            rows.append(_ok_commit_row(pair.order_id, meta_status))
 
     return rows

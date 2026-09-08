@@ -292,6 +292,7 @@ class DeliveryPreflightResult:
     version: str
     checked_at: datetime
     checks: tuple[DeliveryCheck, ...]
+    cancelled_orders: tuple[dict[str, Any], ...] = ()
 
 
 def _wb_error_code(exc: WildberriesClientError) -> str:
@@ -1168,11 +1169,14 @@ async def preflight_delivery(
         source_plan=source_plan,
     )
     can_deliver = _checks_allow_delivery(checks)
+    from app.services.fbs_cancelled_after_pack_service import delivery_cancelled_orders
+
     return DeliveryPreflightResult(
         can_deliver=can_deliver,
         version=version,
         checked_at=checked_at,
         checks=tuple(checks),
+        cancelled_orders=tuple(await delivery_cancelled_orders(session, supply)),
     )
 
 
@@ -1182,6 +1186,7 @@ def delivery_preflight_to_dict(result: DeliveryPreflightResult) -> dict[str, Any
         "version": result.version,
         "checked_at": result.checked_at.isoformat(),
         "checks": _checks_to_payload(list(result.checks)),
+        "cancelled_orders": list(result.cancelled_orders),
     }
 
 
@@ -1201,13 +1206,17 @@ async def _apply_local_delivered(
         source_plan=source_plan,
         operation=operation,
     )
-    now = datetime.now(UTC)
+    now = supply.delivered_at or getattr(operation, "confirmed_at", None) or datetime.now(UTC)
     supply.status = FBS_SUPPLY_STATUS_IN_DELIVERY
     supply.delivered_at = now
     for order in orders:
         if order.status not in _TERMINAL_ORDER_STATUSES:
             order.status = FBS_ORDER_STATUS_IN_DELIVERY
     await session.flush()
+
+    from app.services.fbs_order_billing_service import charge_handed_over_orders
+
+    await charge_handed_over_orders(session, orders, occurred_at=now)
 
 
 async def _write_off_delivered_orders_once(
@@ -1678,10 +1687,11 @@ async def _persist_confirmed_delivery(
     source_plan: source_svc.FbsShipmentSourcePlan | None = None,
 ) -> None:
     """Persist marketplace confirmation and the matching local stock result."""
+    confirmed_at = operation.confirmed_at
     if source_plan is None:
-        # Ozon still uses its packaging write-off ledger.  Keep the established
-        # atomic order here: its idempotent retry path returns an already
-        # confirmed operation and does not replay unfinished local stock work.
+        # Ozon writes stock off at confirmed handover; its source recipe uses
+        # the historically named packaging ledger. Keep local stock and the
+        # operation confirmation in the same transaction.
         await _apply_local_delivered(session, supply, orders, actor_user_id, source_plan, operation)
         await mark_deliver_operation_confirmed(
             session,
@@ -1689,6 +1699,8 @@ async def _persist_confirmed_delivery(
             wb_supply_id=supply.wb_supply_id,
             local_supply_id=supply.id,
         )
+        if confirmed_at is not None:
+            operation.confirmed_at = confirmed_at
         await session.commit()
         return
 
@@ -1709,6 +1721,9 @@ async def _persist_confirmed_delivery(
         wb_supply_id=supply.wb_supply_id,
         local_supply_id=supply.id,
     )
+    # A local recovery must retain the first persisted marketplace confirmation.
+    if confirmed_at is not None:
+        operation.confirmed_at = confirmed_at
     await session.commit()
     await _apply_local_delivered(session, supply, orders, actor_user_id, source_plan, operation)
     # The optional QR fetch happens after this second checkpoint as well.
@@ -2123,6 +2138,16 @@ async def _finish_ozon_delivery(
     actor_user_id: uuid.UUID | None,
 ) -> FbsSupply:
     """Локальная часть уже состоявшейся передачи Ozon."""
+    # External checkpoints commit and release the initial row locks. Reacquire
+    # supply -> orders and refresh stale identity-map objects before write-off,
+    # matching picking/cancellation without holding a row lock across HTTP.
+    with session.no_autoflush:
+        await session.refresh(supply, with_for_update=True)
+    orders = list((await session.scalars(
+        _supply_orders_stmt(supply.tenant_id, supply.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )).all())
     supply.external_supply_id = str(result.carriage_id) if result.carriage_id is not None else None
     supply.document_number = str(result.carriage_id) if result.carriage_id is not None else None
     supply.display_number = result.barcode_text
@@ -2427,6 +2452,9 @@ async def deliver_supply(
             confirmed_preflight_version=confirmed_preflight_version,
             actor_user_id=actor_user_id,
         )
+        from app.services.fbs_cancelled_after_pack_service import exclude_cancelled_delivery_orders
+
+        await exclude_cancelled_delivery_orders(session, supply)
         operation = await create_pending_deliver_operation(
             session,
             tenant_id=tenant_id,

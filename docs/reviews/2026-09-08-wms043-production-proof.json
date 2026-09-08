@@ -1,0 +1,44 @@
+{
+  "sha": "9729c52c985062fc543e7358574e05d27e605db8",
+  "backend": {
+    "api": {
+      "python_files": 259,
+      "mismatches": 0
+    },
+    "celery_worker": {
+      "python_files": 259,
+      "mismatches": 0
+    },
+    "celery_beat": {
+      "python_files": 259,
+      "mismatches": 0
+    }
+  },
+  "frontend": {
+    "files": 177,
+    "mismatches": 0,
+    "built_at_sha": "a63dad2d1efa86343682f2cd0fcbb963d127c929",
+    "unchanged_frontend_tree_at_deployed_sha": true
+  },
+  "database": {
+    "revision": [
+      "20260908_0256"
+    ],
+    "ozon_legacy_null": 12873,
+    "ozon_explicit": 0
+  },
+  "ozon_runtime": {
+    "api": {
+      "ozon_live_api_enabled": true,
+      "ozon_host": "api-seller.ozon.ru"
+    },
+    "celery_worker": {
+      "ozon_live_api_enabled": true,
+      "ozon_host": "api-seller.ozon.ru"
+    },
+    "celery_beat": {
+      "ozon_live_api_enabled": true,
+      "ozon_host": "api-seller.ozon.ru"
+    }
+  }
+}
