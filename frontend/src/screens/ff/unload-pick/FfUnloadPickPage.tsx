@@ -415,7 +415,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
       // Тара — источник, из которого спишется товар (§Ж-03): сначала ищем её
       // среди уже известных pick-options источников, затем среди того, что
       // оператор только что отсканировал сам (см. scannedContainers выше).
-      // Для скана товара без конкретной тары считаем физические источники
+      // Для скана товара без выбранного места считаем физические источники
       // из ответа сервера, а не число ячеек: в одной ячейке бывает несколько коробов.
       let containerSource = sourceKey
         ? (screenData?.placeSource.get(sourceKey) ?? scannedContainers.current.get(sourceKey))

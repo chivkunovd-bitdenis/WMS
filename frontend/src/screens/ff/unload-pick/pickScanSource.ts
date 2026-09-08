@@ -32,12 +32,11 @@ export function resolveProductScanSource(
   locations: ScanLocation[],
   selected: ScanSource | null,
 ): ScanSource {
-  // An explicitly scanned container is authoritative, including newly arrived
-  // stock absent from the last options response. The server validates it.
-  if (selected?.containerId) return selected
+  // Preserve every explicit source: cell + NULL means loose stock, not any
+  // container at that cell. The server validates its current availability.
+  if (selected) return selected
   const candidates: ScanSource[] = []
   for (const location of locations) {
-    if (selected && selected.locationId !== location.storage_location_id) continue
     const sources = location.sources?.length
       ? location.sources
       : [{ available: location.available, container_path: [] }]
