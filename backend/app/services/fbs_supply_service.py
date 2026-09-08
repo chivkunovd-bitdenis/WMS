@@ -1199,11 +1199,20 @@ async def _resume_from_orders_operation(
         return await get_supply_workspace(session, tenant_id, supply.id)
 
     if operation.state == WB_OPERATION_STATE_CONFIRMED:
+        result = dict(operation.response_summary_json or {})
+        accepted = (
+            set(result.get("accepted_wb_order_ids", []))
+            if result.get("partial_confirmation") is True
+            else {int(order.wb_order_id) for order in orders}
+        )
         bound = {int(o.wb_order_id) for o in supply.orders}
-        missing = [o for o in orders if int(o.wb_order_id) not in bound]
+        missing = [o for o in orders if int(o.wb_order_id) in accepted - bound]
         if missing:
             await _bind_orders_to_supply(session, supply, missing)
-        return await get_supply_workspace(session, tenant_id, supply.id)
+        workspace = await get_supply_workspace(session, tenant_id, supply.id)
+        if result.get("partial_confirmation") is True:
+            workspace["partial_rejection"] = result.get("partial_rejection")
+        return workspace
 
     raise FbsSupplyError(
         "operation_in_progress",

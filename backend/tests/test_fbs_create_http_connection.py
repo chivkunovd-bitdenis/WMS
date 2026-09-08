@@ -38,6 +38,7 @@ from app.services.wildberries_client import WildberriesClientError
         "same_key",
         "rotated_key",
         "loser_failed",
+        "partial_winner",
     ],
 )
 async def test_create_http_releases_pool_and_persists_identity(
@@ -120,6 +121,8 @@ async def test_create_http_releases_pool_and_persists_identity(
     async def readback(
         *args: Any, wb_supply_id: str, expected_wb_order_ids: set[int], **kwargs: Any
     ) -> tuple[str, set[int]]:
+        if outcome == "partial_winner" and wb_supply_id == "WB-GI-winner":
+            return "pending_confirmation", {27200}
         if wb_supply_id == "WB-GI-main":
             await pause_http("readback")
             if outcome == "readback_timeout":
@@ -167,7 +170,7 @@ async def test_create_http_releases_pool_and_persists_identity(
         other = await run("other", "disjoint-key", 2)
         assert other["wb_id"] == "WB-GI-other"
         assert create_calls == ["main", "other"]
-        if outcome in {"same_key", "rotated_key", "loser_failed"}:
+        if outcome in {"same_key", "rotated_key", "loser_failed", "partial_winner"}:
             retry_key = "original-key" if outcome == "same_key" else "rotated-key"
             winner = await run("main", retry_key)
             assert winner["wb_id"] == "WB-GI-winner"
@@ -193,7 +196,18 @@ async def test_create_http_releases_pool_and_persists_identity(
                 assert own_operations[0].wb_object_id == "WB-GI-winner"
                 for order_id in order_ids[:2]:
                     order = await observer.get(FbsOrder, order_id)
-                    assert order and str(order.supply_id) == winner["id"]
+                    assert order
+                    if outcome == "partial_winner" and order.wb_order_id == 27201:
+                        assert order.supply_id is None and order.status == "new"
+                    else:
+                        assert str(order.supply_id) == winner["id"]
+                if outcome == "partial_winner":
+                    assert [
+                        row["wb_order_id"] for row in winner["partial_rejection"]["accepted_orders"]
+                    ] == [27200]
+                    assert [
+                        row["wb_order_id"] for row in winner["partial_rejection"]["rejected_orders"]
+                    ] == [27201]
             assert "WB-GI-main" not in add_calls
             assert add_calls.count("WB-GI-winner") == 1
             return
