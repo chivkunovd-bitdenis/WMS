@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
+from app.models.background_job import BackgroundJob
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.services.wildberries_client import WildberriesClientError
@@ -50,6 +51,13 @@ async def sync_wb_products_for_seller(
     except WildberriesClientError as exc:
         suffix = f"_{exc.status_code}" if exc.status_code else ""
         raise WildberriesSyncError(f"wb_{exc.code}{suffix}") from exc
+    return await _save_wb_cards(session, tenant_id, seller_id, cards)
+
+
+async def _save_wb_cards(
+    session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID,
+    cards: list[dict[str, Any]],
+) -> dict[str, Any]:
     saved = await upsert_imported_cards(session, tenant_id, seller_id, cards)
     prod_stats = await upsert_products_from_wb_cards(
         session,
@@ -66,8 +74,39 @@ async def sync_wb_products_for_seller(
     }
 
 
+async def _sync_scheduled_seller(
+    tenant_id: uuid.UUID, seller_id: uuid.UUID, http_client: httpx.AsyncClient,
+) -> dict[str, Any]:
+    # Own the read session: do not commit a caller's transaction to release its
+    # connection. No DB session/lock remains open while fetching all WB pages.
+    async with SessionLocal() as session:
+        active_job = await session.scalar(select(BackgroundJob.id).where(
+            BackgroundJob.tenant_id == tenant_id,
+            BackgroundJob.job_type == "wildberries_cards_sync",
+            BackgroundJob.status.in_(("pending", "running")),
+            BackgroundJob.payload_json["seller_id"].as_string() == str(seller_id),
+        ).limit(1))
+        if active_job is not None:
+            raise WildberriesSyncError("manual_sync_active")
+        pair = await get_decrypted_tokens_for_seller(session, tenant_id, seller_id)
+        if pair is None or not pair[0]:
+            raise WildberriesSyncError("missing_content_token")
+        content_token = pair[0]
+    try:
+        cards = await fetch_all_wb_cards(http_client, api_token=content_token)
+    except WildberriesClientError as exc:
+        suffix = f"_{exc.status_code}" if exc.status_code else ""
+        raise WildberriesSyncError(f"wb_{exc.code}{suffix}") from exc
+    async with SessionLocal() as session:
+        # A disconnect/change during HTTP must not persist that old response.
+        pair = await get_decrypted_tokens_for_seller(session, tenant_id, seller_id)
+        if pair is None or pair[0] != content_token:
+            raise WildberriesSyncError("content_token_changed")
+        return await _save_wb_cards(session, tenant_id, seller_id, cards)
+
+
 async def run_wb_products_sync_all_sellers() -> dict[str, Any]:
-    """Post-deploy: sync WB products for every seller with a content API token."""
+    """Hourly/CLI WB-only import, sequentially for connected content credentials."""
     async with SessionLocal() as session:
         stmt = (
             select(Seller.id, Seller.tenant_id, Seller.name)
@@ -75,7 +114,10 @@ async def run_wb_products_sync_all_sellers() -> dict[str, Any]:
                 SellerWildberriesCredentials,
                 SellerWildberriesCredentials.seller_id == Seller.id,
             )
-            .where(SellerWildberriesCredentials.content_token_encrypted.isnot(None))
+            .where(
+                SellerWildberriesCredentials.content_token_encrypted.isnot(None),
+                SellerWildberriesCredentials.content_token_encrypted != "",
+            )
             .order_by(Seller.tenant_id, Seller.name)
         )
         res = await session.execute(stmt)
@@ -87,62 +129,60 @@ async def run_wb_products_sync_all_sellers() -> dict[str, Any]:
 
     async with httpx.AsyncClient() as http_client:
         for seller_id, tenant_id, seller_name in sellers:
-            async with SessionLocal() as session:
-                try:
-                    result = await sync_wb_products_for_seller(
-                        session,
-                        tenant_id,
-                        seller_id,
-                        http_client,
-                    )
-                except WildberriesSyncError as exc:
-                    code = exc.code
-                    if code == "missing_content_token":
-                        skipped.append(
-                            {
-                                "seller_id": str(seller_id),
-                                "seller_name": seller_name,
-                                "reason": code,
-                            }
-                        )
-                        logger.info(
-                            "wb products sync skipped seller=%s reason=%s",
-                            seller_id,
-                            code,
-                        )
-                        continue
-                    failed.append(
+            try:
+                result = await _sync_scheduled_seller(
+                    tenant_id,
+                    seller_id,
+                    http_client,
+                )
+            except WildberriesSyncError as exc:
+                code = exc.code
+                if code in ("missing_content_token", "manual_sync_active", "content_token_changed"):
+                    skipped.append(
                         {
                             "seller_id": str(seller_id),
                             "seller_name": seller_name,
-                            "error": code,
+                            "reason": code,
                         }
                     )
-                    logger.warning(
-                        "wb products sync failed seller=%s error=%s",
+                    logger.info(
+                        "wb products sync skipped seller=%s reason=%s",
                         seller_id,
                         code,
                     )
-                except Exception as exc:
-                    failed.append(
-                        {
-                            "seller_id": str(seller_id),
-                            "seller_name": seller_name,
-                            "error": str(exc),
-                        }
-                    )
-                    logger.exception("wb products sync failed seller=%s", seller_id)
-                else:
-                    ok.append(result)
-                    logger.info(
-                        "wb products sync ok seller=%s cards=%s created=%s "
-                        "updated=%s legacy_old=%s",
-                        seller_id,
-                        result.get("cards_received"),
-                        result.get("products_created"),
-                        result.get("products_updated"),
-                        result.get("legacy_marked_old"),
-                    )
+                    continue
+                failed.append(
+                    {
+                        "seller_id": str(seller_id),
+                        "seller_name": seller_name,
+                        "error": code,
+                    }
+                )
+                logger.warning(
+                    "wb products sync failed seller=%s error=%s",
+                    seller_id,
+                    code,
+                )
+            except Exception as exc:
+                failed.append(
+                    {
+                        "seller_id": str(seller_id),
+                        "seller_name": seller_name,
+                        "error": str(exc),
+                    }
+                )
+                logger.exception("wb products sync failed seller=%s", seller_id)
+            else:
+                ok.append(result)
+                logger.info(
+                    "wb products sync ok seller=%s cards=%s created=%s "
+                    "updated=%s legacy_old=%s",
+                    seller_id,
+                    result.get("cards_received"),
+                    result.get("products_created"),
+                    result.get("products_updated"),
+                    result.get("legacy_marked_old"),
+                )
 
     summary = {
         "sellers_total": len(sellers),
