@@ -152,7 +152,10 @@ async def print_fbs_order_tape(
         ordered.sort(key=picking_list_order_key)
     line_by_product = await _line_by_product(session, tenant_id, supply)
     prints_honest_sign = any(unit.block == "cz" and unit.copies > 0 for unit in print_layout.units)
-    if prints_honest_sign and not reprint and not allow_partial:
+    if (
+        prints_honest_sign and not reprint and not allow_partial
+        and supply.honest_sign_skipped_at is None
+    ):
         preflight_shortage = await _preflight_new_code_shortage(session, tenant_id, ordered)
         if preflight_shortage > 0:
             return FbsOrderTapePrintResult(
@@ -223,12 +226,12 @@ async def print_fbs_order_tape(
                 )
             )
             continue
-        requires_honest_sign = _order_requires_sgtin(order)
-        # Поставка со снятым требованием Честного знака печатается как немаркированная:
-        # новые коды из пула не выпускаются и в WB не привязываются. Уже отсканированные
-        # коды остаются на месте и уходят в WB как обычно.
+        # Пропуск запрещает автоматическую выдачу новых кодов, но сохраняет
+        # печать уже привязанного ЧЗ, в том числе после передачи поставки.
         honest_sign_skipped = supply.honest_sign_skipped_at is not None
-        if not requires_honest_sign or honest_sign_skipped:
+        existing = _existing_sgtin_marking(order) if honest_sign_skipped else None
+        requires_honest_sign = _order_requires_sgtin(order) or existing is not None
+        if not requires_honest_sign or (honest_sign_skipped and existing is None):
             result_orders.append(
                 FbsOrderTapeOrder(
                     order_id=order.id,
@@ -249,7 +252,7 @@ async def print_fbs_order_tape(
             )
             continue
         line = line_by_product.get(order.product_id)
-        if (
+        if (honest_sign_skipped and existing is not None) or (
             line is None
             and getattr(supply, "marketplace", "wb") == "wb"
             and getattr(supply, "status", None)
@@ -286,6 +289,14 @@ async def print_fbs_order_tape(
                         id=code.id, cis_code=code.cis_code,
                         has_label_artifact=bool(code.label_artifact_pdf),
                     )],
+                ))
+                continue
+            if honest_sign_skipped:
+                errors.append(FbsOrderTapeError(
+                    order_id=order.id,
+                    wb_order_id=int(order.wb_order_id),
+                    code="nothing_to_reprint",
+                    message="nothing_to_reprint",
                 ))
                 continue
         if line is None:
