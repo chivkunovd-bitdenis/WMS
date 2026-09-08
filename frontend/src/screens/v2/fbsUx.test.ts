@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { fbsUnassignedPositionQuantity, supplyQrExpectedForStatus, fbsMarkingPresentation, fbsOrderMarkingAccepted } from './fbsUx'
+import { fbsSameStickerScan, fbsUnassignedPositionQuantity, supplyQrExpectedForStatus, fbsMarkingPresentation, fbsOrderMarkingAccepted } from './fbsUx'
 
 describe('supplyQrExpectedForStatus', () => {
   it('does not count a future supply QR while cargo-place QR codes are printed', () => {
@@ -60,5 +60,21 @@ describe('WMS-086 marking verdict presentation', () => {
   it('does not show success when an accepted status has a refusal reason', () => {
     expect(fbsMarkingPresentation({ kind: 'sgtin', status: 'accepted', reason: 'sgtinNoGS' }))
       .toMatchObject({ tone: 'error', reason: expect.stringContaining('отсканируйте') })
+  })
+})
+
+
+describe('WMS-394 repeated active sticker', () => {
+  it('matches scanner whitespace, BOM and Russian keyboard layout', () => {
+    expect(fbsSameStickerScan(' \ufeff*DVNdzDVg\r\n', '*ВМТвяВМп')).toBe(true)
+    expect(fbsSameStickerScan('*ВМТвяВМп', '*DVNdzDVg')).toBe(true)
+    expect(fbsSameStickerScan('*DVN dzDVg', '*DVNdzDVg')).toBe(true)
+  })
+  it('keeps case, punctuation, other orders and actual KIZ distinct', () => {
+    expect(fbsSameStickerScan('*dvndzdvg', '*DVNdzDVg')).toBe(false)
+    expect(fbsSameStickerScan('*DVNdzDVg', '*DU7aq2hE')).toBe(false)
+    expect(fbsSameStickerScan('010460000000001821ABC', '*DU7aq2hE')).toBe(false)
+    expect(fbsSameStickerScan('  ', '')).toBe(false)
+    expect(fbsSameStickerScan('ABC/123', 'ABC?123')).toBe(false)
   })
 })
