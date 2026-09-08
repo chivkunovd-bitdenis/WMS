@@ -17,6 +17,8 @@ from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.services import marking_code_service as svc
 
+pytestmark = pytest.mark.usefixtures("db_session")
+
 GTIN = "04600000000001"
 PREFIX = f"01{GTIN}21SYNTHETIC0961"
 FULL = PREFIX + "\x1d93ACTUAL+/=TAIL"

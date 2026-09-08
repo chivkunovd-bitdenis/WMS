@@ -32,7 +32,10 @@ def decode_datamatrix_codes_on_pdf_page(
     matrix = fitz.Matrix(scale, scale)
     pixmap = pg.get_pixmap(matrix=matrix, alpha=False)
     image_format = zxingcpp.ImageFormat.RGB if pixmap.n >= 3 else zxingcpp.ImageFormat.Lum
-    view = zxingcpp.ImageView(pixmap.samples, pixmap.width, pixmap.height, image_format)
+    # ImageView does not own its buffer. PyMuPDF's samples returns a bytes copy,
+    # which must stay alive until read_barcodes finishes using its native pointer.
+    samples = pixmap.samples
+    view = zxingcpp.ImageView(samples, pixmap.width, pixmap.height, image_format)
     formats = zxingcpp.BarcodeFormats(zxingcpp.DataMatrix)
     results = zxingcpp.read_barcodes(view, formats=formats)
 
