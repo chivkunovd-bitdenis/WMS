@@ -201,40 +201,18 @@ async def plan_shipment_sources(
                 continue
             # An earlier attempt may have stopped before assembly. Its source
             # recipe must not retain an older quantity after a real composition change.
-        fulfillment = await active_order_fulfillment(session, order.id)
-        units = packed_units(fulfillment)
-        grouped: dict[tuple[uuid.UUID, uuid.UUID], int] = defaultdict(int)
-        try:
-            for unit in units:
-                grouped[
-                    (uuid.UUID(unit["product_id"]), uuid.UUID(unit["storage_location_id"]))
-                ] += 1
-        except (KeyError, ValueError) as exc:
-            raise OzonPackagingError("invalid_ozon_packaging_fulfillment") from exc
-        packed: Counter[uuid.UUID] = Counter()
-        for (product_id, _), quantity in grouped.items():
-            packed[product_id] += quantity
-        if units and packed == expected:
-            recipes[order.id] = [
-                {
-                    "product_id": str(product_id),
-                    "storage_location_id": str(location_id),
-                    "quantity": quantity,
-                }
-                for (product_id, location_id), quantity in grouped.items()
-            ]
-        else:
-            # Unit requests allow the existing planner to span several stock keys
-            # for a single position, without silently discarding repeated order IDs.
-            requests.extend(
-                source_svc.FbsShipmentSourceRequest(
-                    fbs_order_id=order.id,
-                    product_id=product_id,
-                    quantity=1,
-                )
-                for product_id, quantity in expected.items()
-                for _ in range(quantity)
+        # Packaging records work, not a physical stock source. Resolve the
+        # actual balances, including containers, through the shipment planner.
+        # Unit requests let one position span several stock keys.
+        requests.extend(
+            source_svc.FbsShipmentSourceRequest(
+                fbs_order_id=order.id,
+                product_id=product_id,
+                quantity=1,
             )
+            for product_id, quantity in expected.items()
+            for _ in range(quantity)
+        )
     for recipe in recipes.values():
         for row in recipe:
             consumption_key = (

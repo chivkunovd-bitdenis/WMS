@@ -231,7 +231,7 @@ async def _picking_auto_passed_reason(
             StorageLocation.code != SORTING_LOCATION_CODE,
             InventoryBalance.tenant_id == tenant_id,
             InventoryBalance.product_id.in_(product_ids),
-            InventoryBalance.quantity_unpacked > 0,
+            InventoryBalance.quantity > 0,
         )
         .limit(1)
     )

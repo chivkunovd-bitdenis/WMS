@@ -795,7 +795,6 @@ async def pick_scan(
                         InventoryBalance.container_kind.is_not(None),
                         InventoryBalance.container_id.is_not(None),
                         InventoryBalance.quantity > 0,
-                        InventoryBalance.quantity_unpacked > 0,
                     )
                 )
             ).all()

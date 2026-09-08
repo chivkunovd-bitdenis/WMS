@@ -1,0 +1,44 @@
+{
+  "scenario": "physical_box_at_system_sorting",
+  "app_code_sha": "1d07e4f4265b369dbd1e97dd456fc4bd23922ff1",
+  "ui_actions": [
+    "open packaging",
+    "pack all: 0/3 -> 3/3",
+    "next: boxes"
+  ],
+  "location_code": "__SORTING__",
+  "unchanged_tables": [
+    "inventory_balances",
+    "inventory_movements",
+    "inventory_reservations",
+    "fbs_order_reservations",
+    "fbs_order_product_reservations",
+    "fbs_order_products",
+    "warehouse_boxes"
+  ],
+  "balances_before_after": [
+    [
+      5,
+      0,
+      5
+    ],
+    [
+      7,
+      4,
+      3
+    ]
+  ],
+  "position_reservations_before_after": [
+    1,
+    2
+  ],
+  "movements_before_after": 0,
+  "pack_quantities_before": [
+    0,
+    0
+  ],
+  "pack_quantities_after": [
+    1,
+    2
+  ]
+}

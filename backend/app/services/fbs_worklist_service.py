@@ -579,7 +579,7 @@ async def _load_location_balances(
                 InventoryBalance.product_id,
                 StorageLocation.id,
                 StorageLocation.code,
-                InventoryBalance.quantity_unpacked,
+                InventoryBalance.quantity,
             )
             .join(
                 StorageLocation,
@@ -590,7 +590,7 @@ async def _load_location_balances(
                 StorageLocation.tenant_id == tenant_id,
                 StorageLocation.warehouse_id == wh_id,
                 InventoryBalance.product_id.in_(pid_list),
-                InventoryBalance.quantity_unpacked > 0,
+                InventoryBalance.quantity > 0,
             )
             .order_by(StorageLocation.code.asc())
         )
@@ -628,8 +628,8 @@ async def _load_location_balances(
         reserved: dict[tuple[uuid.UUID, uuid.UUID], int] = {
             (pid, loc_id): int(qty or 0) for pid, loc_id, qty in rsv_res.all()
         }
-        for pid, loc_id, code, unpacked in balance_rows:
-            avail = max(0, int(unpacked) - reserved.get((pid, loc_id), 0))
+        for pid, loc_id, code, quantity in balance_rows:
+            avail = max(0, int(quantity) - reserved.get((pid, loc_id), 0))
             if avail <= 0:
                 continue
             key = (wh_id, pid)

@@ -39,7 +39,6 @@ from app.models.fbs_supply import (
 from app.models.fbs_trbx import FbsTrbx
 from app.models.packaging_task import STATUS_DRAFT, PackagingTask, PackagingTaskLine
 from app.models.warehouse_box import WarehouseBox
-from app.services import inventory_service as inv_svc
 from app.services import sorting_location_service as sorting_loc_svc
 from app.services.document_number_service import (
     DOC_TYPE_PACKAGING,
@@ -64,12 +63,6 @@ from app.services.fbs_ozon_packaging_service import (
 )
 from app.services.fbs_ozon_packaging_service import (
     resolve_order_for_pack_unit as _resolve_ozon_order_for_pack_unit,
-)
-from app.services.fbs_packaging_stock_service import (
-    insufficient_stock_message as _insufficient_stock_message,
-)
-from app.services.fbs_packaging_stock_service import (
-    try_deduct_from_alternative_sorting_location as _try_deduct_from_alternative_sorting_location,
 )
 from app.services.packaging_task_service import get_task, is_task_complete, qty_done
 
@@ -527,10 +520,8 @@ async def record_fbs_pack_progress(
     order_id: uuid.UUID | None = None,
     acting_user_id: uuid.UUID | None = None,
     idempotency_key: str | None = None,
-    fail_on_insufficient_stock: bool = False,
-    allow_alternative_sorting_fallback: bool = True,
 ) -> FbsPackProgressResult:
-    """Record one packaging fact per FBS unit; only Ozon converts sorting stock."""
+    """Record packaging facts only; physical stock changes at shipment, never here."""
     if qty < 1:
         raise FbsPackagingIntegrationError("invalid_qty")
 
@@ -623,63 +614,6 @@ async def record_fbs_pack_progress(
             line.qty_packed_in_task = int(line.qty_packed_in_task) + 1
             units.append(FbsPackUnitResult(fulfillment, target_order))
             continue
-
-        try:
-            await inv_svc.apply_packaging_convert(
-                session,
-                tenant_id=tenant_id,
-                product_id=line.product_id,
-                storage_location_id=line.storage_location_id,
-                quantity=1,
-                # Packaging uses the total physical balance in the cell.
-                require_unpacked=False,
-            )
-        except ValueError as exc:
-            if str(exc) == "insufficient_stock":
-                if fail_on_insufficient_stock:
-                    insufficient_msg = await _insufficient_stock_message(
-                        session, tenant_id, line
-                    )
-                    raise FbsPackagingIntegrationError(
-                        "insufficient_packaging_stock",
-                        message=insufficient_msg,
-                    ) from exc
-                success = False
-                alt_location_code: str | None = None
-                if allow_alternative_sorting_fallback:
-                    success, alt_location_code = (
-                        await _try_deduct_from_alternative_sorting_location(
-                            session,
-                            tenant_id,
-                            line.product_id,
-                            line.storage_location_id,
-                        )
-                    )
-                if success:
-                    warnings.append(
-                        f"Товар списан из другой ячейки сортировки: {alt_location_code}"
-                    )
-                    logger.warning(
-                        "fbs packing cross-location deduction: tenant=%s product=%s "
-                        "line_location=%s alt_location=%s order=%s",
-                        tenant_id,
-                        line.product_id,
-                        line.storage_location_id,
-                        alt_location_code,
-                        target_order.id,
-                    )
-                else:
-                    insufficient_msg = await _insufficient_stock_message(session, tenant_id, line)
-                    warnings.append("Упаковка продолжена, остаток не списан. " + insufficient_msg)
-                    logger.warning(
-                        "fbs packing without stock: tenant=%s product=%s location=%s order=%s",
-                        tenant_id,
-                        line.product_id,
-                        line.storage_location_id,
-                        target_order.id,
-                    )
-            else:
-                raise
 
         now = datetime.now(UTC)
         fulfillment = _record_ozon_pack_unit(
