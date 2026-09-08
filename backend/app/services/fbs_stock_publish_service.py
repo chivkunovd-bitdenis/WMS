@@ -34,6 +34,7 @@ _HOOKED_KEY = "fbs_stock_publish_hooked"
 async def publish_seller_stocks_now(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
+    marketplace: str | None = None,
 ) -> None:
     """Republish independently for every connected provider after movement commit."""
     from app.services.fbs_autopoll_service import (
@@ -46,7 +47,9 @@ async def publish_seller_stocks_now(
     targets = [
         target
         for target in all_targets
-        if target.tenant_id == tenant_id and target.seller_id == seller_id
+        if target.tenant_id == tenant_id
+        and target.seller_id == seller_id
+        and (marketplace is None or target.marketplace == marketplace)
     ]
 
     async with httpx.AsyncClient() as http_client:
@@ -56,14 +59,17 @@ async def publish_seller_stocks_now(
                     SessionLocal() as session,
                     AsyncSession(bind=session.bind) as lock_session,
                     marketplace_seller_lock(
-                        lock_session, target.seller_id, target.marketplace,
+                        lock_session,
+                        target.seller_id,
+                        target.marketplace,
                         wait_timeout_sec=30,
                     ) as acquired,
                 ):
                     if not acquired:
                         logger.warning(
                             "fbs stock publish deferred: seller=%s marketplace=%s busy",
-                            seller_id, target.marketplace,
+                            seller_id,
+                            target.marketplace,
                         )
                         continue
                     result = await sync_marketplace_stocks_for_target(
@@ -94,12 +100,19 @@ async def publish_seller_stocks_now(
             )
 
 
-def _dispatch(tenant_id: uuid.UUID, seller_id: uuid.UUID) -> None:
+def _dispatch(
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    marketplace: str | None = None,
+) -> None:
     """Hand the publish off to Celery, or to the running loop when there is no broker."""
     if settings.celery_broker_url:
         from app.tasks.background_jobs import run_fbs_stock_publish_seller_task
 
-        run_fbs_stock_publish_seller_task.delay(str(tenant_id), str(seller_id))
+        if marketplace is None:
+            run_fbs_stock_publish_seller_task.delay(str(tenant_id), str(seller_id))
+        else:
+            run_fbs_stock_publish_seller_task.delay(str(tenant_id), str(seller_id), marketplace)
         return
     try:
         loop = asyncio.get_running_loop()
@@ -110,7 +123,11 @@ def _dispatch(tenant_id: uuid.UUID, seller_id: uuid.UUID) -> None:
         )
         return
     # Keep a reference so the task is not garbage-collected mid-flight.
-    task = loop.create_task(publish_seller_stocks_now(tenant_id, seller_id))
+    task = loop.create_task(
+        publish_seller_stocks_now(tenant_id, seller_id, marketplace)
+        if marketplace is not None
+        else publish_seller_stocks_now(tenant_id, seller_id)
+    )
     _BACKGROUND_TASKS.add(task)
     task.add_done_callback(_BACKGROUND_TASKS.discard)
 
@@ -132,6 +149,7 @@ def schedule_seller_stock_publish(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID | None,
+    marketplace: str | None = None,
 ) -> None:
     """Queue an FBS stock publish for this seller, to run once the transaction commits.
 
@@ -140,8 +158,10 @@ def schedule_seller_stock_publish(
     """
     if seller_id is None:
         return
-    pending: set[tuple[uuid.UUID, uuid.UUID]] = session.info.setdefault(_PENDING_KEY, set())
-    pending.add((tenant_id, seller_id))
+    pending: set[tuple[uuid.UUID, uuid.UUID, str | None]] = session.info.setdefault(
+        _PENDING_KEY, set()
+    )
+    pending.add((tenant_id, seller_id, marketplace))
     if session.info.get(_HOOKED_KEY):
         return
     session.info[_HOOKED_KEY] = True
@@ -154,8 +174,11 @@ def schedule_seller_stock_publish(
         if not queued:
             return
         session.info[_PENDING_KEY] = set()
-        for queued_tenant_id, queued_seller_id in queued:
-            _dispatch(queued_tenant_id, queued_seller_id)
+        for queued_tenant_id, queued_seller_id, queued_marketplace in queued:
+            if queued_marketplace is None:
+                _dispatch(queued_tenant_id, queued_seller_id)
+            else:
+                _dispatch(queued_tenant_id, queued_seller_id, queued_marketplace)
 
     @event.listens_for(sync_session, "after_rollback")
     def _after_rollback(_session: object) -> None:

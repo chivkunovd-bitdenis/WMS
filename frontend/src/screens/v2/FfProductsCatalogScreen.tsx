@@ -2125,7 +2125,10 @@ export function FfProductsCatalogScreen({
                     body: JSON.stringify({
                       product_ids: ids,
                       rule: {
-                        publish: rule.publish,
+                        publish: rule.changedPublication && !rule.changedPublication.includes("wb")
+                          ? undefined : rule.publish,
+                        publish_ozon: rule.changedPublication && !rule.changedPublication.includes("ozon")
+                          ? undefined : (rule.publishOzon ?? rule.publish),
                         same_everywhere: rule.sameEverywhere,
                         percent: rule.percent,
                         by_warehouse: rule.byWarehouse,

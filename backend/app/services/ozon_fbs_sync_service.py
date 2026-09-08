@@ -15,7 +15,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -534,7 +534,12 @@ async def _stock_is_published_for_row(
         return False
     published = await session.scalar(
         select(Product.id)
-        .where(Product.id.in_(product_ids), Product.fbs_stock_sync_enabled.is_(True))
+        .where(
+            Product.id.in_(product_ids),
+            func.coalesce(
+                Product.fbs_ozon_stock_sync_enabled, Product.fbs_stock_sync_enabled,
+            ).is_(True),
+        )
         .limit(1)
     )
     return published is not None

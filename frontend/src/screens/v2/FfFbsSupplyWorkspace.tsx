@@ -71,6 +71,8 @@ import {
   assignFbsPackingBoxOrders,
   clearFbsPackingBox,
   commitFbsKiz,
+  fbsKizOrderNumber,
+  syncFbsOrderMarkings,
   createFbsPackingBoxes,
   createFbsIdempotencyKey,
   deleteFbsOrderKiz,
@@ -213,8 +215,9 @@ export function stickerCodeParts(code: string | null): { head: string; tail: str
   return { head: value.slice(0, -4), tail: value.slice(-4) }
 }
 
-function kizErrorTextByCode(code: string, message: string, context: unknown): string {
-  if (code === 'sticker_not_found') return 'Стикер не найден в этой поставке'
+function kizErrorTextByCode(code: string, message: string, context: unknown, provider = 'WB'): string {
+  if (code === 'sticker_not_found') return 'Номер или стикер заказа не найден в этой поставке'
+  if (code === 'sticker_ambiguous') return 'Скан совпал с несколькими заказами. Введите номер отправления.'
   if (code === 'order_frozen') return 'Заказ уже передан в доставку — КИЗ не изменить'
   if (code === 'duplicate_kiz') {
     const details = context as { wb_order_id?: number; created_at?: string } | null
@@ -230,13 +233,13 @@ function kizErrorTextByCode(code: string, message: string, context: unknown): st
     return `На этот заказ уже есть ЧЗ${current}. Внести другой КИЗ?`
   }
   if (code === 'not_a_kiz') return 'Это не похоже на Честный знак'
-  if (code === 'meta_validation_fail') return `WB не принял: ${message}`
+  if (code === 'meta_validation_fail') return `${provider} не принял: ${message}`
   return fbsErrorText(message)
 }
 
-function kizErrorText(cause: unknown): string {
+function kizErrorText(cause: unknown, provider = 'WB'): string {
   if (cause instanceof FbsApiError) {
-    return kizErrorTextByCode(cause.code, cause.message, cause.context)
+    return kizErrorTextByCode(cause.code, cause.message, cause.context, provider)
   }
   return cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось выполнить операцию'
 }
@@ -345,6 +348,8 @@ export function FfFbsSupplyWorkspace({
   const [kizScanError, setKizScanError] = useState<KizScanError | null>(null)
   const [kizScanHints, setKizScanHints] = useState<string[]>([])
   const [kizScanDebugOpen, setKizScanDebugOpen] = useState(false)
+  const [kizConfirmValue, setKizConfirmValue] = useState<string | null>(null)
+  const [kizScanNotice, setKizScanNotice] = useState<string | null>(null)
   const [kizConfirmTarget, setKizConfirmTarget] = useState<FbsKizLookup | null>(null)
   const kizScanInputRef = useRef<HTMLInputElement | null>(null)
   const [addOrdersOpen, setAddOrdersOpen] = useState(false)
@@ -417,6 +422,8 @@ export function FfFbsSupplyWorkspace({
     setKizScanHints([])
     setKizScanDebugOpen(false)
     setKizConfirmTarget(null)
+    setKizConfirmValue(null)
+    setKizScanNotice(null)
     if (!initialWorkspace) void load()
   }, [open, supplyId, initialWorkspace, load])
 
@@ -589,18 +596,18 @@ export function FfFbsSupplyWorkspace({
         else setKizScanActive(found)
         setKizScanValue('')
       } catch (cause) {
-        setKizScanError({ text: kizErrorText(cause), debug: kizScannerDebug(cause) })
+        setKizScanError({ text: kizErrorText(cause, providerName), debug: kizScannerDebug(cause) })
         setKizScanValue('')
       } finally {
         setKizScanBusy(false)
         refocusKizInput()
       }
     },
-    [workspace, token, authHeaders, refocusKizInput, load],
+    [workspace, token, authHeaders, refocusKizInput, load, providerName],
   )
 
   const scanKizCode = useCallback(
-    async (raw: string) => {
+    async (raw: string, confirmed = false) => {
       if (!kizScanActive) return
       setKizScanBusy(true)
       setKizScanError(null)
@@ -612,19 +619,30 @@ export function FfFbsSupplyWorkspace({
         const results = await commitFbsKiz(
           token,
           authHeaders,
-          [{ order_id: kizScanActive.order_id, value: raw, confirmed: kizScanActive.needs_confirmation }],
+          [{ order_id: kizScanActive.order_id, value: raw, confirmed: confirmed || kizScanActive.needs_confirmation }],
           createFbsIdempotencyKey(),
         )
         const outcome = results.find((item) => item.order_id === kizScanActive.order_id)
-        if (outcome && outcome.status !== 'ok') {
+        if (!outcome) throw new Error('Сервер не подтвердил сохранение кода')
+        if (outcome.status !== 'ok') {
+          if (outcome.code === 'needs_confirmation' && isOzonSupply) {
+            setKizConfirmValue(raw)
+            setKizConfirmTarget(kizScanActive)
+            return
+          }
           setKizScanError({
-            text: kizErrorTextByCode(outcome.code ?? '', outcome.message ?? 'Не сохранено', null),
+            text: kizErrorTextByCode(outcome.code ?? '', outcome.message ?? 'Не сохранено', null, providerName),
             debug: null,
           })
           setKizScanValue('')
           await load(true)
           return
         }
+        setKizScanNotice(isOzonSupply
+          ? outcome.meta_status === 'accepted'
+            ? `Код принят Ozon · ${fbsKizOrderNumber(kizScanActive)}`
+            : `Код сохранён · Ozon проверяет · ${fbsKizOrderNumber(kizScanActive)}`
+          : null)
         setKizScanActive(null)
         setKizScanValue('')
         await load(true)
@@ -634,7 +652,7 @@ export function FfFbsSupplyWorkspace({
           kizRowRefs.current[kizScanActive.order_id]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
         })
       } catch (cause) {
-        setKizScanError({ text: kizErrorText(cause), debug: kizScannerDebug(cause) })
+        setKizScanError({ text: kizErrorText(cause, providerName), debug: kizScannerDebug(cause) })
         setKizScanValue('')
         await load(true)
       } finally {
@@ -642,14 +660,14 @@ export function FfFbsSupplyWorkspace({
         refocusKizInput()
       }
     },
-    [kizScanActive, token, authHeaders, refocusKizInput, load],
+    [kizScanActive, token, authHeaders, refocusKizInput, load, isOzonSupply, providerName],
   )
 
   const onKizScanEnter = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
       if (event.key !== 'Enter' || kizScanBusy) return
       event.preventDefault()
-      const raw = kizScanValue.trim()
+      const raw = kizScanValue.replace(/[ \t\r\n\v\f]+$/, '')
       if (!raw) return
       if (kizScanActive) void scanKizCode(raw)
       else void scanKizSticker(raw)
@@ -1846,7 +1864,7 @@ export function FfFbsSupplyWorkspace({
                           autoComplete="off"
                           value={kizScanValue}
                           disabled={!packagingEditable || kizScanBusy}
-                          placeholder={kizScanActive ? 'Сканируйте Честный знак' : 'Сканируйте QR стикера заказа'}
+                          placeholder={kizScanActive ? 'Сканируйте Честный знак' : (isOzonSupply ? 'Номер отправления или штрихкод Ozon' : 'Сканируйте QR стикера заказа')}
                           onChange={(event) => setKizScanValue(event.target.value)}
                           onKeyDown={onKizScanEnter}
                           data-testid="fbs-kiz-scan-input"
@@ -1869,7 +1887,7 @@ export function FfFbsSupplyWorkspace({
                                 {kizScanActive.product.name}
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
-                                № {kizScanActive.wb_order_id}
+                                {providerName} № {fbsKizOrderNumber(kizScanActive)}
                               </Typography>
                             </Box>
                           </Stack>
@@ -1882,9 +1900,10 @@ export function FfFbsSupplyWorkspace({
                         data-testid="fbs-kiz-scan-message"
                       >
                         {kizScanActive
-                          ? `Заказ № ${kizScanActive.wb_order_id} активен — сканируйте Честный знак, код привяжется и уйдёт в WB.`
-                          : 'Сканируйте QR стикера заказа — его строка станет активной, затем сканируйте Честный знак.'}
+                          ? `Заказ ${providerName} № ${fbsKizOrderNumber(kizScanActive)} активен — сканируйте Честный знак, код уйдёт на проверку в ${providerName}.`
+                          : isOzonSupply ? 'Введите номер отправления или сканируйте штрихкод Ozon, затем Честный знак каждой единицы товара.' : 'Сканируйте QR стикера заказа — его строка станет активной, затем сканируйте Честный знак.'}
                       </Typography>
+                      {kizScanNotice ? <Typography variant="caption" sx={{ display: 'block' }} data-testid="fbs-kiz-scan-result">{kizScanNotice}</Typography> : null}
                       {kizScanHints.length > 0 ? (
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                           {kizScanHints.map((hint) => KIZ_HINT_TEXT[hint] ?? hint).join(' · ')}
@@ -1938,11 +1957,21 @@ export function FfFbsSupplyWorkspace({
                         order.product.barcode,
                         isOzonSupply ? `заказ Ozon ${order.external_order_id ?? '—'}` : `заказ ${order.wb_order_id}`,
                       ].filter(Boolean).join(' · ')
-                      const markingState = order.metadata.states.find((state) => state.kind === 'sgtin')
+                      const czStates = order.metadata.states.filter((state) => state.kind === 'sgtin' && state.status !== 'missing')
+                      const acceptedCz = czStates.filter((state) => state.status === 'accepted').length
+                      const czRejected = czStates.some((state) => state.status === 'rejected' || state.status === 'replacement_required')
+                      const czReady = order.metadata.delivery_allowed && czStates.every((state) => state.status === 'accepted')
+                      const markingState = isOzonSupply
+                        ? czStates.find((state) => state.status === 'rejected' || state.status === 'replacement_required')
+                          ?? czStates.find((state) => state.status !== 'accepted') ?? czStates[0]
+                        : order.metadata.states.find((state) => state.kind === 'sgtin')
                       const markingView = fbsMarkingPresentation(markingState, providerName)
+                      if (isOzonSupply && !czReady && markingView.tone === 'success') {
+                        markingView.tone = 'neutral'
+                        markingView.label = 'Ozon ещё не подтвердил все коды'
+                      }
                       const markingColor = markingView.tone === 'success' ? 'success.dark'
                         : markingView.tone === 'error' ? 'error.main' : 'text.secondary'
-                      // The code identifies the label; only WB's verdict determines its colour.
                       const tail = markingState?.value_tail ?? null
                       const stickerParts = stickerCodeParts(order.sticker.code)
                       return (
@@ -2034,6 +2063,23 @@ export function FfFbsSupplyWorkspace({
                             ) : (
                               <Typography sx={{ color: 'text.disabled', fontSize: 15 }}>—</Typography>
                             )}
+                            {isOzonSupply && czStates.length > 0 ? <>
+                              <Typography variant="caption" sx={{ display: 'block', color: czRejected ? 'error.main' : 'text.secondary' }} data-testid="fbs-ozon-kiz-status">
+                                {czRejected ? 'Ozon не подтвердил коды' : `Принято Ozon: ${acceptedCz}${czReady ? ' · все коды' : ''}`}
+                                {!czRejected && czStates.some((state) => state.status !== 'accepted') ? ' · проверяется' : ''}
+                              </Typography>
+                              <Button size="small" disabled={kizScanBusy} onClick={async () => {
+                                setKizScanBusy(true)
+                                setKizScanError(null)
+                                try {
+                                  await syncFbsOrderMarkings(token, authHeaders, order.id)
+                                  await load(true)
+                                  setKizScanNotice(null)
+                                } catch (cause) {
+                                  setKizScanError({ text: kizErrorText(cause, providerName), debug: null })
+                                } finally { setKizScanBusy(false); refocusKizInput() }
+                              }}>Проверить ЧЗ</Button>
+                            </> : null}
                           </Box>
                           {printed ? <Typography sx={{ color: 'success.main', fontWeight: 700 }}>✓</Typography> : null}
                           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
@@ -2454,7 +2500,9 @@ export function FfFbsSupplyWorkspace({
         <DialogTitle>Заказ уже с ЧЗ</DialogTitle>
         <DialogContent>
           <Typography variant="body2">
-            На заказ № {kizConfirmTarget?.wb_order_id} уже есть ЧЗ {kizConfirmTarget?.current_kiz?.masked}. Внести другой КИЗ?
+            {isOzonSupply
+              ? `На позицию заказа Ozon № ${kizConfirmTarget ? fbsKizOrderNumber(kizConfirmTarget) : '—'} уже внесены коды. Заменить последний код этой позиции?`
+              : `На заказ № ${kizConfirmTarget?.wb_order_id} уже есть ЧЗ ${kizConfirmTarget?.current_kiz?.masked}. Внести другой КИЗ?`}
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -2463,7 +2511,9 @@ export function FfFbsSupplyWorkspace({
             variant="contained"
             data-testid="fbs-kiz-confirm-replace"
             onClick={() => {
-              setKizScanActive(kizConfirmTarget)
+              if (kizConfirmValue !== null) void scanKizCode(kizConfirmValue, true)
+              else setKizScanActive(kizConfirmTarget)
+              setKizConfirmValue(null)
               setKizConfirmTarget(null)
               refocusKizInput()
             }}

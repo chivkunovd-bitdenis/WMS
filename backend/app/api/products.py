@@ -376,7 +376,8 @@ class ProductFbsRuleBody(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    publish: bool
+    publish: bool | None = None
+    publish_ozon: bool | None = None
     same_everywhere: bool
     percent: int = Field(ge=0, le=100)
     # Ключ — идентификатор склада в кабинете WB (он приходит числом, но в JSON
@@ -1498,7 +1499,9 @@ async def patch_product_fbs_stock_sync(
             fbs_stock_limit=limit_patch,
         )
     except CatalogError as exc:
-        if exc.code in {"empty_patch", "invalid_fbs_stock_limit"}:
+        if exc.code in {
+            "empty_patch", "invalid_fbs_stock_limit", "stock_cleanup_failed", "stock_sync_busy",
+        }:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=exc.code,
@@ -1574,6 +1577,7 @@ async def _assert_products_rule_access(
 def _rule_from_body(body: ProductFbsRuleBody) -> FbsRule:
     return FbsRule(
         publish=body.publish,
+        publish_ozon=body.publish_ozon,
         same_everywhere=body.same_everywhere,
         percent=body.percent,
         by_warehouse={
@@ -1593,6 +1597,7 @@ def _rule_view_out(
     return ProductFbsRuleBulkItemOut(
         product_id=str(product_id),
         publish=view.rule.publish,
+        publish_ozon=view.rule.publish_ozon,
         same_everywhere=view.rule.same_everywhere,
         percent=view.rule.percent,
         by_warehouse={str(key): value for key, value in view.rule.by_warehouse.items()},
@@ -1648,6 +1653,7 @@ async def get_product_fbs_rule(
         ) from None
     return ProductFbsRuleOut(
         publish=view.rule.publish,
+        publish_ozon=view.rule.publish_ozon,
         same_everywhere=view.rule.same_everywhere,
         percent=view.rule.percent,
         by_warehouse={str(key): value for key, value in view.rule.by_warehouse.items()},
@@ -1743,7 +1749,7 @@ async def patch_products_fbs_stock_sync_bulk(
             fbs_stock_limit=bulk_limit_patch,
         )
     except CatalogError as exc:
-        if exc.code == "invalid_fbs_stock_limit":
+        if exc.code in {"invalid_fbs_stock_limit", "stock_cleanup_failed", "stock_sync_busy"}:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=exc.code,

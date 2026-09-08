@@ -196,8 +196,9 @@ async def plan_shipment_sources(
                 continue
             # An earlier attempt may have stopped before assembly. Its source
             # recipe must not retain an older quantity after a real composition change.
-        # Packing is a work fact, not a source selection. Resolve the physical
-        # pick/container/warehouse through the same planner as unpacked orders.
+        # Packaging records work, not a physical stock source. Resolve the
+        # actual balances, including containers, through the shipment planner.
+        # Unit requests let one position span several stock keys.
         requests.extend(
             source_svc.FbsShipmentSourceRequest(
                 fbs_order_id=order.id,

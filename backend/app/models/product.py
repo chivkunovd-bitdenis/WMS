@@ -93,6 +93,8 @@ class Product(Base):
     fbs_stock_sync_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    # NULL preserves the old shared switch until an operator saves a rule.
+    fbs_ozon_stock_sync_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     fbs_stock_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Правило вместо снимка: доля свободного остатка, которую отдаём в FBS.
     # Само число считается на момент публикации, поэтому не устаревает от прихода

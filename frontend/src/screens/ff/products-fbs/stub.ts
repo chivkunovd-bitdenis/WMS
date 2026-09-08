@@ -73,8 +73,10 @@ export type Product = {
 
 /** Настройка публикации остатка в FBS по товару. */
 export type FbsRule = {
+  changedPublication?: MarketplaceCode[]
   productId: string
   publish: boolean
+  publishOzon?: boolean
   /** Один процент на все склады, либо свой процент по каждому. */
   sameEverywhere: boolean
   percent: number
@@ -233,18 +235,22 @@ export function amountFromPercent(freeStockQty: number, percent: number): number
  * половину остатка, а уезжал весь (50% + 50%); при долях 50/20/30 на 201
  * свободной штуке окно писало 201, а уезжало 200.
  */
+export function publishesTo(rule: FbsRule, marketplace: MarketplaceCode): boolean {
+  return marketplace === 'ozon' ? (rule.publishOzon ?? rule.publish) : rule.publish
+}
+
 export function splitAmounts(
   rule: FbsRule,
   freeStockQty: number,
   served: SellerWarehouse[],
 ): Record<string, number> {
   const amounts: Record<string, number> = {}
-  if (!rule.publish) {
-    for (const warehouse of served) amounts[warehouse.id] = 0
-    return amounts
-  }
   let remaining = Math.max(freeStockQty, 0)
   for (const warehouse of served) {
+    if (!publishesTo(rule, warehouseMarketplace(warehouse))) {
+      amounts[warehouse.id] = 0
+      continue
+    }
     // В режиме штук доля не участвует вовсе: берётся заданное число, но обрезка
     // по свободному остатку остаётся — столько товара может просто не быть.
     const share = rule.unitsMode
@@ -262,7 +268,6 @@ export function splitAmounts(
 
 /** Сколько уйдёт в Wildberries по этому правилу прямо сейчас. */
 export function publishedQty(product: Product, rule: FbsRule, seller: Seller): number {
-  if (!rule.publish) return 0
   // Остаток уходит только на обслуживаемые склады. Если не выбран ни один,
   // отправлять некуда, и показывать посчитанное по проценту число нельзя:
   // оператор решит, что товар выставлен, а в кабинет не уйдёт ничего.

@@ -84,3 +84,30 @@ def test_scan_in_russian_layout_finds_order() -> None:
 def test_latin_scan_is_not_touched_by_layout_repair() -> None:
     """Нормальный латинский скан не должен «чиниться» — только один вариант."""
     assert sticker_scan_candidates("*DVNdzDVg\n") == ["*DVNdzDVg"]
+
+
+def test_ozon_posting_number_is_an_order_identifier() -> None:
+    target = _order()
+    target.marketplace = "ozon"
+    target.external_order_id = "12345678-0001-1"
+    assert _find_order_by_sticker([target], "12345678-0001-1") is target
+
+
+def test_ozon_split_posting_number_finds_its_order() -> None:
+    target = _order()
+    target.marketplace = "ozon"
+    target.external_order_id = "12345678-0001-1"
+    target.meta_details_json = {"ozon_assembly": {"posting_numbers": ["12345678-0001-2"]}}
+    assert _find_order_by_sticker([target], "12345678-0001-2") is target
+
+
+def test_ambiguous_ozon_barcode_does_not_choose_first_order() -> None:
+    import pytest
+
+    from app.services.fbs_kiz_service import FbsKizError
+
+    orders = [_order(wb_barcode="shared"), _order(wb_barcode="shared")]
+    for order in orders:
+        order.marketplace = "ozon"
+    with pytest.raises(FbsKizError, match="sticker_ambiguous"):
+        _find_order_by_sticker(orders, "shared")
