@@ -1,6 +1,7 @@
 """WMS-085: selected printing/clearing stays within selected orders and marking stock."""
 
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
@@ -190,7 +191,11 @@ async def test_selected_tape_reuses_code_and_clear_never_changes_inventory(
 ) -> None:
     headers, supply_id, orders = await seed_selection(async_client)
     before = await inventory_snapshot()
+    from app.services import fbs_marking_service as marking_svc
+
     sent = _patch_wb_acceptance(monkeypatch)
+    put = AsyncMock(wraps=marking_svc.put_marketplace_order_meta)
+    monkeypatch.setattr(marking_svc, "put_marketplace_order_meta", put)
     requested = [str(orders[i].order_id) for i in (0, 1)]
     payload = {
         "order_ids": requested,
@@ -204,7 +209,9 @@ async def test_selected_tape_reuses_code_and_clear_never_changes_inventory(
     assert printed.status_code == 200, printed.text
     assert printed.json()["order_errors"] == [], printed.text
     assert [row["order_id"] for row in printed.json()["orders"]] == requested
-    assert set(sent) == {orders[0].wb_order_id, orders[1].wb_order_id}
+    # The first order already has an accepted code; only the new binding goes to WB.
+    assert set(sent) == {orders[1].wb_order_id}
+    assert put.await_count == 1
     for reprint in (False, True):
         response = await async_client.post(
             url, headers=headers, json={**payload, "reprint": reprint}
@@ -213,6 +220,7 @@ async def test_selected_tape_reuses_code_and_clear_never_changes_inventory(
         assert [row["codes"] for row in response.json()["orders"]] == [
             row["codes"] for row in printed.json()["orders"]
         ]
+    assert put.await_count == 1
     assert await inventory_snapshot() == before
     async with SessionLocal() as session:
         assert (

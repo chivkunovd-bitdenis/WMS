@@ -441,6 +441,7 @@ async def test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_fail
     warehouse_uuid = uuid.UUID(warehouse_id)
     wb_order_ids = list(range(970000, 970201))
     now = datetime.now(tz=UTC)
+    wb_ids_by_local_id: dict[uuid.UUID, int] = {}
     async with SessionLocal() as session:
         supply = FbsSupply(
             tenant_id=tenant_id,
@@ -471,6 +472,7 @@ async def test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_fail
             )
             session.add(order)
             await session.flush()
+            wb_ids_by_local_id[order.id] = wb_order_id
             session.add(
                 FbsOrderMarking(
                     order_id=order.id,
@@ -483,6 +485,8 @@ async def test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_fail
             )
         await session.commit()
 
+    # Batches follow the common UUID lock order, independently of WB creation dates.
+    wb_order_ids = [wb_ids_by_local_id[key] for key in sorted(wb_ids_by_local_id)]
     requested_batches: list[list[int]] = []
     completed_batches: list[list[int]] = []
     synced_wb_order_ids: list[int] = []
@@ -527,8 +531,14 @@ async def test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_fail
         token: str,
         *,
         meta_batch: list[MarketplaceOrderMetaRow] | None = None,
+        expected_marking_ids: set[uuid.UUID] | None = None,
     ) -> list[object]:
         assert meta_batch is not None
+        assert len(completed_batches) == 3
+        current_ids = set((await session.scalars(select(FbsOrderMarking.id).where(
+            FbsOrderMarking.order_id == order.id,
+        ))).all())
+        assert expected_marking_ids == current_ids and len(current_ids) == 1
         if meta_batch:
             assert [row.order_id for row in meta_batch] == [order.wb_order_id]
         else:
