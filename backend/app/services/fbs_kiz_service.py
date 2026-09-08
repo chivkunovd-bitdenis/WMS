@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -42,8 +42,11 @@ from app.models.marking_code import (
     EVENT_VOIDED,
     STATUS_APPLIED,
     STATUS_AVAILABLE,
+    STATUS_INTRODUCED,
     STATUS_PRINTED,
     STATUS_RESERVED,
+    STATUS_SHIPPED,
+    STATUS_TRANSFERRED,
     STATUS_VOID,
     MarkingCode,
 )
@@ -889,19 +892,22 @@ async def validate_kiz_pair(
 async def _current_sgtin_marking_for_update(
     session: AsyncSession,
     order_id: uuid.UUID,
+    *,
+    include_rejected: bool = False,
 ) -> FbsOrderMarking | None:
     stmt = (
         select(FbsOrderMarking)
         .where(
             FbsOrderMarking.order_id == order_id,
             FbsOrderMarking.kind == MARKING_KIND_SGTIN,
-            FbsOrderMarking.meta_status != META_STATUS_REJECTED,
         )
         .options(selectinload(FbsOrderMarking.marking_code))
         .order_by(FbsOrderMarking.created_at.desc(), FbsOrderMarking.id.desc())
         .limit(1)
         .with_for_update()
     )
+    if not include_rejected:
+        stmt = stmt.where(FbsOrderMarking.meta_status != META_STATUS_REJECTED)
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
@@ -1155,9 +1161,17 @@ async def cancel_order_kiz(
     await session.rollback()
     try:
         order = await _get_order_for_kiz(session, tenant_id, order_id, for_update=True)
-        current = await _current_sgtin_marking_for_update(session, order.id)
+        current = await _current_sgtin_marking_for_update(session, order.id, include_rejected=True)
         if current is None:
             raise FbsKizError("kiz_not_found", context={"order_id": str(order.id)})
+        line = None
+        if current.marking_code is not None and current.marking_code.packaging_task_line_id:
+            line = await session.scalar(
+                select(PackagingTaskLine)
+                .where(PackagingTaskLine.id == current.marking_code.packaging_task_line_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
         await void_existing_sgtin_marking(
             session,
             tenant_id,
@@ -1167,6 +1181,27 @@ async def cancel_order_kiz(
             actor_user_id=actor_user_id,
             reason=_VOID_OPERATOR_CANCEL_REASON,
         )
+        if line is not None:
+            # Cancelled labels no longer cover a unit. Re-read the existing codes
+            # under the same line lock as printing; pool-to-external replacement
+            # can have left its unit in the old printed counter.
+            count_rows = await session.execute(
+                select(MarkingCode.source, func.count(MarkingCode.id))
+                .where(
+                    MarkingCode.tenant_id == tenant_id,
+                    MarkingCode.packaging_task_line_id == line.id,
+                    MarkingCode.status.in_({
+                        STATUS_RESERVED, STATUS_PRINTED, STATUS_APPLIED,
+                        STATUS_INTRODUCED, STATUS_SHIPPED, STATUS_TRANSFERRED,
+                    }),
+                )
+                .group_by(MarkingCode.source)
+            )
+            counts = {source: count for source, count in count_rows}
+            line.qty_marking_external = counts.get(_EXTERNAL_FBS_MARKING_SOURCE, 0)
+            line.qty_marking_printed = sum(
+                count for source, count in counts.items() if source != _EXTERNAL_FBS_MARKING_SOURCE
+            )
         await session.commit()
     except FbsKizError:
         await session.rollback()

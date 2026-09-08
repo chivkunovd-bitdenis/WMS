@@ -316,6 +316,8 @@ export function FfFbsSupplyWorkspace({
   const [printBatch, setPrintBatch] = useState<FbsPrintBatch | null>(null)
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
   const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
+  const [packingSelectedIds, setPackingSelectedIds] = useState<Set<string>>(() => new Set())
+  const [clearMarkingOrders, setClearMarkingOrders] = useState<FbsWorkspace['orders'] | null>(null)
   const [boxCount, setBoxCount] = useState('1')
   const [boxAssignTarget, setBoxAssignTarget] = useState<string | null>(null)
   const [boxProductSearch, setBoxProductSearch] = useState('')
@@ -397,6 +399,8 @@ export function FfFbsSupplyWorkspace({
     const restoredDeliveryKey = persistentOperationKey(supplyId, 'delivery')
     deliveryKeyRef.current = restoredDeliveryKey
     setPrintBatch(null)
+    setPackingSelectedIds(new Set())
+    setClearMarkingOrders(null)
     setBoxCount('1')
     setBoxAssignTarget(null)
     setBoxProductSearch('')
@@ -955,6 +959,17 @@ export function FfFbsSupplyWorkspace({
     return total
   }
 
+  const markingShortageForOrders = (orders: FbsWorkspace['orders']) => {
+    const needed = new Map<string, number>()
+    for (const order of orders) {
+      if (requiresOrderHonestSign(order) && order.product.id && !kizTail(order)) {
+        needed.set(order.product.id, (needed.get(order.product.id) ?? 0) + 1)
+      }
+    }
+    return [...needed].reduce((sum, [productId, quantity]) =>
+      sum + Math.max(0, quantity - (packLineByProduct.get(productId)?.marking_available_count ?? 0)), 0)
+  }
+
   const openBulkOrderMarkingPrint = (orders: Array<FbsWorkspace['orders'][number]>, reprint = false) => {
     if (!workspace || orders.length === 0) return
     const firstOrder = orders[0]
@@ -982,6 +997,7 @@ export function FfFbsSupplyWorkspace({
         productLabel: productLabelFromOrder(firstOrder),
         fbsTape: {
           orders: tapeOrders,
+          markingShortage: markingShortageForOrders(orders),
           includeOrderQr: true,
           print: ({ layout, allowPartial, reprint: printReprint }) => {
             const body: FbsOrderPrintTapeRequest = {
@@ -1001,6 +1017,39 @@ export function FfFbsSupplyWorkspace({
       },
       { reprint },
     )
+  }
+
+  const clearSelectedMarking = async () => {
+    if (!clearMarkingOrders || !workspace) return
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    let cleared = 0
+    try {
+      // Первый отказ WB останавливает операцию; повтор затрагивает только
+      // оставшиеся выбранные заказы. Успешно снятые коды остаются void.
+      for (const order of clearMarkingOrders) {
+        if (!order.metadata.states.some((state) => state.kind === 'sgtin' && state.value_tail)) continue
+        try {
+          await deleteFbsOrderKiz(token, authHeaders, order.id)
+        } catch (cause) {
+          const message = cause instanceof Error ? fbsErrorText(cause.message) : 'Операция не выполнена.'
+          setError(`Заказ № ${order.wb_order_id}: ${message} Очистка остановлена. Очищено: ${cleared}.`)
+          return
+        }
+        cleared += 1
+        setPackingSelectedIds((current) => {
+          const next = new Set(current)
+          next.delete(order.id)
+          return next
+        })
+      }
+      setNotice(`ЧЗ очищены у ${cleared} заказов.`)
+    } finally {
+      setClearMarkingOrders(null)
+      await refreshPackagingTask()
+      setBusy(false)
+    }
   }
 
   /** Печать ЧЗ и ШК заказа через стандартный конструктор системы. */
@@ -1028,6 +1077,7 @@ export function FfFbsSupplyWorkspace({
             requiresHonestSign: requiresOrderHonestSign(order),
             productLabel: productLabelFromOrder(order),
           }],
+          markingShortage: markingShortageForOrders([order]),
           includeOrderQr: false,
           print: ({ layout, allowPartial, reprint: printReprint }) => {
             const body: FbsOrderPrintTapeRequest = {
@@ -1206,7 +1256,20 @@ export function FfFbsSupplyWorkspace({
   )
 
   const printedOrdersCount = packingOrders.filter(orderPrintDone).length
-  const unprintedPackingOrders = packingOrders.filter((order) => !orderPrintDone(order))
+  // Выбор сохраняет тот же порядок, что и исходная лента / лист подбора.
+  const selectedPackingOrders = fullTapeOrders.filter((order) => packingSelectedIds.has(order.id))
+  const printPackingOrders = selectedPackingOrders.length ? selectedPackingOrders : fullTapeOrders
+  const markingNeededByProduct = new Map<string, number>()
+  for (const order of packingOrders) {
+    const hasWorkingCode = order.metadata.states.some((state) => state.kind === 'sgtin'
+      && ['assigned', 'sending', 'pending', 'accepted', 'allowed_without_check'].includes(state.status))
+    if (order.product.id && requiresOrderHonestSign(order) && !hasWorkingCode) {
+      markingNeededByProduct.set(order.product.id, (markingNeededByProduct.get(order.product.id) ?? 0) + 1)
+    }
+  }
+  const clearableSelectedCount = selectedPackingOrders.filter((order) =>
+    order.metadata.states.some((state) => state.kind === 'sgtin' && state.value_tail),
+  ).length
   const markingShortOrderIds = new Set(workspace?.marking_pool?.orders_without_code ?? [])
   // Строка скана КИЗ доступна на любой поставке и любом товаре, без оглядки на
   // признак маркировки в карточке и на requiredMeta от WB. Если Честный знак
@@ -1707,22 +1770,31 @@ export function FfFbsSupplyWorkspace({
                           Напечатано {printedOrdersCount} из {packingOrders.length} · упаковано {workspace.progress.packed} из {workspace.progress.total}
                         </Typography>
                       </Box>
-                      <Stack direction="row" spacing={1}>
+                      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                        <Button
+                          disabled={busy || packingOrders.length === 0}
+                          onClick={() => setPackingSelectedIds(selectedPackingOrders.length === packingOrders.length
+                            ? new Set()
+                            : new Set(packingOrders.map((order) => order.id)))}
+                          data-testid="fbs-packing-select-all"
+                        >
+                          {selectedPackingOrders.length === packingOrders.length && packingOrders.length > 0 ? 'Снять выбор' : 'Выбрать всё'}
+                        </Button>
                         <Button
                           disabled={busy || packingOrders.length === 0}
                           onClick={() => openBulkOrderMarkingPrint(
-                            // L8 (21.08.2026): в ленту идут ВСЕ заказы поставки, а не только
-                            // ненапечатанные. Иначе после первой печати (или после зажёванной
-                            // бумаги) лента выходила короче листа подбора, и оператор об этом
-                            // не знал. Коды Честного знака от этого не жгутся: у заказа, где
-                            // код уже выпущен, сервер переиспользует его, а не берёт новый.
-                            fullTapeOrders,
-                            unprintedPackingOrders.length === 0,
+                            printPackingOrders,
+                            printPackingOrders.every(orderPrintDone),
                           )}
                           data-task-id="FBS-21"
                         >
-                          Печать всего ({packingOrders.length})
+                          {selectedPackingOrders.length ? `Печать выбранного (${selectedPackingOrders.length})` : `Печать всего (${packingOrders.length})`}
                         </Button>
+                        {!isOzonSupply && selectedPackingOrders.length > 0 ? (
+                          <Button color="error" disabled={!packagingEditable || busy || clearableSelectedCount === 0} onClick={() => setClearMarkingOrders([...selectedPackingOrders])} data-testid="fbs-packing-clear-selected">
+                            Очистить ЧЗ
+                          </Button>
+                        ) : null}
                         <Button variant="contained" disabled={!packagingEditable || busy} onClick={() => void packEverything()}>
                           Всё упаковано
                         </Button>
@@ -1847,6 +1919,10 @@ export function FfFbsSupplyWorkspace({
                     {packingOrders.map((order) => {
                       const line = order.product.id ? packLineByProduct.get(order.product.id) : undefined
                       const printed = orderPrintDone(order)
+                      const needsHonestSign = requiresOrderHonestSign(order)
+                      const markingNeeded = order.product.id ? markingNeededByProduct.get(order.product.id) ?? 0 : Number(needsHonestSign)
+                      const markingAvailable = line?.marking_available_count ?? 0
+                      const markingShortage = needsHonestSign && markingAvailable < markingNeeded
                       const mutedColor = printed ? 'text.secondary' : 'text.primary'
                       const kizRowActive = kizScanActive?.order_id === order.id
                       const ids = [
@@ -1875,11 +1951,24 @@ export function FfFbsSupplyWorkspace({
                                 ? 'success.light'
                                 : (printed ? 'action.hover' : 'background.paper'),
                             borderLeft: '4px solid',
-                            borderLeftColor: kizRowActive ? 'info.main' : (tail ? 'success.main' : 'transparent'),
+                            borderLeftColor: markingShortage ? 'error.main' : kizRowActive ? 'info.main' : (tail ? 'success.main' : 'transparent'),
                           }}
                           data-testid={kizRowActive ? 'fbs-kiz-row-active' : undefined}
                           data-kiz-tail={tail ?? ''}
+                          data-order-id={order.id}
                         >
+                          <Checkbox
+                            checked={packingSelectedIds.has(order.id)}
+                            disabled={busy}
+                            onChange={(_, checked) => setPackingSelectedIds((current) => {
+                              const next = new Set(current)
+                              if (checked) next.add(order.id)
+                              else next.delete(order.id)
+                              return next
+                            })}
+                            slotProps={{ input: { 'aria-label': `Выбрать заказ ${isOzonSupply ? order.external_order_id : order.wb_order_id}` } }}
+                            data-testid="fbs-packing-select-order"
+                          />
                           <ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={40} previewSize={280} />
                           <Box sx={{ flex: 1, minWidth: 0 }}>
                             <Typography variant="body2" sx={{ fontWeight: 700, color: mutedColor }}>
@@ -1887,9 +1976,15 @@ export function FfFbsSupplyWorkspace({
                             </Typography>
                             <Typography variant="caption" sx={{ display: 'block', color: printed ? 'text.secondary' : 'text.secondary' }}>
                               {ids}
-                              {markingShortOrderIds.has(order.id) ? <Box component="span" sx={{ color: '#854f0b' }}> · ЧЗ не хватило</Box> : null}
+                              {markingShortOrderIds.has(order.id) ? <Box component="span" sx={{ color: 'error.main' }}> · ЧЗ не хватило</Box> : null}
                             </Typography>
                           </Box>
+                          {needsHonestSign ? (
+                            <Box sx={{ width: 118, flexShrink: 0, textAlign: 'right', color: markingShortage ? 'error.main' : 'text.secondary' }} data-testid="fbs-packing-marking-available">
+                              <Typography variant="caption" sx={{ display: 'block' }}>Доступно ЧЗ</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: markingShortage ? 700 : 400 }}>{markingAvailable} · нужно {markingNeeded}</Typography>
+                            </Box>
+                          ) : null}
                           <Box sx={{ width: 150, flexShrink: 0, textAlign: 'right' }}>
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
                               Стикер
@@ -2314,6 +2409,25 @@ export function FfFbsSupplyWorkspace({
           >
             Сдать без Честного знака
           </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={clearMarkingOrders !== null} onClose={() => { if (!busy) setClearMarkingOrders(null) }} maxWidth="sm" fullWidth>
+        <DialogTitle>Очистить ЧЗ у выбранных заказов?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Привязки снимутся у нас и в WB. Коды останутся в истории и не вернутся в свободный пул. Затем можно внести правильные коды. Упаковка и остаток товара не изменятся.
+          </Typography>
+          <Stack spacing={1} data-testid="fbs-packing-clear-preview">
+            {clearMarkingOrders?.map((order) => (
+              <Typography key={order.id} variant="body2">
+                № {order.wb_order_id} · {order.product.name} · {order.metadata.states.find((state) => state.kind === 'sgtin' && state.value_tail)?.value_tail ?? 'ЧЗ не привязан — без изменений'}
+              </Typography>
+            ))}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={busy} onClick={() => setClearMarkingOrders(null)}>Отмена</Button>
+          <Button color="error" variant="contained" disabled={busy} onClick={() => void clearSelectedMarking()} data-testid="fbs-packing-clear-confirm">Очистить ЧЗ</Button>
         </DialogActions>
       </Dialog>
       {markingPrintDialog}
