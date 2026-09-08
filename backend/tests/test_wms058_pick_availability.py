@@ -5,12 +5,19 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.fbs_order import FbsOrder, FbsOrderProduct, FbsOrderReservation
+from app.models.fbs_order import (
+    FbsOrder,
+    FbsOrderProduct,
+    FbsOrderProductPick,
+    FbsOrderProductReservation,
+    FbsOrderReservation,
+)
 from app.models.fbs_supply import FbsSupply
 from app.models.inventory_balance import InventoryBalance
+from app.models.inventory_movement import InventoryMovement
 from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnloadRequest
 from app.models.storage_location import StorageLocation
 from app.models.user import User
@@ -40,7 +47,7 @@ async def seed(session: AsyncSession, *, kind: str = "loose", marketplace: str =
         role="fulfillment_admin",
     )
     session.add(actor)
-    if kind == "sorting":
+    if kind in {"sorting", "sorting_box"}:
         location = await get_or_create_sorting_location(session, tenant.id, warehouse.id)
     else:
         location = StorageLocation(
@@ -49,7 +56,7 @@ async def seed(session: AsyncSession, *, kind: str = "loose", marketplace: str =
         session.add(location)
     await session.flush()
     box = None
-    if kind == "box":
+    if kind in {"box", "sorting_box"}:
         box = WarehouseBox(
             tenant_id=tenant.id,
             warehouse_id=warehouse.id,
@@ -194,6 +201,12 @@ async def test_ozon_undo_returns_to_original_box_and_repeat_pick_is_single(
     for _ in range(2):
         await picking.manual_pick_product(s, tenant.id, supply.id, idempotency_key="pick", **args)
         await s.commit()
+    # Pre-migration picks have only the real transfer as source evidence.
+    old_pick = await s.scalar(select(FbsOrderProductPick))
+    assert old_pick.inventory_movement_id is not None
+    old_pick.source_container_kind = None
+    old_pick.source_container_id = None
+    await s.commit()
     options = await picking.get_pick_options(s, tenant.id, supply.id)
     source = next(
         row for row in options[0].locations if row.storage_location_id == location.id
@@ -290,10 +303,11 @@ async def test_mp_collection_cannot_spend_fbs_reservation_across_locations(
 
 
 @pytest.mark.asyncio
-async def test_ozon_set_quantity_undo_targets_selected_box(db_session: AsyncSession):
+@pytest.mark.parametrize("kind", ["box", "sorting_box"])
+async def test_ozon_set_quantity_undo_targets_selected_box(db_session: AsyncSession, kind: str):
     s = db_session
     tenant, _, warehouse, product, order, supply, actor, location, box = await seed(
-        s, kind="box", marketplace="ozon"
+        s, kind=kind, marketplace="ozon"
     )
     assert box is not None
     position = await s.scalar(select(FbsOrderProduct).where(FbsOrderProduct.order_id == order.id))
@@ -336,5 +350,212 @@ async def test_ozon_set_quantity_undo_targets_selected_box(db_session: AsyncSess
         assert result.quantity == qty
     remaining = await balances(s, product)
     assert remaining[(location.id, box.id)] == 1
-    assert (location.id, second_box.id) not in remaining
+    if kind == "sorting_box":
+        assert remaining[(location.id, second_box.id)] == 1
+    else:
+        assert (location.id, second_box.id) not in remaining
     assert sum(remaining.values()) == 2
+    options = await picking.get_pick_options(s, tenant.id, supply.id)
+    sources = next(
+        row for row in options[0].locations if row.storage_location_id == location.id
+    ).sources
+    assert {row.container_path[-1].id: row.picked for row in sources if row.container_path} == {
+        box.id: 0,
+        second_box.id: 1,
+    }
+    active = (
+        await s.scalars(select(FbsOrderProductPick).where(FbsOrderProductPick.undone_at.is_(None)))
+    ).all()
+    assert len(active) == 1
+    assert active[0].source_container_id == second_box.id
+
+
+@pytest.mark.asyncio
+async def test_ozon_sorting_box_set_is_final_quantity_without_movements(db_session: AsyncSession):
+    s = db_session
+    tenant, _, warehouse, product, order, supply, actor, location, box = await seed(
+        s, kind="sorting_box", marketplace="ozon"
+    )
+    assert box is not None
+    position = await s.scalar(select(FbsOrderProduct).where(FbsOrderProduct.order_id == order.id))
+    position.quantity = 2
+    balance = await s.scalar(
+        select(InventoryBalance).where(InventoryBalance.product_id == product.id)
+    )
+    balance.quantity = balance.quantity_unpacked = 2
+    s.add(
+        FbsOrderProductReservation(
+            tenant_id=tenant.id,
+            warehouse_id=warehouse.id,
+            product_id=product.id,
+            order_product_id=position.id,
+            quantity=2,
+        )
+    )
+    await s.commit()
+    before = await balances(s, product)
+    for index, qty in enumerate((1, 1, 0)):
+        result = await picking.set_pick_quantity(
+            s,
+            tenant.id,
+            supply.id,
+            product_id=product.id,
+            storage_location_id=location.id,
+            quantity=qty,
+            idempotency_key=f"set-{index}",
+            actor=actor,
+            container_kind="box",
+            container_id=box.id,
+        )
+        await s.commit()
+        assert result.quantity == result.picked_qty == qty
+        options = await picking.get_pick_options(s, tenant.id, supply.id)
+        assert options[0].picked_qty == qty
+        row = next(row for row in options[0].locations if row.storage_location_id == location.id)
+        assert row.picked == qty
+        assert len(row.sources) == 1
+        source = row.sources[0]
+        assert source.container_path[-1].id == box.id
+        assert source.picked == qty and source.available == 2 - qty
+        assert await balances(s, product) == before
+        assert await s.scalar(select(func.count(InventoryMovement.id))) == 0
+        assert (
+            await s.scalar(
+                select(FbsOrderProductReservation.quantity).where(
+                    FbsOrderProductReservation.order_product_id == position.id
+                )
+            )
+            == 2
+        )
+
+
+@pytest.mark.asyncio
+async def test_ozon_sorting_box_scan_response_matches_get_and_set_undo(db_session: AsyncSession):
+    s = db_session
+    tenant, _, _, product, _, supply, actor, location, box = await seed(
+        s, kind="sorting_box", marketplace="ozon"
+    )
+    assert box is not None
+    for _ in range(2):
+        result = await picking.pick_scan(
+            s,
+            tenant.id,
+            supply.id,
+            barcode=product.sku_code,
+            product_id_hint=product.id,
+            storage_location_id=location.id,
+            idempotency_key="scan",
+            actor=actor,
+            container_kind="box",
+            container_id=box.id,
+        )
+        await s.commit()
+        assert result.picked_qty == result.allocation_quantity == 1
+    result = await picking.set_pick_quantity(
+        s,
+        tenant.id,
+        supply.id,
+        product_id=product.id,
+        storage_location_id=location.id,
+        quantity=0,
+        idempotency_key="undo-scan",
+        actor=actor,
+        container_kind="box",
+        container_id=box.id,
+    )
+    await s.commit()
+    assert result.quantity == result.picked_qty == 0
+    assert await s.scalar(select(func.count(InventoryMovement.id))) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("undo_by_id", [False, True])
+async def test_ozon_old_null_pick_stays_at_place_without_invented_container(
+    db_session: AsyncSession,
+    undo_by_id: bool,
+):
+    s = db_session
+    tenant, _, _, product, order, supply, actor, location, box = await seed(
+        s, kind="sorting_box", marketplace="ozon"
+    )
+    assert box is not None
+    position = await s.scalar(select(FbsOrderProduct).where(FbsOrderProduct.order_id == order.id))
+    position.picked_quantity = 1
+    order.pick_status = "picked"
+    old_pick = FbsOrderProductPick(
+        tenant_id=tenant.id,
+        fbs_supply_id=supply.id,
+        order_product_id=position.id,
+        product_id=product.id,
+        source_storage_location_id=location.id,
+        sorting_storage_location_id=location.id,
+        inventory_movement_id=None,
+        scan_idempotency_key="legacy",
+        picked_at=datetime.now(UTC),
+    )
+    s.add(old_pick)
+    await s.commit()
+    before = await balances(s, product)
+    options = await picking.get_pick_options(s, tenant.id, supply.id)
+    row = next(row for row in options[0].locations if row.storage_location_id == location.id)
+    assert row.picked == 1 and row.available == 0
+    source = next(source for source in row.sources if source.picked)
+    assert not source.is_loose and source.container_path == ()
+    assert source.source_label == "Место подбора (тара не сохранена)"
+    actual_box = next(source for source in row.sources if source.container_path)
+    assert actual_box.container_path[-1].id == box.id
+    assert actual_box.picked == 0 and actual_box.available == 0
+    result = await picking.set_pick_quantity(
+        s,
+        tenant.id,
+        supply.id,
+        product_id=product.id,
+        storage_location_id=location.id,
+        quantity=0,
+        idempotency_key="box-does-not-own-legacy",
+        actor=actor,
+        container_kind="box",
+        container_id=box.id,
+    )
+    assert result.quantity == 0 and result.picked_qty == 1
+    result = await picking.set_pick_quantity(
+        s,
+        tenant.id,
+        supply.id,
+        product_id=product.id,
+        storage_location_id=location.id,
+        quantity=1,
+        idempotency_key="keep-place",
+        actor=actor,
+    )
+    assert result.quantity == result.picked_qty == 1
+    if undo_by_id:
+        await picking.undo_pick(
+            s,
+            tenant.id,
+            supply.id,
+            order.id,
+            original_pick_id=old_pick.id,
+            idempotency_key="undo-id",
+            actor=actor,
+        )
+    else:
+        result = await picking.set_pick_quantity(
+            s,
+            tenant.id,
+            supply.id,
+            product_id=product.id,
+            storage_location_id=location.id,
+            quantity=0,
+            idempotency_key="undo-place",
+            actor=actor,
+        )
+        assert result.quantity == result.picked_qty == 0
+    await s.commit()
+    options = await picking.get_pick_options(s, tenant.id, supply.id)
+    assert options[0].picked_qty == 0
+    assert await balances(s, product) == before
+    assert await s.scalar(select(func.count(InventoryMovement.id))) == 0
+    await s.refresh(old_pick)
+    assert old_pick.undone_at is not None
+    assert old_pick.source_container_kind is old_pick.source_container_id is None

@@ -222,12 +222,18 @@ async def _picked_qty_by_product_source(
         )
         picked[key] = picked.get(key, 0) + int(quantity)
 
+    source_kind = func.coalesce(
+        FbsOrderProductPick.source_container_kind, InventoryMovement.container_kind
+    )
+    source_id = func.coalesce(
+        FbsOrderProductPick.source_container_id, InventoryMovement.container_id
+    )
     position_rows = await session.execute(
         select(
             FbsOrderProductPick.product_id,
             FbsOrderProductPick.source_storage_location_id,
-            InventoryMovement.container_kind,
-            InventoryMovement.container_id,
+            source_kind,
+            source_id,
             func.count(FbsOrderProductPick.id),
         )
         .outerjoin(
@@ -241,8 +247,8 @@ async def _picked_qty_by_product_source(
         .group_by(
             FbsOrderProductPick.product_id,
             FbsOrderProductPick.source_storage_location_id,
-            InventoryMovement.container_kind,
-            InventoryMovement.container_id,
+            source_kind,
+            source_id,
         )
     )
     for product_id, location_id, kind, container_id, quantity in position_rows.all():
@@ -274,6 +280,20 @@ async def get_pick_options(
     for (product_id, _location_id), quantity in picked_by_location.items():
         picked_by_product[product_id] = picked_by_product.get(product_id, 0) + quantity
 
+    unlocated_rows = await session.execute(
+        select(
+            FbsOrderProductPick.product_id,
+            FbsOrderProductPick.source_storage_location_id,
+        ).where(
+            FbsOrderProductPick.tenant_id == tenant_id,
+            FbsOrderProductPick.fbs_supply_id == supply.id,
+            FbsOrderProductPick.undone_at.is_(None),
+            FbsOrderProductPick.inventory_movement_id.is_(None),
+            FbsOrderProductPick.source_container_kind.is_(None),
+            FbsOrderProductPick.source_container_id.is_(None),
+        )
+    )
+    unlocated_picked_places = {(pid, loc) for pid, loc in unlocated_rows.all()}
     try:
         locations_by_product = await pick_location_svc.list_pick_option_locations(
             session,
@@ -282,6 +302,7 @@ async def get_pick_options(
             product_ids,
             picked_by_location,
             picked_by_source,
+            unlocated_picked_places=unlocated_picked_places,
         )
     except pick_location_svc.PickOptionLocationError as exc:
         raise FbsPickingError(
@@ -368,8 +389,12 @@ async def _active_assignments_for_product_location(
             InventoryMovement, InventoryMovement.id == FbsOrderProductPick.inventory_movement_id
         )
         .where(
-            InventoryMovement.container_kind == container_kind,
-            InventoryMovement.container_id == container_id,
+            func.coalesce(
+                FbsOrderProductPick.source_container_kind, InventoryMovement.container_kind
+            ) == container_kind,
+            func.coalesce(
+                FbsOrderProductPick.source_container_id, InventoryMovement.container_id
+            ) == container_id,
             FbsOrderProductPick.tenant_id == tenant_id,
             FbsOrderProductPick.fbs_supply_id == supply_id,
             FbsOrderProductPick.product_id == product_id,
@@ -1106,6 +1131,8 @@ async def scan_pick_product(
             order_product_id=target_position.id,
             fbs_supply_id=supply.id,
             source_storage_location_id=location.id,
+            source_container_kind=container_kind,
+            source_container_id=container_id,
             sorting_storage_location_id=sorting_location.id,
             product_id=product.id,
             inventory_movement_id=movement_id,
