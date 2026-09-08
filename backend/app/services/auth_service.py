@@ -312,7 +312,8 @@ async def set_password_by_link(
         user_id, _purpose, fingerprint = decode_auth_link_token(token)
     except AuthLinkError as exc:
         raise AuthError(exc.args[0] if exc.args else "link_invalid") from exc
-    user = await session.get(User, user_id)
+    # Serialize link consumption and recheck the latest password fingerprint.
+    user = await session.get(User, user_id, with_for_update=True, populate_existing=True)
     if user is None:
         raise AuthError("link_invalid")
     if not fingerprint_matches(user, fingerprint):

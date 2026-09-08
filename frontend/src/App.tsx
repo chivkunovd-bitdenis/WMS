@@ -2801,7 +2801,7 @@ export default function App() {
   }, [ffDocDirty, refreshInboundList, token])
 
   const rootElement = (() => {
-    if (!token) {
+    if (!token || location.pathname.endsWith('/set-password')) {
       return (
         <PublicAuthScreen
           variant="fulfillment"
