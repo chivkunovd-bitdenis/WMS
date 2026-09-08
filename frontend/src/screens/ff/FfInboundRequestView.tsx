@@ -1919,6 +1919,8 @@ export function FfInboundRequestView({
     setFinishConfirmOpen(false)
     try {
       await receivingScanQueue(async () => undefined)
+      receivingScanReconciler.cancel()
+      ++loadDetailSeq.current
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${requestId}/complete-receiving`),
         { method: 'POST', headers: authHeaders },
@@ -1927,7 +1929,9 @@ export function FfInboundRequestView({
         setError(scanErrorMessageRu(await readApiErrorMessage(res)))
         return
       }
-      setDetail((await res.json()) as InboundDetail)
+      const completed = (await res.json()) as InboundDetail
+      ++loadDetailSeq.current
+      setDetail(completed)
       setDistOpen(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось завершить приёмку.')
