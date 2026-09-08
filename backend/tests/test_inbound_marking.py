@@ -278,10 +278,20 @@ async def test_failed_check_scheduling_cannot_undo_posting(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("marketplace", ["wb", "ozon"])
+@pytest.mark.parametrize("race", [False, True])
 async def test_receiving_code_binds_as_external_once_and_cannot_be_printed(
     async_client: httpx.AsyncClient,
     marketplace: str,
+    race: bool,
 ) -> None:
+    import asyncio
+
+    from sqlalchemy import text
+
+    from app.db.session import engine
+
+    if race and engine.dialect.name != "postgresql":
+        pytest.skip("PostgreSQL row locks required")
     from app.models.packaging_task import PackagingTaskLine
     from app.services.fbs_kiz_service import _prepare_code_for_binding
     from app.services.ozon_kiz_service import OzonKizError, _claim_or_create_code
@@ -338,7 +348,66 @@ async def test_receiving_code_binds_as_external_once_and_cannot_be_printed(
             )
         assert bound.id == code.id and not from_pool
         assert code.status == "applied" and code.packaging_task_line_id == line.id
-        await session.commit()
+        if race:
+            async with SessionLocal() as contender:
+                # Hold a stale identity-map copy before the other transaction commits.
+                stale = await contender.get(MarkingCode, code.id)
+                assert stale.packaging_task_line_id is None
+                other_order = FbsOrder(
+                    tenant_id=tenant,
+                    seller_id=seller,
+                    product_id=seeded.product_id,
+                    id=uuid.uuid4(),
+                )
+                other_line = await contender.get(PackagingTaskLine, line.id)
+                pid = await contender.scalar(text("SELECT pg_backend_pid()"))
+
+                async def competing_claim() -> str:
+                    try:
+                        if marketplace == "wb":
+                            await _claim_or_create_code(
+                                contender, other_order, seeded.product_id, CIS, other_line
+                            )
+                        else:
+                            await _prepare_code_for_binding(
+                                contender, tenant, other_order, CIS, other_line
+                            )
+                    except (OzonKizError, intake.InboundIntakeError) as exc:
+                        return exc.code
+                    except Exception as exc:
+                        from app.services.fbs_kiz_service import FbsKizError
+
+                        if isinstance(exc, FbsKizError):
+                            return exc.code
+                        raise
+                    return "unexpected_second_claim"
+
+                pending = asyncio.create_task(competing_claim())
+                try:
+                    async with SessionLocal() as observer:
+                        async with asyncio.timeout(10):
+                            while True:
+                                waiting = await observer.scalar(
+                                    text(
+                                        "SELECT wait_event_type FROM pg_stat_activity "
+                                        "WHERE pid = :pid"
+                                    ),
+                                    {"pid": pid},
+                                )
+                                await observer.rollback()
+                                if waiting == "Lock":
+                                    break
+                                assert not pending.done(), "Claim bypassed code row lock"
+                                await asyncio.sleep(0.01)
+                    await session.commit()
+                    assert await asyncio.wait_for(pending, 10) == "duplicate_kiz"
+                finally:
+                    await session.rollback()
+                    if not pending.done():
+                        pending.cancel()
+                    await asyncio.gather(pending, return_exceptions=True)
+        else:
+            await session.commit()
         assert not await marking.is_unbound_received_code(session, code)
         with pytest.raises(OzonKizError, match="duplicate_kiz"):
             await _claim_or_create_code(session, order, seeded.product_id, CIS, line)
