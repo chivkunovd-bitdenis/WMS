@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from wb_emulator.services.fault_injection import get_faults
-from wb_emulator.services.marking_meta import get_meta
+from wb_emulator.services.marking_meta import get_meta, get_meta_details
 
 router = APIRouter()
 
@@ -44,9 +44,7 @@ def get_orders_meta_batch(body: OrdersMetaBody, request: Request) -> dict[str, A
             {
                 "id": order_id,
                 "meta": get_meta(seller_key, order_id),
-                # WB отдаёт metaDetails только когда есть вердикт проверки;
-                # эмулятор держит статусы в meta.checkStatus, поэтому здесь пусто.
-                "metaDetails": [],
+                "metaDetails": get_meta_details(seller_key, order_id),
             }
         )
     return {"orders": orders}

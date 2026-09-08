@@ -61,6 +61,30 @@ def get_meta(seller_key: str, order_id: int) -> dict[str, Any]:
     return dict(stored)
 
 
+def get_meta_details(seller_key: str, order_id: int) -> list[dict[str, str]]:
+    """Expose the existing check results in the marketplace batch contract."""
+    stored = _meta_store.get((seller_key, order_id), {})
+    return [
+        {
+            "key": kind,
+            "value": entry["value"],
+            "decision": "accepted" if entry["checkStatus"] == "ok" else "rejected",
+        }
+        for kind, plural in _META_PLURAL_KEYS.items()
+        for entry in stored.get(plural, [])
+    ]
+
+
+def delete_meta(seller_key: str, order_id: int, kind: str) -> None:
+    """Remove only the requested metadata kind from the existing seller bucket."""
+    plural = plural_key_for_kind(kind)
+    bucket = _meta_store.get((seller_key, order_id))
+    if bucket is not None:
+        bucket.pop(plural, None)
+        if not bucket:
+            _meta_store.pop((seller_key, order_id), None)
+
+
 def parse_put_values(kind: str, body: dict[str, Any]) -> list[str]:
     """Extract values from PUT body (plural array key per WB contract)."""
     plural = plural_key_for_kind(kind)

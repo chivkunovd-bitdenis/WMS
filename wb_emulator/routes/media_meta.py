@@ -10,10 +10,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from wb_emulator.db import get_db
+from wb_emulator.services import orders_store
 from wb_emulator.services import supplies_store as store
 from wb_emulator.services.fault_injection import get_faults, maybe_delay
 from wb_emulator.services.marking_meta import (
     META_KINDS,
+    delete_meta,
     get_meta,
     parse_put_values,
     upsert_meta,
@@ -134,3 +136,20 @@ def put_order_meta(
     for value in values:
         upsert_meta(seller_key, order_id, kind, value)
     return {"status": "ok"}
+
+
+@router.delete("/orders/{order_id}/meta", status_code=204)
+def delete_order_meta(
+    request: Request,
+    order_id: int,
+    session: DbSession,
+    key: str = Query(),
+) -> Response:
+    """DELETE /api/v3/orders/{order_id}/meta?key=… — clear one metadata kind."""
+    seller_key = _seller_key(request)
+    if key not in META_KINDS:
+        raise HTTPException(status_code=400, detail="invalid_meta_kind")
+    if orders_store.get_order(session, seller_key, order_id) is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    delete_meta(seller_key, order_id, key)
+    return Response(status_code=204)
