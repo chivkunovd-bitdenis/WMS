@@ -489,7 +489,10 @@ async def _run_check_job(job_id: uuid.UUID) -> None:
                         client, [code for _, code in batch], tokens[seller_id]
                     )
                     async with SessionLocal() as session:
-                        job = await session.get(BackgroundJob, job_id)
+                        # Same lock order as schedule_check: a replacement owns its
+                        # pending snapshots before an expired worker can write back.
+                        await _request(session, tenant_id, request_id, lock=True)
+                        job = await session.get(BackgroundJob, job_id, populate_existing=True)
                         if job is None or job.status != "running":
                             return
                         events = (await session.scalars(
