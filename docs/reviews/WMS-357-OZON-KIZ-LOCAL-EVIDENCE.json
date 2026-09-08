@@ -233,5 +233,22 @@
         "posting_number": "ozon-posting-products"
       }
     ]
-  ]
+  ],
+  "after_rejection_unchanged": {
+    "inventory_balances": true,
+    "inventory_movements": true,
+    "fbs_order_product_reservations": true,
+    "fbs_order_products": true
+  },
+  "after_rejection_statuses": [
+    "rejected",
+    "rejected",
+    "rejected"
+  ],
+  "boxes_tab": {
+    "opened": true,
+    "packed_quantity": 0,
+    "total_quantity": 3,
+    "ship_called": false
+  }
 }

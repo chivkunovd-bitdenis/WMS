@@ -1951,7 +1951,7 @@ export function FfFbsSupplyWorkspace({
                             )}
                             {isOzonSupply && czStates.length > 0 ? <>
                               <Typography variant="caption" sx={{ display: 'block', color: czRejected ? 'error.main' : 'text.secondary' }} data-testid="fbs-ozon-kiz-status">
-                                {czRejected ? 'Ozon отклонил код' : `Принято Ozon: ${acceptedCz}${czReady ? ' · все коды' : ''}`}
+                                {czRejected ? 'Ozon не подтвердил коды' : `Принято Ozon: ${acceptedCz}${czReady ? ' · все коды' : ''}`}
                                 {!czRejected && czStates.some((state) => state.status !== 'accepted') ? ' · проверяется' : ''}
                               </Typography>
                               <Button size="small" disabled={kizScanBusy} onClick={async () => {
