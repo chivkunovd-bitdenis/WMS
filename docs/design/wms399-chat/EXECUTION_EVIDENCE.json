@@ -11,7 +11,7 @@
   "canonical_instruction_commit": "ac319400",
   "scope": "isolated requirements and React prototype; no backend or production changes",
   "dependencies": "existing frontend/node_modules symlink; no install",
-  "status": "author_pass_completed_typecheck_failed",
+  "status": "build_pass_browser_findings",
   "resume_same_session": true,
   "continued_observed_model": "claude-opus-4-7",
   "rate_limit_type": "five_hour",
@@ -19,9 +19,10 @@
   "reset_unix": 1788903000,
   "reset_local": "2026-09-09T00:30:00+03:00",
   "overage_rejected_reason": "out_of_credits",
-  "browser_checked": false,
-  "build": "passed: npm run build (Vite)",
-  "typecheck": "failed: TS6133 Composer Stack unused; TS2339 NotificationsScreen notificationPrefs missing",
+  "browser_checked": true,
+  "build": "passed: npm run build after Opus compiler fixes",
+  "typecheck": "passed: npm run typecheck after Opus compiler fixes",
   "author_pass_result": "success; exit 0",
-  "author_pass_base": "966592fbd6b5d0064803bbdc271e3a20c0f69fad"
+  "author_pass_base": "966592fbd6b5d0064803bbdc271e3a20c0f69fad",
+  "browser_status": "partial pass; thread count privacy and viewport/composer layout findings returned to author"
 }

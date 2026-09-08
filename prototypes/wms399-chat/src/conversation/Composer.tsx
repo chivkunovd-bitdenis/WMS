@@ -8,7 +8,6 @@ import {
   Menu,
   MenuItem,
   Paper,
-  Stack,
   Switch,
   TextField,
   Tooltip,

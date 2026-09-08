@@ -27,7 +27,8 @@ const KIND_COLORS: Record<NotificationKind, string> = {
 }
 
 export function NotificationsScreen() {
-  const { data, dispatchData, actions, actorById, currentActor, notificationPrefs } = useStore()
+  const { ui, data, dispatchData, actions, actorById, currentActor } = useStore()
+  const notificationPrefs = ui.notificationPrefs
 
   const visibleForRole = (n: NotificationEntry): boolean => {
     const conv = data.conversations.get(n.conversationId)
