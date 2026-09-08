@@ -1,0 +1,38 @@
+WMS-399 incomplete checkpoint, 2026-09-09
+Command: node_modules/.bin/tsc --noEmit --ignoreDeprecations 6.0
+Exit code: 2. Diagnostics condensed to compiler error headers.
+
+src/App.tsx(8,30): error TS2307: Cannot find module './search/SearchScreen' or its corresponding type declarations.
+src/App.tsx(9,37): error TS2307: Cannot find module './notifications/NotificationsScreen' or its corresponding type declarations.
+src/App.tsx(10,35): error TS2307: Cannot find module './notifications/PreferencesScreen' or its corresponding type declarations.
+src/App.tsx(11,26): error TS2307: Cannot find module './conversation/Lightbox' or its corresponding type declarations.
+src/App.tsx(12,36): error TS2307: Cannot find module './participants/ParticipantsDrawer' or its corresponding type declarations.
+src/App.tsx(13,38): error TS2307: Cannot find module './conversation/DocumentPickerDialog' or its corresponding type declarations.
+src/conversation/Composer.tsx(185,10): error TS2769: No overload matches this call.
+src/conversation/Composer.tsx(196,10): error TS2769: No overload matches this call.
+src/conversation/Composer.tsx(251,9): error TS2322: Type '{ inputRef: RefObject<HTMLTextAreaElement | null>; placeholder: string; multiline: true; minRows: number; maxRows: number; fullWidth: true; value: string; onChange: (e: ChangeEvent<...>) => void; onKeyDown: (e: KeyboardEvent<...>) => void; sx: { ...; }; InputProps: { ...; }; }' is not assignable to type 'IntrinsicAttributes & { variant?: TextFieldVariants | undefined; } & Omit<FilledTextFieldProps | OutlinedTextFieldProps | StandardTextFieldProps, "variant">'.
+src/conversation/Composer.tsx(258,8): error TS2769: No overload matches this call.
+src/conversation/Composer.tsx(314,16): error TS2769: No overload matches this call.
+src/conversation/Composer.tsx(363,6): error TS2769: No overload matches this call.
+src/conversation/Composer.tsx(381,11): error TS2322: Type '{ size: "small"; checked: boolean; onChange: (e: ChangeEvent<HTMLInputElement, Element>) => void; inputProps: { 'aria-label': string; }; }' is not assignable to type 'IntrinsicAttributes & SwitchProps'.
+src/conversation/ConversationScreen.tsx(16,30): error TS2307: Cannot find module './ContextPanel' or its corresponding type declarations.
+src/conversation/MessageBubble.tsx(70,8): error TS2769: No overload matches this call.
+src/conversation/MessageBubble.tsx(159,10): error TS2769: No overload matches this call.
+src/conversation/MessageBubble.tsx(192,14): error TS2769: No overload matches this call.
+src/conversation/MessageBubble.tsx(222,12): error TS2769: No overload matches this call.
+src/conversation/MessageBubble.tsx(492,8): error TS2769: No overload matches this call.
+src/conversation/MessageBubble.tsx(518,8): error TS2769: No overload matches this call.
+src/conversation/MessageBubble.tsx(597,22): error TS2769: No overload matches this call.
+src/conversation/ThreadPanel.tsx(52,8): error TS2769: No overload matches this call.
+src/inbox/ConversationRow.tsx(83,10): error TS2769: No overload matches this call.
+src/inbox/ConversationRow.tsx(94,10): error TS2769: No overload matches this call.
+src/inbox/ConversationRow.tsx(113,10): error TS2769: No overload matches this call.
+src/inbox/InboxScreen.tsx(51,10): error TS2769: No overload matches this call.
+src/inbox/InboxScreen.tsx(63,11): error TS2322: Type '{ fullWidth: true; size: "small"; placeholder: string; value: string; onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement, Element>) => void; InputProps: { ...; }; }' is not assignable to type 'IntrinsicAttributes & { variant?: TextFieldVariants | undefined; } & Omit<FilledTextFieldProps | OutlinedTextFieldProps | StandardTextFieldProps, "variant">'.
+src/shell/DemoStateDrawer.tsx(42,7): error TS2322: Type '{ children: Element[]; anchor: "right"; open: boolean; onClose: () => void; PaperProps: { sx: { width: number; p: number; }; }; }' is not assignable to type 'IntrinsicAttributes & DrawerProps'.
+src/shell/DemoStateDrawer.tsx(45,10): error TS2769: No overload matches this call.
+src/shell/DemoStateDrawer.tsx(77,12): error TS2769: No overload matches this call.
+src/shell/TopBar.tsx(28,10): error TS2769: No overload matches this call.
+src/shell/TopBar.tsx(61,10): error TS2769: No overload matches this call.
+src/shell/TopBar.tsx(94,14): error TS2769: No overload matches this call.
+src/state/selectors.ts(39,35): error TS6133: 'actor' is declared but its value is never read.
