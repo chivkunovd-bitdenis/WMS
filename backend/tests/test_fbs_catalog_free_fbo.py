@@ -87,6 +87,13 @@ async def test_catalog_free_fbo_excludes_order_reserves_in_both_modes(
     assert row["quantity_free_fbo"] == expected_free
     assert row["available"] == expected_free
     assert row["quantity_fbs"] == (2 + reserve_qty if units_mode else 0)
+    picker = await async_client.get(
+        "/operations/marketplace-unload-requests/available-products",
+        headers=headers, params={"warehouse_id": str(warehouse_id), "seller_id": seller_id},
+    )
+    assert picker.status_code == 200, picker.text
+    picked_row = next(item for item in picker.json() if item["product_id"] == str(product_id))
+    assert picked_row["available"] == expected_free
 
     # Releasing the existing reservation changes only derived availability.
     async with SessionLocal() as session:

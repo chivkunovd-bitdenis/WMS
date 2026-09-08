@@ -607,15 +607,6 @@ async def list_available_products(
     allocated_fbs = await fbs_allocated_available_by_product(
         session, tenant_id, warehouse_id, product_ids
     )
-    units_products = set(
-        (
-            await session.scalars(
-                select(Product.id).where(
-                    Product.id.in_(product_ids), Product.fbs_units_mode.is_(True)
-                )
-            )
-        ).all()
-    )
     direction_totals = await stock_direction_service.direction_totals_by_product(
         session, tenant_id, product_ids
     )
@@ -629,11 +620,11 @@ async def list_available_products(
                 quantity_total
                 - (
                     direction_totals[product_id].total
-                    + (int(fbs_reserved.get(product_id, 0)) if product_id in units_products else 0)
                     if direction_totals.get(product_id) is not None
                     and direction_totals[product_id].has_any
-                    else int(fbs_reserved.get(product_id, 0))
+                    else 0
                 )
+                - fbs_reserved.get(product_id, 0)
                 - outbound_reserved.get(product_id, 0)
                 - mp_reserved.get(product_id, 0)
                 - allocated_fbs.get(product_id, 0),
