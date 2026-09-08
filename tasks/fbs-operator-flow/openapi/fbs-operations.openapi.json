@@ -1780,6 +1780,22 @@
               "default": 100,
               "title": "Limit"
             }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
           }
         ],
         "responses": {
@@ -5898,6 +5914,79 @@
         ],
         "title": "FbsCancelledCargoPlaceOut"
       },
+      "FbsCancelledDeliveryBoxOut": {
+        "properties": {
+          "box_id": {
+            "type": "string",
+            "title": "Box Id"
+          },
+          "box_number": {
+            "type": "integer",
+            "title": "Box Number"
+          },
+          "box_barcode": {
+            "type": "string",
+            "title": "Box Barcode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "box_id",
+          "box_number",
+          "box_barcode"
+        ],
+        "title": "FbsCancelledDeliveryBoxOut"
+      },
+      "FbsCancelledDeliveryOrderOut": {
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "title": "Order Id"
+          },
+          "wb_order_id": {
+            "type": "integer",
+            "title": "Wb Order Id"
+          },
+          "article": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Article"
+          },
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
+          },
+          "boxes": {
+            "items": {
+              "$ref": "#/components/schemas/FbsCancelledDeliveryBoxOut"
+            },
+            "type": "array",
+            "title": "Boxes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_id",
+          "wb_order_id",
+          "article",
+          "product_name",
+          "boxes"
+        ],
+        "title": "FbsCancelledDeliveryOrderOut"
+      },
       "FbsCancelledProductOut": {
         "properties": {
           "id": {
@@ -6438,6 +6527,13 @@
             },
             "type": "array",
             "title": "Checks"
+          },
+          "cancelled_orders": {
+            "items": {
+              "$ref": "#/components/schemas/FbsCancelledDeliveryOrderOut"
+            },
+            "type": "array",
+            "title": "Cancelled Orders"
           }
         },
         "type": "object",
@@ -7818,6 +7914,10 @@
             "type": "integer",
             "title": "Quantity"
           },
+          "available": {
+            "type": "integer",
+            "title": "Available"
+          },
           "picked": {
             "type": "integer",
             "title": "Picked"
@@ -7841,6 +7941,7 @@
         "type": "object",
         "required": [
           "quantity",
+          "available",
           "picked",
           "is_loose",
           "source_label",
@@ -8624,6 +8725,17 @@
               }
             ],
             "title": "Served"
+          },
+          "stock_sync_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stock Sync Enabled"
           },
           "wms_warehouse_id": {
             "anyOf": [
@@ -9970,6 +10082,17 @@
       },
       "FbsSupplyWorklistOut": {
         "properties": {
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/FbsSupplyWorklistItemOut"
@@ -10270,6 +10393,10 @@
             "type": "boolean",
             "title": "Is Active"
           },
+          "served": {
+            "type": "boolean",
+            "title": "Served"
+          },
           "stock_sync_enabled": {
             "type": "boolean",
             "title": "Stock Sync Enabled"
@@ -10320,6 +10447,7 @@
           "wb_warehouse_id",
           "wms_warehouse_id",
           "is_active",
+          "served",
           "stock_sync_enabled"
         ],
         "title": "FbsWarehouseBindingOut"
@@ -10495,6 +10623,17 @@
               }
             ],
             "title": "Reason"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
           },
           "source": {
             "anyOf": [
@@ -10717,6 +10856,17 @@
       },
       "FbsWorklistPageOut": {
         "properties": {
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/FbsWorklistOrderOut"
@@ -14243,6 +14393,21 @@
       },
       "InventoryCountFiltersIn": {
         "properties": {
+          "product_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Ids"
+          },
           "seller_id": {
             "anyOf": [
               {
@@ -16604,6 +16769,10 @@
             "type": "integer",
             "title": "Quantity"
           },
+          "available": {
+            "type": "integer",
+            "title": "Available"
+          },
           "picked": {
             "type": "integer",
             "title": "Picked"
@@ -16627,6 +16796,7 @@
         "type": "object",
         "required": [
           "quantity",
+          "available",
           "picked",
           "is_loose",
           "source_label",
@@ -18895,6 +19065,20 @@
         "title": "OzonSelfSyncProductsOut",
         "description": "Ровно то, что импорт сделал, без обещаний того, чего он не делает."
       },
+      "PackAllIn": {
+        "properties": {
+          "order_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Order Ids"
+          }
+        },
+        "type": "object",
+        "title": "PackAllIn"
+      },
       "PackProgressIn": {
         "properties": {
           "quantity": {
@@ -19672,6 +19856,46 @@
           "barcode"
         ],
         "title": "PalletOut"
+      },
+      "PasswordResetRequestBody": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "PasswordResetRequestBody"
+      },
+      "PaymentStartOut": {
+        "properties": {
+          "confirmation_url": {
+            "type": "string",
+            "title": "Confirmation Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "confirmation_url"
+        ],
+        "title": "PaymentStartOut"
+      },
+      "PaymentSyncOut": {
+        "properties": {
+          "activated": {
+            "type": "boolean",
+            "title": "Activated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "activated"
+        ],
+        "title": "PaymentSyncOut"
       },
       "PendingMarkingLineOut": {
         "properties": {
@@ -22802,6 +23026,20 @@
         ],
         "title": "ReprintResolutionOut"
       },
+      "ResendInviteBody": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id"
+        ],
+        "title": "ResendInviteBody"
+      },
       "ScanPackIn": {
         "properties": {
           "barcode": {
@@ -23127,6 +23365,34 @@
               }
             ],
             "title": "Ozon Connected"
+          },
+          "wb_has_key": {
+            "type": "boolean",
+            "title": "Wb Has Key",
+            "default": false
+          },
+          "wb_marketplace_scope_ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Marketplace Scope Ok"
+          },
+          "wb_marketplace_scope_checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Marketplace Scope Checked At"
           }
         },
         "type": "object",
@@ -24954,12 +25220,13 @@
         ],
         "title": "SellerWithAccountOut"
       },
-      "SetInitialPasswordBody": {
+      "SetPasswordByLinkBody": {
         "properties": {
-          "email": {
+          "token": {
             "type": "string",
-            "format": "email",
-            "title": "Email"
+            "maxLength": 4096,
+            "minLength": 16,
+            "title": "Token"
           },
           "password": {
             "type": "string",
@@ -24970,10 +25237,10 @@
         },
         "type": "object",
         "required": [
-          "email",
+          "token",
           "password"
         ],
-        "title": "SetInitialPasswordBody"
+        "title": "SetPasswordByLinkBody"
       },
       "SetPoolProductsIn": {
         "properties": {
@@ -26070,6 +26337,59 @@
           "statements"
         ],
         "title": "StorageStatementsOut"
+      },
+      "SubscriptionOut": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "paid_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paid Until"
+          },
+          "days_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Left"
+          },
+          "blocked": {
+            "type": "boolean",
+            "title": "Blocked"
+          },
+          "price_rub": {
+            "type": "integer",
+            "title": "Price Rub"
+          },
+          "payment_available": {
+            "type": "boolean",
+            "title": "Payment Available"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "paid_until",
+          "days_left",
+          "blocked",
+          "price_rub",
+          "payment_available"
+        ],
+        "title": "SubscriptionOut"
       },
       "SwitchSellerBody": {
         "properties": {

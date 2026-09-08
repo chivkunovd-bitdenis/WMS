@@ -20,6 +20,8 @@ async def test_link_product_to_wb_card(
         api_token: str,
         content_api_base: str | None = None,
         limit: int = 100,
+        cursor_updated_at: str | None = None,
+        cursor_nm_id: int | None = None,
     ) -> dict[str, object]:
         return {
             "cards": [
@@ -67,6 +69,7 @@ async def test_link_product_to_wb_card(
         jr = await async_client.get(f"/operations/background-jobs/{jid}", headers=h)
         if jr.json()["status"] == "done":
             break
+    assert jr.json()["status"] == "done", jr.text
     pr = await async_client.post(
         "/products",
         headers=h,
