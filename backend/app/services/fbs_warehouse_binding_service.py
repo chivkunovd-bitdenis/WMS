@@ -288,6 +288,7 @@ async def upsert_binding(
 
 async def _clear_previous_ozon_stock(
     session: AsyncSession, binding: FbsWarehouseBinding,
+    *, product_ids: set[uuid.UUID] | None = None,
 ) -> None:
     """Clear the known own target before its address/publication flag is lost."""
     from app.services.marketplace_account_service import (
@@ -317,6 +318,8 @@ async def _clear_previous_ozon_stock(
     )).all())
     stocks: list[dict[str, object]] = []
     for link in links:
+        if product_ids is not None and link.product_id not in product_ids:
+            continue
         stock: dict[str, object] = {"warehouse_id": int(external_id), "stock": 0}
         if link.external_offer_id:
             stock["offer_id"] = link.external_offer_id

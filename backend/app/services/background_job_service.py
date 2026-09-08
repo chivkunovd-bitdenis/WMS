@@ -354,14 +354,24 @@ async def run_fbs_stock_sync_job(job_id: uuid.UUID) -> None:
         job.started_at = datetime.now(UTC)
         await session.commit()
         try:
-            async with httpx.AsyncClient() as http_client:
-                result = await sync_seller_stocks(
-                    session,
-                    job.tenant_id,
-                    seller_uuid,
-                    http_client,
-                    wb_warehouse_id=wb_warehouse_id,
-                )
+            from app.services.marketplace_seller_lock_service import marketplace_seller_lock
+
+            async with (
+                AsyncSession(bind=session.bind) as lock_session,
+                marketplace_seller_lock(
+                    lock_session, seller_uuid, "wb", wait_timeout_sec=30,
+                ) as acquired,
+            ):
+                if not acquired:
+                    raise RuntimeError("stock_sync_busy")
+                async with httpx.AsyncClient() as http_client:
+                    result = await sync_seller_stocks(
+                        session,
+                        job.tenant_id,
+                        seller_uuid,
+                        http_client,
+                        wb_warehouse_id=wb_warehouse_id,
+                    )
             job.status = JOB_STATUS_DONE
             job.result_json = {
                 "bindings_processed": result.bindings_processed,

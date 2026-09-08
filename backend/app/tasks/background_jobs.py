@@ -90,8 +90,12 @@ def run_fbs_stock_reconcile_task() -> None:
 
 
 @celery_app.task(name="wms.fbs_stock_publish_seller")
-def run_fbs_stock_publish_seller_task(tenant_id: str, seller_id: str) -> None:
+def run_fbs_stock_publish_seller_task(
+    tenant_id: str,
+    seller_id: str,
+    marketplace: str | None = None,
+) -> None:
     """Event-driven publication: one seller, triggered by a stock movement."""
     from app.services.fbs_stock_publish_service import publish_seller_stocks_now
 
-    asyncio.run(publish_seller_stocks_now(uuid.UUID(tenant_id), uuid.UUID(seller_id)))
+    asyncio.run(publish_seller_stocks_now(uuid.UUID(tenant_id), uuid.UUID(seller_id), marketplace))

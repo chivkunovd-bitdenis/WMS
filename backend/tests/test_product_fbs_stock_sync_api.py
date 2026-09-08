@@ -197,11 +197,13 @@ async def test_enabling_fbs_sync_publishes_stock_immediately(
     """
     from app.services import fbs_stock_publish_service
 
-    dispatched: list[tuple[str, str]] = []
+    dispatched: list[tuple[str, str, str]] = []
     monkeypatch.setattr(
         fbs_stock_publish_service,
         "_dispatch",
-        lambda tenant_id, seller_id: dispatched.append((str(tenant_id), str(seller_id))),
+        lambda tenant_id, seller_id, marketplace: dispatched.append(
+            (str(tenant_id), str(seller_id), marketplace)
+        ),
     )
 
     suffix = str(int(time.time() * 1000))
@@ -253,6 +255,7 @@ async def test_enabling_fbs_sync_publishes_stock_immediately(
         json={"fbs_stock_sync_enabled": True},
     )
     assert toggled.status_code == 200, toggled.text
+    assert [entry[2] for entry in dispatched] == ["wb"]
     assert [entry[1] for entry in dispatched] == [seller_id], (
         "включение галочки не поставило публикацию остатка в очередь"
     )
@@ -265,7 +268,7 @@ async def test_enabling_fbs_sync_publishes_stock_immediately(
         json={"fbs_stock_sync_enabled": False},
     )
     assert disabled.status_code == 200, disabled.text
-    assert [entry[1] for entry in dispatched] == [seller_id]
+    assert dispatched == []  # Final zero runs before off, never as a later all-market job.
 
     # Массовое переключение даёт одну публикацию на селлера, не по одной на товар.
     dispatched.clear()

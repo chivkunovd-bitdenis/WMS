@@ -233,6 +233,8 @@ def _build_publish_plan(
     block_errors = product_block_errors or {}
     chrt_to_products: dict[int, list[Product]] = {}
     for product in products:
+        if product.id not in publish_quantities:
+            continue
         if product.wb_chrt_id is None:
             skipped_missing.append(product.id)
             continue
@@ -730,6 +732,7 @@ async def publish_explicit_zero_for_binding(
     *,
     rate_limiter: StockSyncRateLimiter | None = None,
     marketplace_api_base: str | None = None,
+    product_ids: set[uuid.UUID] | None = None,
 ) -> FbsStockSyncResult:
     """Explicitly publish zero for every chrt_id currently tracked on this binding.
 
@@ -752,6 +755,16 @@ async def publish_explicit_zero_for_binding(
 
     result = FbsStockSyncResult()
     try:
+        existing_items = await _load_existing_sync_items(session, binding.id)
+        if product_ids is not None:
+            existing_items = {
+                chrt: item
+                for chrt, item in existing_items.items()
+                if item.product_id in product_ids
+            }
+        if not existing_items:
+            result.bindings_processed = 1
+            return result
         try:
             api_token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
         except FbsStockSyncError as exc:
@@ -760,11 +773,6 @@ async def publish_explicit_zero_for_binding(
             binding.last_error_code = exc.code
             await session.commit()
             return FbsStockSyncResult(errors=1, error_code=exc.code)
-
-        existing_items = await _load_existing_sync_items(session, binding.id)
-        if not existing_items:
-            result.bindings_processed = 1
-            return result
 
         targets = [
             _PublishTarget(

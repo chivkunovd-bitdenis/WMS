@@ -655,14 +655,24 @@ async def start_fbs_stock_sync(
         response.status_code = status.HTTP_202_ACCEPTED
         return FbsStockSyncJobOut(id=str(job.id), status=job.status)
 
-    async with httpx.AsyncClient() as http_client:
-        result = await sync_seller_stocks(
-            session,
-            user.tenant_id,
-            seller_id,
-            http_client,
-            wb_warehouse_id=body.wb_warehouse_id,
-        )
+    from app.services.marketplace_seller_lock_service import marketplace_seller_lock
+
+    async with (
+        AsyncSession(bind=session.bind) as lock_session,
+        marketplace_seller_lock(
+            lock_session, seller_id, "wb", wait_timeout_sec=30,
+        ) as acquired,
+    ):
+        if not acquired:
+            raise_fbs_http(status.HTTP_409_CONFLICT, "stock_sync_busy")
+        async with httpx.AsyncClient() as http_client:
+            result = await sync_seller_stocks(
+                session,
+                user.tenant_id,
+                seller_id,
+                http_client,
+                wb_warehouse_id=body.wb_warehouse_id,
+            )
     return FbsStockSyncResultOut(
         bindings_processed=result.bindings_processed,
         products_targeted=result.products_targeted,

@@ -246,7 +246,7 @@ def _client(transport: _MockStocksTransport) -> httpx.AsyncClient:
 
 
 @pytest.mark.asyncio
-async def test_sync_publishes_configured_disabled_product_as_explicit_zero(
+async def test_sync_does_not_resend_disabled_product_after_final_zero(
     db_session: AsyncSession,
 ) -> None:
     ctx = await _seed_binding(db_session)
@@ -282,9 +282,9 @@ async def test_sync_publishes_configured_disabled_product_as_explicit_zero(
             marketplace_api_base="https://wb-mock.test",
         )
 
-    assert result.products_targeted == 1
-    assert result.products_confirmed == 1
-    assert [[entry.amount for entry in batch] for batch in transport.put_calls] == [[0]]
+    assert result.products_targeted == 0
+    assert result.products_confirmed == 0
+    assert transport.put_calls == []
 
 
 def test_build_publish_plan_reads_amounts_directly_from_pool() -> None:
