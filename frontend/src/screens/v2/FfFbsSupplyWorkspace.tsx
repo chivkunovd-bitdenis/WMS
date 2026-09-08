@@ -558,7 +558,8 @@ export function FfFbsSupplyWorkspace({
     let attempts = 0
     const focus = () => {
       const input = kizScanInputRef.current
-      input?.focus()
+      // Return scanner focus without cancelling the scroll to the scanned row.
+      input?.focus({ preventScroll: true })
       attempts += 1
       if (input != null && document.activeElement !== input && attempts < 8) {
         window.setTimeout(focus, 50)
@@ -581,6 +582,9 @@ export function FfFbsSupplyWorkspace({
           setKizScanValue('')
           return
         }
+        // Lookup can see an order added after this list was opened.
+        // Render its row before selecting it and scrolling into view.
+        if (!workspace.orders.some((order) => order.id === found.order_id)) await load(true)
         if (found.needs_confirmation) setKizConfirmTarget(found)
         else setKizScanActive(found)
         setKizScanValue('')
@@ -592,7 +596,7 @@ export function FfFbsSupplyWorkspace({
         refocusKizInput()
       }
     },
-    [workspace, token, authHeaders, refocusKizInput],
+    [workspace, token, authHeaders, refocusKizInput, load],
   )
 
   const scanKizCode = useCallback(
@@ -624,6 +628,11 @@ export function FfFbsSupplyWorkspace({
         setKizScanActive(null)
         setKizScanValue('')
         await load(true)
+        // Native scanner typing can bring the input back into view. After the
+        // updated row renders, return to the order whose KIZ was just saved.
+        window.requestAnimationFrame(() => {
+          kizRowRefs.current[kizScanActive.order_id]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        })
       } catch (cause) {
         setKizScanError({ text: kizErrorText(cause), debug: kizScannerDebug(cause) })
         setKizScanValue('')
