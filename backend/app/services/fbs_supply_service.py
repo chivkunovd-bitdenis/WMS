@@ -937,30 +937,60 @@ async def _resume_from_orders_operation(
     token = await _require_marketplace_token(session, tenant_id, operation.seller_id)
     wb_order_ids = [int(order.wb_order_id) for order in orders]
     if operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
+        supply_id = supply.id
+        seller_id = operation.seller_id
+        wb_supply_id = operation.wb_object_id
+        order_ids = [order.id for order in orders]
+
+        async def refresh_after_http() -> dict[str, Any] | None:
+            nonlocal supply, orders
+            # Reads preceding HTTP belong to an ended transaction. Discard those
+            # ORM snapshots before applying WB's answer or returning a winner's result.
+            session.expire_all()
+            await session.refresh(operation)
+            refreshed_supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
+            if refreshed_supply is None:
+                raise FbsSupplyError("supply_not_found")
+            supply = refreshed_supply
+            orders = await load_orders_for_validation(session, tenant_id, order_ids)
+            if operation.state != WB_OPERATION_STATE_PENDING_CONFIRMATION:
+                return await _resume_from_orders_operation(
+                    session, tenant_id, operation, orders=orders, http_client=http_client
+                )
+            return None
+
+        # This path only read an already persisted operation; it owns no seller
+        # advisory lock. End that read transaction before every HTTP-only segment.
+        # New create owners must retain their connection until the advisory unlock.
+        await session.commit()
         state, confirmed = await reconcile_supply_orders(
             http_client,
             api_token=token,
-            wb_supply_id=operation.wb_object_id,
+            wb_supply_id=wb_supply_id,
             expected_wb_order_ids=set(wb_order_ids),
         )
         if state != WB_OPERATION_STATE_CONFIRMED:
             if confirmed:
+                concurrent_result = await refresh_after_http()
+                if concurrent_result is not None:
+                    return concurrent_result
                 workspace = await _complete_partial_from_orders(
                     session,
                     tenant_id,
                     operation,
                     supply,
                     orders,
-                    wb_supply_id=operation.wb_object_id,
+                    wb_supply_id=wb_supply_id,
                     confirmed_wb_order_ids=confirmed,
                 )
                 if workspace is not None:
                     return workspace
+            await session.commit()
             try:
                 await _execute_wb_batch_add(
                     http_client,
                     api_token=token,
-                    wb_supply_id=operation.wb_object_id,
+                    wb_supply_id=wb_supply_id,
                     wb_order_ids=wb_order_ids,
                 )
             except WildberriesClientError as exc:
@@ -970,24 +1000,24 @@ async def _resume_from_orders_operation(
                         "fbs supply from-orders WB resume add-orders timeout",
                         exc,
                         tenant_id=tenant_id,
-                        seller_id=operation.seller_id,
-                        local_entity_id=supply.id,
-                        wb_object_id=operation.wb_object_id,
+                        seller_id=seller_id,
+                        local_entity_id=supply_id,
+                        wb_object_id=wb_supply_id,
                         ref=wb_error_ref(),
                     )
                     raise FbsSupplyError(
                         "wb_timeout",
                         message="WB не подтвердил состав поставки — повторите операцию.",
-                        context={"wb_supply_id": operation.wb_object_id},
+                        context={"wb_supply_id": wb_supply_id},
                         retryable=True,
                         http_status=504,
                     ) from exc
                 raise _fbs_supply_error_from_wb(
                     exc,
                     tenant_id=tenant_id,
-                    seller_id=operation.seller_id,
-                    local_entity_id=supply.id,
-                    wb_supply_id=operation.wb_object_id,
+                    seller_id=seller_id,
+                    local_entity_id=supply_id,
+                    wb_supply_id=wb_supply_id,
                     event="fbs supply from-orders WB resume add-orders failed",
                     retryable=False,
                     http_status=502,
@@ -995,9 +1025,12 @@ async def _resume_from_orders_operation(
             state, confirmed = await reconcile_supply_orders(
                 http_client,
                 api_token=token,
-                wb_supply_id=operation.wb_object_id,
+                wb_supply_id=wb_supply_id,
                 expected_wb_order_ids=set(wb_order_ids),
             )
+        concurrent_result = await refresh_after_http()
+        if concurrent_result is not None:
+            return concurrent_result
         if state != WB_OPERATION_STATE_CONFIRMED:
             if confirmed:
                 workspace = await _complete_partial_from_orders(
@@ -1006,7 +1039,7 @@ async def _resume_from_orders_operation(
                     operation,
                     supply,
                     orders,
-                    wb_supply_id=operation.wb_object_id,
+                    wb_supply_id=wb_supply_id,
                     confirmed_wb_order_ids=confirmed,
                 )
                 if workspace is not None:
@@ -1014,7 +1047,7 @@ async def _resume_from_orders_operation(
             raise FbsSupplyError(
                 "wb_pending_confirmation",
                 message="WB не подтвердил состав поставки — повторите операцию.",
-                context={"wb_supply_id": operation.wb_object_id},
+                context={"wb_supply_id": wb_supply_id},
                 retryable=True,
                 http_status=504,
             )
@@ -1022,7 +1055,7 @@ async def _resume_from_orders_operation(
         await mark_operation_confirmed(
             session,
             operation,
-            wb_supply_id=operation.wb_object_id,
+            wb_supply_id=wb_supply_id,
             local_supply_id=supply.id,
         )
         return await get_supply_workspace(session, tenant_id, supply.id)
