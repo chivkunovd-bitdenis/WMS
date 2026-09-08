@@ -995,14 +995,26 @@ def _build_metadata(
     required = list(order.required_meta_json or [])
     optional = list(order.optional_meta_json or [])
     states: list[dict[str, Any]] = []
-    for kind in required + optional:
+    # Observed bindings are facts even when WB omitted requirement flags.
+    for kind in dict.fromkeys(required + optional + [mark.kind for mark in markings]):
         mark = current_order_marking(markings, kind, include_rejected=True)
         if mark is not None:
+            details = mark.meta_details_json if isinstance(mark.meta_details_json, dict) else {}
+            decision = details.get("decision")
+            validation = details.get("meta_validation")
+            if not isinstance(decision, str) and isinstance(validation, list):
+                decision = next((
+                    item.get("decision") for item in validation
+                    if isinstance(item, dict)
+                    and str(item.get("order_id")) == str(order.wb_order_id)
+                    and item.get("kind") == kind
+                ), None)
             states.append(
                 {
                     "kind": kind,
                     "status": mark.meta_status,
                     "reason": mark.reason,
+                    "decision": decision if isinstance(decision, str) else None,
                     "source": mark.source,
                     # Хвост кода: оператор сверяет его глазами с этикеткой на товаре.
                     # Целиком код в строку таблицы не влезает и читать его незачем.

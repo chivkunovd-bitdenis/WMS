@@ -297,6 +297,7 @@ class FbsWorklistMetadataStateOut(BaseModel):
     kind: str
     status: str
     reason: str | None
+    decision: str | None = None
     source: str | None = None
     # Хвост кода маркировки для экрана упаковки. Без явного поля pydantic молча
     # выбрасывал его из ответа: сервис клал значение, схема снимала, и колонка «ЧЗ»
