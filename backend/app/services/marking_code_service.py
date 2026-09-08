@@ -3018,7 +3018,9 @@ async def create_defect_reprint_request(
     )
     if (await session.execute(pending_stmt)).scalar_one_or_none() is not None:
         raise MarkingCodeServiceError("reprint_already_pending")
-    if code.status != STATUS_PRINTED:
+    if code.status != STATUS_PRINTED and not (
+        code.status == STATUS_APPLIED and code.printed_at is not None
+    ):
         raise MarkingCodeServiceError("code_not_printed")
 
     reason_text = reason.strip() if reason and reason.strip() else None
