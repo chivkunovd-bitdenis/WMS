@@ -1,7 +1,7 @@
 # WMS-058: запрет изменения подбора после передачи Ozon
 
 Изолированная ветка `codex/wms-release-ozon-terminal` от
-`a1b64752ffcc4eb8dfc5151c783407530cee931f`. Изменены только два сервиса,
+`a1b64752ffcc4eb8dfc5151c783407530cee931f`. Изменены только три сервиса,
 целевой тест и документация. Фронт и API-контракт не менялись.
 
 ## Подтверждённый дефект
@@ -22,7 +22,7 @@ HTTP endpoint отмены и отдельную PostgreSQL с синтетич�
 
 ## Исправление и граница блокировки
 
-Изменяющие подбор вызовы берут блокировку строки поставки и перечитывают её
+Изменяющие подбор вызовы Ozon берут блокировку строки поставки и перечитывают её
 вместе с заказами после ожидания. Ozon запрещает новые изменения при
 `delivered_at`, `in_delivery` или `done`. Успешный повтор уже выполненной отмены
 остаётся чтением: HTTP 200 без повторного движения.
@@ -36,6 +36,21 @@ HTTP endpoint отмены и отдельную PostgreSQL с синтетич�
 нужно завершить проверку результата передачи. При явном отказе до перевозки,
 когда снимок пуст либо содержит лишь собранные отправления, подбор снова доступен.
 Новые журналы, флаги и сущности не добавлялись.
+
+Дополнительно воспроизведена опасная комбинация нового ограничения со старой
+ошибкой снимка: `/v1/carriage/create` ответил 404/409, альтернативный
+`/v2/posting/fbs/awaiting-delivery` явно отказал 400, но сохранённый
+`carriage_create_started=true` запрещал undo бесконечно. До исправления
+регрессия получила HTTP 409 `operation_in_progress` вместо 200. Теперь
+явные отказы альтернативного вызова 400/401/403/422/429 очищают этот уже
+существующий признак и немедленно сохраняют снимок. Ошибка 503 и отсутствие
+ответа сохраняют неопределённость и запрет изменений до проверки передачи.
+Это проверено через настоящий `handoff_supply` с подставным транспортом,
+сохранение `failed` и последующий HTTP undo; каждый внешний метод вызывается
+ровно один раз. Дополнительных состояний или таймеров нет.
+
+Новые блокировки scan/undo ограничены Ozon. WB сохраняет прежний путь чтения;
+его `set_pick_quantity` блокировал поставку и до этой правки.
 
 После внешних checkpoint финализация повторно берёт блокировки в порядке
 «поставка → заказы», перечитывает актуальные данные и лишь затем завершает
@@ -68,24 +83,29 @@ HTTP endpoint отмены и отдельную PostgreSQL с синтетич�
 
 Целевые команды (из корня worktree, Python из существующего backend/.venv):
 
-Итог: **38 passed, 60 deselected** за 29.89 секунды: 15 новых регрессий
-и 23 существующих проверки подбора/передачи. Ruff проходит. Остались только
-пять предупреждений используемой библиотеки SWIG о deprecated типах.
+Итог окончательного прогона: **52 passed, 60 deselected** за 44.23 секунды:
+29 новых регрессий и 23 существующих проверки подбора/передачи. Ruff проходит.
+Из-за нехватки диска финальный процесс повторно использовал уже созданную
+собственную схему: перед pytest точное множество её 105 таблиц сравнили
+с `Base.metadata.tables`, затем выставили `tests.conftest._SCHEMA_READY=True`.
+Обычный DELETE-reset между всеми тестами сохранён; повторный drop/create
+тех же таблиц не выполнялся. Два предупреждения касались раннего импорта
+pytest_asyncio/anyio перед pytest.main в этом запуске; тесты прошли.
 
 ```sh
-PYTHONDONTWRITEBYTECODE=1 WMS_TEST_DATABASE_URL=postgresql+psycopg://deniscivkunov@127.0.0.1:5432/wms058_ozon_terminal_20260909 python -m pytest backend/tests/test_fbs_ozon_picking_terminal.py backend/tests/test_fbs_picking.py backend/tests/test_fbs_ozon_lane.py -k 'pick or deliver or handoff or finalization' -q --tb=short -p no:cacheprovider
-ruff check backend/app/services/fbs_picking_service.py backend/app/services/fbs_shipment_service.py backend/tests/test_fbs_ozon_picking_terminal.py
+PYTHONDONTWRITEBYTECODE=1 WMS_TEST_DATABASE_URL=postgresql+psycopg://deniscivkunov@127.0.0.1:5432/wms058_ozon_terminal_20260909 python -m pytest backend/tests/test_fbs_ozon_picking_terminal.py backend/tests/test_fbs_picking.py backend/tests/test_fbs_ozon_lane.py -k 'pick or deliver or handoff or finalization or known_fallback' -q --tb=short -p no:cacheprovider
+ruff check backend
 ```
 
 Из backend:
 
 ```sh
-mypy --cache-dir=/dev/null --follow-imports=silent app/services/fbs_picking_service.py app/services/fbs_shipment_service.py tests/test_fbs_ozon_picking_terminal.py
+mypy --cache-dir=/dev/null --follow-imports=silent app/services/fbs_picking_service.py app/services/fbs_shipment_service.py app/services/ozon_fbs_process_service.py tests/test_fbs_ozon_picking_terminal.py
 ```
 
 Обычный целевой mypy с проверкой импортируемых тестов обнаружил три прежние
 ошибки `no-any-return` в `tests/inventory_actor_helpers.py:15` и
-`tests/test_fbs_picking.py:348,474`; эти файлы не менялись. Проверка трёх
+`tests/test_fbs_picking.py:348,474`; эти файлы не менялись. Проверка четырёх
 изменённых файлов с `--follow-imports=silent` проходит.
 Полный pytest не запускался. Живой браузер, staging и production эта отдельная
 исправляющая ветка не проверяла: интеграция и выпуск выполняются root-агентом.

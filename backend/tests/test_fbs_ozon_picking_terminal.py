@@ -424,3 +424,95 @@ async def test_finalization_relocks_supply_after_external_checkpoint(case: Case)
     async with SessionLocal() as session:
         supply = await session.get(FbsSupply, case.supply)
         assert supply is not None and supply.delivered_at is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fallback_status", [400, 401, 403, 422, 429, 503, None])
+@pytest.mark.parametrize("create_status", [404, 409])
+async def test_known_fallback_rejection_reopens_pick_but_uncertain_outcome_does_not(
+    async_client: AsyncClient,
+    case: Case,
+    fallback_status: int | None,
+    create_status: int,
+) -> None:
+    from app.services.fbs_supply_reconcile_service import list_deliver_operations_for_supply
+    from app.services.marketplace_provider import (
+        FakeMarketplaceTransport,
+        MarketplaceProviderError,
+        OzonMarketplaceProvider,
+    )
+    from app.services.ozon_fbs_process_service import OzonHandoffProgress, handoff_supply
+
+    fallback_error = MarketplaceProviderError("ozon", fallback_status, code="fallback_rejected")
+    transport = FakeMarketplaceTransport(
+        endpoint_responses={
+            "/v3/posting/fbs/get": {
+                "result": {"posting_number": "ozon-1", "status": "awaiting_deliver"},
+            }
+        },
+        errors={
+            "/v1/carriage/create": MarketplaceProviderError("ozon", create_status),
+            "/v2/posting/fbs/awaiting-delivery": fallback_error,
+        },
+    )
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, case.supply)
+        assert supply is not None
+        orders = await shipment._load_supply_orders_read(session, case.tenant, case.supply)
+        operation = await create_pending_deliver_operation(
+            session,
+            tenant_id=case.tenant,
+            seller_id=supply.seller_id,
+            idempotency_key="fallback",
+            request_hash="synthetic",
+            local_supply_id=case.supply,
+            confirmed_preflight_version=None,
+        )
+        progress = OzonHandoffProgress(shipped_postings=["ozon-1"], posting_numbers=["ozon-1"])
+
+        async def checkpoint(state: OzonHandoffProgress) -> None:
+            await shipment._save_ozon_handoff_progress(session, operation, state)
+
+        with pytest.raises(MarketplaceProviderError) as caught:
+            await handoff_supply(
+                session,
+                supply=supply,
+                orders=orders,
+                provider=OzonMarketplaceProvider(transport=transport),
+                client_id="synthetic",
+                api_key="synthetic",
+                progress=progress,
+                checkpoint=checkpoint,
+            )
+        assert caught.value is fallback_error
+        await shipment._fail_ozon_deliver_operation(
+            session,
+            operation,
+            error_code=fallback_error.code,
+            supply_id=case.supply,
+        )
+        attempts = await list_deliver_operations_for_supply(
+            session,
+            tenant_id=case.tenant,
+            seller_id=supply.seller_id,
+            local_supply_id=case.supply,
+        )
+        assert len(attempts) == 1 and attempts[0].state == "failed"
+    before = await _snapshot(case)
+    undo = await async_client.post(
+        f"/operations/fbs-supplies/{case.supply}/pick/{case.order}/undo",
+        headers=case.headers,
+        json={"idempotency_key": "fallback-undo"},
+    )
+    known_refusal = fallback_status in {400, 401, 403, 422, 429}
+    assert undo.status_code == (200 if known_refusal else 409), undo.text
+    if known_refusal:
+        assert undo.json()["orders"][0]["positions"][0]["picked_quantity"] == 0
+    else:
+        assert undo.json()["detail"]["code"] == "operation_in_progress"
+        assert await _snapshot(case) == before
+    assert sum(path == "/v1/carriage/create" for path, _ in transport.endpoint_calls) == 1
+    assert (
+        sum(path == "/v2/posting/fbs/awaiting-delivery" for path, _ in transport.endpoint_calls)
+        == 1
+    )
