@@ -32,6 +32,13 @@ def run_wildberries_cards_sync_task(job_id: str) -> None:
     asyncio.run(run_wildberries_cards_sync_job(uuid.UUID(job_id)))
 
 
+@celery_app.task(name="wms.wb_catalog_hourly_sync")
+def run_wb_catalog_hourly_sync_task() -> None:
+    from app.services.wildberries_product_sync_service import run_wb_products_sync_all_sellers
+
+    asyncio.run(run_wb_products_sync_all_sellers())
+
+
 @celery_app.task(name="wms.wildberries_supplies_sync")
 def run_wildberries_supplies_sync_task(job_id: str) -> None:
     asyncio.run(run_wildberries_supplies_sync_job(uuid.UUID(job_id)))

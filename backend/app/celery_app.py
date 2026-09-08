@@ -25,6 +25,10 @@ celery_app = Celery(
 )
 celery_app.conf.task_ignore_result = True
 celery_app.conf.beat_schedule = {
+    "wb-catalog-hourly": {
+        "task": "wms.wb_catalog_hourly_sync",
+        "schedule": crontab(minute=17),
+    },
     "wb-mp-warehouses-daily": {
         "task": "wms.wb_mp_warehouses_daily_sync",
         "schedule": crontab(hour=3, minute=0),
