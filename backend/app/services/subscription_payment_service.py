@@ -158,10 +158,11 @@ async def sync_pending_payment(session: AsyncSession, *, tenant: Tenant) -> bool
     if not payments_configured():
         return False
 
+    tenant_id = tenant.id
     stmt = (
-        select(SubscriptionPayment)
+        select(SubscriptionPayment.id, SubscriptionPayment.provider_payment_id)
         .where(
-            SubscriptionPayment.tenant_id == tenant.id,
+            SubscriptionPayment.tenant_id == tenant_id,
             SubscriptionPayment.status.in_(_PENDING_STATUSES),
         )
         .order_by(SubscriptionPayment.created_at.desc())
@@ -170,16 +171,19 @@ async def sync_pending_payment(session: AsyncSession, *, tenant: Tenant) -> bool
     # нажать «Продлить» дважды и оплатить первый счёт: если смотреть только на
     # последний, деньги ушли бы, а срок остался прежним до тех пор, пока ЮKassa
     # не протухнет второй счёт сама.
-    payments = list((await session.execute(stmt)).scalars().all())
+    payments = (await session.execute(stmt)).all()
     if not payments:
         return False
+    # Caller only reads the user/tenant. Release that transaction and connection
+    # before HTTP; payment/tenant ORM snapshots must not survive as write inputs.
+    await session.commit()
 
-    activated = False
-    for payment in payments:
+    results: dict[uuid.UUID, tuple[str, bool]] = {}
+    for payment_id, provider_payment_id in payments:
         try:
             async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
                 response = await client.get(
-                    _payments_url(payment.provider_payment_id), auth=_auth()
+                    _payments_url(provider_payment_id), auth=_auth()
                 )
                 response.raise_for_status()
                 data = response.json()
@@ -187,8 +191,26 @@ async def sync_pending_payment(session: AsyncSession, *, tenant: Tenant) -> bool
             logger.warning("yookassa get payment failed: %s", exc)
             raise SubscriptionPaymentError("payments_unavailable") from exc
 
-        status = str(data.get("status") or "")
-        if status == "succeeded" and bool(data.get("paid")):
+        results[payment_id] = (str(data.get("status") or ""), bool(data.get("paid")))
+
+    # Serialize settlement for this tenant, then reread both the paid-through
+    # date and pending payments. Another poll may have already applied an answer.
+    tenant = (await session.execute(
+        select(Tenant).where(Tenant.id == tenant_id).with_for_update()
+        .execution_options(populate_existing=True)
+    )).scalar_one()
+    pending = (await session.scalars(
+        select(SubscriptionPayment).where(
+            SubscriptionPayment.tenant_id == tenant_id,
+            SubscriptionPayment.id.in_(results),
+            SubscriptionPayment.status.in_(_PENDING_STATUSES),
+        ).order_by(SubscriptionPayment.id).with_for_update()
+        .execution_options(populate_existing=True)
+    )).all()
+    activated = False
+    for payment in pending:
+        status, paid = results[payment.id]
+        if status == "succeeded" and paid:
             payment.status = "succeeded"
             payment.paid_at = datetime.now(tz=UTC)
             extend_paid_until(tenant)

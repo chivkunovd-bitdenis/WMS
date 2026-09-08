@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date, timedelta
 from typing import Any
 
@@ -13,6 +14,7 @@ import httpx
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
@@ -191,6 +193,81 @@ async def test_one_payment_extends_only_once(
 
     tenant = await _tenant_by_admin(email)
     assert tenant.subscription_paid_until == first
+
+
+@pytest.mark.asyncio
+async def test_overlapping_payment_sync_preserves_both_paid_months(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch, yookassa_keys: Any
+) -> None:
+    """A pauses on P1; B applies P1+P2; late A must not overwrite B's 60 days."""
+    if db_session.get_bind().dialect.name != "postgresql":
+        pytest.skip("Concurrent subscription settlement requires PostgreSQL row locks")
+    initial = svc.today_msk() + timedelta(days=7)
+    tenant = Tenant(name="Payment concurrency", slug="payment-concurrency",
+                    subscription_paid_until=initial)
+    db_session.add(tenant)
+    await db_session.flush()
+    tenant_id = tenant.id
+    db_session.add(SubscriptionPayment(
+        tenant_id=tenant_id, provider_payment_id="race-p1", amount_rub=100, status="pending",
+    ))
+    await db_session.commit()
+
+    started, release = asyncio.Event(), asyncio.Event()
+    http_transactions: list[bool] = []
+    async with SessionLocal() as first_session, SessionLocal() as second_session:
+        first_tenant = await first_session.get(Tenant, tenant_id)
+        second_tenant = await second_session.get(Tenant, tenant_id)
+        assert first_tenant is not None and second_tenant is not None
+
+        class _PausedYooKassa(_FakeYooKassa):
+            async def get(self, url: str, **kwargs: Any) -> httpx.Response:
+                first = asyncio.current_task() is first_task
+                http_transactions.append(
+                    (first_session if first else second_session).in_transaction()
+                )
+                if first:
+                    started.set()
+                    await release.wait()
+                return httpx.Response(
+                    200, json={"status": "succeeded", "paid": True},
+                    request=httpx.Request("GET", url),
+                )
+
+        fake = _PausedYooKassa()
+        monkeypatch.setattr(httpx, "AsyncClient", fake.client_factory)
+        first_task = asyncio.create_task(svc.sync_pending_payment(
+            first_session, tenant=first_tenant,
+        ))
+        try:
+            await asyncio.wait_for(started.wait(), timeout=5)
+            db_session.add(SubscriptionPayment(
+                tenant_id=tenant_id, provider_payment_id="race-p2",
+                amount_rub=100, status="pending",
+            ))
+            await db_session.commit()
+            assert await asyncio.wait_for(svc.sync_pending_payment(
+                second_session, tenant=second_tenant,
+            ), timeout=5)
+            release.set()
+            late_activated = await asyncio.wait_for(first_task, timeout=5)
+        finally:
+            release.set()
+            if not first_task.done():
+                first_task.cancel()
+            await asyncio.gather(first_task, return_exceptions=True)
+
+    async with SessionLocal() as verify:
+        final_tenant = await verify.get(Tenant, tenant_id)
+        assert final_tenant is not None
+        assert final_tenant.subscription_paid_until == initial + timedelta(days=60)
+        payments = list((await verify.scalars(select(SubscriptionPayment).where(
+            SubscriptionPayment.tenant_id == tenant_id,
+        ))).all())
+        assert len(payments) == 2
+        assert all(p.status == "succeeded" and p.paid_at is not None for p in payments)
+    assert late_activated is False
+    assert http_transactions == [False, False, False]
 
 
 @pytest.mark.asyncio
