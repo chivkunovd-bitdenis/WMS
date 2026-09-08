@@ -297,10 +297,10 @@ async def configure_fbs_seller_warehouse(
     # Финальный ноль — это другое действие: «склад наш, но по этому товару больше
     # не публикуем». Оно живёт на тумблере `stock_sync_enabled` в соседней ручке
     # `/warehouse-bindings/` и там работает.
-    # Состояние ДО правки: прощальный ноль уходит по переходу «включено ->
-    # выключено», а не по состоянию «выключено». Не было перехода — не было нуля.
+    # WB keeps its existing background zero. Ozon confirms zero inside the
+    # service before committing OFF; no after-commit cleanup may lose retries.
     publication_was_on = False
-    if body.stock_sync_enabled is False:
+    if body.marketplace == "wb" and body.stock_sync_enabled is False:
         try:
             before = await binding_svc.get_binding(
                 session,
@@ -332,14 +332,11 @@ async def configure_fbs_seller_warehouse(
     if row is not None and publication_was_on:
         # Маркетплейс не должен вечно хранить последнее положительное число после
         # того, как мы перестали публиковать. Один раз — и молчим.
-        if row.marketplace == "wb":
-            row.last_sync_status = STOCK_SYNC_STATUS_PENDING
-            row.last_error_code = None
-            await session.commit()
-            await session.refresh(row)
-            schedule_explicit_zero_publish(user.tenant_id, seller_id, row.id)
-        else:
-            await binding_svc.clear_marketplace_stock(session, row)
+        row.last_sync_status = STOCK_SYNC_STATUS_PENDING
+        row.last_error_code = None
+        await session.commit()
+        await session.refresh(row)
+        schedule_explicit_zero_publish(user.tenant_id, seller_id, row.id)
 
     return FbsSellerWarehouseOut(
         id=wb_warehouse_id,
@@ -405,17 +402,18 @@ async def upsert_fbs_warehouse_binding(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsWarehouseBindingOut:
     was_enabled = False
-    try:
-        existing = await binding_svc.get_binding(
-            session,
-            user.tenant_id,
-            seller_id,
-            wb_warehouse_id,
-            marketplace=body.marketplace,
-        )
-        was_enabled = bool(existing.is_active and existing.stock_sync_enabled)
-    except binding_svc.FbsWarehouseBindingError:
-        was_enabled = False
+    if body.marketplace == "wb":
+        try:
+            existing = await binding_svc.get_binding(
+                session,
+                user.tenant_id,
+                seller_id,
+                wb_warehouse_id,
+                marketplace=body.marketplace,
+            )
+            was_enabled = bool(existing.is_active and existing.stock_sync_enabled)
+        except binding_svc.FbsWarehouseBindingError:
+            was_enabled = False
 
     try:
         row = await binding_svc.upsert_binding(

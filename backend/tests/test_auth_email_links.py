@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.core.settings import settings
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, engine
 from app.models.user import User
+from app.services import auth_service
+from app.services.passwords import hash_password, verify_password
 from tests.auth_helpers import password_link_token, set_password_via_link
 
 
@@ -110,6 +113,53 @@ async def test_invite_link_works_once(async_client: AsyncClient) -> None:
         "/auth/login", json={"email": email, "password": "pervyparol123"}
     )
     assert login.status_code == 200, login.text
+
+
+@pytest.mark.asyncio
+async def test_link_rechecks_password_after_concurrent_change(async_client: AsyncClient) -> None:
+    """A waiting reset must not overwrite the password that invalidated its link."""
+    if engine.dialect.name != "postgresql":
+        pytest.skip("requires PostgreSQL row locks")
+    headers = await _register_admin(async_client, "invite-concurrent")
+    email = "seller-invite-concurrent@example.com"
+    user_id = uuid.UUID(await _create_seller_account(async_client, headers, email))
+    token = await password_link_token(email)
+
+    async with SessionLocal() as winner, SessionLocal() as loser, SessionLocal() as observer:
+        user = await winner.get(User, user_id, with_for_update=True)
+        assert user is not None
+        user.password_hash = hash_password("winner-password123")
+        user.must_set_password = False
+        await winner.flush()
+        loser_pid = await loser.scalar(text("SELECT pg_backend_pid()"))
+        attempt = asyncio.create_task(auth_service.set_password_by_link(
+            loser, token=token, password="loser-password123",
+        ))
+        try:
+            # Wait for an actual DB lock conflict, not an arbitrary sleep.
+            async with asyncio.timeout(5):
+                while await observer.scalar(text(
+                    "SELECT wait_event_type = 'Lock' FROM pg_stat_activity WHERE pid = :pid"
+                ), {"pid": loser_pid}) is not True:
+                    await observer.rollback()
+                    if attempt.done():
+                        await attempt
+                        pytest.fail("password reset did not wait for the concurrent change")
+                    await asyncio.sleep(0.01)
+            await winner.commit()
+            with pytest.raises(auth_service.AuthError, match="link_used"):
+                await attempt
+        finally:
+            await winner.rollback()
+            if not attempt.done():
+                attempt.cancel()
+                await asyncio.gather(attempt, return_exceptions=True)
+            await loser.rollback()
+
+    async with SessionLocal() as session:
+        saved = await session.get(User, user_id)
+        assert saved is not None
+        assert verify_password("winner-password123", saved.password_hash)
 
 
 @pytest.mark.asyncio

@@ -268,9 +268,10 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
   }, [me, refreshInboundList, refreshMpUnloadList, refreshWarehouses, token])
 
   const rootElement = (() => {
-    if (!token) {
+    const isPasswordLink = location.pathname.endsWith('/set-password')
+    if (!token || isPasswordLink) {
       const hasFulfillmentToken = Boolean(getStoredToken('fulfillment'))
-      if (hasFulfillmentToken && location.pathname !== '/') {
+      if (hasFulfillmentToken && location.pathname !== '/' && !isPasswordLink) {
         return (
           <Box sx={{ p: 3 }} data-testid="ff-access-denied" data-task-id="R02-F14">
             <Typography variant="h5" gutterBottom data-task-id="R02-F14">
