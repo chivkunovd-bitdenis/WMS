@@ -104,7 +104,22 @@ async def active_fbs_picks_by_source(
     )
     for position_pick in rows.scalars():
         if position_pick.inventory_movement_id is None:
-            unlocated[(position_pick.product_id, position_pick.sorting_storage_location_id)] += 1
+            if (
+                position_pick.source_container_kind is not None
+                and position_pick.source_container_id is not None
+            ):
+                assigned[
+                    (
+                        position_pick.product_id,
+                        position_pick.source_storage_location_id,
+                        cast(ContainerKind, position_pick.source_container_kind),
+                        position_pick.source_container_id,
+                    )
+                ] += 1
+            else:
+                unlocated[
+                    (position_pick.product_id, position_pick.sorting_storage_location_id)
+                ] += 1
         else:
             assigned[
                 (position_pick.product_id, position_pick.sorting_storage_location_id, None, None)
@@ -193,6 +208,7 @@ async def list_pick_option_locations(
     | None = None,
     *,
     marketplace_unload_request_id: uuid.UUID | None = None,
+    unlocated_picked_places: set[tuple[uuid.UUID, uuid.UUID]] | None = None,
 ) -> dict[uuid.UUID, list[PickOptionLocation]]:
     """Keep legacy location totals and add distinct physical stock sources."""
     locations_by_product: dict[uuid.UUID, list[PickOptionLocation]] = {
@@ -354,6 +370,16 @@ async def list_pick_option_locations(
                 container_path=path,
             )
         sources_by_location[(product_id, location_id)].append(source)
+
+    # NULL legacy Ozon facts identify only the place. Keep its existing NULL-source
+    # set/undo adapter, but do not present the unknown container as proven loose stock.
+    for place in unlocated_picked_places or ():
+        sources_by_location[place] = [
+            replace(source, is_loose=False, source_label="Место подбора (тара не сохранена)")
+            if not source.container_path and source.picked > 0
+            else source
+            for source in sources_by_location[place]
+        ]
 
     for sources in sources_by_location.values():
         sources.sort(
