@@ -542,7 +542,7 @@ async def _get_order(
         FbsOrder.tenant_id == tenant_id,
     ).options(selectinload(FbsOrder.product_positions))
     if for_update:
-        stmt = stmt.with_for_update()
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
 
@@ -979,7 +979,10 @@ async def sync_order_marking_statuses(
     actor_user_id: uuid.UUID | None,
     ozon_provider: OzonMarketplaceProvider | None = None,
 ) -> list[FbsOrderMarking]:
-    order = await _get_order(session, tenant_id, order_id)
+    from app.services.fbs_packaging_integration_service import lock_order_packaging_rows
+
+    await lock_order_packaging_rows(session, tenant_id, order_id)
+    order = await _get_order(session, tenant_id, order_id, for_update=True)
     if order is None:
         raise FbsMarkingError("order_not_found")
 

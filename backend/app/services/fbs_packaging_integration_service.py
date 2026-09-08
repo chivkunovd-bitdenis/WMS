@@ -8,7 +8,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -26,6 +26,7 @@ from app.models.fbs_order import (
     PACK_STATUS_PACKED,
     PICK_STATUS_PICKED,
     FbsOrder,
+    FbsOrderMarking,
     current_order_marking,
 )
 from app.models.fbs_order_pick import FbsOrderPick
@@ -37,6 +38,7 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.fbs_trbx import FbsTrbx
+from app.models.marking_code import MarkingCode
 from app.models.packaging_task import STATUS_DRAFT, PackagingTask, PackagingTaskLine
 from app.models.warehouse_box import WarehouseBox
 from app.services import sorting_location_service as sorting_loc_svc
@@ -93,6 +95,65 @@ class FbsPackProgressResult:
     units: list[FbsPackUnitResult]
     # Warn when stock was deducted elsewhere or not deducted.
     warnings: list[str] = field(default_factory=list)
+
+
+async def lock_packaging_rows(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    supply_id: uuid.UUID | None = None,
+    task_ids: set[uuid.UUID] | None = None,
+) -> None:
+    """Lock existing parents before any line/order/code mutation.
+
+    Print, pack-all and KIZ changes share supply -> task -> lines order.
+    Discovery reads only IDs; callers reload their working objects after waiting.
+    """
+    ids = set(task_ids or ())
+    supplies = list((await session.execute(
+        select(FbsSupply.id, FbsSupply.packaging_task_id).where(
+            FbsSupply.tenant_id == tenant_id,
+            or_(FbsSupply.id == supply_id, FbsSupply.packaging_task_id.in_(ids)),
+        ).order_by(FbsSupply.id).with_for_update()
+    )).all())
+    if not supplies:
+        return
+    ids.update(task_id for _, task_id in supplies if task_id is not None)
+    if not ids:
+        return
+    await session.execute(
+        select(PackagingTask.id).where(
+            PackagingTask.tenant_id == tenant_id, PackagingTask.id.in_(ids),
+        ).order_by(PackagingTask.id).with_for_update()
+    )
+    await session.execute(
+        select(PackagingTaskLine.id).join(PackagingTask).where(
+            PackagingTask.tenant_id == tenant_id, PackagingTaskLine.task_id.in_(ids),
+        ).order_by(PackagingTaskLine.id).with_for_update(of=PackagingTaskLine)
+    )
+
+
+async def lock_order_packaging_rows(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order_id: uuid.UUID,
+) -> None:
+    """Include a detached order's historical code/fulfillment line before its lock."""
+    supply_id = await session.scalar(select(FbsOrder.supply_id).where(
+        FbsOrder.tenant_id == tenant_id, FbsOrder.id == order_id,
+    ))
+    code_tasks = select(PackagingTaskLine.task_id).join(
+        MarkingCode, MarkingCode.packaging_task_line_id == PackagingTaskLine.id,
+    ).join(FbsOrderMarking, FbsOrderMarking.marking_code_id == MarkingCode.id).where(
+        FbsOrderMarking.tenant_id == tenant_id, FbsOrderMarking.order_id == order_id,
+    )
+    fulfillment_tasks = select(FbsPackagingFulfillment.packaging_task_id).where(
+        FbsPackagingFulfillment.tenant_id == tenant_id,
+        FbsPackagingFulfillment.fbs_order_id == order_id,
+        FbsPackagingFulfillment.undone_at.is_(None),
+    )
+    task_ids = set((await session.scalars(code_tasks.union(fulfillment_tasks))).all())
+    await lock_packaging_rows(session, tenant_id, supply_id=supply_id, task_ids=task_ids)
 
 
 async def _load_supply(
@@ -727,6 +788,8 @@ async def sync_fbs_supply_after_order_marking_update(
 ) -> FbsSupply | None:
     order = await session.get(FbsOrder, order_id)
     if order is None or order.tenant_id != tenant_id or order.supply_id is None:
+        return None
+    if order.marketplace == "wb":
         return None
     return await try_promote_fbs_supply_if_ready(
         session,

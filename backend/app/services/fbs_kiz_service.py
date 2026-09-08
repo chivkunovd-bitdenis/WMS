@@ -723,12 +723,16 @@ async def _get_order_for_kiz(
     *,
     for_update: bool = False,
 ) -> FbsOrder:
+    if for_update:
+        from app.services.fbs_packaging_integration_service import lock_order_packaging_rows
+
+        await lock_order_packaging_rows(session, tenant_id, order_id)
     stmt = select(FbsOrder).where(
         FbsOrder.id == order_id,
         FbsOrder.tenant_id == tenant_id,
     )
     if for_update:
-        stmt = stmt.with_for_update()
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
     order = (await session.execute(stmt)).scalar_one_or_none()
     if order is None:
         raise FbsKizError("order_not_found")
@@ -905,6 +909,7 @@ async def _current_sgtin_marking_for_update(
         .order_by(FbsOrderMarking.created_at.desc(), FbsOrderMarking.id.desc())
         .limit(1)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if not include_rejected:
         stmt = stmt.where(FbsOrderMarking.meta_status != META_STATUS_REJECTED)
@@ -930,7 +935,8 @@ async def _packaging_line_for_order(
         )
         .order_by(FbsPackagingFulfillment.fulfilled_at.desc())
         .limit(1)
-        .with_for_update()
+        .with_for_update(of=PackagingTaskLine)
+        .execution_options(populate_existing=True)
     )
     fulfilled = (await session.execute(fulfilled_stmt)).first()
     if fulfilled is not None:
@@ -950,7 +956,8 @@ async def _packaging_line_for_order(
         )
         .order_by(PackagingTaskLine.id)
         .limit(1)
-        .with_for_update()
+        .with_for_update(of=PackagingTaskLine)
+        .execution_options(populate_existing=True)
     )
     line = (await session.execute(supply_stmt)).first()
     if line is None:
