@@ -1,0 +1,6 @@
+{
+  "balances": true,
+  "movements": true,
+  "movement_totals": true,
+  "reservations": true
+}
