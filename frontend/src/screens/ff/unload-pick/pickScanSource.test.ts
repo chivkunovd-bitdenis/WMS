@@ -56,6 +56,18 @@ describe('WMS-058 physical source selection for shared FBS and MP scans', () => 
     expect(resolveProductScanSource(product, [entry], { locationId: 'FBS-VIDEO-01', containerKind: 'box', containerId: 'box' })).toEqual({ locationId: 'FBS-VIDEO-01', containerKind: 'box', containerId: 'box' })
   })
 
+  it.each([0, 4])('keeps an explicitly scanned cell as loose stock when loose available is %s', (available) => {
+    const selected = { locationId: 'FBS-VIDEO-01', containerKind: null, containerId: null }
+    const entry = { ...location, sources: [
+      { available, container_path: [] }, location.sources[1],
+    ] }
+    const source = resolveProductScanSource(product, [entry], selected)
+    expect(source).toBe(selected)
+    expect(source.containerKind).toBeNull()
+    expect(source.containerId).toBeNull()
+    expect(scanSourceKey(source)).toBe('cell:FBS-VIDEO-01')
+  })
+
   it('counts physical sources across cells and restricts scanned cell scope', () => {
     const entries = [location, { storage_location_id: 'other-cell', available: 1, sources: [{ available: 1, container_path: [] }] }]
     expect(() => resolveProductScanSource(product, entries, null)).toThrow('в 3 местах')
