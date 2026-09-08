@@ -167,13 +167,18 @@ function kizTail(order: FbsWorkspace['orders'][number]): string | null {
   return state?.value_tail ?? null
 }
 
+// WMS-395: отменять надо в первую очередь как раз отбитый код. Условие
+// `status !== 'rejected'` стояло здесь с 10.08.2026 (5d8ec33e) заодно с
+// партиальным индексом «без отклонённых WB строк» — отбитую привязку тогда
+// считали как бы несуществующей, отменять нечего. На стороне WB она
+// существует: 08.09.2026 запрос `POST /api/marketplace/v3/orders/meta` по
+// боевым заказам 5695241493 и 5695867136 вернул код целиком с вердиктом
+// `sgtinApplied`. Он там закреплён и по спеке блокирует передачу всей
+// поставки, а оператор не мог его снять — пункта отмены у него не было.
 function hasOperatorKiz(order: FbsWorkspace['orders'][number]) {
   return order.metadata.states.some(
     (state) =>
-      state.kind === 'sgtin' &&
-      state.source === 'operator' &&
-      state.status !== 'missing' &&
-      state.status !== 'rejected',
+      state.kind === 'sgtin' && state.source === 'operator' && state.status !== 'missing',
   )
 }
 
