@@ -1,0 +1,20 @@
+{
+  "checked_at": "2026-09-08T17:47:24.296470+00:00",
+  "project_id": "c28e681d-4535-4c96-ac97-c7b600a7f8e4",
+  "project_name": "loyal-wonder",
+  "requested_commit": "ad116f0d4a642bb3c41af411683b8672f24b1826",
+  "services": [
+    {
+      "service": "WMS",
+      "deployment_id": "ebfa35d1-e2c4-41bb-bd57-93ac8ed37f5a",
+      "status": "SUCCESS",
+      "commit": "5c371f39ccd836be96f85d4ffb68b8e52d5864cf"
+    },
+    {
+      "service": "web",
+      "deployment_id": "52af7300-4807-441b-905e-138929d97862",
+      "status": "SUCCESS",
+      "commit": "5c371f39ccd836be96f85d4ffb68b8e52d5864cf"
+    }
+  ]
+}
