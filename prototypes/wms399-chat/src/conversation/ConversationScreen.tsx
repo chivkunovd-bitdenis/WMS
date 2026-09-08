@@ -163,7 +163,7 @@ export function ConversationScreen() {
         </Box>
       </Box>
       {ui.viewport === 'desktop' ? (
-        <Box sx={{ width: 380, borderLeft: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ width: 380, minHeight: 0, borderLeft: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', display: 'flex', flexDirection: 'column' }}>
           <Tabs
             value={showThread ? 'thread' : rightTab}
             onChange={(_, v) => {
@@ -175,7 +175,7 @@ export function ConversationScreen() {
             <Tab value="context" label="Контекст" />
             <Tab value="thread" label="Обсуждение" disabled={!showThread} />
           </Tabs>
-          <Box sx={{ flex: 1, overflow: 'auto' }}>
+          <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
             {showThread ? <ThreadPanel conversation={conv} /> : <ContextPanel conversation={conv} />}
           </Box>
         </Box>

@@ -33,6 +33,7 @@ import { PersonaAvatar } from '../common/PersonaAvatar'
 import { fmtBytes, fmtTime } from '../utils/format'
 import { docKindLabel, StatusChip } from '../common/StatusChip'
 import { Row, Col } from '../common/Row'
+import { visibleMessagesForActor } from '../state/selectors'
 
 const REACTIONS = ['👍', '👀', '🙏', '🔥', '❗', '✅']
 
@@ -57,14 +58,17 @@ export function MessageBubble({
   const isSellerReading = currentActor.role === 'seller'
 
   const doc = message.documentRef ? documentById.get(message.documentRef) : null
-  const replyToMsg = message.replyToId ? data.messages.get(message.replyToId) : null
+  const replyToMsgRaw = message.replyToId ? data.messages.get(message.replyToId) : null
+  const replyToMsg = replyToMsgRaw && (isSellerReading ? replyToMsgRaw.visibility === 'shared' : true) ? replyToMsgRaw : null
   const threadReplyCount = useMemo(() => {
     const ids = data.messagesByConversation.get(message.conversationId) ?? []
-    return ids.reduce((n, id) => {
+    const branch: Message[] = []
+    for (const id of ids) {
       const m = data.messages.get(id)
-      return m && m.threadRootId === message.id ? n + 1 : n
-    }, 0)
-  }, [data.messages, data.messagesByConversation, message.id, message.conversationId])
+      if (m && m.threadRootId === message.id) branch.push(m)
+    }
+    return visibleMessagesForActor(branch, currentActor).length
+  }, [data.messages, data.messagesByConversation, message.id, message.conversationId, currentActor])
 
   if (message.kind === 'system') {
     return (

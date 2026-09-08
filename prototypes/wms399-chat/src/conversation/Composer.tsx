@@ -257,7 +257,7 @@ export function Composer({ conversation }: { conversation: Conversation }) {
           },
         }}
       />
-      <Row align="center" spacing={0.5} sx={{ mt: 1 }}>
+      <Row align="center" spacing={0.5} wrap sx={{ mt: 1, rowGap: 1 }}>
         <input
           ref={fileInput}
           type="file"
@@ -280,19 +280,21 @@ export function Composer({ conversation }: { conversation: Conversation }) {
             <AlternateEmailIcon />
           </IconButton>
         </Tooltip>
-        <VisibilityToggle
-          value={draft.visibility}
-          onChange={(v) => setDraft({ visibility: v })}
-          canInternal={canInternal}
-          conversation={conversation}
-        />
-        <Box sx={{ flex: 1 }} />
+        <Box sx={{ flexShrink: 0 }}>
+          <VisibilityToggle
+            value={draft.visibility}
+            onChange={(v) => setDraft({ visibility: v })}
+            canInternal={canInternal}
+            conversation={conversation}
+          />
+        </Box>
         <Button
           size="medium"
           variant="contained"
           endIcon={<SendIcon />}
           disabled={!draft.text.trim() && draft.attachments.length === 0 && !draft.documentRef}
           onClick={send}
+          sx={{ ml: 'auto', flexShrink: 0 }}
         >
           Отправить
         </Button>

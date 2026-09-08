@@ -83,29 +83,32 @@ export function App() {
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        minHeight: '100vh',
+        height: '100vh',
+        overflow: 'hidden',
         bgcolor: 'background.default',
       }}
       data-testid="chat-app"
     >
       <TopBar />
       <OfflineBanner />
-      <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <Box sx={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
         {specialScreen ? (
-          <Box sx={{ flex: 1, overflow: 'auto', p: { xs: 2, md: 3 } }}>{specialScreen}</Box>
+          <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', p: { xs: 2, md: 3 } }}>{specialScreen}</Box>
         ) : ui.viewport === 'desktop' ? (
           <>
-            <Box sx={{ width: 340, borderRight: '1px solid', borderColor: 'divider', overflow: 'hidden', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
+            <Box sx={{ width: 340, minHeight: 0, borderRight: '1px solid', borderColor: 'divider', overflow: 'hidden', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
               <InboxScreen />
             </Box>
-            <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+            <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'hidden', display: 'flex' }}>
               <ConversationScreen />
             </Box>
           </>
         ) : route.screen === 'conversation' ? (
-          <ConversationScreen />
+          <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'hidden', display: 'flex' }}>
+            <ConversationScreen />
+          </Box>
         ) : (
-          <Box sx={{ flex: 1, overflow: 'hidden' }}>
+          <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
             <InboxScreen />
           </Box>
         )}

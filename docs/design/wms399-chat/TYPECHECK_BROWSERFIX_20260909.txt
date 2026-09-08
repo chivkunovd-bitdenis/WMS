@@ -1,0 +1,3 @@
+
+> wms399-chat-prototype@0.0.1-demo typecheck
+> tsc -b --noEmit

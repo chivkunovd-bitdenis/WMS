@@ -25,7 +25,6 @@ export function ConversationRow({ conversation }: { conversation: Conversation }
 
   const seller = conversation.sellerId ? sellerById.get(conversation.sellerId) : null
   const warehouse = conversation.warehouseId ? warehouseById.get(conversation.warehouseId) : null
-  const last = conversation.lastMessageId ? data.messages.get(conversation.lastMessageId) : null
 
   const isSelected = ui.selectedConversationId === conversation.id
   const messages = data.messagesByConversation.get(conversation.id) ?? []
@@ -43,7 +42,7 @@ export function ConversationRow({ conversation }: { conversation: Conversation }
     ? (lastVisible.text || (lastVisible.attachments?.length ? '📎 Вложение' : lastVisible.systemPayload?.text || '[документ]'))
     : 'Ещё нет сообщений'
 
-  const isInternalPreview = last?.visibility === 'internal' && currentActor.role !== 'seller'
+  const isInternalPreview = lastVisible?.visibility === 'internal' && currentActor.role !== 'seller'
 
   return (
     <Box
@@ -86,9 +85,9 @@ export function ConversationRow({ conversation }: { conversation: Conversation }
           <Typography variant="body2" sx={{ fontWeight: 700, flex: 1, minWidth: 0 }} noWrap>
             {conversation.title}
           </Typography>
-          {last ? (
+          {lastVisible ? (
             <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
-              {fmtTime(last.createdAt)}
+              {fmtTime(lastVisible.createdAt)}
             </Typography>
           ) : null}
         </Row>
