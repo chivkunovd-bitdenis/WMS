@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
+import weakref
 
 import fitz
 import pytest
@@ -18,6 +19,46 @@ from app.services.marking_datamatrix_service import decode_datamatrix_codes_on_p
 GTIN = "04600000000001"
 FULL = f"01{GTIN}21SYNTHETIC0831\x1d91ABCD\x1d92SYNTHETIC+/=CRYPTO083"
 OTHER = f"01{GTIN}21SECOND083\x1d93OTHER+/=TAIL"
+
+
+@pytest.mark.parametrize("channels", [1, 3])
+def test_decoder_keeps_pixel_buffer_alive_during_native_read(
+    monkeypatch: pytest.MonkeyPatch, channels: int
+) -> None:
+    import zxingcpp
+
+    class PixelBuffer(bytearray):
+        pass
+
+    buffers: list[weakref.ReferenceType[PixelBuffer]] = []
+
+    class Pixmap:
+        width = 10
+        height = 10
+        n = channels
+
+        @property
+        def samples(self) -> PixelBuffer:
+            # Like PyMuPDF's samples, each access returns a separate buffer.
+            pixels = PixelBuffer(b"\xff" * self.width * self.height * self.n)
+            buffers.append(weakref.ref(pixels))
+            return pixels
+
+    class Page:
+        def get_pixmap(self, **kwargs: object) -> Pixmap:
+            return Pixmap()
+
+    native_read = zxingcpp.read_barcodes
+
+    def checked_read(view: object, **kwargs: object) -> list:
+        # Fail safely before the real decoder can dereference freed memory.
+        assert buffers[-1]() is not None, "ImageView outlived its pixel buffer"
+        return native_read(view, **kwargs)
+
+    monkeypatch.setattr(zxingcpp, "read_barcodes", checked_read)
+    assert decode_datamatrix_codes_on_pdf_page(Page()) == []
+    assert len(buffers) == 1
+    assert buffers[0]() is None
 
 
 @pytest.mark.parametrize("caption", [True, False])

@@ -231,6 +231,7 @@ async def test_fbs_pick_options_returns_two_locations_with_inventory_numbers(
         "sources": [
             {
                 "quantity": 3,
+                "available": 3,
                 "picked": 0,
                 "is_loose": False,
                 "source_label": f"Грузоместо CARGO-{suffix[-8:]}",
@@ -251,6 +252,7 @@ async def test_fbs_pick_options_returns_two_locations_with_inventory_numbers(
             },
             {
                 "quantity": 4,
+                "available": 4,
                 "picked": 0,
                 "is_loose": True,
                 "source_label": "Россыпью",
@@ -268,6 +270,7 @@ async def test_fbs_pick_options_returns_two_locations_with_inventory_numbers(
         "sources": [
             {
                 "quantity": 2,
+                "available": 2,
                 "picked": 0,
                 "is_loose": True,
                 "source_label": "Россыпью",
@@ -328,7 +331,7 @@ async def test_fbs_pick_options_reports_active_pick_for_source_location(
         if location["storage_location_id"] == str(location_id)
     )
     assert source["quantity"] == 2
-    assert source["available"] == 2
+    assert source["available"] == 1
     assert source["picked"] == 1
 
 
@@ -382,11 +385,12 @@ async def test_fbs_pick_options_keeps_physical_balance_after_pick(
     )
     assert source["quantity"] == 1
     assert source["reserved"] == 0
-    assert source["available"] == 1
+    assert source["available"] == 0
     assert source["picked"] == 1
     assert source["sources"] == [
         {
             "quantity": 1,
+            "available": 0,
             "picked": 1,
             "is_loose": True,
             "source_label": "Россыпью",

@@ -21,6 +21,7 @@ from app.services.fbs_supply_reconcile_service import (
     request_hash_for_deliver,
 )
 from app.services.marketplace_provider import FakeMarketplaceTransport, OzonMarketplaceProvider
+from app.services.sorting_location_service import get_or_create_sorting_location
 from tests.test_fbs_ozon_lane import (
     _ozon_handoff_responses,
     _seed_ozon_supply_case,
@@ -29,7 +30,7 @@ from tests.test_fbs_ozon_lane import (
 
 
 @pytest.mark.parametrize("staged", [False, True])
-async def test_ozon_known_shortage_requires_confirmation_and_preserves_exact_source(
+async def test_ozon_known_shortage_requires_confirmation_and_uses_staged_or_sorting_source(
     db_session: AsyncSession, staged: bool,
 ) -> None:
     tenant, _, warehouse, product, order, supply = await _seed_ozon_supply_case(
@@ -47,6 +48,11 @@ async def test_ozon_known_shortage_requires_confirmation_and_preserves_exact_sou
     ))
     assert balance is not None
     source_id = balance.storage_location_id
+    if not staged:
+        # WMS-392: a packaging fact does not select the shipment source. With
+        # no physical pick or positive stock, the confirmed minus uses sorting.
+        sorting = await get_or_create_sorting_location(db_session, tenant.id, warehouse.id)
+        source_id = sorting.id
     balance.quantity = 0
     balance.quantity_unpacked = 0
     balance.quantity_packed = 0
@@ -89,10 +95,16 @@ async def test_ozon_known_shortage_requires_confirmation_and_preserves_exact_sou
     assert ledger.negative_quantity == 1
     row = ledger.ozon_positions_json[0]
     assert row["storage_location_id"] == str(source_id)
+    if not staged:
+        assert row["source_mode"] == "forced_negative"
     movement = await db_session.get(InventoryMovement, uuid.UUID(str(row["movement_id"])))
     assert movement is not None and movement.quantity_delta == -1
+    assert movement.storage_location_id == source_id
     await db_session.refresh(balance)
-    assert balance.quantity == -1
+    assert balance.quantity == (-1 if staged else 0)
+    assert await db_session.scalar(select(func.sum(InventoryBalance.quantity)).where(
+        InventoryBalance.product_id == product.id,
+    )) == -1
     assert sum(path == "/v1/carriage/create" for path, _ in transport.endpoint_calls) == 1
 
 
