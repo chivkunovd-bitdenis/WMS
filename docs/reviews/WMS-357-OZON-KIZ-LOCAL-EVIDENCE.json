@@ -1,0 +1,237 @@
+{
+  "scope": "local synthetic only, API18557 / UI15557, native Safari",
+  "supply_id": "67d1b58b-b78a-4adb-9df3-0ef0b8e8d21a",
+  "unchanged": {
+    "inventory_balances": true,
+    "inventory_movements": true,
+    "fbs_order_product_reservations": true,
+    "fbs_order_products": true
+  },
+  "before": {
+    "inventory_balances": [
+      {
+        "id": "6ba4c3d1df3b4ed2a4eddf5e080e9ba4",
+        "tenant_id": "d9aa83a76ad540e087b8c7a1b57827c7",
+        "storage_location_id": "63a347434ca542419790f0b39cbb8b2c",
+        "product_id": "8e4cf87d700f40e699e5e61304882829",
+        "container_kind": null,
+        "container_id": null,
+        "quantity": 10,
+        "quantity_unpacked": 10,
+        "quantity_packed": 0,
+        "updated_at": "2026-09-08 12:55:41"
+      },
+      {
+        "id": "74c0c89a29224a008d432eafa9c508a5",
+        "tenant_id": "d9aa83a76ad540e087b8c7a1b57827c7",
+        "storage_location_id": "63a347434ca542419790f0b39cbb8b2c",
+        "product_id": "ae9fb108ad764b6dbe75768ef8bd8b95",
+        "container_kind": null,
+        "container_id": null,
+        "quantity": 10,
+        "quantity_unpacked": 10,
+        "quantity_packed": 0,
+        "updated_at": "2026-09-08 12:55:41"
+      }
+    ],
+    "inventory_movements": [],
+    "fbs_order_product_reservations": [],
+    "fbs_order_products": [
+      {
+        "id": "1a1e293e6f6b4a80aa68d36a439e60c7",
+        "order_id": "eb81d1835a3b47c2b893b834091e788e",
+        "product_id": "8e4cf87d700f40e699e5e61304882829",
+        "ozon_sku": 4002,
+        "offer_id": "offer-2",
+        "name": "Носки",
+        "quantity": 2,
+        "position_index": 1,
+        "reserved_quantity": 0,
+        "picked_quantity": 0,
+        "provider_data_json": "{\"name\": \"\\u041d\\u043e\\u0441\\u043a\\u0438\", \"offer_id\": \"offer-2\", \"quantity\": 2, \"sku\": 4002, \"barcode\": \"04601234567801\"}",
+        "created_at": "2026-09-08 12:50:42",
+        "updated_at": "2026-09-08 12:50:42"
+      },
+      {
+        "id": "cf197f2622d24fc58940c0dacd90b604",
+        "order_id": "eb81d1835a3b47c2b893b834091e788e",
+        "product_id": "ae9fb108ad764b6dbe75768ef8bd8b95",
+        "ozon_sku": 4001,
+        "offer_id": "offer-1",
+        "name": "Футболка",
+        "quantity": 1,
+        "position_index": 0,
+        "reserved_quantity": 0,
+        "picked_quantity": 0,
+        "provider_data_json": "{\"name\": \"\\u0424\\u0443\\u0442\\u0431\\u043e\\u043b\\u043a\\u0430\", \"offer_id\": \"offer-1\", \"quantity\": 1, \"sku\": 4001, \"barcode\": \"04601234567890\"}",
+        "created_at": "2026-09-08 12:50:42",
+        "updated_at": "2026-09-08 12:50:42"
+      }
+    ]
+  },
+  "after": {
+    "inventory_balances": [
+      {
+        "id": "6ba4c3d1df3b4ed2a4eddf5e080e9ba4",
+        "tenant_id": "d9aa83a76ad540e087b8c7a1b57827c7",
+        "storage_location_id": "63a347434ca542419790f0b39cbb8b2c",
+        "product_id": "8e4cf87d700f40e699e5e61304882829",
+        "container_kind": null,
+        "container_id": null,
+        "quantity": 10,
+        "quantity_unpacked": 10,
+        "quantity_packed": 0,
+        "updated_at": "2026-09-08 12:55:41"
+      },
+      {
+        "id": "74c0c89a29224a008d432eafa9c508a5",
+        "tenant_id": "d9aa83a76ad540e087b8c7a1b57827c7",
+        "storage_location_id": "63a347434ca542419790f0b39cbb8b2c",
+        "product_id": "ae9fb108ad764b6dbe75768ef8bd8b95",
+        "container_kind": null,
+        "container_id": null,
+        "quantity": 10,
+        "quantity_unpacked": 10,
+        "quantity_packed": 0,
+        "updated_at": "2026-09-08 12:55:41"
+      }
+    ],
+    "inventory_movements": [],
+    "fbs_order_product_reservations": [],
+    "fbs_order_products": [
+      {
+        "id": "1a1e293e6f6b4a80aa68d36a439e60c7",
+        "order_id": "eb81d1835a3b47c2b893b834091e788e",
+        "product_id": "8e4cf87d700f40e699e5e61304882829",
+        "ozon_sku": 4002,
+        "offer_id": "offer-2",
+        "name": "Носки",
+        "quantity": 2,
+        "position_index": 1,
+        "reserved_quantity": 0,
+        "picked_quantity": 0,
+        "provider_data_json": "{\"name\": \"\\u041d\\u043e\\u0441\\u043a\\u0438\", \"offer_id\": \"offer-2\", \"quantity\": 2, \"sku\": 4002, \"barcode\": \"04601234567801\"}",
+        "created_at": "2026-09-08 12:50:42",
+        "updated_at": "2026-09-08 12:50:42"
+      },
+      {
+        "id": "cf197f2622d24fc58940c0dacd90b604",
+        "order_id": "eb81d1835a3b47c2b893b834091e788e",
+        "product_id": "ae9fb108ad764b6dbe75768ef8bd8b95",
+        "ozon_sku": 4001,
+        "offer_id": "offer-1",
+        "name": "Футболка",
+        "quantity": 1,
+        "position_index": 0,
+        "reserved_quantity": 0,
+        "picked_quantity": 0,
+        "provider_data_json": "{\"name\": \"\\u0424\\u0443\\u0442\\u0431\\u043e\\u043b\\u043a\\u0430\", \"offer_id\": \"offer-1\", \"quantity\": 1, \"sku\": 4001, \"barcode\": \"04601234567890\"}",
+        "created_at": "2026-09-08 12:50:42",
+        "updated_at": "2026-09-08 12:50:42"
+      }
+    ]
+  },
+  "markings_after": [
+    {
+      "value": "010460123456789021FIRST",
+      "meta_status": "accepted",
+      "order_product_id": "cf197f2622d24fc58940c0dacd90b604"
+    },
+    {
+      "value": "010460123456780121SECOND-A",
+      "meta_status": "accepted",
+      "order_product_id": "1a1e293e6f6b4a80aa68d36a439e60c7"
+    },
+    {
+      "value": "010460123456780121REPLACEMENT",
+      "meta_status": "accepted",
+      "order_product_id": "1a1e293e6f6b4a80aa68d36a439e60c7"
+    }
+  ],
+  "replacement_calls": [
+    [
+      "/v5/fbs/posting/product/exemplar/status",
+      {
+        "posting_number": "ozon-posting-products"
+      }
+    ],
+    [
+      "/v6/fbs/posting/product/exemplar/create-or-get",
+      {
+        "posting_number": "ozon-posting-products"
+      }
+    ],
+    [
+      "/v5/fbs/posting/product/exemplar/validate",
+      {
+        "posting_number": "ozon-posting-products",
+        "products": [
+          {
+            "exemplars": [
+              {
+                "marks": [
+                  {
+                    "mark": "010460123456780121REPLACEMENT",
+                    "mark_type": "mandatory_mark"
+                  }
+                ]
+              }
+            ],
+            "product_id": 4002
+          }
+        ]
+      }
+    ],
+    [
+      "/v6/fbs/posting/product/exemplar/set",
+      {
+        "posting_number": "ozon-posting-products",
+        "products": [
+          {
+            "exemplars": [
+              {
+                "exemplar_id": 81,
+                "marks": [
+                  {
+                    "mark": "010460123456789021FIRST",
+                    "mark_type": "mandatory_mark"
+                  }
+                ]
+              }
+            ],
+            "product_id": 4001
+          },
+          {
+            "exemplars": [
+              {
+                "exemplar_id": 82,
+                "marks": [
+                  {
+                    "mark": "010460123456780121SECOND-A",
+                    "mark_type": "mandatory_mark"
+                  }
+                ]
+              },
+              {
+                "exemplar_id": 83,
+                "marks": [
+                  {
+                    "mark": "010460123456780121REPLACEMENT",
+                    "mark_type": "mandatory_mark"
+                  }
+                ]
+              }
+            ],
+            "product_id": 4002
+          }
+        ]
+      }
+    ],
+    [
+      "/v5/fbs/posting/product/exemplar/status",
+      {
+        "posting_number": "ozon-posting-products"
+      }
+    ]
+  ]
+}

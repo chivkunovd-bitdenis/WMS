@@ -2483,7 +2483,8 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
             ]
         )
         await db_session.flush()
-    for value in values:
+    scan_started_at = datetime.now(UTC)
+    for scan_index, value in enumerate(values):
         # The UI validates before commit; direct commit alone missed the second-product bug.
         assert (await kiz_svc.validate_kiz_pair(db_session, order.tenant_id, order.id, value)).ok
         await kiz_svc._commit_one_kiz_pair(
@@ -2493,6 +2494,15 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
             kiz_svc.FbsKizCommitPair(order.id, value, False),
             AsyncMock(),
         )
+        scanned = await db_session.scalar(
+            select(FbsOrderMarking).where(
+                FbsOrderMarking.order_id == order.id, FbsOrderMarking.value == value
+            )
+        )
+        assert scanned is not None
+        # SQLite defaults have second precision; represent separate operator scans explicitly.
+        scanned.created_at = scan_started_at + timedelta(seconds=scan_index)
+        await db_session.flush()
 
     markings = list(
         (
@@ -2521,6 +2531,17 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
     assert order.metadata_delivery_allowed is (expected_status == "accepted")
     metadata = marking_svc.build_order_metadata(order, markings)
     assert len(metadata["states"]) == 3
+    await db_session.commit()
+    async with SessionLocal() as workspace_session:
+        workspace = await workspace_svc.get_supply_workspace(
+            workspace_session, order.tenant_id, supply.id
+        )
+    assert len(workspace["orders"][0]["metadata"]["states"]) == 3
+    assert sorted(
+        workspace["orders"][0]["metadata"]["states"], key=lambda row: row["value_tail"]
+    ) == sorted(
+        metadata["states"], key=lambda row: row["value_tail"]
+    )
     assert all(state["status"] == expected_status for state in metadata["states"])
     # Re-reading an already entered own code is safe and does not submit it again.
     calls_before_repeat = len(transport.endpoint_calls)
@@ -2630,6 +2651,11 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
 
     # Confirmed replacement keeps exactly one mandatory code for the same exemplar.
     order.status = "assembling"
+    replacing = (await ozon_kiz_svc._active_position_markings(
+        db_session, order.id, order.product_positions[1].id
+    ))[-1]
+    previous_value = replacing.value
+    assert previous_value == values[-1]
     replacement = f"01{second_gtin}21REPLACEMENT"
     await kiz_svc._commit_one_kiz_pair(
         db_session,
@@ -2645,7 +2671,9 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
         for exemplar in product["exemplars"]
         for mark in exemplar["marks"]
     ]
-    assert sorted(sent) == sorted([values[0], values[1], replacement])
+    assert sorted(sent) == sorted(
+        [value for value in values if value != previous_value] + [replacement]
+    )
 
 
 @pytest.mark.asyncio
