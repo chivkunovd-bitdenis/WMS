@@ -424,3 +424,24 @@ export function fbsMarkingPresentation(
   if (state.status === 'missing') return { tone: 'neutral', label: 'ЧЗ не внесён', reason: null }
   return { tone: 'neutral', label: `${provider} ещё не подтвердил ЧЗ`, reason: null }
 }
+
+// Same scanner normalization as fbs_kiz_service.sticker_scan_candidates.
+const stickerKeyboardMap: Record<string, string> = Object.fromEntries(
+  [
+    ["ёйцукенгшщзхъфывапролджэячсмитьбю.", "`qwertyuiop[]asdfghjkl;'zxcvbnm,./"],
+    ["ЁЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮ,", "~QWERTYUIOP{}ASDFGHJKL:\"ZXCVBNM<>?"],
+    ["\"№;:?/", "@#$^&|"],
+  ].flatMap(([russian, qwerty]) => [...russian].map((char, index) => [char, qwerty[index]])),
+)
+
+function stickerScanCandidates(raw: string): string[] {
+  const value = raw.replace(/[\s\u0085\u001c-\u001f]/g, '')
+  if (!value) return []
+  if (![...value].some((char) => stickerKeyboardMap[char] && /[\u0400-\u04ff№]/.test(char))) return [value]
+  return [value, [...value].map((char) => stickerKeyboardMap[char] ?? char).join('')]
+}
+
+export function fbsSameStickerScan(raw: string, selected: string): boolean {
+  const selectedCandidates = new Set(stickerScanCandidates(selected))
+  return stickerScanCandidates(raw).some((candidate) => selectedCandidates.has(candidate))
+}
