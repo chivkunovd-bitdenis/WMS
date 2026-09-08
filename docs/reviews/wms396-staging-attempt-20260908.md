@@ -46,3 +46,36 @@ Mac оставался заблокированным: окончательна�
 CI и блокеры тарифа/браузера; повторять завершённые дорогие ревью и полный pytest
 без новой причины запрещено. Исторические WMS-047/048/013 и решения WMS-084/277
 не выданы за закрытые; свежие ограничения зафиксированы в каноническом бэклоге.
+
+## Успешный запуск после оплаты, 08.09.2026 после 20:23 UTC
+
+Railway customer перешёл из UNPAID в ACTIVE; invoice2488 cents paid2488.
+Оплату выполнил владелец, агент платежей и настроек биллинга не менял.
+Повтор CLI upload из чистого постоянного wms396-staging-release на
+ad116f0d4a642bb3c41af411683b8672f24b1826 завершился успешно для обоих сервисов:
+
+- backend bf3c06ce-5060-41c4-ad53-d94630493f64, SUCCESS;
+- web 96bd59a1-5e92-42c8-9b62-0aa1fc7bdb77, SUCCESS.
+
+Backend instance03246464-5b34-47aa-9ca7-ed9aa5eff840: миграции0256/0257
+прошли, Application startup complete, health200. Проксированный
+https://web-production-9e7c1.up.railway.app/api/health вернул status ok.
+427 Python-файлов app/alembic сравнены с release: сортированные относительные
+пути и байты, разделённые NUL, дают одинаковый SHA256
+18608f196e64aaadf295da83bebd0b47b46eef6648a864c46f20651cc67ef8aa.
+CLI metadata не содержит commitHash; не выдавать cliMessage за независимый SHA.
+Фронт upload из того же clean checkout, активные assets ff-DuglG8kr.js и
+FfInboundRequestView-DXNw_RMP.js. Их SHA256 соответственно
+2b86c3b22805c8ede6825686a4a32a9ee87ed9b8003ebe80c54a4efb2a15156a и
+e14b05ca546e138da2147f223729f924f1cd6bfe7bfe54417ddcffb9f9d5b472.
+Существующий локальный QA dist имеет другие JS имена; независимое совпадение
+всей frontend сборки не доказано. Новая сборка локально не запускалась.
+
+Ручной reload IAB таб1 показал login с 401 invalid_token. Запрошен повторный
+вход владельца. Конечная stage-приёмка остаётся открытой. Локальный агент
+проверил удаление unused КИЗ кликом и неизменность количества/склада;
+report wms396-delete-browser-20260908.md commit04d531fc.
+Проверка проведённого документа ограничена native CUA и переполненным диском:
+no space left on device, df111Mi. Освобождён только генерируемый .vite cache
+своего QA worktree (28MB), пользовательские данные не удалялись.
+Новых application изменений, тестов, review и production deployment не было.
