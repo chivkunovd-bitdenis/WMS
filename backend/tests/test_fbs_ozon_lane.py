@@ -572,19 +572,20 @@ async def test_ozon_stock_dispatch_uses_binding_pool_with_fake_transport(
     )
 
     assert result.bindings_processed == 1
-    assert result.products_targeted == 1
-    assert result.products_confirmed == 1
-    assert transport.calls == [("publish_stocks", "ozon-client")]
+    # Off is omitted from polling; the final zero belongs to the save operation.
+    assert result.products_targeted == int(publish)
+    assert result.products_confirmed == int(publish)
+    assert transport.calls == ([("publish_stocks", "ozon-client")] if publish else [])
     # В поле `product_id` уходит именно product_id Ozon, а не SKU: раньше туда
     # клали SKU и остаток подписывался чужим идентификатором.
-    assert transport.published_stocks == [
+    assert transport.published_stocks == ([
         {
             "warehouse_id": 900001,
             "offer_id": "offer-1",
             "product_id": 6001,
             "stock": expected,
         }
-    ]
+    ] if publish else [])
 
 
 @pytest.mark.asyncio
@@ -607,6 +608,7 @@ async def test_ozon_partial_stock_confirmation_counts_only_what_ozon_confirmed(
             name=f"Product {index}",
             sku_code=f"sku-{uuid.uuid4().hex[:8]}",
             fbs_units_mode=True,
+            fbs_ozon_stock_sync_enabled=True,
         )
         for index in range(2)
     ]
@@ -715,11 +717,12 @@ async def test_ozon_publish_respects_configured_products_and_all_binding_flags(
     configured: bool,
     expected_targets: int,
 ) -> None:
-    """WMS-375: no rule means no write; a disabled configured product sends zero."""
+    """WMS-375: no rule means no write; an enabled rule on empty stock sends zero."""
     tenant, seller, _warehouse, _provider = await _seed_ozon_scope_case(
         db_session, published=False, served=served
     )
     product = (await db_session.scalars(select(Product))).one()
+    product.fbs_ozon_stock_sync_enabled = True
     product.fbs_percent = 50 if configured else None
     binding = (await db_session.scalars(select(FbsWarehouseBinding))).one()
     binding.is_active = active
@@ -727,10 +730,12 @@ async def test_ozon_publish_respects_configured_products_and_all_binding_flags(
     link = (await db_session.scalars(select(ProductMarketplaceLink))).one()
     link.external_offer_id = "configured-ozon"
     unrelated_wb = Product(
-        tenant=tenant, seller=seller, name="WB only, no rule", sku_code="wb-no-rule"
+        tenant=tenant, seller=seller, name="WB only, no rule", sku_code="wb-no-rule",
+        fbs_ozon_stock_sync_enabled=True,
     )
     unrelated_ozon = Product(
-        tenant=tenant, seller=seller, name="Ozon, no rule", sku_code="ozon-no-rule"
+        tenant=tenant, seller=seller, name="Ozon, no rule", sku_code="ozon-no-rule",
+        fbs_ozon_stock_sync_enabled=True,
     )
     db_session.add_all([unrelated_wb, unrelated_ozon])
     await db_session.flush()
