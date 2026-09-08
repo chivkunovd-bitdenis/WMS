@@ -78,7 +78,9 @@ async def test_scan_print_one_unit_per_scan(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_print_rejects_completed_task(async_client: AsyncClient) -> None:
+async def test_completed_task_reprints_without_allocating_new_code(
+    async_client: AsyncClient,
+) -> None:
     h = await _register_admin(async_client)
     seller = await async_client.post(
         "/sellers",
@@ -151,10 +153,10 @@ async def test_print_rejects_completed_task(async_client: AsyncClient) -> None:
     )
     assert done.status_code == 200, done.text
 
-    blocked = await async_client.post(
+    repeated = await async_client.post(
         f"/operations/marking-codes/packaging-lines/{line_id}/print",
         headers=h,
-        json={"duplicate_copies": 1, "reprint": False},
+        json={"duplicate_copies": 1, "reprint": True},
     )
-    assert blocked.status_code == 409
-    assert blocked.json()["detail"] == "task_not_active"
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json()["codes"] == printed.json()["codes"]

@@ -11,7 +11,7 @@ from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
-from app.models.fbs_order import FbsOrder
+from app.models.fbs_order import FbsOrder, FbsOrderMarking
 from app.models.fbs_stock_sync_item import FbsStockSyncItem
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
@@ -367,7 +367,7 @@ async def sync_marking_statuses_for_assembling_supplies(
                 {FBS_SUPPLY_STATUS_ASSEMBLING, FBS_SUPPLY_STATUS_PACKED}
             ),
         )
-        .order_by(FbsOrder.created_at_wb.asc(), FbsOrder.id.asc())
+        .order_by(FbsOrder.id.asc())
     )
     orders = list((await session.execute(stmt)).scalars().all())
     if not orders:
@@ -375,6 +375,12 @@ async def sync_marking_statuses_for_assembling_supplies(
     token = await require_marketplace_token(session, target.tenant_id, target.seller_id)
     synced = 0
     unique_wb_order_ids = list(dict.fromkeys(int(order.wb_order_id) for order in orders))
+    marking_ids: dict[uuid.UUID, set[uuid.UUID]] = {}
+    for order_id, marking_id in (await session.execute(select(
+        FbsOrderMarking.order_id, FbsOrderMarking.id,
+    ).where(FbsOrderMarking.order_id.in_([order.id for order in orders])))).all():
+        marking_ids.setdefault(order_id, set()).add(marking_id)
+    batches = []
     for start in range(0, len(unique_wb_order_ids), MARKING_SYNC_BATCH_SIZE):
         wb_order_ids = unique_wb_order_ids[start : start + MARKING_SYNC_BATCH_SIZE]
         try:
@@ -386,6 +392,9 @@ async def sync_marking_statuses_for_assembling_supplies(
                 "fbs autopoll marking batch skipped (%s orders): %s", len(wb_order_ids), exc
             )
             continue
+        batches.append((wb_order_ids, meta_batch))
+    # Apply in the same UUID order as tape/pack-all, without HTTP between locks.
+    for wb_order_ids, meta_batch in batches:
         rows_by_wb_order_id = {row.order_id: [row] for row in meta_batch}
         for order in orders:
             if int(order.wb_order_id) not in wb_order_ids:
@@ -400,6 +409,7 @@ async def sync_marking_statuses_for_assembling_supplies(
                     http_client,
                     token,
                     meta_batch=returned_rows,
+                    expected_marking_ids=marking_ids.get(order.id, set()),
                 )
                 # A partial WB batch must clear a stale positive verdict, but it
                 # must not look like a successful local sync: there is no fresh
@@ -460,7 +470,9 @@ async def sync_fbs_order_statuses_for_seller(
         http_client,
         actor_user_id=None,
     )
+    await session.commit()
     await sync_marking_statuses_for_assembling_supplies(session, target, http_client)
+    await session.commit()
     await repair_pending_supplies(session, target, http_client)
     try:
         await sync_in_delivery_supplies(

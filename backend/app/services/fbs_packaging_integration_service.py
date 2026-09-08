@@ -102,6 +102,7 @@ async def lock_packaging_rows(
     tenant_id: uuid.UUID,
     *,
     supply_id: uuid.UUID | None = None,
+    supply_ids: set[uuid.UUID] | None = None,
     task_ids: set[uuid.UUID] | None = None,
 ) -> None:
     """Lock existing parents before any line/order/code mutation.
@@ -113,7 +114,8 @@ async def lock_packaging_rows(
     supplies = list((await session.execute(
         select(FbsSupply.id, FbsSupply.packaging_task_id).where(
             FbsSupply.tenant_id == tenant_id,
-            or_(FbsSupply.id == supply_id, FbsSupply.packaging_task_id.in_(ids)),
+            or_(FbsSupply.id == supply_id, FbsSupply.id.in_(supply_ids or ()),
+                FbsSupply.packaging_task_id.in_(ids)),
         ).order_by(FbsSupply.id).with_for_update()
     )).all())
     if not supplies:
@@ -131,6 +133,23 @@ async def lock_packaging_rows(
             PackagingTask.tenant_id == tenant_id, PackagingTaskLine.task_id.in_(ids),
         ).order_by(PackagingTaskLine.id).with_for_update(of=PackagingTaskLine)
     )
+
+
+async def lock_order_batch_packaging_rows(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order_ids: list[uuid.UUID],
+) -> None:
+    """Resolve all parents before locking any order in a background/import batch."""
+    discovered = (await session.scalars(select(FbsOrder.supply_id).where(
+        FbsOrder.tenant_id == tenant_id, FbsOrder.id.in_(order_ids),
+        FbsOrder.supply_id.is_not(None),
+    ))).all()
+    supply_ids = {supply_id for supply_id in discovered if supply_id is not None}
+    await lock_packaging_rows(session, tenant_id, supply_ids=supply_ids)
+    await session.execute(select(FbsOrder.id).where(
+        FbsOrder.tenant_id == tenant_id, FbsOrder.id.in_(order_ids),
+    ).order_by(FbsOrder.id).with_for_update())
 
 
 async def lock_order_packaging_rows(

@@ -3861,8 +3861,10 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
         assert foreign is not None and foreign.state == "pending_confirmation"
         line = await session.get(PackagingTaskLine, order.packaging_task_line_id)
         assert line is not None
-        assert line.qty_marking_printed == (0 if failure == "read" else 1)
-        assert line.qty_marking_external == (1 if failure == "read" else 0)
+        assert line.qty_marking_printed == (0 if failure == "read" or resolution == "cancel" else 1)
+        assert line.qty_marking_external == (
+            1 if failure == "read" and resolution != "cancel" else 0
+        )
         assert line.qty_confirmed_packed == 0
         assert (
             await session.scalar(

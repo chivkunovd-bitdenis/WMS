@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -685,6 +686,32 @@ async def _record_wb_orphaned_once(
     )
 
 
+async def record_pending_kiz_operation(
+    session: AsyncSession,
+    order: FbsOrder,
+    marking: FbsOrderMarking,
+    *,
+    error_code: str,
+    actor_user_id: uuid.UUID | None,
+    idempotency_key: str,
+) -> None:
+    marking.meta_status = META_STATUS_UNKNOWN
+    marking.check_status = CHECK_STATUS_ERROR
+    marking.reason = "Wildberries не подтвердил результат; нужна сверка."
+    session.add(FbsWbOperation(
+        tenant_id=order.tenant_id, seller_id=order.seller_id,
+        operation_kind=OPERATION_KIND_ORDER_KIZ_BIND,
+        idempotency_key=hashlib.sha256(
+            f"{idempotency_key}:{order.id}:{marking.id}".encode()
+        ).hexdigest(),
+        request_hash=hashlib.sha256(marking.value.encode()).hexdigest(),
+        local_entity_type="fbs_order_marking", local_entity_id=marking.id,
+        wb_object_kind="order", wb_object_id=str(order.wb_order_id),
+        state=WB_OPERATION_STATE_PENDING_CONFIRMATION,
+        error_code=error_code, created_by_user_id=actor_user_id,
+    ))
+
+
 async def pending_kiz_operation(
     session: AsyncSession,
     marking: FbsOrderMarking,
@@ -710,10 +737,16 @@ async def _sync_order_meta_from_wb(
     token: str,
     *,
     meta_batch: list[MarketplaceOrderMetaRow] | None = None,
+    expected_marking_ids: set[uuid.UUID] | None = None,
 ) -> list[FbsOrderMarking]:
     order_id = order.id
     tenant_id = order.tenant_id
     wb_order_id = int(order.wb_order_id)
+    before_ids = expected_marking_ids
+    if before_ids is None:
+        before_ids = set((await session.scalars(select(FbsOrderMarking.id).where(
+            FbsOrderMarking.order_id == order_id, FbsOrderMarking.tenant_id == tenant_id,
+        ))).all())
     batch = meta_batch
     if batch is None:
         batch = await fetch_marketplace_orders_meta_batch(
@@ -724,7 +757,9 @@ async def _sync_order_meta_from_wb(
     # Network I/O above may have overlapped with an operator changing the KIZ.
     # Lock and reload the current local state before applying the remote snapshot.
     locked_order = await session.scalar(
-        select(FbsOrder).where(FbsOrder.id == order_id).with_for_update()
+        select(FbsOrder).where(FbsOrder.id == order_id)
+        .options(selectinload(FbsOrder.markings).selectinload(FbsOrderMarking.marking_code))
+        .with_for_update().execution_options(populate_existing=True)
     )
     if locked_order is None:
         raise FbsMarkingError("order_not_found")
@@ -738,12 +773,17 @@ async def _sync_order_meta_from_wb(
                     FbsOrderMarking.order_id == order_id,
                 )
                 .order_by(FbsOrderMarking.kind, FbsOrderMarking.value)
+                .options(selectinload(FbsOrderMarking.marking_code))
                 .with_for_update()
+                .execution_options(populate_existing=True)
             )
         )
         .scalars()
         .all()
     )
+    if {marking.id for marking in markings} != before_ids:
+        # The GET describes the previous binding; a completed scan/unbind wins.
+        return markings
     details_by_kind: dict[str, MarketplaceMetaDetail] = {}
     returned_kinds: set[str] = set()
     returned_details: tuple[MarketplaceMetaDetail, ...] = ()
@@ -839,6 +879,7 @@ async def attach_order_meta_to_wb_and_sync(
     actor_user_id: uuid.UUID | None,
     api_token: str | None = None,
     ozon_provider: OzonMarketplaceProvider | None = None,
+    notify_supply: bool = True,
 ) -> list[FbsOrderMarking]:
     marking.meta_status = META_STATUS_SENDING
     await session.flush()
@@ -882,12 +923,10 @@ async def attach_order_meta_to_wb_and_sync(
         )
         order.metadata_last_checked_at = datetime.now(tz=UTC)
         await session.flush()
-        await _notify_supply_marking_update(
-            session,
-            tenant_id,
-            order.id,
-            actor_user_id=actor_user_id,
-        )
+        if notify_supply:
+            await _notify_supply_marking_update(
+                session, tenant_id, order.id, actor_user_id=actor_user_id,
+            )
         return await list_order_markings(session, tenant_id, order.id)
 
     token = api_token or await require_marketplace_token(session, tenant_id, order.seller_id)
@@ -915,12 +954,10 @@ async def attach_order_meta_to_wb_and_sync(
         raise FbsMarkingError(_wb_error_code(exc)) from exc
 
     markings = await _sync_order_meta_from_wb(session, order, http_client, token)
-    await _notify_supply_marking_update(
-        session,
-        tenant_id,
-        order.id,
-        actor_user_id=actor_user_id,
-    )
+    if notify_supply:
+        await _notify_supply_marking_update(
+            session, tenant_id, order.id, actor_user_id=actor_user_id,
+        )
     return markings
 
 
@@ -981,8 +1018,7 @@ async def sync_order_marking_statuses(
 ) -> list[FbsOrderMarking]:
     from app.services.fbs_packaging_integration_service import lock_order_packaging_rows
 
-    await lock_order_packaging_rows(session, tenant_id, order_id)
-    order = await _get_order(session, tenant_id, order_id, for_update=True)
+    order = await _get_order(session, tenant_id, order_id)
     if order is None:
         raise FbsMarkingError("order_not_found")
 
@@ -1003,6 +1039,12 @@ async def sync_order_marking_statuses(
             )
         except (MarketplaceAccountError, MarketplaceProviderError, OzonFbsProcessError) as exc:
             raise FbsMarkingError(getattr(exc, "code", "ozon_upstream_error")) from exc
+        await lock_order_packaging_rows(session, tenant_id, order_id)
+        refreshed = await _get_order(session, tenant_id, order_id, for_update=True)
+        if refreshed is None:
+            raise FbsMarkingError("order_not_found")
+        order = refreshed
+        markings = await list_order_markings(session, tenant_id, order_id)
         ozon_gate_svc.apply_status(
             order,
             markings,
