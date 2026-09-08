@@ -246,6 +246,7 @@ async def test_create_http_releases_pool_and_persists_identity(
                     assert op.wb_object_id == "WB-GI-main"
                     assert supply and supply.wb_supply_id == "WB-GI-main"
                     if name == "add":
+                        assert op.error_code is None
                         for readback_ids in ([], [27200]):
                             await service._close_pending_operation_if_complete(
                                 observer, supply, wb_order_ids=readback_ids, unresolved=[]

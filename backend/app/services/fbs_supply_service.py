@@ -817,6 +817,7 @@ async def create_supply_from_orders(
         await mark_operation_pending_confirmation(
             session, operation, wb_supply_id=wb_supply_id, local_supply_id=supply.id
         )
+        operation.error_code = None
         operation_id, supply_id = operation.id, supply.id
         wb_order_ids = [int(order.wb_order_id) for order in orders]
         wb_context = _from_orders_wb_context(summary, orders)
