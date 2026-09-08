@@ -5,6 +5,7 @@ import { apiUrl } from '../../../api'
 import { useMarketplaceProductCatalog } from '../../../hooks/useWbProductCatalog'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { EmptyState, ErrorNotice } from '../../../ui-kit'
+import { resolveProductScanSource, scanSourceKey } from './pickScanSource'
 import { UnloadPickScreen, type UnloadPickScanResult } from './UnloadPickScreen'
 import {
   cellRef,
@@ -414,24 +415,20 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
       // Тара — источник, из которого спишется товар (§Ж-03): сначала ищем её
       // среди уже известных pick-options источников, затем среди того, что
       // оператор только что отсканировал сам (см. scannedContainers выше).
-      // Если выбрана просто ячейка, а не тара, containerSource останется
-      // пустым — сработает старая адресация по locationId.
-      const containerSource = sourceKey
+      // Для скана товара без конкретной тары считаем физические источники
+      // из ответа сервера, а не число ячеек: в одной ячейке бывает несколько коробов.
+      let containerSource = sourceKey
         ? (screenData?.placeSource.get(sourceKey) ?? scannedContainers.current.get(sourceKey))
         : null
       let locationId = containerSource?.locationId ?? sourceLocationId(sourceKey)
-      if (matchedProduct && !locationId) {
+      if (matchedProduct) {
         const option = pickOptions.find((one) => one.product_id === matchedProduct.id)
-        const candidates = option?.locations.filter((one) => one.available > 0) ?? []
-        if (candidates.length === 0) {
-          throw new Error(`${matchedProduct.sku} — этого товара нет на складе`)
-        }
-        if (candidates.length > 1) {
-          throw new Error(
-            `${matchedProduct.sku} лежит в ${candidates.length} местах — уточните место или укажите число руками`,
-          )
-        }
-        locationId = candidates[0].storage_location_id
+        containerSource = resolveProductScanSource(
+          matchedProduct,
+          option?.locations ?? [],
+          containerSource ?? (locationId ? { locationId, containerKind: null, containerId: null } : null),
+        )
+        locationId = containerSource.locationId
       }
 
       setBusy(true)
@@ -491,11 +488,12 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
         ) {
           throw new Error('Сервер не вернул результат снятия товара')
         }
-        if (result.storage_location_id) {
+        if (result.storage_location_id || containerSource) {
           await updateOption()
         }
         return {
           kind: 'product',
+          sourceKey: containerSource ? scanSourceKey(containerSource) : null,
           storageLocationId: result.storage_location_id,
           productId: result.product_id,
           sku: result.sku_code,
