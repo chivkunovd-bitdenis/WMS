@@ -386,6 +386,14 @@ async def _full_exemplar_products(
             # Экземпляр без позиции нельзя отнести к товару; молча приписать его
             # к чужому product_id — хуже, чем не отправить.
             continue
+        if (
+            int(sku) == current_product_id
+            and exemplar_id == current_exemplar_id
+            and mark_type == current_mark_type
+        ):
+            # A replacement supplies the new value for this exact exemplar/type.
+            # Other exemplars and other kinds on this exemplar remain in the full set.
+            continue
         _add(int(sku), exemplar_id, row.value, mark_type)
 
     _add(current_product_id, current_exemplar_id, current_marking.value, current_mark_type)

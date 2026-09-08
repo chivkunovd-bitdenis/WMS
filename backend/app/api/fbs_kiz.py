@@ -41,6 +41,8 @@ class FbsKizLookupOut(BaseModel):
     needs_confirmation: bool
     can_bind: bool
     block_reason: str | None
+    marketplace: str = "wb"
+    external_order_id: str | None = None
 
 
 class FbsKizValidateBody(BaseModel):
@@ -69,6 +71,7 @@ class FbsKizCommitRowOut(BaseModel):
     status: str
     code: str
     message: str
+    meta_status: str | None = None
 
 
 def _raise_from_service(exc: kiz_svc.FbsKizError) -> None:
@@ -86,15 +89,20 @@ def _raise_from_service(exc: kiz_svc.FbsKizError) -> None:
     if exc.code == "order_frozen":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
     if exc.code in {
+        "sticker_ambiguous",
         "duplicate_kiz",
         "cross_seller_code",
         "code_product_mismatch",
         "needs_confirmation",
         "meta_validation_fail",
         "packaging_line_not_found",
+        "product_mapping_missing",
+        "ozon_marking_product_ambiguous",
+        "ozon_marking_position_missing",
+        "ozon_product_quantity_invalid",
     }:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
-    if exc.code.startswith("wb_"):
+    if exc.code.startswith(("wb_", "ozon_")):
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
 
@@ -121,6 +129,8 @@ def _lookup_out(result: kiz_svc.FbsKizLookup) -> FbsKizLookupOut:
         needs_confirmation=result.needs_confirmation,
         can_bind=result.can_bind,
         block_reason=result.block_reason,
+        marketplace=result.marketplace,
+        external_order_id=result.external_order_id,
     )
 
 
@@ -134,6 +144,7 @@ def _commit_row_out(result: kiz_svc.FbsKizCommitRow) -> FbsKizCommitRowOut:
         status=result.status,
         code=result.code,
         message=result.message,
+        meta_status=result.meta_status,
     )
 
 
@@ -174,7 +185,9 @@ async def validate_fbs_order_kiz(
     return _validate_out(result)
 
 
-@router.post("/kiz/commit", response_model=list[FbsKizCommitRowOut])
+@router.post(
+    "/kiz/commit", response_model=list[FbsKizCommitRowOut], response_model_exclude_none=True
+)
 async def commit_fbs_order_kiz(
     body: FbsKizCommitBody,
     user: Annotated[User, Depends(require_fbs_operator_access)],
