@@ -44,6 +44,8 @@ const API_DETAIL_MESSAGES_RU: Record<string, string> = {
   product_seller_mismatch: 'Товар принадлежит другому селлеру — выберите товар этого селлера.',
   pool_not_found: 'Пул КМ не найден.',
   empty_file: 'В файле не найдено КМ.',
+  no_valid_codes:
+    'В файле не удалось распознать коды маркировки. Загрузите PDF с читаемыми Data Matrix или CSV/TXT с полными кодами.',
   not_reopenable: 'Нельзя открыть распределение заново на этом статусе заявки.',
   already_posted_partial: 'Часть товара уже оприходована — отмена фиксации недоступна.',
   sorting_stock_unavailable:
