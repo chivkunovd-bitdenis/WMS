@@ -32,6 +32,7 @@ export function inboundMarkingNeedsAttention(code: InboundMarkingCode): boolean 
 
 export function inboundMarkingError(message: string): string {
   const messages: Record<string, string> = {
+    marking_code_not_found: 'Код уже убран из приёмки. Обновите документ.',
     marking_invalid_code: 'Код Честного знака не распознан. Отсканируйте его целиком ещё раз.',
     marking_code_other_product: 'Этот код записан для другого товара. Проверьте товар и маркировку.',
     marking_code_other_receipt: 'Этот код уже записан в другой приёмке.',

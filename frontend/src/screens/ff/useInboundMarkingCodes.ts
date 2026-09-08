@@ -9,6 +9,7 @@ export function useInboundMarkingCodes(requestId: string, token: string, enabled
   const [data, setData] = useState<MarkingList>({ items: [], checking: false })
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const [removingCodeId, setRemovingCodeId] = useState<string | null>(null)
   const generation = useRef(0)
   const readSequence = useRef(0)
   const base = `/operations/inbound-intake-requests/${requestId}/marking-codes`
@@ -28,6 +29,7 @@ export function useInboundMarkingCodes(requestId: string, token: string, enabled
     generation.current += 1
     setData({ items: [], checking: false })
     setExpanded({})
+    setRemovingCodeId(null)
     setError(null)
     return () => { generation.current += 1; readSequence.current += 1 }
   }, [requestId, token])
@@ -63,6 +65,26 @@ export function useInboundMarkingCodes(requestId: string, token: string, enabled
     setExpanded((current) => ({ ...current, [lineId]: true }))
   }
 
+  const remove = async (codeId: string) => {
+    const epoch = generation.current
+    setRemovingCodeId(codeId)
+    setError(null)
+    ++readSequence.current
+    try {
+      const res = await fetch(apiUrl(`${base}/${codeId}`), {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error(inboundMarkingError(await readApiErrorMessage(res)))
+      if (epoch !== generation.current) return
+      ++readSequence.current
+      setData((current) => ({ ...current, items: current.items.filter((code) => code.id !== codeId) }))
+    } catch (e) {
+      if (epoch === generation.current) setError(e instanceof Error ? e.message : 'Не удалось убрать код.')
+    } finally {
+      if (epoch === generation.current) setRemovingCodeId(null)
+    }
+  }
+
   const recheck = async () => {
     try {
       const res = await fetch(apiUrl(`${base}/check`), { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
@@ -83,5 +105,5 @@ export function useInboundMarkingCodes(requestId: string, token: string, enabled
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch (e) { setError(e instanceof Error ? e.message : 'Не удалось скачать коды.') }
   }
-  return { ...data, error, expanded, setExpanded, attach, recheck, download }
+  return { ...data, error, expanded, setExpanded, attach, remove, removingCodeId, recheck, download }
 }

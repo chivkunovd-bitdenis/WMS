@@ -14,6 +14,7 @@ import ErrorOutline from '@mui/icons-material/ErrorOutlineOutlined'
 import { inboundMarkingNeedsAttention, inboundMarkingStatusLabel, isInboundMarkingScan } from './inboundMarkingCodes'
 import { useInboundMarkingCodes } from './useInboundMarkingCodes'
 import EditOutlined from '@mui/icons-material/EditOutlined'
+import CloseOutlined from '@mui/icons-material/CloseOutlined'
 import ExpandMoreOutlined from '@mui/icons-material/ExpandMoreOutlined'
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
 import StraightenOutlined from '@mui/icons-material/StraightenOutlined'
@@ -2488,7 +2489,7 @@ export function FfInboundRequestView({
               {marking.items.some(inboundMarkingNeedsAttention) ? (
                 <Button size="small" variant="outlined" onClick={() => void marking.download()} data-testid="ff-inbound-kiz-export">Проблемные коды ЧЗ в Excel</Button>
               ) : null}
-              {receptionClosed && marking.items.some((code) => code.cz_status === 'unavailable' || code.cz_status === 'pending') ? (
+              {receptionClosed && marking.items.some((code) => code.cz_status !== 'introduced') ? (
                 <Button size="small" disabled={marking.checking} onClick={() => void marking.recheck()} data-testid="ff-inbound-kiz-recheck">Повторить проверку ЧЗ</Button>
               ) : null}
               {marking.checking ? <Typography variant="caption" color="text.secondary">Проверяем коды в Честном знаке…</Typography> : null}
@@ -2792,6 +2793,14 @@ export function FfInboundRequestView({
                                   <TableCell><Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                                     <Tooltip title={code.cz_reason}><Typography variant="body2" tabIndex={0}>{inboundMarkingStatusLabel(code.cz_status)}</Typography></Tooltip>
                                     {inboundMarkingNeedsAttention(code) ? <Tooltip title={code.cz_reason}><ErrorOutline tabIndex={0} fontSize="small" color="error" aria-label={code.cz_reason} /></Tooltip> : null}
+                                    {receivingActive && isFulfillmentAdmin ? (
+                                      <Tooltip title="Убрать ошибочно отсканированный код">
+                                        <span><IconButton size="small" aria-label="Убрать код из приёмки" disabled={busy || marking.removingCodeId !== null}
+                                          onClick={() => { void receivingScanQueue(() => marking.remove(code.id)) }}>
+                                          <CloseOutlined fontSize="small" />
+                                        </IconButton></span>
+                                      </Tooltip>
+                                    ) : null}
                                   </Stack></TableCell>
                                 </TableRow>
                               ))}</TableBody>
