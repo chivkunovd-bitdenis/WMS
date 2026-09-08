@@ -1,3 +1,4 @@
+import { PickScanSourceError } from './pickScanSource'
 import { Box, LinearProgress, Paper, Stack, Typography } from '@mui/material'
 import { useEffect, useRef, useState } from 'react'
 import CloseOutlined from '@mui/icons-material/CloseOutlined'
@@ -80,6 +81,7 @@ export type UnloadPickScanResult =
     }
   | {
       kind: 'product'
+      sourceKey?: string | null
       storageLocationId: string | null
       productId: string
       sku: string
@@ -323,7 +325,8 @@ export function UnloadPickScreen({
       // строку ячейки: снятие приписывалось бы россыпи, хотя на сервере оно
       // записано на короб. Отсюда и подпись «снято — СТЕЛЛАЖ 1.1» вместо
       // короба, и прирост не на той строке.
-      const selectedPlace = source ? row.places.find((one) => one.key === source) : undefined
+      const resolvedSource = result.sourceKey ?? source
+      const selectedPlace = resolvedSource ? row.places.find((one) => one.key === resolvedSource) : undefined
       const place =
         selectedPlace ??
         (scannedLocationId
@@ -350,6 +353,10 @@ export function UnloadPickScreen({
       onNote(`${result.sku}: снято ${added || 1} шт — ${place.label}`)
       return true
     } catch (err) {
+      if (err instanceof PickScanSourceError) {
+        const row = rows.find((one) => one.product.id === err.productId)
+        if (row) expandRow(row.key)
+      }
       setScanNotice(null)
       setScanError(err instanceof Error ? err.message : 'Не удалось выполнить скан')
       return true
