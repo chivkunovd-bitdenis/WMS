@@ -407,9 +407,15 @@ async def _load_supply(
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
 ) -> FbsSupply | None:
+    await pack_int_svc.lock_packaging_rows(session, tenant_id, supply_id=supply_id)
+    # Stable lock order is independent from the requested label order.
+    await session.execute(select(FbsOrder.id).where(
+        FbsOrder.tenant_id == tenant_id, FbsOrder.supply_id == supply_id,
+    ).order_by(FbsOrder.id).with_for_update())
     stmt = (
         select(FbsSupply)
         .where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)
+        .execution_options(populate_existing=True)
         .options(
             selectinload(FbsSupply.orders).selectinload(FbsOrder.product),
             selectinload(FbsSupply.orders)

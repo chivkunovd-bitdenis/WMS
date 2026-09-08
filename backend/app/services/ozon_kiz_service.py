@@ -62,8 +62,10 @@ async def _packaging_line(
                 FbsSupply.tenant_id == order.tenant_id,
                 PackagingTaskLine.product_id == product_id,
             )
+            .order_by(PackagingTaskLine.id)
             .limit(1)
-            .with_for_update()
+            .with_for_update(of=PackagingTaskLine)
+            .execution_options(populate_existing=True)
         )
     ).first()
     if row is None:

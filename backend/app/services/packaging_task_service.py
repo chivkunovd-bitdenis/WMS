@@ -1145,6 +1145,9 @@ async def complete_task(
     acknowledge_all_packed: bool = False,
     acting_user_id: uuid.UUID | None,
 ) -> PackagingTask:
+    from app.services.fbs_packaging_integration_service import lock_packaging_rows
+
+    await lock_packaging_rows(session, tenant_id, task_ids={task_id})
     task = await get_task(session, tenant_id, task_id)
     if task is None:
         raise PackagingTaskServiceError("not_found")
@@ -1249,11 +1252,13 @@ async def pack_all_and_complete_fbs_task(
         await session.execute(
             select(PackagingTaskLine.id)
             .where(PackagingTaskLine.task_id == task_id)
+            .order_by(PackagingTaskLine.id)
             .with_for_update()
         )
         await session.execute(
             select(FbsOrder.id)
             .where(FbsOrder.tenant_id == tenant_id, FbsOrder.supply_id == supply.id)
+            .order_by(FbsOrder.id)
             .with_for_update()
             .execution_options(populate_existing=True)
         )

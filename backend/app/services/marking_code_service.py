@@ -44,6 +44,7 @@ from app.models.marking_code import (
     MarkingReprintRequest,
 )
 from app.models.packaging_task import (
+    STATUS_DONE,
     STATUS_DRAFT,
     STATUS_IN_PROGRESS,
     PackagingTask,
@@ -1601,6 +1602,14 @@ async def print_codes_for_packaging_line(
     print_layout = resolve_print_layout(layout, duplicate_copies=duplicate_copies)
     event_copies = cz_copies_from_layout(print_layout)
 
+    from app.services.fbs_packaging_integration_service import lock_packaging_rows
+
+    task_id = await session.scalar(select(PackagingTaskLine.task_id).where(
+        PackagingTaskLine.id == task_line_id,
+    ))
+    if task_id is not None:
+        await lock_packaging_rows(session, tenant_id, task_ids={task_id})
+
     # После ожидания чужой печати перечитываем потребность даже у уже загруженной строки.
     line_stmt = (
         select(PackagingTaskLine)
@@ -1615,7 +1624,7 @@ async def print_codes_for_packaging_line(
     task = line.task
     if task.tenant_id != tenant_id:
         raise MarkingCodeServiceError("line_not_found")
-    if task.status not in (STATUS_DRAFT, STATUS_IN_PROGRESS):
+    if task.status not in (STATUS_DRAFT, STATUS_IN_PROGRESS, STATUS_DONE):
         raise MarkingCodeServiceError("task_not_active")
 
     product = await get_product(session, tenant_id, line.product_id)
