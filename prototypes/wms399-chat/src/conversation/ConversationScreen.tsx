@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Alert, Box, Divider, IconButton, Stack, Tab, Tabs, Typography, alpha } from '@mui/material'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeftOutlined'
 import PushPinIcon from '@mui/icons-material/PushPinOutlined'
@@ -18,7 +18,6 @@ import { ThreadPanel } from './ThreadPanel'
 import { conversationAccessible } from '../state/selectors'
 import { SellerAvatar } from '../common/SellerAvatar'
 import { docKindLabel } from '../common/StatusChip'
-import { useState } from 'react'
 import type { Conversation } from '../types'
 
 const KIND_LABEL: Record<Conversation['kind'], string> = {

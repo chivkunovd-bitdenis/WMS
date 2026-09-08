@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Box, Stack, TextField, Tabs, Tab, InputAdornment, Typography, MenuItem, Select, FormControl, InputLabel } from '@mui/material'
 import SearchIcon from '@mui/icons-material/SearchOutlined'
 import { useStore } from '../state/store'
+import { Row } from '../common/Row'
 import { EmptyState } from '../common/EmptyState'
 import { ConversationRow } from './ConversationRow'
 import { conversationAccessible } from '../state/selectors'
@@ -48,24 +49,26 @@ export function InboxScreen() {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }} data-testid="inbox">
       <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+        <Row align="center" justify="space-between" sx={{ mb: 1.5 }}>
           <Typography variant="h6">Инбокс</Typography>
           <Typography variant="caption" color="text.secondary">
             {filtered.length} каналов
           </Typography>
-        </Stack>
+        </Row>
         <TextField
           fullWidth
           size="small"
           placeholder="Поиск канала…"
           value={ui.inboxFilter.query}
           onChange={(e) => dispatch({ type: 'set_inbox_filter', patch: { query: e.target.value } })}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" />
-              </InputAdornment>
-            ),
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            },
           }}
         />
         {!isSeller ? (

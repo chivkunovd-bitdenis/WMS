@@ -36,7 +36,7 @@ export function canWriteInternal(actor: Actor, conv: Conversation): boolean {
   return actor.role === 'ff_admin' || actor.role === 'ff_operator'
 }
 
-export function defaultVisibility(actor: Actor, conv: Conversation): Visibility {
+export function defaultVisibility(_actor: Actor, conv: Conversation): Visibility {
   if (conv.kind === 'warehouse_internal') return 'internal'
   return 'shared'
 }

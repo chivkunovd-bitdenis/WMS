@@ -6,6 +6,7 @@ import { useStore } from '../state/store'
 import { EmptyState } from '../common/EmptyState'
 import { MessageBubble } from './MessageBubble'
 import { visibleMessagesForActor } from '../state/selectors'
+import { Row } from '../common/Row'
 import type { Conversation } from '../types'
 
 export function ThreadPanel({ conversation }: { conversation: Conversation }) {
@@ -49,7 +50,7 @@ export function ThreadPanel({ conversation }: { conversation: Conversation }) {
 
   return (
     <Stack sx={{ height: '100%' }}>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+      <Row align="center" spacing={1} sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
         <Chip size="small" color="primary" label="Обсуждение" />
         <Typography variant="subtitle2" sx={{ flex: 1 }}>
           Ветка от {new Date(root.createdAt).toLocaleString('ru-RU')}
@@ -57,7 +58,7 @@ export function ThreadPanel({ conversation }: { conversation: Conversation }) {
         <IconButton size="small" aria-label="Закрыть" onClick={() => dispatch({ type: 'open_thread', rootId: null })}>
           <CloseIcon fontSize="small" />
         </IconButton>
-      </Stack>
+      </Row>
       <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider', bgcolor: (t) => t.palette.action.hover }}>
         <MessageBubble message={root} conversation={conversation} isThread />
       </Box>

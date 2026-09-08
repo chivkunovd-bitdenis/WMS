@@ -1,0 +1,6 @@
+
+> wms399-chat-prototype@0.0.1-demo typecheck
+> tsc -b --noEmit
+
+src/conversation/Composer.tsx(11,3): error TS6133: 'Stack' is declared but its value is never read.
+src/notifications/NotificationsScreen.tsx(30,65): error TS2339: Property 'notificationPrefs' does not exist on type 'StoreShape'.

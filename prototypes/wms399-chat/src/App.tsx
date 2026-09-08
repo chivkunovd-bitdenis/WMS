@@ -11,6 +11,7 @@ import { PreferencesScreen } from './notifications/PreferencesScreen'
 import { Lightbox } from './conversation/Lightbox'
 import { ParticipantsDrawer } from './participants/ParticipantsDrawer'
 import { DocumentPickerDialog } from './conversation/DocumentPickerDialog'
+import { DocumentPreviewDrawer } from './conversation/DocumentPreviewDrawer'
 import { OfflineBanner } from './shell/OfflineBanner'
 
 type RouteInfo = {
@@ -113,6 +114,7 @@ export function App() {
       <Lightbox />
       <ParticipantsDrawer />
       <DocumentPickerDialog />
+      <DocumentPreviewDrawer />
     </Box>
   )
 }

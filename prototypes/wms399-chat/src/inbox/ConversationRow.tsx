@@ -7,6 +7,7 @@ import { useStore } from '../state/store'
 import type { Conversation } from '../types'
 import { PersonaAvatar } from '../common/PersonaAvatar'
 import { SellerAvatar } from '../common/SellerAvatar'
+import { Row } from '../common/Row'
 import { visibleMessagesForActor } from '../state/selectors'
 import { fmtTime } from '../utils/format'
 
@@ -80,7 +81,7 @@ export function ConversationRow({ conversation }: { conversation: Conversation }
         <PersonaAvatar actor={{ id: 'x', name: '?', short: '?', role: 'ff_admin', color: '#334155' }} size={40} />
       )}
       <Stack sx={{ flex: 1, minWidth: 0 }} spacing={0.25}>
-        <Stack direction="row" alignItems="center" spacing={0.75}>
+        <Row align="center" spacing={0.75}>
           {conversation.pinned ? <PushPinIcon sx={{ fontSize: 14, color: 'primary.main' }} /> : null}
           <Typography variant="body2" sx={{ fontWeight: 700, flex: 1, minWidth: 0 }} noWrap>
             {conversation.title}
@@ -90,8 +91,8 @@ export function ConversationRow({ conversation }: { conversation: Conversation }
               {fmtTime(last.createdAt)}
             </Typography>
           ) : null}
-        </Stack>
-        <Stack direction="row" alignItems="center" spacing={0.5}>
+        </Row>
+        <Row align="center" spacing={0.5}>
           <Chip
             size="small"
             label={KIND_LABEL[conversation.kind]}
@@ -109,8 +110,8 @@ export function ConversationRow({ conversation }: { conversation: Conversation }
           <Typography variant="caption" color="text.secondary" noWrap sx={{ flex: 1 }}>
             {warehouse?.name}
           </Typography>
-        </Stack>
-        <Stack direction="row" alignItems="flex-start" spacing={1}>
+        </Row>
+        <Row align="flex-start" spacing={1}>
           <Typography
             variant="body2"
             sx={{
@@ -142,7 +143,7 @@ export function ConversationRow({ conversation }: { conversation: Conversation }
               />
             ) : null}
           </Stack>
-        </Stack>
+        </Row>
       </Stack>
     </Box>
   )

@@ -25,6 +25,7 @@ import type { Attachment, Conversation, Visibility } from '../types'
 import { useStore } from '../state/store'
 import { canWriteInternal, defaultVisibility } from '../state/selectors'
 import { fmtBytes } from '../utils/format'
+import { Row } from '../common/Row'
 
 const MAX_FILE_MB = 25
 const MAX_FILES = 10
@@ -51,7 +52,7 @@ function makeAttachment(file: File): Attachment | { error: string } {
 }
 
 export function Composer({ conversation }: { conversation: Conversation }) {
-  const { ui, dispatch, currentActor, actorById, actions } = useStore()
+  const { ui, dispatch, data, currentActor, actorById, actions } = useStore()
   const draft = ui.drafts[conversation.id] ?? {
     text: '',
     visibility: defaultVisibility(currentActor, conversation),
@@ -66,7 +67,7 @@ export function Composer({ conversation }: { conversation: Conversation }) {
   const canInternal = canWriteInternal(currentActor, conversation)
   const sellerReading = currentActor.role === 'seller'
 
-  const replyMsg = draft.replyToId ? useStoreMsg(draft.replyToId) : null
+  const replyMsg = draft.replyToId ? data.messages.get(draft.replyToId) ?? null : null
 
   const mentionableActors = useMemo(() => {
     const list = conversation.participantIds
@@ -182,7 +183,7 @@ export function Composer({ conversation }: { conversation: Conversation }) {
       data-testid="composer"
     >
       {replyMsg ? (
-        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+        <Row align="center" spacing={1} sx={{ mb: 1 }}>
           <Chip size="small" label="Ответ" sx={{ fontWeight: 700 }} />
           <Typography variant="caption" sx={{ flex: 1, color: 'text.secondary' }} noWrap>
             {replyMsg.text || (replyMsg.attachments?.length ? '📎 Вложение' : '[документ]')}
@@ -190,10 +191,10 @@ export function Composer({ conversation }: { conversation: Conversation }) {
           <IconButton size="small" onClick={clearReply} aria-label="Отменить ответ">
             <CloseIcon fontSize="small" />
           </IconButton>
-        </Stack>
+        </Row>
       ) : null}
       {draft.documentRef ? (
-        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+        <Row align="center" spacing={1} sx={{ mb: 1 }}>
           <Chip size="small" icon={<DescriptionIcon />} label="Карточка документа" sx={{ fontWeight: 700 }} />
           <Typography variant="caption" sx={{ flex: 1, color: 'text.secondary' }} noWrap>
             Вставим карточку при отправке
@@ -201,10 +202,10 @@ export function Composer({ conversation }: { conversation: Conversation }) {
           <IconButton size="small" onClick={clearDocRef} aria-label="Убрать документ">
             <CloseIcon fontSize="small" />
           </IconButton>
-        </Stack>
+        </Row>
       ) : null}
       {draft.attachments.length > 0 ? (
-        <Stack direction="row" spacing={1} sx={{ mb: 1, flexWrap: 'wrap' }}>
+        <Row spacing={1} wrap sx={{ mb: 1 }}>
           {draft.attachments.map((a) => (
             <Chip
               key={a.id}
@@ -215,7 +216,7 @@ export function Composer({ conversation }: { conversation: Conversation }) {
               sx={{ maxWidth: 240, fontWeight: 600 }}
             />
           ))}
-        </Stack>
+        </Row>
       ) : null}
       <TextField
         inputRef={inputRef}
@@ -248,14 +249,16 @@ export function Composer({ conversation }: { conversation: Conversation }) {
           borderRadius: 2,
           '& .MuiInputBase-root': { borderRadius: 2 },
         }}
-        InputProps={{
-          sx: {
-            fontFamily: 'inherit',
-            fontSize: 14,
+        slotProps={{
+          input: {
+            sx: {
+              fontFamily: 'inherit',
+              fontSize: 14,
+            },
           },
         }}
       />
-      <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mt: 1 }}>
+      <Row align="center" spacing={0.5} sx={{ mt: 1 }}>
         <input
           ref={fileInput}
           type="file"
@@ -294,7 +297,7 @@ export function Composer({ conversation }: { conversation: Conversation }) {
         >
           Отправить
         </Button>
-      </Stack>
+      </Row>
       {error ? (
         <Alert severity="warning" sx={{ mt: 1 }} onClose={() => setError(null)}>
           {error}
@@ -311,14 +314,14 @@ export function Composer({ conversation }: { conversation: Conversation }) {
         ) : (
           mentionableActors.map((a) => (
             <MenuItem key={a.id} onClick={() => insertMention(a.id)}>
-              <Stack direction="row" spacing={1} alignItems="center">
+              <Row align="center" spacing={1}>
                 <Typography variant="body2" sx={{ fontWeight: 700 }}>
                   {a.name}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   {a.title}
                 </Typography>
-              </Stack>
+              </Row>
             </MenuItem>
           ))
         )}
@@ -360,7 +363,7 @@ function VisibilityToggle({
     )
   }
   return (
-    <Stack direction="row" alignItems="center" spacing={0.5}>
+    <Row align="center" spacing={0.5}>
       <Chip
         size="small"
         icon={value === 'shared' ? <PublicIcon fontSize="small" /> : <LockIcon fontSize="small" />}
@@ -378,16 +381,11 @@ function VisibilityToggle({
           size="small"
           checked={value === 'shared'}
           onChange={(e) => onChange(e.target.checked ? 'shared' : 'internal')}
-          inputProps={{ 'aria-label': 'Переключить видимость сообщения' }}
+          slotProps={{ input: { 'aria-label': 'Переключить видимость сообщения' } }}
         />
       </Tooltip>
-    </Stack>
+    </Row>
   )
-}
-
-function useStoreMsg(id: string) {
-  const { data } = useStore()
-  return data.messages.get(id) ?? null
 }
 
 function dtToFileList(files: File[]): FileList {

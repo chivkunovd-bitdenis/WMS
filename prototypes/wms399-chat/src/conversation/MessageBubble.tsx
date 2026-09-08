@@ -27,11 +27,12 @@ import ScheduleIcon from '@mui/icons-material/AccessTimeOutlined'
 import ErrorIcon from '@mui/icons-material/ErrorOutlined'
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined'
 import EditIcon from '@mui/icons-material/EditOutlined'
-import type { Conversation, Message } from '../types'
+import type { Conversation, Message, WmsDocument } from '../types'
 import { useStore } from '../state/store'
 import { PersonaAvatar } from '../common/PersonaAvatar'
 import { fmtBytes, fmtTime } from '../utils/format'
 import { docKindLabel, StatusChip } from '../common/StatusChip'
+import { Row, Col } from '../common/Row'
 
 const REACTIONS = ['👍', '👀', '🙏', '🔥', '❗', '✅']
 
@@ -67,7 +68,7 @@ export function MessageBubble({
 
   if (message.kind === 'system') {
     return (
-      <Stack alignItems="center" sx={{ my: 1.25 }}>
+      <Row justify="center" sx={{ my: 1.25 }}>
         <Chip
           size="small"
           label={message.systemPayload?.text ?? 'Событие'}
@@ -80,7 +81,7 @@ export function MessageBubble({
             borderColor: 'divider',
           }}
         />
-      </Stack>
+      </Row>
     )
   }
 
@@ -156,7 +157,7 @@ export function MessageBubble({
     >
       {author ? <PersonaAvatar actor={author} size={34} /> : null}
       <Stack sx={{ maxWidth: '76%', minWidth: 0, alignItems }} spacing={0.5}>
-        <Stack direction="row" spacing={0.75} alignItems="baseline">
+        <Row align="baseline" spacing={0.75} sx={{ flexWrap: 'wrap' }}>
           <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.primary' }}>
             {author?.name ?? '?'}
           </Typography>
@@ -171,7 +172,7 @@ export function MessageBubble({
               · изменено
             </Typography>
           ) : null}
-        </Stack>
+        </Row>
 
         <Box
           sx={{
@@ -189,7 +190,7 @@ export function MessageBubble({
           }}
         >
           {isInternal ? (
-            <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.5 }}>
+            <Row align="center" spacing={0.75} sx={{ mb: 0.5 }}>
               <Chip
                 size="small"
                 label="Внутренняя заметка склада"
@@ -204,7 +205,7 @@ export function MessageBubble({
               <Typography variant="caption" sx={{ color: 'warning.main' }}>
                 Селлер этого не увидит
               </Typography>
-            </Stack>
+            </Row>
           ) : null}
           {replyToMsg ? <ReplyPreview msg={replyToMsg} /> : null}
           {message.text ? (
@@ -219,7 +220,7 @@ export function MessageBubble({
           {message.attachments && message.attachments.length > 0 ? (
             <AttachmentsGrid message={message} />
           ) : null}
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+          <Row align="center" spacing={1} sx={{ mt: 1 }}>
             {followupOpen ? (
               <Chip
                 size="small"
@@ -250,7 +251,7 @@ export function MessageBubble({
             <Typography variant="caption" sx={{ color: isOwn ? 'primary.contrastText' : 'text.secondary', display: 'inline-flex', alignItems: 'center', gap: 0.25 }}>
               {isOwn ? statusIcon : null}
             </Typography>
-          </Stack>
+          </Row>
         </Box>
 
         {message.reactions && message.reactions.length > 0 ? (
@@ -352,13 +353,13 @@ export function MessageBubble({
         ) : null}
 
         <Menu anchorEl={emojiAnchor} open={!!emojiAnchor} onClose={() => setEmojiAnchor(null)}>
-          <Stack direction="row" spacing={0.5} sx={{ px: 1 }}>
+          <Row spacing={0.5} sx={{ px: 1 }}>
             {REACTIONS.map((r) => (
               <IconButton key={r} size="small" onClick={() => toggleReaction(r)} aria-label={`Поставить реакцию ${r}`}>
                 <span style={{ fontSize: 18 }}>{r}</span>
               </IconButton>
             ))}
-          </Stack>
+          </Row>
         </Menu>
 
         <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
@@ -473,7 +474,7 @@ function renderMentions(text: string): React.ReactNode {
   })
 }
 
-function DocCard({ doc, inOwn }: { doc: NonNullable<ReturnType<typeof useStore>['documentById'] extends Map<string, infer V> ? V : never>; inOwn: boolean }) {
+function DocCard({ doc, inOwn }: { doc: WmsDocument; inOwn: boolean }) {
   const { dispatch, ui } = useStore()
   const outdated = ui.demo.documentOutdated
   const deleted = doc.deleted
@@ -489,7 +490,7 @@ function DocCard({ doc, inOwn }: { doc: NonNullable<ReturnType<typeof useStore>[
         borderColor: inOwn ? 'primary.light' : 'divider',
       }}
     >
-      <Stack direction="row" spacing={1.25} alignItems="flex-start">
+      <Row align="flex-start" spacing={1.25}>
         <Box sx={{ p: 1, borderRadius: 1.5, bgcolor: inOwn ? 'primary.light' : 'primary.main', color: 'primary.contrastText' }}>
           <DescriptionIcon fontSize="small" />
         </Box>
@@ -500,10 +501,10 @@ function DocCard({ doc, inOwn }: { doc: NonNullable<ReturnType<typeof useStore>[
           <Typography variant="caption" sx={{ color: 'inherit', opacity: 0.85 }}>
             {doc.summary}
           </Typography>
-          <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
+          <Row spacing={0.5} sx={{ mt: 0.5 }}>
             <StatusChip status={doc.status} />
             <Chip size="small" label={`${doc.totalFact}/${doc.totalPlanned} шт`} sx={{ height: 22, bgcolor: 'background.paper', color: 'text.primary' }} />
-          </Stack>
+          </Row>
           {outdated ? (
             <Alert severity="warning" sx={{ mt: 1 }} icon={false}>
               Документ обновлён после отправки. Откройте актуальную версию.
@@ -514,8 +515,8 @@ function DocCard({ doc, inOwn }: { doc: NonNullable<ReturnType<typeof useStore>[
             </Alert>
           ) : null}
         </Stack>
-      </Stack>
-      <Stack direction="row" spacing={1} sx={{ mt: 1 }} justifyContent="flex-end">
+      </Row>
+      <Row justify="flex-end" spacing={1} sx={{ mt: 1 }}>
         <Button
           size="small"
           variant="contained"
@@ -529,7 +530,7 @@ function DocCard({ doc, inOwn }: { doc: NonNullable<ReturnType<typeof useStore>[
         >
           Открыть документ
         </Button>
-      </Stack>
+      </Row>
     </Box>
   )
 }
@@ -572,9 +573,9 @@ function AttachmentsGrid({ message }: { message: Message }) {
                   bgcolor: 'background.paper',
                 }}
               >
-                {a.dataUri ? (
+                {a.dataUri || a.blobUrl ? (
                   <img
-                    src={a.dataUri}
+                    src={a.dataUri ?? a.blobUrl}
                     alt={a.name}
                     loading="lazy"
                     style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', filter: inProgress ? 'blur(3px) grayscale(0.4)' : 'none' }}
@@ -594,12 +595,12 @@ function AttachmentsGrid({ message }: { message: Message }) {
                 ) : null}
                 {failed ? (
                   <Box sx={{ position: 'absolute', inset: 0, bgcolor: 'rgba(127,29,29,0.65)', color: 'common.white', display: 'grid', placeItems: 'center', p: 1, textAlign: 'center' }}>
-                    <Stack alignItems="center" spacing={0.5}>
+                    <Col align="center" spacing={0.5}>
                       <ErrorIcon />
                       <Typography variant="caption" sx={{ fontWeight: 700 }}>
                         {a.failReason ?? 'Не загрузилось'}
                       </Typography>
-                      <Stack direction="row" spacing={0.5}>
+                      <Row spacing={0.5}>
                         <Button
                           size="small"
                           variant="contained"
@@ -626,8 +627,8 @@ function AttachmentsGrid({ message }: { message: Message }) {
                         >
                           Удалить
                         </Button>
-                      </Stack>
-                    </Stack>
+                      </Row>
+                    </Col>
                   </Box>
                 ) : null}
               </Box>

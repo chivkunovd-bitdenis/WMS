@@ -405,7 +405,7 @@ function buildActions(deps: {
       mentions?: Message['mentions']
     },
   ) => {
-    const { currentActor, ui, data } = getState()
+    const { currentActor, ui } = getState()
     const now = new Date().toISOString()
     const clientId = `local_${Math.random().toString(36).slice(2, 10)}`
     const isDocCard = !!payload.documentRef && !payload.attachments.length && !payload.text.trim()
@@ -486,11 +486,11 @@ function buildActions(deps: {
     }
 
     if (payload.mentions && !offline) {
-      for (const m of payload.mentions) {
+      for (const mention of payload.mentions) {
         dispatchData({
           type: 'add_notification',
           notification: {
-            id: `ntf_${Math.random().toString(36).slice(2, 8)}`,
+            id: `ntf_${Math.random().toString(36).slice(2, 8)}_${mention.actorId}`,
             kind: 'mention',
             createdAt: now,
             conversationId,
@@ -500,8 +500,6 @@ function buildActions(deps: {
             read: false,
           },
         })
-        void data
-        void m
       }
     }
 

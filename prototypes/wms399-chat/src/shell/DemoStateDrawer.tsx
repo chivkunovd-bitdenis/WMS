@@ -17,6 +17,7 @@ import CloseIcon from '@mui/icons-material/CloseOutlined'
 import { useStore } from '../state/store'
 import { PersonaAvatar } from '../common/PersonaAvatar'
 import { readableRole } from '../state/selectors'
+import { Row } from '../common/Row'
 import type { Role } from '../types'
 
 const ROLE_LABEL: Record<Role, string> = {
@@ -39,10 +40,10 @@ export function DemoStateDrawer() {
       anchor="right"
       open={ui.showDemoMenu}
       onClose={close}
-      PaperProps={{ sx: { width: 360, p: 0 } }}
+      slotProps={{ paper: { sx: { width: 360, p: 0 } } }}
     >
       <Box sx={{ px: 3, py: 2.5, borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Row align="center" justify="space-between">
           <Stack>
             <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
               Демо-состояния
@@ -54,7 +55,7 @@ export function DemoStateDrawer() {
           <IconButton onClick={close} aria-label="Закрыть">
             <CloseIcon />
           </IconButton>
-        </Stack>
+        </Row>
       </Box>
       <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
         <Stack spacing={1.25}>
@@ -74,7 +75,7 @@ export function DemoStateDrawer() {
         <Divider />
         <Stack spacing={1.25}>
           <Typography variant="subtitle2">Активный пользователь</Typography>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ p: 1.25, bgcolor: 'action.hover', borderRadius: 2 }}>
+          <Row align="center" spacing={1} sx={{ p: 1.25, bgcolor: 'action.hover', borderRadius: 2 }}>
             <PersonaAvatar actor={currentActor} size={40} />
             <Stack sx={{ minWidth: 0 }}>
               <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
@@ -84,7 +85,7 @@ export function DemoStateDrawer() {
                 {readableRole(currentActor.role)} · {currentActor.title ?? ''}
               </Typography>
             </Stack>
-          </Stack>
+          </Row>
           <RadioGroup
             value={currentActor.id}
             onChange={(e) => dispatch({ type: 'set_actor', actorId: e.target.value })}
