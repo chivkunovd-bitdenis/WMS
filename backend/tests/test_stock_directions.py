@@ -16,7 +16,11 @@ from app.models.product import Product
 from app.models.stock_direction import StockDirection, StockMonthlySnapshot
 from app.services import inventory_service, stock_direction_service
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
-from app.services.marketplace_unload_service import list_available_products
+from app.services.marketplace_unload_service import (
+    MarketplaceUnloadError,
+    _assert_available_for_unload_quantity,
+    list_available_products,
+)
 from tests.auth_helpers import set_password_via_link
 from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
@@ -319,7 +323,18 @@ async def test_directions_reserve_from_stock_and_mp_free_fbo(
             warehouse_id=warehouse_id,
             seller_id=uuid.UUID(seller_id),
         )
-        assert available[0].available == 4
+        # Named directions are independent reserves, not the FBS order's pool.
+        # The picker must match the existing write boundary: 10 - 6 - 1 = 3.
+        assert available[0].available == 3
+        await _assert_available_for_unload_quantity(
+            session, tenant_id, warehouse_id, product_id, 3,
+        )
+        with pytest.raises(MarketplaceUnloadError) as rejected:
+            await _assert_available_for_unload_quantity(
+                session, tenant_id, warehouse_id, product_id, 4,
+            )
+        assert rejected.value.code == "insufficient_free_fbo"
+        assert rejected.value.detail["available"] == 3
 
     admin_available = await async_client.get(
         "/operations/marketplace-unload-requests/available-products",
@@ -327,7 +342,7 @@ async def test_directions_reserve_from_stock_and_mp_free_fbo(
         params={"warehouse_id": str(warehouse_id), "seller_id": seller_id},
     )
     assert admin_available.status_code == 200, admin_available.text
-    assert admin_available.json()[0]["available"] == 4
+    assert admin_available.json()[0]["available"] == 3
 
 
 @pytest.mark.asyncio
