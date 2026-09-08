@@ -527,31 +527,45 @@ def _create_operation_in_progress(operation: FbsWbOperation) -> FbsSupplyError:
     )
 
 
-async def _ensure_orders_not_in_pending_create(
+async def _existing_create_for_orders(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     order_ids: list[uuid.UUID],
-) -> None:
+    request_hash: str,
+) -> FbsWbOperation | None:
     # Reuse the operation's existing request identity, not a lease or a new
-    # seller-wide blocker. Failed/confirmed attempts do not claim any order.
-    pending = await session.scalars(
+    # seller-wide blocker. A rotated browser key can still return the same winner.
+    # Failed attempts and unrelated confirmed requests do not claim orders.
+    candidates = await session.scalars(
         select(FbsWbOperation).where(
             FbsWbOperation.tenant_id == tenant_id,
             FbsWbOperation.seller_id == seller_id,
             FbsWbOperation.operation_kind == OPERATION_KIND_SUPPLY_FROM_ORDERS,
+            or_(
+                FbsWbOperation.state != WB_OPERATION_STATE_CONFIRMED,
+                FbsWbOperation.request_hash == request_hash,
+            ),
             FbsWbOperation.state.in_(
-                [WB_OPERATION_STATE_PENDING, WB_OPERATION_STATE_PENDING_CONFIRMATION]
+                [
+                    WB_OPERATION_STATE_PENDING,
+                    WB_OPERATION_STATE_PENDING_CONFIRMATION,
+                    WB_OPERATION_STATE_CONFIRMED,
+                ]
             ),
         )
     )
     requested = {str(order_id) for order_id in order_ids}
-    for operation in pending:
+    for operation in candidates:
         summary = operation.request_summary_json or {}
         if summary.get("marketplace", "wb") != "wb":
             continue
         if requested.intersection(summary.get("order_ids", [])):
-            raise _create_operation_in_progress(operation)
+            if operation.request_hash == request_hash:
+                return operation
+            if operation.state != WB_OPERATION_STATE_CONFIRMED:
+                raise _create_operation_in_progress(operation)
+    return None
 
 
 async def create_supply_from_orders(
@@ -588,6 +602,10 @@ async def create_supply_from_orders(
     seller_id = stub_orders[0].seller_id
     marketplace = stub_orders[0].marketplace or "wb"
     existing_op = await get_operation_by_idempotency(session, seller_id, idempotency_key)
+    if existing_op is None and marketplace == "wb":
+        existing_op = await _existing_create_for_orders(
+            session, tenant_id, seller_id, order_ids, request_hash
+        )
     if existing_op is not None:
         if existing_op.request_hash and existing_op.request_hash != request_hash:
             raise FbsSupplyError(
@@ -645,6 +663,30 @@ async def create_supply_from_orders(
             http_status=409,
         )
 
+    wb_supply_id = ""
+    token = None
+    if marketplace == "wb":
+        token = await _require_marketplace_token(session, tenant_id, seller_id)
+        assert preview.summary is not None
+        wb_context = _from_orders_wb_context(preview.summary, list(preview.orders))
+        # Creating an empty WB draft changes no order. Persist the local claim
+        # only with a real WB ID, so a lost process cannot strand pending orders.
+        await session.commit()
+        try:
+            wb_row = await create_marketplace_supply(http_client, api_token=token, name=name)
+            raw_id = wb_row.get("id")
+            if not isinstance(raw_id, (str, int)) or not str(raw_id).strip():
+                raise WildberriesClientError("invalid_response")
+            wb_supply_id = str(raw_id)
+        except WildberriesClientError as exc:
+            raise _fbs_supply_error_from_wb(
+                exc,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                event="fbs supply from-orders WB create failed",
+                extra_context=wb_context,
+            ) from exc
+
     # Serialize only the local claim. The existing durable operation owns its
     # order set while WB is processing; no DB connection is held during HTTP.
     async with marketplace_seller_lock(
@@ -672,8 +714,18 @@ async def create_supply_from_orders(
             if existing_op is not None:
                 if existing_op.request_hash and existing_op.request_hash != request_hash:
                     raise FbsSupplyError("idempotency_key_reused", http_status=409)
-                raise _create_operation_in_progress(existing_op)
-            await _ensure_orders_not_in_pending_create(session, tenant_id, seller_id, order_ids)
+            else:
+                existing_op = await _existing_create_for_orders(
+                    session, tenant_id, seller_id, order_ids, request_hash
+                )
+            if existing_op is not None:
+                # A peer won during create HTTP. Keep this extra WB draft empty;
+                # resume only the canonical operation and its persisted WB ID.
+                orders = await load_orders_for_validation(session, tenant_id, order_ids)
+                await session.commit()
+                return await _resume_from_orders_operation(
+                    session, tenant_id, existing_op, orders=orders, http_client=http_client
+                )
         locked = await validate_supply_composition(
             session,
             tenant_id,
@@ -694,11 +746,6 @@ async def create_supply_from_orders(
         summary = locked.summary
         assert summary is not None
         marketplace = orders[0].marketplace or "wb"
-        token = (
-            await _require_marketplace_token(session, tenant_id, seller_id)
-            if marketplace == "wb"
-            else None
-        )
         operation = await create_pending_operation(
             session,
             tenant_id=tenant_id,
@@ -735,7 +782,7 @@ async def create_supply_from_orders(
             seller_id=seller_id,
             warehouse_id=summary.wms_warehouse_id,
             marketplace=marketplace,
-            wb_supply_id=f"PENDING-{operation.id}",
+            wb_supply_id=wb_supply_id if marketplace == "wb" else f"PENDING-{operation.id}",
             name=name,
             source=FBS_SUPPLY_SOURCE_WMS,
             status=FBS_SUPPLY_STATUS_DRAFT,
@@ -767,6 +814,9 @@ async def create_supply_from_orders(
             )
             return await get_supply_workspace(session, tenant_id, supply.id)
 
+        await mark_operation_pending_confirmation(
+            session, operation, wb_supply_id=wb_supply_id, local_supply_id=supply.id
+        )
         operation_id, supply_id = operation.id, supply.id
         wb_order_ids = [int(order.wb_order_id) for order in orders]
         wb_context = _from_orders_wb_context(summary, orders)
@@ -788,46 +838,6 @@ async def create_supply_from_orders(
         # order here so concurrent finalization cannot deadlock in reverse order.
         await session.refresh(operation, with_for_update=True)
         return operation.state == WB_OPERATION_STATE_CONFIRMED
-
-    try:
-        wb_row = await create_marketplace_supply(http_client, api_token=token, name=name)
-        wb_supply_id_raw = wb_row.get("id")
-        if not isinstance(wb_supply_id_raw, (str, int)) or not str(wb_supply_id_raw).strip():
-            raise WildberriesClientError("invalid_response")
-    except WildberriesClientError as exc:
-        await refresh_after_http()
-        error = _fbs_supply_error_from_wb(
-            exc,
-            tenant_id=tenant_id,
-            seller_id=seller_id,
-            local_entity_id=supply_id,
-            event="fbs supply from-orders WB create failed",
-            extra_context=wb_context,
-        )
-        # An HTTP rejection proves no supply was created. A lost/invalid response
-        # or server error does not; retain the operation and never repeat POST.
-        if exc.status_code is not None and 400 <= exc.status_code < 500 and exc.status_code != 408:
-            await mark_operation_failed(
-                session, operation, error_code=error.code, error_context=error.context
-            )
-            operation.local_entity_id = None
-            await session.delete(supply)
-        else:
-            operation.state = WB_OPERATION_STATE_PENDING_CONFIRMATION
-            operation.error_code = error.code
-            operation.error_context_json = error.context
-        await session.commit()
-        raise error from exc
-
-    wb_supply_id = str(wb_supply_id_raw)
-    await refresh_after_http()
-    supply.wb_supply_id = wb_supply_id
-    operation.wb_object_id = wb_supply_id
-    operation.wb_object_kind = "supply"
-    # A retry can now reconcile this exact supply even if the owner dies before
-    # adding its orders. It must not issue another create request.
-    operation.state = WB_OPERATION_STATE_PENDING_CONFIRMATION
-    await session.commit()
 
     try:
         mock_error = (
@@ -1521,6 +1531,25 @@ async def _close_pending_operation_if_complete(
         FbsWbOperation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION,
     )
     for operation in (await session.execute(stmt)).scalars().all():
+        requested = (operation.request_summary_json or {}).get("order_ids", [])
+        try:
+            requested_ids = {uuid.UUID(str(value)) for value in requested}
+        except (ValueError, TypeError):
+            continue
+        expected = list(
+            (
+                await session.scalars(
+                    select(FbsOrder.wb_order_id).where(
+                        FbsOrder.tenant_id == supply.tenant_id,
+                        FbsOrder.id.in_(requested_ids),
+                    )
+                )
+            ).all()
+        )
+        # Repair may read WB between create's ID commit and any add-orders batch.
+        # Only the full original composition confirms this operation.
+        if len(expected) != len(requested_ids) or not set(expected).issubset(wb_order_ids):
+            continue
         await mark_operation_confirmed(
             session,
             operation,

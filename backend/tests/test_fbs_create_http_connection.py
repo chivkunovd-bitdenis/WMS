@@ -26,7 +26,19 @@ from app.services.wildberries_client import WildberriesClientError
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "outcome", ["success", "transport", "invalid", "rejected", "cancelled", "readback_timeout"]
+    "outcome",
+    [
+        "success",
+        "transport",
+        "invalid",
+        "rejected",
+        "cancelled",
+        "readback_timeout",
+        "owner_cancelled",
+        "same_key",
+        "rotated_key",
+        "loser_failed",
+    ],
 )
 async def test_create_http_releases_pool_and_persists_identity(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch, outcome: str
@@ -50,7 +62,7 @@ async def test_create_http_releases_pool_and_persists_identity(
             created_at_wb=datetime.now(UTC),
             deadline_at=datetime.now(UTC),
         )
-        for index in range(2)
+        for index in range(3)
     ]
     db_session.add_all(orders)
     await db_session.commit()
@@ -88,9 +100,11 @@ async def test_create_http_releases_pool_and_persists_identity(
 
     async def create(*args: Any, name: str, **kwargs: Any) -> dict[str, Any]:
         create_calls.append(name)
+        if name == "main" and create_calls.count("main") > 1:
+            return {"id": "WB-GI-winner"}
         if name == "main":
             await pause_http("create")
-            if outcome == "transport":
+            if outcome in {"transport", "loser_failed"}:
                 raise WildberriesClientError("transport_error")
             if outcome == "invalid":
                 return {}
@@ -132,7 +146,7 @@ async def test_create_http_releases_pool_and_persists_identity(
                 session,
                 tenant_id,
                 name=name,
-                order_ids=[order_ids[order_index]],
+                order_ids=order_ids[:2] if order_index == 0 else [order_ids[order_index]],
                 planned_delivery_type="warehouse_sc",
                 planned_destination=None,
                 idempotency_key=key,
@@ -147,45 +161,60 @@ async def test_create_http_releases_pool_and_persists_identity(
         assert name == "create"
         async with sessions() as observer:
             assert await observer.scalar(text("select 1")) == 1
-            op = await observer.scalar(select(FbsWbOperation))
-            assert op and op.state == "pending" and op.wb_object_id is None
-            operation_id, supply_id = op.id, op.local_entity_id
-            assert supply_id is not None
-            assert await observer.get(FbsSupply, supply_id) is not None
-        # Same key and a rotated key cannot create another supply for the same order.
-        for key in ("original-key", "rotated-key"):
-            with pytest.raises(service.FbsSupplyError) as duplicate:
-                await run("main", key)
-            assert duplicate.value.code in {"operation_incomplete", "operation_in_progress"}
-            assert duplicate.value.context["operation_id"] == str(operation_id)
+            assert await observer.scalar(select(FbsWbOperation)) is None
+            assert await observer.scalar(select(FbsSupply)) is None
         # The operation owns only its order set, not the whole seller.
-        other = await run("other", "disjoint-key", 1)
+        other = await run("other", "disjoint-key", 2)
         assert other["wb_id"] == "WB-GI-other"
         assert create_calls == ["main", "other"]
+        if outcome in {"same_key", "rotated_key", "loser_failed"}:
+            retry_key = "original-key" if outcome == "same_key" else "rotated-key"
+            winner = await run("main", retry_key)
+            assert winner["wb_id"] == "WB-GI-winner"
+            release.set()
+            if outcome == "loser_failed":
+                with pytest.raises(service.FbsSupplyError):
+                    await task
+            else:
+                assert await task == winner
+            async with sessions() as observer:
+                assert await observer.scalar(text("select 1")) == 1
+                own_operations = list(
+                    (
+                        await observer.scalars(
+                            select(FbsWbOperation).where(
+                                FbsWbOperation.wb_object_id != "WB-GI-other"
+                            )
+                        )
+                    ).all()
+                )
+                assert len(own_operations) == 1
+                assert own_operations[0].state == "confirmed"
+                assert own_operations[0].wb_object_id == "WB-GI-winner"
+                for order_id in order_ids[:2]:
+                    order = await observer.get(FbsOrder, order_id)
+                    assert order and str(order.supply_id) == winner["id"]
+            assert "WB-GI-main" not in add_calls
+            assert add_calls.count("WB-GI-winner") == 1
+            return
+        if outcome == "owner_cancelled":
+            task.cancel()
         release.set()
-        if outcome in {"transport", "invalid", "rejected"}:
-            with pytest.raises(service.FbsSupplyError):
+        if outcome in {"transport", "invalid", "rejected", "owner_cancelled"}:
+            error_type = (
+                asyncio.CancelledError if outcome == "owner_cancelled" else service.FbsSupplyError
+            )
+            with pytest.raises(error_type):
                 await task
             async with sessions() as observer:
-                op = await observer.get(FbsWbOperation, operation_id)
-                assert op and op.state == (
-                    "failed" if outcome == "rejected" else "pending_confirmation"
+                operations = list((await observer.scalars(select(FbsWbOperation))).all())
+                assert len(operations) == 1 and operations[0].wb_object_id == "WB-GI-other"
+                assert (
+                    await observer.scalar(select(FbsSupply).where(FbsSupply.name == "main")) is None
                 )
-                assert op.wb_object_id is None
-                if outcome == "rejected":
-                    assert op.local_entity_id is None
-                    assert await observer.get(FbsSupply, supply_id) is None
-                else:
-                    assert op.local_entity_id == supply_id
-            for key in ("original-key", "rotated-key"):
-                if outcome == "rejected" and key == "rotated-key":
-                    # A definite failure does not retain ownership of the orders.
-                    retried = await run("retry", key)
-                    assert retried["wb_id"] == "WB-GI-retry"
-                    continue
-                with pytest.raises(service.FbsSupplyError):
-                    await run("main", key)
-            assert create_calls.count("main") == 1
+            # The same browser key works after a failed or cancelled empty-draft HTTP.
+            retried = await run("retry", "original-key")
+            assert retried["wb_id"] == "WB-GI-retry"
             assert "WB-GI-main" not in add_calls
         else:
             for expected in ("add", "readback"):
@@ -193,11 +222,23 @@ async def test_create_http_releases_pool_and_persists_identity(
                 assert name == expected
                 async with sessions() as observer:
                     assert await observer.scalar(text("select 1")) == 1
-                    op = await observer.get(FbsWbOperation, operation_id)
+                    op = await observer.scalar(
+                        select(FbsWbOperation).where(FbsWbOperation.wb_object_id == "WB-GI-main")
+                    )
+                    assert op
+                    operation_id, supply_id = op.id, op.local_entity_id
                     supply = await observer.get(FbsSupply, supply_id)
                     assert op and op.state == "pending_confirmation"
                     assert op.wb_object_id == "WB-GI-main"
                     assert supply and supply.wb_supply_id == "WB-GI-main"
+                    if name == "add":
+                        for readback_ids in ([], [27200]):
+                            await service._close_pending_operation_if_complete(
+                                observer, supply, wb_order_ids=readback_ids, unresolved=[]
+                            )
+                            await observer.commit()
+                            await observer.refresh(op)
+                            assert op.state == "pending_confirmation"
                     if outcome == "cancelled" and name == "readback":
                         cancelled = await observer.get(FbsOrder, order_ids[0])
                         assert cancelled
