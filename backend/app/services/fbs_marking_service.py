@@ -602,6 +602,10 @@ async def _claim_pool_code_if_present(
         and locked.packaging_task_line_id == printed_for_line_id
     ):
         return locked
+    from app.services.marking_code_service import is_unbound_received_code
+
+    if await is_unbound_received_code(session, locked):
+        return locked
     if locked.status != STATUS_AVAILABLE:
         raise FbsMarkingError("duplicate_kiz")
     locked.status = STATUS_RESERVED

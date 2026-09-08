@@ -3700,3 +3700,31 @@ async def restore_truncated_pool_cis_codes(
         "by_outcome": counts,
         "rows": rows,
     }
+
+
+async def is_unbound_received_code(session: AsyncSession, code: MarkingCode) -> bool:
+    """A physically applied receipt code may be bound once without entering print pools."""
+    from app.models.fbs_order import FbsOrderMarking
+
+    if (code.source != "external_fbs" or code.status != STATUS_APPLIED
+            or code.packaging_task_line_id is not None or code.pool_id is not None):
+        return False
+    # Historical/rejected/cancelled bindings are not released by a receipt scan.
+    if await session.scalar(select(FbsOrderMarking.id).where(
+        FbsOrderMarking.tenant_id == code.tenant_id,
+        FbsOrderMarking.marking_code_id == code.id,
+    ).limit(1)) is not None:
+        return False
+    events = (await session.scalars(select(MarkingCodeEvent).where(
+        MarkingCodeEvent.tenant_id == code.tenant_id, MarkingCodeEvent.code_id == code.id,
+        MarkingCodeEvent.event_type == EVENT_IMPORTED,
+    ))).all()
+    for event in events:
+        try:
+            meta = json.loads(event.meta_json or "{}")
+        except ValueError:
+            continue
+        if (isinstance(meta, dict) and meta.get("source_process") == "reception"
+                and meta.get("request_id")):
+            return True
+    return False

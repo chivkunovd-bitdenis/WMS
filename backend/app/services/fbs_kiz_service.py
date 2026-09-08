@@ -807,6 +807,8 @@ async def _ensure_kiz_not_occupied_in_pool(
         and code.product_id != order.product_id
     ):
         raise FbsKizError("code_product_mismatch")
+    if await marking_code_svc.is_unbound_received_code(session, code):
+        return
     if code.status != STATUS_AVAILABLE:
         marking = await session.scalar(
             select(FbsOrderMarking).where(
@@ -1006,9 +1008,10 @@ async def _prepare_code_for_binding(
     except marking_svc.FbsMarkingError as exc:
         raise _marking_error_to_kiz(exc) from exc
     if pool_code is not None:
+        received = await marking_code_svc.is_unbound_received_code(session, pool_code)
         pool_code.packaging_task_line_id = line.id
         await session.flush()
-        return pool_code, True
+        return pool_code, not received
     return (
         await _create_or_apply_external_code(
             session,

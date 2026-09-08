@@ -5,7 +5,17 @@ import uuid
 from datetime import date
 from typing import Annotated, Literal, cast
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Response,
+    UploadFile,
+    status,
+)
 from pydantic import BaseModel, Field
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
@@ -26,6 +36,7 @@ from app.api.deps import (
     require_reception_or_seller_draft_access,
     seller_line_product_scope,
 )
+from app.api.inbound_marking import schedule_after_posting
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.inbound_intake import (
@@ -1188,19 +1199,22 @@ async def add_received_product_line(
 )
 async def complete_inbound_receiving(
     request_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
+    tenant_id = user.tenant_id
     try:
-        r = await svc.complete_receiving(
+        await svc.complete_receiving(
             session,
             user.tenant_id,
             request_id,
             actor_user_id=user.id,
         )
+        await schedule_after_posting(session, user.tenant_id, request_id, background_tasks)
     except InboundIntakeError as exc:
         raise _map_inbound_svc_err(exc) from None
-    r2 = await svc.get_request(session, user.tenant_id, r.id)
+    r2 = await svc.get_request(session, tenant_id, request_id)
     if r2 is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1645,20 +1659,23 @@ async def patch_inbound_line_defective(
 @router.post("/{request_id}/verify", response_model=InboundIntakeRequestOut)
 async def complete_inbound_verification(
     request_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
     """Legacy alias for POST .../complete-receiving."""
+    tenant_id = user.tenant_id
     try:
-        r = await svc.complete_receiving(
+        await svc.complete_receiving(
             session,
             user.tenant_id,
             request_id,
             actor_user_id=user.id,
         )
+        await schedule_after_posting(session, user.tenant_id, request_id, background_tasks)
     except InboundIntakeError as exc:
         raise _map_inbound_svc_err(exc) from None
-    r2 = await svc.get_request(session, user.tenant_id, r.id)
+    r2 = await svc.get_request(session, tenant_id, request_id)
     if r2 is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -2057,13 +2074,16 @@ async def submit_inbound_request(
 @router.post("/{request_id}/post", response_model=InboundIntakeRequestOut)
 async def post_inbound_request(
     request_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
+    tenant_id = user.tenant_id
     try:
-        r = await svc.post_all_remaining(
+        await svc.post_all_remaining(
             session, user.tenant_id, request_id, performer_id=user.id
         )
+        await schedule_after_posting(session, user.tenant_id, request_id, background_tasks)
     except InboundIntakeError as exc:
         if exc.code == "request_not_found":
             raise HTTPException(
@@ -2101,7 +2121,7 @@ async def post_inbound_request(
                 detail="nothing_to_receive",
             ) from None
         raise
-    r2 = await svc.get_request(session, user.tenant_id, r.id)
+    r2 = await svc.get_request(session, tenant_id, request_id)
     if r2 is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

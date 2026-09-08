@@ -83,6 +83,7 @@ async def _claim_or_create_code(
     code = await session.scalar(
         select(MarkingCode)
         .where(MarkingCode.tenant_id == order.tenant_id, MarkingCode.cis_code == value)
+        .execution_options(populate_existing=True)
         .with_for_update()
     )
     if code is not None:
@@ -90,6 +91,11 @@ async def _claim_or_create_code(
             raise OzonKizError("cross_seller_code", "Код принадлежит другому селлеру.")
         if code.product_id is not None and code.product_id != product_id:
             raise OzonKizError("code_product_mismatch", "Код принадлежит другому товару.")
+        from app.services.marking_code_service import is_unbound_received_code
+
+        if await is_unbound_received_code(session, code):
+            code.packaging_task_line_id = line.id
+            return code, False
         if code.status != STATUS_AVAILABLE:
             raise OzonKizError("duplicate_kiz", "Код маркировки уже использован.")
         code.status = STATUS_RESERVED
