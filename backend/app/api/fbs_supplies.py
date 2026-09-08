@@ -227,6 +227,7 @@ class FbsPickAllocationOut(BaseModel):
 class FbsPickScanBody(BaseModel):
     barcode: str = Field(min_length=1, max_length=128)
     product_id: uuid.UUID | None = None
+    order_id: uuid.UUID | None = None
     storage_location_id: uuid.UUID | None = None
     container_kind: Literal["pallet", "box", "cargo_place"] | None = None
     container_id: uuid.UUID | None = None
@@ -1307,6 +1308,7 @@ async def scan_fbs_supply_pick(
             storage_location_id=body.storage_location_id,
             idempotency_key=idempotency_key or str(uuid.uuid4()),
             actor=user,
+            order_id=body.order_id,
             container_kind=body.container_kind,
             container_id=body.container_id,
         )

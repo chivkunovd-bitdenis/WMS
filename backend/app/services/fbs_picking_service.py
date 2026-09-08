@@ -622,6 +622,7 @@ async def pick_scan(
     storage_location_id: uuid.UUID | None,
     idempotency_key: str,
     actor: User,
+    order_id: uuid.UUID | None = None,
     container_kind: ContainerKind | None = None,
     container_id: uuid.UUID | None = None,
 ) -> PickScanResult:
@@ -783,6 +784,7 @@ async def pick_scan(
         product_id=product.id,
         idempotency_key=idempotency_key,
         actor=actor,
+        order_id=order_id,
         container_kind=container_kind,
         container_id=container_id,
     )
