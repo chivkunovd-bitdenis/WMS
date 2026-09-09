@@ -14,14 +14,19 @@ const PRODUCT = '45587c50-451f-4d0a-b233-98c07be4dc9d';
 const BARCODE = '2000000000013';
 const A = '817b4384-17ba-4872-9a81-d8f62adc3dfe';
 const B = '7b100aa1-54c8-4efc-bd61-2bf1e1453374';
-const SHA = '50c9c88e0e56097e857fa26e0bda419d69125f9f';
-const execute = process.argv[2] === '--execute-red-approved';
+const OLD_SHA = '50c9c88e0e56097e857fa26e0bda419d69125f9f';
+const green = process.argv[2]?.startsWith('--execute-green-approved=') ?? false;
+const SHA = green ? process.argv[2].split('=')[1] : OLD_SHA;
+assert.match(SHA, /^[0-9a-f]{40}$/, 'Full root-verified staging SHA required');
+if (green) assert.notEqual(SHA, OLD_SHA, 'Old stage still contains the source race');
+const execute = green || process.argv[2] === '--execute-red-approved';
+const mode = green ? 'green' : 'red';
 assert.equal(process.argv.length, execute ? 3 : 2);
 const token = fs.readFileSync('/Users/deniscivkunov/Projects/WMS/.secrets/staging-token.txt', 'utf8').trim().replace(/^Bearer\s+/i, '');
 const output = path.resolve(__dirname, '../wms058-queued-source-20260909');
-const evidence = { label: 'WMS058 queue-source RED', started: new Date().toISOString(), sha: SHA, requests: [], states: {}, cleanup: [] };
+const evidence = { label: `WMS058 queue-source ${mode.toUpperCase()}`, started: new Date().toISOString(), sha: SHA, requests: [], states: {}, cleanup: [] };
 let docId, browser, release422;
-function save() { fs.mkdirSync(output, { recursive: true }); fs.writeFileSync(path.join(output, 'red.json'), JSON.stringify(evidence, null, 2) + '\n'); }
+function save() { fs.mkdirSync(output, { recursive: true }); fs.writeFileSync(path.join(output, `${mode}.json`), JSON.stringify(evidence, null, 2) + '\n'); }
 function allowed(p, m) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(m)) return true;
   return execute && m === 'POST' && (p === MP || (docId && (['lines', 'confirm', 'cancel', 'boxes'].some(s => p === `${MP}/${docId}/${s}`) || p.startsWith(`${MP}/${docId}/boxes/`) && p.endsWith('/scan'))));
@@ -103,17 +108,40 @@ async function main() {
     hold=true;await input.fill(BARCODE);await input.press('Enter');await Promise.race([held,new Promise((_,reject)=>setTimeout(()=>reject(new Error('Real422 not captured')),15000))]);
     await input.fill(codeB);await input.press('Enter');evidence.queuedBWhileReal422Held=true;
     const bResponse=page.waitForResponse(r=>r.url().endsWith(scanPath)&&r.request().postDataJSON()?.barcode===codeB);
-    release422();await page.getByTestId('ff-mp-box-add-over-plan-dialog').waitFor();assert.equal((await bResponse).status(),200);
-    await page.getByTestId('ff-mp-box-add-active-location').filter({hasText:codeB}).waitFor();
-    await page.screenshot({path:path.join(output,'red-modal-source-b.png'),animations:'disabled'});
-    const modal=await state('modal_with_b_selected');assert.deepEqual(modal.balances,baseline.balances);assert.deepEqual(modal.movements,baseline.movements);
+    release422();await page.getByTestId('ff-mp-box-add-over-plan-dialog').waitFor();
+    if (!green) assert.equal((await bResponse).status(),200);
+    await page.getByTestId('ff-mp-box-add-active-location').filter({hasText:green ? codeA : codeB}).waitFor();
+    await page.screenshot({path:path.join(output,`${mode}-modal-source-${green ? 'a' : 'b'}.png`),animations:'disabled'});
+    const modal=await state(green ? 'modal_queue_paused_source_a' : 'modal_with_b_selected');assert.deepEqual(modal.balances,baseline.balances);assert.deepEqual(modal.movements,baseline.movements);
+    if (green) {
+      // This check follows a real SQL/API reread while the dialog stays open.
+      // A queued source scan must still not have been sent to the server.
+      assert.equal(evidence.requests.filter(r=>r.body.barcode===codeB).length,0,'Queued B ran before operator decision');
+      evidence.queuePausedUntilDecision=true;
+    }
     const confirmed=page.waitForResponse(r=>r.url().endsWith(scanPath)&&r.request().postDataJSON()?.allow_over_plan===true);
     await page.getByTestId('ff-mp-box-add-over-plan-confirm').click();assert.equal((await confirmed).status(),200);
-    const after=await state('after_confirmation');const last=evidence.requests.at(-1).body;
-    assert.equal(last.container_id,B);assert.equal(quantity(after,A),quantity(baseline,A));assert.equal(quantity(after,B),quantity(baseline,B)-1);
-    evidence.result='RED_CONFIRMED_WRONG_SOURCE';evidence.wrongSource={expected:A,actual:B,confirmedRequest:last};
-    await page.screenshot({path:path.join(output,'red-after-confirmation.png'),animations:'disabled'});save();
-    console.log(JSON.stringify({result:evidence.result,document:docId,expected:A,actual:B}));
+    if (green) {
+      assert.equal((await bResponse).status(),200);
+      await page.getByTestId('ff-mp-box-add-active-location').filter({hasText:codeB}).waitFor();
+      const retryIndex=evidence.requests.findIndex(r=>r.body.allow_over_plan===true);
+      const sourceBIndex=evidence.requests.findIndex(r=>r.body.barcode===codeB);
+      assert(sourceBIndex>retryIndex,'B must execute after the original scan retry');
+      const original=evidence.requests.filter(r=>r.body.barcode===BARCODE&&!r.body.allow_over_plan).at(-1).body;
+      assert.deepEqual(evidence.requests[retryIndex].body,{...original,allow_over_plan:true},'Retry changed more than allow_over_plan');
+      evidence.queuedBExecutedAfterDecision=true;
+    }
+    const after=await state('after_confirmation');const last=evidence.requests.find(r=>r.body.allow_over_plan===true).body;
+    assert.equal(last.container_id,green ? A : B);
+    assert.equal(quantity(after,A),quantity(baseline,A)-(green ? 1 : 0));
+    assert.equal(quantity(after,B),quantity(baseline,B)-(green ? 0 : 1));
+    const oldMovementIds=new Set(baseline.movements.map(m=>m.id));
+    const newMovements=after.movements.filter(m=>!oldMovementIds.has(m.id));
+    assert.equal(newMovements.length,1);assert.equal(newMovements[0].container_id,green ? A : B);assert.equal(newMovements[0].quantity_delta,-1);
+    evidence.result=green ? 'GREEN_CONFIRMED_ORIGINAL_SOURCE' : 'RED_CONFIRMED_WRONG_SOURCE';
+    evidence.confirmedSource={expected:A,actual:last.container_id,confirmedRequest:last,newMovements};
+    await page.screenshot({path:path.join(output,`${mode}-after-confirmation.png`),animations:'disabled'});save();
+    console.log(JSON.stringify({result:evidence.result,document:docId,expected:A,actual:last.container_id}));
   }finally{
     if(release422)release422();if(browser)await browser.close();evidence.chromeClosed=true;
     if(docId){await api(`${MP}/${docId}/cancel`,'POST',{});const cancelled=await api(`${MP}/${docId}`);evidence.cleanup.push({id:docId,status:cancelled.status});assert.equal(cancelled.status,'cancelled');evidence.states.after_cancel={physical:physical()};assert.equal(total(evidence.states.after_cancel.physical),total(before));}
