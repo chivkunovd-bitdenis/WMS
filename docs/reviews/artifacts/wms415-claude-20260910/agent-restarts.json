@@ -1,0 +1,45 @@
+{
+  "reason": "Original workers ended after pause; coordinator used new Agent invocations to continue preserved work in verified absolute worktrees, without automatic isolation.",
+  "starts": [
+    {
+      "at": "2026-09-09T21:37:34.058Z",
+      "description": "Chat lane resume WMS-397/399",
+      "subagent_type": "general-purpose",
+      "model": "opus",
+      "name": "chat-lane",
+      "run_in_background": true,
+      "agent_id": "af80ecff1f130996a",
+      "launched": true
+    },
+    {
+      "at": "2026-09-09T21:38:04.420Z",
+      "description": "Stock lane resume WMS-338/341/329/060/352/386/384",
+      "subagent_type": "general-purpose",
+      "model": "opus",
+      "name": "stock-lane",
+      "run_in_background": true,
+      "agent_id": "aab979354b7b35a31",
+      "launched": true
+    },
+    {
+      "at": "2026-09-09T21:38:29.073Z",
+      "description": "Warehouse lane resume WMS-062/153-156/174/177",
+      "subagent_type": "general-purpose",
+      "model": "opus",
+      "name": "warehouse-lane",
+      "run_in_background": true,
+      "agent_id": "adf248a78bc868237",
+      "launched": true
+    },
+    {
+      "at": "2026-09-09T21:39:12.953Z",
+      "description": "Mobile lane finish WMS-401/412 verify",
+      "subagent_type": "general-purpose",
+      "model": "opus",
+      "name": "mobile-lane",
+      "run_in_background": true,
+      "agent_id": "ac1c974740a0b3fb5",
+      "launched": true
+    }
+  ]
+}
