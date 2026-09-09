@@ -1,0 +1,74 @@
+{
+  "task": "WMS-396",
+  "evidence_kind": "Sanitized extraction of recorded live shell tool calls and results; no new network request",
+  "source_session": "c00aad3b-56f1-4fb8-808c-5a3d18b0bbb8",
+  "source_basename": "c00aad3b-56f1-4fb8-808c-5a3d18b0bbb8.jsonl",
+  "source_records": [
+    {
+      "line": 1299,
+      "timestamp": "2026-09-08T12:01:41.598Z",
+      "uuid": "2bbaafda-bcd8-4dab-a9e5-6fc1bd714779",
+      "sha256": "2c199e6f004b44a819677ad2203a7aeb149927a07dcf31b4da0b79b8f6d47189"
+    },
+    {
+      "line": 1303,
+      "timestamp": "2026-09-08T12:01:42.787Z",
+      "uuid": "c9faeb83-5c32-4541-bebd-717e51b03e6b",
+      "sha256": "ff9a21d2db0bd7eeb25b9255e62ecd84d41221013b4647580313ef043ba03231"
+    },
+    {
+      "line": 1307,
+      "timestamp": "2026-09-08T12:02:08.815Z",
+      "uuid": "02f010cc-56bf-498b-a0e0-1c89e892d764",
+      "sha256": "5df383a973649b6831e7bac7074057adf4c8ff8db79c3a6092957d98355ef8e0"
+    },
+    {
+      "line": 1308,
+      "timestamp": "2026-09-08T12:02:20.013Z",
+      "uuid": "02ec3b24-a342-4495-bacb-1b14776c44b5",
+      "sha256": "fee6b7465ee6fc03217795986758a18405aabde6d540fffc61ba182b3ffa57b1"
+    }
+  ],
+  "transport": {
+    "environment": "local macOS shell; curl outside SSH/docker",
+    "method": "POST",
+    "url": "https://mobile.api.crpt.ru/mobile/check",
+    "explicit_headers": {
+      "Content-Type": "application/json"
+    },
+    "authorization_header_present": false,
+    "request_body": "{\"code\":\"<REDACTED_FULL_KIZ>\"}",
+    "http_status": "not captured by these curl commands",
+    "mock": false
+  },
+  "comparison": [
+    {
+      "case": "previously rejected code",
+      "outerStatus": "APPLIED",
+      "checkResult": false,
+      "status": "wrong",
+      "warning": "ok",
+      "codeResolveData.verified": true
+    },
+    {
+      "case": "previously accepted control code",
+      "outerStatus": "INTRODUCED",
+      "checkResult": true,
+      "status": "ok",
+      "warning": "ok",
+      "codeResolveData.verified": true
+    }
+  ],
+  "batch": {
+    "count": 10,
+    "outerStatus": "APPLIED",
+    "checkResult": false,
+    "codeResolveData.verified": true
+  },
+  "redaction": "Full codes, code fragments, cryptographic tails, order IDs, product/importer details and database commands omitted.",
+  "limits": [
+    "These source outputs contain selected parsed JSON fields, not the full raw response.",
+    "Historical success does not establish current access from staging or production.",
+    "Later HTTP451 does not establish that this mobile endpoint requires authentication."
+  ]
+}
