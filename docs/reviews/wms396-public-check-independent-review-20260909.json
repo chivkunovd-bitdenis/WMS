@@ -17,5 +17,22 @@
     "skipped_postgresql_only": 4
   },
   "remote_head_verified": "4f124cfa646431aa6ae4a1d949bcfdb8155eab1b",
-  "scope": "read-only diff, helpers, job guards and test inspection; no browser or deployment acceptance"
+  "scope": "read-only diff, helpers, job guards and test inspection; no browser or deployment acceptance",
+  "subsequent_postgresql_run": {
+    "source_sha": "4f124cfa646431aa6ae4a1d949bcfdb8155eab1b",
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "duration_seconds": 4.954,
+    "pytest_exit": 0,
+    "drop_exit": 0,
+    "owned_database_remaining_count": 0,
+    "reviewer_reran_tests": false,
+    "artifacts": {
+      "pytest.txt": "c238a6beb4be12c3ac3087d56fc612a13e12cb9933e7d4293cfa1c7c8619713a",
+      "junit.xml": "072856714a98fd589e75b2c7f6f4f3cb27817aa320604c46464d419a7fee0536",
+      "run.json": "45ce45636d3efd31c229c879e6709e144ca5f20005a1773c246ecd8dccc87c94"
+    }
+  }
 }

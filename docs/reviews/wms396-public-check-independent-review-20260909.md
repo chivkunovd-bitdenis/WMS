@@ -13,3 +13,11 @@ Request pacing uses the existing process-local MarketplaceBackoff with a two-sec
 The reviewer read the changed tests for full GS/no-auth requests, malformed and negative results, HTTP errors, no open database session across HTTP, idempotent re-execution, unchanged inventory-movement count, deletion/rescan draining and expired-job replacement. Tests were not rerun, as requested. The author's reported result is 61 passed with four PostgreSQL-only cases skipped; those skipped row-lock cases are not represented as runtime concurrency proof. The author also reported Ruff on four changed files and Mypy on the two services passing.
 
 This review made no application, database, deployment, browser or credential changes and launched no Opus run. It is a code-review verdict, not staging or production acceptance. Detailed record: [review JSON](wms396-public-check-independent-review-20260909.json).
+
+## Subsequent PostgreSQL-only test evidence
+
+The four previously skipped row-lock cases now have a separate saved passing run for the same source `4f124cfa646431aa6ae4a1d949bcfdb8155eab1b`. The reviewer opened the runner's existing pytest output, JUnit XML and run metadata; no tests were repeated. The XML records four tests, zero failures, zero errors and zero skips, with 4.954 seconds total test time. The cases cover concurrent WB/Ozon external-code binding and receiving capacity/duplicate serialization.
+
+The runner used an isolated localhost PostgreSQL database (PostgreSQL 17.10 as reported by mobile_resume). The saved run metadata records `pytest_exit=0`, `drop_exit=0` and `owned_database_remaining_count=0`; it also pins the source SHA. Thus the original four skips are now covered by actual local PostgreSQL results. The checked CI workflow does not start a PostgreSQL service, so this evidence remains separate from the ordinary CI run.
+
+The three artifacts were inspected before copying: they contain test names, outcomes, local paths and the disposable local database identifier, with no credentials, real CIS or customer payload. Preserved evidence: [pytest output](artifacts/wms396-pg-only-20260909/pytest.txt), [JUnit XML](artifacts/wms396-pg-only-20260909/junit.xml), [run and cleanup metadata](artifacts/wms396-pg-only-20260909/run.json).

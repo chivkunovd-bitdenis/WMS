@@ -1,0 +1,28 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.14.3, pytest-9.1.1, pluggy-1.6.0 -- /Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python3
+rootdir: /Users/deniscivkunov/Projects/WMS/.worktrees/wms396-public-check/backend
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.4.0, anyio-4.14.2
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 4 items
+
+tests/test_inbound_marking.py::test_receiving_code_binds_as_external_once_and_cannot_be_printed[True-wb] PASSED [ 25%]
+tests/test_inbound_marking.py::test_receiving_code_binds_as_external_once_and_cannot_be_printed[True-ozon] PASSED [ 50%]
+tests/test_inbound_marking.py::test_concurrent_receipt_scan_serializes_capacity_and_duplicate[True] PASSED [ 75%]
+tests/test_inbound_marking.py::test_concurrent_receipt_scan_serializes_capacity_and_duplicate[False] PASSED [100%]
+
+=============================== warnings summary ===============================
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+- generated xml file: /Users/deniscivkunov/Projects/WMS/.worktrees/wms396-public-check/outputs/wms396-pg-only/junit.xml -
+======================== 4 passed, 5 warnings in 4.95s =========================
