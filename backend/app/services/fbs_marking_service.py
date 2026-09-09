@@ -57,6 +57,7 @@ from app.services.marketplace_provider import (
     MarketplaceProviderError,
     OzonMarketplaceProvider,
 )
+from app.services.marketplace_scope import is_wildberries
 from app.services.marking_code_service import normalize_cis, record_event
 from app.services.ozon_fbs_process_service import (
     OzonFbsProcessError,
@@ -609,8 +610,13 @@ async def _claim_pool_code_if_present(
         and locked.packaging_task_line_id == printed_for_line_id
     ):
         return locked
-    from app.services.marking_code_service import is_unbound_received_code
+    from app.services.marking_code_service import (
+        is_unbound_cancelled_wb_code,
+        is_unbound_received_code,
+    )
 
+    if is_wildberries(order) and await is_unbound_cancelled_wb_code(session, locked):
+        return locked
     if await is_unbound_received_code(session, locked):
         return locked
     if locked.status != STATUS_AVAILABLE:
