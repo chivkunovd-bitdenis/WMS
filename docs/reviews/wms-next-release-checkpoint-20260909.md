@@ -52,3 +52,18 @@ Automationwms-40-staging remainsACTIVE every20minutes in the same thread.
 Packaging is onlyaflag, noinventory/reservationeffects/navigationblockers;
 frontendesignunchanged. Continue autonomous work where evidence/authorization
 allows, keep meaningful notifications only, and preserve precise status limits.
+
+
+Follow-up: WMS-397 backend contract independently reviewed and corrected.
+Published integration commit6dd443ce9998861591a6f6dc9058eafab59a88cc includes
+required attachments/screenshots, existing FF access, and seller membership.
+One owner decision has been requested under AGENTS.md:105 for four records
+and25MB/file,100MB/message,10files. Do not repeat the question or treat
+waiting as approval. No chat application/schema changes made.
+
+Production SSH still reports743a794b; correct public health endpoint
+https://wms.sellerfocus.pro/api/health returns ok.
+Local disk hitENOSPC (180MiB then132MiB available). Bounded read-only audit
+found only16.7MiB of unused reproducible WMS web dist outputs. That cannot
+unblock mobile dependencies; nothing deleted. Existing APK/build outputs
+and active browser profiles preserved. Automation remains ACTIVE every20min.
