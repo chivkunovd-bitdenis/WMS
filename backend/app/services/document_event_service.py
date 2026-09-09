@@ -91,6 +91,16 @@ def system_document_events() -> Iterator[None]:
         _actor_context.reset(token)
 
 
+def current_document_event_actor() -> DocumentEventActor:
+    """Return the JWT/context actor bound to the current request.
+
+    Services that record explicit audit rows (WMS-056 tare removal, WMS-325
+    staff permission mutations) call this to get the acting user without
+    re-decoding the token themselves.
+    """
+    return _actor_context.get()
+
+
 _original_background_task_call = BackgroundTask.__call__
 
 

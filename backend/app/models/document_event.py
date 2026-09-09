@@ -21,12 +21,16 @@ DOCUMENT_TYPE_FBS_SUPPLY = "fbs_supply"
 DOCUMENT_TYPE_MARKETPLACE_UNLOAD = "marketplace_unload"
 # Заказ FBS — тоже документ склада: по нему надо восстанавливать картину по часам.
 DOCUMENT_TYPE_FBS_ORDER = "fbs_order"
+# Учётная запись сотрудника — тот же аудит, чтобы фиксировать изменение прав
+# (WMS-325). Новую параллельную таблицу журнала заводить нельзя.
+DOCUMENT_TYPE_STAFF_USER = "staff_user"
 DOCUMENT_TYPES = frozenset(
     {
         DOCUMENT_TYPE_INBOUND_INTAKE,
         DOCUMENT_TYPE_FBS_SUPPLY,
         DOCUMENT_TYPE_MARKETPLACE_UNLOAD,
         DOCUMENT_TYPE_FBS_ORDER,
+        DOCUMENT_TYPE_STAFF_USER,
     }
 )
 
@@ -37,6 +41,14 @@ EVENT_LINE_QTY_CHANGED = "line_qty_changed"
 EVENT_WAREHOUSE_CHANGED = "warehouse_changed"
 EVENT_PLANNED_DATE_CHANGED = "planned_date_changed"
 EVENT_DEFECT_QTY_CHANGED = "defect_qty_changed"
+# WMS-056: снятие/изменение количества товара в приёмочной таре (короб или
+# грузоместо). Строка тары не документ, поэтому событие пишется на inbound
+# intake с указанием container_kind/container_id в payload_json.
+EVENT_TARE_LINE_QTY_CHANGED = "tare_line_qty_changed"
+# WMS-325: смена прав пользователя. Пишется в тот же аудит, before/after —
+# в payload_json, ключи "before"/"after".
+EVENT_PERMISSIONS_CHANGED = "permissions_changed"
+EVENT_STAFF_USER_CREATED = "staff_user_created"
 DOCUMENT_EVENT_TYPES = frozenset(
     {
         EVENT_STATUS_CHANGED,
@@ -46,6 +58,9 @@ DOCUMENT_EVENT_TYPES = frozenset(
         EVENT_WAREHOUSE_CHANGED,
         EVENT_PLANNED_DATE_CHANGED,
         EVENT_DEFECT_QTY_CHANGED,
+        EVENT_TARE_LINE_QTY_CHANGED,
+        EVENT_PERMISSIONS_CHANGED,
+        EVENT_STAFF_USER_CREATED,
     }
 )
 
