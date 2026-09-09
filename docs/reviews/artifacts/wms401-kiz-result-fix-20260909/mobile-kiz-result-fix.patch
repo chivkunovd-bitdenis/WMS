@@ -1,0 +1,75 @@
+From 30d8e52c656296cb71a2e315a80d1268d1b382cc Mon Sep 17 00:00:00 2001
+From: Denis Civkunov <denischivkunov@icloud.com>
+Date: Wed, 9 Sep 2026 14:50:30 +0300
+Subject: [PATCH] WMS-401: distinguish saved KIZ from WB verification result
+
+---
+ .../ru/wms/tsd/features/fbs/FbsViewModel.kt   | 11 ++++++-
+ .../wms/tsd/features/fbs/FbsViewModelTest.kt  | 29 ++++++++++++++++++-
+ 2 files changed, 38 insertions(+), 2 deletions(-)
+
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+index 65f1200..fb0262c 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+@@ -234,7 +234,16 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+             val result = answer ?: required { api.fbs().commitKiz(body) }.single().also { if (it.status == "ok") answer = it }
+             require(result.status == "ok") { result.message ?: "WB не подтвердил запись кода" }
+             refresh(supplyId)
+-            mutable.value = state.value.copy(kizOrder = null, pendingKiz = null, kizResult = result.message ?: "КИЗ сохранён. Ответ WB: ${result.metaStatus ?: "ожидает подтверждения"}")
++            val notice = when (result.metaStatus) {
++                "accepted" -> "КИЗ сохранён. WB принял код."
++                "allowed_without_check" -> "КИЗ сохранён. WB разрешил код без проверки."
++                "pending" -> "КИЗ сохранён. WB ещё проверяет код."
++                "assigned", "sending" -> "КИЗ сохранён. Передача в WB ещё не подтверждена."
++                "rejected" -> "КИЗ сохранён. WB отклонил код."
++                "replacement_required" -> "КИЗ сохранён. WB требует заменить код."
++                else -> "КИЗ сохранён. Результат проверки WB неизвестен."
++            }
++            mutable.value = state.value.copy(kizOrder = null, pendingKiz = null, kizResult = notice)
+         }
+     }
+     fun selectBox(boxId: String?) { mutable.value = state.value.copy(selectedBoxId = boxId) }
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+index e4422d6..cd3c0f1 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+@@ -160,7 +160,34 @@ class FbsViewModelTest {
+         coEvery { service.commitKiz(capture(commits)) } returns Response.success(listOf(KizCommitResult("1", "ok", "Сохранено", "pending")))
+         val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.scan("pack", "QR"); vm.scan("pack", code + "\r\n")
+         assertEquals(code, commits.single().pairs.single().value); assertNull(vm.state.value.error)
+-        assertEquals("Сохранено", vm.state.value.kizResult)
++        assertEquals("КИЗ сохранён. WB ещё проверяет код.", vm.state.value.kizResult)
++    }
++    @Test fun `commit ok message never hides WB verification outcome`() = runTest {
++        val code = "010460000000001221SERIAL\u001d91ABCD\u001d92SIGNATURE"
++        coEvery { service.workspace("supply") } returns Response.success(workspace(listOf(order("1", "2026-09-08T09:00:00Z"))))
++        coEvery { service.lookupKiz("supply", "QR") } returns Response.success(KizLookup("1", 1, true, false))
++        coEvery { service.validateKiz(any()) } returns Response.success(KizValidation(true))
++        val vm = FbsViewModel(provider); vm.loadSupply("supply")
++        val cases = listOf(
++            "accepted" to "КИЗ сохранён. WB принял код.",
++            "allowed_without_check" to "КИЗ сохранён. WB разрешил код без проверки.",
++            "pending" to "КИЗ сохранён. WB ещё проверяет код.",
++            "sending" to "КИЗ сохранён. Передача в WB ещё не подтверждена.",
++            "assigned" to "КИЗ сохранён. Передача в WB ещё не подтверждена.",
++            "rejected" to "КИЗ сохранён. WB отклонил код.",
++            "replacement_required" to "КИЗ сохранён. WB требует заменить код.",
++            null to "КИЗ сохранён. Результат проверки WB неизвестен.",
++            "unknown" to "КИЗ сохранён. Результат проверки WB неизвестен.",
++            "future_status" to "КИЗ сохранён. Результат проверки WB неизвестен.",
++        )
++        for ((status, expected) in cases) {
++            coEvery { service.commitKiz(any()) } returns Response.success(listOf(KizCommitResult("1", "ok", "ok", status)))
++            vm.scan("pack", "QR"); vm.scan("pack", code)
++            assertNull(vm.state.value.error)
++            assertNull(vm.state.value.pendingKiz)
++            assertEquals(expected, vm.state.value.kizResult)
++        }
++        coVerify(exactly = cases.size) { service.commitKiz(any()) }
+     }
+     @Test fun `box technical QR resolves its exact order without marking gates`() = runTest {
+         val box = FbsBox("box", 1, "BOX")
+-- 
+2.39.2 (Apple Git-143)
+

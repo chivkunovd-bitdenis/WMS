@@ -1,0 +1,13 @@
+# WMS-401 — distinguish saved KIZ from marketplace verification
+
+The deployed response contract was read directly from Git source `c3aa4dfaccbc99c6d58cf9e5a864bc248cc8ae3f`. `_ok_commit_row` returns literal `message="ok"`; the WB branch of `_commit_one_kiz_pair` returns `None`, so a successful WB response currently has `meta_status=null`. The mobile code previously displayed any non-null message first, hiding the structured status behind the word `ok`. The current mobile workspace DTO does not include metadata verdicts, so this small fix does not claim to read a later WB verdict from that DTO.
+
+Mobile commit `30d8e52c656296cb71a2e315a80d1268d1b382cc`, based on the QR fix `3b198e7c81ca13f7980c45565170fc25ba9e6bbf`, changes only the successful result text and its tests. The text distinguishes acceptance, permission without checking, ongoing checking, unconfirmed transmission, rejection and replacement. Missing, unknown or future status values say “КИЗ сохранён. Результат проверки WB неизвестен.” They do not say that WB accepted the code. The server's success/error contract, refresh, retries, pending scan cleanup and navigation are unchanged; no additional gate was introduced.
+
+The actual ViewModel commit flow was tested with literal `message="ok"` and ten outcomes, including null and an unrecognized future status. The tests also verify that every result remains actionable without new errors or pending-scan gates. The complete targeted `FbsViewModelTest` suite passed 17/17, with no failures, errors or skips. This run includes the preceding QR and date regression cases.
+
+One combined debug APK was assembled after both QR and result-text changes: `/Users/deniscivkunov/Projects/WMS/outputs/wms401-android-20260909/WMS-TSD-FBS-30d8e52-debug.apk`. It is 45,350,978 bytes, SHA256 `1a89635dcc3fadc48143ff9fc1597fa9b679be128ae8d0ac5bc06dba2fe0b907`. The build and tests completed successfully in 23 seconds. `apksigner verify --print-certs` confirmed the existing Android Debug certificate SHA256 `e343ab0cccc6284b271a72da42a67b14a0f0893d92b9ca461f1cac3d0be1aeb6`.
+
+The APK and final source SHA were handed to mobile_resume for the real screen and technical-QR checks. The author did not operate the AVD, deploy backend changes or run another Opus review. The mobile checkout is committed and clean. Only the safe incremental patch and evidence are published here; complete mobile Git history is not published. Final APK acceptance remains pending the separate mobile run.
+
+Evidence: [safe patch](artifacts/wms401-kiz-result-fix-20260909/mobile-kiz-result-fix.patch), [targeted tests](artifacts/wms401-kiz-result-fix-20260909/targeted-tests.xml), [APK proof](artifacts/wms401-kiz-result-fix-20260909/build-proof.json).

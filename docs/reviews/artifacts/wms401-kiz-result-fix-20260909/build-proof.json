@@ -1,0 +1,20 @@
+{
+  "source_sha": "30d8e52c656296cb71a2e315a80d1268d1b382cc",
+  "base_sha": "3b198e7c81ca13f7980c45565170fc25ba9e6bbf",
+  "includes_date_fix": "e2d43b5cc7817bf5be164b53ef9e2ef723c4f718",
+  "includes_box_qr_fix": "3b198e7c81ca13f7980c45565170fc25ba9e6bbf",
+  "verified_at_utc": "2026-09-09T11:50:51.125430+00:00",
+  "apk": "/Users/deniscivkunov/Projects/WMS/outputs/wms401-android-20260909/WMS-TSD-FBS-30d8e52-debug.apk",
+  "apk_bytes": 45350978,
+  "apk_sha256": "1a89635dcc3fadc48143ff9fc1597fa9b679be128ae8d0ac5bc06dba2fe0b907",
+  "variant": "debug",
+  "debug_certificate_sha256": "e343ab0cccc6284b271a72da42a67b14a0f0893d92b9ca461f1cac3d0be1aeb6",
+  "targeted_tests": {
+    "tests": 17,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "apk_live_tested": false,
+  "safe_patch_sha256": "d08be9231a95f5abd59eb32e41f617f3e41d50bc644f33a01ef3f4b7601724a9"
+}
