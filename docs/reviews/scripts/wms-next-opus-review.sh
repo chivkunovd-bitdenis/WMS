@@ -19,7 +19,7 @@ test -s tmp/wms-next-frozen.diff
 test -s "$request"
 test ! -e tmp/wms-next-opus-result.json
 
-claude -p --resume e4e0a5b1-2d0b-42bc-8dd9-3b919ef15f6b \
+claude -p \
   --model claude-opus-4-7 --effort max \
   --tools Read,Grep,Glob --allowedTools Read,Grep,Glob \
   --permission-mode dontAsk --no-chrome --disable-slash-commands \
