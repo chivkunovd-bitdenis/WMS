@@ -194,7 +194,10 @@ export function FfInventorySnapshotScreen({
                   Общий остаток
                 </TableCell>
                 <TableCell align="right" width={130}>
-                  FBS-пул
+                  {/* WMS-187: пользовательская колонка не называется
+                      «FBS-пул» — по решению владельца это направление
+                      резерва, а не отдельная сущность. */}
+                  Резерв на FBS
                 </TableCell>
                 <TableCell align="right" width={190}>
                   Резервы/направления

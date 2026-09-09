@@ -913,8 +913,11 @@ export function SellerProductsStockScreen({
                     >
                       {direction.name}
                     </Typography>
+                    {/* WMS-187: снимаем термин «FBS-пул» из пользовательских
+                        подписей. Направление FBS остаётся признаком, а сам
+                        блок называется «Резервы». */}
                     <Typography variant="caption" color="text.secondary">
-                      {direction.is_fbs ? 'FBS-пул' : 'Резерв/набор'} · {direction.quantity} шт
+                      {direction.is_fbs ? 'Резерв на FBS' : 'Резерв/набор'} · {direction.quantity} шт
                     </Typography>
                     {direction.comment ? (
                       <Typography

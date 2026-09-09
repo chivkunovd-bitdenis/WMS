@@ -1891,8 +1891,13 @@ export function FfProductsCatalogScreen({
                           >
                             {direction.name}
                           </Typography>
+                          {/* WMS-187: старая формулировка «FBS-пул» осталась
+                              единственным местом, где всплывал этот термин.
+                              По решению владельца весь блок называется
+                              «Резервы»; направление FBS отличается своим
+                              признаком, а не отдельной сущностью. */}
                           <Typography variant="caption" color="text.secondary">
-                            {direction.is_fbs ? 'FBS-пул' : 'Резерв/набор'} · {direction.quantity} шт
+                            {direction.is_fbs ? 'Резерв на FBS' : 'Резерв/набор'} · {direction.quantity} шт
                           </Typography>
                           {direction.comment ? (
                             <Typography
@@ -2017,7 +2022,7 @@ export function FfProductsCatalogScreen({
             {deleteTarget ? (
               <Typography variant="body2" color="text.secondary">
                 {deleteTarget.direction.is_fbs
-                  ? `Направление "${deleteTarget.direction.name}" на ${deleteTarget.direction.quantity} шт будет удалено из FBS-пула.`
+                  ? `Направление "${deleteTarget.direction.name}" на ${deleteTarget.direction.quantity} шт будет снято с резерва на FBS.`
                   : `Направление "${deleteTarget.direction.name}" на ${deleteTarget.direction.quantity} шт будет удалено. Эти ${deleteTarget.direction.quantity} шт снова станут свободным FBO-остатком, если не заняты другими операциями.`}
               </Typography>
             ) : null}
