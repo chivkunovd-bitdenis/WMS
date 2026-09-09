@@ -1,0 +1,14 @@
+{
+  "verified_at_utc": "2026-09-09T11:12:42.848279+00:00",
+  "source_sha": "aa7de3de8a965d1088ec44db1bb5f41a766d9dc5",
+  "deployment_id": "a4ec12eb-3607-40e9-813f-36f9e2195d66",
+  "deployment_status": "SUCCESS",
+  "source_count": 428,
+  "runtime_count": 428,
+  "missing": [],
+  "extra": [],
+  "mismatches": [],
+  "fbs_picking_service_sha256": "672f9bedca10e6fd1713e7d8f5638ebde462df1ea7d5f1148e2918a9c836adbf",
+  "health_response": "HTTP/2 200 \ncontent-type: application/json\ndate: Wed, 09 Sep 2026 11:12:42 GMT\nserver: railway-hikari\nx-railway-request-id: b-WeOdoPSdySKBjY6WHkDg\ncontent-length: 15\nx-hikari-trace: zrh1.3dmv\nx-railway-edge: zrh1\n\n{\"status\":\"ok\"}",
+  "pass": true
+}
