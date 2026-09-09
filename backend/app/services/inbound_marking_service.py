@@ -6,7 +6,6 @@ MarkingCode.status remains the warehouse lifecycle used by FBS/printing.
 
 from __future__ import annotations
 
-import asyncio
 import io
 import json
 import logging
@@ -32,15 +31,16 @@ from app.models.marking_code import (
     MarkingReprintRequest,
 )
 from app.models.product import Product
+from app.services import true_api_marking_check as true_api
 from app.services.inbound_intake_service import (
     RECEIVING_STATUSES,
     InboundIntakeError,
     effective_actual_qty,
 )
 from app.services.marking_code_service import extract_gtin_from_cis
+from app.services.seller_marking_credentials_service import get_cz_token_for_seller
 
 JOB_TYPE = "inbound_marking_check"
-CHECK_URL = "https://mobile.api.crpt.ru/mobile/check"
 
 
 def _meta(event: MarkingCodeEvent) -> dict[str, Any]:
@@ -397,43 +397,6 @@ async def delete_code(
     await session.commit()
 
 
-def interpret_check(data: Any) -> dict[str, Any]:
-    result: dict[str, Any] = {
-        "status": "unavailable",
-        "reason": "Честный знак не подтвердил статус. Повторите проверку.",
-        "outer_status": None,
-        "checked_at": datetime.now(UTC).isoformat(),
-    }
-    if not isinstance(data, dict):
-        return result
-    outer = data.get("outerStatus")
-    resolved = data.get("codeResolveData")
-    resolved = resolved if isinstance(resolved, dict) else {}
-    result["outer_status"] = outer if isinstance(outer, str) else None
-    if data.get("codeFounded") is False or data.get("status") == "not_found_dm":
-        result.update(status="problem", reason="Код не найден в Честном знаке")
-    elif resolved.get("verified") is False:
-        result.update(status="problem", reason="Криптоподпись кода не подтверждена")
-    elif resolved.get("isBlocked") is True:
-        result.update(status="problem", reason="Код заблокирован в Честном знаке")
-    elif (
-        outer == "INTRODUCED"
-        and data.get("checkResult") is True
-        and resolved.get("verified") is True
-    ):
-        result.update(status="introduced", reason="Код введён в оборот")
-    elif outer in {"APPLIED", "EMITTED", "RETIRED", "WRITTEN_OFF", "DISAGGREGATED"}:
-        reason = {
-            "APPLIED": "Код нанесён, но не введён в оборот",
-            "EMITTED": "Код выпущен, но не введён в оборот",
-            "RETIRED": "Код выведен из оборота",
-            "WRITTEN_OFF": "Код списан",
-            "DISAGGREGATED": "Код расформирован",
-        }[outer]
-        result.update(status="problem", reason=reason)
-    return result
-
-
 async def schedule_check(
     session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID, *, force: bool = False
 ) -> uuid.UUID | None:
@@ -502,43 +465,52 @@ async def _run_check_job(job_id: uuid.UUID) -> None:
                     await session.commit()
                     return
                 await session.commit()
-            for event_id in event_ids:
-                async with SessionLocal() as session:
-                    event = await session.get(MarkingCodeEvent, event_id)
-                    if event is None or (_meta(event).get("cz_check") or {}).get("status") not in {
-                        None,
-                        "pending",
-                    }:
-                        continue
-                    code = await session.get(MarkingCode, event.code_id)
-                    if code is None:
-                        continue
-                    code_text = code.cis_code
-                try:
-                    response = await client.post(CHECK_URL, json={"code": code_text})
-                    response.raise_for_status()
-                    check = interpret_check(response.json())
-                except (httpx.HTTPError, ValueError):
-                    check = interpret_check(None)
-                    check["reason"] = "Честный знак недоступен. Повторите проверку позже."
-                async with SessionLocal() as session:
-                    event = await session.scalar(
-                        select(MarkingCodeEvent)
-                        .where(MarkingCodeEvent.id == event_id)
-                        .with_for_update()
+            async with SessionLocal() as session:
+                rows = (await session.execute(
+                    select(MarkingCodeEvent.id, MarkingCode.cis_code, MarkingCode.seller_id)
+                    .join(MarkingCode, MarkingCode.id == MarkingCodeEvent.code_id)
+                    .where(
+                        MarkingCodeEvent.id.in_(event_ids),
+                        MarkingCodeEvent.tenant_id == tenant_id,
+                        MarkingCode.tenant_id == tenant_id,
                     )
-                    job = await session.get(BackgroundJob, job_id)
-                    if job is None or job.status != "running":
-                        return
-                    if event is None:
-                        continue
-                    meta = _meta(event)
-                    if (meta.get("cz_check") or {}).get("status") not in {None, "pending"}:
-                        continue
-                    meta["cz_check"] = check
-                    event.meta_json = json.dumps(meta)
-                    await session.commit()
-                await asyncio.sleep(0.25)
+                )).all()
+                by_seller: dict[uuid.UUID, list[tuple[uuid.UUID, str]]] = {}
+                for event_id, code_text, seller_id in rows:
+                    by_seller.setdefault(seller_id, []).append((event_id, code_text))
+                tokens = {
+                    seller_id: await get_cz_token_for_seller(session, tenant_id, seller_id)
+                    for seller_id in by_seller
+                }
+            for seller_id, entries in by_seller.items():
+                for offset in range(0, len(entries), true_api.BATCH_SIZE):
+                    batch = entries[offset:offset + true_api.BATCH_SIZE]
+                    checks = await true_api.check_batch(
+                        client, [code for _, code in batch], tokens[seller_id]
+                    )
+                    async with SessionLocal() as session:
+                        # Same lock order as schedule_check: a replacement owns its
+                        # pending snapshots before an expired worker can write back.
+                        await _request(session, tenant_id, request_id, lock=True)
+                        job = await session.get(BackgroundJob, job_id, populate_existing=True)
+                        if job is None or job.status != "running":
+                            return
+                        events = (await session.scalars(
+                            select(MarkingCodeEvent)
+                            .where(
+                                MarkingCodeEvent.id.in_([event_id for event_id, _ in batch]),
+                                MarkingCodeEvent.tenant_id == tenant_id,
+                            )
+                            .with_for_update()
+                        )).all()
+                        by_event = dict(batch)
+                        for event in events:
+                            meta = _meta(event)
+                            if (meta.get("cz_check") or {}).get("status") not in {None, "pending"}:
+                                continue
+                            meta["cz_check"] = checks[by_event[event.id]]
+                            event.meta_json = json.dumps(meta)
+                        await session.commit()
 
 
 async def run_check_job(job_id: uuid.UUID) -> None:
@@ -564,7 +536,7 @@ async def run_check_job(job_id: uuid.UUID) -> None:
                 for event in await _attachments(session, req):
                     meta = _meta(event)
                     if (meta.get("cz_check") or {}).get("status") == "pending":
-                        meta["cz_check"] = interpret_check(None)
+                        meta["cz_check"] = true_api.unavailable()
                         event.meta_json = json.dumps(meta)
                 await session.commit()
             except Exception:

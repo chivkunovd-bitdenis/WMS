@@ -32,8 +32,10 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import { FfUnloadPickPage } from '../ff/unload-pick/FfUnloadPickPage'
 import CloseIcon from '@mui/icons-material/Close'
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlined'
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined'
 import MoreVertOutlinedIcon from '@mui/icons-material/MoreVertOutlined'
@@ -53,6 +55,7 @@ import {
   buildFbsPickingListPrintHtml,
   fbsAccessibleStageIndex,
   fbsErrorText,
+  fbsSameStickerScan,
   fbsOrderMarkingAccepted,
   fbsMarkingPresentation,
   fbsBoxEditingDisabled,
@@ -166,13 +169,13 @@ function kizTail(order: FbsWorkspace['orders'][number]): string | null {
   return state?.value_tail ?? null
 }
 
-function hasOperatorKiz(order: FbsWorkspace['orders'][number]) {
+function hasOperatorKiz(order: FbsWorkspace['orders'][number], includeRejected = false) {
   return order.metadata.states.some(
     (state) =>
       state.kind === 'sgtin' &&
       state.source === 'operator' &&
       state.status !== 'missing' &&
-      state.status !== 'rejected',
+      (includeRejected || state.status !== 'rejected'),
   )
 }
 
@@ -352,6 +355,7 @@ export function FfFbsSupplyWorkspace({
   const [kizScanNotice, setKizScanNotice] = useState<string | null>(null)
   const [kizConfirmTarget, setKizConfirmTarget] = useState<FbsKizLookup | null>(null)
   const kizScanInputRef = useRef<HTMLInputElement | null>(null)
+  const kizSelectedStickerRef = useRef('')
   const [addOrdersOpen, setAddOrdersOpen] = useState(false)
   const [addableOrders, setAddableOrders] = useState<FbsWorklistOrder[]>([])
   const [addableSelected, setAddableSelected] = useState<Set<string>>(() => new Set())
@@ -381,6 +385,7 @@ export function FfFbsSupplyWorkspace({
             visualStage(next.stage),
           ))
         }
+        return next
       } catch (cause) {
         if (!silent) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось загрузить поставку.')
       } finally {
@@ -416,6 +421,7 @@ export function FfFbsSupplyWorkspace({
     setAddableOrders([])
     setAddableSelected(new Set())
     setKizScanActive(null)
+    kizSelectedStickerRef.current = ''
     setKizScanValue('')
     setKizScanBusy(false)
     setKizScanError(null)
@@ -582,6 +588,7 @@ export function FfFbsSupplyWorkspace({
       setKizScanError(null)
       setKizScanHints([])
       setKizScanDebugOpen(false)
+      setKizScanNotice(null)
       try {
         const found = await lookupFbsOrderBySticker(token, authHeaders, workspace.supply.id, raw)
         if (!found.can_bind) {
@@ -592,6 +599,7 @@ export function FfFbsSupplyWorkspace({
         // Lookup can see an order added after this list was opened.
         // Render its row before selecting it and scrolling into view.
         if (!workspace.orders.some((order) => order.id === found.order_id)) await load(true)
+        kizSelectedStickerRef.current = raw
         if (found.needs_confirmation) setKizConfirmTarget(found)
         else setKizScanActive(found)
         setKizScanValue('')
@@ -613,6 +621,7 @@ export function FfFbsSupplyWorkspace({
       setKizScanError(null)
       setKizScanHints([])
       setKizScanDebugOpen(false)
+      setKizScanNotice(null)
       try {
         const validated = await validateFbsKiz(token, authHeaders, kizScanActive.order_id, raw)
         setKizScanHints(validated.hints)
@@ -644,8 +653,18 @@ export function FfFbsSupplyWorkspace({
             : `Код сохранён · Ozon проверяет · ${fbsKizOrderNumber(kizScanActive)}`
           : null)
         setKizScanActive(null)
+        kizSelectedStickerRef.current = ''
         setKizScanValue('')
-        await load(true)
+        const refreshed = await load(true)
+        if (!isOzonSupply) {
+          const savedOrder = refreshed?.orders.find((order) => order.id === kizScanActive.order_id)
+          const verdict = fbsMarkingPresentation(savedOrder?.metadata.states.find((state) => state.kind === 'sgtin'), providerName)
+          if (verdict.label) {
+            const text = `${verdict.label}${verdict.reason ? `: ${verdict.reason}` : ''} · ${fbsKizOrderNumber(kizScanActive)}`
+            if (verdict.tone === 'error') setKizScanError({ text, debug: null })
+            else setKizScanNotice(text)
+          }
+        }
         // Native scanner typing can bring the input back into view. After the
         // updated row renders, return to the order whose KIZ was just saved.
         window.requestAnimationFrame(() => {
@@ -663,16 +682,41 @@ export function FfFbsSupplyWorkspace({
     [kizScanActive, token, authHeaders, refocusKizInput, load, isOzonSupply, providerName],
   )
 
+  // WMS-403: restore the original reset from 2ef9c0d3; it only clears scanner UI.
+  const dropKizScanActive = useCallback(() => {
+    setKizScanActive(null)
+    kizSelectedStickerRef.current = ''
+    setKizScanValue('')
+    setKizScanError(null)
+    setKizScanHints([])
+    setKizScanNotice(null)
+    setKizScanDebugOpen(false)
+    setKizConfirmTarget(null)
+    setKizConfirmValue(null)
+    refocusKizInput()
+  }, [refocusKizInput])
+
   const onKizScanEnter = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
-      if (event.key !== 'Enter' || kizScanBusy) return
+      if (kizScanBusy) return
+      if (event.key === 'Escape' && kizScanActive) {
+        event.preventDefault()
+        event.stopPropagation()
+        dropKizScanActive()
+        return
+      }
+      if (event.key !== 'Enter') return
       event.preventDefault()
       const raw = kizScanValue.replace(/[ \t\r\n\v\f]+$/, '')
       if (!raw) return
+      if (kizScanActive && fbsSameStickerScan(raw, kizSelectedStickerRef.current)) {
+        dropKizScanActive()
+        return
+      }
       if (kizScanActive) void scanKizCode(raw)
       else void scanKizSticker(raw)
     },
-    [kizScanBusy, kizScanValue, kizScanActive, scanKizCode, scanKizSticker],
+    [kizScanBusy, kizScanValue, kizScanActive, scanKizCode, scanKizSticker, dropKizScanActive],
   )
 
   const requestPrintBatch = async (orderIds?: string[], retryMissing = false) => {
@@ -1512,7 +1556,13 @@ export function FfFbsSupplyWorkspace({
   return (
     <Dialog
       open={open}
-      onClose={busy ? undefined : onClose}
+      onClose={busy ? undefined : (_event, reason) => {
+        if (reason === 'escapeKeyDown' && (kizScanActive || kizScanBusy)) {
+          if (!kizScanBusy) dropKizScanActive()
+          return
+        }
+        onClose()
+      }}
       maxWidth={false}
       fullScreen={false}
       slotProps={{ paper: { sx: { width: 'min(1500px, 98vw)', height: '94vh', m: 1 } } }}
@@ -1890,6 +1940,10 @@ export function FfFbsSupplyWorkspace({
                                 {providerName} № {fbsKizOrderNumber(kizScanActive)}
                               </Typography>
                             </Box>
+                            <Button size="small" startIcon={<CloseIcon fontSize="small" />} onClick={dropKizScanActive}
+                              disabled={kizScanBusy} data-testid="fbs-kiz-scan-reset">
+                              Сбросить
+                            </Button>
                           </Stack>
                         ) : null}
                       </Stack>
@@ -1985,7 +2039,7 @@ export function FfFbsSupplyWorkspace({
                             px: 2,
                             py: 1.25,
                             bgcolor: markingView.tone === 'error'
-                              ? 'error.light'
+                              ? (theme) => alpha(theme.palette.error.main, 0.08)
                               : kizRowActive ? 'info.light'
                                 : markingView.tone === 'success' ? 'success.light'
                                   : (printed ? 'action.hover' : 'background.paper'),
@@ -2021,6 +2075,12 @@ export function FfFbsSupplyWorkspace({
                             </Typography>
                             {markingView.label ? (
                               <Typography variant="caption" sx={{ display: 'block', color: markingColor }} data-testid="fbs-packing-marking-status">
+                                {markingView.tone === 'error' ? (
+                                  <Tooltip title={markingView.reason ?? markingView.label}>
+                                    <ErrorOutlineIcon fontSize="inherit" tabIndex={0} aria-label={markingView.reason ?? markingView.label}
+                                      sx={{ verticalAlign: 'text-bottom', mr: 0.5 }} data-testid="fbs-kiz-rejection-hint" />
+                                  </Tooltip>
+                                ) : null}
                                 {markingView.label}{markingView.reason ? `: ${markingView.reason}` : ''}
                               </Typography>
                             ) : null}
@@ -2053,16 +2113,24 @@ export function FfFbsSupplyWorkspace({
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
                               ЧЗ
                             </Typography>
-                            {tail ? (
-                              <Typography
-                                sx={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 15, color: markingColor }}
-                                data-testid="fbs-kiz-tail"
-                              >
-                                {tail}
-                              </Typography>
-                            ) : (
-                              <Typography sx={{ color: 'text.disabled', fontSize: 15 }}>—</Typography>
-                            )}
+                            <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center', justifyContent: 'flex-end' }}>
+                              {tail ? (
+                                <Typography
+                                  sx={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 15, color: markingColor }}
+                                  data-testid="fbs-kiz-tail"
+                                >
+                                  {tail}
+                                </Typography>
+                              ) : (
+                                <Typography sx={{ color: 'text.disabled', fontSize: 15 }}>—</Typography>
+                              )}
+                              {!isOzonSupply && hasOperatorKiz(order, true) ? (
+                                <IconButton size="small" disabled={busy || kizScanBusy} aria-label="Отменить КИЗ"
+                                  onClick={() => setKizUndoOrderId(order.id)} data-testid="fbs-kiz-undo-inline">
+                                  <CloseIcon fontSize="small" />
+                                </IconButton>
+                              ) : null}
+                            </Stack>
                             {isOzonSupply && czStates.length > 0 ? <>
                               <Typography variant="caption" sx={{ display: 'block', color: czRejected ? 'error.main' : 'text.secondary' }} data-testid="fbs-ozon-kiz-status">
                                 {czRejected ? 'Ozon не подтвердил коды' : `Принято Ozon: ${acceptedCz}${czReady ? ' · все коды' : ''}`}
@@ -2563,7 +2631,7 @@ export function FfFbsSupplyWorkspace({
         >
           Перепечатать
         </MenuItem>
-        {reprintOrder && hasOperatorKiz(reprintOrder) ? (
+        {reprintOrder && hasOperatorKiz(reprintOrder, !isOzonSupply) ? (
           <MenuItem
             data-testid="fbs-kiz-undo"
             onClick={() => {

@@ -57,7 +57,15 @@ def test_fbs_pick_write_models_match_marketplace_unload() -> None:
         (FbsPickAllocationOut, MarketplaceUnloadPickAllocationOut),
     )
     for fbs_model, unload_model in pairs:
-        assert _schema_without_title(fbs_model) == _schema_without_title(unload_model)
+        fbs_schema = _schema_without_title(fbs_model)
+        if fbs_model is FbsPickScanBody:
+            # WMS-401: mobile FBS may target one order; the shared scanner
+            # still sends exactly the original marketplace-unload payload.
+            order_schema = fbs_schema["properties"].pop("order_id")
+            assert order_schema["default"] is None
+            assert "order_id" not in fbs_schema.get("required", [])
+            assert FbsPickScanBody(barcode="123").order_id is None
+        assert fbs_schema == _schema_without_title(unload_model)
 
 
 async def _active_pick_count(supply_id: uuid.UUID) -> int:

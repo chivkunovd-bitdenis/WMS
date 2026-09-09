@@ -17,13 +17,27 @@ from app.models.inventory_movement import InventoryMovement
 from app.models.marking_code import MarkingCode, MarkingCodeEvent
 from app.models.product import Product
 from app.models.seller import Seller
+from app.models.seller_marking_credentials import SellerMarkingCredentials
 from app.services import fbs_marking_service as wb
 from app.services import inbound_intake_service as intake
 from app.services import inbound_marking_service as svc
 from app.services import marking_code_service as marking
+from app.services import true_api_marking_check as true_api
+from app.services.integration_fernet import encrypt_secret
 from tests.test_inbound_intake_service_be01 import _auth_ids, _setup_request
 
 CIS = "010460123456789021SERIAL1234567\x1d91KEY1\x1d92SIGNATURE+/="
+
+
+@pytest.fixture(autouse=True)
+def no_real_check_pacing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(true_api._PACING, "remaining_seconds", lambda _key: 0.0)
+
+
+def _info_response(url: str, codes: list[str], status: str = "APPLIED") -> httpx.Response:
+    return httpx.Response(200, request=httpx.Request("POST", url), json=[
+        {"cisInfo": {"requestedCis": code, "cis": code, "status": status}} for code in codes
+    ])
 
 
 async def _setup(client: httpx.AsyncClient) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID]:
@@ -36,6 +50,9 @@ async def _setup(client: httpx.AsyncClient) -> tuple[uuid.UUID, uuid.UUID, uuid.
         session.add(seller)
         await session.flush()
         product.seller_id = seller.id
+        session.add(SellerMarkingCredentials(
+            tenant_id=tenant, seller_id=seller.id, cz_token_enc=encrypt_secret("test-cz-token")
+        ))
         await session.commit()
         req = await intake.begin_receiving(session, tenant, req_id, actor_user_id=user)
         line_id = req.lines[0].id
@@ -107,49 +124,6 @@ async def test_capacity_and_existing_lifecycle_are_not_overwritten(
         assert await session.scalar(select(func.count(MarkingCode.id))) == 2
 
 
-@pytest.mark.parametrize(
-    ("payload", "status", "reason"),
-    [
-        (
-            {
-                "outerStatus": "INTRODUCED",
-                "checkResult": True,
-                "codeResolveData": {"verified": True},
-            },
-            "introduced",
-            "введён",
-        ),
-        ({"outerStatus": "APPLIED", "checkResult": False}, "problem", "не введён"),
-        (
-            {
-                "codeFounded": False,
-                "checkResult": False,
-                "status": "not_found_dm",
-                "codeResolveData": {"valid": True, "verified": False},
-            },
-            "problem",
-            "не найден",
-        ),
-        (
-            {
-                "outerStatus": "INTRODUCED",
-                "checkResult": True,
-                "codeResolveData": {"verified": False},
-            },
-            "problem",
-            "Криптоподпись",
-        ),
-        ({"outerStatus": "INTRODUCED", "checkResult": False}, "unavailable", "не подтвердил"),
-        ({"outerStatus": "NEW_FUTURE_STATUS", "checkResult": True}, "unavailable", "не подтвердил"),
-        ([], "unavailable", "не подтвердил"),
-    ],
-)
-def test_check_contract_is_conservative(payload: Any, status: str, reason: str) -> None:
-    result = svc.interpret_check(payload)
-    assert result["status"] == status
-    assert reason in result["reason"]
-
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize("offline", [False, True])
 async def test_background_check_is_idempotent_and_has_no_stock_effect(
@@ -168,13 +142,15 @@ async def test_background_check_is_idempotent_and_has_no_stock_effect(
     calls = []
 
     async def fake_post(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
-        calls.append(kwargs["json"]["code"])
+        if url.endswith("/cises/info"):
+            return _info_response(url, kwargs["json"])
+        calls.extend(kwargs["json"]["codes"])
         if offline:
             raise httpx.ConnectError("offline")
         return httpx.Response(
             200,
             request=httpx.Request("POST", url),
-            json={"outerStatus": "APPLIED", "checkResult": False},
+            json={"result": True, "quantity": len(kwargs["json"]["codes"])},
         )
 
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
@@ -519,16 +495,6 @@ async def test_concurrent_receipt_scan_serializes_capacity_and_duplicate(
         assert await session.scalar(select(func.count(InventoryMovement.id))) == 0
 
 
-@pytest.mark.parametrize("resolved", [None, {}, {"verified": None}, {"verified": 1}])
-def test_green_requires_explicit_verified_true(resolved: Any) -> None:
-    assert (
-        svc.interpret_check(
-            {"outerStatus": "INTRODUCED", "checkResult": True, "codeResolveData": resolved}
-        )["status"]
-        == "unavailable"
-    )
-
-
 @pytest.mark.asyncio
 async def test_failed_job_is_persisted_when_receipt_was_deleted(
     async_client: httpx.AsyncClient,
@@ -562,15 +528,13 @@ async def test_automatic_check_preserves_finished_answers_manual_check_rechecks(
     calls = []
 
     async def fake_post(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
-        calls.append(kwargs["json"]["code"])
+        if url.endswith("/cises/info"):
+            return _info_response(url, kwargs["json"], "INTRODUCED")
+        calls.extend(kwargs["json"]["codes"])
         return httpx.Response(
             200,
             request=httpx.Request("POST", url),
-            json={
-                "outerStatus": "INTRODUCED",
-                "checkResult": True,
-                "codeResolveData": {"verified": True},
-            },
+            json={"result": True, "quantity": len(kwargs["json"]["codes"])},
         )
 
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
@@ -652,7 +616,9 @@ async def test_deletion_during_check_and_rescan_are_drained_without_stuck_job(
     calls = []
 
     async def fake_post(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
-        calls.append(kwargs["json"]["code"])
+        if url.endswith("/cises/info"):
+            return _info_response(url, kwargs["json"])
+        calls.extend(kwargs["json"]["codes"])
         if len(calls) == 1:
             async with SessionLocal() as session:
                 await svc.delete_code(session, tenant, req, uuid.UUID(first["id"]))
@@ -669,7 +635,7 @@ async def test_deletion_during_check_and_rescan_are_drained_without_stuck_job(
         return httpx.Response(
             200,
             request=httpx.Request("POST", url),
-            json={"outerStatus": "APPLIED", "checkResult": False},
+            json={"result": True, "quantity": len(kwargs["json"]["codes"])},
         )
 
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
@@ -762,10 +728,12 @@ async def test_printed_pool_inspection_and_removal_preserve_original_code_and_hi
         job_id = await svc.schedule_check(session, tenant, req)
 
     async def fake_post(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
+        if url.endswith("/cises/info"):
+            return _info_response(url, kwargs["json"])
         return httpx.Response(
             200,
             request=httpx.Request("POST", url),
-            json={"outerStatus": "APPLIED", "checkResult": False},
+            json={"result": True, "quantity": len(kwargs["json"]["codes"])},
         )
 
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
