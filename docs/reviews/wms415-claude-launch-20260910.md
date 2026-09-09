@@ -75,3 +75,35 @@ Root независимо проверил в 21:36 UTC: все пять пра�
 | `mobile-lane` | `/Users/deniscivkunov/Projects/WMS/.worktrees/wms401-mobile-followup` + `/Users/deniscivkunov/Projects/WMS/.worktrees/wms397-mobile` | `feat/wms401-mobile-followup` (WMS) + `codex/wms397-mobile` (mobile) | APK 0.1.8 собран и загружен; далее — swap `update.json`, in-app 0.1.7→0.1.8 verify на эмуляторе, WMS-401 note, узкий mirror patch; затем **WMS-363** как отдельный следующий срез (root корректировка: жёсткий `marketplace=wb` — доказательство пробела, а не повод отменить задачу). |
 
 Каждый повторный подагент явно обязан `pwd && git branch --show-current && git status --short` в начале каждого шага, коммитить только на свою ветку, никогда не переходить в чужой worktree, никогда не удалять и не откатывать чужие правки. При сомнении — пауза с концретным вопросом, не молчаливый пропуск задачи.
+
+## Контроль root 22:02 UTC, снимок хода
+
+Свежий /usage: **81% used weekly, 19% remaining**; порог 7% не достигнут, режим 5 параллельных исполнителей продолжен. Максимум одновременно — пять (WMS-416 подтверждает). Coord docs снова можно и нужно обновлять; прежнее ограничение снято в `aadac0b6`.
+
+### Готовые срезы (push подтверждён на origin)
+
+| Полоса | Ветка | HEAD | Результат |
+|---|---|---|---|
+| stock-lane | `feat/wms338-stock-min-formula` | `453bb87d` | 7 коммитов; 5 не-операторских мутаций `FbsBindingStockPool.quantity` удалены; 6 новых регрессий + 8 обновлённых легаси + 119-тестовый расширенный прогон зелёные; WMS-060 фронт `/ff/fbs-stock` больше не сбрасывает units_mode; WMS-384 общий предикат через `product_has_rule_predicate()`; grep подтвердил единственный оставшийся writer — операторский `set_rule_for_products`. Не проверено: реальные WB/Ozon endpoints, фронтовый tsc в worktree, ручной браузер. Требуется Astra 6 high ревью перед выпуском. |
+| merge-lane | `feat/wms349-merge-service` | `5a3f40c5` | Атомарный `SELECT Product … FOR UPDATE` по обеим карточкам в возрастании id ДО чтения балансов; `_sum_inventory_balances` c `with_for_update()`; 5 новых + 14 существующих merge-тестов зелёные. inventory_service.py не тронут. **Не проверено физически:** live PostgreSQL race-replay (тесты используют SQLite и recompile Select под PG диалектом для доказательства порядка `FOR UPDATE`); задача поставлена в очередь координатора перед Astra-ревью. |
+| mobile-lane WMS-401/412 | `feat/wms401-mobile-followup` | `a6afbf4e` (WMS Git) + `9a83ef6` (mobile Git, локальный, без push) | Финальный APK 0.1.8-wms401-orders-first, SHA256 `ccb8d7ea…`, 45281897 байт залит на релиз `tsd-preview`; update.json переключён; **живое доказательство сетевого обновления**: `adb dumpsys package ru.wms.tsd` на emulator-5554 показал versionCode=9, versionName=0.1.8-wms401-orders-first, lastUpdateTime=2026-09-10 00:48:32, firstInstallTime=2026-07-07 00:22:00 — в-place update без переустановки, `adb install` не вызывался. WMS-412 механизм сохранён и работает. Узкий безопасный mirror patch положен в `docs/reviews/artifacts/wms401-mobile-20260910/` (top-level `mobile/` в основном репо gitignored — та же конвенция, что у прежнего `7d4347e0`). Не выполнено намеренно: 6-минутное воспроизведение белого экрана, ручная UI-проверка PIN/URL/документа после обновления, WMS-363. |
+| chat-lane pass 1 | `feat/wms397-chat-mvp` | `1d0dfc70` | Инфраструктура готова: модели+alembic, сервис с идемпотентностью main-chat, REST endpoints (list/get/main/messages/edit/attachments), 9 pytest зелёных, ruff/mypy/tsc/build чистые, экран/диалог/composer/AttachedDocCard/ChatOpenButton. **НЕ ЗАВЕРШЕНО по владельческому спеку** (root 22:02 UTC): AttachedDocCard кликает на список, а не на конкретный документ; ChatOpenButton вставлен только в FBS supply, входы из заказа/отгрузки/приёмки отсутствуют; UI создания extra-чата и добавления участников нет; браузерная проверка Ctrl+V/Cmd+V и reload со вторым пользователем не выполнена. Запущен `chat-completion` на той же ветке для закрытия этих gap'ов. Формально «DONE от worker» не считать окончанием. |
+
+### Текущие полосы (5 из 5)
+
+- `warehouse-lane` (WMS-062 ✓ committed as `5fee5efd`; WMS-153/155 partial in progress; хвост подрезан до WMS-177 + 055/182/185/186/187/190; 056/179/184 переданы во вторую очередь).
+- `pair1-lane` (WMS-111/112, `feat/wms111-wb-cancel-return`).
+- `pair2-lane` (WMS-121/122, `feat/wms121-supply-identity`).
+- `pair3-lane` (WMS-056/325, `feat/wms056-audit-trail`).
+- `chat-completion` (закрытие семантических gap'ов WMS-397/399 на `feat/wms397-chat-mvp`).
+
+### Очередь на слоты по мере освобождения
+
+Приоритет: WMS-363 (обязательная current queue после WMS-401, не откладывается за десятку) → Pair 4 (WMS-179/184) → Pair 5 (WMS-270/377). Pair 3 уже запущен. Warehouse-lane закончив WMS-177 переходит только к 055/182/185/186/187/190; не назначать ему 056/179/184.
+
+### Перед Astra 6 high ревью
+
+- WMS-349: обеспечить один целевой live PostgreSQL replay гонки merge (два параллельных merge пересекающихся product set), прежде чем передавать срез на ревью.
+- Stock-lane: подтвердить фронтовый tsc + build в чистом окружении или у warehouse-lane (когда её worktree установит node_modules).
+
+`/usage` следующее чтение — по расписанию монитора root. При падении ниже 7% координатор действует по §6 handoff.
