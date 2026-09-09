@@ -7,7 +7,7 @@ from collections import Counter
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field, replace
 
-from sqlalchemy import select, update
+from sqlalchemy import ColumnElement, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
@@ -22,6 +22,24 @@ from app.services.marketplace_seller_lock_service import marketplace_seller_lock
 # оператору не нужны, а круглые числа он читает не считая.
 PERCENT_STEP = 10
 PERCENT_MAX = 100
+
+
+def product_has_rule_predicate() -> ColumnElement[bool]:
+    """WMS-384. SQL-предикат «у товара есть хоть какое-то правило публикации».
+
+    Раньше та же самая проверка `or_(percent IS NOT NULL, units_mode)` жила
+    отдельными копиями в `fbs_stock_sync_service` и `fbs_warehouse_binding_service`.
+    Второй счётчик одного смысла: разойдутся, вопрос только когда. Здесь один
+    предикат, к которому все обращаются по имени. Семантики callsite это НЕ
+    меняет: сам отбор такой же грубый, как был. Точная проверка «правило
+    задано и с положительным значением» остаётся в `_has_rule` — она сложнее и
+    требует per-binding pool_rows, поэтому её нельзя выразить одной колонкой.
+
+    Не расширять этот предикат новыми условиями (published_now, флаги площадок
+    и т.д.): у каждого места вызова свой смысл — served, stock_sync_enabled,
+    per-marketplace publication flag — и они добавляются в WHERE отдельно.
+    """
+    return or_(Product.fbs_percent.is_not(None), Product.fbs_units_mode.is_(True))
 
 
 class FbsStockRuleError(Exception):

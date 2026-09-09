@@ -25,7 +25,10 @@ from app.models.fbs_stock_sync_item import (
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller import Seller
-from app.services.fbs_stock_rule_service import publish_amounts_for_binding
+from app.services.fbs_stock_rule_service import (
+    product_has_rule_predicate,
+    publish_amounts_for_binding,
+)
 from app.services.wildberries_client import (
     MARKETPLACE_STOCKS_PATH,
     MarketplaceStockAmount,
@@ -184,10 +187,10 @@ async def _load_seller_products(
     stmt = select(Product).where(
         Product.tenant_id == tenant_id,
         Product.seller_id == seller_id,
-        # Товар в режиме штук доли не имеет вовсе — отбор только по `fbs_percent`
-        # его бы молча выбросил из публикации, и оператор увидел бы «включили, а
-        # ничего не уехало».
-        or_(Product.fbs_percent.is_not(None), Product.fbs_units_mode.is_(True)),
+        # WMS-384: единый предикат наличия правила. Товар в режиме штук доли не
+        # имеет вовсе — отбор только по `fbs_percent` его бы молча выбросил из
+        # публикации.
+        product_has_rule_predicate(),
     )
     res = await session.execute(stmt)
     return list(res.scalars().all())
