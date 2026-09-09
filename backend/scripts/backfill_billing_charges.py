@@ -27,15 +27,17 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import uuid
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
+from app.models.fbs_order import FbsOrder
 from app.models.operation_fact import OperationFact, OperationFactLine
 from app.models.tenant import Tenant
 from app.services.billing_ledger_service import (
@@ -45,6 +47,7 @@ from app.services.billing_ledger_service import (
     product_billing_lines,
     record_operational_charge,
 )
+from app.services.fbs_order_billing_service import confirmed_order_handover_dates
 
 MOSCOW = ZoneInfo("Europe/Moscow")
 
@@ -76,8 +79,13 @@ async def _facts(
     query = (
         select(OperationFact)
         .where(
-            OperationFact.occurred_at >= start,
-            OperationFact.occurred_at < end,
+            or_(
+                and_(OperationFact.occurred_at >= start, OperationFact.occurred_at < end),
+                and_(
+                    OperationFact.billable_service_code == "fbs_order",
+                    OperationFact.marketplace == "wb",
+                ),
+            ),
             OperationFact.seller_id.is_not(None),
             OperationFact.billable_service_code.is_not(None),
             OperationFact.reversal_of_id.is_(None),
@@ -134,12 +142,34 @@ async def main() -> None:
 
         facts = await _facts(session, start=start, end=end, tenant_id=args.tenant_id)
         print(f"операций за период: {len(facts)}")
+        wb_fact_ids = {
+            fact.document_id for fact in facts
+            if fact.billable_service_code == "fbs_order" and fact.marketplace == "wb"
+        }
+        wb_orders = list(await session.scalars(
+            select(FbsOrder).where(FbsOrder.id.in_(wb_fact_ids))
+        ))
+        handover_dates: dict[uuid.UUID, datetime] = {}
+        for own_tenant_id in {order.tenant_id for order in wb_orders}:
+            handover_dates.update(
+                await confirmed_order_handover_dates(session, own_tenant_id, wb_orders)
+            )
 
         for fact in facts:
             service = str(fact.billable_service_code)
             if service not in CHARGEABLE_SERVICES:
                 unpriced[f"услуга начисляется не по документу: {service}"] += 1
                 continue
+            moment = fact.occurred_at
+            if service == "fbs_order" and fact.marketplace == "wb":
+                handover = handover_dates.get(fact.document_id)
+                if handover is None:
+                    unpriced["WB: нет подтверждённой передачи через WMS"] += 1
+                    continue
+                if not start <= handover < end:
+                    unpriced["WB: дата передачи вне выбранного периода"] += 1
+                    continue
+                moment = handover
             lines = list(
                 (
                     await session.scalars(
@@ -173,8 +203,9 @@ async def main() -> None:
                         source=fact.source_kind,
                         service_code=charged_service,
                         quantity=Decimal(int(fact.item_quantity or 0)),
-                        occurred_at=fact.occurred_at,
+                        occurred_at=moment,
                         performer_id=None,
+                        respect_billing_start=service not in {"fbs_order", "marketplace_outbound"},
                         warehouse_id=fact.warehouse_id,
                         # Без строк ставка ищется только в старой таблице
                         # тарифов, а матрица пишет в новую: начисление вышло бы
