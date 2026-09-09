@@ -29,6 +29,7 @@ from app.models.fbs_order import FbsOrder
 from app.models.marketplace_unload import MarketplaceUnloadRequest
 from app.models.operation_fact import OperationFact
 from app.models.seller import Seller
+from app.services.billing_invoice_service import invoiced_ledger_ids
 from app.services.billing_ledger_service import (
     BillingLedgerError,
     OperationalBillingLine,
@@ -248,17 +249,11 @@ async def _storage_line(
     # Хранение — ежесуточное начисление, и повторно взять за него деньги нельзя
     # ни при каком сценарии. До 03.09.2026 эта дыра была недостижима только
     # потому, что галочка хранения вообще не доезжала до запроса.
-    invoiced = set(
-        (
-            await session.scalars(
-                select(BillingInvoiceV2Source.billing_ledger_entry_id).where(
-                    BillingInvoiceV2Source.tenant_id == tenant_id,
-                    BillingInvoiceV2Source.billing_ledger_entry_id.in_(
-                        {entry.id for entry in entries}
-                    ),
-                )
-            )
-        ).all()
+    invoiced = await invoiced_ledger_ids(
+        session,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        entry_ids={entry.id for entry in entries},
     )
     entries = [entry for entry in entries if entry.id not in invoiced]
     if not entries:
@@ -517,23 +512,12 @@ async def _preview_selected_operations(
     # История отменённого счёта остаётся неизменной, но не занимает операции.
     # Проверяем всю выбранную цепочку; частичный счёт вместо запрошенного
     # молча не собираем.
-    already_invoiced = await session.scalar(
-        select(BillingInvoiceV2Source.id)
-        .join(
-            BillingInvoiceV2Line,
-            BillingInvoiceV2Source.invoice_line_id == BillingInvoiceV2Line.id,
-        )
-        .join(BillingInvoiceV2, BillingInvoiceV2Line.invoice_id == BillingInvoiceV2.id)
-        .where(
-            BillingInvoiceV2Source.tenant_id == tenant_id,
-            BillingInvoiceV2Line.tenant_id == tenant_id,
-            BillingInvoiceV2.tenant_id == tenant_id,
-            BillingInvoiceV2.status != "cancelled",
-            BillingInvoiceV2Source.billing_ledger_entry_id.in_(selected),
-        )
-        .limit(1)
-    )
-    if already_invoiced is not None:
+    if await invoiced_ledger_ids(
+        session,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        entry_ids=set(selected),
+    ):
         raise BillingInvoiceV2Error("selected_source_already_invoiced")
     grouped: dict[tuple[str, bool], list[BillingLedgerEntry]] = {}
     for entry in selected.values():
@@ -627,9 +611,7 @@ async def create_invoice_v2(
 ) -> BillingInvoiceV2:
     if not idempotency_key.strip():
         raise BillingInvoiceV2Error("idempotency_key_required")
-    if request.get("creation_mode") == "selected_operations" and (
-        request.get("selected_root_ids") or request.get("selected_sources")
-    ):
+    if request.get("creation_mode") == "selected_operations":
         # Оба запроса одного селлера проходят проверку последовательно, до
         # записи счёта и до проверки повторного ключа. В PostgreSQL блокировка
         # живёт до commit вызывающего API; следующий запрос увидит его счёт.
