@@ -294,11 +294,17 @@ export async function createCountContainer(
   token: string,
   countId: string,
   kind: 'pallet' | 'box' | 'cargo_place',
+  // WMS-153: если оператор выбрал ячейку — тара сразу ложится в неё, а не «на
+  // склад без адреса». Без выбранной ячейки поведение прежнее, для обратной
+  // совместимости с диалогом наполнения короба и мобильным ТСД.
+  cellId?: string | null,
 ): Promise<InventoryCount> {
+  const payload: { kind: 'pallet' | 'box' | 'cargo_place'; cell_id?: string } = { kind }
+  if (cellId) payload.cell_id = cellId
   const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/containers`), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
-    body: JSON.stringify({ kind }),
+    body: JSON.stringify(payload),
   })
   if (!res.ok) throw new Error(await readApiErrorMessage(res))
   return toCount((await res.json()) as ApiDetail)

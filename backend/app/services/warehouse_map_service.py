@@ -1285,6 +1285,7 @@ async def create_sorting_object(
     *,
     kind: Literal["pallet", "box", "cargo_place"],
     inbound_request_id: uuid.UUID | None = None,
+    storage_location_id: uuid.UUID | None = None,
     commit: bool = True,
 ) -> dict[str, str | None]:
     await _assert_warehouse(session, tenant_id, warehouse_id)
@@ -1296,12 +1297,25 @@ async def create_sorting_object(
             or request.warehouse_id != warehouse_id
         ):
             raise WarehouseMapError("inbound_request_not_found")
+    if storage_location_id is not None:
+        # WMS-153: тара должна попадать сразу в выбранную ячейку, а не в общий
+        # склад. Проверяем, что ячейка принадлежит тому же складу и тенанту —
+        # иначе оператор случайно создаст тару чужого склада.
+        location = await session.get(StorageLocation, storage_location_id)
+        if (
+            location is None
+            or location.tenant_id != tenant_id
+            or location.warehouse_id != warehouse_id
+            or location.deleted_at is not None
+        ):
+            raise WarehouseMapError("storage_location_not_found")
     if kind == "pallet":
         try:
             pallet = await pallet_service.create_pallet(
                 session,
                 tenant_id,
                 warehouse_id=warehouse_id,
+                storage_location_id=storage_location_id,
                 inbound_request_id=inbound_request_id,
                 commit=commit,
             )
@@ -1320,6 +1334,7 @@ async def create_sorting_object(
             session,
             tenant_id,
             warehouse_id=warehouse_id,
+            storage_location_id=storage_location_id,
             inbound_request_id=inbound_request_id,
             container_kind=kind,
         )
