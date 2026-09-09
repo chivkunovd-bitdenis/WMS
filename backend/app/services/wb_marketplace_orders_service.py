@@ -563,6 +563,7 @@ async def _apply_wb_row_to_existing(
             wb_status,
             supplier_status=supplier_status,
             actor_user_id=None,
+            row=row,
         )
     apply_wb_meta_requirements_to_order(existing, row)
     if preserve_unmapped_warehouse:
@@ -713,7 +714,15 @@ async def _apply_wb_status_to_order(
     *,
     supplier_status: str | None = None,
     actor_user_id: uuid.UUID | None,
+    row: dict[str, Any] | None = None,
 ) -> None:
+    """Применить статус WB к заказу. `row` нужен только для WMS-111:
+
+    если это отмена и заказ уже был передан, из сырого ответа WB попробуем
+    достать честный момент отмены. WB в открытой части API его не отдаёт,
+    но код читает поле имеющимся именем — как только WB добавит его, всё
+    заработает без правки.
+    """
     normalized_wb = (
         wb_status.strip().lower() if isinstance(wb_status, str) and wb_status.strip() else None
     )
@@ -757,6 +766,15 @@ async def _apply_wb_status_to_order(
             actor_user_id=actor_user_id,
         )
         await _release_reservation(session, order)
+        # WMS-111: отмена после подтверждённой передачи автоматически заводит
+        # документ возврата ровно один раз. Проверку «была ли передача» и
+        # идемпотентность делает сам helper — здесь только доставляем строку WB,
+        # чтобы честно достать `cancelledAt`, если WB когда-нибудь его добавит.
+        from app.services.fbs_cancel_return_document_service import (
+            maybe_create_cancel_return_document,
+        )
+
+        await maybe_create_cancel_return_document(session, order, row=row)
         return
     if normalized_wb == "sold":
         order.status = FBS_ORDER_STATUS_DONE
@@ -988,7 +1006,7 @@ async def sync_order_statuses(
             continue
         await _apply_wb_status_to_order(
             session, order, wb_status, supplier_status=supplier_status,
-            actor_user_id=actor_user_id,
+            actor_user_id=actor_user_id, row=status_row,
         )
         updated += 1
     return updated
