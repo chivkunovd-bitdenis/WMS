@@ -20,7 +20,7 @@ from app.models.fbs_order import FbsOrder, FbsOrderMarking, FbsOrderReservation
 from app.models.fbs_supply import FbsSupply
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
-from app.models.marking_code import MarkingCode
+from app.models.marking_code import MarkingCode, MarkingCodeEvent
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.services.wildberries_errors import WildberriesClientError
@@ -271,12 +271,18 @@ async def test_selected_tape_reuses_code_and_clear_never_changes_inventory(
     assert states[requested[1]][0]["value_tail"] is not None
     assert deleted == [orders[0].wb_order_id, orders[1].wb_order_id]
     async with SessionLocal() as session:
-        assert (
-            await session.scalar(
-                select(func.count()).select_from(MarkingCode).where(MarkingCode.status == "void")
-            )
-            == 1
+        # WMS-084: a confirmed operator detach releases the binding, not the
+        # physical label. The code must also stay out of the available print pool.
+        detached = await session.scalar(
+            select(MarkingCode).where(MarkingCode.cis_code == _cis("USED085"))
         )
+        assert detached is not None
+        assert detached.status == "applied"
+        assert detached.source == "pool"
+        assert detached.packaging_task_line_id is None
+        assert await session.scalar(
+            select(FbsOrderMarking.id).where(FbsOrderMarking.marking_code_id == detached.id)
+        ) is None
         assert await session.scalar(select(func.count()).select_from(MarkingCode)) == 5
     assert await inventory_snapshot() == before
 
@@ -375,6 +381,7 @@ async def test_clear_rejected_code_keeps_code_in_history(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     headers, _supply_id, orders = await seed_selection(async_client)
+    before = await inventory_snapshot()
     async with SessionLocal() as session:
         marking = (await session.execute(select(FbsOrderMarking))).scalar_one()
         marking.meta_status = "rejected"
@@ -391,13 +398,17 @@ async def test_clear_rejected_code_keeps_code_in_history(
     assert response.status_code == 204, response.text
     async with SessionLocal() as session:
         assert await session.scalar(select(func.count()).select_from(FbsOrderMarking)) == 0
-        assert (
-            await session.scalar(
-                select(func.count())
-                .select_from(MarkingCode)
-                .where(
-                    MarkingCode.status == "void",
-                )
-            )
-            == 1
+        detached = await session.scalar(
+            select(MarkingCode).where(MarkingCode.cis_code == _cis("USED085"))
         )
+        assert detached is not None
+        assert detached.status == "applied"
+        assert detached.source == "pool"
+        assert detached.packaging_task_line_id is None
+        event = (await session.execute(
+            select(MarkingCodeEvent).where(MarkingCodeEvent.code_id == detached.id)
+        )).scalar_one()
+        assert event.event_type == "voided"
+        assert event.reason == "отмена оператором"
+        assert event.packaging_task_line_id == orders[0].packaging_task_line_id
+    assert await inventory_snapshot() == before
