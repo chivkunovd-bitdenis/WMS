@@ -2570,18 +2570,12 @@ export function FfInboundRequestView({
                         '& td': { px: 1.25 },
                         '& td:first-of-type': { pl: 1 },
                         '& td:last-of-type': { pr: 1 },
-                        ...(matchesExpected
-                          ? {
-                              backgroundColor: (theme) =>
-                                alpha(theme.palette.success.main, 0.12),
-                            }
-                          : null),
-                        ...(hasDiscrepancy
-                          ? {
-                              backgroundColor: (theme) =>
-                                alpha(theme.palette.error.main, 0.08),
-                          }
-                          : null),
+                        // WMS-182: убираем заливку по статусу совпадения/расхождения.
+                        // Расхождение остаётся только красным текстом в своём
+                        // столбце — правило владельца от 17.08.2026. Подсветка
+                        // последнего скана и ошибок ЧЗ — отдельные визуальные
+                        // сигналы разных задач (WMS-394/395/396/403), они
+                        // сохраняются.
                         ...(isLatestScannedInboundLine(ln.id, lastScannedLineId)
                           ? {
                               backgroundColor: (theme) => alpha(theme.palette.success.main, 0.16),
