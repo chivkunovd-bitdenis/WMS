@@ -1,0 +1,89 @@
+{
+  "checkedAt": "2026-09-09T00:32:16.659Z",
+  "site": "https://web-production-9e7c1.up.railway.app",
+  "before": {
+    "id": "05cd913b-7f50-4f64-9c45-d1b124737166",
+    "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+    "document_number": "ПРИЕМ-26-09-09-1",
+    "status": "sorting",
+    "lines": [
+      {
+        "id": "c2890d7a-ddbf-4a31-b029-c50e864de1a2",
+        "product_id": "1f0cefc8-5224-407d-9882-66f5aa1008c4",
+        "expected_qty": 2,
+        "actual_qty": 2,
+        "effective_actual_qty": null
+      },
+      {
+        "id": "dcdd199e-a9de-4f59-b3f7-efdd1bbf3b30",
+        "product_id": "95aebe2c-5824-4ee7-aa61-8e5e0d609b91",
+        "expected_qty": 2,
+        "actual_qty": 2,
+        "effective_actual_qty": null
+      }
+    ]
+  },
+  "after": {
+    "id": "05cd913b-7f50-4f64-9c45-d1b124737166",
+    "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+    "document_number": "ПРИЕМ-26-09-09-1",
+    "status": "sorting",
+    "lines": [
+      {
+        "id": "c2890d7a-ddbf-4a31-b029-c50e864de1a2",
+        "product_id": "1f0cefc8-5224-407d-9882-66f5aa1008c4",
+        "expected_qty": 2,
+        "actual_qty": 2,
+        "effective_actual_qty": null
+      },
+      {
+        "id": "dcdd199e-a9de-4f59-b3f7-efdd1bbf3b30",
+        "product_id": "95aebe2c-5824-4ee7-aa61-8e5e0d609b91",
+        "expected_qty": 2,
+        "actual_qty": 2,
+        "effective_actual_qty": null
+      }
+    ]
+  },
+  "quantitiesUnchanged": true,
+  "check": {
+    "checking": false,
+    "items": [
+      {
+        "id": "5235ee4f-867f-4f6b-85ed-ac532d11d9ee",
+        "article": "EMU-KIZ-REQUIRED",
+        "cis_code": "010200000000001221QA39609090001\u001d91ABCD\u001d92QA396-TEST-NOT-FOR-SALE",
+        "cz_status": "unavailable",
+        "cz_reason": "У селлера не настроен токен Честного знака. Проверьте интеграцию.",
+        "checked_at": "2026-09-09T00:32:14.770712+00:00"
+      },
+      {
+        "id": "278be20b-837f-4632-a8cf-2ecd5296ff67",
+        "article": "EMU-NORMAL-B2C",
+        "cis_code": "010200000000001121QA39609090002\u001d91ABCD\u001d92QA396-TEST-NOT-FOR-SALE",
+        "cz_status": "unavailable",
+        "cz_reason": "У селлера не настроен токен Честного знака. Проверьте интеграцию.",
+        "checked_at": "2026-09-09T00:32:14.770721+00:00"
+      }
+    ]
+  },
+  "uiRows": [
+    {
+      "text": "010200000000001221QA39609090001␝91ABCD␝92QA396-TEST-NOT-FOR-SALE\t\n\nНе удалось проверить",
+      "background": "rgba(211, 47, 47, 0.12)"
+    },
+    {
+      "text": "010200000000001121QA39609090002␝91ABCD␝92QA396-TEST-NOT-FOR-SALE\t\n\nНе удалось проверить",
+      "background": "rgba(211, 47, 47, 0.12)"
+    }
+  ],
+  "tooltip": "У селлера не настроен токен Честного знака. Проверьте интеграцию.",
+  "downloadName": "Проблемные коды ЧЗ.xlsx",
+  "deleteButtons": 0,
+  "writes": [
+    {
+      "method": "POST",
+      "path": "/api/operations/inbound-intake-requests/05cd913b-7f50-4f64-9c45-d1b124737166/marking-codes/check"
+    }
+  ]
+}

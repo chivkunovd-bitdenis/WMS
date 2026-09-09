@@ -471,7 +471,7 @@ async def test_metadata_get_does_not_overwrite_a_new_binding_after_http(
                 )
             ).all()
         )
-        assert statuses == {"void": 1, "printed": 1}
+        assert statuses == {"applied": 1, "printed": 1}
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,72 @@
+{
+  "checkedAt": "2026-09-09T01:12:41.786630+00:00",
+  "gitSha": "40b722a4d2d0ff1a6a5899cdb2713a98d1265bc5",
+  "expectedPythonFiles": 428,
+  "services": {
+    "api": {
+      "image": "sha256:899942fc049625f72e9132d762699329c6c724485d49e7d5a5a488cc59618936",
+      "state": "running",
+      "restarts": 0,
+      "startedAt": "2026-09-09T01:04:37.875779505Z",
+      "pythonFiles": 428,
+      "mismatch": [],
+      "extra": []
+    },
+    "celery_worker": {
+      "image": "sha256:b780422e35c339c38e070c9f0252878a4cb51464357b5ef9ab045c3fc6a059df",
+      "state": "running",
+      "restarts": 0,
+      "startedAt": "2026-09-09T01:04:37.870983108Z",
+      "pythonFiles": 428,
+      "mismatch": [],
+      "extra": []
+    },
+    "celery_beat": {
+      "image": "sha256:a0bf9cbea1357a213b9402ed4d529fe17643cb097d3221582ae87fb413090ff9",
+      "state": "running",
+      "restarts": 0,
+      "startedAt": "2026-09-09T01:04:38.199077393Z",
+      "pythonFiles": 428,
+      "mismatch": [],
+      "extra": []
+    },
+    "web": {
+      "image": "sha256:b95fe7b52a647d6f2eee6ef2910cbac24f994838050d482899b3a72069733eb4",
+      "state": "running",
+      "restarts": 0,
+      "startedAt": "2026-09-09T01:04:38.17002871Z"
+    }
+  },
+  "migration": "20260908_0257",
+  "http": [
+    {
+      "url": "https://wms.sellerfocus.pro/api/health",
+      "status": 200,
+      "seconds": 0.033,
+      "body": "{\"status\":\"ok\"}"
+    },
+    {
+      "url": "https://wms.sellerfocus.pro/app/ff/fbs",
+      "status": 200,
+      "seconds": 0.022
+    },
+    {
+      "url": "https://wms.sellerfocus.pro/seller",
+      "status": 200,
+      "seconds": 0.076
+    }
+  ],
+  "allCodeMatches": true,
+  "allRunning": true,
+  "webImageMatchesBuilt": true,
+  "logWindow": {
+    "from": "2026-09-09T01:04:30Z",
+    "untilApprox": "2026-09-09T01:14:00Z",
+    "apiErrorLines": 0,
+    "beatErrorLines": 0,
+    "workerErrorLines": 12,
+    "workerError": "WB HTTP401 for two sellers in three autopoll cycles; each produces two log entries",
+    "traceback": 0,
+    "preexistingCauseProven": false
+  }
+}

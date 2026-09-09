@@ -26,12 +26,14 @@ from app.models.marking_code import (
     EVENT_REPLACED,
     EVENT_REPRINTED,
     EVENT_SHIPPED,
+    EVENT_VOIDED,
     REPRINT_STATUS_APPROVED,
     REPRINT_STATUS_PENDING,
     REPRINT_STATUS_REJECTED,
     STATUS_APPLIED,
     STATUS_AVAILABLE,
     STATUS_DEFECTIVE,
+    STATUS_INTRODUCED,
     STATUS_PRINTED,
     STATUS_REPLACED,
     STATUS_RESERVED,
@@ -3700,6 +3702,33 @@ async def restore_truncated_pool_cis_codes(
         "by_outcome": counts,
         "rows": rows,
     }
+
+
+MARKING_OPERATOR_CANCEL_REASON = "отмена оператором"
+
+
+async def is_unbound_cancelled_wb_code(session: AsyncSession, code: MarkingCode) -> bool:
+    """An operator detached a physical label; it never returns to the print pool.
+
+    Mutating callers must hold the code row lock until the new binding is saved.
+    Old voided codes and arbitrary unbound applied codes are never resurrected.
+    """
+    from app.models.fbs_order import FbsOrderMarking
+
+    if (code.status not in {STATUS_APPLIED, STATUS_INTRODUCED}
+            or code.packaging_task_line_id is not None):
+        return False
+    if await session.scalar(select(FbsOrderMarking.id).where(
+        FbsOrderMarking.tenant_id == code.tenant_id,
+        FbsOrderMarking.marking_code_id == code.id,
+    ).limit(1)) is not None:
+        return False
+    return await session.scalar(select(MarkingCodeEvent.id).where(
+        MarkingCodeEvent.tenant_id == code.tenant_id,
+        MarkingCodeEvent.code_id == code.id,
+        MarkingCodeEvent.event_type == EVENT_VOIDED,
+        MarkingCodeEvent.reason == MARKING_OPERATOR_CANCEL_REASON,
+    ).limit(1)) is not None
 
 
 async def is_unbound_received_code(session: AsyncSession, code: MarkingCode) -> bool:

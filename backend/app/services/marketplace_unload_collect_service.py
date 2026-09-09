@@ -257,6 +257,8 @@ async def collect_into_box(
     require_open_box: bool = False,
     allow_over_plan: bool = False,
     actor_user_id: uuid.UUID | None,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> CollectResult:
     if quantity < 1:
         raise MarketplaceUnloadPickError("invalid_quantity")
@@ -312,6 +314,12 @@ async def collect_into_box(
             MarketplaceUnloadPickAllocation.request_id == request_id,
             MarketplaceUnloadPickAllocation.product_id == product_id,
             MarketplaceUnloadPickAllocation.storage_location_id == effective_location_id,
+            MarketplaceUnloadPickAllocation.container_kind.is_(None)
+            if container_kind is None
+            else MarketplaceUnloadPickAllocation.container_kind == container_kind,
+            MarketplaceUnloadPickAllocation.container_id.is_(None)
+            if container_id is None
+            else MarketplaceUnloadPickAllocation.container_id == container_id,
         )
         .with_for_update()
     )
@@ -322,7 +330,7 @@ async def collect_into_box(
 
     await inventory_service.lock_stock_product(session, tenant_id, product_id)
     available = await available_pick_source_quantity(
-        session, tenant_id, product_id, effective_location_id,
+        session, tenant_id, product_id, effective_location_id, container_kind, container_id,
         marketplace_unload_request_id=request_id,
     )
     if available < quantity:
@@ -337,6 +345,8 @@ async def collect_into_box(
             quantity=quantity,
             marketplace_unload_request_id=request_id,
             actor_user_id=actor_user_id,
+            container_kind=container_kind,
+            container_id=container_id,
         )
     except ValueError as exc:
         if str(exc) == "insufficient stock":
@@ -352,6 +362,8 @@ async def collect_into_box(
             request_id=request_id,
             product_id=product_id,
             storage_location_id=effective_location_id,
+            container_kind=container_kind,
+            container_id=container_id,
             quantity=new_pick,
         )
         session.add(alloc)
@@ -375,7 +387,7 @@ async def collect_into_box(
         box_line.quantity = int(box_line.quantity) + quantity
 
     mu_svc.enter_collecting_if_needed(req)
-    await session.commit()
+    await session.flush()
 
     picked = await picked_qty_for_product(session, request_id, product_id)
     stmt_alloc = (
@@ -395,14 +407,6 @@ async def collect_into_box(
     )
     res_line = await session.execute(stmt_line)
     line_loaded = res_line.scalar_one()
-
-    from app.services import packaging_task_service as pkg_svc
-
-    pkg_task = await pkg_svc.get_task_for_unload(session, tenant_id, request_id)
-    if pkg_task is not None:
-        await pkg_svc.sync_lines_from_pick_allocations(
-            session, tenant_id, pkg_task, reload_result=False
-        )
 
     return CollectResult(
         box_line=line_loaded,
