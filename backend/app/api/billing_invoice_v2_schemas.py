@@ -19,6 +19,12 @@ class ManualInvoiceV2DraftIn(BaseModel):
     lines: list[ManualInvoiceV2LineIn] = Field(min_length=1, max_length=10)
 
 
+class SelectedInvoiceSourceIn(BaseModel):
+    source_type: Literal["fbs_order", "marketplace_unload"]
+    source_id: uuid.UUID
+    service_code: Literal["fbs_order", "marketplace_outbound", "packing"]
+
+
 class SelectedOperationsInvoiceV2DraftIn(BaseModel):
     creation_mode: Literal["selected_operations"]
     seller_id: uuid.UUID
@@ -26,7 +32,9 @@ class SelectedOperationsInvoiceV2DraftIn(BaseModel):
     date_to: date
     # Пустой список допустим, когда выбрана только строка хранения. Отказ на
     # «не выбрано вообще ничего» даёт сервис: он видит обе части сразу.
-    selected_root_ids: list[uuid.UUID] = Field(default_factory=list, max_length=100)
+    selected_root_ids: list[uuid.UUID] = Field(default_factory=list, max_length=10000)
+    selected_sources: list[SelectedInvoiceSourceIn] = Field(default_factory=list, max_length=10000)
+    final_amount: str | None = None
     # Хранение берётся из ночных начислений за период, пересчёта больше нет.
     include_storage: bool = False
     # Строки, которых нет в начислениях: короба, доставка, разовая работа. Их
@@ -45,7 +53,7 @@ class InvoiceV2LineOut(BaseModel):
     id: uuid.UUID
     description: str
     unit_price_kopecks: int | None
-    total_amount_kopecks: int
+    total_amount_kopecks: int | None
     sort_order: int
 
 
@@ -58,7 +66,8 @@ class InvoiceV2Out(BaseModel):
     period_end: date | None
     status: Literal["issued", "cancelled"]
     issued_at: datetime | None
-    total_amount_kopecks: int
+    total_amount_kopecks: int | None
+    calculated_amount_kopecks: int | None = None
     ff_profile: dict[str, str | None]
     seller_profile: dict[str, str | None]
     lines: list[InvoiceV2LineOut]

@@ -27,7 +27,7 @@ type PreviewLine = {
   id: string
   description: string
   unit_price_kopecks: number | null
-  total_amount_kopecks: number
+  total_amount_kopecks: number | null
   sort_order: number
 }
 
@@ -40,7 +40,8 @@ type InvoicePreview = {
   period_end: string | null
   status: 'issued' | 'cancelled'
   issued_at: string | null
-  total_amount_kopecks: number
+  total_amount_kopecks: number | null
+  calculated_amount_kopecks?: number | null
   ff_profile?: ProfileSnapshot
   seller_profile?: ProfileSnapshot
   lines: PreviewLine[]
@@ -88,6 +89,7 @@ function rejectionMessage(detail: unknown): string {
 }
 
 function previewToOpened(preview: InvoicePreview, sellerName: string): OpenedInvoice {
+  if (preview.total_amount_kopecks === null) throw new Error('Нет ставки')
   return {
     id: preview.id,
     origin: 'v2',
@@ -228,6 +230,9 @@ export function FfBillingInvoiceCreate({
   const [extraOpen, setExtraOpen] = useState(false)
   const [extraLines, setExtraLines] = useState<ManualLine[]>([])
   const [preview, setPreview] = useState<InvoicePreview | null>(null)
+  const [finalAmount, setFinalAmount] = useState('')
+  const [appliedFinalAmount, setAppliedFinalAmount] = useState('')
+  const [previewBody, setPreviewBody] = useState<Record<string, unknown> | null>(null)
   const [issued, setIssued] = useState<InvoicePreview | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -257,7 +262,11 @@ export function FfBillingInvoiceCreate({
     seller_id: sellerId,
     date_from: dateFrom,
     date_to: dateTo,
-    selected_root_ids: selectedRootIds,
+    selected_root_ids: selectedRootIds.filter((id) => !id.startsWith('source:')),
+    selected_sources: selectedRootIds.filter((id) => id.startsWith('source:')).map((id) => {
+      const [, source_type, source_id, service_code] = id.split(':')
+      return { source_type, source_id, service_code }
+    }),
     ...(includeStorage ? { include_storage: true } : {}),
     manual_lines: extraLines
       .filter((line) => line.description.trim() && line.amount.trim())
@@ -278,6 +287,9 @@ export function FfBillingInvoiceCreate({
     try {
       const result = await request('invoices-v2/preview', body)
       setPreview(result)
+      setPreviewBody(body as Record<string, unknown>)
+      setFinalAmount('')
+      setAppliedFinalAmount('')
       setIssued(null)
       // Ключ идемпотентности живёт от предпросмотра до сохранения: повторное
       // нажатие «Сохранить» не должно порождать второй счёт.
@@ -310,7 +322,7 @@ export function FfBillingInvoiceCreate({
     setBusy(true)
     setError(null)
     try {
-      const body = preview.creation_mode === 'manual' ? manualBody() : selectedBody()
+      const body = { ...previewBody, ...(finalAmount.trim() ? { final_amount: finalAmount.trim() } : {}) }
       const result = await request('invoices-v2', body, idempotencyKey)
       setIssued(result)
       // Добавленные строки принадлежат выставленному счёту: следующий счёт
@@ -324,9 +336,26 @@ export function FfBillingInvoiceCreate({
     }
   }
 
+  const applyFinalAmount = async () => {
+    if (!previewBody) return
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await request('invoices-v2/preview', { ...previewBody,
+        ...(finalAmount.trim() ? { final_amount: finalAmount.trim() } : {}) })
+      setPreview(result)
+      setAppliedFinalAmount(finalAmount.trim())
+      setIdempotencyKey(randomId())
+    } catch (reason) {
+      setError((reason as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const print = () => {
     const source = issued ?? preview
-    if (!source) return
+    if (!source || source.total_amount_kopecks === null) return
     const printWindow = window.open('', '_blank')
     if (!printWindow) return
     printWindow.document.write(buildInvoicePrintHtml(previewToOpened(source, previewSellerName)))
@@ -455,7 +484,7 @@ export function FfBillingInvoiceCreate({
             {issued ? null : (
               <PrimaryAction
                 onClick={() => void save()}
-                disabledReason={busy ? 'Счёт уже сохраняется' : undefined}
+                disabledReason={busy ? 'Счёт уже сохраняется' : finalAmount.trim() !== appliedFinalAmount ? 'Примените итоговую сумму к предпросмотру' : shown?.total_amount_kopecks === null ? 'Нет ставки — задайте итог вручную или настройте тариф' : undefined}
                 data-testid="billing-invoice-save"
               >
                 Сохранить
@@ -476,7 +505,7 @@ export function FfBillingInvoiceCreate({
             <Typography>
               {issued
                 ? 'Счёт сохранён и виден на вкладке «Выставленные счета».'
-                : 'До сохранения это ровно тот документ, который будет сохранён.'}
+                : 'Исходный расчёт и ручная корректировка сохраняются отдельными строками.'}
             </Typography>
             <DataTable
               columns={[
@@ -491,7 +520,7 @@ export function FfBillingInvoiceCreate({
                   header: 'Сумма',
                   width: 160,
                   align: 'right' as const,
-                  render: (line: PreviewLine) => <MoneyCell minor={line.total_amount_kopecks} />,
+                  render: (line: PreviewLine) => line.total_amount_kopecks === null || line.description.includes('Нет ставки; сумма не рассчитана') ? <TextCell value="Нет ставки" /> : <MoneyCell minor={line.total_amount_kopecks} />,
                 },
               ]}
               rows={shown.lines}
@@ -501,8 +530,15 @@ export function FfBillingInvoiceCreate({
               empty={{ title: 'Строк нет' }}
             />
             <Typography sx={{ textAlign: 'right', fontWeight: 'bold' }}>
-              Итого: {formatMoney(shown.total_amount_kopecks)}
+              Итого: {shown.total_amount_kopecks === null ? 'Нет ставки — сумма не рассчитана' : formatMoney(shown.total_amount_kopecks)}
             </Typography>
+            {!issued && preview?.creation_mode === 'selected_operations' ? (
+              <Stack spacing={1}>
+                <MoneyInput label="Итоговая сумма вручную" value={finalAmount} onChange={setFinalAmount} testId="billing-invoice-final-amount" />
+                <SecondaryAction onClick={() => void applyFinalAmount()} disabledReason={busy ? 'Сумма пересчитывается' : undefined} data-testid="billing-invoice-apply-final">Применить итог</SecondaryAction>
+                <Typography variant="body2">Исходный расчёт сохранится. Разница будет отдельной строкой ручной корректировки. Если ставки нет, введённая сумма будет явно отмечена как ручная.</Typography>
+              </Stack>
+            ) : null}
             {error ? <ErrorNotice testId="billing-preview-error">{error}</ErrorNotice> : null}
           </Stack>
         ) : null}

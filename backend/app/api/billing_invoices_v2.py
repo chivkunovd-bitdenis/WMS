@@ -75,12 +75,16 @@ async def preview_billing_invoice_v2(
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
+    # Preview may calculate missing charges, but must never retain them.
+    savepoint = await session.begin_nested()
     try:
         return await preview_invoice_v2(
             session, tenant_id=user.tenant_id, request=body.model_dump(mode="json")
         )
     except BillingInvoiceV2Error as exc:
         raise _invoice_v2_error(exc) from exc
+    finally:
+        await savepoint.rollback()
 
 
 @router.post("/invoices-v2", response_model=InvoiceV2Out, status_code=status.HTTP_201_CREATED)

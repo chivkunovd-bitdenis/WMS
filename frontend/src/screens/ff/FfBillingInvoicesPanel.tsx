@@ -54,7 +54,7 @@ export type OpenedInvoice = {
   total_amount_kopecks: number
   ff_profile?: ProfileSnapshot
   seller_profile?: ProfileSnapshot
-  lines: Array<{ id: string; description: string; total_amount_kopecks: number }>
+  lines: Array<{ id: string; description: string; total_amount_kopecks: number | null }>
 }
 
 const profileFieldLabels: Record<string, string> = {
@@ -129,7 +129,7 @@ export function buildInvoicePrintHtml(invoice: OpenedInvoice): string {
     payer: (invoice.seller_profile ?? {}) as PrintProfile,
     lines: invoice.lines.map((line) => ({
       description: line.description,
-      amount: formatMoney(line.total_amount_kopecks),
+      amount: line.total_amount_kopecks === null ? 'Нет ставки' : formatMoney(line.total_amount_kopecks),
     })),
     total: formatMoney(invoice.total_amount_kopecks),
     totalKopecks: invoice.total_amount_kopecks,
@@ -162,7 +162,7 @@ type V2Invoice = {
   total_amount_kopecks: number
   ff_profile?: ProfileSnapshot
   seller_profile?: ProfileSnapshot
-  lines: Array<{ id: string; description: string; total_amount_kopecks: number }>
+  lines: Array<{ id: string; description: string; total_amount_kopecks: number | null }>
 }
 
 /** Свести старый счёт к общему виду: суммы там уже в копейках. */
@@ -519,7 +519,7 @@ export function FfBillingInvoicesPanel({
                   width: 160,
                   align: 'right' as const,
                   render: (line: OpenedInvoice['lines'][number]) => (
-                    <MoneyCell minor={line.total_amount_kopecks} />
+                    line.total_amount_kopecks === null ? <TextCell value="Нет ставки" /> : <MoneyCell minor={line.total_amount_kopecks} />
                   ),
                 },
               ]}
