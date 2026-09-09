@@ -2930,6 +2930,8 @@ export default function App() {
                   infoNotice={ffSuppliesNotice}
                   onDismissInfoNotice={() => setFfSuppliesNotice(null)}
                   token={token}
+                  chatAuthHeaders={authHeaders}
+                  currentUserId={me?.id ?? null}
                   addressStorageEnabled={me?.address_storage_enabled !== false}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
                   productPicklist={products.map((p) => ({
@@ -3665,6 +3667,8 @@ export default function App() {
                   addressStorageEnabled={me?.address_storage_enabled !== false}
                   onDirtyChange={setFfDocDirty}
                   onClose={closeFfDocument}
+                  chatAuthHeaders={authHeaders}
+                  currentUserId={me?.id ?? null}
                 />
               ) : (
                 <MuiTypography variant="body2" color="text.secondary">

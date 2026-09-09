@@ -60,6 +60,7 @@ import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintB
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { WbProductPickerDialog } from '../../components/WbProductPickerDialog'
 import { WmsDateField } from '../../components/WmsDateField'
+import { ChatOpenButton } from '../../components/chat/ChatOpenButton'
 import { OzonReturnActions, OzonReturnGroupRow, OzonReturnOrphanGroupRows, ReturnDefectiveQtyCell } from '../../components/OzonReturnDocumentUi'
 import { ozonReturnGroupAt, ozonReturnUnrepresentedGroups } from '../../components/ozonReturnPickerHelpers'
 import {
@@ -450,6 +451,12 @@ type Props = {
   onClose: () => void
   onDirtyChange?: (dirty: boolean) => void
   addressStorageEnabled?: boolean
+  // WMS-397/399 gap 1: chat entry point in the inbound doc toolbar. We accept
+  // the same function-shaped `authHeaders` used by ChatDialog so the doc view
+  // stays agnostic of the header format used elsewhere in this component
+  // (which is a plain object for local fetches).
+  chatAuthHeaders?: (token: string) => Record<string, string>
+  currentUserId?: string | null
 }
 
 export function FfInboundRequestView({
@@ -460,6 +467,8 @@ export function FfInboundRequestView({
   onClose,
   onDirtyChange,
   addressStorageEnabled = true,
+  chatAuthHeaders,
+  currentUserId = null,
 }: Props) {
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
 
@@ -2451,6 +2460,25 @@ export function FfInboundRequestView({
               >
                 Сохранить
               </Button>
+
+              {chatAuthHeaders && detail.seller_id ? (
+                <ChatOpenButton
+                  token={token}
+                  authHeaders={chatAuthHeaders}
+                  currentUserId={currentUserId}
+                  sellerId={detail.seller_id}
+                  sellerName={detail.seller_name ?? undefined}
+                  attachedDocument={{
+                    kind: 'inbound_intake',
+                    id: detail.id,
+                    title: displayDocumentNumber
+                      ? `Приёмка ${displayDocumentNumber}`
+                      : 'Приёмка',
+                    seller_id: detail.seller_id,
+                    seller_name: detail.seller_name ?? undefined,
+                  }}
+                />
+              ) : null}
 
               <Button variant="outlined" disabled={busy} onClick={handleClose} data-testid="ff-inbound-close">
                 Закрыть

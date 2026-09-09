@@ -25,18 +25,22 @@ const KIND_LABEL: Record<string, string> = {
 }
 
 function routeFor(kind: string, id: string, base: string): string | null {
-  // The chat card only jumps to routes we know exist in App.tsx today. If a
-  // kind lands here without a route we render it as a static card so the
-  // seller still sees the reference.
+  // WMS-397/399 gap 2: query keys match the parameter each screen already
+  // reads to auto-open the target document, so a click on the chat card lands
+  // on the specific doc, not the list. See:
+  //   * FBS supplies — FfFbsOrdersScreen reads ?supply_id=<id>.
+  //   * Marketplace-unload — FfSuppliesShipmentsPage reads ?open_mp=<id>.
+  //   * Inbound reception — FfInboundQueuePage reads ?open=<id> after this
+  //     patch (see the useEffect added there).
   switch (kind) {
     case 'fbs_order':
     case 'fbs_supply':
-      return `${base}/ff/fbs?open=${id}`
+      return `${base}/ff/fbs?supply_id=${id}`
     case 'inbound_intake':
-      return `${base}/ff/inbound?open=${id}`
+      return `${base}/ff/reception?open=${id}`
     case 'marketplace_unload':
     case 'outbound_shipment':
-      return `${base}/ff/mp-shipments?open=${id}`
+      return `${base}/ff/mp-shipments?open_mp=${id}`
     default:
       return null
   }
