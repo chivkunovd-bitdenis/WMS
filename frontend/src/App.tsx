@@ -3263,6 +3263,7 @@ export default function App() {
                   authHeaders={authHeaders}
                   currentUserId={me.id ?? null}
                   sellers={sellers}
+                  isFulfillmentAdmin={isFulfillmentAdmin}
                 />
               ) : (
                 ffAccessDenied

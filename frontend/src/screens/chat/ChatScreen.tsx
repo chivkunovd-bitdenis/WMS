@@ -20,6 +20,7 @@ import {
 } from '@mui/material'
 import { ChatComposer } from '../../components/chat/ChatComposer'
 import { ChatFeed } from '../../components/chat/ChatFeed'
+import { ExtraChatCreateDialog } from '../../components/chat/ExtraChatCreateDialog'
 import {
   listConversations,
   listMessages,
@@ -34,6 +35,11 @@ type Props = {
   authHeaders: (token: string) => Record<string, string>
   currentUserId: string | null
   sellers: SellerRow[]
+  // WMS-397/399 gap 3: only FF admins may spin up an extra chat, so the
+  // "Новый чат" button hides for everyone else. The backend enforces the
+  // same rule (require_fulfillment_admin on POST /conversations/extra), so
+  // this flag is a UX affordance, not an access boundary.
+  isFulfillmentAdmin?: boolean
 }
 
 function sellerLabel(sellers: SellerRow[], sellerId: string): string {
@@ -41,12 +47,19 @@ function sellerLabel(sellers: SellerRow[], sellerId: string): string {
   return row?.name ?? sellerId.slice(0, 8)
 }
 
-export function ChatScreen({ token, authHeaders, currentUserId, sellers }: Props) {
+export function ChatScreen({
+  token,
+  authHeaders,
+  currentUserId,
+  sellers,
+  isFulfillmentAdmin = false,
+}: Props) {
   const [conversations, setConversations] = useState<ChatConversation[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
 
   const loadConversations = useCallback(async () => {
     setLoading(true)
@@ -129,11 +142,37 @@ export function ChatScreen({ token, authHeaders, currentUserId, sellers }: Props
           </List>
         )}
         <Box sx={{ p: 1, borderTop: 1, borderColor: 'divider' }}>
+          {isFulfillmentAdmin ? (
+            <Button
+              size="small"
+              fullWidth
+              variant="contained"
+              onClick={() => setCreateOpen(true)}
+              data-testid="chat-extra-create-open"
+              sx={{ mb: 1 }}
+            >
+              Новый чат
+            </Button>
+          ) : null}
           <Button size="small" fullWidth onClick={() => void loadConversations()}>
             Обновить список
           </Button>
         </Box>
       </Paper>
+
+      {isFulfillmentAdmin ? (
+        <ExtraChatCreateDialog
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          token={token}
+          authHeaders={authHeaders}
+          sellers={sellers}
+          onCreated={(conv) => {
+            setConversations((prev) => [conv, ...prev.filter((row) => row.id !== conv.id)])
+            setSelectedId(conv.id)
+          }}
+        />
+      ) : null}
 
       <Paper
         variant="outlined"
