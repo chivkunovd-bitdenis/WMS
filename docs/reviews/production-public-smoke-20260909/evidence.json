@@ -1,0 +1,859 @@
+{
+  "rootVerifiedSha": "743a794bf0ee9e20cccf7f87c05138b035604ec9",
+  "started": "2026-09-09T04:12:11.385Z",
+  "scope": "Unauthenticated public UI smoke; not protected FBS or seller acceptance.",
+  "pages": [
+    {
+      "name": "ff-fbs-login",
+      "requestedPath": "/app/ff/fbs",
+      "status": 200,
+      "observed": {
+        "url": "https://wms.sellerfocus.pro/app/ff/fbs",
+        "title": "WMS · Фулфилмент",
+        "headings": [
+          "Короб ВМС"
+        ],
+        "passwordInputs": 1,
+        "loginButtonLabels": [
+          "Войти",
+          "Забыли пароль?"
+        ],
+        "recoveryLinks": []
+      }
+    },
+    {
+      "name": "ff-fbs-login-recovery",
+      "observed": {
+        "url": "https://wms.sellerfocus.pro/app/ff/fbs",
+        "headings": [
+          "Короб ВМС"
+        ],
+        "bodyText": "Короб ВМС\nВосстановление пароля\n\nУкажите почту, на которую заведён кабинет. Пришлём ссылку для нового пароля.\n\nEmail *\nEmail *\nПрислать ссылку\nНазад ко входу"
+      }
+    },
+    {
+      "name": "seller-login",
+      "requestedPath": "/seller",
+      "status": 200,
+      "observed": {
+        "url": "https://wms.sellerfocus.pro/seller/",
+        "title": "WMS · Селлер",
+        "headings": [
+          "WMS · Портал селлера"
+        ],
+        "passwordInputs": 1,
+        "loginButtonLabels": [
+          "Войти",
+          "Забыли пароль?"
+        ],
+        "recoveryLinks": []
+      }
+    },
+    {
+      "name": "seller-login-recovery",
+      "observed": {
+        "url": "https://wms.sellerfocus.pro/seller/",
+        "headings": [
+          "WMS · Портал селлера"
+        ],
+        "bodyText": "WMS · Портал селлера\nВосстановление пароля\n\nУкажите почту, на которую заведён кабинет. Пришлём ссылку для нового пароля.\n\nEmail *\nEmail *\nПрислать ссылку\nНазад ко входу"
+      }
+    }
+  ],
+  "responses": [
+    {
+      "path": "/app/ff/fbs",
+      "status": 200,
+      "resourceType": "document"
+    },
+    {
+      "path": "/assets/react-dom-CdjxR9kv.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/jsx-runtime-CDioDdFk.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ff-Cqym5Czi.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Stack-_PXjrBcC.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Skeleton-Bkw31IlI.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ArrowBackOutlined-C36ikaEf.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ToggleButtonGroup-DqdvCkwK.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Checkbox-CPKmI2Sq.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Button-jXq1wBtJ.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/WarehouseMapToolbar-DZY9s5OS.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/client-BPdQZMHG.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ui-kit-4aWRGPFz.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/DialogTitle-Be_myI8E.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ExpandMoreOutlined-BkM2NLq7.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ProductPhotoThumb-BYtwC2SH.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/dividerClasses-Mo1Fhp_J.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/usePreviousProps-B4DM1Adn.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/PrintOutlined-BGq6Q3qw.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Divider-DifjhnF0.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ffPermissions-zUi6ybVN.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Collapse--7dI7aNF.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/AccordionSummary-0dfz9HMB.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/TextField-D1vreGzZ.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Link-BMWL44yV.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/MenuItem-BpblwrT5.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/LinearProgress-BxjNTd_j.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/plural-BaRKADbq.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/LabelSizeSelect-BEMEn72l.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/PageHeader-C-u5GhuC.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ChevronRight-Sc08YJEe.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/GridViewOutlined-B40PJXGF.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/HistoryOutlined-Dvp-IWS9.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/WidgetsOutlined-BvZ0l2QL.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/BoxLabelPrintDialog-DVv8-E9X.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/CloudUploadOutlined-B89K33MA.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/UndoOutlined-1zaqCUA3.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/useWbProductCatalog-DYEH7bfa.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/documentDisplay-XluWy2Cr.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/FfProductLineCells-D_9tWw86.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Close-CGXMtZS9.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/CloseOutlined-C9Ryu0dy.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/DownloadOutlined-D6RyUsw6.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/FbsSupplyHistoryDialog-Be1O61mY.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/SearchOutlined-CtxOHcGI.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/FormGroup-DtaA8DZL.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/InputAdornment-DvJ2TufZ.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/TablePagination-BILtaf4g.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/inboundOperationType-Bo9kR8Pu.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/preload-helper-ClBMtM1g.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/listItemTextClasses-v3mQ5vwa.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ListItemText-BR_QFtOX.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/objectsStub-DnyMIZeO.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/SortingObjectsScreen-P_2BBrxi.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/inboundReceivingHelpers-aXjKqvWw.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/FfPackagingPage-Sogm-3wh.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/readApiErrorMessage-G_IxUTCi.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/HonestSignScreen-tcyUboDS.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ProductBarcodeCell-CIAgd-xG.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/warehouseMapState-CapGktNf.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Autocomplete-B9tUWEMV.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Tabs-BfJs3CNQ.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/fbsApi-B-7tWCya.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/printBarcodeLabel-CvNdROLK.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/renderBarcodeDataUrl-D7pBKVxj.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/pickRows-DsvPEdHk.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/UnloadPickScreen-ZNiflceF.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/useMarkingCodePrint-DW8KenQW.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/InventoryTree-6j7DYsvI.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ListItemButton-C2d1rUN0.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/FfInboundRequestView-DXNw_RMP.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/WbProductPickerDialog-B-IIM4Hc.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/WmsDateField-BYAzrw6Z.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/FbsMetricPanel-CyJpWwpF.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/InfoOutlined-CX49F83Z.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/invoicePrint-C_jNXrBI.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/printPackagingInstructions-DiWybrdF.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Container-DGDgAgZc.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/randomId-9Hcw6uH8.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/WmsDatePickersProvider-BaEsOhw8.css",
+      "status": 200,
+      "resourceType": "stylesheet"
+    },
+    {
+      "path": "/assets/ff-C8Lao7a-.css",
+      "status": 200,
+      "resourceType": "stylesheet"
+    },
+    {
+      "path": "/assets/src-CWU4KsJC.css",
+      "status": 200,
+      "resourceType": "stylesheet"
+    },
+    {
+      "path": "/assets/FfFbsOrdersScreen-BeE4sy8w.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/FfHonestSignPage-Obvgb7s2.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/InventoryCreateDialog-QZthziEq.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/FfInboundQueuePage-mgaJAEoD.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/theme-BIw5WO78.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/FfKnowledgeBaseScreen-BPuyYsLg.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/FfBillingScreen-DFitY4bY.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/FfBillingTariffMatrixPanel-DaESCqAy.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/FfInventoryListScreen-DDn1l5nv.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/fromWarehouseMap-P6BKUteB.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ProductsScreen-DZXeLwPH.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/WmsDatePickersProvider-DdMLam7k.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/AuthedAppLayout-DS7eZOhf.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/FfProductsCatalogScreen-CRH9Wgwq.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/portal-logo-ff.png",
+      "status": 200,
+      "resourceType": "image"
+    },
+    {
+      "path": "/portal-logo-ff.png",
+      "status": 200,
+      "resourceType": "other"
+    },
+    {
+      "path": "/seller",
+      "status": 302,
+      "resourceType": "document"
+    },
+    {
+      "path": "/seller/",
+      "status": 200,
+      "resourceType": "document"
+    },
+    {
+      "path": "/assets/jsx-runtime-CDioDdFk.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/LinearProgress-BxjNTd_j.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/usePreviousProps-B4DM1Adn.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/CloudUploadOutlined-B89K33MA.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/dividerClasses-Mo1Fhp_J.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/listItemTextClasses-v3mQ5vwa.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/seller-Ds5O48L2.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/MenuItem-BpblwrT5.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ToggleButtonGroup-DqdvCkwK.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/LabelSizeSelect-BEMEn72l.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/preload-helper-ClBMtM1g.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/react-dom-CdjxR9kv.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ProductPhotoThumb-BYtwC2SH.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Checkbox-CPKmI2Sq.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/DialogTitle-Be_myI8E.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Autocomplete-B9tUWEMV.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/FfProductLineCells-D_9tWw86.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/FormGroup-DtaA8DZL.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/plural-BaRKADbq.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Skeleton-Bkw31IlI.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ListItemText-BR_QFtOX.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Container-DGDgAgZc.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/src-CWU4KsJC.css",
+      "status": 200,
+      "resourceType": "stylesheet"
+    },
+    {
+      "path": "/assets/InputAdornment-DvJ2TufZ.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/WmsDatePickersProvider-BaEsOhw8.css",
+      "status": 200,
+      "resourceType": "stylesheet"
+    },
+    {
+      "path": "/assets/documentDisplay-XluWy2Cr.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/inboundOperationType-Bo9kR8Pu.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Button-jXq1wBtJ.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/PageHeader-C-u5GhuC.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/useWbProductCatalog-DYEH7bfa.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/randomId-9Hcw6uH8.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Link-BMWL44yV.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Divider-DifjhnF0.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/printPackagingInstructions-DiWybrdF.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/PrintOutlined-BGq6Q3qw.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/renderBarcodeDataUrl-D7pBKVxj.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Collapse--7dI7aNF.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/TablePagination-BILtaf4g.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/invoicePrint-C_jNXrBI.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/readApiErrorMessage-G_IxUTCi.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/FbsSupplyHistoryDialog-Be1O61mY.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ProductBarcodeCell-CIAgd-xG.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/theme-BIw5WO78.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Tabs-BfJs3CNQ.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/WbProductPickerDialog-B-IIM4Hc.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ffPermissions-zUi6ybVN.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/FfBillingScreen-DFitY4bY.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/HonestSignScreen-tcyUboDS.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ListItemButton-C2d1rUN0.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/WmsDatePickersProvider-DdMLam7k.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/TextField-D1vreGzZ.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/ui-kit-4aWRGPFz.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/useMarkingCodePrint-DW8KenQW.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/Stack-_PXjrBcC.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/WmsDateField-BYAzrw6Z.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/assets/client-BPdQZMHG.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "path": "/portal-logo-seller.png",
+      "status": 200,
+      "resourceType": "image"
+    },
+    {
+      "path": "/portal-logo-seller.png",
+      "status": 200,
+      "resourceType": "other"
+    }
+  ],
+  "blockedMutations": [],
+  "pageErrors": [],
+  "result": "PUBLIC_UI_PASS",
+  "chromeClosed": true
+}

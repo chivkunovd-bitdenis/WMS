@@ -46,11 +46,20 @@ async function main() {
       evidence.pages.push({ name, requestedPath: route, status: response.status(), observed });
       await page.screenshot({ path: path.join(output, `${name}.png`), animations: 'disabled' });
       const link = observed.recoveryLinks.find(a => new URL(a.href).origin === origin);
-      if (link) {
-        // Click the actual observed same-origin link; never submit recovery.
-        await page.getByRole('link', { name: link.text, exact: true }).first().click();
-        await page.waitForURL(link.href);
+      const recoveryButton = observed.loginButtonLabels.includes('Забыли пароль?');
+      if (link || recoveryButton) {
+        // The observed production UI renders recovery as a type=button, not an anchor.
+        // Open that navigation control only; never submit the recovery form.
+        if (link) {
+          await page.getByRole('link', { name: link.text, exact: true }).first().click();
+          await page.waitForURL(link.href);
+        } else {
+          const control = page.getByRole('button', { name: 'Забыли пароль?', exact: true });
+          assert.equal(await control.getAttribute('type'), 'button', 'Recovery navigation must not submit');
+          await control.click();
+        }
         await page.waitForLoadState('networkidle');
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         evidence.pages.push({ name: `${name}-recovery`, observed: await page.evaluate(() => ({ url: location.href, headings: [...document.querySelectorAll('h1,h2,h3')].map(n => n.textContent), bodyText: document.body.innerText })) });
         await page.screenshot({ path: path.join(output, `${name}-recovery.png`), animations: 'disabled' });
       }
