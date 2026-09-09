@@ -1,0 +1,26 @@
+{
+  "operation": "read_only",
+  "scope": "staging WB emulator seller_a, order 500046",
+  "http_status": 200,
+  "meta": {
+    "sgtins": [
+      {
+        "value": "010200000000001221WMS401APK500046",
+        "checkStatus": "ok"
+      }
+    ]
+  },
+  "technical_stickers": [
+    {
+      "wb_order_id": 500045,
+      "sticker_code": "57156822 35",
+      "sticker_barcode": "*DU7lOQOH"
+    },
+    {
+      "wb_order_id": 500046,
+      "sticker_code": "57115752 8424",
+      "sticker_barcode": "*DU7aq2hE"
+    }
+  ],
+  "limits": "Receipt/storage at emulator confirmed. Its batch route returns metaDetails=[]; actual WB acceptance is not established. Technical sticker values read from scoped staging orders; earlier APK scans used printed code, not technical QR."
+}
