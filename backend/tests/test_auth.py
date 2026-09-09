@@ -40,6 +40,34 @@ async def test_register_login_me(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_register_creates_default_warehouse(async_client: AsyncClient) -> None:
+    """WMS-062: у новой организации сразу есть один «Основной» склад, и повторных нет."""
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "FF Warehouse Default",
+            "slug": "ff-warehouse-default",
+            "admin_email": "wh-default@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    token = reg.json()["access_token"]
+
+    warehouses = await async_client.get(
+        "/warehouses",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert warehouses.status_code == 200, warehouses.text
+    items = warehouses.json()
+    assert isinstance(items, list)
+    names = [w["name"] for w in items]
+    assert names == ["Основной"], names
+    codes = [w["code"] for w in items]
+    assert codes == ["main"], codes
+
+
+@pytest.mark.asyncio
 async def test_register_duplicate_slug(async_client: AsyncClient) -> None:
     payload = {
         "organization_name": "A",
