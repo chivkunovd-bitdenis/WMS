@@ -1,0 +1,48 @@
+{
+  "sha": "7b02fb98be1d1d8fc557760f359beb64ac2a4312",
+  "checkedAt": "2026-09-09T09:12:28.059Z",
+  "result": "PASS",
+  "methods": [
+    "GET"
+  ],
+  "auth": {
+    "tenant": "9c31f3f4-ce62-4c1f-891a-295b278f1e69",
+    "role": "fulfillment_admin"
+  },
+  "backendHealth": 200,
+  "webHealth": 200,
+  "invoice": {
+    "id": "325b20ca-30d8-4e15-a2e1-a3d34b49d906",
+    "status": "cancelled",
+    "total": 40723,
+    "lines": [
+      {
+        "id": "d74bc6cd-c359-4eea-b058-394f8b6351ea",
+        "description": "FBS",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 12500,
+        "sort_order": 0
+      },
+      {
+        "id": "0b45bd0a-8ae2-47cd-8506-00ea900ee83a",
+        "description": "QA WMS407 — Нет ставки; сумма не рассчитана",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 100,
+        "sort_order": 1
+      },
+      {
+        "id": "17a19bbb-e0ed-4603-ad59-d15530cd9867",
+        "description": "Ручная корректировка итога",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 28123,
+        "sort_order": 2
+      }
+    ]
+  },
+  "report": {
+    "seller": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+    "http": 200,
+    "returnedRows": 1,
+    "hasNext": true
+  }
+}
