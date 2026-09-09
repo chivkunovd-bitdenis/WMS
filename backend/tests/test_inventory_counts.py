@@ -1596,3 +1596,90 @@ async def test_inventory_count_manual_line_rejects_non_positive_quantity(
         json={"product_id": str(product), "quantity": 0},
     )
     assert response.status_code == 422
+
+
+# WMS-153: тара, созданная через ручку документа, должна попадать в выбранную
+# оператором ячейку — а не «на складе без адреса», как раньше. Сама механика
+# хранения адреса живёт в pallet_service/warehouse_box_service; здесь мы
+# проверяем, что кнопка «Создать короб/палету/грузоместо» с выделенной ячейкой
+# доводит выбор до объектов.
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["box", "cargo_place", "pallet"])
+async def test_inventory_count_create_container_places_into_selected_cell(
+    async_client: AsyncClient, kind: str,
+) -> None:
+    setup = await _tenant(async_client, "CellPlacement")
+    count = await _create_all(async_client, setup)
+
+    response = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/containers",
+        headers=setup.headers,
+        json={"kind": kind, "cell_id": str(setup.location_id)},
+    )
+    assert response.status_code == 200, response.text
+
+    async with SessionLocal() as session:
+        link_row = (
+            await session.execute(
+                select(InventoryCountCreatedContainer).where(
+                    InventoryCountCreatedContainer.count_id
+                    == uuid.UUID(str(count["id"]))
+                )
+            )
+        ).scalar_one()
+        model = Pallet if kind == "pallet" else WarehouseBox
+        obj = await session.get(model, link_row.container_id)
+        assert obj is not None
+        assert obj.storage_location_id == setup.location_id
+
+
+# WMS-153: чужая ячейка (или удалённая) не должна принимать тару — иначе одна
+# ошибочная подстановка id пересаживает объект в другой склад.
+@pytest.mark.asyncio
+async def test_inventory_count_create_container_rejects_foreign_cell(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "ForeignCell")
+    other = await _tenant(async_client, "ForeignCellOther")
+    count = await _create_all(async_client, setup)
+
+    response = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/containers",
+        headers=setup.headers,
+        json={"kind": "box", "cell_id": str(other.location_id)},
+    )
+    # Ячейка чужого склада для этого документа не найдена — сервер отвечает 404
+    # тем же кодом, что и «не нашли объект», чтобы клиент не гадал маппинг.
+    assert response.status_code == 404
+    assert response.json()["detail"] == "storage_location_not_found"
+
+
+# WMS-153: обратная совместимость — без cell_id сервер по-прежнему создаёт
+# тару «на складе», и старые точки входа (мобильный ТСД, диалог наполнения
+# короба) продолжают работать.
+@pytest.mark.asyncio
+async def test_inventory_count_create_container_without_cell_still_works(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "NoCellStillWorks")
+    count = await _create_all(async_client, setup)
+
+    response = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/containers",
+        headers=setup.headers,
+        json={"kind": "box"},
+    )
+    assert response.status_code == 200, response.text
+
+    async with SessionLocal() as session:
+        link_row = (
+            await session.execute(
+                select(InventoryCountCreatedContainer).where(
+                    InventoryCountCreatedContainer.count_id
+                    == uuid.UUID(str(count["id"]))
+                )
+            )
+        ).scalar_one()
+        obj = await session.get(WarehouseBox, link_row.container_id)
+        assert obj is not None
+        assert obj.storage_location_id is None

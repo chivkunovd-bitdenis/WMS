@@ -519,6 +519,7 @@ async def create_document_container(
     count_id: uuid.UUID,
     *,
     kind: ContainerKind,
+    cell_id: uuid.UUID | None = None,
 ) -> InventoryCount:
     """Завести пустую тару прямо в документе пересчёта.
 
@@ -528,6 +529,9 @@ async def create_document_container(
     она пуста по определению, оператор только что её завёл. Общее правило
     прунинга не трогаем, здесь только точечное исключение для этой пары
     (документ, тара).
+
+    WMS-153: если оператор выбрал ячейку — тара сразу создаётся в ней. Иначе
+    (когда оператор запустил счёт по всему складу) — на складе без ячейки.
     """
     result = await session.execute(
         select(InventoryCount)
@@ -550,6 +554,7 @@ async def create_document_container(
             tenant_id,
             count.warehouse_id,
             kind=kind,
+            storage_location_id=cell_id,
             commit=False,
         )
     except warehouse_map_service.WarehouseMapError as exc:

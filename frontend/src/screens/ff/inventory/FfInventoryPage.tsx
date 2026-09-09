@@ -278,7 +278,10 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     foundQueueRef.current?.push({ ...place, countId: count.id })
   }
 
-  async function createContainer(kind: 'pallet' | 'box' | 'cargo_place') {
+  async function createContainer(
+    kind: 'pallet' | 'box' | 'cargo_place',
+    cellId: string | null,
+  ) {
     if (!count || count.status !== 'draft') return
     if (!count.warehouseId) {
       setError('Не удалось определить склад документа')
@@ -291,7 +294,8 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
       // Ручка документа, а не общая /warehouses/{id}/sorting-objects: она же
       // запоминает тару за документом, чтобы прунинг пустой тары не выбросил
       // её из дерева сразу после создания (см. inventoryCountApi).
-      setCount(await createCountContainer(token, count.id, kind))
+      // WMS-153: если оператор выбрал ячейку, тара сразу ложится в неё.
+      setCount(await createCountContainer(token, count.id, kind, cellId))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось создать тару')
     } finally {
@@ -397,7 +401,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         onPost={() => void post()}
         onCancelDocument={() => void cancelDocument()}
         pendingFound={pendingFound}
-        onCreateContainer={(kind) => void createContainer(kind)}
+        onCreateContainer={(kind, cellId) => void createContainer(kind, cellId)}
         onFound={(place) => recordFound(place)}
         productCatalog={pickerCatalog}
         catalogLoading={catalogLoading}

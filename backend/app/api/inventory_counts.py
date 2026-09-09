@@ -745,6 +745,10 @@ async def save_inventory_count_lines(
 
 class InventoryCountContainerCreateIn(BaseModel):
     kind: Literal["pallet", "box", "cargo_place"]
+    # WMS-153: оператор указывает ячейку, в которой создаётся тара. None —
+    # исторический режим «просто на складе», для совместимости с существующим
+    # UI и мобильным ТСД, где ячейка ещё не выбрана.
+    cell_id: uuid.UUID | None = None
 
 
 @router.post("/{count_id}/containers", response_model=InventoryCountDetailOut)
@@ -766,6 +770,7 @@ async def create_inventory_count_container(
             user.tenant_id,
             count_id,
             kind=body.kind,
+            cell_id=body.cell_id,
         )
     except service.InventoryCountError as exc:
         raise _http_error(exc) from None

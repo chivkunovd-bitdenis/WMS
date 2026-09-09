@@ -123,7 +123,16 @@ type Props = {
    * документ невозможно.
    */
   pendingFound?: number
-  onCreateContainer?: (kind: 'pallet' | 'box' | 'cargo_place') => void
+  /**
+   * WMS-153: тара должна ложиться в выбранную оператором ячейку сразу при
+   * создании, а не «на склад без адреса». Второй аргумент — id ячейки, если
+   * она выбрана; null означает прежнее поведение «на складе, разложите
+   * потом руками с карты».
+   */
+  onCreateContainer?: (
+    kind: 'pallet' | 'box' | 'cargo_place',
+    cellId: string | null,
+  ) => void
   /** Записать находку: товар лежит там, где по учёту его нет. */
   onFound?: (place: {
     barcodes: string[]
@@ -350,21 +359,21 @@ export function FfInventoryCountScreen({
       <Box sx={{ mb: 2 }}>
         <ActionGroup>
           <SecondaryAction
-            onClick={() => onCreateContainer?.('box')}
+            onClick={() => onCreateContainer?.('box', selectionPlacement(selectedRow).cellId)}
             disabledReason={createContainerDisabledReason}
             data-testid="inv-create-box"
           >
             Создать короб
           </SecondaryAction>
           <SecondaryAction
-            onClick={() => onCreateContainer?.('pallet')}
+            onClick={() => onCreateContainer?.('pallet', selectionPlacement(selectedRow).cellId)}
             disabledReason={createContainerDisabledReason}
             data-testid="inv-create-pallet"
           >
             Создать палету
           </SecondaryAction>
           <SecondaryAction
-            onClick={() => onCreateContainer?.('cargo_place')}
+            onClick={() => onCreateContainer?.('cargo_place', selectionPlacement(selectedRow).cellId)}
             disabledReason={createContainerDisabledReason}
             data-testid="inv-create-cargo-place"
           >
