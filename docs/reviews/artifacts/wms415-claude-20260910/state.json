@@ -2,10 +2,10 @@
   "phase": "five_lanes_next_ten_queued",
   "quota_session_id": "5ed12390-4d22-4b83-b183-114202609010",
   "quota_tool_pty": 75581,
-  "last_weekly_used_percent": 81,
-  "last_weekly_remaining_percent": 19,
+  "last_weekly_used_percent": 83,
+  "last_weekly_remaining_percent": 17,
   "recorded_at_utc": "2026-09-09T21:10:11.500624+00:00",
-  "last_full_progress_check_utc": "2026-09-09T21:49:49.781256+00:00",
+  "last_full_progress_check_utc": "2026-09-09T22:15:24.583098+00:00",
   "coordinator_session_id": "2a1f478a-9d10-48fe-b183-114202609010",
   "automation_id": "wms-claude",
   "quota_minutes": 10,
@@ -17,7 +17,7 @@
   "coordinator_branch": "codex/wms415-coord-20260910",
   "coordinator_initial_head": "bc7f760c11b032fbb94376f042bb6d0f2dd7c13b",
   "audit_head": "c91af35d1c96c3d0ab3678817f415ef1b86bd34d",
-  "quota_observed_at_utc": "2026-09-09T22:02:21.976407+00:00",
+  "quota_observed_at_utc": "2026-09-09T22:15:24.583098+00:00",
   "quota_terminal_tty": "ttys000",
   "agent_count": 5,
   "workspace_issue_detected_at_utc": "2026-09-09T21:30:33.637747+00:00",
@@ -25,7 +25,7 @@
   "initial_coordinator_checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-claude",
   "workspace_recovery_verified_at_utc": "2026-09-09T21:36:28.837326+00:00",
   "workspace_recovery_proof": "worktree-recovery.json",
-  "quota_ticks_since_full_progress": 1,
+  "quota_ticks_since_full_progress": 0,
   "max_parallel_workers": 5,
   "next_queue_task": "WMS-416",
   "next_queue_ids": [
@@ -48,6 +48,7 @@
     "mobile-lane": "a1e35af42df51c631",
     "merge-lane": "a3f469302a51bc5bb"
   },
-  "last_heartbeat_utc": "2026-09-09T22:02:21.976580+00:00",
-  "intervention": "Chat prematurely marked done although only FBS supply entry and list-only attached-document links; instructed coordinator to prioritize chat completion and WMS-363 before more next-queue pairs. WMS-349 requires actual PostgreSQL concurrency replay."
+  "last_heartbeat_utc": "2026-09-09T22:15:24.583098+00:00",
+  "intervention": "Ozon352/386 actual import filter still depends on publication; current-queue correction sent. Requested Astra CLI review of saved slices and honest in-app verification.",
+  "last_full_progress_artifact": "progress-20260909T2215.json"
 }

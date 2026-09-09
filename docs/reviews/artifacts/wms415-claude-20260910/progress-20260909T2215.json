@@ -1,0 +1,48 @@
+{
+  "checked_at_utc": "2026-09-09T22:15:24.583098+00:00",
+  "git": [
+    {
+      "checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord",
+      "head": "beb19d252ddec0d7ad30a1784d78499884a09966",
+      "status": ""
+    },
+    {
+      "checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms397-chat-mvp",
+      "head": "0343d40ba9e0a7b08d464a6e76e876bfa72c504f",
+      "status": ""
+    },
+    {
+      "checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms338-stock-min-formula",
+      "head": "453bb87d9331209908235ab14bcfe9a10b903372",
+      "status": ""
+    },
+    {
+      "checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms062-warehouse-docs",
+      "head": "755275da62573778af25626b72c72199f13afe02",
+      "status": "M frontend/src/App.tsx\n M frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx"
+    },
+    {
+      "checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms401-mobile-followup",
+      "head": "a6afbf4ef1a14dffdd34b7f3bd36bf7bd2b4e62a",
+      "status": ""
+    },
+    {
+      "checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms349-merge-service",
+      "head": "5a3f40c5017ee5b296ed62aca735f5e7ef01ace1",
+      "status": ""
+    },
+    {
+      "checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms111-wb-cancel-return",
+      "head": "f1b879fd0fd70e46b4048b3321cd991795b27b3e",
+      "status": ""
+    }
+  ],
+  "weekly_used": 83,
+  "weekly_remaining": 17,
+  "root_findings": [
+    "WMS352/386 import gate unchanged in stock453bb87d: _stock_is_published_for_row513-545 plus caller836; quantity mutation search in worker note does not check this requirement.",
+    "WMS401 package metadata proves installed update state but not transport. Worker note admits no observed transition; in-app UI path and persistence remain required.",
+    "Chat completion now has b1004b0e and active edits; WMS363 spawned.",
+    "Sent coordinator request for CLI Astra6 high review of saved stock and cancellation commits plus next-slot Ozon gate correction."
+  ]
+}
