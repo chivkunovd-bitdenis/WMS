@@ -1,0 +1,12 @@
+{
+  "mobile_source_sha": "3b198e7c81ca13f7980c45565170fc25ba9e6bbf",
+  "base_sha": "e2d43b5cc7817bf5be164b53ef9e2ef723c4f718",
+  "tests": 16,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "test_command": "JAVA_HOME=/opt/homebrew/opt/openjdk@17 ANDROID_HOME=/opt/homebrew/share/android-commandlinetools ./gradlew --no-daemon --max-workers=2 :app:testDebugUnitTest --tests ru.wms.tsd.features.fbs.FbsViewModelTest",
+  "apk_built": false,
+  "live_scenario_retested": false,
+  "safe_patch_sha256": "0e526ef2bd93d1b6e6221f448051e073097868f645c6f591b934fde64422e4c3"
+}
