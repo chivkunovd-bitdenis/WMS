@@ -1,0 +1,658 @@
+{
+  "started": "2026-09-09T01:31:02.759Z",
+  "sha": "27400e5ff45d4e93eb6afc174f60710f3930abb4",
+  "document": {
+    "id": "4f4a381c-aa9d-4fee-9cc4-36e6a7c692ba",
+    "document_number": "ОТГР-26-09-09-3",
+    "display_number": "№000038",
+    "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+    "warehouse_name": "Тестовый",
+    "status": "draft",
+    "line_count": 0,
+    "goods_qty_total": 0,
+    "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+    "seller_name": "Эмулятор WB",
+    "marketplace": "wb",
+    "wb_mp_warehouse_id": 507,
+    "planned_shipment_date": null,
+    "ff_modified": false,
+    "created_at": "2026-09-09T01:31:05.117564+00:00"
+  },
+  "box": {
+    "id": "1806e29d-df87-4052-9e4d-ff3a98b235c4",
+    "box_preset": "60_40_40",
+    "internal_barcode": "WHB-GKQVW6TVHQXKM2",
+    "closed_at": null,
+    "lines": []
+  },
+  "result": "passed",
+  "blocked": [],
+  "pageErrors": [],
+  "inb": "Skipped: no separately owned persisted INB fixture identified in reports.",
+  "before": [
+    {
+      "location": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+      "row": {
+        "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+        "sku_code": "EMU-KIZ-OPTIONAL",
+        "product_name": "Куртка демо ЧЗ необязателен",
+        "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+        "seller_name": "Эмулятор WB",
+        "packaging_instructions": null,
+        "requires_honest_sign": true,
+        "quantity": 57,
+        "quantity_unpacked": 57,
+        "quantity_packed": 0,
+        "quantity_in_sorting": 0,
+        "quantity_in_storage": 57,
+        "reserved": 0,
+        "available": 57,
+        "quantity_fbs": 0,
+        "quantity_reserved_directions": 0,
+        "quantity_free_fbo": 0
+      }
+    },
+    {
+      "location": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+      "row": {
+        "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+        "sku_code": "EMU-KIZ-OPTIONAL",
+        "product_name": "Куртка демо ЧЗ необязателен",
+        "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+        "seller_name": "Эмулятор WB",
+        "packaging_instructions": null,
+        "requires_honest_sign": true,
+        "quantity": 3,
+        "quantity_unpacked": 3,
+        "quantity_packed": 0,
+        "quantity_in_sorting": 3,
+        "quantity_in_storage": 0,
+        "reserved": 0,
+        "available": 0,
+        "quantity_fbs": 0,
+        "quantity_reserved_directions": 0,
+        "quantity_free_fbo": 0
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "confirmed before source scan",
+      "picked": 0,
+      "boxed": 0,
+      "sources": [
+        {
+          "location": "FBS-VIDEO-01",
+          "source": "FBSVID-CARGO-01",
+          "quantity": 20,
+          "available": 18,
+          "picked": 0
+        },
+        {
+          "location": "FBS-VIDEO-01",
+          "source": "FBSVID-BOX-03",
+          "quantity": 37,
+          "available": 37,
+          "picked": 0
+        },
+        {
+          "location": "Без ячеек",
+          "source": "loose",
+          "quantity": 3,
+          "available": 2,
+          "picked": 0
+        }
+      ],
+      "balances": [
+        {
+          "location": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+          "row": {
+            "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "sku_code": "EMU-KIZ-OPTIONAL",
+            "product_name": "Куртка демо ЧЗ необязателен",
+            "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+            "seller_name": "Эмулятор WB",
+            "packaging_instructions": null,
+            "requires_honest_sign": true,
+            "quantity": 57,
+            "quantity_unpacked": 57,
+            "quantity_packed": 0,
+            "quantity_in_sorting": 0,
+            "quantity_in_storage": 57,
+            "reserved": 0,
+            "available": 57,
+            "quantity_fbs": 0,
+            "quantity_reserved_directions": 0,
+            "quantity_free_fbo": 0
+          }
+        },
+        {
+          "location": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+          "row": {
+            "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "sku_code": "EMU-KIZ-OPTIONAL",
+            "product_name": "Куртка демо ЧЗ необязателен",
+            "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+            "seller_name": "Эмулятор WB",
+            "packaging_instructions": null,
+            "requires_honest_sign": true,
+            "quantity": 3,
+            "quantity_unpacked": 3,
+            "quantity_packed": 0,
+            "quantity_in_sorting": 3,
+            "quantity_in_storage": 0,
+            "reserved": 0,
+            "available": 0,
+            "quantity_fbs": 0,
+            "quantity_reserved_directions": 0,
+            "quantity_free_fbo": 0
+          }
+        }
+      ],
+      "newMovements": []
+    },
+    {
+      "name": "browser scan FBSVID-BOX-03",
+      "response": {
+        "kind": "container",
+        "container_kind": "box",
+        "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+        "container_code": "FBSVID-BOX-03",
+        "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+        "location_code": null,
+        "id": null,
+        "product_id": null,
+        "sku_code": null,
+        "product_name": null,
+        "quantity": null,
+        "picked_qty": null,
+        "lines_added": null,
+        "total_qty": null
+      },
+      "visible": "\tEMU-KIZ-OPTIONAL\tКуртка демо ЧЗ необязателен\t2\t0\t2\t\n​\n\tДобавить",
+      "screenMs": 375.1,
+      "httpMs": 292.6
+    },
+    {
+      "name": "source selected",
+      "picked": 0,
+      "boxed": 0,
+      "sources": [
+        {
+          "location": "FBS-VIDEO-01",
+          "source": "FBSVID-CARGO-01",
+          "quantity": 20,
+          "available": 18,
+          "picked": 0
+        },
+        {
+          "location": "FBS-VIDEO-01",
+          "source": "FBSVID-BOX-03",
+          "quantity": 37,
+          "available": 37,
+          "picked": 0
+        },
+        {
+          "location": "Без ячеек",
+          "source": "loose",
+          "quantity": 3,
+          "available": 2,
+          "picked": 0
+        }
+      ],
+      "balances": [
+        {
+          "location": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+          "row": {
+            "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "sku_code": "EMU-KIZ-OPTIONAL",
+            "product_name": "Куртка демо ЧЗ необязателен",
+            "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+            "seller_name": "Эмулятор WB",
+            "packaging_instructions": null,
+            "requires_honest_sign": true,
+            "quantity": 57,
+            "quantity_unpacked": 57,
+            "quantity_packed": 0,
+            "quantity_in_sorting": 0,
+            "quantity_in_storage": 57,
+            "reserved": 0,
+            "available": 57,
+            "quantity_fbs": 0,
+            "quantity_reserved_directions": 0,
+            "quantity_free_fbo": 0
+          }
+        },
+        {
+          "location": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+          "row": {
+            "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "sku_code": "EMU-KIZ-OPTIONAL",
+            "product_name": "Куртка демо ЧЗ необязателен",
+            "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+            "seller_name": "Эмулятор WB",
+            "packaging_instructions": null,
+            "requires_honest_sign": true,
+            "quantity": 3,
+            "quantity_unpacked": 3,
+            "quantity_packed": 0,
+            "quantity_in_sorting": 3,
+            "quantity_in_storage": 0,
+            "reserved": 0,
+            "available": 0,
+            "quantity_fbs": 0,
+            "quantity_reserved_directions": 0,
+            "quantity_free_fbo": 0
+          }
+        }
+      ],
+      "newMovements": []
+    },
+    {
+      "name": "browser scan 2000000000013",
+      "response": {
+        "kind": "product",
+        "container_kind": null,
+        "container_id": null,
+        "container_code": null,
+        "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+        "location_code": null,
+        "id": "94fc2522-d243-4046-a8c7-729eec9d1a1c",
+        "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+        "sku_code": "EMU-KIZ-OPTIONAL",
+        "product_name": "Куртка демо ЧЗ необязателен",
+        "quantity": 1,
+        "picked_qty": 1,
+        "lines_added": null,
+        "total_qty": null
+      },
+      "visible": "\tEMU-KIZ-OPTIONAL\tКуртка демо ЧЗ необязателен\t2\t1\t1\t\n​\n\tДобавить",
+      "screenMs": 615.6,
+      "httpMs": 528.8
+    },
+    {
+      "name": "one scanned into box",
+      "picked": 1,
+      "boxed": 1,
+      "sources": [
+        {
+          "location": "FBS-VIDEO-01",
+          "source": "FBSVID-CARGO-01",
+          "quantity": 20,
+          "available": 18,
+          "picked": 0
+        },
+        {
+          "location": "FBS-VIDEO-01",
+          "source": "FBSVID-BOX-03",
+          "quantity": 36,
+          "available": 36,
+          "picked": 1
+        },
+        {
+          "location": "Без ячеек",
+          "source": "loose",
+          "quantity": 3,
+          "available": 2,
+          "picked": 0
+        }
+      ],
+      "balances": [
+        {
+          "location": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+          "row": {
+            "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "sku_code": "EMU-KIZ-OPTIONAL",
+            "product_name": "Куртка демо ЧЗ необязателен",
+            "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+            "seller_name": "Эмулятор WB",
+            "packaging_instructions": null,
+            "requires_honest_sign": true,
+            "quantity": 56,
+            "quantity_unpacked": 56,
+            "quantity_packed": 0,
+            "quantity_in_sorting": 0,
+            "quantity_in_storage": 56,
+            "reserved": 0,
+            "available": 56,
+            "quantity_fbs": 0,
+            "quantity_reserved_directions": 0,
+            "quantity_free_fbo": 0
+          }
+        },
+        {
+          "location": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+          "row": {
+            "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "sku_code": "EMU-KIZ-OPTIONAL",
+            "product_name": "Куртка демо ЧЗ необязателен",
+            "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+            "seller_name": "Эмулятор WB",
+            "packaging_instructions": null,
+            "requires_honest_sign": true,
+            "quantity": 3,
+            "quantity_unpacked": 3,
+            "quantity_packed": 0,
+            "quantity_in_sorting": 3,
+            "quantity_in_storage": 0,
+            "reserved": 0,
+            "available": 0,
+            "quantity_fbs": 0,
+            "quantity_reserved_directions": 0,
+            "quantity_free_fbo": 0
+          }
+        }
+      ],
+      "newMovements": [
+        {
+          "id": "c3e7fe80-88e1-435b-80c9-d4514d837c62",
+          "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+          "sku_code": "EMU-KIZ-OPTIONAL",
+          "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+          "quantity_delta": -1,
+          "movement_type": "marketplace_unload",
+          "actor_user_id": "00980c4b-c5ae-49c5-8c25-0771436b952f",
+          "created_at": "2026-09-09T01:31:14.424445+00:00"
+        }
+      ]
+    },
+    {
+      "name": "second unit already picked by public API",
+      "picked": 2,
+      "boxed": 1,
+      "sources": [
+        {
+          "location": "FBS-VIDEO-01",
+          "source": "FBSVID-CARGO-01",
+          "quantity": 20,
+          "available": 18,
+          "picked": 0
+        },
+        {
+          "location": "FBS-VIDEO-01",
+          "source": "FBSVID-BOX-03",
+          "quantity": 35,
+          "available": 35,
+          "picked": 2
+        },
+        {
+          "location": "Без ячеек",
+          "source": "loose",
+          "quantity": 3,
+          "available": 2,
+          "picked": 0
+        }
+      ],
+      "balances": [
+        {
+          "location": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+          "row": {
+            "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "sku_code": "EMU-KIZ-OPTIONAL",
+            "product_name": "Куртка демо ЧЗ необязателен",
+            "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+            "seller_name": "Эмулятор WB",
+            "packaging_instructions": null,
+            "requires_honest_sign": true,
+            "quantity": 55,
+            "quantity_unpacked": 55,
+            "quantity_packed": 0,
+            "quantity_in_sorting": 0,
+            "quantity_in_storage": 55,
+            "reserved": 0,
+            "available": 55,
+            "quantity_fbs": 0,
+            "quantity_reserved_directions": 0,
+            "quantity_free_fbo": 0
+          }
+        },
+        {
+          "location": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+          "row": {
+            "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "sku_code": "EMU-KIZ-OPTIONAL",
+            "product_name": "Куртка демо ЧЗ необязателен",
+            "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+            "seller_name": "Эмулятор WB",
+            "packaging_instructions": null,
+            "requires_honest_sign": true,
+            "quantity": 3,
+            "quantity_unpacked": 3,
+            "quantity_packed": 0,
+            "quantity_in_sorting": 3,
+            "quantity_in_storage": 0,
+            "reserved": 0,
+            "available": 0,
+            "quantity_fbs": 0,
+            "quantity_reserved_directions": 0,
+            "quantity_free_fbo": 0
+          }
+        }
+      ],
+      "newMovements": [
+        {
+          "id": "de33e72e-80df-48be-997b-907adf1280e0",
+          "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+          "sku_code": "EMU-KIZ-OPTIONAL",
+          "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+          "quantity_delta": -1,
+          "movement_type": "marketplace_unload",
+          "actor_user_id": "00980c4b-c5ae-49c5-8c25-0771436b952f",
+          "created_at": "2026-09-09T01:31:16.488566+00:00"
+        },
+        {
+          "id": "c3e7fe80-88e1-435b-80c9-d4514d837c62",
+          "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+          "sku_code": "EMU-KIZ-OPTIONAL",
+          "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+          "quantity_delta": -1,
+          "movement_type": "marketplace_unload",
+          "actor_user_id": "00980c4b-c5ae-49c5-8c25-0771436b952f",
+          "created_at": "2026-09-09T01:31:14.424445+00:00"
+        }
+      ]
+    },
+    {
+      "name": "browser scan 2000000000013",
+      "response": {
+        "kind": "product",
+        "container_kind": null,
+        "container_id": null,
+        "container_code": null,
+        "storage_location_id": null,
+        "location_code": null,
+        "id": "94fc2522-d243-4046-a8c7-729eec9d1a1c",
+        "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+        "sku_code": "EMU-KIZ-OPTIONAL",
+        "product_name": "Куртка демо ЧЗ необязателен",
+        "quantity": 2,
+        "picked_qty": 2,
+        "lines_added": null,
+        "total_qty": null
+      },
+      "visible": "\tEMU-KIZ-OPTIONAL\tКуртка демо ЧЗ необязателен\t2\t2\t0\t\n​\n\tДобавить",
+      "screenMs": 510.8,
+      "httpMs": 411.5
+    },
+    {
+      "name": "already picked unit placed through browser",
+      "picked": 2,
+      "boxed": 2,
+      "sources": [
+        {
+          "location": "FBS-VIDEO-01",
+          "source": "FBSVID-CARGO-01",
+          "quantity": 20,
+          "available": 18,
+          "picked": 0
+        },
+        {
+          "location": "FBS-VIDEO-01",
+          "source": "FBSVID-BOX-03",
+          "quantity": 35,
+          "available": 35,
+          "picked": 2
+        },
+        {
+          "location": "Без ячеек",
+          "source": "loose",
+          "quantity": 3,
+          "available": 2,
+          "picked": 0
+        }
+      ],
+      "balances": [
+        {
+          "location": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+          "row": {
+            "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "sku_code": "EMU-KIZ-OPTIONAL",
+            "product_name": "Куртка демо ЧЗ необязателен",
+            "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+            "seller_name": "Эмулятор WB",
+            "packaging_instructions": null,
+            "requires_honest_sign": true,
+            "quantity": 55,
+            "quantity_unpacked": 55,
+            "quantity_packed": 0,
+            "quantity_in_sorting": 0,
+            "quantity_in_storage": 55,
+            "reserved": 0,
+            "available": 55,
+            "quantity_fbs": 0,
+            "quantity_reserved_directions": 0,
+            "quantity_free_fbo": 0
+          }
+        },
+        {
+          "location": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+          "row": {
+            "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "sku_code": "EMU-KIZ-OPTIONAL",
+            "product_name": "Куртка демо ЧЗ необязателен",
+            "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+            "seller_name": "Эмулятор WB",
+            "packaging_instructions": null,
+            "requires_honest_sign": true,
+            "quantity": 3,
+            "quantity_unpacked": 3,
+            "quantity_packed": 0,
+            "quantity_in_sorting": 3,
+            "quantity_in_storage": 0,
+            "reserved": 0,
+            "available": 0,
+            "quantity_fbs": 0,
+            "quantity_reserved_directions": 0,
+            "quantity_free_fbo": 0
+          }
+        }
+      ],
+      "newMovements": [
+        {
+          "id": "de33e72e-80df-48be-997b-907adf1280e0",
+          "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+          "sku_code": "EMU-KIZ-OPTIONAL",
+          "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+          "quantity_delta": -1,
+          "movement_type": "marketplace_unload",
+          "actor_user_id": "00980c4b-c5ae-49c5-8c25-0771436b952f",
+          "created_at": "2026-09-09T01:31:16.488566+00:00"
+        },
+        {
+          "id": "c3e7fe80-88e1-435b-80c9-d4514d837c62",
+          "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+          "sku_code": "EMU-KIZ-OPTIONAL",
+          "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+          "quantity_delta": -1,
+          "movement_type": "marketplace_unload",
+          "actor_user_id": "00980c4b-c5ae-49c5-8c25-0771436b952f",
+          "created_at": "2026-09-09T01:31:14.424445+00:00"
+        }
+      ]
+    }
+  ],
+  "cleanup": [
+    {
+      "id": "4f4a381c-aa9d-4fee-9cc4-36e6a7c692ba",
+      "status": "cancelled"
+    }
+  ],
+  "after": [
+    {
+      "location": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+      "row": {
+        "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+        "sku_code": "EMU-KIZ-OPTIONAL",
+        "product_name": "Куртка демо ЧЗ необязателен",
+        "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+        "seller_name": "Эмулятор WB",
+        "packaging_instructions": null,
+        "requires_honest_sign": true,
+        "quantity": 55,
+        "quantity_unpacked": 55,
+        "quantity_packed": 0,
+        "quantity_in_sorting": 0,
+        "quantity_in_storage": 55,
+        "reserved": 0,
+        "available": 55,
+        "quantity_fbs": 0,
+        "quantity_reserved_directions": 0,
+        "quantity_free_fbo": 0
+      }
+    },
+    {
+      "location": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+      "row": {
+        "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+        "sku_code": "EMU-KIZ-OPTIONAL",
+        "product_name": "Куртка демо ЧЗ необязателен",
+        "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+        "seller_name": "Эмулятор WB",
+        "packaging_instructions": null,
+        "requires_honest_sign": true,
+        "quantity": 5,
+        "quantity_unpacked": 5,
+        "quantity_packed": 0,
+        "quantity_in_sorting": 5,
+        "quantity_in_storage": 0,
+        "reserved": 0,
+        "available": 0,
+        "quantity_fbs": 0,
+        "quantity_reserved_directions": 0,
+        "quantity_free_fbo": 0
+      }
+    }
+  ],
+  "newMovements": [
+    {
+      "id": "1288a4ac-6aa5-4f94-85d4-1266e5dc42cb",
+      "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+      "sku_code": "EMU-KIZ-OPTIONAL",
+      "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+      "quantity_delta": 2,
+      "movement_type": "marketplace_unload",
+      "actor_user_id": "00980c4b-c5ae-49c5-8c25-0771436b952f",
+      "created_at": "2026-09-09T01:31:23.488850+00:00"
+    },
+    {
+      "id": "de33e72e-80df-48be-997b-907adf1280e0",
+      "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+      "sku_code": "EMU-KIZ-OPTIONAL",
+      "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+      "quantity_delta": -1,
+      "movement_type": "marketplace_unload",
+      "actor_user_id": "00980c4b-c5ae-49c5-8c25-0771436b952f",
+      "created_at": "2026-09-09T01:31:16.488566+00:00"
+    },
+    {
+      "id": "c3e7fe80-88e1-435b-80c9-d4514d837c62",
+      "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+      "sku_code": "EMU-KIZ-OPTIONAL",
+      "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+      "quantity_delta": -1,
+      "movement_type": "marketplace_unload",
+      "actor_user_id": "00980c4b-c5ae-49c5-8c25-0771436b952f",
+      "created_at": "2026-09-09T01:31:14.424445+00:00"
+    }
+  ]
+}

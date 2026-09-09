@@ -1,0 +1,23 @@
+{
+  "checkedAt": "2026-09-09T01:30:39.806015+00:00",
+  "sha": "27400e5ff45d4e93eb6afc174f60710f3930abb4",
+  "expectedFiles": 428,
+  "actualFiles": 428,
+  "mismatch": [],
+  "extra": [],
+  "backendDeployment": "227cd159-eefd-4711-b1b0-97d019934ce1",
+  "webDeployment": "0f9dfc90-5953-4a66-8878-8832ef627826",
+  "railwayStatus": "SUCCESS",
+  "http": [
+    {
+      "url": "https://wms-production-780c.up.railway.app/health",
+      "status": 200,
+      "body": "{\"status\":\"ok\"}"
+    },
+    {
+      "url": "https://web-production-9e7c1.up.railway.app/app/ff/fbs",
+      "status": 200,
+      "body": "SPA"
+    }
+  ]
+}

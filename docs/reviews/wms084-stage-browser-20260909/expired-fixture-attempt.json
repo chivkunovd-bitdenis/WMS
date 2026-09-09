@@ -1,0 +1,174 @@
+{
+  "fixture": {
+    "tenant": "9c31f3f4-ce62-4c1f-891a-295b278f1e69",
+    "seller": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+    "product": "3d6050c5-0d29-4612-9e30-e90ecbf9408a",
+    "orders": [
+      "cf303d12-426b-4a38-a59f-ac0c18ccb68b",
+      "b620419c-79b3-4369-beb0-5fdc21c53ddb"
+    ],
+    "wbOrders": [
+      500033,
+      500035
+    ],
+    "code": "1be09c79-4fd1-465e-9688-a77183af289f",
+    "pool": "80a718dd-2487-4951-a1dd-9e13aee562e6",
+    "name": "WMS-084 QA 2026-09-09 · 500033 → 500035",
+    "operationKey": "wms084-browser-20260909-500033-500035"
+  },
+  "approvedSha": "27400e5ff45d4e93eb6afc174f60710f3930abb4",
+  "checks": [],
+  "snapshots": {
+    "before_setup": {
+      "product": [
+        {
+          "id": "3d6050c5-0d29-4612-9e30-e90ecbf9408a",
+          "sku_code": "EMU-CAN-PVZ-TRUE",
+          "name": "Куртка демо ПВЗ"
+        }
+      ],
+      "orders": [
+        {
+          "id": "cf303d12-426b-4a38-a59f-ac0c18ccb68b",
+          "wb_order_id": 500033,
+          "product_id": "3d6050c5-0d29-4612-9e30-e90ecbf9408a",
+          "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+          "supply_id": null,
+          "status": "new",
+          "pick_status": "pending",
+          "pack_status": "pending",
+          "reserve_status": "reserved",
+          "sticker_status": "not_requested",
+          "sticker_barcode": null
+        },
+        {
+          "id": "b620419c-79b3-4369-beb0-5fdc21c53ddb",
+          "wb_order_id": 500035,
+          "product_id": "3d6050c5-0d29-4612-9e30-e90ecbf9408a",
+          "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+          "supply_id": null,
+          "status": "new",
+          "pick_status": "pending",
+          "pack_status": "pending",
+          "reserve_status": "reserved",
+          "sticker_status": "not_requested",
+          "sticker_barcode": null
+        }
+      ],
+      "code": [
+        {
+          "id": "1be09c79-4fd1-465e-9688-a77183af289f",
+          "status": "available",
+          "source": "pool",
+          "pool_id": "80a718dd-2487-4951-a1dd-9e13aee562e6",
+          "packaging_task_line_id": null,
+          "printed_at": null,
+          "applied_at": null,
+          "introduced_at": null,
+          "has_label_artifact": false
+        }
+      ],
+      "bindings": [],
+      "balances": [
+        {
+          "id": "13a04ebf-c7bf-49d4-b720-fdf9e85d6a1d",
+          "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+          "container_kind": null,
+          "container_id": null,
+          "quantity": 0,
+          "quantity_unpacked": 0,
+          "quantity_packed": 0
+        },
+        {
+          "id": "9998d7cc-033c-4b1d-904f-118e3a33780f",
+          "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+          "container_kind": "cargo_place",
+          "container_id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+          "quantity": 20,
+          "quantity_unpacked": 20,
+          "quantity_packed": 0
+        },
+        {
+          "id": "a2f9dc94-e3db-47d2-9ab4-4ba9ead20dbe",
+          "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+          "container_kind": "box",
+          "container_id": "a91228f3-0e47-453a-b897-fe23a8519917",
+          "quantity": 40,
+          "quantity_unpacked": 40,
+          "quantity_packed": 0
+        }
+      ],
+      "movements": [
+        {
+          "id": "0c2a86b4-6b88-4438-9530-98203df7787a"
+        },
+        {
+          "id": "5de1bad7-f1b9-4b4a-bde8-e9010db93654"
+        },
+        {
+          "id": "6238628e-6df1-4b29-9679-cf2b92b46c19"
+        },
+        {
+          "id": "b4c45b78-e4e4-4a22-a74c-d4388406ca8d"
+        },
+        {
+          "id": "cf90d65a-3cb2-4855-9e99-b8cf5cb2af43"
+        },
+        {
+          "id": "dd0e5cb1-df3a-420b-8cd5-5fda7c1917b6"
+        }
+      ],
+      "reservations": [
+        {
+          "id": "14f3538b-103e-4a5d-aaf0-3db34f35d15f",
+          "fbs_order_id": "84049d60-2c7d-4352-a520-24c24e38c27e",
+          "quantity": 1
+        },
+        {
+          "id": "1af3fa8f-32c1-4c95-b87f-b681ecb2956e",
+          "fbs_order_id": "d1e9fa70-778a-4bae-99f0-7c6dae1ba18a",
+          "quantity": 1
+        },
+        {
+          "id": "31d3a7a4-bd94-4595-bc1a-e60ad61374eb",
+          "fbs_order_id": "88580177-fe3d-4748-8db5-ea9dbfe0b7e2",
+          "quantity": 1
+        },
+        {
+          "id": "3ca7b667-29d5-43f5-9363-26d6479b0eea",
+          "fbs_order_id": "dcd9f765-9be2-4d9b-855a-6f5da1af520e",
+          "quantity": 1
+        },
+        {
+          "id": "5fa6e868-dbca-4d0d-93c8-e0c44570e620",
+          "fbs_order_id": "57a44251-1ea9-46e0-8626-f515b8dc66ea",
+          "quantity": 1
+        },
+        {
+          "id": "6b96f81d-9b9c-4c16-a392-51fdd43efaad",
+          "fbs_order_id": "d7d91d16-4798-41d2-903b-d5b277a81c32",
+          "quantity": 1
+        },
+        {
+          "id": "88c10ab2-23b4-441a-aab9-2695f2383d8e",
+          "fbs_order_id": "cf303d12-426b-4a38-a59f-ac0c18ccb68b",
+          "quantity": 1
+        },
+        {
+          "id": "d6b2cca4-58c0-464e-8748-f2609b0d09ce",
+          "fbs_order_id": "9cfeccd6-c454-4122-8cb3-334f4bcdfd51",
+          "quantity": 1
+        },
+        {
+          "id": "ee6022d5-693f-4933-8bb5-9de647e650c3",
+          "fbs_order_id": "b620419c-79b3-4369-beb0-5fdc21c53ddb",
+          "quantity": 1
+        }
+      ],
+      "provider_host": "wb-emulator.railway.internal",
+      "runtime_sha": "27400e5ff45d4e93eb6afc174f60710f3930abb4"
+    }
+  },
+  "result": "FAIL_OR_INCOMPLETE",
+  "error": "POST /operations/fbs-supplies/from-orders: HTTP 409"
+}

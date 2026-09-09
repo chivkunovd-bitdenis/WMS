@@ -1,0 +1,39 @@
+{
+  "checkedAt": "2026-09-09T01:32:03.767595+00:00",
+  "taskId": "d4c49270-5fd5-4c7f-a4c6-37b42ee22cdc",
+  "summary": [
+    "[2026-09-09 01:25:51,477: INFO/ForkPoolWorker-1] wb products sync all sellers done ok=21 failed=7 skipped=0",
+    "[2026-09-09 01:25:51,477: INFO/ForkPoolWorker-1] Task wms.wb_catalog_hourly_sync[d4c49270-5fd5-4c7f-a4c6-37b42ee22cdc] succeeded in 531.4715568502434s: None"
+  ],
+  "successfulSellerCount": 21,
+  "failures": [
+    {
+      "sellerId": "d18e384f-6faa-4ff3-961f-9d3a5f308f17",
+      "error": "wb_upstream_error_401"
+    },
+    {
+      "sellerId": "2eadaf08-c9b7-48f8-b8e7-efe633483cc1",
+      "error": "wb_upstream_error_401"
+    },
+    {
+      "sellerId": "4e67e471-5cc4-4732-bc0b-f8f1143b5271",
+      "error": "wb_upstream_error_401"
+    },
+    {
+      "sellerId": "0746134b-f252-4543-91b9-fd872d008322",
+      "error": "wb_upstream_error_401"
+    },
+    {
+      "sellerId": "0d9c9932-c32e-47f9-af25-8719746e2e07",
+      "error": "wb_upstream_error_401"
+    },
+    {
+      "sellerId": "bf8eea6b-eaa6-47ea-8dfc-289142372dab",
+      "error": "IntegrityError: duplicate tenant/seller/sku_code during existing Product update"
+    },
+    {
+      "sellerId": "06b2e991-0533-4adf-83f3-d6cf21251433",
+      "error": "IntegrityError: duplicate tenant/seller/sku_code during existing Product update"
+    }
+  ]
+}
