@@ -93,7 +93,7 @@ async def _facts(
         .order_by(OperationFact.occurred_at)
     )
     if tenant_id:
-        query = query.where(OperationFact.tenant_id == tenant_id)
+        query = query.where(OperationFact.tenant_id == uuid.UUID(tenant_id))
     return list((await session.scalars(query)).all())
 
 

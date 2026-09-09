@@ -119,10 +119,10 @@ async def reverse_fbs_order_billing(
 ) -> None:
     """Снять с селлера деньги за отменённый заказ.
 
-    Начисление появляется, когда маркетплейс подтвердил, что забрал заказ. После
-    этого заказ всё ещё может отмениться — покупателем или самим маркетплейсом, —
-    и без сторно селлер платит за работу, которой не было. Отменяем обе строки
-    документа: и сборку заказа, и упаковку по нему.
+    Для WB подтверждённая передача через WMS означает выполненную работу:
+    последующая отмена покупателем не сторнирует сборку и упаковку. Для старых
+    начислений без доказанной передачи и для Ozon сохраняется прежнее сторно
+    обеих строк документа.
 
     Второе сторно появиться не может: начисление, у которого сторно уже есть,
     перестаёт быть активным, и повторная отмена возвращает прежнюю строку, не
@@ -135,6 +135,15 @@ async def reverse_fbs_order_billing(
     """
     try:
         async with session.begin_nested():
+            if order.marketplace == "wb":
+                from app.services.fbs_order_billing_service import confirmed_order_handover_dates
+
+                if order.id in await confirmed_order_handover_dates(
+                    session, order.tenant_id, [order]
+                ):
+                    # WMS-406: a later buyer cancellation does not undo work
+                    # already performed by the warehouse at successful handover.
+                    return
             occurred_at = datetime.now(UTC)
             for service_code in (FBS_ORDER_SERVICE_CODE, PACKING_SERVICE_CODE):
                 await record_operational_reversal(
