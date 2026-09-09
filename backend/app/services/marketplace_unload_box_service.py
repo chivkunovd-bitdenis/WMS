@@ -23,6 +23,13 @@ from app.services import marketplace_unload_collect_service as collect_svc
 from app.services import marketplace_unload_service as mu_svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services import warehouse_box_service as wh_box_svc
+from app.services import warehouse_map_service
+from app.services.inventory_container_service import (
+    ContainerKind,
+    InventoryContainerScanError,
+    resolve_container_scan,
+    validate_container,
+)
 from app.services.marketplace_unload_pick_service import (
     MarketplaceUnloadPickError,
     find_location_by_barcode,
@@ -44,9 +51,12 @@ class MarketplaceUnloadBoxError(Exception):
 class BoxScanResult:
     """TSD scan flow: location (optional) → ready box / product → box line update."""
 
-    kind: Literal["location", "product", "ready_box"]
+    kind: Literal["location", "container", "product", "ready_box"]
     storage_location_id: uuid.UUID | None = None
     location_code: str | None = None
+    container_kind: ContainerKind | None = None
+    container_id: uuid.UUID | None = None
+    container_code: str | None = None
     box_line: MarketplaceUnloadBoxLine | None = None
     picked_qty: int | None = None
     lines_added: int | None = None
@@ -222,6 +232,9 @@ async def collect_ready_box_into_open_box(
     if wh_box is not None and wh_box.warehouse_id != req.warehouse_id:
         raise MarketplaceUnloadBoxError("warehouse_mismatch")
 
+    if inb_box is None:
+        raise MarketplaceUnloadBoxError("box_needs_location")
+
     picks_added = 0
     total_qty = 0
     if inb_box is not None:
@@ -298,6 +311,8 @@ async def scan_barcode_into_box(
     quantity: int = 1,
     allow_over_plan: bool = False,
     actor_user_id: uuid.UUID | None,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> BoxScanResult:
     """Scan flow for TSD/web: optional location barcode, then product → box line."""
     raw = barcode.strip()
@@ -324,8 +339,8 @@ async def scan_barcode_into_box(
                 location_code=loc.code,
             )
 
-    wh_box, inb_box = await wh_box_svc.resolve_barcode(session, tenant_id, raw)
-    if wh_box is not None or inb_box is not None:
+    _wh_box, inb_box = await wh_box_svc.resolve_barcode(session, tenant_id, raw)
+    if inb_box is not None:
         return await collect_ready_box_into_open_box(
             session,
             tenant_id,
@@ -333,6 +348,27 @@ async def scan_barcode_into_box(
             barcode=raw,
             allow_over_plan=allow_over_plan,
             actor_user_id=actor_user_id,
+        )
+
+    # A storage container selects the exact source; it does not move its contents.
+    try:
+        container = await resolve_container_scan(session, tenant_id, req.warehouse_id, raw)
+    except InventoryContainerScanError as exc:
+        if exc.code != "container_scan_not_found":
+            raise MarketplaceUnloadBoxError("invalid_container_reference") from exc
+    else:
+        try:
+            location_id = await warehouse_map_service.resolve_container_location(
+                session, tenant_id, req.warehouse_id, container.kind, container.id
+            )
+        except (ValueError, warehouse_map_service.WarehouseMapError) as exc:
+            raise MarketplaceUnloadBoxError("invalid_container_reference") from exc
+        return BoxScanResult(
+            kind="container",
+            storage_location_id=location_id,
+            container_kind=container.kind,
+            container_id=container.id,
+            container_code=container.code,
         )
 
     if product_id_hint is None:
@@ -346,24 +382,23 @@ async def scan_barcode_into_box(
     if not await _product_in_shipment(session, req.id, product_id):
         raise MarketplaceUnloadBoxError("product_not_in_shipment")
 
-    try:
-        result = await collect_svc.collect_into_box(
-            session,
-            tenant_id,
-            box.request_id,
-            box_id=box_id,
-            storage_location_id=storage_location_id,
-            product_id=product_id,
-            quantity=quantity,
-            actor_user_id=actor_user_id,
-        )
-    except MarketplaceUnloadPickError as exc:
-        raise _map_collect_err(exc) from None
+    line = await add_manual_qty_to_box(
+        session,
+        tenant_id,
+        box_id,
+        storage_location_id=storage_location_id,
+        product_id=product_id,
+        quantity=quantity,
+        actor_user_id=actor_user_id,
+        allow_over_plan=allow_over_plan,
+        container_kind=container_kind,
+        container_id=container_id,
+    )
     return BoxScanResult(
         kind="product",
-        storage_location_id=result.allocation.storage_location_id,
-        box_line=result.box_line,
-        picked_qty=result.picked_qty,
+        storage_location_id=storage_location_id,
+        box_line=line,
+        picked_qty=await collect_svc.picked_qty_for_product(session, box.request_id, product_id),
     )
 
 
@@ -438,6 +473,9 @@ async def add_manual_qty_to_box(
     storage_location_id: uuid.UUID | None,
     quantity: int,
     actor_user_id: uuid.UUID | None,
+    allow_over_plan: bool = False,
+    container_kind: ContainerKind | None = None,
+    container_id: uuid.UUID | None = None,
 ) -> MarketplaceUnloadBoxLine:
     if quantity < 1:
         raise MarketplaceUnloadBoxError("invalid_quantity")
@@ -449,6 +487,29 @@ async def add_manual_qty_to_box(
     req = await _request_for_picking(session, tenant_id, box.request_id)
     if not await _product_in_shipment(session, req.id, product_id):
         raise MarketplaceUnloadBoxError("product_not_in_shipment")
+
+    if (container_kind is None) != (container_id is None):
+        raise MarketplaceUnloadBoxError("invalid_container_reference")
+    if container_kind is not None and container_id is not None:
+        try:
+            await validate_container(
+                session, tenant_id, req.warehouse_id, container_kind, container_id
+            )
+            source_location_id = await warehouse_map_service.resolve_container_location(
+                session, tenant_id, req.warehouse_id, container_kind, container_id
+            )
+        except (ValueError, warehouse_map_service.WarehouseMapError) as exc:
+            raise MarketplaceUnloadBoxError("invalid_container_reference") from exc
+        if storage_location_id is not None and storage_location_id != source_location_id:
+            raise MarketplaceUnloadBoxError("invalid_container_reference")
+        storage_location_id = source_location_id
+
+    # Serialize placement with collection: two scans cannot spend the same picked unit.
+    await session.execute(
+        select(MarketplaceUnloadRequest.id)
+        .where(MarketplaceUnloadRequest.id == req.id)
+        .with_for_update()
+    )
 
     # Упаковка идёт после подбора, и товар к этому моменту уже снят со склада.
     # Раньше любое наполнение короба шло через подбор, а тот отказывал с
@@ -477,6 +538,9 @@ async def add_manual_qty_to_box(
                 product_id=product_id,
                 quantity=to_collect,
                 actor_user_id=actor_user_id,
+                allow_over_plan=allow_over_plan,
+                container_kind=container_kind,
+                container_id=container_id,
             )
         except MarketplaceUnloadPickError as exc:
             raise _map_collect_err(exc) from None

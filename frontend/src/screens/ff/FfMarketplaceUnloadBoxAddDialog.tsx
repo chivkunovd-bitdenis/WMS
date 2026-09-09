@@ -43,7 +43,10 @@ type PickOptionLocation = {
   quantity: number
   reserved: number
   available: number
+  sources?: { available: number; container_path: { id: string }[] }[]
 }
+
+type ContainerSource = { kind: 'pallet' | 'box' | 'cargo_place'; id: string; code: string }
 
 type LocationOption = {
   id: string
@@ -89,12 +92,20 @@ function physicalAvailable(
   addressStorageEnabled: boolean,
   activeLocationId: string | null,
   warehouseStockByProductId: Map<string, number>,
+  container: ContainerSource | null,
 ): number {
+  if (container) {
+    return row.locations.flatMap((location) => location.sources ?? [])
+      .find((source) => source.container_path.at(-1)?.id === container.id)?.available ?? 0
+  }
   if (!addressStorageEnabled) {
     return warehouseStockByProductId.get(row.product_id) ?? 0
   }
   if (activeLocationId) {
     const loc = row.locations.find((l) => l.storage_location_id === activeLocationId)
+    if (loc?.sources) {
+      return loc.sources.find((source) => source.container_path.length === 0)?.available ?? 0
+    }
     return loc?.available ?? 0
   }
   return row.locations.reduce((sum, l) => sum + l.available, 0)
@@ -105,6 +116,7 @@ function addableQty(
   addressStorageEnabled: boolean,
   activeLocationId: string | null,
   warehouseStockByProductId: Map<string, number>,
+  container: ContainerSource | null,
 ): number {
   // Считаем остаток к раскладке по коробам, а не по подобранному. Раньше здесь
   // стояло «план − подобрано»: после полного подбора выходил ноль, кнопка
@@ -118,6 +130,7 @@ function addableQty(
     addressStorageEnabled,
     activeLocationId,
     warehouseStockByProductId,
+    container,
   )
   return Math.min(leftToBox, alreadyPicked + physical)
 }
@@ -153,7 +166,7 @@ function productNeedsExplicitLocation(
 }
 
 function looksLikeReadyBoxBarcode(raw: string): boolean {
-  return raw.startsWith('WHB-') || raw.startsWith('INB-')
+  return raw.startsWith('INB-')
 }
 
 export function FfMarketplaceUnloadBoxAddDialog({
@@ -182,6 +195,11 @@ export function FfMarketplaceUnloadBoxAddDialog({
   const [scanBarcode, setScanBarcode] = useState('')
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null)
   const [activeLocationCode, setActiveLocationCode] = useState<string | null>(null)
+  const [activeContainer, setActiveContainer] = useState<ContainerSource | null>(null)
+  // The serial scanner queue must see a preceding source scan before React rerenders.
+  const sourceRef = useRef<{ locationId: string | null; container: ContainerSource | null }>({
+    locationId: null, container: null,
+  })
   const [manualQtyByProduct, setManualQtyByProduct] = useState<Record<string, string>>({})
   const [readyBoxConfirmOpen, setReadyBoxConfirmOpen] = useState(false)
   const [readyBoxOverPlanOpen, setReadyBoxOverPlanOpen] = useState(false)
@@ -238,12 +256,12 @@ export function FfMarketplaceUnloadBoxAddDialog({
 
   const scanPlaceholder = useMemo(() => {
     if (addressStorageEnabled && !activeLocationId) {
-      return 'Штрихкод ячейки, товара или готового короба (WHB-…)'
+      return 'Штрихкод ячейки, тары или товара'
     }
     if (addressStorageEnabled) {
-      return 'Штрихкод товара или готового короба (WHB-…)'
+      return 'Штрихкод тары или товара'
     }
-    return 'Штрихкод товара или готового короба (WHB-…)'
+    return 'Штрихкод тары или товара'
   }, [addressStorageEnabled, activeLocationId])
 
   const loadPickOptions = useCallback(async (opts?: { silent?: boolean }) => {
@@ -281,6 +299,8 @@ export function FfMarketplaceUnloadBoxAddDialog({
       setScanBarcode('')
       setActiveLocationId(null)
       setActiveLocationCode(null)
+      setActiveContainer(null)
+      sourceRef.current = { locationId: null, container: null }
       setManualQtyByProduct({})
       setError(null)
       setReadyBoxConfirmOpen(false)
@@ -304,6 +324,8 @@ export function FfMarketplaceUnloadBoxAddDialog({
 
   const selectLocation = (locationId: string) => {
     const loc = locationOptions.find((l) => l.id === locationId)
+    sourceRef.current = { locationId: locationId || null, container: null }
+    setActiveContainer(null)
     setActiveLocationId(locationId || null)
     setActiveLocationCode(loc?.code ?? null)
   }
@@ -333,9 +355,15 @@ export function FfMarketplaceUnloadBoxAddDialog({
         product_id: string
         quantity: number
         storage_location_id?: string
+        container_kind?: ContainerSource['kind']
+        container_id?: string
       } = { product_id: productId, quantity }
       if (addressStorageEnabled && activeLocationId) {
         body.storage_location_id = activeLocationId
+      }
+      if (activeContainer) {
+        body.container_kind = activeContainer.kind
+        body.container_id = activeContainer.id
       }
       const res = await fetch(
         apiUrl(
@@ -372,6 +400,8 @@ export function FfMarketplaceUnloadBoxAddDialog({
         quantity: number
         storage_location_id?: string
         allow_over_plan?: boolean
+        container_kind?: ContainerSource['kind']
+        container_id?: string
       } = {
         barcode,
         quantity: 1,
@@ -381,8 +411,13 @@ export function FfMarketplaceUnloadBoxAddDialog({
       if (productId) {
         scanBody.product_id = productId
       }
-      if (addressStorageEnabled && activeLocationId) {
-        scanBody.storage_location_id = activeLocationId
+      const selected = sourceRef.current
+      if (addressStorageEnabled && selected.locationId) {
+        scanBody.storage_location_id = selected.locationId
+      }
+      if (selected.container) {
+        scanBody.container_kind = selected.container.kind
+        scanBody.container_id = selected.container.id
       }
 
       const scanRes = await fetch(
@@ -400,6 +435,9 @@ export function FfMarketplaceUnloadBoxAddDialog({
           kind: string
           storage_location_id?: string | null
           location_code?: string | null
+          container_kind?: ContainerSource['kind']
+          container_id?: string
+          container_code?: string
           total_qty?: number | null
           product_id?: string | null
           id?: string | null
@@ -408,7 +446,20 @@ export function FfMarketplaceUnloadBoxAddDialog({
           quantity?: number | null
           picked_qty?: number | null
         }
+        if (j.kind === 'container' && j.container_kind && j.container_id) {
+          const container = {
+            kind: j.container_kind, id: j.container_id, code: j.container_code ?? j.container_id,
+          }
+          sourceRef.current = { locationId: j.storage_location_id ?? null, container }
+          setActiveContainer(container)
+          setActiveLocationId(j.storage_location_id ?? null)
+          setActiveLocationCode(j.location_code ?? j.storage_location_id ?? null)
+          setScanBarcode('')
+          return
+        }
         if (j.kind === 'location' && j.storage_location_id) {
+          sourceRef.current = { locationId: j.storage_location_id, container: null }
+          setActiveContainer(null)
           setActiveLocationId(j.storage_location_id)
           setActiveLocationCode(j.location_code ?? j.storage_location_id)
           setScanBarcode('')
@@ -427,12 +478,22 @@ export function FfMarketplaceUnloadBoxAddDialog({
           setPickOptions((current) =>
             current.map((row) => {
               if (row.product_id !== j.product_id) return row
+              const pickedDelta = Math.max(0, (j.picked_qty ?? row.picked_qty + 1) - row.picked_qty)
               return {
                 ...row,
                 picked_qty: j.picked_qty ?? row.picked_qty + 1,
+                boxed_qty: (row.boxed_qty ?? 0) + 1,
                 locations: row.locations.map((location) =>
                   location.storage_location_id === j.storage_location_id
-                    ? { ...location, available: Math.max(0, location.available - 1) }
+                    ? {
+                        ...location,
+                        available: Math.max(0, location.available - pickedDelta),
+                        sources: location.sources?.map((source) =>
+                          (source.container_path.at(-1)?.id ?? null) === (selected.container?.id ?? null)
+                            ? { ...source, available: Math.max(0, source.available - pickedDelta) }
+                            : source,
+                        ),
+                      }
                     : location,
                 ),
               }
@@ -472,11 +533,13 @@ export function FfMarketplaceUnloadBoxAddDialog({
       }
       if (errDetail === 'insufficient_available') {
         setError(
-          'Недостаточно остатка в выбранной ячейке. Если товар ещё в зоне сортировки — не выбирайте ячейку и сканируйте товар снова.',
+          'Недостаточно остатка в выбранном источнике. Проверьте ячейку или отсканируйте нужную тару.',
         )
         return
       }
-      setError(errDetail ?? errText.slice(0, 200) ?? 'Не удалось выполнить скан.')
+      setError(errDetail === 'invalid_container_reference'
+        ? 'Тара недоступна или находится в другой ячейке. Отсканируйте источник заново.'
+        : errDetail ?? errText.slice(0, 200) ?? 'Не удалось выполнить скан.')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось выполнить скан.')
     } finally {
@@ -593,10 +656,9 @@ export function FfMarketplaceUnloadBoxAddDialog({
                     {activeLocationCode ? (
                       <Chip
                         size="small"
-                        label={`Ячейка: ${activeLocationCode}`}
+                        label={activeContainer ? `Тара: ${activeContainer.code}` : `Ячейка: ${activeLocationCode}`}
                         onDelete={() => {
-                          setActiveLocationId(null)
-                          setActiveLocationCode(null)
+                          selectLocation('')
                         }}
                         data-testid="ff-mp-box-add-active-location"
                       />
@@ -618,6 +680,9 @@ export function FfMarketplaceUnloadBoxAddDialog({
                       </Typography>
                     )}
                   </Stack>
+                ) : null}
+                {!addressStorageEnabled && activeContainer ? (
+                  <Chip size="small" label={`Тара: ${activeContainer.code}`} onDelete={() => selectLocation('')} data-testid="ff-mp-box-add-active-location" />
                 ) : null}
                 <Stack
                   direction={{ xs: 'column', sm: 'row' }}
@@ -688,6 +753,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
                           addressStorageEnabled,
                           activeLocationId,
                           warehouseStockByProductId,
+                          activeContainer,
                         )
                         const qtyStr = manualQtyByProduct[row.product_id] ?? '1'
                         const qtyNum = Number(qtyStr)
