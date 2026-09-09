@@ -1,0 +1,27 @@
+{
+  "scope": "local real component; synthetic failure/success callbacks; no warehouse/API mutations",
+  "cases": [
+    {
+      "name": "missing warehouse",
+      "error": "Склад ФФ не найден.",
+      "dialogOpen": true
+    },
+    {
+      "name": "API failure",
+      "error": "seller_not_found",
+      "dialogOpen": true
+    },
+    {
+      "name": "null result",
+      "dialogOpen": true
+    },
+    {
+      "name": "successful create",
+      "dialogOpen": false
+    }
+  ],
+  "pageErrors": [],
+  "requests": [],
+  "result": "PASS",
+  "finished": "2026-09-09T09:36:59.631Z"
+}

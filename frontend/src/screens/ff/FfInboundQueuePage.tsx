@@ -54,7 +54,7 @@ type Props = {
     operationType: InboundOperationType,
     sellerId: string,
     marketplace?: Exclude<ReturnMarketplace, ''>,
-  ) => void | Promise<void>
+  ) => { id: string } | null | void | Promise<{ id: string } | null | void>
   creatingDraft?: boolean
   sellers?: { id: string; name: string }[]
   loading?: boolean
@@ -143,6 +143,7 @@ export function FfInboundQueuePage({
   const [draftOperationType, setDraftOperationType] = useState<InboundOperationType | null>(null)
   const [draftSellerId, setDraftSellerId] = useState('')
   const [draftMarketplace, setDraftMarketplace] = useState<ReturnMarketplace>('')
+  const [createError, setCreateError] = useState<string | null>(null)
 
   useEffect(() => {
     if (workspace === 'reception' && onRetry) {
@@ -208,6 +209,7 @@ export function FfInboundQueuePage({
   }
 
   const openCreateDialog = (operationType: InboundOperationType) => {
+    setCreateError(null)
     setDraftOperationType(operationType)
     setDraftSellerId(sellerOptions.length === 1 ? sellerOptions[0].id : '')
     setDraftMarketplace('')
@@ -221,9 +223,18 @@ export function FfInboundQueuePage({
 
   const submitCreateDialog = async () => {
     if (!draftOperationType || !draftSellerId || !onCreateDraft) return
-    await onCreateDraft(draftOperationType, draftSellerId,
-      draftOperationType === 'return' && draftMarketplace ? draftMarketplace : undefined,)
-    closeCreateDialog()
+    setCreateError(null)
+    try {
+      const created = await onCreateDraft(draftOperationType, draftSellerId,
+        draftOperationType === 'return' && draftMarketplace ? draftMarketplace : undefined,)
+      if (created === null) {
+        setCreateError('Документ не создан. Повторите попытку.')
+        return
+      }
+      closeCreateDialog()
+    } catch (reason) {
+      setCreateError(reason instanceof Error ? reason.message : 'Не удалось создать документ.')
+    }
   }
 
   return (
@@ -328,6 +339,7 @@ export function FfInboundQueuePage({
             {draftOperationType === 'return' ? 'Создать возврат' : 'Создать приёмку'}
           </DialogTitle>
           <DialogContent sx={{ minWidth: 360, pt: 1 }}>
+            {createError ? <Alert severity="error" sx={{ mt: 1 }} data-testid="ff-inbound-create-error">{createError}</Alert> : null}
             <FormControl fullWidth size="small" sx={{ mt: 1 }}>
               <InputLabel id="ff-inbound-create-seller-label">Селлер</InputLabel>
               <Select
