@@ -30,7 +30,6 @@ from app.services.auth_service import (
 )
 from app.services.login_rate_limit import (
     check_login_rate_limit,
-    register_login_failure,
     register_login_success,
 )
 from app.services.seller_shop_service import (
@@ -255,7 +254,7 @@ async def login_route(
 ) -> TokenResponse:
     # WMS-270. Ограничитель частоты — до всех обращений к базе, чтобы перебор
     # почт не мог просто нагружать бэкенд запросами. На каждый неуспех счётчик
-    # растёт, на успех — сбрасывается.
+    # остаётся занятым; успех освобождает только свою попытку.
     check_login_rate_limit(request=request, email=str(body.email))
     try:
         _user, token = await login(
@@ -265,7 +264,6 @@ async def login_route(
         # WMS-270. Все причины отказа (нет пользователя, пароль не установлен,
         # неверный пароль, аккаунт заблокирован) отвечают одинаково: 401 и
         # неизменяемый invalid_credentials. Никаких оракулов на состояние аккаунта.
-        register_login_failure(request=request, email=str(body.email))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="invalid_credentials",
