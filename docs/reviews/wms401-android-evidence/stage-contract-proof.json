@@ -1,0 +1,52 @@
+{
+  "base": "https://web-production-9e7c1.up.railway.app/api/",
+  "source_sha": "d15f09d4c09c74438ebd6b31632db0c346525a6f",
+  "get_only": true,
+  "responses": [
+    {
+      "path": "operations/fbs-orders/worklist?marketplace=wb&limit=100",
+      "http_status": 200,
+      "bytes": 110856,
+      "seconds": 0.652,
+      "items_count": 59,
+      "decode": "DECODE_OK",
+      "decode_exit": 0
+    },
+    {
+      "path": "operations/fbs-supplies/worklist?marketplace=wb&status_group=active&limit=100",
+      "http_status": 200,
+      "bytes": 10531,
+      "seconds": 0.395,
+      "items_count": 23,
+      "decode": "DECODE_OK",
+      "decode_exit": 0
+    },
+    {
+      "path": "operations/fbs-supplies/4e38cabf-b129-4a28-85b0-3dd3631da6a4/workspace",
+      "http_status": 200,
+      "bytes": 5171,
+      "seconds": 0.468,
+      "items_count": 2,
+      "decode": "DECODE_OK",
+      "decode_exit": 0
+    },
+    {
+      "path": "operations/fbs-supplies/4e38cabf-b129-4a28-85b0-3dd3631da6a4/pick-options",
+      "http_status": 200,
+      "bytes": 2147,
+      "seconds": 0.455,
+      "items_count": 2
+    },
+    {
+      "path": "operations/packaging-tasks/77ae4141-6aab-4abd-86d9-8b7d5b190328",
+      "http_status": 200,
+      "bytes": 3501,
+      "seconds": 0.386,
+      "items_count": 0,
+      "decode": "DECODE_OK",
+      "decode_exit": 0
+    }
+  ],
+  "tenant_id": "9c31f3f4-ce62-4c1f-891a-295b278f1e69",
+  "missing_routes": []
+}
