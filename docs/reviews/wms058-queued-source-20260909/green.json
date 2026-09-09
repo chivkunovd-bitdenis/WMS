@@ -1,0 +1,1892 @@
+{
+  "label": "WMS058 queue-source GREEN",
+  "started": "2026-09-09T04:04:33.355Z",
+  "sha": "1a508b98c01d55e3462f104c1523f4ff6721704d",
+  "requests": [
+    {
+      "time": "2026-09-09T04:04:45.568Z",
+      "body": {
+        "barcode": "FBSVID-BOX-03",
+        "quantity": 1,
+        "allow_over_plan": false
+      }
+    },
+    {
+      "time": "2026-09-09T04:04:45.901Z",
+      "body": {
+        "barcode": "2000000000013",
+        "quantity": 1,
+        "allow_over_plan": false,
+        "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+        "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+        "container_kind": "box",
+        "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe"
+      }
+    },
+    {
+      "time": "2026-09-09T04:04:52.192Z",
+      "body": {
+        "barcode": "2000000000013",
+        "quantity": 1,
+        "allow_over_plan": false,
+        "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+        "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+        "container_kind": "box",
+        "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe"
+      }
+    },
+    {
+      "time": "2026-09-09T04:04:59.666Z",
+      "body": {
+        "barcode": "2000000000013",
+        "quantity": 1,
+        "allow_over_plan": true,
+        "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+        "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+        "container_kind": "box",
+        "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe"
+      }
+    },
+    {
+      "time": "2026-09-09T04:05:00.178Z",
+      "body": {
+        "barcode": "FBSVID-CARGO-01",
+        "quantity": 1,
+        "allow_over_plan": false,
+        "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+        "container_kind": "box",
+        "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe"
+      }
+    }
+  ],
+  "states": {
+    "before_create": {
+      "physical": {
+        "product": [
+          {
+            "id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+            "sku_code": "EMU-KIZ-OPTIONAL"
+          }
+        ],
+        "balances": [
+          {
+            "id": "6db70eba-c6e3-4fd0-bcb9-f470fd9423e0",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity": 9,
+            "quantity_unpacked": 9,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": null
+          },
+          {
+            "id": "73900eac-5274-46b6-b5f0-9e63a78b0622",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "cargo_place",
+            "container_id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+            "quantity": 19,
+            "quantity_unpacked": 19,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": "FBSVID-CARGO-01"
+          },
+          {
+            "id": "7c41f02e-b0ae-4a8c-afff-91b5b392b84b",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity": 0,
+            "quantity_unpacked": 0,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": null
+          },
+          {
+            "id": "852604bb-0974-48ca-8f2a-8428e3a62600",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity": 0,
+            "quantity_unpacked": 0,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": null
+          },
+          {
+            "id": "a32618f8-1b8e-40c0-a61f-f9ab602774ad",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity": 34,
+            "quantity_unpacked": 34,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": "FBSVID-BOX-03"
+          }
+        ],
+        "movements": [
+          {
+            "id": "0ba0f309-144c-405b-95dd-c5c272b8c832",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": -20,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "1288a4ac-6aa5-4f94-85d4-1266e5dc42cb",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 2,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "15775d9a-f115-4d02-a122-981c83bb9315",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 10,
+            "movement_type": "inbound_intake"
+          },
+          {
+            "id": "1ffc9d1d-6b16-4dc9-acef-ad84e51a63a3",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "cargo_place",
+            "container_id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "380f9835-c415-4bc6-a254-06c3599c7d63",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 50,
+            "movement_type": "inbound_intake"
+          },
+          {
+            "id": "40b07d06-28a6-48f4-8330-a141bd424767",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "4135e508-cc1e-4653-bc96-ea007d466eea",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 2,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "4d0c2101-2a30-421b-bf80-73581acb7bd6",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "50d33053-38e0-4919-98cb-e1fc622bf6fe",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": 40,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "7635609b-9132-47a5-8eca-4a97ac393c2f",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "cargo_place",
+            "container_id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+            "quantity_delta": 20,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "789ac206-b95d-461f-b238-d088fc753e8a",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": -2,
+            "movement_type": "stock_transfer_out"
+          },
+          {
+            "id": "99304ec4-1f3a-43fa-9400-a87ae33f4814",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": 2,
+            "movement_type": "stock_transfer_in"
+          },
+          {
+            "id": "b20458b7-5b57-4bd9-9b06-7e757d5eb11e",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": -40,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "bbf66f67-ac6f-4bdf-8a7c-8e4555758da8",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 2,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "c3e7fe80-88e1-435b-80c9-d4514d837c62",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "c7290fdd-b9d4-4381-bc6c-c74b4e327d3d",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "de33e72e-80df-48be-997b-907adf1280e0",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "e1b35c51-4b12-4194-9841-46a8ee7a1b23",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "e5cccd47-58cf-44c3-8d81-d0a8dbe2cb7f",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 3,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "e8192b2d-7785-4952-a5cc-5422829e3df7",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": 2,
+            "movement_type": "inbound_intake"
+          },
+          {
+            "id": "f5e1f902-0688-44bf-b608-f2d571285b2e",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "f86ab4ee-e648-48ab-9433-a00fae337437",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          }
+        ],
+        "sha": "1a508b98c01d55e3462f104c1523f4ff6721704d"
+      }
+    },
+    "plan_fulfilled": {
+      "physical": {
+        "product": [
+          {
+            "id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+            "sku_code": "EMU-KIZ-OPTIONAL"
+          }
+        ],
+        "balances": [
+          {
+            "id": "6db70eba-c6e3-4fd0-bcb9-f470fd9423e0",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity": 9,
+            "quantity_unpacked": 9,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": null
+          },
+          {
+            "id": "73900eac-5274-46b6-b5f0-9e63a78b0622",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "cargo_place",
+            "container_id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+            "quantity": 19,
+            "quantity_unpacked": 19,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": "FBSVID-CARGO-01"
+          },
+          {
+            "id": "7c41f02e-b0ae-4a8c-afff-91b5b392b84b",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity": 0,
+            "quantity_unpacked": 0,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": null
+          },
+          {
+            "id": "852604bb-0974-48ca-8f2a-8428e3a62600",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity": 0,
+            "quantity_unpacked": 0,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": null
+          },
+          {
+            "id": "a32618f8-1b8e-40c0-a61f-f9ab602774ad",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity": 33,
+            "quantity_unpacked": 33,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": "FBSVID-BOX-03"
+          }
+        ],
+        "movements": [
+          {
+            "id": "0ba0f309-144c-405b-95dd-c5c272b8c832",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": -20,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "1288a4ac-6aa5-4f94-85d4-1266e5dc42cb",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 2,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "15775d9a-f115-4d02-a122-981c83bb9315",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 10,
+            "movement_type": "inbound_intake"
+          },
+          {
+            "id": "1ffc9d1d-6b16-4dc9-acef-ad84e51a63a3",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "cargo_place",
+            "container_id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "2d227685-93be-44d7-a3c0-0a7a30ec2fd5",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "380f9835-c415-4bc6-a254-06c3599c7d63",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 50,
+            "movement_type": "inbound_intake"
+          },
+          {
+            "id": "40b07d06-28a6-48f4-8330-a141bd424767",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "4135e508-cc1e-4653-bc96-ea007d466eea",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 2,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "4d0c2101-2a30-421b-bf80-73581acb7bd6",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "50d33053-38e0-4919-98cb-e1fc622bf6fe",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": 40,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "7635609b-9132-47a5-8eca-4a97ac393c2f",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "cargo_place",
+            "container_id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+            "quantity_delta": 20,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "789ac206-b95d-461f-b238-d088fc753e8a",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": -2,
+            "movement_type": "stock_transfer_out"
+          },
+          {
+            "id": "99304ec4-1f3a-43fa-9400-a87ae33f4814",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": 2,
+            "movement_type": "stock_transfer_in"
+          },
+          {
+            "id": "b20458b7-5b57-4bd9-9b06-7e757d5eb11e",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": -40,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "bbf66f67-ac6f-4bdf-8a7c-8e4555758da8",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 2,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "c3e7fe80-88e1-435b-80c9-d4514d837c62",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "c7290fdd-b9d4-4381-bc6c-c74b4e327d3d",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "de33e72e-80df-48be-997b-907adf1280e0",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "e1b35c51-4b12-4194-9841-46a8ee7a1b23",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "e5cccd47-58cf-44c3-8d81-d0a8dbe2cb7f",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 3,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "e8192b2d-7785-4952-a5cc-5422829e3df7",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": 2,
+            "movement_type": "inbound_intake"
+          },
+          {
+            "id": "f5e1f902-0688-44bf-b608-f2d571285b2e",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "f86ab4ee-e648-48ab-9433-a00fae337437",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          }
+        ],
+        "sha": "1a508b98c01d55e3462f104c1523f4ff6721704d"
+      },
+      "detail": {
+        "id": "de10f403-dad1-432d-8c1e-a588586457a1",
+        "document_number": "ОТГР-26-09-09-7",
+        "display_number": "№000042",
+        "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+        "warehouse_name": "Тестовый",
+        "status": "collecting",
+        "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+        "seller_name": "Эмулятор WB",
+        "marketplace": "wb",
+        "wb_mp_warehouse_id": 507,
+        "planned_shipment_date": "2026-09-10",
+        "ff_modified": false,
+        "created_at": "2026-09-09T04:04:39.045995+00:00",
+        "lines": [
+          {
+            "id": "c71fbea2-ad1b-4895-ae93-3d85b2c4659f",
+            "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "sku_code": "EMU-KIZ-OPTIONAL",
+            "product_name": "Куртка демо ЧЗ необязателен",
+            "quantity": 1,
+            "picked_qty": 1,
+            "has_discrepancy": false
+          }
+        ],
+        "boxes": [
+          {
+            "id": "1509becf-2edd-401b-8427-3e71f0189411",
+            "box_preset": "60_40_40",
+            "internal_barcode": "WHB-5HA1B21F0NPVE5",
+            "closed_at": null,
+            "lines": [
+              {
+                "id": "23d9bb23-5d4c-435c-ad58-7ba7904b9b47",
+                "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+                "sku_code": "EMU-KIZ-OPTIONAL",
+                "product_name": "Куртка демо ЧЗ необязателен",
+                "quantity": 1
+              }
+            ]
+          }
+        ],
+        "pick_allocations": [
+          {
+            "id": "b23c01d6-c1a7-4109-8bdd-59ff7963001c",
+            "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "sku_code": "EMU-KIZ-OPTIONAL",
+            "product_name": "Куртка демо ЧЗ необязателен",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "location_code": "FBS-VIDEO-01",
+            "quantity": 1
+          }
+        ],
+        "linked_packaging_task": {
+          "task_id": "83fc4509-4579-43a3-bb77-19fbf5fc2928",
+          "status": "in_progress",
+          "qty_done": 1,
+          "qty_total": 1,
+          "is_complete": true
+        }
+      },
+      "options": [
+        {
+          "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+          "sku_code": "EMU-KIZ-OPTIONAL",
+          "product_name": "Куртка демо ЧЗ необязателен",
+          "planned_qty": 1,
+          "picked_qty": 1,
+          "boxed_qty": 1,
+          "locations": [
+            {
+              "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+              "location_code": "FBS-VIDEO-01",
+              "quantity": 52,
+              "reserved": 0,
+              "available": 50,
+              "picked": 1,
+              "sources": [
+                {
+                  "quantity": 19,
+                  "available": 17,
+                  "picked": 0,
+                  "is_loose": false,
+                  "source_label": "Грузоместо FBSVID-CARGO-01",
+                  "container_path": [
+                    {
+                      "kind": "pallet",
+                      "id": "8ab29b41-23d6-44ad-acb6-427abd13eeed",
+                      "code": "П-001012",
+                      "label": "Палета П-001012"
+                    },
+                    {
+                      "kind": "cargo_place",
+                      "id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+                      "code": "FBSVID-CARGO-01",
+                      "label": "Грузоместо FBSVID-CARGO-01"
+                    }
+                  ]
+                },
+                {
+                  "quantity": 33,
+                  "available": 33,
+                  "picked": 1,
+                  "is_loose": false,
+                  "source_label": "Короб FBSVID-BOX-03",
+                  "container_path": [
+                    {
+                      "kind": "pallet",
+                      "id": "8ab29b41-23d6-44ad-acb6-427abd13eeed",
+                      "code": "П-001012",
+                      "label": "Палета П-001012"
+                    },
+                    {
+                      "kind": "box",
+                      "id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+                      "code": "FBSVID-BOX-03",
+                      "label": "Короб FBSVID-BOX-03"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+              "location_code": "Без ячеек",
+              "quantity": 9,
+              "reserved": 0,
+              "available": 8,
+              "picked": 0,
+              "sources": [
+                {
+                  "quantity": 9,
+                  "available": 8,
+                  "picked": 0,
+                  "is_loose": true,
+                  "source_label": "Россыпью",
+                  "container_path": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "modal_queue_paused_source_a": {
+      "physical": {
+        "product": [
+          {
+            "id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+            "sku_code": "EMU-KIZ-OPTIONAL"
+          }
+        ],
+        "balances": [
+          {
+            "id": "6db70eba-c6e3-4fd0-bcb9-f470fd9423e0",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity": 9,
+            "quantity_unpacked": 9,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": null
+          },
+          {
+            "id": "73900eac-5274-46b6-b5f0-9e63a78b0622",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "cargo_place",
+            "container_id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+            "quantity": 19,
+            "quantity_unpacked": 19,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": "FBSVID-CARGO-01"
+          },
+          {
+            "id": "7c41f02e-b0ae-4a8c-afff-91b5b392b84b",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity": 0,
+            "quantity_unpacked": 0,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": null
+          },
+          {
+            "id": "852604bb-0974-48ca-8f2a-8428e3a62600",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity": 0,
+            "quantity_unpacked": 0,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": null
+          },
+          {
+            "id": "a32618f8-1b8e-40c0-a61f-f9ab602774ad",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity": 33,
+            "quantity_unpacked": 33,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": "FBSVID-BOX-03"
+          }
+        ],
+        "movements": [
+          {
+            "id": "0ba0f309-144c-405b-95dd-c5c272b8c832",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": -20,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "1288a4ac-6aa5-4f94-85d4-1266e5dc42cb",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 2,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "15775d9a-f115-4d02-a122-981c83bb9315",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 10,
+            "movement_type": "inbound_intake"
+          },
+          {
+            "id": "1ffc9d1d-6b16-4dc9-acef-ad84e51a63a3",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "cargo_place",
+            "container_id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "2d227685-93be-44d7-a3c0-0a7a30ec2fd5",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "380f9835-c415-4bc6-a254-06c3599c7d63",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 50,
+            "movement_type": "inbound_intake"
+          },
+          {
+            "id": "40b07d06-28a6-48f4-8330-a141bd424767",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "4135e508-cc1e-4653-bc96-ea007d466eea",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 2,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "4d0c2101-2a30-421b-bf80-73581acb7bd6",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "50d33053-38e0-4919-98cb-e1fc622bf6fe",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": 40,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "7635609b-9132-47a5-8eca-4a97ac393c2f",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "cargo_place",
+            "container_id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+            "quantity_delta": 20,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "789ac206-b95d-461f-b238-d088fc753e8a",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": -2,
+            "movement_type": "stock_transfer_out"
+          },
+          {
+            "id": "99304ec4-1f3a-43fa-9400-a87ae33f4814",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": 2,
+            "movement_type": "stock_transfer_in"
+          },
+          {
+            "id": "b20458b7-5b57-4bd9-9b06-7e757d5eb11e",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": -40,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "bbf66f67-ac6f-4bdf-8a7c-8e4555758da8",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 2,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "c3e7fe80-88e1-435b-80c9-d4514d837c62",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "c7290fdd-b9d4-4381-bc6c-c74b4e327d3d",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "de33e72e-80df-48be-997b-907adf1280e0",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "e1b35c51-4b12-4194-9841-46a8ee7a1b23",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "e5cccd47-58cf-44c3-8d81-d0a8dbe2cb7f",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 3,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "e8192b2d-7785-4952-a5cc-5422829e3df7",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": 2,
+            "movement_type": "inbound_intake"
+          },
+          {
+            "id": "f5e1f902-0688-44bf-b608-f2d571285b2e",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "f86ab4ee-e648-48ab-9433-a00fae337437",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          }
+        ],
+        "sha": "1a508b98c01d55e3462f104c1523f4ff6721704d"
+      },
+      "detail": {
+        "id": "de10f403-dad1-432d-8c1e-a588586457a1",
+        "document_number": "ОТГР-26-09-09-7",
+        "display_number": "№000042",
+        "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+        "warehouse_name": "Тестовый",
+        "status": "collecting",
+        "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+        "seller_name": "Эмулятор WB",
+        "marketplace": "wb",
+        "wb_mp_warehouse_id": 507,
+        "planned_shipment_date": "2026-09-10",
+        "ff_modified": false,
+        "created_at": "2026-09-09T04:04:39.045995+00:00",
+        "lines": [
+          {
+            "id": "c71fbea2-ad1b-4895-ae93-3d85b2c4659f",
+            "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "sku_code": "EMU-KIZ-OPTIONAL",
+            "product_name": "Куртка демо ЧЗ необязателен",
+            "quantity": 1,
+            "picked_qty": 1,
+            "has_discrepancy": false
+          }
+        ],
+        "boxes": [
+          {
+            "id": "1509becf-2edd-401b-8427-3e71f0189411",
+            "box_preset": "60_40_40",
+            "internal_barcode": "WHB-5HA1B21F0NPVE5",
+            "closed_at": null,
+            "lines": [
+              {
+                "id": "23d9bb23-5d4c-435c-ad58-7ba7904b9b47",
+                "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+                "sku_code": "EMU-KIZ-OPTIONAL",
+                "product_name": "Куртка демо ЧЗ необязателен",
+                "quantity": 1
+              }
+            ]
+          }
+        ],
+        "pick_allocations": [
+          {
+            "id": "b23c01d6-c1a7-4109-8bdd-59ff7963001c",
+            "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "sku_code": "EMU-KIZ-OPTIONAL",
+            "product_name": "Куртка демо ЧЗ необязателен",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "location_code": "FBS-VIDEO-01",
+            "quantity": 1
+          }
+        ],
+        "linked_packaging_task": {
+          "task_id": "83fc4509-4579-43a3-bb77-19fbf5fc2928",
+          "status": "in_progress",
+          "qty_done": 1,
+          "qty_total": 1,
+          "is_complete": true
+        }
+      },
+      "options": [
+        {
+          "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+          "sku_code": "EMU-KIZ-OPTIONAL",
+          "product_name": "Куртка демо ЧЗ необязателен",
+          "planned_qty": 1,
+          "picked_qty": 1,
+          "boxed_qty": 1,
+          "locations": [
+            {
+              "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+              "location_code": "FBS-VIDEO-01",
+              "quantity": 52,
+              "reserved": 0,
+              "available": 50,
+              "picked": 1,
+              "sources": [
+                {
+                  "quantity": 19,
+                  "available": 17,
+                  "picked": 0,
+                  "is_loose": false,
+                  "source_label": "Грузоместо FBSVID-CARGO-01",
+                  "container_path": [
+                    {
+                      "kind": "pallet",
+                      "id": "8ab29b41-23d6-44ad-acb6-427abd13eeed",
+                      "code": "П-001012",
+                      "label": "Палета П-001012"
+                    },
+                    {
+                      "kind": "cargo_place",
+                      "id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+                      "code": "FBSVID-CARGO-01",
+                      "label": "Грузоместо FBSVID-CARGO-01"
+                    }
+                  ]
+                },
+                {
+                  "quantity": 33,
+                  "available": 33,
+                  "picked": 1,
+                  "is_loose": false,
+                  "source_label": "Короб FBSVID-BOX-03",
+                  "container_path": [
+                    {
+                      "kind": "pallet",
+                      "id": "8ab29b41-23d6-44ad-acb6-427abd13eeed",
+                      "code": "П-001012",
+                      "label": "Палета П-001012"
+                    },
+                    {
+                      "kind": "box",
+                      "id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+                      "code": "FBSVID-BOX-03",
+                      "label": "Короб FBSVID-BOX-03"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+              "location_code": "Без ячеек",
+              "quantity": 9,
+              "reserved": 0,
+              "available": 8,
+              "picked": 0,
+              "sources": [
+                {
+                  "quantity": 9,
+                  "available": 8,
+                  "picked": 0,
+                  "is_loose": true,
+                  "source_label": "Россыпью",
+                  "container_path": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "after_confirmation": {
+      "physical": {
+        "product": [
+          {
+            "id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+            "sku_code": "EMU-KIZ-OPTIONAL"
+          }
+        ],
+        "balances": [
+          {
+            "id": "6db70eba-c6e3-4fd0-bcb9-f470fd9423e0",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity": 9,
+            "quantity_unpacked": 9,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": null
+          },
+          {
+            "id": "73900eac-5274-46b6-b5f0-9e63a78b0622",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "cargo_place",
+            "container_id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+            "quantity": 19,
+            "quantity_unpacked": 19,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": "FBSVID-CARGO-01"
+          },
+          {
+            "id": "7c41f02e-b0ae-4a8c-afff-91b5b392b84b",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity": 0,
+            "quantity_unpacked": 0,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": null
+          },
+          {
+            "id": "852604bb-0974-48ca-8f2a-8428e3a62600",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity": 0,
+            "quantity_unpacked": 0,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": null
+          },
+          {
+            "id": "a32618f8-1b8e-40c0-a61f-f9ab602774ad",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity": 32,
+            "quantity_unpacked": 32,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": "FBSVID-BOX-03"
+          }
+        ],
+        "movements": [
+          {
+            "id": "0ba0f309-144c-405b-95dd-c5c272b8c832",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": -20,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "1288a4ac-6aa5-4f94-85d4-1266e5dc42cb",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 2,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "15775d9a-f115-4d02-a122-981c83bb9315",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 10,
+            "movement_type": "inbound_intake"
+          },
+          {
+            "id": "1ffc9d1d-6b16-4dc9-acef-ad84e51a63a3",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "cargo_place",
+            "container_id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "2d227685-93be-44d7-a3c0-0a7a30ec2fd5",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "380f9835-c415-4bc6-a254-06c3599c7d63",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 50,
+            "movement_type": "inbound_intake"
+          },
+          {
+            "id": "40b07d06-28a6-48f4-8330-a141bd424767",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "4135e508-cc1e-4653-bc96-ea007d466eea",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 2,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "4d0c2101-2a30-421b-bf80-73581acb7bd6",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "50d33053-38e0-4919-98cb-e1fc622bf6fe",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": 40,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "7635609b-9132-47a5-8eca-4a97ac393c2f",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "cargo_place",
+            "container_id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+            "quantity_delta": 20,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "789ac206-b95d-461f-b238-d088fc753e8a",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": -2,
+            "movement_type": "stock_transfer_out"
+          },
+          {
+            "id": "99304ec4-1f3a-43fa-9400-a87ae33f4814",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": 2,
+            "movement_type": "stock_transfer_in"
+          },
+          {
+            "id": "b20458b7-5b57-4bd9-9b06-7e757d5eb11e",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": -40,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "bbf66f67-ac6f-4bdf-8a7c-8e4555758da8",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 2,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "c3e7fe80-88e1-435b-80c9-d4514d837c62",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "c7290fdd-b9d4-4381-bc6c-c74b4e327d3d",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "de33e72e-80df-48be-997b-907adf1280e0",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "deb623f1-1616-4872-a86c-2b3f808c30b9",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "e1b35c51-4b12-4194-9841-46a8ee7a1b23",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "e5cccd47-58cf-44c3-8d81-d0a8dbe2cb7f",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 3,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "e8192b2d-7785-4952-a5cc-5422829e3df7",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": 2,
+            "movement_type": "inbound_intake"
+          },
+          {
+            "id": "f5e1f902-0688-44bf-b608-f2d571285b2e",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "f86ab4ee-e648-48ab-9433-a00fae337437",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          }
+        ],
+        "sha": "1a508b98c01d55e3462f104c1523f4ff6721704d"
+      },
+      "detail": {
+        "id": "de10f403-dad1-432d-8c1e-a588586457a1",
+        "document_number": "ОТГР-26-09-09-7",
+        "display_number": "№000042",
+        "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+        "warehouse_name": "Тестовый",
+        "status": "collecting",
+        "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+        "seller_name": "Эмулятор WB",
+        "marketplace": "wb",
+        "wb_mp_warehouse_id": 507,
+        "planned_shipment_date": "2026-09-10",
+        "ff_modified": false,
+        "created_at": "2026-09-09T04:04:39.045995+00:00",
+        "lines": [
+          {
+            "id": "c71fbea2-ad1b-4895-ae93-3d85b2c4659f",
+            "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "sku_code": "EMU-KIZ-OPTIONAL",
+            "product_name": "Куртка демо ЧЗ необязателен",
+            "quantity": 1,
+            "picked_qty": 2,
+            "has_discrepancy": true
+          }
+        ],
+        "boxes": [
+          {
+            "id": "1509becf-2edd-401b-8427-3e71f0189411",
+            "box_preset": "60_40_40",
+            "internal_barcode": "WHB-5HA1B21F0NPVE5",
+            "closed_at": null,
+            "lines": [
+              {
+                "id": "23d9bb23-5d4c-435c-ad58-7ba7904b9b47",
+                "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+                "sku_code": "EMU-KIZ-OPTIONAL",
+                "product_name": "Куртка демо ЧЗ необязателен",
+                "quantity": 2
+              }
+            ]
+          }
+        ],
+        "pick_allocations": [
+          {
+            "id": "b23c01d6-c1a7-4109-8bdd-59ff7963001c",
+            "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "sku_code": "EMU-KIZ-OPTIONAL",
+            "product_name": "Куртка демо ЧЗ необязателен",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "location_code": "FBS-VIDEO-01",
+            "quantity": 2
+          }
+        ],
+        "linked_packaging_task": {
+          "task_id": "83fc4509-4579-43a3-bb77-19fbf5fc2928",
+          "status": "in_progress",
+          "qty_done": 2,
+          "qty_total": 2,
+          "is_complete": true
+        }
+      },
+      "options": [
+        {
+          "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+          "sku_code": "EMU-KIZ-OPTIONAL",
+          "product_name": "Куртка демо ЧЗ необязателен",
+          "planned_qty": 1,
+          "picked_qty": 2,
+          "boxed_qty": 2,
+          "locations": [
+            {
+              "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+              "location_code": "FBS-VIDEO-01",
+              "quantity": 51,
+              "reserved": 0,
+              "available": 49,
+              "picked": 2,
+              "sources": [
+                {
+                  "quantity": 19,
+                  "available": 17,
+                  "picked": 0,
+                  "is_loose": false,
+                  "source_label": "Грузоместо FBSVID-CARGO-01",
+                  "container_path": [
+                    {
+                      "kind": "pallet",
+                      "id": "8ab29b41-23d6-44ad-acb6-427abd13eeed",
+                      "code": "П-001012",
+                      "label": "Палета П-001012"
+                    },
+                    {
+                      "kind": "cargo_place",
+                      "id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+                      "code": "FBSVID-CARGO-01",
+                      "label": "Грузоместо FBSVID-CARGO-01"
+                    }
+                  ]
+                },
+                {
+                  "quantity": 32,
+                  "available": 32,
+                  "picked": 2,
+                  "is_loose": false,
+                  "source_label": "Короб FBSVID-BOX-03",
+                  "container_path": [
+                    {
+                      "kind": "pallet",
+                      "id": "8ab29b41-23d6-44ad-acb6-427abd13eeed",
+                      "code": "П-001012",
+                      "label": "Палета П-001012"
+                    },
+                    {
+                      "kind": "box",
+                      "id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+                      "code": "FBSVID-BOX-03",
+                      "label": "Короб FBSVID-BOX-03"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+              "location_code": "Без ячеек",
+              "quantity": 9,
+              "reserved": 0,
+              "available": 8,
+              "picked": 0,
+              "sources": [
+                {
+                  "quantity": 9,
+                  "available": 8,
+                  "picked": 0,
+                  "is_loose": true,
+                  "source_label": "Россыпью",
+                  "container_path": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "after_cancel": {
+      "physical": {
+        "product": [
+          {
+            "id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+            "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+            "sku_code": "EMU-KIZ-OPTIONAL"
+          }
+        ],
+        "balances": [
+          {
+            "id": "6db70eba-c6e3-4fd0-bcb9-f470fd9423e0",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity": 11,
+            "quantity_unpacked": 11,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": null
+          },
+          {
+            "id": "73900eac-5274-46b6-b5f0-9e63a78b0622",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "cargo_place",
+            "container_id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+            "quantity": 19,
+            "quantity_unpacked": 19,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": "FBSVID-CARGO-01"
+          },
+          {
+            "id": "7c41f02e-b0ae-4a8c-afff-91b5b392b84b",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity": 0,
+            "quantity_unpacked": 0,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": null
+          },
+          {
+            "id": "852604bb-0974-48ca-8f2a-8428e3a62600",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity": 0,
+            "quantity_unpacked": 0,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": null
+          },
+          {
+            "id": "a32618f8-1b8e-40c0-a61f-f9ab602774ad",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity": 32,
+            "quantity_unpacked": 32,
+            "quantity_packed": 0,
+            "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+            "internal_barcode": "FBSVID-BOX-03"
+          }
+        ],
+        "movements": [
+          {
+            "id": "0ba0f309-144c-405b-95dd-c5c272b8c832",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": -20,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "1288a4ac-6aa5-4f94-85d4-1266e5dc42cb",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 2,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "15775d9a-f115-4d02-a122-981c83bb9315",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 10,
+            "movement_type": "inbound_intake"
+          },
+          {
+            "id": "1ffc9d1d-6b16-4dc9-acef-ad84e51a63a3",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "cargo_place",
+            "container_id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "2d227685-93be-44d7-a3c0-0a7a30ec2fd5",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "380f9835-c415-4bc6-a254-06c3599c7d63",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 50,
+            "movement_type": "inbound_intake"
+          },
+          {
+            "id": "40b07d06-28a6-48f4-8330-a141bd424767",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "4135e508-cc1e-4653-bc96-ea007d466eea",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 2,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "4d0c2101-2a30-421b-bf80-73581acb7bd6",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "50d33053-38e0-4919-98cb-e1fc622bf6fe",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": 40,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "7635609b-9132-47a5-8eca-4a97ac393c2f",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "cargo_place",
+            "container_id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+            "quantity_delta": 20,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "789ac206-b95d-461f-b238-d088fc753e8a",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": -2,
+            "movement_type": "stock_transfer_out"
+          },
+          {
+            "id": "99304ec4-1f3a-43fa-9400-a87ae33f4814",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": 2,
+            "movement_type": "stock_transfer_in"
+          },
+          {
+            "id": "b20458b7-5b57-4bd9-9b06-7e757d5eb11e",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": -40,
+            "movement_type": "warehouse_map_move"
+          },
+          {
+            "id": "b48ca891-2784-44e9-ae53-356f49f84814",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 2,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "bbf66f67-ac6f-4bdf-8a7c-8e4555758da8",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 2,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "c3e7fe80-88e1-435b-80c9-d4514d837c62",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "c7290fdd-b9d4-4381-bc6c-c74b4e327d3d",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "de33e72e-80df-48be-997b-907adf1280e0",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "deb623f1-1616-4872-a86c-2b3f808c30b9",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "e1b35c51-4b12-4194-9841-46a8ee7a1b23",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "e5cccd47-58cf-44c3-8d81-d0a8dbe2cb7f",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": null,
+            "container_id": null,
+            "quantity_delta": 3,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "e8192b2d-7785-4952-a5cc-5422829e3df7",
+            "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": 2,
+            "movement_type": "inbound_intake"
+          },
+          {
+            "id": "f5e1f902-0688-44bf-b608-f2d571285b2e",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          },
+          {
+            "id": "f86ab4ee-e648-48ab-9433-a00fae337437",
+            "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+            "container_kind": "box",
+            "container_id": "477e829a-74d3-4266-9d8d-93f6bb2b6a41",
+            "quantity_delta": -1,
+            "movement_type": "marketplace_unload"
+          }
+        ],
+        "sha": "1a508b98c01d55e3462f104c1523f4ff6721704d"
+      }
+    }
+  },
+  "cleanup": [
+    {
+      "id": "de10f403-dad1-432d-8c1e-a588586457a1",
+      "status": "cancelled"
+    }
+  ],
+  "document": {
+    "id": "de10f403-dad1-432d-8c1e-a588586457a1",
+    "document_number": "ОТГР-26-09-09-7",
+    "display_number": "№000042",
+    "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+    "warehouse_name": "Тестовый",
+    "status": "draft",
+    "line_count": 0,
+    "goods_qty_total": 0,
+    "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+    "seller_name": "Эмулятор WB",
+    "marketplace": "wb",
+    "wb_mp_warehouse_id": 507,
+    "planned_shipment_date": null,
+    "ff_modified": false,
+    "created_at": "2026-09-09T04:04:39.045995+00:00"
+  },
+  "box": {
+    "id": "1509becf-2edd-401b-8427-3e71f0189411",
+    "box_preset": "60_40_40",
+    "internal_barcode": "WHB-5HA1B21F0NPVE5",
+    "closed_at": null,
+    "lines": []
+  },
+  "sourceA": {
+    "quantity": 34,
+    "available": 34,
+    "picked": 0,
+    "is_loose": false,
+    "source_label": "Короб FBSVID-BOX-03",
+    "container_path": [
+      {
+        "kind": "pallet",
+        "id": "8ab29b41-23d6-44ad-acb6-427abd13eeed",
+        "code": "П-001012",
+        "label": "Палета П-001012"
+      },
+      {
+        "kind": "box",
+        "id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+        "code": "FBSVID-BOX-03",
+        "label": "Короб FBSVID-BOX-03"
+      }
+    ],
+    "location": "43a2a23a-0653-49de-82f5-b60f2ba48530"
+  },
+  "sourceB": {
+    "quantity": 19,
+    "available": 17,
+    "picked": 0,
+    "is_loose": false,
+    "source_label": "Грузоместо FBSVID-CARGO-01",
+    "container_path": [
+      {
+        "kind": "pallet",
+        "id": "8ab29b41-23d6-44ad-acb6-427abd13eeed",
+        "code": "П-001012",
+        "label": "Палета П-001012"
+      },
+      {
+        "kind": "cargo_place",
+        "id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+        "code": "FBSVID-CARGO-01",
+        "label": "Грузоместо FBSVID-CARGO-01"
+      }
+    ],
+    "location": "43a2a23a-0653-49de-82f5-b60f2ba48530"
+  },
+  "delayedResponse": {
+    "status": 422,
+    "body": {
+      "detail": "plan_limit_exceeded"
+    }
+  },
+  "queuedBWhileReal422Held": true,
+  "queuePausedUntilDecision": true,
+  "queuedBExecutedAfterDecision": true,
+  "result": "GREEN_CONFIRMED_ORIGINAL_SOURCE",
+  "confirmedSource": {
+    "expected": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+    "actual": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+    "confirmedRequest": {
+      "barcode": "2000000000013",
+      "quantity": 1,
+      "allow_over_plan": true,
+      "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+      "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+      "container_kind": "box",
+      "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe"
+    },
+    "newMovements": [
+      {
+        "id": "deb623f1-1616-4872-a86c-2b3f808c30b9",
+        "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+        "container_kind": "box",
+        "container_id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+        "quantity_delta": -1,
+        "movement_type": "marketplace_unload"
+      }
+    ]
+  },
+  "chromeClosed": true
+}
