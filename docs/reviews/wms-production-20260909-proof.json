@@ -1,0 +1,41 @@
+{
+  "checked_at": "2026-09-08T23:17:27.023685+00:00",
+  "git_sha": "054897e270533d3e0fc65b651d420b3af8332fce",
+  "tracked_status": "",
+  "backend": {
+    "api": {
+      "count": 427,
+      "expected_count": 427,
+      "different": [],
+      "missing": [],
+      "extra": [],
+      "status": "running",
+      "restarts": "0",
+      "image": "sha256:72e80727d1b5b18526b0c936e6e3c5bbcbc7f3ef3556f0e17996e487921bb0e4"
+    },
+    "celery_worker": {
+      "count": 427,
+      "expected_count": 427,
+      "different": [],
+      "missing": [],
+      "extra": [],
+      "status": "running",
+      "restarts": "0",
+      "image": "sha256:5c961d35cf1e5075730d942d9440569e0efb185c009c9233557b847152ea83be"
+    },
+    "celery_beat": {
+      "count": 427,
+      "expected_count": 427,
+      "different": [],
+      "missing": [],
+      "extra": [],
+      "status": "running",
+      "restarts": "0",
+      "image": "sha256:4ed1d23720887cb560c7c37a9f14bd1b08802e7d05470ad9213525b92bb20702"
+    }
+  },
+  "migration": "20260908_0257",
+  "web_image": "sha256:d41c0ba1ad60963eb60c2cb8fc62c41a9f28dcafce6235b206f3d922f18f486f",
+  "built_web_image": "sha256:d41c0ba1ad60963eb60c2cb8fc62c41a9f28dcafce6235b206f3d922f18f486f",
+  "web_status": "running"
+}

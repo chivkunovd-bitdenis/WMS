@@ -6,6 +6,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 
+from cryptography.fernet import InvalidToken
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.seller import Seller
@@ -220,6 +222,26 @@ async def patch_seller_credentials(
     await session.commit()
     await session.refresh(row)
     return row
+
+
+async def get_cz_token_for_seller(
+    session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID
+) -> str | None:
+    """Read only the True API credential; never decrypt OMS/marketplace secrets."""
+    encrypted = await session.scalar(
+        select(SellerMarkingCredentials.cz_token_enc)
+        .join(Seller, Seller.id == SellerMarkingCredentials.seller_id)
+        .where(
+            Seller.id == seller_id, Seller.tenant_id == tenant_id,
+            SellerMarkingCredentials.tenant_id == tenant_id,
+        )
+    )
+    if not encrypted:
+        return None
+    try:
+        return decrypt_secret(encrypted).strip() or None
+    except (InvalidToken, ValueError, UnicodeError):
+        return None
 
 
 async def get_decrypted_credentials_for_seller(
