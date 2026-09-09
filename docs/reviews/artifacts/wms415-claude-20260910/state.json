@@ -59,5 +59,21 @@
     "warehouse-lane": "adf248a78bc868237",
     "mobile-lane": "a1e35af42df51c631",
     "merge-lane": "a3f469302a51bc5bb"
-  }
+  },
+  "agent_count": 3,
+  "current_agents": {
+    "stock": {
+      "pid": 75180,
+      "thread_id": "01a0884d-9d51-73f1-a1cb-f657c2d56c0d"
+    },
+    "cancel": {
+      "pid": 75181,
+      "thread_id": "01a0884d-9d55-7d51-b42f-a4b106fc30ec"
+    },
+    "mobile": {
+      "pid": 75182,
+      "thread_id": "01a0884d-9d82-7f41-a45a-91123f9ea9d8"
+    }
+  },
+  "astra_wave1_directory": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/wave1"
 }
