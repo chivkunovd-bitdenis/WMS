@@ -1,0 +1,48 @@
+{
+  "source": "3f6f02c77db6ee777518f6dc55922297df907d67",
+  "started": "2026-09-09T10:26:53.871Z",
+  "web": "https://web-production-9e7c1.up.railway.app",
+  "cases": [
+    {
+      "name": "real stage inbound dialog with QA seller",
+      "pass": true
+    },
+    {
+      "name": "return dialog marketplace and Escape",
+      "pass": true
+    },
+    {
+      "name": "deployed App handles empty warehouse GET without POST",
+      "error": "Склад ФФ не найден.",
+      "dialogOpen": true,
+      "sellerPreserved": true
+    },
+    {
+      "name": "reopening clears old error",
+      "pass": true
+    }
+  ],
+  "blockedMutations": [],
+  "pageErrors": [],
+  "intercepted": [
+    {
+      "method": "GET",
+      "path": "/api/warehouses",
+      "fixture": "empty warehouse list in browser only"
+    }
+  ],
+  "auth": {
+    "tenant": "9c31f3f4-ce62-4c1f-891a-295b278f1e69",
+    "role": "fulfillment_admin"
+  },
+  "documentsBefore": {
+    "count": 45,
+    "idsSha256": "76ebd059131d1efa82508ea21aa94c0437084892f010e698a80d12f81331d816"
+  },
+  "documentsAfter": {
+    "count": 45,
+    "idsSha256": "76ebd059131d1efa82508ea21aa94c0437084892f010e698a80d12f81331d816"
+  },
+  "result": "PASS",
+  "finished": "2026-09-09T10:27:19.280Z"
+}

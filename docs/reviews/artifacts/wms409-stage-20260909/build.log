@@ -1,0 +1,261 @@
+fetched snapshot sha256:e468f8774e837c47d7219b35e508a88dbd126a4999a72a027565a9477e6eb5bd (13 MB bytes)
+[INFO] fetching snapshot
+[INFO] unpacking archive
+[INFO] [internal] load build definition from frontend/Dockerfile.railway
+[INFO] [internal] load build definition from frontend/Dockerfile.railway
+[INFO] [internal] load build definition from frontend/Dockerfile.railway
+[INFO] [internal] load build definition from frontend/Dockerfile.railway
+[INFO] [internal] load metadata for docker.io/library/caddy:2-alpine
+[INFO] [internal] load metadata for docker.io/library/node:20-slim
+[INFO] [internal] load metadata for docker.io/library/node:20-slim
+scheduling build on Metal builder "builder-oibyls"
+[INFO] [internal] load metadata for docker.io/library/caddy:2-alpine
+[INFO] [internal] load .dockerignore
+[INFO] [internal] load .dockerignore
+[INFO] [internal] load .dockerignore
+[INFO] [internal] load .dockerignore
+[INFO] [stage-1 4/4] COPY deploy/Caddyfile.railway /etc/caddy/Caddyfile
+[INFO] [stage-1 3/4] COPY --from=build /app/frontend/dist /srv
+[INFO] [build 6/6] RUN npm run build
+[INFO] [build 5/6] COPY . /app/frontend
+[INFO] [build 4/6] RUN npm ci
+[INFO] [build 3/6] COPY package.json package-lock.json /app/frontend/
+[INFO] [internal] load build context
+[INFO] [build 2/6] WORKDIR /app/frontend
+[INFO] [build 1/6] FROM docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
+[INFO] [stage-1 2/4] WORKDIR /srv
+[INFO] [stage-1 1/4] FROM docker.io/library/caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+[INFO] [internal] load build context
+[INFO] [build 1/6] FROM docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
+[INFO] [stage-1 1/4] FROM docker.io/library/caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+[INFO] [internal] load build context
+[INFO] [stage-1 1/4] FROM docker.io/library/caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+[INFO] [build 1/6] FROM docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
+[INFO] [internal] load build context
+[INFO] [build 2/6] WORKDIR /app/frontend
+[INFO] [build 3/6] COPY package.json package-lock.json /app/frontend/
+[INFO] [build 4/6] RUN npm ci
+[INFO] [build 5/6] COPY . /app/frontend
+[INFO] [build 5/6] COPY . /app/frontend
+[INFO] [build 6/6] RUN npm run build
+[INFO]
+> frontend@0.0.0 build
+> tsc -b && vite build
+
+
+scheduling build on Metal builder "builder-oibyls"
+[INFO] vite v8.0.8 building client environment for production...
+
+[INFO]
+[INFO] transforming...
+[INFO] ✓ 12188 modules transformed.
+
+[INFO] rendering chunks...
+
+[INFO] computing gzip size...
+
+[INFO] dist/schet.html                                            0.70 kB │ gzip:   0.40 kB
+dist/kb-scenes.html                                        0.98 kB │ gzip:   0.44 kB
+dist/fbs-speed.html                                        1.38 kB │ gzip:   0.53 kB
+dist/move-lab.html                                         1.47 kB │ gzip:   0.55 kB
+dist/ui-kit.html                                           1.52 kB │ gzip:   0.54 kB
+dist/knowledge.html                                        1.66 kB │ gzip:   0.58 kB
+dist/raschety.html                                         1.68 kB │ gzip:   0.57 kB
+dist/products.html                                         1.78 kB │ gzip:   0.59 kB
+dist/unload-pick-2.html                                    1.83 kB │ gzip:   0.64 kB
+dist/fbs-pick.html                                         2.05 kB │ gzip:   0.65 kB
+dist/unload-pick.html                                      2.14 kB │ gzip:   0.68 kB
+dist/sorting-objects.html                                  2.43 kB │ gzip:   0.76 kB
+dist/raschety-razdely.html                                 2.72 kB │ gzip:   0.80 kB
+dist/warehouse-map.html                                    2.92 kB │ gzip:   0.83 kB
+dist/honest-sign.html                                      3.53 kB │ gzip:   0.96 kB
+dist/packaging.html                                        3.57 kB │ gzip:   0.96 kB
+dist/inventory.html                                        3.87 kB │ gzip:   1.03 kB
+dist/reception.html                                        4.90 kB │ gzip:   1.24 kB
+dist/seller/index.html                                     5.01 kB │ gzip:   1.25 kB
+dist/fbs-orders.html                                       5.16 kB │ gzip:   1.26 kB
+dist/index.html                                            8.39 kB │ gzip:   1.89 kB
+dist/assets/fbs-04-koroba-DH3MmVXy.png                   297.76 kB
+dist/assets/chz-02-pechat-UOoW35w9.png                   389.73 kB
+dist/assets/priemka-05-zavershenie-CwdXLLh1.png          422.19 kB
+dist/assets/priemka-02-chernovik-BQUeDjKa.png            423.02 kB
+dist/assets/priemka-04-napolnenie-LxNHQ3aV.png           461.79 kB
+dist/assets/fbs-02-podbor-Cos3fcOe.png                   484.51 kB
+dist/assets/inventarizaciya-01-spisok-fLsVe43P.png       519.58 kB
+dist/assets/chz-01-puly-Db6btvEm.png                     529.73 kB
+dist/assets/priemka-01-ochered-DMFBw_bV.png              540.16 kB
+dist/assets/fbs-03-upakovka-B_IWwvGv.png                 599.24 kB
+dist/assets/priemka-03-koroba-D7TsDOnY.png               640.25 kB
+dist/assets/raschety-01-nachisleniya-DysuQgo0.png        653.51 kB
+dist/assets/raschety-02-tarify-Bo8poojq.png              673.41 kB
+dist/assets/razmeshchenie-02-karta-CNryfzT9.png          710.07 kB
+dist/assets/razmeshchenie-01-sortirovka-BWCJq1jl.png     717.76 kB
+dist/assets/katalog-02-sozdanie-D7CNwe_A.png             745.11 kB
+dist/assets/fbs-01-zakazy-BBNalne4.png                   782.45 kB
+dist/assets/otgruzka-01-podbor-DmJTNCNO.png              831.77 kB
+dist/assets/katalog-01-spisok-n_lGrqnW.png               969.74 kB
+dist/assets/inventarizaciya-02-pereschet-DAahuHSX.png  1,052.41 kB
+dist/assets/src-CWU4KsJC.css                               2.05 kB │ gzip:   0.90 kB
+dist/assets/WmsDatePickersProvider-BaEsOhw8.css            4.02 kB │ gzip:   1.12 kB
+dist/assets/ff-C8Lao7a-.css                                5.91 kB │ gzip:   1.45 kB
+dist/assets/plural-BaRKADbq.js                             0.11 kB │ gzip:   0.12 kB
+dist/assets/ChevronRight-Sc08YJEe.js                       0.19 kB │ gzip:   0.18 kB
+dist/assets/listItemTextClasses-v3mQ5vwa.js                0.19 kB │ gzip:   0.17 kB
+dist/assets/ExpandMoreOutlined-BkM2NLq7.js                 0.20 kB │ gzip:   0.18 kB
+dist/assets/ArrowBackOutlined-C36ikaEf.js                  0.21 kB │ gzip:   0.19 kB
+dist/assets/inboundOperationType-Bo9kR8Pu.js               0.21 kB │ gzip:   0.14 kB
+dist/assets/DownloadOutlined-D6RyUsw6.js                   0.22 kB │ gzip:   0.20 kB
+dist/assets/Close-CGXMtZS9.js                              0.24 kB │ gzip:   0.18 kB
+dist/assets/GridViewOutlined-B40PJXGF.js                   0.25 kB │ gzip:   0.20 kB
+dist/assets/CloseOutlined-C9Ryu0dy.js                      0.25 kB │ gzip:   0.19 kB
+dist/assets/documentDisplay-XluWy2Cr.js                    0.25 kB │ gzip:   0.19 kB
+dist/assets/dividerClasses-Mo1Fhp_J.js                     0.27 kB │ gzip:   0.21 kB
+dist/assets/UndoOutlined-1zaqCUA3.js                       0.29 kB │ gzip:   0.24 kB
+dist/assets/InfoOutlined-CX49F83Z.js                       0.29 kB │ gzip:   0.23 kB
+dist/assets/PageHeader-C-u5GhuC.js                         0.32 kB │ gzip:   0.24 kB
+dist/assets/HistoryOutlined-Dvp-IWS9.js                    0.37 kB │ gzip:   0.29 kB
+dist/assets/SearchOutlined-CtxOHcGI.js                     0.38 kB │ gzip:   0.27 kB
+dist/assets/FfHonestSignPage-Obvgb7s2.js                   0.47 kB │ gzip:   0.33 kB
+dist/assets/randomId-9Hcw6uH8.js                           0.49 kB │ gzip:   0.31 kB
+dist/assets/CloudUploadOutlined-B89K33MA.js                0.51 kB │ gzip:   0.36 kB
+dist/assets/stubFetch-BPlDLcNp.js                          0.55 kB │ gzip:   0.35 kB
+dist/assets/UnloadScenes-BELOMCpt.js                       0.66 kB │ gzip:   0.38 kB
+dist/assets/usePreviousProps-B4DM1Adn.js                   0.70 kB │ gzip:   0.35 kB
+dist/assets/SceneShell-BcxEAjna.js                         0.72 kB │ gzip:   0.48 kB
+dist/assets/WidgetsOutlined-BvZ0l2QL.js                    0.74 kB │ gzip:   0.46 kB
+dist/assets/FormGroup-DtaA8DZL.js                          0.87 kB │ gzip:   0.52 kB
+dist/assets/InventoryScenes-EwtZ-Pe1.js                    0.88 kB │ gzip:   0.50 kB
+dist/assets/data-DycAkBuv.js                               0.97 kB │ gzip:   0.41 kB
+dist/assets/BoxLabelPrintDialog-DVv8-E9X.js                1.14 kB │ gzip:   0.66 kB
+dist/assets/useWbProductCatalog-DYEH7bfa.js                1.16 kB │ gzip:   0.74 kB
+dist/assets/WarehouseScenes-COfol8YI.js                    1.18 kB │ gzip:   0.72 kB
+dist/assets/preload-helper-ClBMtM1g.js                     1.19 kB │ gzip:   0.68 kB
+dist/assets/knowledge-Cr6G3KKD.js                          1.29 kB │ gzip:   0.77 kB
+dist/assets/sortingObjects-Cwu3gqB9.js                     1.30 kB │ gzip:   0.73 kB
+dist/assets/raschety-D9FeZIe0.js                           1.33 kB │ gzip:   0.78 kB
+dist/assets/unloadPick-K6lcN1sZ.js                         1.33 kB │ gzip:   0.76 kB
+dist/assets/LabelSizeSelect-BEMEn72l.js                    1.57 kB │ gzip:   0.80 kB
+dist/assets/schet-DkUACPz2.js                              1.62 kB │ gzip:   0.98 kB
+dist/assets/ListItemText-BR_QFtOX.js                       1.91 kB │ gzip:   0.93 kB
+dist/assets/InputAdornment-DvJ2TufZ.js                     1.92 kB │ gzip:   0.97 kB
+dist/assets/Container-DGDgAgZc.js                          2.00 kB │ gzip:   0.84 kB
+dist/assets/PriemkaQueueScene-B0zqUbdQ.js                  2.10 kB │ gzip:   0.71 kB
+dist/assets/FfProductLineCells-D_9tWw86.js                 2.51 kB │ gzip:   1.11 kB
+dist/assets/printPackagingInstructions-DiWybrdF.js         2.53 kB │ gzip:   1.30 kB
+dist/assets/honestSign-CvN_x9lL.js                         2.75 kB │ gzip:   1.37 kB
+dist/assets/InventoryCreateDialog-QZthziEq.js              2.89 kB │ gzip:   1.45 kB
+dist/assets/FbsMetricPanel-CyJpWwpF.js                     3.07 kB │ gzip:   1.29 kB
+dist/assets/BillingScenes-isRZD1Ye.js                      3.12 kB │ gzip:   1.50 kB
+dist/assets/Skeleton-Bkw31IlI.js                           3.14 kB │ gzip:   1.38 kB
+dist/assets/Link-BMWL44yV.js                               3.26 kB │ gzip:   1.33 kB
+dist/assets/Divider-DifjhnF0.js                            3.48 kB │ gzip:   1.22 kB
+dist/assets/react-dom-CdjxR9kv.js                          3.54 kB │ gzip:   1.34 kB
+dist/assets/inventory-CjzcIzrE.js                          3.56 kB │ gzip:   1.82 kB
+dist/assets/FbsSupplyHistoryDialog-Be1O61mY.js             3.66 kB │ gzip:   1.76 kB
+dist/assets/objectsStub-DnyMIZeO.js                        3.73 kB │ gzip:   1.59 kB
+dist/assets/MenuItem-BpblwrT5.js                           3.76 kB │ gzip:   1.57 kB
+dist/assets/Collapse--7dI7aNF.js                           3.97 kB │ gzip:   1.56 kB
+dist/assets/inboundReceivingHelpers-aXjKqvWw.js            4.38 kB │ gzip:   2.00 kB
+dist/assets/warehouseMap-jt-4befS.js                       4.53 kB │ gzip:   2.21 kB
+dist/assets/stub-8xSzSzZ4.js                               4.58 kB │ gzip:   1.87 kB
+dist/assets/ProductPhotoThumb-BYtwC2SH.js                  4.61 kB │ gzip:   2.25 kB
+dist/assets/ScenarioPlayer-BL3yMcNN.js                     5.09 kB │ gzip:   2.34 kB
+dist/assets/Checkbox-CPKmI2Sq.js                           5.11 kB │ gzip:   2.10 kB
+dist/assets/HonestSignScenes-W3Yx2xA8.js                   5.33 kB │ gzip:   2.14 kB
+dist/assets/packaging-JqigJKoD.js                          5.39 kB │ gzip:   2.10 kB
+dist/assets/LinearProgress-BxjNTd_j.js                     5.52 kB │ gzip:   1.74 kB
+dist/assets/PriemkaDocScene-My2ZByBh.js                    5.69 kB │ gzip:   2.39 kB
+dist/assets/stub-CFXcdAFg.js                               5.83 kB │ gzip:   2.25 kB
+dist/assets/fbsOrders-C63z6oZ2.js                          5.98 kB │ gzip:   2.49 kB
+dist/assets/ToggleButtonGroup-DqdvCkwK.js                  6.07 kB │ gzip:   1.98 kB
+dist/assets/pickRows-DsvPEdHk.js                           6.10 kB │ gzip:   2.68 kB
+dist/assets/AccordionSummary-0dfz9HMB.js                   6.28 kB │ gzip:   2.17 kB
+dist/assets/printBarcodeLabel-CvNdROLK.js                  6.53 kB │ gzip:   2.98 kB
+dist/assets/TablePagination-BILtaf4g.js                    6.54 kB │ gzip:   2.52 kB
+dist/assets/DialogTitle-Be_myI8E.js                        6.77 kB │ gzip:   2.32 kB
+dist/assets/invoicePrint-C_jNXrBI.js                       6.91 kB │ gzip:   2.55 kB
+dist/assets/reception-H6Pay4FP.js                          6.96 kB │ gzip:   2.66 kB
+dist/assets/fromWarehouseMap-P6BKUteB.js                   7.07 kB │ gzip:   3.13 kB
+dist/assets/AuthedAppLayout-DS7eZOhf.js                    7.24 kB │ gzip:   1.97 kB
+dist/assets/CatalogScenes-BXGvuHM0.js                      7.34 kB │ gzip:   2.91 kB
+dist/assets/products-jUMFpFNT.js                           7.46 kB │ gzip:   2.89 kB
+dist/assets/raschetyRazdely-WHNPCXPn.js                    7.70 kB │ gzip:   3.09 kB
+dist/assets/fbsSpeed-B47ckutT.js                           7.92 kB │ gzip:   3.15 kB
+dist/assets/stub-zKKRQaRD.js                               8.00 kB │ gzip:   2.82 kB
+dist/assets/fbsPick-EiDXKBTB.js                            8.06 kB │ gzip:   3.40 kB
+dist/assets/jsx-runtime-CDioDdFk.js                        8.39 kB │ gzip:   3.20 kB
+dist/assets/readApiErrorMessage-G_IxUTCi.js                9.15 kB │ gzip:   3.14 kB
+dist/assets/WbProductPickerDialog-B-IIM4Hc.js              9.74 kB │ gzip:   4.01 kB
+dist/assets/ProductBarcodeCell-CIAgd-xG.js                10.72 kB │ gzip:   4.29 kB
+dist/assets/WarehouseMapToolbar-DZY9s5OS.js               11.35 kB │ gzip:   4.14 kB
+dist/assets/FbsScenes-BlKUcsrO.js                         11.95 kB │ gzip:   4.59 kB
+dist/assets/FfInboundQueuePage-CmHWjBe5.js                13.07 kB │ gzip:   4.56 kB
+dist/assets/kbScenes-L_rA800c.js                          13.16 kB │ gzip:   4.52 kB
+dist/assets/moveLab-Bdwp5cT9.js                           13.17 kB │ gzip:   5.18 kB
+dist/assets/FfInventoryListScreen-DDn1l5nv.js             13.40 kB │ gzip:   5.14 kB
+dist/assets/theme-BIw5WO78.js                             13.84 kB │ gzip:   5.19 kB
+dist/assets/FfBillingTariffMatrixPanel-DaESCqAy.js        13.86 kB │ gzip:   5.12 kB
+dist/assets/UnloadPickScreen-ZNiflceF.js                  14.81 kB │ gzip:   5.37 kB
+dist/assets/Tabs-BfJs3CNQ.js                              14.99 kB │ gzip:   5.24 kB
+dist/assets/unloadPick2-CgNlGcqw.js                       17.94 kB │ gzip:   6.34 kB
+dist/assets/warehouseMapState-CapGktNf.js                 18.34 kB │ gzip:   6.68 kB
+dist/assets/SortingObjectsScreen-P_2BBrxi.js              18.68 kB │ gzip:   6.70 kB
+dist/assets/ffPermissions-zUi6ybVN.js                     19.69 kB │ gzip:   6.77 kB
+dist/assets/ProductsScreen-DZXeLwPH.js                    20.64 kB │ gzip:   6.78 kB
+dist/assets/fbsApi-B-7tWCya.js                            23.46 kB │ gzip:   7.45 kB
+dist/assets/Autocomplete-B9tUWEMV.js                      23.72 kB │ gzip:   8.30 kB
+dist/assets/uiKit-CAUrON8x.js                             23.88 kB │ gzip:   6.40 kB
+dist/assets/HonestSignScreen-tcyUboDS.js                  26.50 kB │ gzip:   8.73 kB
+dist/assets/InventoryTree-6j7DYsvI.js                     27.93 kB │ gzip:  10.06 kB
+dist/assets/Button-jXq1wBtJ.js                            32.70 kB │ gzip:   9.88 kB
+dist/assets/PrintOutlined-BGq6Q3qw.js                     34.33 kB │ gzip:  12.07 kB
+dist/assets/FfBillingScreen-DjN6fuFg.js                   41.74 kB │ gzip:  12.23 kB
+dist/assets/ListItemButton-C2d1rUN0.js                    45.86 kB │ gzip:  16.00 kB
+dist/assets/FfPackagingPage-Sogm-3wh.js                   46.25 kB │ gzip:  13.16 kB
+dist/assets/WmsDatePickersProvider-DOJZe41j.js            51.72 kB │ gzip:  16.63 kB
+dist/assets/ui-kit-4aWRGPFz.js                            53.86 kB │ gzip:  18.11 kB
+dist/assets/useMarkingCodePrint-DW8KenQW.js               58.79 kB │ gzip:  18.01 kB
+dist/assets/FfProductsCatalogScreen-CRH9Wgwq.js           64.23 kB │ gzip:  17.36 kB
+dist/assets/renderBarcodeDataUrl-D7pBKVxj.js              64.98 kB │ gzip:  11.64 kB
+dist/assets/Stack-_PXjrBcC.js                             85.01 kB │ gzip:  29.81 kB
+dist/assets/TextField-D1vreGzZ.js                         96.41 kB │ gzip:  28.55 kB
+dist/assets/seller-ChNKichi.js                            96.77 kB │ gzip:  23.42 kB
+dist/assets/FfInboundRequestView-DXNw_RMP.js             102.46 kB │ gzip:  28.18 kB
+dist/assets/FfFbsOrdersScreen-BeE4sy8w.js                134.86 kB │ gzip:  39.28 kB
+dist/assets/WmsDateField-BYAzrw6Z.js                     142.07 kB │ gzip:  41.52 kB
+dist/assets/client-BPdQZMHG.js                           179.01 kB │ gzip:  56.61 kB
+dist/assets/FfKnowledgeBaseScreen-BPuyYsLg.js            207.96 kB │ gzip:  54.35 kB
+dist/assets/ff-DFfJOXYQ.js                               305.98 kB │ gzip:  72.65 kB
+dist/assets/bwip-js-DKTR_g9C.js                          932.62 kB │ gzip: 255.75 kB
+
+
+[INFO] [plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+
+[INFO] ✓ built in 1.95s
+
+[INFO] [build 6/6] RUN npm run build
+[INFO] [stage-1 2/4] WORKDIR /srv
+[INFO] [stage-1 3/4] COPY --from=build /app/frontend/dist /srv
+[INFO] [stage-1 3/4] COPY --from=build /app/frontend/dist /srv
+[INFO] [stage-1 4/4] COPY deploy/Caddyfile.railway /etc/caddy/Caddyfile
+[INFO] [stage-1 4/4] COPY deploy/Caddyfile.railway /etc/caddy/Caddyfile
+[INFO] exporting to docker image format
+[INFO] exporting to docker image format
+containerimage.config.digest: sha256:bc3110961275443f3df59bbf54c9ba1fb1b09411f4fa3dc74edb51bdc148bc0d
+containerimage.digest: sha256:6e51737074dd28cd0e8911f5437d4e091ccb0a86c09bdf172115f7a7350a7a34
+containerimage.descriptor: eyJtZWRpYVR5cGUiOiJhcHBsaWNhdGlvbi92bmQub2NpLmltYWdlLm1hbmlmZXN0LnYxK2pzb24iLCJkaWdlc3QiOiJzaGEyNTY6NmU1MTczNzA3NGRkMjhjZDBlODkxMWY1NDM3ZDRlMDkxY2NiMGE4NmMwOWJkZjE3MjExNWY3YTczNTBhN2EzNCIsInNpemUiOjE4MTAsImFubm90YXRpb25zIjp7Im9yZy5vcGVuY29udGFpbmVycy5pbWFnZS5jcmVhdGVkIjoiMjAyNi0wOS0wOVQxMDoyMzo1MFoifSwicGxhdGZvcm0iOnsiYXJjaGl0ZWN0dXJlIjoiYW1kNjQiLCJvcyI6ImxpbnV4In19
+[INFO] image push
+[INFO] image push
+
+====================
+Starting Healthcheck
+====================
+
+Path: /
+Retry window: 5m0s
+
+[1/1] Healthcheck succeeded!
