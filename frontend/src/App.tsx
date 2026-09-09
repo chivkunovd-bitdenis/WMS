@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { apiUrl } from './api'
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { ProfileLoadingScreen } from './screens/ProfileLoadingScreen'
 import { PublicAuthScreen } from './screens/PublicAuthScreen'
 import { SubscriptionBlockedScreen } from './screens/SubscriptionBlockedScreen'
@@ -285,6 +285,9 @@ export default function App() {
   const { subscription, reloadSubscription, startPayment, syncPayment } = useSubscription(token)
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  // WMS-177: держим id открытой FF-приёмки в адресе (?open_inbound=...), чтобы
+  // reload не выкидывал оператора в журнал документов.
+  const [appSearchParams, setAppSearchParams] = useSearchParams()
   const [pendingMpUnloadId, setPendingMpUnloadId] = useState<string | null>(null)
   const [warehouses, setWarehouses] = useState<WarehouseRow[]>([])
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(
@@ -2794,10 +2797,48 @@ export default function App() {
     setSelectedInboundId(null)
     setSelectedOutboundId(null)
     setFfInboundWorkspace('full')
+    // WMS-177: явное закрытие документа убирает и URL-параметр, иначе при
+    // следующем возврате на эту страницу тот же документ откроется снова.
+    if (appSearchParams.get('open_inbound')) {
+      const cleaned = new URLSearchParams(appSearchParams)
+      cleaned.delete('open_inbound')
+      setAppSearchParams(cleaned, { replace: true })
+    }
     if (token) {
       void refreshInboundList(token)
     }
-  }, [ffDocDirty, refreshInboundList, token])
+  }, [ffDocDirty, refreshInboundList, token, appSearchParams, setAppSearchParams])
+
+  // WMS-177: при первом рендере (или после reload) читаем ?open_inbound=<id>
+  // и восстанавливаем открытый экран приёмки, если параметр совпадает с
+  // существующей заявкой из списка. Обновление сохранённого id в URL идёт
+  // отдельно, когда оператор открывает документ из списка.
+  useEffect(() => {
+    const openInbound = appSearchParams.get('open_inbound')
+    if (!openInbound) return
+    if (selectedInboundId === openInbound && ffDocModal === 'inbound') return
+    setSelectedOutboundId(null)
+    setSelectedInboundId(openInbound)
+    setFfInboundWorkspace('reception')
+    setFfDocModal('inbound')
+  }, [appSearchParams, selectedInboundId, ffDocModal])
+
+  // WMS-177: одна точка входа в «открыть приёмку»: она же кладёт id в URL,
+  // чтобы reload вернул оператора в тот же документ, а не в журнал.
+  const openInboundDocument = useCallback(
+    (id: string, workspace: 'full' | 'reception' | 'sorting' = 'reception') => {
+      setSelectedOutboundId(null)
+      setSelectedInboundId(id)
+      setFfInboundWorkspace(workspace)
+      setFfDocModal('inbound')
+      if (appSearchParams.get('open_inbound') !== id) {
+        const next = new URLSearchParams(appSearchParams)
+        next.set('open_inbound', id)
+        setAppSearchParams(next, { replace: true })
+      }
+    },
+    [appSearchParams, setAppSearchParams],
+  )
 
   const rootElement = (() => {
     if (!token || location.pathname.endsWith('/set-password')) {
@@ -2895,12 +2936,7 @@ export default function App() {
                       r.marketplace === 'ozon' ? 'Ozon' : 'Wildberries',
                     goods_qty_total: r.line_count,
                   }))}
-                onOpenInbound={(id) => {
-                  setSelectedOutboundId(null)
-                  setSelectedInboundId(id)
-                  setFfInboundWorkspace('full')
-                  setFfDocModal('inbound')
-                }}
+                onOpenInbound={(id) => openInboundDocument(id, 'full')}
                 onOpenOutbound={(id) => {
                   setPendingMpUnloadId(null)
                   setSelectedInboundId(null)
@@ -2954,12 +2990,7 @@ export default function App() {
                   discrepancyActSummaries={discrepancyActSummaries}
                   initialMarketplaceUnloadId={pendingMpUnloadId}
                   onInitialMarketplaceUnloadOpened={() => setPendingMpUnloadId(null)}
-                  onOpenInbound={(id) => {
-                    setSelectedOutboundId(null)
-                    setSelectedInboundId(id)
-                    setFfInboundWorkspace('full')
-                    setFfDocModal('inbound')
-                  }}
+                  onOpenInbound={(id) => openInboundDocument(id, 'full')}
                   onOpenOutbound={(id) => {
                     setSelectedInboundId(null)
                     setSelectedOutboundId(id)
@@ -3006,18 +3037,10 @@ export default function App() {
                     if (!created?.id) {
                       return null
                     }
-                    setSelectedOutboundId(null)
-                    setSelectedInboundId(created.id)
-                    setFfInboundWorkspace('reception')
-                    setFfDocModal('inbound')
+                    openInboundDocument(created.id, 'reception')
                     return created
                   }}
-                  onOpen={(id) => {
-                    setSelectedOutboundId(null)
-                    setSelectedInboundId(id)
-                    setFfInboundWorkspace('reception')
-                    setFfDocModal('inbound')
-                  }}
+                  onOpen={(id) => openInboundDocument(id, 'reception')}
                 />
               ) : (
                 ffAccessDenied
@@ -3032,12 +3055,7 @@ export default function App() {
                 <FfInboundQueuePage
                   addressStorageEnabled={me.address_storage_enabled !== false} workspace="sorting"
                   rows={inboundSummaries}
-                  onOpen={(id) => {
-                    setSelectedOutboundId(null)
-                    setSelectedInboundId(id)
-                    setFfInboundWorkspace('sorting')
-                    setFfDocModal('inbound')
-                  }}
+                  onOpen={(id) => openInboundDocument(id, 'sorting')}
                 />
               ) : (
                 ffAccessDenied
@@ -3175,12 +3193,7 @@ export default function App() {
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
                   warehouses={reportWarehouseOptions(warehouses)}
-                  onOpenInbound={(id) => {
-                    setSelectedOutboundId(null)
-                    setSelectedInboundId(id)
-                    setFfInboundWorkspace('full')
-                    setFfDocModal('inbound')
-                  }}
+                  onOpenInbound={(id) => openInboundDocument(id, 'full')}
                 />
               ) : (
                 ffAccessDenied
@@ -3208,12 +3221,7 @@ export default function App() {
                 <FfBillingScreen
                   token={token}
                   sellers={sellers.map((seller) => ({ id: seller.id, name: seller.name }))}
-                  onOpenInbound={(id) => {
-                    setSelectedOutboundId(null)
-                    setSelectedInboundId(id)
-                    setFfInboundWorkspace('reception')
-                    setFfDocModal('inbound')
-                  }}
+                  onOpenInbound={(id) => openInboundDocument(id, 'reception')}
                 />
               ) : (
                 ffAccessDenied
