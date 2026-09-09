@@ -160,6 +160,17 @@ async def approve_act(
     *,
     actor_user_id: uuid.UUID | None,
 ) -> DiscrepancyAct:
+    # WMS-156: до чтения статуса берём блокировку строки акта, иначе два
+    # одновременных approve увидят confirmed и оба запишут движения — товар
+    # спишется дважды. Только после блокировки читаем связанные данные.
+    locked = await session.execute(
+        select(DiscrepancyAct)
+        .where(DiscrepancyAct.id == act_id)
+        .where(DiscrepancyAct.tenant_id == tenant_id)
+        .with_for_update()
+    )
+    if locked.scalar_one_or_none() is None:
+        raise DiscrepancyActError("not_found")
     act = await get_act(session, tenant_id, act_id)
     if act is None:
         raise DiscrepancyActError("not_found")
