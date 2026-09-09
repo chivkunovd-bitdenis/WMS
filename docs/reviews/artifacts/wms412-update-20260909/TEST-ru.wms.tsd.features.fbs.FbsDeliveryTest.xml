@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ru.wms.tsd.features.fbs.FbsDeliveryTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-09-09T15:19:50" hostname="MacBook-Air-Denis.local" time="0.889">
+  <properties/>
+  <testcase name="definitive WB refusal requires new confirmation and a new key even when retryable" classname="ru.wms.tsd.features.fbs.FbsDeliveryTest" time="0.802"/>
+  <testcase name="pending and unstructured errors preserve the request but definitive refusal does not" classname="ru.wms.tsd.features.fbs.FbsDeliveryTest" time="0.004"/>
+  <testcase name="failed preflight retains web option to confirm without a version" classname="ru.wms.tsd.features.fbs.FbsDeliveryTest" time="0.011"/>
+  <testcase name="confirmation sends preflight version once and exposes confirmed server workspace" classname="ru.wms.tsd.features.fbs.FbsDeliveryTest" time="0.016"/>
+  <testcase name="confirmed workspace on reopen clears pending request and refresh uses tracking only" classname="ru.wms.tsd.features.fbs.FbsDeliveryTest" time="0.008"/>
+  <testcase name="double tap while response pending sends only one request" classname="ru.wms.tsd.features.fbs.FbsDeliveryTest" time="0.01"/>
+  <testcase name="unknown response keeps exact request across reopening and never refreshes its version" classname="ru.wms.tsd.features.fbs.FbsDeliveryTest" time="0.006"/>
+  <testcase name="disk write failure prevents delivery request" classname="ru.wms.tsd.features.fbs.FbsDeliveryTest" time="0.005"/>
+  <testcase name="connection loss preserves identity for explicit retry" classname="ru.wms.tsd.features.fbs.FbsDeliveryTest" time="0.006"/>
+  <testcase name="unconfirmed successful HTTP response cannot become delivered" classname="ru.wms.tsd.features.fbs.FbsDeliveryTest" time="0.004"/>
+  <testcase name="blocked preflight cannot deliver and cancelling never mutates supply" classname="ru.wms.tsd.features.fbs.FbsDeliveryTest" time="0.005"/>
+  <testcase name="pending request never migrates to a different supply" classname="ru.wms.tsd.features.fbs.FbsDeliveryTest" time="0.004"/>
+  <testcase name="late delivery error stays attached to old supply after navigation" classname="ru.wms.tsd.features.fbs.FbsDeliveryTest" time="0.006"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

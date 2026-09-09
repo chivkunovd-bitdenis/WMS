@@ -1,0 +1,28 @@
+From 364e8aed004069ced37b9692fa788dd0eb8d95b2 Mon Sep 17 00:00:00 2001
+From: Denis Civkunov <denischivkunov@icloud.com>
+Date: Wed, 9 Sep 2026 18:19:07 +0300
+Subject: [PATCH] WMS-412 prepare next APK version for network update
+ acceptance
+
+---
+ android/app/build.gradle.kts | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/android/app/build.gradle.kts b/android/app/build.gradle.kts
+index 70dfb5d..6e2ca73 100644
+--- a/android/app/build.gradle.kts
++++ b/android/app/build.gradle.kts
+@@ -13,8 +13,8 @@ android {
+         applicationId = "ru.wms.tsd"
+         minSdk = 24
+         targetSdk = 35
+-        versionCode = 7
+-        versionName = "0.1.6-network-update"
++        versionCode = 8
++        versionName = "0.1.7-network-update"
+         buildConfigField("String", "APK_UPDATE_MANIFEST_URL", "\"https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/update.json\"")
+         buildConfigField(
+             "String",
+-- 
+2.39.2 (Apple Git-143)
+

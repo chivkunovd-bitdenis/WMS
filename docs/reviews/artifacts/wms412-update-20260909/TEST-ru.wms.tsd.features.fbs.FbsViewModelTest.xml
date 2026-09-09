@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ru.wms.tsd.features.fbs.FbsViewModelTest" tests="20" skipped="0" failures="0" errors="0" timestamp="2026-09-09T15:19:51" hostname="MacBook-Air-Denis.local" time="0.204">
+  <properties/>
+  <testcase name="QR only printing retains the asset path without requesting KIZ tape" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.101"/>
+  <testcase name="oldest matching order respects offsets and fractions before WB id" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.006"/>
+  <testcase name="scan retry keeps same order source and request identity after lost response" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.007"/>
+  <testcase name="missing requested tape order cannot fall back to QR only success" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.006"/>
+  <testcase name="full KIZ scan is preserved through WB commit" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.008"/>
+  <testcase name="box quantity retry rereads successful deletes after lost response" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.007"/>
+  <testcase name="oldest matching SKU uses instants and skips picked orders" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.001"/>
+  <testcase name="box local printed code does not invoke marking lookup" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.006"/>
+  <testcase name="cancel chooser preserves queued scan oldest order and explicit cell stays loose" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.008"/>
+  <testcase name="box technical QR resolves its exact order without marking gates" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.007"/>
+  <testcase name="switching supply cancels chooser and discards scans queued for previous supply" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.006"/>
+  <testcase name="serial product scans use refreshed server progress and distinct identities" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.004"/>
+  <testcase name="commit ok message never hides WB verification outcome" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.011"/>
+  <testcase name="deadline and label escaping preserve operator data without script execution" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.002"/>
+  <testcase name="deadline offsets preserve the exclusive six hour boundary" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.001"/>
+  <testcase name="box QR cannot assign an absent or already assigned lookup order" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.005"/>
+  <testcase name="print tape order error blocks all preview pages and is retried freshly" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.006"/>
+  <testcase name="box lookup frozen response never assigns an order" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.004"/>
+  <testcase name="display time accepts API offsets fractions and UTC in local timezone" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.002"/>
+  <testcase name="physical choices use server availability and the deepest container" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ru.wms.tsd.features.update.UpdateTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-09-09T15:19:52" hostname="MacBook-Air-Denis.local" time="0.135">
+  <properties/>
+  <testcase name="apk must match package signing certificate manifest version and Android support" classname="ru.wms.tsd.features.update.UpdateTest" time="0.004"/>
+  <testcase name="returning from denied permission or cancelled install keeps file and revalidates on next tap" classname="ru.wms.tsd.features.update.UpdateTest" time="0.102"/>
+  <testcase name="changed or deleted cached file cannot reach installer" classname="ru.wms.tsd.features.update.UpdateTest" time="0.003"/>
+  <testcase name="manifest rejects insecure authenticated oversized or malformed files" classname="ru.wms.tsd.features.update.UpdateTest" time="0.001"/>
+  <testcase name="incompatible Android cannot download update" classname="ru.wms.tsd.features.update.UpdateTest" time="0.002"/>
+  <testcase name="only a complete matching download becomes installable" classname="ru.wms.tsd.features.update.UpdateTest" time="0.005"/>
+  <testcase name="check failure stays retryable and does not report latest installed" classname="ru.wms.tsd.features.update.UpdateTest" time="0.003"/>
+  <testcase name="truncated corrupted and oversized downloads leave no installable or partial file" classname="ru.wms.tsd.features.update.UpdateTest" time="0.002"/>
+  <testcase name="double download tap does not start duplicate download" classname="ru.wms.tsd.features.update.UpdateTest" time="0.004"/>
+  <testcase name="current or older version never offers download" classname="ru.wms.tsd.features.update.UpdateTest" time="0.003"/>
+  <testcase name="network interruption cleans partial download and retry succeeds" classname="ru.wms.tsd.features.update.UpdateTest" time="0.002"/>
+  <testcase name="cancelled download is not left ready to install" classname="ru.wms.tsd.features.update.UpdateTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

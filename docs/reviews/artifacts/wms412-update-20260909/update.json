@@ -1,0 +1,9 @@
+{
+  "versionCode": 8,
+  "versionName": "0.1.7-network-update",
+  "apkUrl": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/WMS-TSD-0.1.7-364e8ae-debug.apk",
+  "sha256": "91b6e4312ef0288803217c88356aa1e3785cd45ff0fbe88c4220ea82988c90c9",
+  "sizeBytes": 45281889,
+  "minSdk": 24,
+  "notes": "Передача поставок FBS в WB с защитой повторов. Проверка, скачивание и установка новых версий прямо из приложения."
+}

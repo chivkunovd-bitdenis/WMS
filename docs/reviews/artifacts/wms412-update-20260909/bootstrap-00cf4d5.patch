@@ -1,0 +1,656 @@
+From 00cf4d5c9ebbf7690ed3e8905bd0f4cb25d7c35c Mon Sep 17 00:00:00 2001
+From: Denis Civkunov <denischivkunov@icloud.com>
+Date: Wed, 9 Sep 2026 18:18:01 +0300
+Subject: [PATCH] WMS-412 add verified in-app APK download and Android update
+ installer
+
+---
+ android/app/build.gradle.kts                  |   5 +-
+ android/app/src/main/AndroidManifest.xml      |   8 +
+ .../src/main/java/ru/wms/tsd/Navigation.kt    |   6 +
+ .../ru/wms/tsd/features/home/HomeScreen.kt    |   5 +
+ .../tsd/features/update/UpdateInstaller.kt    |  51 ++++++
+ .../tsd/features/update/UpdateRepository.kt   | 153 ++++++++++++++++++
+ .../wms/tsd/features/update/UpdateScreen.kt   |  85 ++++++++++
+ .../tsd/features/update/UpdateViewModel.kt    |  70 ++++++++
+ android/app/src/main/res/xml/update_paths.xml |   4 +
+ .../ru/wms/tsd/features/update/UpdateTest.kt  | 137 ++++++++++++++++
+ 10 files changed, 522 insertions(+), 2 deletions(-)
+ create mode 100644 android/app/src/main/java/ru/wms/tsd/features/update/UpdateInstaller.kt
+ create mode 100644 android/app/src/main/java/ru/wms/tsd/features/update/UpdateRepository.kt
+ create mode 100644 android/app/src/main/java/ru/wms/tsd/features/update/UpdateScreen.kt
+ create mode 100644 android/app/src/main/java/ru/wms/tsd/features/update/UpdateViewModel.kt
+ create mode 100644 android/app/src/main/res/xml/update_paths.xml
+ create mode 100644 android/app/src/test/java/ru/wms/tsd/features/update/UpdateTest.kt
+
+diff --git a/android/app/build.gradle.kts b/android/app/build.gradle.kts
+index 53e094b..70dfb5d 100644
+--- a/android/app/build.gradle.kts
++++ b/android/app/build.gradle.kts
+@@ -13,8 +13,9 @@ android {
+         applicationId = "ru.wms.tsd"
+         minSdk = 24
+         targetSdk = 35
+-        versionCode = 6
+-        versionName = "0.1.5-fbs-delivery"
++        versionCode = 7
++        versionName = "0.1.6-network-update"
++        buildConfigField("String", "APK_UPDATE_MANIFEST_URL", "\"https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/update.json\"")
+         buildConfigField(
+             "String",
+             "DEFAULT_API_BASE_URL",
+diff --git a/android/app/src/main/AndroidManifest.xml b/android/app/src/main/AndroidManifest.xml
+index 87a9ef6..1f2e4fb 100644
+--- a/android/app/src/main/AndroidManifest.xml
++++ b/android/app/src/main/AndroidManifest.xml
+@@ -2,6 +2,7 @@
+ <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+ 
+     <uses-permission android:name="android.permission.INTERNET" />
++    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+     <uses-permission android:name="android.permission.CAMERA" />
+     <uses-permission android:name="android.permission.VIBRATE" />
+@@ -19,6 +20,13 @@
+         android:theme="@style/Theme.WmsTsd"
+         android:usesCleartextTraffic="false"
+         android:networkSecurityConfig="@xml/network_security_config">
++        <provider
++            android:name=".features.update.UpdateFileProvider"
++            android:authorities="${applicationId}.updates"
++            android:exported="false"
++            android:grantUriPermissions="true">
++            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_paths" />
++        </provider>
+         <activity
+             android:name=".MainActivity"
+             android:exported="true"
+diff --git a/android/app/src/main/java/ru/wms/tsd/Navigation.kt b/android/app/src/main/java/ru/wms/tsd/Navigation.kt
+index 79ade8c..006264c 100644
+--- a/android/app/src/main/java/ru/wms/tsd/Navigation.kt
++++ b/android/app/src/main/java/ru/wms/tsd/Navigation.kt
+@@ -19,6 +19,7 @@ import androidx.navigation.compose.composable
+ import androidx.navigation.compose.rememberNavController
+ import androidx.navigation.navArgument
+ import ru.wms.tsd.core.auth.AuthSession
++import ru.wms.tsd.features.update.UpdateScreen
+ import ru.wms.tsd.features.home.HomeScreen
+ import ru.wms.tsd.features.fbs.FbsOrdersScreen
+ import ru.wms.tsd.features.fbs.FbsSupplyScreen
+@@ -55,9 +56,14 @@ fun AppNavHost(
+                     navController.navigate(section.route)
+                 },
+                 onLogout = onLogout,
++                onUpdate = { navController.navigate("update") },
+             )
+         }
+ 
++        composable("update") {
++            UpdateScreen(onBack = { navController.popBackStack() })
++        }
++
+         composable("fbs") {
+             FbsOrdersScreen(onBack = { navController.popBackStack() }, onOpen = { navController.navigate("fbs/$it") })
+         }
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/home/HomeScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/home/HomeScreen.kt
+index f16f155..cd65432 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/home/HomeScreen.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/home/HomeScreen.kt
+@@ -96,6 +96,7 @@ fun HomeScreen(
+     session: AuthSession,
+     onSectionClick: (HomeSection) -> Unit,
+     onLogout: () -> Unit,
++    onUpdate: () -> Unit,
+ ) {
+     val vm: HomeViewModel = viewModel(factory = HomeViewModel.Factory(AppGraph.apiProvider))
+     val counts by vm.counts.collectAsState()
+@@ -135,6 +136,10 @@ fun HomeScreen(
+             }
+         }
+ 
++        TextButton(onClick = onUpdate, modifier = Modifier.fillMaxWidth()) {
++            Text("Обновление приложения", fontSize = 18.sp)
++        }
++
+         // Полоса инфо сотрудника
+         Row(
+             modifier = Modifier
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/update/UpdateInstaller.kt b/android/app/src/main/java/ru/wms/tsd/features/update/UpdateInstaller.kt
+new file mode 100644
+index 0000000..10f3ba8
+--- /dev/null
++++ b/android/app/src/main/java/ru/wms/tsd/features/update/UpdateInstaller.kt
+@@ -0,0 +1,51 @@
++package ru.wms.tsd.features.update
++
++import android.content.ClipData
++import android.content.Context
++import android.content.Intent
++import android.content.pm.PackageInfo
++import android.content.pm.PackageManager
++import android.net.Uri
++import android.os.Build
++import android.provider.Settings
++import androidx.core.content.FileProvider
++import java.io.File
++
++class UpdateFileProvider : FileProvider()
++
++class UpdateInstaller(private val context: Context) {
++    @Suppress("DEPRECATION")
++    fun verify(file: File, update: AppUpdate) {
++        val pm = context.packageManager
++        val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
++        val installed = pm.getPackageInfo(context.packageName, flags)
++        val archive = requireNotNull(pm.getPackageArchiveInfo(file.absolutePath, flags)) { "Android не распознал файл обновления." }
++        verifyIdentity(installed.identity(), archive.identity(), update, Build.VERSION.SDK_INT)
++    }
++
++    fun allowed(): Boolean = Build.VERSION.SDK_INT < 26 || context.packageManager.canRequestPackageInstalls()
++
++    fun permissionIntent(): Intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
++
++    @Suppress("DEPRECATION")
++    fun installIntent(file: File): Intent {
++        val uri = FileProvider.getUriForFile(context, "${context.packageName}.updates", file)
++        return Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
++            setDataAndType(uri, "application/vnd.android.package-archive")
++            clipData = ClipData.newRawUri("Обновление WMS ТСД", uri)
++            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
++            putExtra(Intent.EXTRA_RETURN_RESULT, true)
++        }
++    }
++}
++
++@Suppress("DEPRECATION")
++private fun PackageInfo.identity(): ApkIdentity {
++    val certificates = if (Build.VERSION.SDK_INT >= 28) signingInfo?.apkContentsSigners else signatures
++    return ApkIdentity(
++        packageName,
++        if (Build.VERSION.SDK_INT >= 28) longVersionCode else versionCode.toLong(),
++        requireNotNull(applicationInfo).minSdkVersion,
++        certificates.orEmpty().map { it.toCharsString() }.toSet(),
++    )
++}
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/update/UpdateRepository.kt b/android/app/src/main/java/ru/wms/tsd/features/update/UpdateRepository.kt
+new file mode 100644
+index 0000000..5953239
+--- /dev/null
++++ b/android/app/src/main/java/ru/wms/tsd/features/update/UpdateRepository.kt
+@@ -0,0 +1,153 @@
++package ru.wms.tsd.features.update
++
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.ensureActive
++import kotlinx.coroutines.withContext
++import kotlinx.serialization.Serializable
++import kotlinx.serialization.json.Json
++import okhttp3.CacheControl
++import okhttp3.HttpUrl.Companion.toHttpUrl
++import okhttp3.OkHttpClient
++import okhttp3.Request
++import ru.wms.tsd.BuildConfig
++import java.io.File
++import java.io.IOException
++import java.io.InputStream
++import java.security.MessageDigest
++import java.util.concurrent.TimeUnit
++import kotlin.coroutines.coroutineContext
++
++private const val MAX_APK_BYTES = 120L * 1024 * 1024
++
++@Serializable
++data class AppUpdate(
++    val versionCode: Long,
++    val versionName: String,
++    val apkUrl: String,
++    val sha256: String,
++    val sizeBytes: Long,
++    val minSdk: Int,
++    val notes: String = "",
++) {
++    fun validate() {
++        require(versionCode > 0 && versionName.isNotBlank() && versionName.length <= 100) { "Не удалось прочитать версию обновления." }
++        require(sizeBytes in 1..MAX_APK_BYTES && minSdk >= 24) { "Некорректный размер или версия Android в обновлении." }
++        require(sha256.matches(Regex("[a-fA-F0-9]{64}"))) { "В обновлении отсутствует контрольная сумма." }
++        val url = apkUrl.toHttpUrl()
++        require(url.isHttps && url.username.isEmpty() && url.password.isEmpty()) { "Обновление должно загружаться по защищённому соединению." }
++        require(notes.length <= 4000) { "Описание обновления слишком длинное." }
++    }
++}
++
++internal data class ApkIdentity(val packageName: String, val versionCode: Long, val minSdk: Int, val signers: Set<String>)
++
++internal fun verifyIdentity(installed: ApkIdentity, archive: ApkIdentity, update: AppUpdate, sdk: Int) {
++    require(archive.packageName == installed.packageName) { "Этот файл предназначен для другого приложения." }
++    require(archive.versionCode == update.versionCode && archive.versionCode > installed.versionCode) { "Версия файла не соответствует обновлению или уже установлена." }
++    require(archive.minSdk == update.minSdk && archive.minSdk <= sdk) { "Обновление не поддерживает эту версию Android." }
++    require(installed.signers.isNotEmpty() && archive.signers == installed.signers) { "Подпись обновления не совпадает с установленным приложением." }
++}
++
++internal fun File.sha256(): String = inputStream().use { input ->
++    val digest = MessageDigest.getInstance("SHA-256")
++    val buffer = ByteArray(64 * 1024)
++    while (true) {
++        val read = input.read(buffer)
++        if (read == -1) break
++        digest.update(buffer, 0, read)
++    }
++    digest.digest().joinToString("") { "%02x".format(it) }
++}
++
++/** A partial download is never exposed to Android's installer. */
++internal suspend fun saveApk(input: InputStream, target: File, update: AppUpdate, progress: (Int) -> Unit) {
++    val partial = File(target.parentFile, target.name + ".part")
++    try {
++        var count = 0L
++        var lastPercent = -1
++        partial.outputStream().use { output ->
++            val buffer = ByteArray(64 * 1024)
++            while (true) {
++                coroutineContext.ensureActive()
++                val read = input.read(buffer)
++                if (read == -1) break
++                count += read
++                require(count <= update.sizeBytes && count <= MAX_APK_BYTES) { "Размер файла обновления не совпадает с заявленным." }
++                output.write(buffer, 0, read)
++                val percent = (count * 100 / update.sizeBytes).toInt()
++                if (percent != lastPercent) { progress(percent); lastPercent = percent }
++            }
++        }
++        require(count == update.sizeBytes && partial.sha256().equals(update.sha256, ignoreCase = true)) { "Файл скачан не полностью или повреждён. Скачайте его ещё раз." }
++        check(partial.renameTo(target)) { "Не удалось сохранить обновление. Проверьте свободное место." }
++    } finally {
++        partial.delete()
++    }
++}
++
++interface UpdateSource {
++    suspend fun latest(): AppUpdate
++    suspend fun download(update: AppUpdate, progress: (Int) -> Unit): File
++    suspend fun verify(file: File, update: AppUpdate)
++}
++
++class UpdateRepository(
++    private val directory: File,
++    private val verifyArchive: (File, AppUpdate) -> Unit,
++    private val manifestUrl: String = BuildConfig.APK_UPDATE_MANIFEST_URL,
++    // Deliberately independent of WMS API: no session token or API logging goes to the release host.
++    private val client: OkHttpClient = OkHttpClient.Builder()
++        .connectTimeout(20, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS)
++        .callTimeout(5, TimeUnit.MINUTES).followSslRedirects(false).build(),
++) : UpdateSource {
++    private val json = Json { ignoreUnknownKeys = true }
++
++    override suspend fun latest(): AppUpdate = withContext(Dispatchers.IO) {
++        val url = manifestUrl.toHttpUrl()
++        require(url.isHttps) { "Адрес обновлений должен использовать защищённое соединение." }
++        val request = Request.Builder().url(url.newBuilder().addQueryParameter("check", System.currentTimeMillis().toString()).build())
++            .cacheControl(CacheControl.FORCE_NETWORK).build()
++        client.newCall(request).execute().use { response ->
++            if (!response.isSuccessful) throw IOException("Не удалось проверить обновление (HTTP ${response.code}). Повторите позже.")
++            val body = response.body ?: throw IOException("Сервер обновлений вернул пустой ответ.")
++            val bytes = body.byteStream().use { it.readBytesLimited(32 * 1024) }
++            json.decodeFromString<AppUpdate>(bytes.toString(Charsets.UTF_8)).also { it.validate() }
++        }
++    }
++
++    override suspend fun download(update: AppUpdate, progress: (Int) -> Unit): File = withContext(Dispatchers.IO) {
++        update.validate()
++        check(directory.isDirectory || directory.mkdirs()) { "Не удалось создать папку обновления." }
++        val target = File(directory, "${update.versionCode}-${update.sha256.lowercase()}.apk")
++        if (target.isFile) {
++            try { verify(target, update); return@withContext target } catch (_: IllegalArgumentException) { target.delete() }
++        }
++        // Only this screen uses the restricted updates cache directory.
++        directory.listFiles()?.filter { it != target }?.forEach { it.delete() }
++        client.newCall(Request.Builder().url(update.apkUrl).build()).execute().use { response ->
++            if (!response.isSuccessful) throw IOException("Не удалось скачать обновление (HTTP ${response.code}). Повторите позже.")
++            val body = response.body ?: throw IOException("Сервер вернул пустой файл.")
++            require(body.contentLength() == -1L || body.contentLength() == update.sizeBytes) { "Размер файла обновления не совпадает с заявленным." }
++            body.byteStream().use { saveApk(it, target, update, progress) }
++        }
++        try { verify(target, update) } catch (error: Exception) { target.delete(); throw error }
++        target
++    }
++
++    override suspend fun verify(file: File, update: AppUpdate) = withContext(Dispatchers.IO) {
++        require(file.isFile && file.length() == update.sizeBytes && file.sha256().equals(update.sha256, ignoreCase = true)) { "Файл обновления отсутствует или повреждён. Скачайте его ещё раз." }
++        verifyArchive(file, update)
++    }
++}
++
++private fun InputStream.readBytesLimited(limit: Int): ByteArray {
++    val output = java.io.ByteArrayOutputStream()
++    val buffer = ByteArray(4096)
++    while (true) {
++        val read = read(buffer)
++        if (read == -1) break
++        require(output.size() + read <= limit) { "Сервер вернул слишком большой ответ об обновлении." }
++        output.write(buffer, 0, read)
++    }
++    return output.toByteArray()
++}
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/update/UpdateScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/update/UpdateScreen.kt
+new file mode 100644
+index 0000000..56d2777
+--- /dev/null
++++ b/android/app/src/main/java/ru/wms/tsd/features/update/UpdateScreen.kt
+@@ -0,0 +1,85 @@
++package ru.wms.tsd.features.update
++
++import android.app.Activity
++import android.os.Build
++import androidx.activity.compose.rememberLauncherForActivityResult
++import androidx.activity.result.contract.ActivityResultContracts
++import androidx.compose.foundation.layout.Arrangement
++import androidx.compose.foundation.layout.Column
++import androidx.compose.foundation.layout.fillMaxSize
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.padding
++import androidx.compose.foundation.rememberScrollState
++import androidx.compose.foundation.verticalScroll
++import androidx.compose.material3.Button
++import androidx.compose.material3.LinearProgressIndicator
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.material3.OutlinedButton
++import androidx.compose.material3.Text
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.getValue
++import androidx.compose.runtime.remember
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.unit.dp
++import androidx.compose.ui.unit.sp
++import androidx.lifecycle.ViewModel
++import androidx.lifecycle.ViewModelProvider
++import androidx.lifecycle.compose.collectAsStateWithLifecycle
++import androidx.lifecycle.viewmodel.compose.viewModel
++import ru.wms.tsd.BuildConfig
++import ru.wms.tsd.ui.patterns.ScanFlash
++import ru.wms.tsd.ui.patterns.ScanScaffold
++import java.io.File
++
++@Composable
++fun UpdateScreen(onBack: () -> Unit) {
++    val context = LocalContext.current
++    val installer = remember { UpdateInstaller(context.applicationContext) }
++    val vm: UpdateViewModel = viewModel(factory = remember {
++        object : ViewModelProvider.Factory {
++            @Suppress("UNCHECKED_CAST")
++            override fun <T : ViewModel> create(modelClass: Class<T>): T = UpdateViewModel(
++                UpdateRepository(File(context.cacheDir, "updates"), installer::verify),
++                BuildConfig.VERSION_CODE.toLong(), Build.VERSION.SDK_INT,
++            ) as T
++        }
++    })
++    val state by vm.state.collectAsStateWithLifecycle()
++    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
++        vm.installMessage(if (installer.allowed()) "Разрешение получено. Нажмите «Установить обновление»." else "Установка пока не разрешена. Текущая версия продолжает работать.")
++    }
++    val installLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
++        // A successful self-update restarts the process. Returning to this version is not success proof.
++        if (result.resultCode != Activity.RESULT_OK) vm.installMessage("Установка не завершена. Можно повторить её или продолжить работу.")
++    }
++    ScanScaffold(title = "Обновление приложения", flash = ScanFlash.None, onExit = onBack, cameraScanner = false) {
++        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
++            Text("Установлена версия ${BuildConfig.VERSION_NAME}", fontSize = 22.sp)
++            Text("Обновляйте приложение между заданиями. Вход, адрес сервера и сохранённые данные останутся на устройстве.")
++            state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
++            if (state.busy) {
++                val percent = state.downloadPercent
++                if (percent == null) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Проверяем обновление…") }
++                else { LinearProgressIndicator(progress = { percent / 100f }, modifier = Modifier.fillMaxWidth()); Text("Скачивание: $percent %") }
++            }
++            val update = state.available
++            if (update != null) {
++                Text("Доступна версия ${update.versionName}", fontSize = 22.sp)
++                Text("Размер: ${update.sizeBytes / (1024 * 1024)} МБ")
++                if (update.notes.isNotBlank()) Text(update.notes)
++                if (state.file == null) Button(onClick = vm::download, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text("Скачать обновление", fontSize = 20.sp) }
++                else {
++                    Text("Обновление скачано и проверено. Android попросит подтвердить установку.")
++                    Button(onClick = {
++                        vm.prepareInstall { file ->
++                            if (installer.allowed()) installLauncher.launch(installer.installIntent(file))
++                            else permissionLauncher.launch(installer.permissionIntent())
++                        }
++                    }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text("Установить обновление", fontSize = 20.sp) }
++                }
++            } else if (state.checked) Text("Установлена последняя версия.", fontSize = 22.sp)
++            OutlinedButton(onClick = vm::check, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text("Проверить обновление", fontSize = 20.sp) }
++        }
++    }
++}
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/update/UpdateViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/update/UpdateViewModel.kt
+new file mode 100644
+index 0000000..44a7dcc
+--- /dev/null
++++ b/android/app/src/main/java/ru/wms/tsd/features/update/UpdateViewModel.kt
+@@ -0,0 +1,70 @@
++package ru.wms.tsd.features.update
++
++import androidx.lifecycle.ViewModel
++import androidx.lifecycle.viewModelScope
++import kotlinx.coroutines.CancellationException
++import kotlinx.coroutines.flow.MutableStateFlow
++import kotlinx.coroutines.flow.asStateFlow
++import kotlinx.coroutines.flow.update
++import kotlinx.coroutines.launch
++import java.io.File
++
++data class UpdateState(
++    val busy: Boolean = false,
++    val checked: Boolean = false,
++    val available: AppUpdate? = null,
++    val downloadPercent: Int? = null,
++    val file: File? = null,
++    val error: String? = null,
++)
++
++class UpdateViewModel(private val source: UpdateSource, private val currentVersion: Long, private val sdk: Int) : ViewModel() {
++    private val mutableState = MutableStateFlow(UpdateState())
++    val state = mutableState.asStateFlow()
++
++    fun check() = action {
++        mutableState.value = UpdateState(busy = true)
++        val update = source.latest()
++        if (update.versionCode > currentVersion) {
++            require(update.minSdk <= sdk) { "Новая версия требует более новый Android. На этом устройстве продолжайте работать в установленной версии." }
++            mutableState.update { it.copy(checked = true, available = update) }
++        } else mutableState.update { it.copy(checked = true) }
++    }
++
++    fun download() {
++        if (state.value.available == null) return
++        action {
++        val update = state.value.available ?: return@action
++        mutableState.update { it.copy(file = null, downloadPercent = 0) }
++        val file = source.download(update) { percent -> mutableState.update { it.copy(downloadPercent = percent) } }
++        mutableState.update { it.copy(file = file, downloadPercent = null) }
++        }
++    }
++
++    fun prepareInstall(onReady: (File) -> Unit) {
++        if (state.value.available == null || state.value.file == null) return
++        action {
++        val update = state.value.available ?: return@action
++        val file = state.value.file ?: return@action
++        try { source.verify(file, update) } catch (error: Exception) {
++            if (error is CancellationException) throw error
++            mutableState.update { it.copy(file = null) }
++            throw error
++        }
++        onReady(file)
++        }
++    }
++
++    fun installMessage(message: String) { mutableState.update { it.copy(error = message) } }
++
++    private fun action(block: suspend () -> Unit) {
++        if (state.value.busy) return
++        mutableState.update { it.copy(busy = true, error = null) }
++        viewModelScope.launch {
++            try { block() } catch (error: Exception) {
++                if (error is CancellationException) throw error
++                mutableState.update { it.copy(error = error.message ?: "Не удалось обновить приложение. Проверьте сеть и свободное место.") }
++            } finally { mutableState.update { it.copy(busy = false, downloadPercent = null) } }
++        }
++    }
++}
+diff --git a/android/app/src/main/res/xml/update_paths.xml b/android/app/src/main/res/xml/update_paths.xml
+new file mode 100644
+index 0000000..1996944
+--- /dev/null
++++ b/android/app/src/main/res/xml/update_paths.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<paths xmlns:android="http://schemas.android.com/apk/res/android">
++    <cache-path name="updates" path="updates/" />
++</paths>
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/update/UpdateTest.kt b/android/app/src/test/java/ru/wms/tsd/features/update/UpdateTest.kt
+new file mode 100644
+index 0000000..664120c
+--- /dev/null
++++ b/android/app/src/test/java/ru/wms/tsd/features/update/UpdateTest.kt
+@@ -0,0 +1,137 @@
++package ru.wms.tsd.features.update
++
++import io.mockk.coEvery
++import io.mockk.coVerify
++import io.mockk.mockk
++import kotlinx.coroutines.CompletableDeferred
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.ExperimentalCoroutinesApi
++import kotlinx.coroutines.cancelAndJoin
++import kotlinx.coroutines.launch
++import kotlinx.coroutines.test.UnconfinedTestDispatcher
++import kotlinx.coroutines.test.resetMain
++import kotlinx.coroutines.test.runTest
++import kotlinx.coroutines.test.setMain
++import org.junit.After
++import org.junit.Assert.*
++import org.junit.Before
++import org.junit.Rule
++import org.junit.Test
++import org.junit.rules.TemporaryFolder
++import java.io.ByteArrayInputStream
++import java.io.File
++import java.io.IOException
++import java.io.InputStream
++import java.security.MessageDigest
++
++@OptIn(ExperimentalCoroutinesApi::class)
++class UpdateTest {
++    @get:Rule val tmp = TemporaryFolder()
++    private val bytes = "sample apk bytes".toByteArray()
++    private val update = AppUpdate(8, "0.1.7", "https://github.com/example/app.apk", MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }, bytes.size.toLong(), 24)
++    private val installed = ApkIdentity("ru.wms.tsd", 7, 24, setOf("signer"))
++    private val archive = installed.copy(versionCode = 8)
++    @Before fun setup() { Dispatchers.setMain(UnconfinedTestDispatcher()) }
++    @After fun teardown() { Dispatchers.resetMain() }
++
++    @Test fun `manifest rejects insecure authenticated oversized or malformed files`() {
++        update.validate()
++        listOf(
++            update.copy(apkUrl = "http://example.com/app.apk"),
++            update.copy(apkUrl = "https://user:password@example.com/app.apk"),
++            update.copy(sizeBytes = 0), update.copy(sizeBytes = 121L * 1024 * 1024),
++            update.copy(sha256 = "invalid"), update.copy(versionCode = 0),
++        ).forEach { assertThrows(IllegalArgumentException::class.java) { it.validate() } }
++    }
++
++    @Test fun `apk must match package signing certificate manifest version and Android support`() {
++        verifyIdentity(installed, archive, update, 24)
++        listOf(
++            archive.copy(packageName = "another.app"), archive.copy(signers = emptySet()),
++            archive.copy(signers = setOf("other-signer")), archive.copy(versionCode = 9),
++            archive.copy(minSdk = 26),
++        ).forEach { assertThrows(IllegalArgumentException::class.java) { verifyIdentity(installed, it, update, 24) } }
++        assertThrows(IllegalArgumentException::class.java) { verifyIdentity(installed, installed, update.copy(versionCode = 7), 24) }
++    }
++
++    @Test fun `only a complete matching download becomes installable`() = runTest {
++        val target = File(tmp.root, "update.apk"); val progress = mutableListOf<Int>()
++        saveApk(ByteArrayInputStream(bytes), target, update, progress::add)
++        assertArrayEquals(bytes, target.readBytes()); assertEquals(100, progress.last())
++        assertFalse(File(tmp.root, "update.apk.part").exists())
++    }
++
++    @Test fun `truncated corrupted and oversized downloads leave no installable or partial file`() = runTest {
++        for (body in listOf(bytes.dropLast(1).toByteArray(), ByteArray(bytes.size), bytes + 1)) {
++            val target = File(tmp.root, "update.apk")
++            try { saveApk(ByteArrayInputStream(body), target, update) {}; fail("Accepted damaged download") } catch (_: IllegalArgumentException) { }
++            assertFalse(target.exists()); assertFalse(File(tmp.root, "update.apk.part").exists())
++        }
++    }
++
++    @Test fun `network interruption cleans partial download and retry succeeds`() = runTest {
++        val target = File(tmp.root, "update.apk")
++        val input = object : InputStream() { override fun read(): Int = throw IOException("Connection lost") }
++        try { saveApk(input, target, update) {}; fail("Expected network error") } catch (_: IOException) { }
++        assertFalse(target.exists()); assertFalse(File(tmp.root, "update.apk.part").exists())
++        saveApk(ByteArrayInputStream(bytes), target, update) {}; assertTrue(target.exists())
++    }
++
++    @Test fun `cancelled download is not left ready to install`() = runTest {
++        val target = File(tmp.root, "update.apk")
++        val job = launch {
++            coroutineContext[kotlinx.coroutines.Job]!!.cancel()
++            saveApk(ByteArrayInputStream(bytes), target, update) {}
++        }
++        job.join(); assertFalse(target.exists()); assertFalse(File(tmp.root, "update.apk.part").exists())
++    }
++
++    @Test fun `current or older version never offers download`() = runTest {
++        val source = mockk<UpdateSource>(); coEvery { source.latest() } returns update.copy(versionCode = 7)
++        val vm = UpdateViewModel(source, 7, 24); vm.check()
++        assertTrue(vm.state.value.checked); assertNull(vm.state.value.available)
++        vm.download(); coVerify(exactly = 0) { source.download(any(), any()) }
++    }
++
++    @Test fun `check failure stays retryable and does not report latest installed`() = runTest {
++        val source = mockk<UpdateSource>(); coEvery { source.latest() } throws IOException("offline")
++        val vm = UpdateViewModel(source, 7, 24); vm.check()
++        assertFalse(vm.state.value.checked); assertNotNull(vm.state.value.error); assertFalse(vm.state.value.busy)
++        coEvery { source.latest() } returns update; vm.check(); assertEquals(update, vm.state.value.available); assertNull(vm.state.value.error)
++    }
++
++    @Test fun `incompatible Android cannot download update`() = runTest {
++        val source = mockk<UpdateSource>(); coEvery { source.latest() } returns update.copy(minSdk = 26)
++        val vm = UpdateViewModel(source, 7, 24); vm.check(); vm.download()
++        assertNull(vm.state.value.available); assertNotNull(vm.state.value.error)
++        coVerify(exactly = 0) { source.download(any(), any()) }
++    }
++
++    @Test fun `double download tap does not start duplicate download`() = runTest {
++        val source = mockk<UpdateSource>(); val downloaded = CompletableDeferred<File>(); val target = tmp.newFile("update.apk")
++        coEvery { source.latest() } returns update
++        coEvery { source.download(update, any()) } coAnswers { downloaded.await() }
++        val vm = UpdateViewModel(source, 7, 24); vm.check(); vm.download(); vm.download()
++        assertTrue(vm.state.value.busy); downloaded.complete(target)
++        assertEquals(target, vm.state.value.file); coVerify(exactly = 1) { source.download(update, any()) }
++    }
++
++    @Test fun `returning from denied permission or cancelled install keeps file and revalidates on next tap`() = runTest {
++        val source = mockk<UpdateSource>(); val target = tmp.newFile("update.apk")
++        coEvery { source.latest() } returns update; coEvery { source.download(update, any()) } returns target
++        coEvery { source.verify(target, update) } returns Unit
++        val vm = UpdateViewModel(source, 7, 24); vm.check(); vm.download()
++        var launches = 0; vm.prepareInstall { launches++ }; vm.installMessage("Permission denied")
++        vm.prepareInstall { launches++ }; assertEquals(2, launches)
++        assertEquals(target, vm.state.value.file); coVerify(exactly = 2) { source.verify(target, update) }
++    }
++
++    @Test fun `changed or deleted cached file cannot reach installer`() = runTest {
++        val source = mockk<UpdateSource>(); val target = tmp.newFile("update.apk")
++        coEvery { source.latest() } returns update; coEvery { source.download(update, any()) } returns target
++        coEvery { source.verify(target, update) } throws IllegalArgumentException("Bad checksum")
++        val vm = UpdateViewModel(source, 7, 24); vm.check(); vm.download()
++        vm.prepareInstall { fail("Installer opened with invalid APK") }
++        assertNull(vm.state.value.file); assertNotNull(vm.state.value.error)
++    }
++}
+-- 
+2.39.2 (Apple Git-143)
+
