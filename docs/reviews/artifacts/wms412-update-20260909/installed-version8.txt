@@ -1,0 +1,4 @@
+    versionCode=8 minSdk=24 targetSdk=35
+    versionName=0.1.7-network-update
+    lastUpdateTime=2026-09-09 18:58:35
+    installerPackageName=com.google.android.packageinstaller
