@@ -1,0 +1,38 @@
+{
+  "source_sha": "3f6f02c77db6ee777518f6dc55922297df907d67",
+  "deployment_id": "b4134355-1542-4189-9567-6db5fbf61e79",
+  "built_files_reported": 173,
+  "all_reported_build_paths_present": true,
+  "missing_build_paths": [],
+  "served_files": [
+    {
+      "path": "index.html",
+      "status": 200,
+      "sha256": "6bfb9bbb3fd2a6a3d3342ba5101728f79b2fb6511403c7cfbacde2821086a4a0",
+      "runtime_match": true,
+      "reported_in_build_log": true
+    },
+    {
+      "path": "assets/ff-DFfJOXYQ.js",
+      "status": 200,
+      "sha256": "49880525b7024bef73843bdaad78e22c70f3f3afbedcb344e68ed942d05a111f",
+      "runtime_match": true,
+      "reported_in_build_log": true
+    },
+    {
+      "path": "assets/FfInboundQueuePage-CmHWjBe5.js",
+      "status": 200,
+      "sha256": "a8d4a5486317574ee7e4cda2bb44b05eec0bfa8fe708697c59c239f115aa1d63",
+      "runtime_match": true,
+      "reported_in_build_log": true
+    }
+  ],
+  "runtime_manifest_sha256": "dc75cc467b50c6904c7648fb3ed5154b4f8cba559145c023ea87f1fc0b4553f5",
+  "build_log_sha256": "3ffeb8e6e242abaa935cdbedb47f6e36d12cbcd0fbee49a5ca56338d8bf5b0a0",
+  "local_byte_identical_files": 123,
+  "local_total_files": 179,
+  "runtime_total_files": 179,
+  "local_build_full_match": false,
+  "raw_build_log_sha256": "7169c320ef346a29f03c40e1d96bc7ca2331700b9a52a2f27ea025d276a0583a",
+  "build_log_normalization": "Only trailing whitespace removed for repository diff checks; raw hash retained."
+}

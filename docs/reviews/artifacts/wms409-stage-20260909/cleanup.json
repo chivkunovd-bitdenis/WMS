@@ -1,0 +1,16 @@
+[
+  {
+    "path": "transport",
+    "lsof_empty": true,
+    "removed": true
+  },
+  {
+    "path": "local-build",
+    "lsof_empty": true,
+    "removed": true
+  },
+  {
+    "path": "frontend.tar",
+    "removed": true
+  }
+]

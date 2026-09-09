@@ -1,0 +1,12 @@
+{
+  "id": "b4134355-1542-4189-9567-6db5fbf61e79",
+  "status": "SUCCESS",
+  "createdAt": "2026-09-09T10:23:23.617Z",
+  "imageDigest": "sha256:a3859c6aa267224c34e4adefce6a672fb33050f9e0670f04ebc5bbb498a82087",
+  "rootDirectory": "/frontend",
+  "cliMessage": "WMS-409 3f6f02c77db6ee777518f6dc55922297df907d67 verified frontend archive",
+  "project_id": "c28e681d-4535-4c96-ac97-c7b600a7f8e4",
+  "environment_id": "58a08b66-1290-45a2-8737-e3d7408389e5",
+  "frontend_service_id": "f2ad51a8-009d-488c-9d64-7054072ccac6",
+  "web": "https://web-production-9e7c1.up.railway.app"
+}
