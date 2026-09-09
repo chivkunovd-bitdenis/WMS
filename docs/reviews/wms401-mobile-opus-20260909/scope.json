@@ -1,0 +1,24 @@
+{
+  "baseline": "69caa22b3d2d0e715966776d0edb2cec92723696",
+  "head": "e2d43b5cc7817bf5be164b53ef9e2ef723c4f718",
+  "files": [
+    "android/app/src/main/java/ru/wms/tsd/Navigation.kt",
+    "android/app/src/main/java/ru/wms/tsd/core/api/ApiErrors.kt",
+    "android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt",
+    "android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt",
+    "android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt",
+    "android/app/src/main/java/ru/wms/tsd/features/auth/LoginScreen.kt",
+    "android/app/src/main/java/ru/wms/tsd/features/fbs/FbsPrinting.kt",
+    "android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt",
+    "android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt",
+    "android/app/src/main/java/ru/wms/tsd/features/home/HomeScreen.kt",
+    "android/app/src/test/java/ru/wms/tsd/features/fbs/FbsApiContractTest.kt",
+    "android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt"
+  ],
+  "excluded_names": [
+    "android/app/src/main/assets/bwip-js-LICENSE.txt",
+    "android/app/src/main/assets/bwip-js-min.js",
+    "docs/reviews/wms397-398-mobile-20260909.md"
+  ],
+  "diff_sha256": "a5f686b919cc2e7e5a50b1068cea590ec2324dc08f40b123b7b4aa506eb31afb"
+}
