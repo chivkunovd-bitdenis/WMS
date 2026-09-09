@@ -9,3 +9,11 @@ The target is the existing staging project `c28e681d-4535-4c96-ac97-c7b600a7f8e4
 This verification did not contact the marking endpoint, trigger a receiving check, modify application data or run another deployment. It proves delivery of the reviewed source to staging. The actual browser recheck is being performed separately by root, and no browser verdict is inferred from runtime hashes.
 
 Evidence: [comparison](artifacts/wms396-stage-runtime-20260909/verification.json), [deployment metadata](artifacts/wms396-stage-runtime-20260909/deployment.json), [runtime hashes](artifacts/wms396-stage-runtime-20260909/runtime-python-sha256.json), [source hashes](artifacts/wms396-stage-runtime-20260909/source-python-sha256.json).
+
+## Saved receiving recheck result
+
+At 12:43:05 UTC, after root's actual browser recheck, a separate database read verified receiving request `05cd913b-7f50-4f64-9c45-d1b124737166` in tenant `9c31f3f4-ce62-4c1f-891a-295b278f1e69`. The request is still `sorting`. Its two product lines total four expected and four accepted units, zero posted units and zero defective units.
+
+Both attached check snapshots contain `provider=mobile_check`, `http_status=451`, `status=unavailable` and the reason “Честный знак недоступен. Повторите проверку позже.” This confirms the stored result of the new transport; it does not claim successful external code verification. Two check snapshots and four accepted units are separate quantities.
+
+The database transaction was explicitly READ ONLY. No new marking POST, scheduling operation, receipt mutation or raw code output occurred. Only allowlisted result fields and quantities were retained in [the sanitized receiving snapshot](artifacts/wms396-stage-runtime-20260909/receiving-recheck-sanitized.json).

@@ -1,0 +1,27 @@
+{
+  "verified_at_utc": "2026-09-09T12:43:05.946040+00:00",
+  "request_id": "05cd913b-7f50-4f64-9c45-d1b124737166",
+  "tenant_id": "9c31f3f4-ce62-4c1f-891a-295b278f1e69",
+  "request_status": "sorting",
+  "line_count": 2,
+  "expected_qty": 4,
+  "accepted_qty": 4,
+  "posted_qty": 0,
+  "defective_qty": 0,
+  "attached_check_count": 2,
+  "cz_checks": [
+    {
+      "provider": "mobile_check",
+      "http_status": 451,
+      "reason": "Честный знак недоступен. Повторите проверку позже.",
+      "status": "unavailable"
+    },
+    {
+      "provider": "mobile_check",
+      "http_status": 451,
+      "reason": "Честный знак недоступен. Повторите проверку позже.",
+      "status": "unavailable"
+    }
+  ],
+  "transaction_read_only": true
+}
