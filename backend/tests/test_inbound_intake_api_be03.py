@@ -394,3 +394,169 @@ async def test_reopen_receiving_reverses_sorting_and_allows_recomplete(
     )
     row_final = next(r for r in bal_final.json() if r["product_id"] == pid)
     assert row_final["quantity_in_sorting"] == 5
+
+
+# WMS-174: если план коробов 2, а по факту оператор создал 1 короб —
+# сервер обязан вернуть boxes_discrepancy=True после complete-receiving.
+# Раньше здесь всегда стоял False (begin_receiving передавал actual_box_count=None).
+@pytest.mark.asyncio
+async def test_complete_receiving_reports_box_count_discrepancy(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    ah = await _admin_headers(async_client, suffix)
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "Wbx", "code": f"wbx-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    wid = wh.json()["id"]
+
+    seller = await async_client.post(
+        "/sellers",
+        headers=ah,
+        json={"name": f"Seller-box {suffix}"},
+    )
+    assert seller.status_code in (200, 201), seller.text
+    seller_id = seller.json()["id"]
+
+    pr = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Pbx",
+            "sku_code": f"sku-box-{suffix}",
+            "seller_id": seller_id,
+            "length_mm": 100,
+            "width_mm": 100,
+            "height_mm": 100,
+        },
+    )
+    assert pr.status_code == 200, pr.text
+    pid = pr.json()["id"]
+    sku = pr.json()["sku_code"]
+
+    base = "/operations/inbound-intake-requests"
+    cr = await async_client.post(
+        base,
+        headers=ah,
+        json={"warehouse_id": wid, "seller_id": seller_id},
+    )
+    assert cr.status_code == 201, cr.text
+    rid = cr.json()["id"]
+
+    ln = await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=ah,
+        json={"product_id": pid, "expected_qty": 6},
+    )
+    assert ln.status_code == 201, ln.text
+
+    # Планируем два короба, но создадим только один — расхождение по коробам.
+    await set_planned_boxes(async_client, base, rid, ah, count=2)
+    sub = await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    assert sub.status_code == 200, sub.text
+
+    req_base = f"/operations/inbound-intake-requests/{rid}"
+    box = await async_client.post(f"{req_base}/boxes", headers=ah)
+    assert box.status_code == 201, box.text
+    box_id = box.json()["id"]
+
+    for _ in range(6):
+        scan = await async_client.post(
+            f"{req_base}/boxes/{box_id}/scan",
+            headers=ah,
+            json={"barcode": sku},
+        )
+        assert scan.status_code == 200, scan.text
+
+    close = await async_client.post(f"{req_base}/boxes/{box_id}/close", headers=ah)
+    assert close.status_code == 200, close.text
+
+    done = await async_client.post(f"{req_base}/complete-receiving", headers=ah)
+    assert done.status_code == 200, done.text
+    body = done.json()
+    assert body["planned_box_count"] == 2
+    assert body["actual_box_count"] == 1
+    assert body["boxes_discrepancy"] is True
+    assert body["has_discrepancy"] is True
+
+
+# WMS-174: пометка «пришёл битым» на конкретном коробе — просто заметка,
+# ничего не блокирует и не двигает остатки.
+@pytest.mark.asyncio
+async def test_inbound_box_damaged_flag_toggle(async_client: AsyncClient) -> None:
+    suffix = str(int(time.time() * 1000))
+    ah = await _admin_headers(async_client, suffix)
+    rid, _pid, _sku = await _submitted_request(async_client, ah, suffix, expected_qty=1)
+    base = f"/operations/inbound-intake-requests/{rid}"
+
+    box = await async_client.post(f"{base}/boxes", headers=ah)
+    assert box.status_code == 201, box.text
+    box_id = box.json()["id"]
+    assert box.json()["is_damaged"] is False
+
+    mark = await async_client.patch(
+        f"{base}/boxes/{box_id}/damaged",
+        headers=ah,
+        json={"is_damaged": True},
+    )
+    assert mark.status_code == 200, mark.text
+    assert mark.json()["is_damaged"] is True
+
+    # Признак живой: обычный чтением заявки короб приходит уже помеченным.
+    got = await async_client.get(base, headers=ah)
+    boxes_out = {b["id"]: b for b in got.json()["boxes"]}
+    assert boxes_out[box_id]["is_damaged"] is True
+
+    unmark = await async_client.patch(
+        f"{base}/boxes/{box_id}/damaged",
+        headers=ah,
+        json={"is_damaged": False},
+    )
+    assert unmark.status_code == 200
+    assert unmark.json()["is_damaged"] is False
+
+
+# WMS-174: пометка чужой (несуществующей) пары request/box не должна проходить.
+@pytest.mark.asyncio
+async def test_inbound_box_damaged_flag_rejects_unknown_box(async_client: AsyncClient) -> None:
+    suffix = str(int(time.time() * 1000))
+    ah = await _admin_headers(async_client, suffix)
+    rid, _pid, _sku = await _submitted_request(async_client, ah, suffix, expected_qty=1)
+    base = f"/operations/inbound-intake-requests/{rid}"
+
+    missing = await async_client.patch(
+        f"{base}/boxes/00000000-0000-4000-8000-000000000000/damaged",
+        headers=ah,
+        json={"is_damaged": True},
+    )
+    assert missing.status_code == 404
+    assert missing.json()["detail"] == "box_not_found"
+
+
+# WMS-174: приёмка «россыпью» (ни одного короба не создано) не должна
+# считаться расхождением по коробам, даже если план был задан. Это законный
+# сценарий и старое поведение — оставляем.
+@pytest.mark.asyncio
+async def test_complete_receiving_loose_no_box_count_discrepancy(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    ah = await _admin_headers(async_client, suffix)
+    rid, _pid, sku = await _submitted_request(async_client, ah, suffix, expected_qty=2)
+    base = f"/operations/inbound-intake-requests/{rid}"
+
+    for _ in range(2):
+        await async_client.post(
+            f"{base}/receiving/scan",
+            headers=ah,
+            json={"barcode": sku},
+        )
+
+    done = await async_client.post(f"{base}/complete-receiving", headers=ah)
+    assert done.status_code == 200, done.text
+    body = done.json()
+    assert body["boxes_discrepancy"] is False
+    assert body["has_discrepancy"] is False
