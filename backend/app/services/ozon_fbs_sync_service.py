@@ -511,27 +511,10 @@ async def _binding_for_row(
 
 
 def _warehouse_is_served_for_row(binding: FbsWarehouseBinding | None) -> bool:
-    """Наш ли это склад для заказа Ozon (WMS-352 / WMS-386).
+    """Import served, mapped warehouses regardless of publication (WMS-352/386).
 
-    Кабинет Ozon отдаёт все отправления продавца — в том числе те, что он
-    собирает сам на другом складе. Своими считаем ровно те, что пришли на
-    склад с активной привязкой Ozon и признаком ``served`` — то есть тот
-    склад, за приёмку и отгрузку которого отвечаем мы.
-
-    Импорт заказа НЕ зависит от публикации остатка по товару.
-    Публикация — отдельный шаг: ``inventory_service`` считает
-    ``min(cap, free_stock)`` и передаёт его в
-    ``fbs_stock_sync_service`` в момент выкладки. Раньше эта функция
-    дополнительно требовала у товара включённую галку публикации
-    (``fbs_ozon_stock_sync_enabled`` / ``fbs_stock_sync_enabled``); из-за
-    этого при снятии галки оператор терял видимость новых заказов Ozon
-    по этому товару. Прямое поручение владельца развязать импорт и
-    публикацию (WMS-386): импорт идёт по обслуживаемому складу,
-    публикация остаётся отдельной операцией.
-
-    Правило и место отсева — те же, что у Wildberries в
-    ``fbs_order_import_scope_service.import_wb_order_rows``: отсеиваем до
-    записи в локальную базу, без отдельного признака «чужой» у заказа.
+    The lookup already scopes active bindings to this tenant, seller and Ozon.
+    Product and binding publication switches control outgoing stocks only.
     """
     return binding is not None and binding.served
 
@@ -767,8 +750,8 @@ async def sync_ozon_orders(
 ) -> dict[str, int]:
     """Import automatic scope, or explicitly selected postings from served warehouses.
 
-    An explicit selection authorizes intake without stock publication; it does
-    not enable publication or change the automatic polling scope (WMS-373).
+    Both paths require an active, served warehouse mapping. Explicit selection
+    limits posting numbers; neither path changes stock publication switches.
     """
     client_id, api_key = await _credentials(session, tenant_id, seller_id)
     if selected_posting_numbers is None:
@@ -821,12 +804,7 @@ async def sync_ozon_orders(
         fallback_product_id = await _product_id_for_row(session, tenant_id, seller_id, row)
         positions = await _posting_products_for_row(session, tenant_id, seller_id, row)
         binding = await _binding_for_row(session, tenant_id, seller_id, row)
-        if selected_posting_numbers is not None:
-            if binding is None or not binding.served:
-                continue
-        elif not await _stock_is_published_for_row(
-            session, binding, positions, fallback_product_id
-        ):
+        if not _warehouse_is_served_for_row(binding):
             continue
         if MARKING_KIND_SGTIN not in required_kinds and await _honest_sign_required_by_catalog(
             session, positions, fallback_product_id

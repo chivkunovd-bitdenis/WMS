@@ -100,7 +100,7 @@ async def _seed(db_session: AsyncSession, *, with_binding: bool = True) -> Simpl
         seller=seller,
         name="Очки",
         sku_code=f"sku-{uuid.uuid4().hex[:8]}",
-        # WMS-352: заказ Ozon импортируется только там, где мы публикуем остаток.
+        # Publication is independent of intake through a served warehouse.
         fbs_stock_sync_enabled=True,
     )
     db_session.add_all([tenant, seller, warehouse, product])
@@ -197,6 +197,66 @@ async def test_explicit_posting_intake_without_publication_keeps_warehouse_scope
         assert order.warehouse_id == ctx.warehouse.id
         assert order.product_positions[0].quantity == 3
         assert order.product_positions[0].product_id == ctx.product.id
+
+
+@pytest.mark.parametrize("publication", [(False, False), (False, None), (True, False)])
+async def test_automatic_intake_without_publication_preserves_settings_and_repeats(
+    db_session: AsyncSession, publication: tuple[bool, bool | None],
+) -> None:
+    ctx = await _seed(db_session)
+    ctx.product.fbs_stock_sync_enabled, ctx.product.fbs_ozon_stock_sync_enabled = publication
+    binding = (await db_session.scalars(select(FbsWarehouseBinding))).one()
+    binding.stock_sync_enabled = False
+    await db_session.commit()
+    transport = FakeMarketplaceTransport(orders=[posting_row()])
+    provider = OzonMarketplaceProvider(transport=transport)
+    for attempt in range(2):
+        result = await sync_svc.sync_ozon_orders(
+            db_session, ctx.tenant.id, ctx.seller.id, provider, AsyncMock(),
+        )
+        assert result["orders_created"] == int(attempt == 0)
+    orders = list((await db_session.scalars(select(FbsOrder))).all())
+    assert len(orders) == 1
+    assert orders[0].warehouse_id == ctx.warehouse.id
+    await db_session.refresh(ctx.product)
+    await db_session.refresh(binding)
+    assert (
+        ctx.product.fbs_stock_sync_enabled, ctx.product.fbs_ozon_stock_sync_enabled,
+    ) == publication
+    assert binding.stock_sync_enabled is False
+    assert binding.served is True
+    assert transport.published_stocks == []
+
+
+@pytest.mark.parametrize(
+    "excluded", ["unserved", "inactive", "missing", "seller", "tenant", "marketplace"],
+)
+async def test_automatic_intake_rejects_warehouses_outside_served_mapping(
+    db_session: AsyncSession, excluded: str,
+) -> None:
+    ctx = await _seed(db_session)
+    binding = (await db_session.scalars(select(FbsWarehouseBinding))).one()
+    if excluded == "unserved":
+        binding.served = False
+    elif excluded == "inactive":
+        binding.is_active = False
+    elif excluded == "missing":
+        await db_session.delete(binding)
+    elif excluded == "marketplace":
+        binding.marketplace = "wb"
+    elif excluded == "seller":
+        seller = Seller(tenant=ctx.tenant, name="Other seller")
+        db_session.add(seller)
+        await db_session.flush()
+        binding.seller_id = seller.id
+    else:
+        tenant = Tenant(name="Other tenant", slug=f"other-{uuid.uuid4().hex[:8]}")
+        db_session.add(tenant)
+        await db_session.flush()
+        binding.tenant_id = tenant.id
+    await db_session.commit()
+    await _sync(db_session, ctx, [posting_row()])
+    assert list((await db_session.scalars(select(FbsOrder))).all()) == []
 
 
 async def test_warehouse_is_read_from_delivery_method_not_from_the_top_level(
