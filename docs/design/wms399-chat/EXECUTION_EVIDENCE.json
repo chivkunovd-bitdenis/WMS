@@ -11,7 +11,7 @@
   "canonical_instruction_commit": "ac319400",
   "scope": "isolated requirements and React prototype; no backend or production changes",
   "dependencies": "existing frontend/node_modules symlink; no install",
-  "status": "repaired_build_pass_final_browser_pending",
+  "status": "prototype_build_and_browser_verified",
   "resume_same_session": true,
   "continued_observed_model": "claude-opus-4-7",
   "rate_limit_type": "five_hour",
@@ -24,9 +24,12 @@
   "typecheck": "PASS: npm run typecheck after Opus disk repair",
   "author_pass_result": "success; exit 0",
   "author_pass_base": "966592fbd6b5d0064803bbdc271e3a20c0f69fad",
-  "browser_status": "prior full scenario pass; notification badge/read-all final recheck pending disk stability",
-  "last_verified_commit": "42ff86ba",
+  "browser_status": "PASS: final notification seller3→read-all0→operator1; hidden internal entry preserved",
+  "last_verified_commit": "1edcadf361eaa91dc06fc725e2d9fb8625b954b4",
   "last_cli_exit_code": 0,
   "last_cli_result_present": true,
-  "last_cli_result": "success"
+  "last_cli_result": "success",
+  "notification_browser_evidence": "NOTIFICATION_BROWSER_FINAL_20260909.json",
+  "local_browser_closed": true,
+  "local_vite_stopped": true
 }

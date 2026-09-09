@@ -7,3 +7,9 @@
 После восстановления места координатор продолжает ту же session8f165d2e-0399-4c15-a9be-cb182241cde4, modelclaude-opus-4-7 effortmax, инструменты Read/Write/Edit/Glob/Grep, без Bash/network/secrets/history/installs. Тот же scope prototypes/wms399-chat/** и docs/design/wms399-chat/**. Затем один typecheck/build и Chrome: fresh seller badge3, read-all seller→0, switch operator→1 скрытое internal остаётся unread.
 
 Последний собственный Chrome был закрыт handlebrowser399, PID15526 исчез; сервер Vite127.0.0.1:5199 остаётся запущен. Новые проверки остановлены до восстановления места.
+
+## Восстановление завершено
+
+Повреждение исправлено самим Opus в1edcadf3; typecheck/build и последняя
+браузерная проверка уведомлений PASS. Нового восстановления не требуется.
+Актуальные доказательства — EXECUTION_EVIDENCE.json и NOTIFICATION_BROWSER_FINAL_20260909.json.

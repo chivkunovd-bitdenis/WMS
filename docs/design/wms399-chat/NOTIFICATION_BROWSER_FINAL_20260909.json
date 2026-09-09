@@ -1,0 +1,14 @@
+{
+  "sourceCommit": "1edcadf361eaa91dc06fc725e2d9fb8625b954b4",
+  "pageErrors": [],
+  "passed": true,
+  "browserClosed": true,
+  "sellerBadgeBefore": "3",
+  "sellerInternalTextVisible": 0,
+  "sellerReadAllDisabled": true,
+  "sellerBadgeAfterDisplayed": 0,
+  "sellerBadgeAfterClass": "MuiBadge-badge MuiBadge-standard MuiBadge-invisible MuiBadge-anchorOriginTopRight MuiBadge-anchorOriginTopRightCircular MuiBadge-overlapCircular MuiBadge-colorError css-yosum8-MuiBadge-badge",
+  "operatorBadgeAfter": "1",
+  "operatorReadAllEnabled": true,
+  "operatorInternalTextVisible": 1
+}
