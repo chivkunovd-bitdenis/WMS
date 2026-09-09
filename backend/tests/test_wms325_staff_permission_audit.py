@@ -288,3 +288,40 @@ async def test_seller_staff_permission_mutations_write_audit_rows(
     assert change.payload_json["before"]["products"] is False
     assert change.payload_json["after"]["products"] is True
     assert change.payload_json["after"]["honest_sign"] is True
+
+
+@pytest.mark.asyncio
+async def test_staff_history_is_available_over_http_and_keeps_rate_changes(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(time.time_ns())
+    headers, _tenant_id, admin_id = await _register_admin(async_client, suffix)
+    created = await async_client.post(
+        "/auth/staff-accounts", headers=headers,
+        json={"email": f"rate-{suffix}@example.com"},
+    )
+    assert created.status_code == 201, created.text
+    staff_id = created.json()["id"]
+    for _ in range(2):
+        response = await async_client.patch(
+            f"/auth/staff-accounts/{staff_id}/packaging-rate", headers=headers,
+            json={"rate_rub": "12.34"},
+        )
+        assert response.status_code == 200, response.text
+    response = await async_client.get(
+        "/operations/document-events", headers=headers,
+        params={"document_type": "staff_user", "document_id": staff_id},
+    )
+    assert response.status_code == 200, response.text
+    rates = [row for row in response.json() if row["event_type"] == "staff_rate_changed"]
+    assert len(rates) == 1
+    assert rates[0]["actor"]["id"] == str(admin_id)
+    assert rates[0]["payload"]["before"] == {"packaging_rate_kopecks": 0}
+    assert rates[0]["payload"]["after"] == {"packaging_rate_kopecks": 1234}
+    other, _, _ = await _register_admin(async_client, suffix + "other")
+    forbidden = await async_client.get(
+        "/operations/document-events", headers=other,
+        params={"document_type": "staff_user", "document_id": staff_id},
+    )
+    assert forbidden.status_code == 200, forbidden.text
+    assert forbidden.json() == []

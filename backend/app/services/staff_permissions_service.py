@@ -137,10 +137,12 @@ async def update_staff_permissions(
         raise PermissionError("forbidden")
     if acting_user.id == staff_user_id:
         raise PermissionError("self_update_forbidden")
-    user = await session.get(
-        User,
-        staff_user_id,
-        options=(selectinload(User.ff_staff_permissions),),
+    user = await session.scalar(
+        select(User)
+        .where(User.id == staff_user_id, User.tenant_id == acting_user.tenant_id)
+        .options(selectinload(User.ff_staff_permissions))
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if user is None or user.tenant_id != acting_user.tenant_id:
         raise LookupError("user_not_found")
@@ -172,7 +174,7 @@ async def update_staff_permissions(
             document_id=user.id,
             event_type=EVENT_PERMISSIONS_CHANGED,
             source=actor.source,
-            actor_user_id=actor.actor_user_id,
+            actor_user_id=acting_user.id,
             payload_json={
                 "role": "fulfillment_staff",
                 "target_user_id": str(user.id),

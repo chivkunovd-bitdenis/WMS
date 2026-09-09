@@ -49,6 +49,7 @@ EVENT_TARE_LINE_QTY_CHANGED = "tare_line_qty_changed"
 # в payload_json, ключи "before"/"after".
 EVENT_PERMISSIONS_CHANGED = "permissions_changed"
 EVENT_STAFF_USER_CREATED = "staff_user_created"
+EVENT_STAFF_RATE_CHANGED = "staff_rate_changed"
 DOCUMENT_EVENT_TYPES = frozenset(
     {
         EVENT_STATUS_CHANGED,
@@ -61,6 +62,7 @@ DOCUMENT_EVENT_TYPES = frozenset(
         EVENT_TARE_LINE_QTY_CHANGED,
         EVENT_PERMISSIONS_CHANGED,
         EVENT_STAFF_USER_CREATED,
+        EVENT_STAFF_RATE_CHANGED,
     }
 )
 

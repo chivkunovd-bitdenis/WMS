@@ -69,7 +69,9 @@ def _event_out(event: DocumentEvent) -> DocumentEventOut:
 async def get_document_events(
     # `fbs_order` сервис пишет, а ручка его не принимала: историю FBS-заказа
     # через этот эндпоинт было не запросить вовсе.
-    document_type: Literal["inbound_intake", "fbs_supply", "marketplace_unload", "fbs_order"],
+    document_type: Literal[
+        "inbound_intake", "fbs_supply", "marketplace_unload", "fbs_order", "staff_user",
+    ],
     document_id: uuid.UUID,
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
