@@ -83,3 +83,23 @@ Local ENOSPC interrupted one screenshot and a later evidence write; those attemp
 counted as proof. After root freed browser caches, the final UI screenshot and scoped SQL
 evidence were saved successfully. No browser/profile credentials or application caches were
 altered by this agent. Only script syntax checks were run; no full tests/build were repeated.
+
+## Prepared continuation while PR206 awaits stage deployment
+
+`scripts/wms084-stage-browser-continue.cjs` now implements the continuation against these
+existing objects only. Its default read-only preflight was run successfully: the runtime
+is still `27400e5ff45d4e93eb6afc174f60710f3930abb4`, the original binding remains on A,
+the physical code is applied and absent from available labels, and all inventory/reservation
+rows still match the original `before_kiz` snapshot. No Chrome or mutation was started by
+that preflight. The mutation mode also explicitly rejects this old deployment SHA.
+
+After root verifies and authorizes the new staging SHA, run:
+
+```sh
+node docs/reviews/scripts/wms084-stage-browser-continue.cjs --execute-after-deployment-ready=<new verified full staging SHA>
+```
+
+The continuation creates no orders/supply, issues no API DELETE itself, and uses the existing
+A cross and confirmation dialog before scanning B. It writes a separate `continuation.json`
+and screenshots so the initial blocker evidence remains intact. Any failure after a mutation
+requires rereading the saved state before further action; do not blindly rerun the command.
