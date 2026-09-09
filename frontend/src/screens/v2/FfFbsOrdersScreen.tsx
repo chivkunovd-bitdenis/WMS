@@ -671,6 +671,19 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     return () => { loadSequence.current += 1 }
   }, [load])
 
+  // WMS-121: выбор заказов принадлежит контексту, в котором его сделали.
+  // Как только меняются селлер, маркетплейс, склад WB или вкладка статуса —
+  // старые UUID уже не относятся к тому, что видит оператор: массовое действие
+  // тогда либо ударит по чужому заказу, либо получит от сервера отказ
+  // `order_incompatible`. Чистим и Set выбранных, и Map кэш строк, чтобы нижняя
+  // панель не хранила «прошлое», а `selected.size` честно уходил в ноль.
+  // Поисковую строку и активный поиск сюда НЕ добавляем: поиск — фильтр внутри
+  // одного контекста, а не смена контекста.
+  useEffect(() => {
+    setSelected(new Set())
+    setSelectedCache(new Map())
+  }, [sellerId, marketplace, wbWarehouseId, statusGroup])
+
   useEffect(() => {
     const timer = window.setTimeout(() => setActiveSearch(search.trim()), 250)
     return () => window.clearTimeout(timer)
