@@ -1,0 +1,132 @@
+{
+  "balances": [
+    {
+      "id": "9730bdda-01bd-4afe-9bce-e1a3f4ab8b85",
+      "storage_location_id": "37d69433-b9e3-4315-b1e1-0c83c4307721",
+      "container_kind": "box",
+      "container_id": "6d430a8f-9dab-4d67-bf86-527455e9ec39",
+      "quantity": 37,
+      "quantity_unpacked": 37,
+      "quantity_packed": 0
+    },
+    {
+      "id": "b1a4db0e-962d-4fca-8524-b9ca61025dd6",
+      "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+      "container_kind": null,
+      "container_id": null,
+      "quantity": 0,
+      "quantity_unpacked": 0,
+      "quantity_packed": 0
+    },
+    {
+      "id": "ed38696c-9470-4f6a-a548-0ce53ed49148",
+      "storage_location_id": "37d69433-b9e3-4315-b1e1-0c83c4307721",
+      "container_kind": "cargo_place",
+      "container_id": "c5f16aa4-0270-4093-b9ec-3a854a8572d7",
+      "quantity": 20,
+      "quantity_unpacked": 20,
+      "quantity_packed": 0
+    }
+  ],
+  "ledger": [
+    {
+      "fbs_order_id": "2b9f3313-2fcb-43a3-958d-3b4a4b79bd19",
+      "quantity": 1,
+      "shipment_movement_id": "e963190a-da77-476c-87c6-409689248e1b",
+      "wb_operation_id": "3824bab5-7e7a-46ea-834d-5f35b270d8a6"
+    },
+    {
+      "fbs_order_id": "a558ece0-44c0-4453-95f3-f34f5c15848f",
+      "quantity": 1,
+      "shipment_movement_id": "69f857c3-a32d-486f-838c-aceb079edb65",
+      "wb_operation_id": "3824bab5-7e7a-46ea-834d-5f35b270d8a6"
+    }
+  ],
+  "operations": [
+    {
+      "id": "ae2fdd46-a27c-4a5f-9fde-7eb034325b8f",
+      "operation_kind": "supply_from_orders",
+      "idempotency_key": "92b3327c-172e-4ff0-8aeb-4dac1935bf0f",
+      "state": "confirmed",
+      "request_summary_json": {
+        "name": "WMS401-Delivery-0909",
+        "order_ids": [
+          "2b9f3313-2fcb-43a3-958d-3b4a4b79bd19",
+          "a558ece0-44c0-4453-95f3-f34f5c15848f"
+        ],
+        "planned_delivery_type": "warehouse_sc",
+        "marketplace": "wb"
+      }
+    },
+    {
+      "id": "bf2e4606-e4f9-4d26-90d5-7f0a810e3072",
+      "operation_kind": "cargo_places_create",
+      "idempotency_key": "073edd0a-abac-4e97-b37a-4a37d820aeee",
+      "state": "confirmed",
+      "request_summary_json": {
+        "supply_id": "7565ca8d-10a4-4d6c-8020-e25e93e283dc",
+        "count": 1,
+        "boxes": [
+          {
+            "client_id": "bfa5bace-b17b-4ad0-9244-0c4bc1dab1d7",
+            "length_mm": null,
+            "width_mm": null,
+            "height_mm": null,
+            "weight_g": null,
+            "measurements_confirmed": true
+          }
+        ],
+        "wb_trbx_ids_before": [],
+        "measurements_confirmation_audit": {
+          "actor_user_id": "32bc08bd-e9b3-476e-8992-5519d0bc8be4",
+          "confirmed_at": "2026-09-09T15:04:01.414746+00:00",
+          "source": "fbs_physical_box",
+          "confirmed_client_ids": [
+            "bfa5bace-b17b-4ad0-9244-0c4bc1dab1d7"
+          ]
+        }
+      }
+    },
+    {
+      "id": "3824bab5-7e7a-46ea-834d-5f35b270d8a6",
+      "operation_kind": "supply_deliver",
+      "idempotency_key": "4b8ae86f-d2ed-4cff-b1af-8bb2e8ce7bc8",
+      "state": "confirmed",
+      "request_summary_json": {
+        "supply_id": "7565ca8d-10a4-4d6c-8020-e25e93e283dc",
+        "confirmed_preflight_version": "8829c5ceb33de2738aa867aa6961d7fd32e8371737ce82f54b48acc967147ff7",
+        "checkpoint_source_plan": {
+          "supply_warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+          "resolutions": [
+            {
+              "fbs_order_id": "2b9f3313-2fcb-43a3-958d-3b4a4b79bd19",
+              "product_id": "95aebe2c-5824-4ee7-aa61-8e5e0d609b91",
+              "quantity": 1,
+              "source_warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+              "storage_location_id": "37d69433-b9e3-4315-b1e1-0c83c4307721",
+              "container_kind": "box",
+              "container_id": "6d430a8f-9dab-4d67-bf86-527455e9ec39",
+              "source_mode": "manual_pick",
+              "positive_quantity": 1,
+              "shortage_quantity": 0,
+              "negative_quantity": 0
+            },
+            {
+              "fbs_order_id": "a558ece0-44c0-4453-95f3-f34f5c15848f",
+              "product_id": "95aebe2c-5824-4ee7-aa61-8e5e0d609b91",
+              "quantity": 1,
+              "source_warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+              "storage_location_id": "37d69433-b9e3-4315-b1e1-0c83c4307721",
+              "container_kind": "box",
+              "container_id": "6d430a8f-9dab-4d67-bf86-527455e9ec39",
+              "source_mode": "manual_pick",
+              "positive_quantity": 1,
+              "shortage_quantity": 0,
+              "negative_quantity": 0
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
