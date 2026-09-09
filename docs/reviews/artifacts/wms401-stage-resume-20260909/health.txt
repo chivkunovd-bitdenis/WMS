@@ -1,0 +1,10 @@
+HTTP/2 200
+content-type: application/json
+date: Wed, 09 Sep 2026 11:12:42 GMT
+server: railway-hikari
+x-railway-request-id: b-WeOdoPSdySKBjY6WHkDg
+content-length: 15
+x-hikari-trace: zrh1.3dmv
+x-railway-edge: zrh1
+
+{"status":"ok"}
