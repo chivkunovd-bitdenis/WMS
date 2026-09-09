@@ -129,17 +129,26 @@ async def _sum_inventory_balances(
     ячейка занята только исчезающей карточкой, строка просто меняет владельца.
     Итог по товару поэтому равен сумме двух прежних итогов, ни одна штука не
     теряется.
+
+    Оба SELECT читают строки с ``FOR UPDATE``: сам по себе лок на Product строке
+    (см. :func:`merge_products`) сериализует конкурентную запись, а лок на
+    balance-строке дополнительно исключает то, что новая балансовая строка
+    появится между чтением и суммированием и не попадёт в свод.
     """
     target_rows = (
         await session.execute(
-            select(InventoryBalance).where(InventoryBalance.product_id == target_id)
+            select(InventoryBalance)
+            .where(InventoryBalance.product_id == target_id)
+            .with_for_update()
         )
     ).scalars().all()
     by_cell = {(row.storage_location_id, row.container_id): row for row in target_rows}
 
     source_rows = (
         await session.execute(
-            select(InventoryBalance).where(InventoryBalance.product_id == source_id)
+            select(InventoryBalance)
+            .where(InventoryBalance.product_id == source_id)
+            .with_for_update()
         )
     ).scalars().all()
     for row in source_rows:
@@ -208,24 +217,50 @@ async def merge_products(
     tenant_id: uuid.UUID,
     product_ids: Sequence[uuid.UUID],
 ) -> Product:
-    """Объединить ровно две карточки. Возвращает ту, что осталась."""
+    """Объединить ровно две карточки. Возвращает ту, что осталась.
+
+    Сериализация с обычной складской записью (WMS-349). Штатный writer остатка
+    ``record_movement_and_adjust_balance`` берёт ``SELECT Product ... FOR UPDATE``
+    через :func:`app.services.inventory_service.lock_stock_product` до чтения и
+    правки баланса. Merge должен идти тем же путём, иначе конкурентное движение
+    успевает изменить остаток между нашим SELECT и UPDATE, и мы записываем сумму
+    из прежнего снимка — движение теряется. Поэтому обе карточки блокируются
+    здесь строго в порядке возрастания ``id``: одинаковый порядок у обеих сторон
+    исключает встречный deadlock, а сам ``FOR UPDATE`` гарантирует, что
+    последующие чтения балансов идут под уже удерживаемой блокировкой.
+    """
     ids = list(dict.fromkeys(product_ids))
     if len(ids) != 2:
         raise ProductMergeError("merge_needs_exactly_two")
 
-    products = list(
-        (
-            await session.execute(
+    # Стабильный порядок блокировок: строго по возрастанию id. Два параллельных
+    # merge над пересекающимися карточками не могут выстроить обратные очереди и
+    # заклиниться — оба берут первую блокировку по меньшему id, второй ждёт.
+    locked_ids = sorted(ids)
+    locked: dict[uuid.UUID, Product] = {}
+    for product_id in locked_ids:
+        row = (
+            await session.scalars(
                 select(Product)
-                .options(selectinload(Product.seller))
-                .where(Product.tenant_id == tenant_id, Product.id.in_(ids))
+                .where(Product.tenant_id == tenant_id, Product.id == product_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
-        )
-        .scalars()
-        .all()
+        ).one_or_none()
+        if row is None:
+            raise ProductMergeError("product_not_found")
+        locked[product_id] = row
+
+    # Selectinload после lock, чтобы не смешивать блокирующий SELECT с загрузкой
+    # связанной строки продавца одним запросом (with_for_update + join не всеми
+    # диалектами поддерживается корректно).
+    await session.execute(
+        select(Product)
+        .options(selectinload(Product.seller))
+        .where(Product.tenant_id == tenant_id, Product.id.in_(locked_ids))
     )
-    if len(products) != 2:
-        raise ProductMergeError("product_not_found")
+
+    products = [locked[product_id] for product_id in ids]
     if products[0].seller_id != products[1].seller_id:
         # Разные продавцы — разные юрлица и разный товар на полке. Объединение
         # переложило бы остаток одного продавца другому.
