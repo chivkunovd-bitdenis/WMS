@@ -71,6 +71,7 @@ async def _seed(session: AsyncSession) -> tuple[Tenant, Seller, FbsOrder, Operat
         document_id=order.id,
         idempotency_key=f"fbs-order:{order.id}",
         source="system",
+        marketplace="wb",
         item_quantity=1,
         occurred_at=STORED,
     )

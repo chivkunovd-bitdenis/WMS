@@ -174,6 +174,11 @@ async def test_deliver_api_records_work_before_marketplace_sorting(
             expected = operation.confirmed_at.replace(tzinfo=UTC)
             order.supply_id = None
             order.status = "cancelled"
+            await reverse_fbs_order_billing(session, order)
+            await reverse_fbs_order_billing(session, order)
+            assert {
+                entry.id for entry in await session.scalars(select(BillingLedgerEntry))
+            } == original_ids
             snapshot = operation.request_summary_json
             operation.request_summary_json = {}
             await session.flush()
