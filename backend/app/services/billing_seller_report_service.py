@@ -341,7 +341,7 @@ async def _operation_entries(
         # старой веткой отчёта: у сторно свой адрес источника, и по документу
         # оно бы не отсеклось.
         covered.update((entry.source_type, entry.source_id) for entry in priced)
-        money = sum(_amount(entry.amount) for entry in priced) if priced else None
+        money = sum(_amount(entry.amount) for entry in priced) if priced and all(entry.amount is not None for entry in priced) else None
         product_lines = fact_lines[fact.id]
         product_names = [line.product_name_snapshot for line in product_lines if line.product_name_snapshot]
         skus = [line.sku_snapshot for line in product_lines if line.sku_snapshot]
@@ -369,7 +369,7 @@ async def _operation_entries(
                 # Id начисления — это то, чем операцию кладут в счёт. Без него
                 # галочка выбора остаётся выключенной, даже когда деньги есть.
                 row["billing_ledger_entry_id"] = str(priced[0].id)
-            if money is None and not fact.reversal_of_id:
+            if not priced and not fact.reversal_of_id:
                 single_product = (
                     product_lines[0].product_id if len(product_lines) == 1 else None
                 )

@@ -10,7 +10,12 @@ from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.main import app
-from app.models.billing import BillingInvoice, BillingLedgerEntry, BillingLedgerLine
+from app.models.billing import (
+    BillingInvoice,
+    BillingLedgerEntry,
+    BillingLedgerLine,
+    BillingTariffVersionV2,
+)
 from app.models.fbs_order import FbsOrder
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_wb_operation import FbsWbOperation
@@ -188,6 +193,54 @@ async def test_wms406_legacy_fbo_packing_and_ozon_contract_remain_visible(async_
     assert payload["totals"]["fbs_items"] == 3
     assert payload["totals"]["outbound_items"] == 5
     assert payload["totals"]["net_total_kopecks"] == 800
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("with_priced_part", [False, True])
+async def test_wms406_fbo_existing_unpriced_charge_is_not_zero_or_live_repriced(async_client, with_priced_part) -> None:
+    headers, seller_id, email = await _admin(async_client)
+    moment = datetime(2026, 8, 20, 12, tzinfo=UTC)
+    document_id = uuid.uuid4()
+    async with SessionLocal() as session:
+        user = await session.scalar(select(User).where(User.email == email))
+        assert user is not None
+        session.add(OperationFact(
+            tenant_id=user.tenant_id, seller_id=seller_id, operation_code="marketplace_outbound_completed",
+            billable_service_code="marketplace_outbound", source_kind="marketplace_unload_request",
+            source_event_id=document_id, document_type="marketplace_unload", document_id=document_id,
+            occurred_at=moment, item_quantity=3, source="system",
+        ))
+        for service_code in ("marketplace_outbound", "packing"):
+            session.add_all([
+                BillingLedgerEntry(
+                    tenant_id=user.tenant_id, seller_id=seller_id, service_code=service_code,
+                    source="marketplace_unload", source_type="marketplace_unload", source_id=document_id,
+                    unit="item", quantity=3, rate=None, amount=None, occurred_at=moment,
+                ),
+                # A now-available tariff must not replace an existing unpriced ledger.
+                BillingTariffVersionV2(
+                    tenant_id=user.tenant_id, seller_id=seller_id, service_code=service_code,
+                    unit="item", rate=100, valid_from_at=datetime(2026, 8, 1, tzinfo=UTC),
+                ),
+            ])
+        if with_priced_part:
+            session.add(BillingLedgerEntry(
+                tenant_id=user.tenant_id, seller_id=seller_id, service_code="marketplace_outbound",
+                source="marketplace_unload", source_type="marketplace_unload", source_id=document_id,
+                event_kind="correction", unit="item", quantity=1, rate=100, amount=100, occurred_at=moment,
+            ))
+        await session.commit()
+    params = "date_from=2026-08-20&date_to=2026-08-20&include_finance=true"
+    summary = await async_client.get(f"/billing/seller-report/summary?{params}", headers=headers)
+    details = await async_client.get(f"/billing/seller-report/sellers/{seller_id}/details?{params}", headers=headers)
+    assert summary.status_code == details.status_code == 200, (summary.text, details.text)
+    entries = details.json()["entries"]
+    assert {row["service_code"] for row in entries} == {"marketplace_outbound", "packing"}
+    assert all(row["amount_kopecks"] is None and row["result"] == "unpriced" for row in entries)
+    assert all(row.get("priced_live") is False for row in entries)
+    for totals in (summary.json()["totals"], details.json()["totals"]):
+        assert totals["unpriced_count"] == 2
+        assert totals["packing_items"] == totals["outbound_items"] == 3
 
 
 @pytest.mark.asyncio
