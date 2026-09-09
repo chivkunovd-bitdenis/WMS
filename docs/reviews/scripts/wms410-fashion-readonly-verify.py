@@ -79,6 +79,9 @@ async def main():
       "bindings_flags_unchanged":True,"served_sync_items":len(rows),"db_positive":0,
       "db_confirmed_zero":sum(x["last_confirmed_amount"]==0 for x in rows),
       "db_unconfirmed":sum(x["last_confirmed_amount"] is None for x in rows),
+      "db_status_counts":{status:sum(x["status"]==status for x in rows) for status in sorted({x["status"] for x in rows})},
+      "db_positive_targets":sum((x["last_target_amount"] or 0)>0 for x in rows),
+      "db_error_codes":{code:sum(x["last_error_code"]==code for x in rows) for code in sorted({x["last_error_code"] for x in rows if x["last_error_code"]})},
       "marketplace_readbacks":readbacks,
       "scope":"All current sync items of 34 explicitly disabled products on four served WB bindings; historical 64-item manifest was not persisted.",
       "method":"DB read-only transaction; standard read-only WB POST/chrtIds; no stock PUT, sync or other mutations"}
