@@ -15,6 +15,9 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.billing import (
     BillingInvoice,
+    BillingInvoiceV2,
+    BillingInvoiceV2Line,
+    BillingInvoiceV2Source,
     BillingLedgerEntry,
     BillingProfile,
     BillingRunIssue,
@@ -422,6 +425,53 @@ async def _source_numbers(
     return result
 
 
+async def invoiced_ledger_ids(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    entry_ids: set[uuid.UUID],
+) -> set[uuid.UUID]:
+    """Active snapshots of either invoice format occupy the same ledger sources."""
+    if not entry_ids:
+        return set()
+    occupied = set(
+        await session.scalars(
+            select(BillingInvoiceV2Source.billing_ledger_entry_id)
+            .join(
+                BillingInvoiceV2Line,
+                BillingInvoiceV2Source.invoice_line_id == BillingInvoiceV2Line.id,
+            )
+            .join(BillingInvoiceV2, BillingInvoiceV2Line.invoice_id == BillingInvoiceV2.id)
+            .where(
+                BillingInvoiceV2Source.tenant_id == tenant_id,
+                BillingInvoiceV2Line.tenant_id == tenant_id,
+                BillingInvoiceV2.tenant_id == tenant_id,
+                BillingInvoiceV2.seller_id == seller_id,
+                BillingInvoiceV2.status != "cancelled",
+                BillingInvoiceV2Source.billing_ledger_entry_id.in_(entry_ids),
+            )
+        )
+    )
+    snapshots = await session.scalars(
+        select(BillingInvoice.lines).where(
+            BillingInvoice.tenant_id == tenant_id,
+            BillingInvoice.seller_id == seller_id,
+            BillingInvoice.status != "cancelled",
+        )
+    )
+    for lines in snapshots:
+        for line in lines:
+            for document in line.get("documents", []):
+                try:
+                    entry_id = uuid.UUID(str(document.get("id")))
+                except (ValueError, TypeError, AttributeError):
+                    continue
+                if entry_id in entry_ids:
+                    occupied.add(entry_id)
+    return {entry_id for entry_id in occupied if entry_id is not None}
+
+
 async def form_invoice(
     session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID, period: date
 ) -> BillingInvoice | BillingRunIssue | list[BillingRunIssue] | None:
@@ -430,7 +480,9 @@ async def form_invoice(
     if period >= date(today_msk.year, today_msk.month, 1):
         raise ValueError("Счёт можно формировать только за закрытый месяц")
     seller_in_tenant = await session.scalar(
-        select(Seller.id).where(Seller.id == seller_id, Seller.tenant_id == tenant_id)
+        select(Seller.id)
+        .where(Seller.id == seller_id, Seller.tenant_id == tenant_id)
+        .with_for_update(key_share=True)
     )
     if seller_in_tenant is None:
         raise ValueError("Селлер не найден в текущем tenant")
@@ -474,6 +526,13 @@ async def form_invoice(
     if inputs.reasons:
         return issues[0] if len(issues) == 1 else issues
 
+    if await invoiced_ledger_ids(
+        session,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        entry_ids={entry.id for entry in inputs.entries if entry.id is not None},
+    ):
+        raise ValueError("selected_source_already_invoiced")
     assert inputs.ff_profile is not None and inputs.seller_profile is not None
     source_numbers = await _source_numbers(session, inputs.entries, period)
     grouped: dict[tuple[str, str, Decimal], dict[str, Any]] = {}
