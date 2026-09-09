@@ -164,3 +164,40 @@ async def test_source_and_amount_guards(async_client, failure):
         "/billing/invoices-v2", headers={**headers, "Idempotency-Key": failure}, json=body
     )
     assert response.status_code == 422, response.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("selection", ["ledger", "source"])
+@pytest.mark.parametrize("service", ["fbs_order", "packing"])
+async def test_ozon_confirmed_without_local_handover_remains_invoiceable(
+    async_client, selection, service
+):
+    from app.services.fbs_order_billing_service import record_fbs_order_confirmed
+
+    headers, body, order_id = await shipment(async_client)
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        order.marketplace = "ozon"
+        order.status = "done"
+        order.supply_id = None
+        await record_fbs_order_confirmed(
+            session, order, occurred_at=datetime(2026, 8, 20, tzinfo=UTC)
+        )
+        await session.commit()
+        entry = await session.scalar(
+            select(BillingLedgerEntry).where(
+                BillingLedgerEntry.source_id == order_id, BillingLedgerEntry.service_code == service
+            )
+        )
+        assert entry is not None
+        entry_id = str(entry.id)
+    body["selected_sources"][0]["service_code"] = service
+    if selection == "ledger":
+        body["selected_sources"] = []
+        body["selected_root_ids"] = [entry_id]
+    body["final_amount"] = "10.00"
+    response = await async_client.post(
+        "/billing/invoices-v2", headers={**headers, "Idempotency-Key": "ozon"}, json=body
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["total_amount_kopecks"] == 1000

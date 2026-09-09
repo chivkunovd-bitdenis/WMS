@@ -32,6 +32,7 @@ from app.models.seller import Seller
 from app.services.billing_ledger_service import (
     BillingLedgerError,
     OperationalBillingLine,
+    _active_charge_for_source,
     postgres_integer,
     record_operational_charge,
 )
@@ -300,6 +301,27 @@ async def _selected_shipment_charge(
         if order is None or order.seller_id != seller_id:
             raise BillingInvoiceV2Error("selected_source_not_found")
         moment = handovers.get(order.id)
+        if order.marketplace == "ozon":
+            # WMS-406 tightens WB proof only. Ozon's report still uses its
+            # historical confirmed operation, or the existing charge's date.
+            fact_moment = await session.scalar(
+                select(OperationFact.occurred_at).where(
+                    OperationFact.tenant_id == tenant_id,
+                    OperationFact.seller_id == seller_id,
+                    OperationFact.marketplace == "ozon",
+                    OperationFact.document_type == "fbs_order",
+                    OperationFact.document_id == order.id,
+                    OperationFact.operation_code == "fbs_order",
+                )
+            )
+            existing = await _active_charge_for_source(
+                session,
+                tenant_id=tenant_id,
+                source_type="fbs_order",
+                source_id=order.id,
+                service_code=service_code,
+            )
+            moment = fact_moment or (existing.occurred_at if existing is not None else moment)
         warehouse_id = order.warehouse_id
         positions = await _positions(session, order)
         lines = [
