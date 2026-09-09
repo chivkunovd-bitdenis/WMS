@@ -40,3 +40,38 @@
 Координатор оставляет за собой канонические статусы (WMS-415, канонический бэклог) и сведение результатов; полосы владеют своим кодом. Ревью Astra 6 high по каждому готовому срезу — по правилу handoff §5; Opus финальный ревью — когда позволит квота. Астра не запускается ниже порога 7% остатка.
 
 **Мониторинг и квота:** heartbeat `wms-claude` каждые 10 минут для квоты и каждые 20 минут для полного контроля работ — активен в отдельной сессии root. Отдельная idle CLI-сессия квоты не трогается координатором. Свежее чтение: 75% used current week (all models), 25% remaining. Порог остановки 7% и передачи Astra 6 high описаны в handoff §6 — координатор его соблюдает.
+
+## Восстановление 10.09.2026 после сбоя изоляции подагентов
+
+Через несколько минут после первого запуска обнаружено, что параметр `isolation: worktree` инструмента `Agent` не создаёт настоящей изоляции для этих подагентов: их создавали каталоги-заглушки в `/Users/deniscivkunov/Projects/WMS/.claude/worktrees/agent-*` со стартовым SHA `ff5555e2` (не аудированный `bc7f760c`), а сами подагенты писали и коммитили в общий координаторский checkout `/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-claude` абсолютными путями. Root подтвердил конфликт независимой проверкой: HEAD общего checkout переехал на `feat/wms397-chat-mvp`, в дереве остался `M backend/app/services/inventory_service.py` (правка `stock-lane`) и `?? backend/tests/test_chat_api.py` (правка `chat-lane`).
+
+Восстановление выполнено без `git reset`/`git stash`, все правки сохранены. Отчёты подагентов подтвердили точное содержание оставленного:
+
+- `chat-lane` (a6e9bcf0dbbdafa7b): три коммита `71c903ca → d16e8589 → d73c05f0` в общем checkout плюс новый файл теста; harness-каталог оставался нетронутым.
+- `stock-lane` (a254e6d9b275d4afb): пять удалений мутаций `FbsBindingStockPool.quantity` в `inventory_service.py` (пути резерва, отмены, недостачи, `apply_fbs_supply_write_off`, реверса `units_mode`) плюс комментарии WMS-338/341 — не коммитилось.
+- `warehouse-lane` (a7a57b97a3faeba40): один коммит `5fee5efd` (WMS-062, default «Основной» при регистрации), плюс WMS-153/155 partial в четырёх файлах — уже жил в собственном harness-каталоге, но не под `.worktrees`.
+- `mobile-lane` (a6bcd38a653b6a036): САМОСТОЯТЕЛЬНО выполнил правильный `git worktree add -b feat/wms401-mobile-followup .worktrees/wms401-mobile-followup codex/wms415-claude-extra-20260910` на `bc7f760c`; отдельный mobile Git на `codex/wms397-mobile` получил локальный коммит `9a83ef6133201cea178cdda8a9437a165892a458` (WMS-401: orders-first + sortedOrders + versionCode 8→9), APK собран (`ccb8d7ea57863133f1b2c0dc549ffb10c74d17620203ff0ba3f43f88726457a6`, 45 281 897 байт), загружен в релиз `tsd-preview`, `update.json` намеренно ещё не переключён.
+
+Резервные копии обоих несохранённых файлов положены в `/tmp/wms415-recovery/` перед любыми git-операциями. Затем:
+
+1. `git worktree add -f /Users/deniscivkunov/Projects/WMS/.worktrees/wms397-chat-mvp feat/wms397-chat-mvp` — включая три коммита chat-lane; поверх положен сохранённый `test_chat_api.py`.
+2. `git worktree add -b feat/wms338-stock-min-formula /Users/deniscivkunov/Projects/WMS/.worktrees/wms338-stock-min-formula bc7f760c…` — свежая ветка на аудированном SHA; поверх положена сохранённая правка `inventory_service.py` (uncommitted).
+3. `git worktree unlock` + `git worktree move` для `warehouse-lane` из `.claude/worktrees/agent-a7a57b97a3faeba40` в `.worktrees/wms062-warehouse-docs` — атомарно, все uncommitted файлы перенесены.
+4. `mobile-lane` не двигали — уже правильно.
+5. `git worktree add -b codex/wms415-coord-20260910 /Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord bc7f760c…`, затем `git cherry-pick ff7d100d` — координаторский doc-коммит переехал на изолированную ветку `codex/wms415-coord-20260910` (новый SHA `10925387`). Старая ветка `feat/wms397-chat-mvp` продолжает нести коммит `ff7d100d` в середине — редактировать её историю нельзя, чтобы не рушить работу chat-lane; при финальном сведении coordinator-документы вынимаются отдельно.
+6. `.worktrees/wms415-claude` объявлен read-only quarantine: остаётся с исходным «грязным» состоянием как исторический артефакт, писать в него больше нельзя.
+
+Root независимо проверил в 21:36 UTC: все пять правильных worktrees существуют под `.worktrees/`, все происходят от `bc7f760c`, скопированные файлы совпадают с резервными копиями побайтово. Дальнейшая работа ведётся строго в этих пяти путях.
+
+## Повторный запуск подагентов после восстановления
+
+Прежние сессии подагентов уже завершились (адресация по имени истекла), поэтому созданы четыре свежих Opus-подагента без `isolation: worktree` — с явным абсолютным путём в промпте и жёстким запретом на `cd` за его пределы. Каждому передан полный список сохранённого предыдущей сессией, чтобы не переделывать её работу:
+
+| Полоса | Абсолютный путь | Ветка | Стартовое состояние |
+|---|---|---|---|
+| `chat-lane` | `/Users/deniscivkunov/Projects/WMS/.worktrees/wms397-chat-mvp` | `feat/wms397-chat-mvp` @ `d73c05f0` | 3 коммита моделей/сервиса/API уже есть; `test_chat_api.py` uncommitted; далее — фронт, alembic upgrade, note, push. |
+| `stock-lane` | `/Users/deniscivkunov/Projects/WMS/.worktrees/wms338-stock-min-formula` | `feat/wms338-stock-min-formula` @ `bc7f760c…` | Правка `inventory_service.py` uncommitted; далее — атомарный коммит с WMS-338/341/329, регрессионные тесты, обход остальных мутаций quantity, WMS-060/352/386/384, note, push. |
+| `warehouse-lane` | `/Users/deniscivkunov/Projects/WMS/.worktrees/wms062-warehouse-docs` | `feat/wms062-warehouse-docs` @ `5fee5efd` | WMS-062 коммит есть; WMS-153/155 partial в 4 файлах uncommitted; далее — доделать WMS-153/155, потом WMS-154/156/174/177, потом UI defect batch и тары. |
+| `mobile-lane` | `/Users/deniscivkunov/Projects/WMS/.worktrees/wms401-mobile-followup` + `/Users/deniscivkunov/Projects/WMS/.worktrees/wms397-mobile` | `feat/wms401-mobile-followup` (WMS) + `codex/wms397-mobile` (mobile) | APK 0.1.8 собран и загружен; далее — swap `update.json`, in-app 0.1.7→0.1.8 verify на эмуляторе, WMS-401 note, узкий mirror patch; затем **WMS-363** как отдельный следующий срез (root корректировка: жёсткий `marketplace=wb` — доказательство пробела, а не повод отменить задачу). |
+
+Каждый повторный подагент явно обязан `pwd && git branch --show-current && git status --short` в начале каждого шага, коммитить только на свою ветку, никогда не переходить в чужой worktree, никогда не удалять и не откатывать чужие правки. При сомнении — пауза с концретным вопросом, не молчаливый пропуск задачи.
