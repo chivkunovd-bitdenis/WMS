@@ -2,9 +2,42 @@ import type {
   Actor,
   Conversation,
   Message,
+  NotificationEntry,
   Role,
   Visibility,
 } from '../types'
+
+type ChatDataView = {
+  conversations: Map<string, Conversation>
+  messages: Map<string, Message>
+  messagesByConversation: Map<string, string[]>
+}
+
+export function notificationVisibleForActor(
+  entry: NotificationEntry,
+  data: ChatDataView,
+  actor: Actor,
+): boolean {
+  const conv = data.conversations.get(entry.conversationId)
+  if (!conv) return false
+  if (!conversationAccessible(conv, actor)) return false
+  const ids = data.messagesByConversation.get(conv.id) ?? []
+  const msgs: Message[] = []
+  for (const id of ids) {
+    const m = data.messages.get(id)
+    if (m) msgs.push(m)
+  }
+  const visible = visibleMessagesForActor(msgs, actor)
+  return visible.some((m) => m.id === entry.messageId)
+}
+
+export function visibleNotificationsForActor(
+  notifications: NotificationEntry[],
+  data: ChatDataView,
+  actor: Actor,
+): NotificationEntry[] {
+  return notifications.filter((n) => notificationVisibleForActor(n, data, actor))
+}
 
 export function visibleMessagesForActor(
   ordered: Message[],

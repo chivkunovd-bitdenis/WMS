@@ -6,9 +6,9 @@ import { useStore } from '../state/store'
 import { EmptyState } from '../common/EmptyState'
 import { Row } from '../common/Row'
 import { PersonaAvatar } from '../common/PersonaAvatar'
-import { conversationAccessible, visibleMessagesForActor } from '../state/selectors'
+import { visibleNotificationsForActor } from '../state/selectors'
 import { fmtRelative } from '../utils/format'
-import type { NotificationEntry, NotificationKind } from '../types'
+import type { NotificationKind } from '../types'
 
 const KIND_LABELS: Record<NotificationKind, string> = {
   mention: 'Упоминание',
@@ -30,20 +30,13 @@ export function NotificationsScreen() {
   const { ui, data, dispatchData, actions, actorById, currentActor } = useStore()
   const notificationPrefs = ui.notificationPrefs
 
-  const visibleForRole = (n: NotificationEntry): boolean => {
-    const conv = data.conversations.get(n.conversationId)
-    if (!conv) return false
-    if (!conversationAccessible(conv, currentActor)) return false
-    const msgs = (data.messagesByConversation.get(conv.id) ?? [])
-      .map((id) => data.messages.get(id))
-      .filter((m): m is NonNullable<typeof m> => Boolean(m))
-    const visible = visibleMessagesForActor(msgs, currentActor)
-    return visible.some((m) => m.id === n.messageId)
-  }
+  const notifications = useMemo(
+    () => visibleNotificationsForActor(data.notifications, data, currentActor),
+    [data.notifications, data.conversations, data.messages, data.messagesByConversation, currentActor],
+  )
 
-  const notifications = useMemo(() => data.notifications.filter(visibleForRole), [data.notifications, data.conversations, data.messages, data.messagesByConversation, currentActor])
-
-  const unreadCount = notifications.filter((n) => !n.read).length
+  const unreadIds = notifications.filter((n) => !n.read).map((n) => n.id)
+  const unreadCount = unreadIds.length
 
   const noPush = notificationPrefs.pushPermission !== 'granted' && notificationPrefs.pushEnabled
 
@@ -63,7 +56,7 @@ export function NotificationsScreen() {
           variant="outlined"
           startIcon={<MarkChatReadIcon />}
           disabled={unreadCount === 0}
-          onClick={() => dispatchData({ type: 'notif_read_all' })}
+          onClick={() => dispatchData({ type: 'notif_read_all', ids: unreadIds })}
         >
           Отметить всё прочитанным
         </Button>
@@ -132,6 +125,31 @@ export function NotificationsScreen() {
             )
           })}
         </Stack>
+      )}
+    </Stack>
+  )
+}
+ </Stack>
+      )}
+    </Stack>
+  )
+}
+.name ?? '—'}: {n.preview}
+                    </Typography>
+                  </Stack>
+                  {!n.read ? (
+                    <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: 'primary.main', mt: 1 }} />
+                  ) : null}
+                </Row>
+              </Paper>
+            )
+          })}
+        </Stack>
+      )}
+    </Stack>
+  )
+}
+ </Stack>
       )}
     </Stack>
   )

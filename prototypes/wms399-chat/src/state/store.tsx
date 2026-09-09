@@ -207,7 +207,7 @@ type DataAction =
   | { type: 'set_upload_status'; messageId: string; attachmentId: string; status: Attachment['uploadStatus']; progress: number; failReason?: string }
   | { type: 'add_notification'; notification: NotificationEntry }
   | { type: 'notif_read'; id: string }
-  | { type: 'notif_read_all' }
+  | { type: 'notif_read_all'; ids: string[] }
 
 function dataReducer(state: DataState, action: DataAction): DataState {
   switch (action.type) {
@@ -349,8 +349,13 @@ function dataReducer(state: DataState, action: DataAction): DataState {
         ...state,
         notifications: state.notifications.map((n) => (n.id === action.id ? { ...n, read: true } : n)),
       }
-    case 'notif_read_all':
-      return { ...state, notifications: state.notifications.map((n) => ({ ...n, read: true })) }
+    case 'notif_read_all': {
+      const ids = new Set(action.ids)
+      return {
+        ...state,
+        notifications: state.notifications.map((n) => (ids.has(n.id) ? { ...n, read: true } : n)),
+      }
+    }
     default:
       return state
   }

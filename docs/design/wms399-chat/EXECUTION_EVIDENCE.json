@@ -11,7 +11,7 @@
   "canonical_instruction_commit": "ac319400",
   "scope": "isolated requirements and React prototype; no backend or production changes",
   "dependencies": "existing frontend/node_modules symlink; no install",
-  "status": "build_pass_browser_findings",
+  "status": "partial_notification_fix_interrupted_disk_full",
   "resume_same_session": true,
   "continued_observed_model": "claude-opus-4-7",
   "rate_limit_type": "five_hour",
@@ -20,9 +20,12 @@
   "reset_local": "2026-09-09T00:30:00+03:00",
   "overage_rejected_reason": "out_of_credits",
   "browser_checked": true,
-  "build": "passed: npm run build after Opus compiler fixes",
-  "typecheck": "passed: npm run typecheck after Opus compiler fixes",
+  "build": "last PASS at42ff86ba; current partial notification diff unverified and has duplicate JSX tail",
+  "typecheck": "last PASS at42ff86ba; current partial diff not run",
   "author_pass_result": "success; exit 0",
   "author_pass_base": "966592fbd6b5d0064803bbdc271e3a20c0f69fad",
-  "browser_status": "partial pass; thread count privacy and viewport/composer layout findings returned to author"
+  "browser_status": "verified scenarios through42ff86ba; current Chrome closed for disk pressure",
+  "last_verified_commit": "42ff86ba",
+  "last_cli_exit_code": 0,
+  "last_cli_result_present": false
 }

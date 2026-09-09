@@ -6,13 +6,14 @@ import TuneIcon from '@mui/icons-material/TuneOutlined'
 import InboxIcon from '@mui/icons-material/InboxOutlined'
 import BuildIcon from '@mui/icons-material/HandymanOutlined'
 import { useStore } from '../state/store'
-import { readableRole } from '../state/selectors'
+import { readableRole, visibleNotificationsForActor } from '../state/selectors'
 import { PersonaAvatar } from '../common/PersonaAvatar'
 
 export function TopBar() {
   const { ui, currentActor, data, dispatch, navigate } = useStore()
 
-  const unreadNotifs = data.notifications.filter((n) => !n.read).length
+  const unreadNotifs = visibleNotificationsForActor(data.notifications, data, currentActor)
+    .filter((n) => !n.read).length
   const portal = currentActor.role === 'seller' ? 'seller' : 'ff'
 
   return (
