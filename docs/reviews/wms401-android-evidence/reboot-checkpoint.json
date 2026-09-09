@@ -1,0 +1,8 @@
+{
+  "wm size reset": "timeout; not confirmed",
+  "wm density reset": "timeout; not confirmed",
+  "settings put global window_animation_scale 1.0": 0,
+  "settings put global transition_animation_scale 1.0": 0,
+  "settings delete global animator_duration_scale": 0,
+  "console_kill": "OK: killing emulator, bye bye\nOK"
+}
