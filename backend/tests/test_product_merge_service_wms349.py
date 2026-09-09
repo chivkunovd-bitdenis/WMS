@@ -9,19 +9,20 @@ deadlock, а сама блокировка сериализует конкуре
 Границы теста. Тест-БД — SQLite, у которого ``FOR UPDATE`` синтаксически
 игнорируется. Поэтому наличие блокировки и порядок инструкций проверяются на
 уровне SQLAlchemy: каждый выполненный ``Select`` перекомпилируется под диалект
-PostgreSQL и в его тексте ищется ``FOR UPDATE``. Физической проверки против
-живого PostgreSQL здесь нет — это следующая линия защиты, не эта.
+PostgreSQL и в его тексте ищется ``FOR UPDATE``. Дополнительный тест test_postgres_merge_replays_committed_movement_with_stale_balances
+запускается только на PostgreSQL и проверяет настоящую конкурентную запись.
 """
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from typing import Any
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import event, select
+from sqlalchemy import event, select, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import ClauseElement
 
@@ -216,6 +217,70 @@ def _uninstall_capture(handlers: Any) -> None:
     before_execute, before_cursor = handlers
     event.remove(engine.sync_engine, "before_execute", before_execute)
     event.remove(engine.sync_engine, "before_cursor_execute", before_cursor)
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(engine.dialect.name != "postgresql", reason="real PostgreSQL required")
+@pytest.mark.parametrize("movement_side", ["source", "target"])
+async def test_postgres_merge_replays_committed_movement_with_stale_balances(
+    async_client: AsyncClient, movement_side: str,
+) -> None:
+    """Two real transactions: merge waits for a warehouse writer, then rereads."""
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, f"pg-{suffix}")
+    response = await async_client.post("/sellers", headers=headers, json={"name": "Seller"})
+    assert response.status_code == 201, response.text
+    seller_id = response.json()["id"]
+    tenant_id = await _seller_tenant_id(seller_id)
+    location_id = await _create_warehouse_location(async_client, headers, suffix)
+    target = await _create_product(
+        async_client, headers, sku_code=f"pg-wb-{suffix}", seller_id=seller_id,
+        wb_vendor_code=f"pg-vendor-{suffix}",
+    )
+    source = await _create_product(
+        async_client, headers, sku_code=f"pg-oz-{suffix}", seller_id=seller_id,
+    )
+    target_id, source_id = uuid.UUID(target["id"]), uuid.UUID(source["id"])
+    await _add_stock(tenant_id, target_id, location_id, 8)
+    await _add_stock(tenant_id, source_id, location_id, 5)
+    from app.models.inventory_movement import InventoryMovement
+
+    async with SessionLocal() as merger, SessionLocal() as writer:
+        # Keep ORM objects alive to exercise a caller that read old balances.
+        stale = list((await merger.scalars(select(InventoryBalance))).all())
+        assert sorted(row.quantity for row in stale) == [5, 8]
+        merger_pid = await merger.scalar(text("select pg_backend_pid()"))
+        await inventory_service.record_movement_and_adjust_balance(
+            writer, tenant_id=tenant_id,
+            product_id=source_id if movement_side == "source" else target_id,
+            storage_location_id=location_id, quantity_delta=3,
+            movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(writer, tenant_id),
+        )
+        merge_task = asyncio.create_task(merge_products(merger, tenant_id, [source_id, target_id]))
+        try:
+            async with asyncio.timeout(5):
+                while not await writer.scalar(
+                    text("select cardinality(pg_blocking_pids(:pid)) > 0"), {"pid": merger_pid},
+                ):
+                    assert not merge_task.done(), "merge failed to wait for the Product lock"
+                    await asyncio.sleep(0.01)
+            await writer.commit()
+            merged = await asyncio.wait_for(merge_task, timeout=10)
+            assert merged.id == target_id
+        finally:
+            if not merge_task.done():
+                merge_task.cancel()
+                await asyncio.gather(merge_task, return_exceptions=True)
+    async with SessionLocal() as check:
+        balances = list((await check.scalars(select(InventoryBalance))).all())
+        movements = list((await check.scalars(select(InventoryMovement))).all())
+        assert len(balances) == 1
+        assert balances[0].product_id == target_id
+        assert balances[0].quantity == 16
+        assert sum(row.quantity_delta for row in movements) == 16
+        assert len(movements) == 3
+        assert all(row.product_id == target_id for row in movements)
 
 
 @pytest.mark.asyncio
