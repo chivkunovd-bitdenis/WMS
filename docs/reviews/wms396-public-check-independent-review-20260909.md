@@ -21,3 +21,9 @@ The four previously skipped row-lock cases now have a separate saved passing run
 The runner used an isolated localhost PostgreSQL database (PostgreSQL 17.10 as reported by mobile_resume). The saved run metadata records `pytest_exit=0`, `drop_exit=0` and `owned_database_remaining_count=0`; it also pins the source SHA. Thus the original four skips are now covered by actual local PostgreSQL results. The checked CI workflow does not start a PostgreSQL service, so this evidence remains separate from the ordinary CI run.
 
 The three artifacts were inspected before copying: they contain test names, outcomes, local paths and the disposable local database identifier, with no credentials, real CIS or customer payload. Preserved evidence: [pytest output](artifacts/wms396-pg-only-20260909/pytest.txt), [JUnit XML](artifacts/wms396-pg-only-20260909/junit.xml), [run and cleanup metadata](artifacts/wms396-pg-only-20260909/run.json).
+
+## Additional expired-worker PostgreSQL regression
+
+The subsequently supplied existing run for `test_expired_worker_cannot_overwrite_retry_while_saving_response` was inspected and copied without rerunning it. Its JUnit XML records one test, zero failures, zero errors and zero skips in 2.439 seconds. The run metadata records `pytest_exit=0`, `drop_exit=0` and `owned_database_remaining_count=0` for a separate localhost database. No credentials or real code payload are present in the preserved files. Unlike the preceding four-case metadata, this run.json does not itself record a source SHA; the artifact is therefore kept as the supplied expired-worker regression evidence, without inventing such a field.
+
+Artifacts: [pytest output](artifacts/wms396-pg-expired-worker-20260909/pytest.txt), [JUnit XML](artifacts/wms396-pg-expired-worker-20260909/junit.xml), [run/cleanup metadata](artifacts/wms396-pg-expired-worker-20260909/run.json).
