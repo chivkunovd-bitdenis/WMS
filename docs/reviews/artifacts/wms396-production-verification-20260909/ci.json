@@ -1,0 +1,30 @@
+{
+  "run_id": 34353281295,
+  "conclusion": "success",
+  "event": "pull_request",
+  "headSha": "0860fe221180f9d369c9ccbbe6697a6b33c153a4",
+  "status": "completed",
+  "url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/34353281295",
+  "workflowName": "CI",
+  "metadata_source": "gh run view read during this verification",
+  "raw_log_sha256": "ff1cc432aa10de8359d7928b5891f23e4a0bdfe1ed4c8937e8b3459b03b0d3c9",
+  "raw_log_selected_line_numbers": [
+    119,
+    187,
+    369,
+    846,
+    990,
+    1317,
+    1329,
+    1416
+  ],
+  "raw_log_excerpt": "ci-summary.txt",
+  "pytest": {
+    "passed": 2305,
+    "skipped": 52,
+    "xfailed": 1,
+    "warnings": 14,
+    "duration_seconds": 575.26
+  },
+  "source_note": "CI tested synthetic PR merge 53fd442 of 0860fe22 into c3aa4dfa; actual production merge is 0229831f. Runtime hash comparison is separate."
+}

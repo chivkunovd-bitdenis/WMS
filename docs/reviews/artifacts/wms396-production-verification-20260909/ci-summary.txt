@@ -1,0 +1,12 @@
+WMS-396 CI 34353281295: selected raw log lines (ANSI removed).
+Original source: .worktrees/wms396-public-check/tmp/ci-34353281295.log
+Original SHA256: ff1cc432aa10de8359d7928b5891f23e4a0bdfe1ed4c8937e8b3459b03b0d3c9
+
+119: frontend-build	Run actions/checkout@v4	2026-09-09T12:49:36.6580421Z HEAD is now at 53fd442 Merge 0860fe221180f9d369c9ccbbe6697a6b33c153a4 into c3aa4dfaccbc99c6d58cf9e5a864bc248cc8ae3f
+187: frontend-build	Build	2026-09-09T12:50:26.6369382Z transforming...✓ 12188 modules transformed.
+369: frontend-build	Build	2026-09-09T12:50:27.3328931Z ✓ built in 1.62s
+846: backlog	Run actions/checkout@v4	2026-09-09T12:49:38.5474555Z HEAD is now at 53fd442e Merge 0860fe221180f9d369c9ccbbe6697a6b33c153a4 into c3aa4dfaccbc99c6d58cf9e5a864bc248cc8ae3f
+990: backend	Run actions/checkout@v4	2026-09-09T12:49:38.5863649Z HEAD is now at 53fd442 Merge 0860fe221180f9d369c9ccbbe6697a6b33c153a4 into c3aa4dfaccbc99c6d58cf9e5a864bc248cc8ae3f
+1317: backend	Ruff	2026-09-09T12:50:00.2737478Z All checks passed!
+1329: backend	Mypy	2026-09-09T12:50:19.4636361Z Success: no issues found in 436 source files
+1416: backend	Pytest	2026-09-09T12:59:58.8953265Z ===== 2305 passed, 52 skipped, 1 xfailed, 14 warnings in 575.26s (0:09:35) =====
