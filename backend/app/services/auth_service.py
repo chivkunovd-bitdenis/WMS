@@ -15,6 +15,7 @@ from app.models.ff_staff_permissions import FfStaffPermissions
 from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.user import User
+from app.models.warehouse import Warehouse
 from app.services.auth_link_tokens import (
     AuthLinkError,
     build_link,
@@ -25,7 +26,11 @@ from app.services.auth_link_tokens import (
 from app.services.billing_tariff_matrix_service import ensure_disabled_tariff_matrix
 from app.services.mailer import send_email
 from app.services.passwords import hash_password, verify_password
+from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.tokens import create_access_token
+
+DEFAULT_WAREHOUSE_NAME = "Основной"
+DEFAULT_WAREHOUSE_CODE = "main"
 
 
 class AuthError(Exception):
@@ -54,6 +59,17 @@ async def register_fulfillment(
     try:
         await session.flush()
         await ensure_disabled_tariff_matrix(session, tenant=tenant)
+        # WMS-062: у новой организации всегда есть один «Основной» склад.
+        # Форма приёмки/отгрузки в UI и мобильный ТСД падали на пустом списке
+        # складов, поэтому склад создаётся в той же транзакции, что и tenant.
+        warehouse = Warehouse(
+            tenant_id=tenant.id,
+            name=DEFAULT_WAREHOUSE_NAME,
+            code=DEFAULT_WAREHOUSE_CODE,
+        )
+        session.add(warehouse)
+        await session.flush()
+        await get_or_create_sorting_location(session, tenant.id, warehouse.id)
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
