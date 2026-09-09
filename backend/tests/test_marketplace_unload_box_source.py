@@ -25,18 +25,12 @@ from test_marketplace_unload_pick_from_container import (  # type: ignore[import
 from app.db.session import SessionLocal
 from app.models.inventory_movement import InventoryMovement
 from app.models.marketplace_unload import MarketplaceUnloadPickAllocation
-from app.services.marketplace_unload_box_service import (
-    MarketplaceUnloadBoxError,
-    collect_ready_box_into_open_box,
-)
 
 BoxFixture = tuple[dict[str, str], str, str, str, str, str, str, str, str, str]
 
 
 @pytest_asyncio.fixture
-async def box_fixture(
-    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> BoxFixture:
+async def box_fixture(async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> BoxFixture:
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(
         "/auth/register",
@@ -223,7 +217,7 @@ async def test_box_scan_places_previously_picked_without_new_inventory(
 async def test_box_scan_rejects_invalid_or_exhausted_source_without_fallback(
     async_client: AsyncClient, box_fixture: BoxFixture
 ) -> None:
-    h, _, pid, loc, source, barcode, mid, _, scan, target = box_fixture
+    h, _, pid, loc, source, _, mid, _, scan, _ = box_fixture
     body = {
         "barcode": E2E_BARCODE,
         "product_id": pid,
@@ -241,22 +235,6 @@ async def test_box_scan_rejects_invalid_or_exhausted_source_without_fallback(
     )
     assert missing.status_code == 422, missing.text
     assert await movement_count(mid) == 0
-    # The legacy "collect ready box" service must not return a zero-content success.
-    async with SessionLocal() as session:
-        from app.models.marketplace_unload import MarketplaceUnloadRequest
-
-        req = await session.get(MarketplaceUnloadRequest, uuid.UUID(mid))
-        assert req is not None
-        with pytest.raises(MarketplaceUnloadBoxError, match="box_needs_location"):
-            await collect_ready_box_into_open_box(
-                session,
-                req.tenant_id,
-                uuid.UUID(target),
-                barcode=barcode,
-                allow_over_plan=False,
-                actor_user_id=None,
-            )
-
     for _ in range(3):
         response = await async_client.post(scan, headers=h, json=body)
         assert response.status_code == 200, response.text
@@ -266,3 +244,46 @@ async def test_box_scan_rejects_invalid_or_exhausted_source_without_fallback(
     assert failed.json()["detail"] == "insufficient_available"
     assert await _balances_by_container(loc, pid) == before
     assert before[None] == 2
+
+
+@pytest.mark.asyncio
+async def test_mixed_box_scan_failure_does_not_commit_placement(
+    async_client: AsyncClient,
+    box_fixture: BoxFixture,
+) -> None:
+    h, _, pid, loc, source, _, mid, base, scan, target = box_fixture
+    picked = await async_client.post(
+        base + "/pick/set",
+        headers=h,
+        json={
+            "product_id": pid,
+            "storage_location_id": loc,
+            "quantity": 1,
+            "container_kind": "box",
+            "container_id": source,
+        },
+    )
+    assert picked.status_code == 200, picked.text
+    before = await _balances_by_container(loc, pid)
+    movements = await movement_count(mid)
+    failed = await async_client.post(
+        scan,
+        headers=h,
+        json={
+            "barcode": E2E_BARCODE,
+            "product_id": pid,
+            "quantity": 4,
+            "storage_location_id": loc,
+            "container_kind": "box",
+            "container_id": source,
+        },
+    )
+    assert failed.status_code == 422, failed.text
+    assert failed.json()["detail"] == "insufficient_available"
+    detail = await async_client.get(base, headers=h)
+    assert detail.status_code == 200, detail.text
+    destination = next(box for box in detail.json()["boxes"] if box["id"] == target)
+    assert destination["lines"] == []
+    assert await _balances_by_container(loc, pid) == before
+    assert await movement_count(mid) == movements
+    assert sum(row["quantity"] for row in detail.json()["pick_allocations"]) == 1

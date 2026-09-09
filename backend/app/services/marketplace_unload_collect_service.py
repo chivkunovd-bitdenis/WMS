@@ -387,7 +387,7 @@ async def collect_into_box(
         box_line.quantity = int(box_line.quantity) + quantity
 
     mu_svc.enter_collecting_if_needed(req)
-    await session.commit()
+    await session.flush()
 
     picked = await picked_qty_for_product(session, request_id, product_id)
     stmt_alloc = (
@@ -407,14 +407,6 @@ async def collect_into_box(
     )
     res_line = await session.execute(stmt_line)
     line_loaded = res_line.scalar_one()
-
-    from app.services import packaging_task_service as pkg_svc
-
-    pkg_task = await pkg_svc.get_task_for_unload(session, tenant_id, request_id)
-    if pkg_task is not None:
-        await pkg_svc.sync_lines_from_pick_allocations(
-            session, tenant_id, pkg_task, reload_result=False
-        )
 
     return CollectResult(
         box_line=line_loaded,
