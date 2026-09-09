@@ -2,6 +2,12 @@
 
 from app.models.background_job import BackgroundJob
 from app.models.base import Base
+from app.models.chat import (
+    ChatAttachment,
+    ChatConversation,
+    ChatMessage,
+    ChatParticipant,
+)
 from app.models.billing import (
     BillingInvoice,
     BillingInvoiceV2,
@@ -118,6 +124,10 @@ __all__ = [
     "BillingTariffServiceState",
     "BillingTariffVersion",
     "BillingTariffVersionV2",
+    "ChatAttachment",
+    "ChatConversation",
+    "ChatMessage",
+    "ChatParticipant",
     "DiscrepancyAct",
     "DiscrepancyActLine",
     "DocumentDisplaySequence",
