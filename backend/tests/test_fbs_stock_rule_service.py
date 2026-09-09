@@ -694,8 +694,8 @@ async def test_zero_edit_cancel_and_repeated_events_preserve_reserve(
     view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
     # Потолок оператора остался прежним, резерв заказа его не расходует.
     assert view.units_remaining_by_warehouse == {501001: 100, 501002: 200}
-    # Свободное в складе (не ФБС) = on_hand − резерв − потолки:
-    # 400 − 1 (резерв заказа) − (100 + 200) = 99. Раньше здесь было 100, потому
+    # Свободное в складе (не ФБС) = on_hand - резерв - потолки:
+    # 400 - 1 (резерв заказа) - (100 + 200) = 99. Раньше здесь было 100, потому
     # что резерв дополнительно ел операторский потолок, и суммарные потолки
     # уменьшались до 299. По контракту WMS-338 второй счётчик убран.
     assert (
@@ -755,8 +755,8 @@ async def test_inventory_uses_ordinary_stock_then_fbs(db_session: AsyncSession) 
         assert view.on_hand == physical
         assert view.published_now == available
         assert view.reserved == 1
-    # marketplace_unload считает: on_hand − резерв − сумма_потолков.
-    # 250 − 1 − 300 = −51: физический остаток уже меньше того, что оператор
+    # marketplace_unload считает: on_hand - резерв - сумма_потолков.
+    # 250 - 1 - 300 = -51: физический остаток уже меньше того, что оператор
     # обещал в кабинетах, и marketplace_unload честно показывает недостачу.
     # Раньше здесь было 0, потому что потолок ел сам себя вслед за недостачей.
     # WMS-338: потолок больше не расходуется автоматически — оператор либо
