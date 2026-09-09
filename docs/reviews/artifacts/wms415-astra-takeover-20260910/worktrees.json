@@ -1,0 +1,74 @@
+[
+  {
+    "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms056-audit-trail",
+    "head": "8d8ef3d14627c0a4e681680fd69768598c709dc2",
+    "branch": "feat/wms056-audit-trail",
+    "status": ""
+  },
+  {
+    "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms062-warehouse-docs",
+    "head": "ed930463ae3504e1eb1112031a98408a3ee227dd",
+    "branch": "feat/wms062-warehouse-docs",
+    "status": ""
+  },
+  {
+    "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms111-wb-cancel-return",
+    "head": "f1b879fd0fd70e46b4048b3321cd991795b27b3e",
+    "branch": "feat/wms111-wb-cancel-return",
+    "status": ""
+  },
+  {
+    "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms121-supply-identity",
+    "head": "14e637cceda3b74ccb23c539a2ddf62535ea2e14",
+    "branch": "feat/wms121-supply-identity",
+    "status": ""
+  },
+  {
+    "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms270-login-and-ports",
+    "head": "b3020e8f01e6fd3d9d5450bc5dc841b0af0628a1",
+    "branch": "feat/wms270-login-and-ports",
+    "status": ""
+  },
+  {
+    "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms338-stock-min-formula",
+    "head": "453bb87d9331209908235ab14bcfe9a10b903372",
+    "branch": "feat/wms338-stock-min-formula",
+    "status": ""
+  },
+  {
+    "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms349-merge-service",
+    "head": "5a3f40c5017ee5b296ed62aca735f5e7ef01ace1",
+    "branch": "feat/wms349-merge-service",
+    "status": ""
+  },
+  {
+    "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms352-ozon-publication",
+    "head": "e27bec204eb994c45b1d44f6ea339b203de33402",
+    "branch": "feat/wms352-ozon-publication",
+    "status": ""
+  },
+  {
+    "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms363-ozon-tsd",
+    "head": "9332976b1321cea9041b627874f438d223692ec0",
+    "branch": "feat/wms363-ozon-tsd",
+    "status": ""
+  },
+  {
+    "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms397-chat-mvp",
+    "head": "dfcd0959dfed721620039edba656aa436e7855ec",
+    "branch": "feat/wms397-chat-mvp",
+    "status": ""
+  },
+  {
+    "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms401-mobile-followup",
+    "head": "7f8b6caa47fc43bf3ba1fa301ec1e20a9c253863",
+    "branch": "feat/wms401-mobile-followup",
+    "status": ""
+  },
+  {
+    "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord",
+    "head": "beb19d252ddec0d7ad30a1784d78499884a09966",
+    "branch": "codex/wms415-coord-20260910",
+    "status": "?? astra-review-request-cancel-return-f1b879fd.md\n?? astra-review-request-stock-453bb87d.md\n?? astra-review-result-cancel-return-f1b879fd.md\n?? astra-review-result-stock-453bb87d.md\n?? docs/reviews/artifacts/wms415-astra-takeover-20260910/"
+  }
+]

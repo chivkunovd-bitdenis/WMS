@@ -1,0 +1,68 @@
+{
+  "time_utc": "2026-09-09T22:28:46.003195+00:00",
+  "claude_pid_stopped": 63350,
+  "snapshots": [
+    {
+      "checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms062-warehouse-docs",
+      "head": "ed930463ae3504e1eb1112031a98408a3ee227dd",
+      "preserved_paths": [
+        "backend/app/services/seller_wb_catalog_service.py"
+      ],
+      "pushed": true,
+      "verification": "WIP only, not accepted"
+    },
+    {
+      "checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms270-login-and-ports",
+      "head": "b3020e8f01e6fd3d9d5450bc5dc841b0af0628a1",
+      "preserved_paths": [
+        "backend/app/services/login_rate_limit.py",
+        "backend/tests/test_wms270_login_leak.py",
+        "backend/tests/test_wms270_login_rate_limit.py",
+        "backend/app/api/auth.py",
+        "backend/app/services/auth_service.py",
+        "backend/tests/test_auth_email_links.py",
+        "backend/tests/test_seller_rbac.py",
+        "backend/tests/test_staff_users.py",
+        "backend/tests/test_tenant_settings.py",
+        "docker-compose.wms-host-8088.yml",
+        "docker-compose.yml"
+      ],
+      "pushed": true,
+      "verification": "WIP only, not accepted"
+    },
+    {
+      "checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms352-ozon-publication",
+      "head": "e27bec204eb994c45b1d44f6ea339b203de33402",
+      "preserved_paths": [
+        "backend/app/services/ozon_fbs_sync_service.py"
+      ],
+      "pushed": true,
+      "verification": "WIP only, not accepted"
+    },
+    {
+      "checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms363-ozon-tsd",
+      "head": "794f5404854bbc6b2dc070d394a72bec32e5642e",
+      "preserved_paths": [
+        "backend/tests/test_wms363_ozon_tsd.py",
+        "backend/app/api/fbs_kiz.py",
+        "backend/app/api/fbs_orders.py",
+        "backend/app/api/fbs_supplies.py",
+        "backend/app/services/wb_marketplace_orders_service.py",
+        "tasks/fbs-operator-flow/openapi/fbs-operations.openapi.json"
+      ],
+      "pushed": true,
+      "verification": "WIP only, not accepted"
+    },
+    {
+      "checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms397-mobile",
+      "head": "b90d20ab61222bf89379006f2b0a898ba1a10068",
+      "preserved_paths": [
+        "android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt",
+        "android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt",
+        "android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt"
+      ],
+      "pushed": false,
+      "verification": "WIP only, not accepted"
+    }
+  ]
+}
