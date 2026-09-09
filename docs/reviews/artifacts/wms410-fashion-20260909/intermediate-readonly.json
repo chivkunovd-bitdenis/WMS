@@ -1,0 +1,21 @@
+{
+  "phase": "Intermediate diagnostic read explicitly requested by root; not final acceptance",
+  "checked_at": "2026-09-09T10:11:29.416358+00:00",
+  "warehouse_id": 2103525,
+  "requested": 26,
+  "returned": 26,
+  "returned_unique": 26,
+  "matched": 26,
+  "missing_count": 0,
+  "zero_count": 0,
+  "nonzero_count": 26,
+  "nonzero_examples": [
+    {"chrt_id": 414300660, "amount": 44},
+    {"chrt_id": 414300661, "amount": 79},
+    {"chrt_id": 414300662, "amount": 85},
+    {"chrt_id": 1929377551, "amount": 2},
+    {"chrt_id": 1929377552, "amount": 8},
+    {"chrt_id": 1929383511, "amount": 5}
+  ],
+  "method": "standard fetch_marketplace_stocks read-only POST with chrtIds; no PUT or stock sync invocation"
+}

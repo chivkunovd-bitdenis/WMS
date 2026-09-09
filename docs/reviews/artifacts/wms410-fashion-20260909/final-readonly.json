@@ -1,0 +1,157 @@
+{
+  "result": "FAIL",
+  "checked_at": "2026-09-09T10:25:57.000397+00:00",
+  "summary": {
+    "products": 5425,
+    "wb_on": 0,
+    "ozon_effective_on": 0,
+    "selected_off": 34,
+    "legacy_off": 5391
+  },
+  "bindings_flags_unchanged": true,
+  "served_sync_items": 136,
+  "db_positive": 0,
+  "db_confirmed_zero": 136,
+  "db_unconfirmed": 0,
+  "marketplace_readbacks": [
+    {
+      "warehouse_id": 2103525,
+      "requested": 34,
+      "returned": 34,
+      "missing": [],
+      "nonzero": [
+        {
+          "chrt_id": 414300660,
+          "amount": 44
+        },
+        {
+          "chrt_id": 414300661,
+          "amount": 79
+        },
+        {
+          "chrt_id": 414300662,
+          "amount": 85
+        },
+        {
+          "chrt_id": 414300663,
+          "amount": 59
+        },
+        {
+          "chrt_id": 414300664,
+          "amount": 58
+        },
+        {
+          "chrt_id": 428722249,
+          "amount": 2
+        },
+        {
+          "chrt_id": 428722251,
+          "amount": 14
+        },
+        {
+          "chrt_id": 428722252,
+          "amount": 30
+        },
+        {
+          "chrt_id": 428722253,
+          "amount": 18
+        },
+        {
+          "chrt_id": 1929366021,
+          "amount": 5
+        },
+        {
+          "chrt_id": 1929366023,
+          "amount": 2
+        },
+        {
+          "chrt_id": 1929366025,
+          "amount": 5
+        },
+        {
+          "chrt_id": 1929377551,
+          "amount": 2
+        },
+        {
+          "chrt_id": 1929377552,
+          "amount": 8
+        },
+        {
+          "chrt_id": 1929379263,
+          "amount": 29
+        },
+        {
+          "chrt_id": 1929379264,
+          "amount": 13
+        },
+        {
+          "chrt_id": 1929379265,
+          "amount": 43
+        },
+        {
+          "chrt_id": 1929379266,
+          "amount": 16
+        },
+        {
+          "chrt_id": 1929379267,
+          "amount": 23
+        },
+        {
+          "chrt_id": 1929383505,
+          "amount": 7
+        },
+        {
+          "chrt_id": 1929383506,
+          "amount": 8
+        },
+        {
+          "chrt_id": 1929383507,
+          "amount": 25
+        },
+        {
+          "chrt_id": 1929383508,
+          "amount": 26
+        },
+        {
+          "chrt_id": 1929383509,
+          "amount": 1
+        },
+        {
+          "chrt_id": 1929383510,
+          "amount": 3
+        },
+        {
+          "chrt_id": 1929383511,
+          "amount": 5
+        }
+      ],
+      "zero": 8
+    },
+    {
+      "warehouse_id": 2115687,
+      "requested": 34,
+      "returned": 34,
+      "missing": [],
+      "nonzero": [],
+      "zero": 34
+    },
+    {
+      "warehouse_id": 2115694,
+      "requested": 34,
+      "returned": 34,
+      "missing": [],
+      "nonzero": [],
+      "zero": 34
+    },
+    {
+      "warehouse_id": 2157148,
+      "requested": 34,
+      "returned": 34,
+      "missing": [],
+      "nonzero": [],
+      "zero": 34
+    }
+  ],
+  "scope": "All current sync items of 34 explicitly disabled products on four served WB bindings; historical 64-item manifest was not persisted.",
+  "method": "DB read-only transaction; standard read-only WB POST/chrtIds; no stock PUT, sync or other mutations"
+}
