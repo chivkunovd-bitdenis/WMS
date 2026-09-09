@@ -1,0 +1,93 @@
+commit 9a83ef6133201cea178cdda8a9437a165892a458
+Author: Denis Civkunov <denischivkunov@icloud.com>
+Date:   Thu Sep 10 00:30:26 2026 +0300
+
+    WMS-401 order list first, sortedOrders(oldest first), bump versionCode=9 for network update
+
+diff --git a/android/app/build.gradle.kts b/android/app/build.gradle.kts
+index 6e2ca73..c72161e 100644
+--- a/android/app/build.gradle.kts
++++ b/android/app/build.gradle.kts
+@@ -13,8 +13,8 @@ android {
+         applicationId = "ru.wms.tsd"
+         minSdk = 24
+         targetSdk = 35
+-        versionCode = 8
+-        versionName = "0.1.7-network-update"
++        versionCode = 9
++        versionName = "0.1.8-wms401-orders-first"
+         buildConfigField("String", "APK_UPDATE_MANIFEST_URL", "\"https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/update.json\"")
+         buildConfigField(
+             "String",
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
+index f5eba7a..2fd5554 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
+@@ -56,18 +56,18 @@ internal fun displayTime(value: String): String = runCatching {
+                 OutlinedButton(onClick = { chooseSupply = true }, enabled = !state.busy, modifier = Modifier.weight(1f)) { Text("В поставку") }
+             }
+             LazyColumn(Modifier.weight(1f).padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+-                if (state.supplies.isNotEmpty()) item { Text("Поставки в работе", fontWeight = FontWeight.Bold) }
+-                items(state.supplies, key = { "supply:${it.id}" }) { supply ->
+-                    OutlinedButton(onClick = { onOpen(supply.id) }, modifier = Modifier.fillMaxWidth()) { Text("${supply.name} · ${supply.ordersCount} заказов") }
+-                }
+                 item { Text("Все заказы", fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp)) }
+-                items(state.orders, key = { it.id }) { order ->
++                items(sortedOrders(state.orders), key = { it.id }) { order ->
+                     OrderCard(order, state.selected.contains(order.id), onClick = {
+                         if (order.supplyId != null) onOpen(order.supplyId) else vm.toggle(order)
+                     }, selectable = order.status == "new" && order.supplyId == null)
+                 }
+                 if (state.cursor != null) item { OutlinedButton(onClick = { vm.loadOrders(true) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text("Загрузить ещё") } }
+                 if (state.orders.isEmpty() && !state.busy) item { Text("Заказов пока нет", modifier = Modifier.padding(16.dp)) }
++                if (state.supplies.isNotEmpty()) item { Text("Поставки в работе", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp)) }
++                items(state.supplies, key = { "supply:${it.id}" }) { supply ->
++                    OutlinedButton(onClick = { onOpen(supply.id) }, modifier = Modifier.fillMaxWidth()) { Text("${supply.name} · ${supply.ordersCount} заказов") }
++                }
+             }
+         }
+     }
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+index d21b693..df87356 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+@@ -24,6 +24,15 @@ fun oldestMatchingOrder(orders: List<FbsOrder>, barcode: String): FbsOrder? = or
+     .filter { barcode in listOfNotNull(it.product.barcode, it.product.sku, it.product.sellerArticle) }
+     .minWithOrNull(compareBy<FbsOrder> { runCatching { OffsetDateTime.parse(it.createdAt).toInstant() }.getOrDefault(Instant.MAX) }.thenBy { it.wbOrderId })
+ 
++/**
++ * Первый экран показывает заказы в порядке старейших сначала (WMS-401): точка отсчёта —
++ * createdAt в Instant. Если сервер вернул нечитаемую дату, такой заказ уходит в конец,
++ * но его позиция не меняется относительно других нечитаемых дат (stable sort по wbOrderId).
++ */
++fun sortedOrders(orders: List<FbsOrder>): List<FbsOrder> = orders.sortedWith(
++    compareBy<FbsOrder> { runCatching { OffsetDateTime.parse(it.createdAt).toInstant() }.getOrDefault(Instant.MAX) }.thenBy { it.wbOrderId }
++)
++
+ fun isDeadlineNear(deadline: String, now: Instant = Instant.now()): Boolean =
+     runCatching { OffsetDateTime.parse(deadline).toInstant().isBefore(now.plusSeconds(6 * 3600)) }.getOrDefault(false)
+ 
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+index 78587b0..f07014b 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+@@ -68,6 +68,19 @@ class FbsViewModelTest {
+             TimeZone.setDefault(originalZone)
+         }
+     }
++    @Test fun `sortedOrders lists earliest createdAt first with wb order tiebreaker (WMS-401)`() {
++        val a = order("10", "2026-09-08T09:00:00+00:00")
++        val b = order("20", "2026-09-08T08:00:00+03:00") // +03 = 05:00 UTC — самый ранний instant
++        val c = order("5", "2026-09-08T09:00:00Z") // тот же instant, что и a → тайбрейк по wbOrderId (5 < 10)
++        val bad = order("40", "not-a-date")
++        val result = sortedOrders(listOf(a, bad, c, b))
++        assertEquals(listOf(b, c, a, bad), result)
++    }
++    @Test fun `sortedOrders on empty and single-element inputs`() {
++        assertTrue(sortedOrders(emptyList()).isEmpty())
++        val only = order("1", "2026-09-08T09:00:00Z")
++        assertEquals(listOf(only), sortedOrders(listOf(only)))
++    }
+     @Test fun `deadline offsets preserve the exclusive six hour boundary`() {
+         val now = Instant.parse("2026-09-09T10:00:00Z")
+         assertTrue(isDeadlineNear("2026-09-09T18:59:59.999999+03:00", now))
