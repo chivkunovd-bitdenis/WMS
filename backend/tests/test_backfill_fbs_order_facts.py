@@ -286,3 +286,29 @@ async def test_backfill_uses_persisted_handover_and_ignores_unconfirmed_import(
         assert list(await reread.scalars(select(BillingLedgerEntry))) == []
         saved_tenant = await reread.get(Tenant, tenant.id)
         assert saved_tenant and saved_tenant.billing_enabled_from is None
+
+
+@pytest.mark.asyncio
+async def test_redating_commits_at_batch_boundary_without_new_facts(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant, _, _, fact = await _seed(db_session)
+    await db_session.commit()
+    commits = 0
+    original_commit = AsyncSession.commit
+
+    async def counted_commit(session: AsyncSession) -> None:
+        nonlocal commits
+        commits += 1
+        await original_commit(session)
+
+    monkeypatch.setattr(AsyncSession, "commit", counted_commit)
+    monkeypatch.setattr(script, "BATCH", 1)
+    monkeypatch.setattr(sys, "argv", ["backfill", "--tenant", str(tenant.id), "--apply"])
+    await script.main()
+    # One boundary commit and the final commit, even with no create branch.
+    assert commits == 2
+    async with SessionLocal() as reread:
+        saved = await reread.get(OperationFact, fact.id)
+        assert saved and saved.occurred_at.replace(tzinfo=UTC) == WORK
+        assert len(list(await reread.scalars(select(OperationFact)))) == 1

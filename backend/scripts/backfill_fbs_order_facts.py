@@ -216,6 +216,9 @@ async def main() -> None:
                     if fact is not None:
                         fact.occurred_at = moment
                         pending += 1
+                        if pending >= BATCH:
+                            await session.commit()
+                            pending = 0
                 continue
 
             if order.seller_id is None:
