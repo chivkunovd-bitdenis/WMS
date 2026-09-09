@@ -1,0 +1,453 @@
+{
+  "workspace": {
+    "supply": {
+      "id": "85a8476c-05b4-46a8-a90f-77d5199257b4",
+      "marketplace": "wb",
+      "wb_supply_id": "WB-GI-928D876298FC",
+      "source": "wms",
+      "name": "WMS401-Android-0909-1346",
+      "status": "assembling",
+      "delivery_type": "warehouse_sc",
+      "seller": {
+        "id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+        "name": "Эмулятор WB"
+      },
+      "wb_warehouse": {
+        "id": 501001,
+        "name": null
+      },
+      "wms_warehouse": {
+        "id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+        "name": "Тестовый"
+      },
+      "planned_destination": null,
+      "planned_shipment_date": null,
+      "nearest_deadline_at": "2026-09-14T10:43:24+00:00",
+      "packaging_task_id": "c3ec8602-de91-4e00-b367-df46210e4265",
+      "barcode_asset": null,
+      "honest_sign_skipped": false,
+      "boxes_without_distribution": false
+    },
+    "stage": "handoff_prep",
+    "progress": {
+      "picked": 2,
+      "packed": 2,
+      "metadata_ready": 1,
+      "stickers_ready": 2,
+      "total": 2
+    },
+    "blockers": [],
+    "orders": [
+      {
+        "id": "91051af5-47a3-4d52-89ac-661eeddee893",
+        "marketplace": "wb",
+        "external_order_id": null,
+        "wb_order_id": 500046,
+        "status": "assembling",
+        "wb_status": "waiting",
+        "supplier_status": "new",
+        "seller": {
+          "id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+          "name": "Эмулятор WB"
+        },
+        "wb_warehouse": {
+          "id": 501001,
+          "name": "Склад WB неизвестен"
+        },
+        "wms_warehouse": {
+          "id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+          "name": "Тестовый"
+        },
+        "product": {
+          "id": "1f0cefc8-5224-407d-9882-66f5aa1008c4",
+          "name": "Куртка демо с ЧЗ",
+          "image_url": "https://basket-39.wbbasket.ru/vol8786/part878691/878691100/images/big/1.webp",
+          "seller_article": "KURTKA-VIDEO-02",
+          "wb_article": 123456790,
+          "barcode": "2000000000012",
+          "sku": "EMU-KIZ-REQUIRED",
+          "chrt_id": 111002,
+          "category": "Куртки",
+          "color": null,
+          "size": "50",
+          "packaging_instructions": null,
+          "has_packaging_instructions": false
+        },
+        "positions": [],
+        "inventory": {
+          "available_unpacked": 50,
+          "locations": [
+            {
+              "id": "37d69433-b9e3-4315-b1e1-0c83c4307721",
+              "code": "FBS-VIDEO-02",
+              "available_unpacked": 40
+            },
+            {
+              "id": "37d69433-b9e3-4315-b1e1-0c83c4307721",
+              "code": "FBS-VIDEO-02",
+              "available_unpacked": 20
+            }
+          ]
+        },
+        "buyer_type": "individual",
+        "cargo_type": "mgt",
+        "can_pvz": false,
+        "delivery_route": null,
+        "metadata": {
+          "required": [
+            "sgtin"
+          ],
+          "optional": [],
+          "states": [
+            {
+              "kind": "sgtin",
+              "status": "unknown",
+              "reason": null,
+              "decision": null,
+              "source": "operator",
+              "value_tail": "PK500046"
+            }
+          ],
+          "delivery_allowed": false,
+          "last_checked_at": null
+        },
+        "sticker": {
+          "code": "57115752 8424",
+          "status": "ready",
+          "asset_url": "/operations/fbs-print-assets/8c3f3348-4f27-4332-8109-cf9b033f2542/content",
+          "applied_at": null
+        },
+        "pick": {
+          "status": "picked",
+          "location_code": "FBS-VIDEO-02",
+          "picked_at": "2026-09-09T10:49:41.908235+00:00"
+        },
+        "pack": {
+          "status": "packed",
+          "packed_at": "2026-09-09T10:51:38.641801+00:00"
+        },
+        "created_at_wb": "2026-09-09T10:43:24+00:00",
+        "deadline_at": "2026-09-14T10:43:24+00:00",
+        "supply_id": "85a8476c-05b4-46a8-a90f-77d5199257b4",
+        "selection_blockers": [
+          {
+            "code": "already_in_supply",
+            "message": "Заказ уже в поставке."
+          }
+        ],
+        "tape_order_index": 1
+      },
+      {
+        "id": "c7acf3cd-4d3c-4aee-bfa1-60189c194645",
+        "marketplace": "wb",
+        "external_order_id": null,
+        "wb_order_id": 500045,
+        "status": "assembling",
+        "wb_status": "waiting",
+        "supplier_status": "new",
+        "seller": {
+          "id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+          "name": "Эмулятор WB"
+        },
+        "wb_warehouse": {
+          "id": 501001,
+          "name": "Склад WB неизвестен"
+        },
+        "wms_warehouse": {
+          "id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+          "name": "Тестовый"
+        },
+        "product": {
+          "id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+          "name": "Куртка демо ЧЗ необязателен",
+          "image_url": "https://basket-38.wbbasket.ru/vol8728/part872838/872838989/images/big/1.webp",
+          "seller_article": "KURTKA-VIDEO-03",
+          "wb_article": 123456791,
+          "barcode": "2000000000013",
+          "sku": "EMU-KIZ-OPTIONAL",
+          "chrt_id": 111003,
+          "category": "Куртки",
+          "color": null,
+          "size": "46",
+          "packaging_instructions": null,
+          "has_packaging_instructions": false
+        },
+        "positions": [],
+        "inventory": {
+          "available_unpacked": 53,
+          "locations": [
+            {
+              "id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+              "code": "FBS-VIDEO-01",
+              "available_unpacked": 32
+            },
+            {
+              "id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+              "code": "FBS-VIDEO-01",
+              "available_unpacked": 19
+            },
+            {
+              "id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+              "code": "__SORTING__",
+              "available_unpacked": 11
+            }
+          ]
+        },
+        "buyer_type": "individual",
+        "cargo_type": "mgt",
+        "can_pvz": false,
+        "delivery_route": null,
+        "metadata": {
+          "required": [],
+          "optional": [
+            "sgtin"
+          ],
+          "states": [
+            {
+              "kind": "sgtin",
+              "status": "unknown",
+              "reason": null,
+              "decision": null,
+              "source": "pool",
+              "value_tail": "1STAGE01"
+            }
+          ],
+          "delivery_allowed": true,
+          "last_checked_at": "2026-09-09T11:47:00.786661+00:00"
+        },
+        "sticker": {
+          "code": "57156822 35",
+          "status": "ready",
+          "asset_url": "/operations/fbs-print-assets/b0fbdf08-1963-4dfb-890b-2f9ee3644215/content",
+          "applied_at": null
+        },
+        "pick": {
+          "status": "picked",
+          "location_code": "FBS-VIDEO-01",
+          "picked_at": "2026-09-09T10:48:23.531438+00:00"
+        },
+        "pack": {
+          "status": "packed",
+          "packed_at": "2026-09-09T10:51:08.880348+00:00"
+        },
+        "created_at_wb": "2026-09-09T10:43:24+00:00",
+        "deadline_at": "2026-09-14T10:43:24+00:00",
+        "supply_id": "85a8476c-05b4-46a8-a90f-77d5199257b4",
+        "selection_blockers": [
+          {
+            "code": "already_in_supply",
+            "message": "Заказ уже в поставке."
+          }
+        ],
+        "tape_order_index": 0
+      }
+    ],
+    "cargo_places": [
+      {
+        "id": "718e0798-1096-4af0-a881-f70b5af20f91",
+        "wb_trbx_id": "TRBX-90D833870E",
+        "length_mm": null,
+        "width_mm": null,
+        "height_mm": null,
+        "weight_g": null,
+        "qr_asset": {
+          "id": "00246bd6-3723-41a2-b4f7-8ec348709a06",
+          "kind": "cargo_place_qr",
+          "status": "ready",
+          "content_type": "image/png",
+          "width_mm": 58,
+          "height_mm": 40,
+          "preview_url": "/operations/fbs-print-assets/00246bd6-3723-41a2-b4f7-8ec348709a06/content",
+          "download_url": "/operations/fbs-print-assets/00246bd6-3723-41a2-b4f7-8ec348709a06/content",
+          "checksum": "sha256:ef4e55b360aa19701d5fe3200d6e2f5d687612b4ab231a31f0ad5980899a7b74",
+          "applied_at": null,
+          "error": null
+        },
+        "applied_at": null
+      }
+    ],
+    "boxes": [
+      {
+        "id": "44978670-445f-4328-9eee-b4cf6b0eca15",
+        "box_number": 1,
+        "barcode": "FBS-85A8476C-001",
+        "assigned_order_ids": [
+          "91051af5-47a3-4d52-89ac-661eeddee893"
+        ],
+        "assigned_order_product_ids": [],
+        "ozon_assembled": false,
+        "trbx_id": "718e0798-1096-4af0-a881-f70b5af20f91",
+        "wb_trbx_id": "TRBX-90D833870E",
+        "qr_asset": {
+          "id": "00246bd6-3723-41a2-b4f7-8ec348709a06",
+          "kind": "cargo_place_qr",
+          "status": "ready",
+          "content_type": "image/png",
+          "width_mm": 58,
+          "height_mm": 40,
+          "preview_url": "/operations/fbs-print-assets/00246bd6-3723-41a2-b4f7-8ec348709a06/content",
+          "download_url": "/operations/fbs-print-assets/00246bd6-3723-41a2-b4f7-8ec348709a06/content",
+          "checksum": "sha256:ef4e55b360aa19701d5fe3200d6e2f5d687612b4ab231a31f0ad5980899a7b74",
+          "applied_at": null,
+          "error": null
+        },
+        "without_distribution": false
+      }
+    ],
+    "marking_pool": {
+      "required": 1,
+      "available": 38,
+      "shortage": 0,
+      "orders_without_code": []
+    },
+    "delivery_preflight": null,
+    "last_wb_sync_at": null,
+    "tracking_summary": null,
+    "partial_rejection": null,
+    "picking_auto_passed_reason": null,
+    "wb_sync_stale": false,
+    "server_now": "2026-09-09T11:49:20.672253+00:00"
+  },
+  "pick_options": [
+    {
+      "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+      "sku_code": "EMU-KIZ-OPTIONAL",
+      "product_name": "Куртка демо ЧЗ необязателен",
+      "planned_qty": 1,
+      "picked_qty": 1,
+      "locations": [
+        {
+          "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+          "location_code": "FBS-VIDEO-01",
+          "quantity": 51,
+          "reserved": 0,
+          "available": 48,
+          "picked": 1,
+          "sources": [
+            {
+              "quantity": 19,
+              "available": 17,
+              "picked": 0,
+              "is_loose": false,
+              "source_label": "Грузоместо FBSVID-CARGO-01",
+              "container_path": [
+                {
+                  "kind": "pallet",
+                  "id": "8ab29b41-23d6-44ad-acb6-427abd13eeed",
+                  "code": "П-001012",
+                  "label": "Палета П-001012"
+                },
+                {
+                  "kind": "cargo_place",
+                  "id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+                  "code": "FBSVID-CARGO-01",
+                  "label": "Грузоместо FBSVID-CARGO-01"
+                }
+              ]
+            },
+            {
+              "quantity": 32,
+              "available": 31,
+              "picked": 1,
+              "is_loose": false,
+              "source_label": "Короб FBSVID-BOX-03",
+              "container_path": [
+                {
+                  "kind": "pallet",
+                  "id": "8ab29b41-23d6-44ad-acb6-427abd13eeed",
+                  "code": "П-001012",
+                  "label": "Палета П-001012"
+                },
+                {
+                  "kind": "box",
+                  "id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+                  "code": "FBSVID-BOX-03",
+                  "label": "Короб FBSVID-BOX-03"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+          "location_code": "Без ячеек",
+          "quantity": 11,
+          "reserved": 0,
+          "available": 10,
+          "picked": 0,
+          "sources": [
+            {
+              "quantity": 11,
+              "available": 10,
+              "picked": 0,
+              "is_loose": true,
+              "source_label": "Россыпью",
+              "container_path": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "product_id": "1f0cefc8-5224-407d-9882-66f5aa1008c4",
+      "sku_code": "EMU-KIZ-REQUIRED",
+      "product_name": "Куртка демо с ЧЗ",
+      "planned_qty": 1,
+      "picked_qty": 1,
+      "locations": [
+        {
+          "storage_location_id": "37d69433-b9e3-4315-b1e1-0c83c4307721",
+          "location_code": "FBS-VIDEO-02",
+          "quantity": 60,
+          "reserved": 0,
+          "available": 57,
+          "picked": 1,
+          "sources": [
+            {
+              "quantity": 20,
+              "available": 18,
+              "picked": 0,
+              "is_loose": false,
+              "source_label": "Грузоместо FBSVID-CARGO-02",
+              "container_path": [
+                {
+                  "kind": "pallet",
+                  "id": "18121c8c-b9be-4d29-995d-839842b3874d",
+                  "code": "П-001013",
+                  "label": "Палета П-001013"
+                },
+                {
+                  "kind": "cargo_place",
+                  "id": "c5f16aa4-0270-4093-b9ec-3a854a8572d7",
+                  "code": "FBSVID-CARGO-02",
+                  "label": "Грузоместо FBSVID-CARGO-02"
+                }
+              ]
+            },
+            {
+              "quantity": 40,
+              "available": 39,
+              "picked": 1,
+              "is_loose": false,
+              "source_label": "Короб FBSVID-BOX-04",
+              "container_path": [
+                {
+                  "kind": "pallet",
+                  "id": "18121c8c-b9be-4d29-995d-839842b3874d",
+                  "code": "П-001013",
+                  "label": "Палета П-001013"
+                },
+                {
+                  "kind": "box",
+                  "id": "a1100515-e580-4289-aecd-4eb9621f36b4",
+                  "code": "FBSVID-BOX-04",
+                  "label": "Короб FBSVID-BOX-04"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

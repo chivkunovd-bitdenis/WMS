@@ -1,0 +1,8 @@
+{
+  "compared": "exact product/location/container path/is_loose source.quantity",
+  "before_rows": 5,
+  "after_rows": 5,
+  "unchanged": true,
+  "differences_before": [],
+  "differences_after": []
+}
