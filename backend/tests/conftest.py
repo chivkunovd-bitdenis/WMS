@@ -4,6 +4,7 @@ import os
 from collections.abc import AsyncIterator
 from pathlib import Path
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -97,3 +98,17 @@ async def db_session() -> AsyncIterator[AsyncSession]:
         yield session
     await drain_background_stock_publish_tasks()
     await drain_zero_publish_background_tasks()
+
+
+@pytest.fixture(autouse=True)
+def isolated_login_rate_limit():
+    from app.services.login_rate_limit import (
+        configure_for_tests,
+        get_config,
+        reset_rate_limit_state,
+    )
+    original = get_config()
+    reset_rate_limit_state()
+    yield
+    reset_rate_limit_state()
+    configure_for_tests(max_attempts=original[0], window_seconds=original[1])

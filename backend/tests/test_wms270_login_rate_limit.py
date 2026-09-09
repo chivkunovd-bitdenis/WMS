@@ -131,3 +131,97 @@ async def test_rate_limit_configurable_window(async_client: AsyncClient) -> None
         json={"email": "rl-d@example.com", "password": "wrongwrongwrong"},
     )
     assert blocked.status_code == 429
+
+
+async def test_spoofed_forwarding_headers_do_not_reset_client_limit(async_client: AsyncClient):
+    for attempt in range(5):
+        response = await async_client.post(
+            "/auth/login", headers={"X-Forwarded-For": f"198.51.100.{attempt}"},
+            json={"email": "missing@example.com", "password": "wrong"},
+        )
+        assert response.status_code == 401
+    response = await async_client.post(
+        "/auth/login", headers={"X-Forwarded-For": "203.0.113.99"},
+        json={"email": "missing@example.com", "password": "wrong"},
+    )
+    assert response.status_code == 429
+
+
+def test_concurrent_attempts_are_charged_before_password_check():
+    from concurrent.futures import ThreadPoolExecutor
+
+    from fastapi import HTTPException
+    from starlette.requests import Request
+
+    from app.services.login_rate_limit import check_login_rate_limit
+
+    def attempt(index):
+        request = Request({"type": "http", "client": ("192.0.2.1", 123), "headers": []})
+        try:
+            check_login_rate_limit(request=request, email=f"{index}@example.com")
+            return True
+        except HTTPException as error:
+            assert error.status_code == 429
+            return False
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        assert sum(executor.map(attempt, range(40))) == 5
+
+
+def test_limiter_bounds_memory_and_reclaims_expired_clients(monkeypatch):
+    from fastapi import HTTPException
+    from starlette.requests import Request
+
+    from app.services import login_rate_limit as limiter
+
+    monkeypatch.setattr(limiter, "_MAX_CLIENTS", 2)
+    clock = [100.0]
+    monkeypatch.setattr(limiter.time, "monotonic", lambda: clock[0])
+    def attempt(ip):
+        limiter.check_login_rate_limit(
+            request=Request({"type": "http", "client": (ip, 123), "headers": []}),
+            email="test@example.com",
+        )
+    attempt("192.0.2.1")
+    attempt("192.0.2.2")
+    with pytest.raises(HTTPException) as error:
+        attempt("192.0.2.3")
+    assert error.value.status_code == 429
+    assert len(limiter._attempts) == 2
+    clock[0] += 60
+    attempt("192.0.2.3")
+    assert list(limiter._attempts) == ["192.0.2.3"]
+
+
+async def test_concurrent_http_logins_are_limited_while_authentication_is_pending(
+    async_client: AsyncClient, monkeypatch,
+):
+    import asyncio
+
+    from app.api import auth
+    from app.services.auth_service import AuthError
+
+    pending = 0
+    five_entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def authenticate(*args, **kwargs):
+        nonlocal pending
+        pending += 1
+        if pending == 5:
+            five_entered.set()
+        await release.wait()
+        raise AuthError("invalid_credentials")
+
+    monkeypatch.setattr(auth, "login", authenticate)
+    tasks = [asyncio.create_task(async_client.post(
+        "/auth/login", json={"email": f"burst-{i}@example.com", "password": "wrong"},
+    )) for i in range(20)]
+    try:
+        await asyncio.wait_for(five_entered.wait(), timeout=3)
+        release.set()
+        responses = await asyncio.gather(*tasks)
+    finally:
+        release.set()
+        await asyncio.gather(*tasks, return_exceptions=True)
+    assert pending == 5
+    assert sorted(response.status_code for response in responses) == [401] * 5 + [429] * 15
