@@ -2707,12 +2707,10 @@ export default function App() {
     }
     const wid = selectedWarehouseId ?? warehouses[0]?.id ?? null
     if (!wid) {
-      setOpsError('Склад ФФ не найден.')
-      return null
+      throw new Error('Склад ФФ не найден.')
     }
     if (!sellerId) {
-      setOpsError('Выберите селлера для документа.')
-      return null
+      throw new Error('Выберите селлера для документа.')
     }
     setFfSuppliesNotice(null)
     setOpsError(null)
@@ -2732,21 +2730,17 @@ export default function App() {
         }),
       })
       if (!res.ok) {
-        setOpsError(await readApiErrorMessage(res))
-        return null
+        throw new Error(await readApiErrorMessage(res))
       }
       const created = (await res.json()) as { id: string }
-      await refreshInboundList(token)
+      // The POST already created the document; a list refresh failure must
+      // not invite a second creation. refreshInboundList records its own error.
+      await refreshInboundList(token).catch(() => undefined)
       return created
     } catch (e) {
-      setOpsError(
-        e instanceof Error
-          ? e.message
-          : operationType === 'return'
-            ? 'Не удалось создать возврат.'
-            : 'Не удалось создать приёмку.',
+      throw e instanceof Error ? e : new Error(
+        operationType === 'return' ? 'Не удалось создать возврат.' : 'Не удалось создать приёмку.',
       )
-      return null
     } finally {
       setOpsBusy(false)
     }
@@ -3005,12 +2999,13 @@ export default function App() {
                   onCreateDraft={async (operationType, sellerId, marketplace) => {
                     const created = await onCreateFfInboundDraft(operationType, sellerId, marketplace)
                     if (!created?.id) {
-                      return
+                      return null
                     }
                     setSelectedOutboundId(null)
                     setSelectedInboundId(created.id)
                     setFfInboundWorkspace('reception')
                     setFfDocModal('inbound')
+                    return created
                   }}
                   onOpen={(id) => {
                     setSelectedOutboundId(null)

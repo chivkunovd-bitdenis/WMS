@@ -1,0 +1,18 @@
+{
+  "warehouses": [
+    {
+      "id": "050fb5f6-dacf-4742-96ec-e9128a73cc81",
+      "tenant_id": "5baaf211-7cb7-495d-9c2b-b42121606bf9",
+      "name": "Основной",
+      "code": "main",
+      "is_operational": true
+    }
+  ],
+  "locations": [
+    {
+      "id": "5ab8f9de-db22-46b4-950f-71b647bdcbd4",
+      "warehouse_id": "050fb5f6-dacf-4742-96ec-e9128a73cc81",
+      "code": "__SORTING__"
+    }
+  ]
+}
