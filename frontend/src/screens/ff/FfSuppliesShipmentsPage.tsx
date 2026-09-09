@@ -266,7 +266,13 @@ type Props = {
     sellerId: string,
     marketplace: 'wb' | 'ozon',
   ) => Promise<{ id: string } | null>
-  onCreateDiverge: () => Promise<{ id: string } | null>
+  /**
+   * WMS-156: акт расхождений без указания приёмки нельзя завершить — approve
+   * требует inbound_intake_request. Экран передаёт выбранную оператором
+   * приёмку сразу при создании, а не после submit, иначе связь придётся
+   * задавать отдельным путём или собирать акт-сирот.
+   */
+  onCreateDiverge: (inboundIntakeRequestId: string) => Promise<{ id: string } | null>
   initialMarketplaceUnloadId?: string | null
   onInitialMarketplaceUnloadOpened?: () => void
   addressStorageEnabled?: boolean
@@ -300,6 +306,10 @@ export function FfSuppliesShipmentsPage({
   const [sellerFilter, setSellerFilter] = useState<string>('all')
   const [mpCreateSellerId, setMpCreateSellerId] = useState<string>('')
   const [mpCreateMarketplace, setMpCreateMarketplace] = useState<'wb' | 'ozon'>('wb')
+  // WMS-156: приёмка, к которой относится создаваемый акт расхождений.
+  // Без неё сервер акт не approve-нет (approve_act требует inbound_intake_request),
+  // поэтому просим оператора выбрать её прямо здесь, при создании.
+  const [divergeInboundId, setDivergeInboundId] = useState<string>('')
   const [sortKey, setSortKey] = useState<'planned_desc' | 'planned_asc' | 'created_desc' | 'created_asc'>(
     'created_desc',
   )
@@ -835,7 +845,11 @@ export function FfSuppliesShipmentsPage({
   }
 
   const createAndOpenDiverge = async () => {
-    const created = await onCreateDiverge()
+    // WMS-156: без выбранной приёмки создавать нечего — approve всё равно
+    // потребует inbound_intake_request. Кнопка ниже отключается, но защита
+    // здесь на случай гонки состояний.
+    if (!divergeInboundId) return
+    const created = await onCreateDiverge(divergeInboundId)
     if (!created?.id) {
       return
     }
@@ -2142,15 +2156,37 @@ export function FfSuppliesShipmentsPage({
               </Button>
             </>
           ) : (
-            <Button
-              variant="outlined"
-              color="secondary"
-              disabled={busy}
-              data-testid="ff-create-diverge"
-              onClick={() => void createAndOpenDiverge()}
-            >
-              Создать расхождение
-            </Button>
+            <>
+              {/* WMS-156: селект приёмки живёт рядом с кнопкой. Список ограничен
+                  реальными приёмками этого арендатора — иначе оператор наберёт
+                  UUID руками и создаст акт-сироту. */}
+              <FormControl size="small" sx={{ minWidth: 300 }} required>
+                <InputLabel id="ff-diverge-inbound-label">Приёмка для акта</InputLabel>
+                <Select
+                  labelId="ff-diverge-inbound-label"
+                  label="Приёмка для акта"
+                  value={divergeInboundId}
+                  onChange={(event) => setDivergeInboundId(String(event.target.value))}
+                  data-testid="ff-diverge-inbound-picker"
+                >
+                  {inboundSummaries.map((row) => (
+                    <MenuItem key={row.id} value={row.id}>
+                      {(row.document_number ?? row.id.slice(0, 8) + '…')}
+                      {row.seller_name ? ` · ${row.seller_name}` : ''}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Button
+                variant="outlined"
+                color="secondary"
+                disabled={busy || !divergeInboundId}
+                data-testid="ff-create-diverge"
+                onClick={() => void createAndOpenDiverge()}
+              >
+                Создать расхождение
+              </Button>
+            </>
           )}
         </Stack>
       </Paper>

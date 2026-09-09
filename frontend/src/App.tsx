@@ -2746,8 +2746,13 @@ export default function App() {
     }
   }, [authHeaders, refreshInboundList, selectedWarehouseId, token, warehouses])
 
-  const onCreateFfDiscrepancyAct = useCallback(async (): Promise<{ id: string } | null> => {
-    if (!token) {
+  const onCreateFfDiscrepancyAct = useCallback(async (
+    // WMS-156: обязательный inbound_intake_request_id прилетает от экрана,
+    // и мы кладём его в тело запроса. Без связи с приёмкой approve всё равно
+    // не выполнится, поэтому запрещаем создание акта-сироты уже здесь.
+    inboundIntakeRequestId: string,
+  ): Promise<{ id: string } | null> => {
+    if (!token || !inboundIntakeRequestId) {
       return null
     }
     setFfSuppliesNotice(null)
@@ -2760,7 +2765,7 @@ export default function App() {
           ...authHeaders(token),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ inbound_intake_request_id: inboundIntakeRequestId }),
       })
       if (!res.ok) {
         setOpsError(await readApiErrorMessage(res))
