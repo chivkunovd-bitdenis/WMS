@@ -65,11 +65,26 @@ async function main() {
   evidence.visibleBefore=await page.getByTestId('ff-billing-screen').innerText(); save();
   if(!execute) return;
   await page.getByTestId('billing-pick-section-fbs').check();
+  if(process.argv.includes('--manual-marker')) {
+    await page.getByTestId('billing-extra-lines-open').click();
+    await page.getByTestId('billing-extra-description-0').fill('QA WMS407 — Нет ставки; сумма не рассчитана');
+    await page.getByTestId('billing-extra-amount-0').fill('1.00');
+    await page.getByTestId('billing-extra-lines-done').click();
+  }
   const firstPreview=page.waitForResponse(r=>r.url().endsWith('/billing/invoices-v2/preview')&&r.request().method()==='POST');
   await page.getByTestId('billing-issue-invoice').click();
   const first=await firstPreview; assert.equal(first.status(),200); evidence.initialPreview=await first.json();
   await page.getByTestId('billing-invoice-preview').waitFor();
   await page.screenshot({path:path.join(output,'02-original-preview.png'),animations:'disabled'});
+  if(process.argv.includes('--manual-marker')) {
+    evidence.manualMarkerLine=evidence.initialPreview.lines.find(l=>l.description.startsWith('QA WMS407'));
+    assert.equal(evidence.manualMarkerLine?.total_amount_kopecks,100);
+    evidence.manualMarkerVisible=await page.getByTestId('billing-invoice-preview-lines').innerText();
+    const markerRow=page.getByTestId('billing-invoice-preview-lines').getByRole('row').filter({hasText:'QA WMS407'});
+    evidence.manualMarkerRow=await markerRow.innerText();
+    save();
+    assert(/1[,.]00/.test(evidence.manualMarkerRow),'Manual priced marker row must visibly show 1.00, not unknown');
+  }
   const finalAmount='407.23';
   await page.getByTestId('billing-invoice-final-amount').fill(finalAmount);
   const amendedResponse=page.waitForResponse(r=>r.url().endsWith('/billing/invoices-v2/preview')&&r.request().method()==='POST');

@@ -1,7 +1,7 @@
 'use strict';
 const {execFileSync}=require('node:child_process');
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict');
-const SHA='d7d38935628805b90e3cc0295861bac4a7a0824f';
+const SHA=process.argv[3] || 'd7d38935628805b90e3cc0295861bac4a7a0824f';
 const ROOT='/Users/deniscivkunov/Projects/WMS/.worktrees/wms396-stage';
 const OUTPUT=process.argv[2]; assert(OUTPUT?.startsWith('/'));
 const listed=execFileSync('git',['ls-tree','-r','--name-only',SHA,'--','backend/app','backend/alembic'],{cwd:ROOT,encoding:'utf8'}).trim().split('\n').filter(x=>x.endsWith('.py'));

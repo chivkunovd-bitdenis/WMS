@@ -1,0 +1,467 @@
+{
+  "mode": "actual_invoice",
+  "sha": "829684a0106dd8a0d6cfb050abadfebed74908dc",
+  "started": "2026-09-09T08:24:41.015Z",
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/api/billing/invoices-v2/preview",
+      "body": {
+        "creation_mode": "selected_operations",
+        "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+        "date_from": "2026-08-11",
+        "date_to": "2026-09-09",
+        "selected_root_ids": [
+          "6997a612-d2c9-402e-b3f3-6c985e36f2a2",
+          "24f9470e-07ca-4f71-a35b-2fb8ee981bfe",
+          "a207f4d0-5776-4c96-a291-6734cb88201b",
+          "624cd944-0a88-4bea-a19f-eec64c9a0674",
+          "40761fc4-495d-47fa-b38f-0596b24f4a4d"
+        ],
+        "selected_sources": [],
+        "manual_lines": [
+          {
+            "description": "QA WMS407 — Нет ставки; сумма не рассчитана",
+            "amount": "1.00"
+          }
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/billing/invoices-v2/preview",
+      "body": {
+        "creation_mode": "selected_operations",
+        "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+        "date_from": "2026-08-11",
+        "date_to": "2026-09-09",
+        "selected_root_ids": [
+          "6997a612-d2c9-402e-b3f3-6c985e36f2a2",
+          "24f9470e-07ca-4f71-a35b-2fb8ee981bfe",
+          "a207f4d0-5776-4c96-a291-6734cb88201b",
+          "624cd944-0a88-4bea-a19f-eec64c9a0674",
+          "40761fc4-495d-47fa-b38f-0596b24f4a4d"
+        ],
+        "selected_sources": [],
+        "manual_lines": [
+          {
+            "description": "QA WMS407 — Нет ставки; сумма не рассчитана",
+            "amount": "1.00"
+          }
+        ],
+        "final_amount": "407.23"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/billing/invoices-v2",
+      "body": {
+        "creation_mode": "selected_operations",
+        "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+        "date_from": "2026-08-11",
+        "date_to": "2026-09-09",
+        "selected_root_ids": [
+          "6997a612-d2c9-402e-b3f3-6c985e36f2a2",
+          "24f9470e-07ca-4f71-a35b-2fb8ee981bfe",
+          "a207f4d0-5776-4c96-a291-6734cb88201b",
+          "624cd944-0a88-4bea-a19f-eec64c9a0674",
+          "40761fc4-495d-47fa-b38f-0596b24f4a4d"
+        ],
+        "selected_sources": [],
+        "manual_lines": [
+          {
+            "description": "QA WMS407 — Нет ставки; сумма не рассчитана",
+            "amount": "1.00"
+          }
+        ],
+        "final_amount": "407.23"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/billing/invoices-v2/325b20ca-30d8-4e15-a2e1-a3d34b49d906/cancel",
+      "body": null
+    }
+  ],
+  "pageErrors": [],
+  "blocked": [],
+  "auth": {
+    "tenant": "9c31f3f4-ce62-4c1f-891a-295b278f1e69",
+    "role": "fulfillment_admin"
+  },
+  "seller": {
+    "id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+    "name": "Эмулятор WB"
+  },
+  "beforeInvoices": {
+    "invoices": [
+      {
+        "id": "731bbec1-3afb-4bd7-b71a-1a0090610286",
+        "origin": "v2",
+        "number": "СЧЕТ-26-09-09-1",
+        "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+        "seller_name": "Эмулятор WB",
+        "issued_at": "2026-09-09T07:34:13.452054Z",
+        "period_start": "2026-08-11",
+        "period_end": "2026-09-09",
+        "creation_mode": "selected_operations",
+        "status": "cancelled",
+        "total_amount_kopecks": 40723
+      }
+    ],
+    "next_cursor": null
+  },
+  "available": [
+    {
+      "id": "billing_entry:c664c928-6c92-44da-91c0-cff8ac54f3ed",
+      "source_id": "ec351b77-74f3-473a-81bb-774b0bc10479",
+      "service": "packing",
+      "result": "completed",
+      "ledger": "c664c928-6c92-44da-91c0-cff8ac54f3ed",
+      "amount": 2500
+    },
+    {
+      "id": "billing_entry:ae781b78-fa88-4ad9-b38a-d3b0afee7e64",
+      "source_id": "1fd4d301-d43a-4c4a-b905-dc9830ddc1bd",
+      "service": "packing",
+      "result": "completed",
+      "ledger": "ae781b78-fa88-4ad9-b38a-d3b0afee7e64",
+      "amount": 2500
+    },
+    {
+      "id": "billing_entry:6997a612-d2c9-402e-b3f3-6c985e36f2a2",
+      "source_id": "1fd4d301-d43a-4c4a-b905-dc9830ddc1bd",
+      "service": "fbs_order",
+      "result": "completed",
+      "ledger": "6997a612-d2c9-402e-b3f3-6c985e36f2a2",
+      "amount": 2500
+    },
+    {
+      "id": "billing_entry:24f9470e-07ca-4f71-a35b-2fb8ee981bfe",
+      "source_id": "ec351b77-74f3-473a-81bb-774b0bc10479",
+      "service": "fbs_order",
+      "result": "completed",
+      "ledger": "24f9470e-07ca-4f71-a35b-2fb8ee981bfe",
+      "amount": 2500
+    },
+    {
+      "id": "billing_entry:a207f4d0-5776-4c96-a291-6734cb88201b",
+      "source_id": "1950820b-dfe1-46c3-bc82-742b76489969",
+      "service": "fbs_order",
+      "result": "completed",
+      "ledger": "a207f4d0-5776-4c96-a291-6734cb88201b",
+      "amount": 2500
+    },
+    {
+      "id": "billing_entry:624cd944-0a88-4bea-a19f-eec64c9a0674",
+      "source_id": "36134bd6-8072-40bb-b617-51ade1563774",
+      "service": "fbs_order",
+      "result": "completed",
+      "ledger": "624cd944-0a88-4bea-a19f-eec64c9a0674",
+      "amount": 2500
+    },
+    {
+      "id": "billing_entry:4ce38de7-c33f-47a8-9e77-66e7651319ef",
+      "source_id": "27c43a05-e700-44dc-a888-10f527302c64",
+      "service": "packing",
+      "result": "completed",
+      "ledger": "4ce38de7-c33f-47a8-9e77-66e7651319ef",
+      "amount": 2500
+    },
+    {
+      "id": "billing_entry:40761fc4-495d-47fa-b38f-0596b24f4a4d",
+      "source_id": "27c43a05-e700-44dc-a888-10f527302c64",
+      "service": "fbs_order",
+      "result": "completed",
+      "ledger": "40761fc4-495d-47fa-b38f-0596b24f4a4d",
+      "amount": 2500
+    },
+    {
+      "id": "billing_entry:3674c332-1697-4128-8906-cd80d704ea82",
+      "source_id": "1950820b-dfe1-46c3-bc82-742b76489969",
+      "service": "packing",
+      "result": "completed",
+      "ledger": "3674c332-1697-4128-8906-cd80d704ea82",
+      "amount": 2500
+    },
+    {
+      "id": "billing_entry:0ca9c23a-8916-46a0-96cd-5e65351ea337",
+      "source_id": "36134bd6-8072-40bb-b617-51ade1563774",
+      "service": "packing",
+      "result": "completed",
+      "ledger": "0ca9c23a-8916-46a0-96cd-5e65351ea337",
+      "amount": 2500
+    }
+  ],
+  "visibleBefore": "Расчёты\n\nНачисления за работу склада и счета селлерам за выбранный период.\n\nСеллеры\nВыставленные счета\nПериод\nс\nс\nпо\nпо\nСегодня\n7 дней\n30 дней\nЭтот месяц\nПрошлый месяц\nСеллер\nВсе селлеры\nDenmarcs\nВектор Плюс\nЛуна Трейд\nРомашка\nСеверный ветер\nТестовый селлер WMS-378\nЭмулятор WB\nСеллер\nСЕЛЛЕРОВ\n\n1\n\nшт.\n\nПРИНЯТО\n\n2\n\nшт.\n\nУПАКОВАНО\n\n5\n\nшт.\n\nОТГРУЖЕНО ФБО\n\n0\n\nшт.\n\nОТГРУЖЕНО FBS\n\n5\n\nшт.\n\nХРАНЕНИЕ\n\n0\n\nл·дн\n\nСТОИМОСТЬ УСЛУГ\n\n400,00 ₽\n\nРеквизиты\nВыставить счёт\n\tСеллер\tДокументов\tШтук\tСтоимость услуг\tНе тарифицируется\tНет ставки\n\n\t\nЭмулятор WB\n\t11\t12\t\n400,00 ₽\n\t0\t0\n\n\t\tУслуга\tДокументов\tШтук\tСтавка\tСумма\n\n\t\n\t\nПриёмка\n\t1\t2\t\n150,00 ₽\n\t\n150,00 ₽\n\n\n\t\n\t\nУпаковка\n\t5\t5\t\n25,00 ₽\n\t\n125,00 ₽\n\n\n\t\n\t\nFBS\n\t5\t5\t\n25,00 ₽\n\t\n125,00 ₽\n\n\n\t\n\nЗа период хранение не начислено — выставлять нечего\n\n\t\nХранение\n\t\nза период\n\t\n0,00 л·дн\n\t\n—\n\t\n0,00 ₽",
+  "initialPreview": {
+    "id": "5ab09c17-6cda-4287-a043-d9402450ccf7",
+    "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+    "number": "Новый счёт",
+    "creation_mode": "selected_operations",
+    "period_start": "2026-08-11",
+    "period_end": "2026-09-09",
+    "status": "issued",
+    "issued_at": null,
+    "total_amount_kopecks": 12600,
+    "calculated_amount_kopecks": 12600,
+    "ff_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "seller_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "lines": [
+      {
+        "id": "8564a9c2-a859-4b8f-b835-53447566c1bc",
+        "description": "FBS",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 12500,
+        "sort_order": 0
+      },
+      {
+        "id": "7e5c7298-f82e-43b0-9ff6-f002e92fc84d",
+        "description": "QA WMS407 — Нет ставки; сумма не рассчитана",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 100,
+        "sort_order": 1
+      }
+    ]
+  },
+  "manualMarkerLine": {
+    "id": "7e5c7298-f82e-43b0-9ff6-f002e92fc84d",
+    "description": "QA WMS407 — Нет ставки; сумма не рассчитана",
+    "unit_price_kopecks": null,
+    "total_amount_kopecks": 100,
+    "sort_order": 1
+  },
+  "manualMarkerVisible": "Услуга\tСумма\n\nFBS\n\t\n125,00 ₽\n\n\nQA WMS407 — Нет ставки; сумма не рассчитана\n\t\n1,00 ₽",
+  "manualMarkerRow": "QA WMS407 — Нет ставки; сумма не рассчитана\n\t\n1,00 ₽",
+  "adjustedPreview": {
+    "id": "d12bfd7a-293a-47f0-8041-5f208257b617",
+    "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+    "number": "Новый счёт",
+    "creation_mode": "selected_operations",
+    "period_start": "2026-08-11",
+    "period_end": "2026-09-09",
+    "status": "issued",
+    "issued_at": null,
+    "total_amount_kopecks": 40723,
+    "calculated_amount_kopecks": 12600,
+    "ff_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "seller_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "lines": [
+      {
+        "id": "84887978-81e0-497d-9d4b-e23940fe6b97",
+        "description": "FBS",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 12500,
+        "sort_order": 0
+      },
+      {
+        "id": "39238b28-63f7-46af-9d0a-7ed3698fe17f",
+        "description": "QA WMS407 — Нет ставки; сумма не рассчитана",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 100,
+        "sort_order": 1
+      },
+      {
+        "id": "558a123b-9c9a-4b16-b1d5-3c8a413e31d8",
+        "description": "Ручная корректировка итога",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 28123,
+        "sort_order": 2
+      }
+    ]
+  },
+  "created": {
+    "id": "325b20ca-30d8-4e15-a2e1-a3d34b49d906",
+    "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+    "number": "СЧЕТ-26-09-09-2",
+    "creation_mode": "selected_operations",
+    "period_start": "2026-08-11",
+    "period_end": "2026-09-09",
+    "status": "issued",
+    "issued_at": "2026-09-09T08:24:50.625317Z",
+    "total_amount_kopecks": 40723,
+    "calculated_amount_kopecks": null,
+    "ff_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "seller_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "lines": [
+      {
+        "id": "d74bc6cd-c359-4eea-b058-394f8b6351ea",
+        "description": "FBS",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 12500,
+        "sort_order": 0
+      },
+      {
+        "id": "0b45bd0a-8ae2-47cd-8506-00ea900ee83a",
+        "description": "QA WMS407 — Нет ставки; сумма не рассчитана",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 100,
+        "sort_order": 1
+      },
+      {
+        "id": "17a19bbb-e0ed-4603-ad59-d15530cd9867",
+        "description": "Ручная корректировка итога",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 28123,
+        "sort_order": 2
+      }
+    ]
+  },
+  "reopened": {
+    "id": "325b20ca-30d8-4e15-a2e1-a3d34b49d906",
+    "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+    "number": "СЧЕТ-26-09-09-2",
+    "creation_mode": "selected_operations",
+    "period_start": "2026-08-11",
+    "period_end": "2026-09-09",
+    "status": "issued",
+    "issued_at": "2026-09-09T08:24:50.625317Z",
+    "total_amount_kopecks": 40723,
+    "calculated_amount_kopecks": null,
+    "ff_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "seller_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "lines": [
+      {
+        "id": "d74bc6cd-c359-4eea-b058-394f8b6351ea",
+        "description": "FBS",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 12500,
+        "sort_order": 0
+      },
+      {
+        "id": "0b45bd0a-8ae2-47cd-8506-00ea900ee83a",
+        "description": "QA WMS407 — Нет ставки; сумма не рассчитана",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 100,
+        "sort_order": 1
+      },
+      {
+        "id": "17a19bbb-e0ed-4603-ad59-d15530cd9867",
+        "description": "Ручная корректировка итога",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 28123,
+        "sort_order": 2
+      }
+    ]
+  },
+  "printText": "Счёт на оплату № СЧЕТ-26-09-09-2 от 09.09.2026\nРЕКВИЗИТЫ ДЛЯ ОПЛАТЫ\nПолучатель\tФулфилмент\nИНН / КПП\t\tСч. №\t\nБанк получателя\t\tБИК\t\nКорр. счёт\t\nИсполнитель\nФулфилмент\nПлательщик\nЭмулятор WB\nПериод оказания услуг: 11.08.2026 — 09.09.2026\n№\tНаименование услуги\tСумма\n1\tFBS\t125,00 ₽\n2\tQA WMS407 — Нет ставки; сумма не рассчитана\t1,00 ₽\n3\tРучная корректировка итога\t281,23 ₽\nИтого: 407,23 ₽\nБез налога (НДС)\nВсего к оплате: 407,23 ₽\nВсего наименований 3, на сумму 407,23 ₽\nЧетыреста семь рублей 23 копейки\nРуководитель\nБухгалтер\nМ.П.",
+  "cancelled": {
+    "id": "325b20ca-30d8-4e15-a2e1-a3d34b49d906",
+    "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+    "number": "СЧЕТ-26-09-09-2",
+    "creation_mode": "selected_operations",
+    "period_start": "2026-08-11",
+    "period_end": "2026-09-09",
+    "status": "cancelled",
+    "issued_at": "2026-09-09T08:24:50.625317Z",
+    "total_amount_kopecks": 40723,
+    "calculated_amount_kopecks": null,
+    "ff_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "seller_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "lines": [
+      {
+        "id": "d74bc6cd-c359-4eea-b058-394f8b6351ea",
+        "description": "FBS",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 12500,
+        "sort_order": 0
+      },
+      {
+        "id": "0b45bd0a-8ae2-47cd-8506-00ea900ee83a",
+        "description": "QA WMS407 — Нет ставки; сумма не рассчитана",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 100,
+        "sort_order": 1
+      },
+      {
+        "id": "17a19bbb-e0ed-4603-ad59-d15530cd9867",
+        "description": "Ручная корректировка итога",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 28123,
+        "sort_order": 2
+      }
+    ]
+  },
+  "result": "PASS",
+  "finished": "2026-09-09T08:24:53.519Z"
+}

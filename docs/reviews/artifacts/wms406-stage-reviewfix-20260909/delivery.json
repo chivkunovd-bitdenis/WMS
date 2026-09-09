@@ -1,0 +1,11 @@
+{
+  "backendSha": "c82783bf0d4495cc74a6210f4eb22c6edca723b0",
+  "frontendSha": "829684a0106dd8a0d6cfb050abadfebed74908dc",
+  "backendDeployment": "1b2b58f9-48e3-4d67-9d86-a5be354ad4de",
+  "frontendDeployment": "abc8c3ff-4a1a-4bc7-8b71-b4d3f05d97fc",
+  "bothStatuses": "SUCCESS",
+  "backendHealth": 200,
+  "webHealth": 200,
+  "transport": "git archive backend/frontend preserving service-root prefixes; no settings/secret changes",
+  "transportRemoved": true
+}
