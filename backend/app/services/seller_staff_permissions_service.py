@@ -10,8 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.roles import FULFILLMENT_SELLER
+from app.models.document_event import (
+    DOCUMENT_TYPE_STAFF_USER,
+    EVENT_PERMISSIONS_CHANGED,
+    EVENT_STAFF_USER_CREATED,
+)
 from app.models.seller_staff_permissions import SellerStaffPermissions
 from app.models.user import User
+from app.services.document_event_service import (
+    current_document_event_actor,
+    record_document_event_safely,
+)
 from app.services.passwords import hash_password
 
 PERM_DOCUMENTS = "documents"
@@ -152,6 +161,28 @@ async def create_seller_staff_user(
     )
     session.add(row)
     user.seller_staff_permissions = row
+    # WMS-325: создание сотрудника продавца — сразу с правами; фиксируем
+    # событие вместе с начальным набором прав, чтобы точка "у пользователя
+    # появился доступ" была на общем аудит-контуре.
+    actor = current_document_event_actor()
+    after = permissions.as_dict()
+    await record_document_event_safely(
+        session,
+        tenant_id=user.tenant_id,
+        document_type=DOCUMENT_TYPE_STAFF_USER,
+        document_id=user.id,
+        event_type=EVENT_STAFF_USER_CREATED,
+        source=actor.source,
+        actor_user_id=actor.actor_user_id,
+        payload_json={
+            "role": "fulfillment_seller",
+            "target_user_id": str(user.id),
+            "acting_user_id": str(acting_user.id),
+            "email": user.email,
+            "before": None,
+            "after": after,
+        },
+    )
     try:
         await session.commit()
     except IntegrityError as exc:
@@ -191,11 +222,32 @@ async def update_seller_staff_permissions(
         raise PermissionError("owner_protected")
     if acting_user.id == staff_user_id:
         raise PermissionError("self_update_forbidden")
+    before = _from_row(row).as_dict()
     row.can_documents = permissions.documents
     row.can_products = permissions.products
     row.can_honest_sign = permissions.honest_sign
     row.can_settings = permissions.settings
     row.can_staff = permissions.staff
+    after = permissions.as_dict()
+    # WMS-325: append-only факт смены прав seller-сотрудника.
+    if before != after:
+        actor = current_document_event_actor()
+        await record_document_event_safely(
+            session,
+            tenant_id=user.tenant_id,
+            document_type=DOCUMENT_TYPE_STAFF_USER,
+            document_id=user.id,
+            event_type=EVENT_PERMISSIONS_CHANGED,
+            source=actor.source,
+            actor_user_id=actor.actor_user_id,
+            payload_json={
+                "role": "fulfillment_seller",
+                "target_user_id": str(user.id),
+                "acting_user_id": str(acting_user.id),
+                "before": before,
+                "after": after,
+            },
+        )
     await session.commit()
     await session.refresh(user)
     await session.refresh(row)
