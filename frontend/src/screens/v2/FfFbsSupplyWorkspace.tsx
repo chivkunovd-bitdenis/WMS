@@ -1555,7 +1555,13 @@ export function FfFbsSupplyWorkspace({
   return (
     <Dialog
       open={open}
-      onClose={busy ? undefined : onClose}
+      onClose={busy ? undefined : (_event, reason) => {
+        if (reason === 'escapeKeyDown' && (kizScanActive || kizScanBusy)) {
+          if (!kizScanBusy) dropKizScanActive()
+          return
+        }
+        onClose()
+      }}
       maxWidth={false}
       fullScreen={false}
       slotProps={{ paper: { sx: { width: 'min(1500px, 98vw)', height: '94vh', m: 1 } } }}
