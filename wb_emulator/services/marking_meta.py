@@ -61,6 +61,14 @@ def get_meta(seller_key: str, order_id: int) -> dict[str, Any]:
     return dict(stored)
 
 
+def delete_meta(seller_key: str, order_id: int, kind: str) -> None:
+    """Remove only the requested kind from this seller's order; repeats are harmless."""
+    plural = plural_key_for_kind(kind)
+    bucket = _meta_store.get((seller_key, order_id))
+    if bucket is not None:
+        bucket.pop(plural, None)
+
+
 def parse_put_values(kind: str, body: dict[str, Any]) -> list[str]:
     """Extract values from PUT body (plural array key per WB contract)."""
     plural = plural_key_for_kind(kind)

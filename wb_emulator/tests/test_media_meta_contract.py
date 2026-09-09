@@ -9,8 +9,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from wb_emulator.db import reset_db_runtime
+from wb_emulator.db import get_session_factory, reset_db_runtime
 from wb_emulator.main import create_app
+from wb_emulator.services import orders_store
 from wb_emulator.services.marking_meta import reset_marking_meta_store
 from wb_emulator.settings import get_settings
 
@@ -133,3 +134,40 @@ def test_media_meta_routes_require_auth(client: TestClient) -> None:
         json={"orders": [1]},
     )
     assert response.status_code == 401
+
+
+def test_delete_meta_removes_only_requested_kind_and_is_idempotent(client: TestClient) -> None:
+    with get_session_factory()() as session:
+        order = orders_store.seed_default_order(session, "seller_env")
+        order_id = order.wb_order_id
+    path = f"/api/v3/orders/{order_id}/meta"
+    for kind, body in (("sgtin", {"sgtins": ["010460000000000021QA\x1d91TEST"]}),
+                       ("gtin", {"gtins": ["04600000000000"]})):
+        assert client.put(f"{path}/{kind}", headers=AUTH_HEADERS, json=body).status_code == 200
+    before = client.get(path, headers=AUTH_HEADERS).json()
+    assert "sgtins" in before
+
+    for _ in range(2):
+        response = client.delete(path, headers=AUTH_HEADERS, params={"key": "sgtin"})
+        assert response.status_code == 204
+        assert response.content == b""
+        assert client.get(path, headers=AUTH_HEADERS).json() == {"gtins": before["gtins"]}
+
+
+def test_delete_meta_enforces_auth_seller_order_and_kind(client: TestClient) -> None:
+    with get_session_factory()() as session:
+        order = orders_store.seed_default_order(session, "seller_env")
+        order_id = order.wb_order_id
+    path = f"/api/v3/orders/{order_id}/meta"
+    assert client.put(f"{path}/sgtin", headers=AUTH_HEADERS,
+                      json={"sgtins": ["QA-UNCHANGED"]}).status_code == 200
+    before = client.get(path, headers=AUTH_HEADERS).json()
+    assert client.delete(path, params={"key": "sgtin"}).status_code == 401
+    assert client.delete(path, headers={"Authorization": "unknown"},
+                         params={"key": "sgtin"}).status_code == 401
+    assert client.delete(path, headers={"Authorization": "file-token"},
+                         params={"key": "sgtin"}).status_code == 404
+    assert client.delete("/api/v3/orders/999999999/meta", headers=AUTH_HEADERS,
+                         params={"key": "sgtin"}).status_code == 404
+    assert client.delete(path, headers=AUTH_HEADERS, params={"key": "unknown"}).status_code == 400
+    assert client.get(path, headers=AUTH_HEADERS).json() == before
