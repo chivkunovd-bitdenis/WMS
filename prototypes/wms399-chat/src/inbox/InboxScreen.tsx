@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Box, Stack, TextField, Tabs, Tab, InputAdornment, Typography, MenuItem, Select, FormControl, InputLabel } from '@mui/material'
+import { Box, Skeleton, Stack, TextField, Tabs, Tab, InputAdornment, Typography, MenuItem, Select, FormControl, InputLabel } from '@mui/material'
 import SearchIcon from '@mui/icons-material/SearchOutlined'
 import { useStore } from '../state/store'
 import { Row } from '../common/Row'
@@ -102,8 +102,21 @@ export function InboxScreen() {
           <Tab value="archived" label="Архив" />
         </Tabs>
       </Box>
-      <Box sx={{ flex: 1, overflow: 'auto' }}>
-        {filtered.length === 0 ? (
+      <Box sx={{ flex: 1, overflow: 'auto' }} aria-busy={ui.demo.loading}>
+        {ui.demo.loading ? (
+          <Stack sx={{ p: 2, gap: 1.5 }} aria-label="Загружаем каналы">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Row key={i} align="center" spacing={1.25}>
+                <Skeleton variant="rounded" width={40} height={40} />
+                <Stack sx={{ flex: 1, minWidth: 0 }} spacing={0.5}>
+                  <Skeleton variant="text" width="70%" height={16} />
+                  <Skeleton variant="text" width="45%" height={14} />
+                  <Skeleton variant="text" width="90%" height={14} />
+                </Stack>
+              </Row>
+            ))}
+          </Stack>
+        ) : filtered.length === 0 ? (
           <EmptyState
             title="Здесь ничего нет"
             description="Попробуйте изменить фильтр или сбросить поиск. Каналы под документы появляются, когда в них написано первое сообщение."

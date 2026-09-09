@@ -44,7 +44,7 @@ type UiState = {
   route: string
   drafts: Record<string, DraftState>
   demo: DemoFlags
-  search: { query: string; sellerId: string | null; hasAttachment: boolean; hasDocument: boolean }
+  search: { query: string; sellerId: string | null; hasAttachment: boolean; hasDocument: boolean; dateFrom: string; dateTo: string }
   notificationPrefs: NotificationPrefs
   flashMessageId: string | null
 }
@@ -69,8 +69,10 @@ const initialDemo: DemoFlags = {
   forceUploadFail: false,
   offline: false,
   documentOutdated: false,
+  documentDeleted: false,
   permissionDenied: false,
   slowNetwork: false,
+  loading: false,
 }
 
 const initialPrefs: NotificationPrefs = {
@@ -98,7 +100,7 @@ const initialState: UiState = {
   route: seedRoute,
   drafts: {},
   demo: { ...initialDemo },
-  search: { query: '', sellerId: null, hasAttachment: false, hasDocument: false },
+  search: { query: '', sellerId: null, hasAttachment: false, hasDocument: false, dateFrom: '', dateTo: '' },
   notificationPrefs: { ...initialPrefs },
   flashMessageId: null,
 }

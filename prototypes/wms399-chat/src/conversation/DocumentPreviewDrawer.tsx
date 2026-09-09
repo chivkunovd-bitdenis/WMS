@@ -55,7 +55,7 @@ export function DocumentPreviewDrawer() {
         <Box sx={{ p: 3 }}>
           <Alert severity="warning">Нет доступа к документу для текущей роли (403 в демо).</Alert>
         </Box>
-      ) : doc.deleted ? (
+      ) : doc.deleted || ui.demo.documentDeleted ? (
         <Box sx={{ p: 3 }}>
           <Alert severity="error">Документ удалён. Ссылка недействительна.</Alert>
         </Box>

@@ -57,7 +57,7 @@ export function PreferencesScreen() {
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
           Push в браузере
         </Typography>
-        <Row align="center" spacing={2}>
+        <Row align="center" spacing={2} wrap sx={{ rowGap: 1 }}>
           <FormControlLabel
             control={
               <Switch
@@ -68,12 +68,30 @@ export function PreferencesScreen() {
             label="Присылать push"
           />
           <Button size="small" variant="outlined" onClick={requestPush}>
-            Запросить разрешение
+            Запросить разрешение (реальный браузер)
           </Button>
           <Typography variant="caption" color="text.secondary">
             Статус: {prefs.pushPermission === 'granted' ? 'разрешены' : prefs.pushPermission === 'denied' ? 'запрещены' : 'не запрошены'}
           </Typography>
         </Row>
+        <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 2, bgcolor: 'action.hover' }}>
+          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+            Демо-состояние разрешения (без реального запроса)
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            Только для просмотра баннеров прототипа. Меняет отображаемый статус
+            локально и не трогает системное разрешение браузера.
+          </Typography>
+          <RadioGroup
+            row
+            value={prefs.pushPermission}
+            onChange={(e) => set({ pushPermission: e.target.value as NotificationPrefs['pushPermission'] })}
+          >
+            <FormControlLabel value="default" control={<Radio size="small" />} label="не запрошены" />
+            <FormControlLabel value="granted" control={<Radio size="small" />} label="разрешены" />
+            <FormControlLabel value="denied" control={<Radio size="small" />} label="запрещены" />
+          </RadioGroup>
+        </Box>
         <FormControlLabel
           sx={{ mt: 1, display: 'block' }}
           control={

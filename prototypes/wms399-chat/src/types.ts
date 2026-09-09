@@ -197,6 +197,8 @@ export type DemoFlags = {
   forceUploadFail: boolean
   offline: boolean
   documentOutdated: boolean
+  documentDeleted: boolean
   permissionDenied: boolean
   slowNetwork: boolean
+  loading: boolean
 }

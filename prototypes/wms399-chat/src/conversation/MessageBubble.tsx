@@ -481,7 +481,7 @@ function renderMentions(text: string): React.ReactNode {
 function DocCard({ doc, inOwn }: { doc: WmsDocument; inOwn: boolean }) {
   const { dispatch, ui } = useStore()
   const outdated = ui.demo.documentOutdated
-  const deleted = doc.deleted
+  const deleted = doc.deleted || ui.demo.documentDeleted
   return (
     <Box
       sx={{

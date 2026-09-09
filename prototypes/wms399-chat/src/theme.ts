@@ -32,7 +32,7 @@ export const chatTheme = createTheme({
   shape: { borderRadius: 12 },
   typography: {
     fontFamily:
-      'Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"',
+      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, ui-sans-serif, system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif',
     h5: { fontWeight: 800, letterSpacing: '-0.02em', color: '#0f172a' },
     h6: { fontWeight: 800, letterSpacing: '-0.015em', color: '#0f172a' },
     subtitle1: { fontWeight: 600, color: '#0f172a' },

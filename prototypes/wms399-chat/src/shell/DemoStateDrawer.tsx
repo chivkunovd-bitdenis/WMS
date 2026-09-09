@@ -136,8 +136,16 @@ export function DemoStateDrawer() {
             label="Документы в карточках устарели"
           />
           <FormControlLabel
+            control={<Switch checked={ui.demo.documentDeleted} onChange={(e) => setDemo({ documentDeleted: e.target.checked })} />}
+            label="Документы в карточках удалены"
+          />
+          <FormControlLabel
             control={<Switch checked={ui.demo.permissionDenied} onChange={(e) => setDemo({ permissionDenied: e.target.checked })} />}
             label="У пользователя закрыт доступ (403)"
+          />
+          <FormControlLabel
+            control={<Switch checked={ui.demo.loading} onChange={(e) => setDemo({ loading: e.target.checked })} />}
+            label="Показывать состояние загрузки (инбокс + лента)"
           />
         </Stack>
         <Divider />

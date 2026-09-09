@@ -36,7 +36,10 @@ export function SearchScreen() {
 
   const results = useMemo(() => {
     const list: Hit[] = []
-    if (q.length < 2 && !ui.search.hasAttachment && !ui.search.hasDocument) return list
+    const hasDateFilter = !!(ui.search.dateFrom || ui.search.dateTo)
+    if (q.length < 2 && !ui.search.hasAttachment && !ui.search.hasDocument && !hasDateFilter) return list
+    const fromMs = ui.search.dateFrom ? new Date(`${ui.search.dateFrom}T00:00:00`).getTime() : Number.NEGATIVE_INFINITY
+    const toMs = ui.search.dateTo ? new Date(`${ui.search.dateTo}T23:59:59.999`).getTime() : Number.POSITIVE_INFINITY
     data.conversations.forEach((conv) => {
       if (!conversationAccessible(conv, currentActor)) return
       if (ui.search.sellerId && conv.sellerId !== ui.search.sellerId) return
@@ -48,6 +51,8 @@ export function SearchScreen() {
       for (const m of visible) {
         if (ui.search.hasAttachment && !(m.attachments?.length)) continue
         if (ui.search.hasDocument && !m.documentRef) continue
+        const at = new Date(m.createdAt).getTime()
+        if (at < fromMs || at > toMs) continue
         const doc = m.documentRef ? documentById.get(m.documentRef) : null
         const haystack = `${m.text ?? ''}\n${doc ? `${doc.number} ${doc.summary} ${doc.lines.map((l) => `${l.sku} ${l.name}`).join(' ')}` : ''}`
         const lower = haystack.toLowerCase()
@@ -117,6 +122,24 @@ export function SearchScreen() {
               ))}
             </TextField>
           ) : null}
+          <TextField
+            size="small"
+            type="date"
+            label="С даты"
+            value={ui.search.dateFrom}
+            onChange={(e) => dispatch({ type: 'set_search', patch: { dateFrom: e.target.value } })}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ minWidth: 160 }}
+          />
+          <TextField
+            size="small"
+            type="date"
+            label="По дату"
+            value={ui.search.dateTo}
+            onChange={(e) => dispatch({ type: 'set_search', patch: { dateTo: e.target.value } })}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ minWidth: 160 }}
+          />
           <FormControlLabel
             control={
               <Switch
@@ -145,7 +168,7 @@ export function SearchScreen() {
         <Alert severity="warning">Показываем первые 100 совпадений. Уточните запрос, если ищете конкретное.</Alert>
       ) : null}
 
-      {q.length < 2 && !ui.search.hasAttachment && !ui.search.hasDocument ? (
+      {q.length < 2 && !ui.search.hasAttachment && !ui.search.hasDocument && !ui.search.dateFrom && !ui.search.dateTo ? (
         <EmptyState
           title="Начните искать"
           description="Ищем по тексту сообщений, номерам документов, SKU. Фильтры сверху ограничивают выборку."

@@ -1,0 +1,18 @@
+
+> wms399-chat-prototype@0.0.1-demo build
+> vite build
+
+vite v8.0.8 building client environment for production...
+[2K
+transforming...✓ 970 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                  0.86 kB │ gzip:   0.54 kB
+dist/assets/index-D4fNurHT.js  659.71 kB │ gzip: 196.69 kB
+
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 250ms
