@@ -14,6 +14,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.billing import (
     BillingInvoice,
@@ -24,9 +25,19 @@ from app.models.billing import (
     BillingLedgerEntry,
     BillingProfile,
 )
+from app.models.fbs_order import FbsOrder
+from app.models.marketplace_unload import MarketplaceUnloadRequest
+from app.models.operation_fact import OperationFact
 from app.models.seller import Seller
+from app.services.billing_ledger_service import (
+    BillingLedgerError,
+    OperationalBillingLine,
+    postgres_integer,
+    record_operational_charge,
+)
 from app.services.billing_seller_report_service import moscow_interval
 from app.services.document_number_service import DOC_TYPE_INVOICE, next_document_number
+from app.services.fbs_order_billing_service import _positions, confirmed_order_handover_dates
 
 DECIMAL_RE = re.compile(r"^-?\d+(\.\d{1,2})?$")
 
@@ -34,6 +45,8 @@ DECIMAL_RE = re.compile(r"^-?\d+(\.\d{1,2})?$")
 # снимается в момент выставления и дальше не пересчитывается.
 SERVICE_LABELS = {
     "inbound": "Приёмка",
+    "fbs_order": "FBS",
+    "packing": "Упаковка",
     "marketplace_outbound": "Отгрузка",
     "storage_liter_day": "Хранение",
 }
@@ -47,13 +60,20 @@ class BillingInvoiceV2Error(ValueError):
     pass
 
 
+def _invoice_integer(value: int) -> int:
+    try:
+        return postgres_integer(Decimal(value), field="billing_amount")
+    except BillingLedgerError as exc:
+        raise BillingInvoiceV2Error("invalid_decimal_amount") from exc
+
+
 def decimal_to_kopecks(value: str) -> int:
     if not DECIMAL_RE.fullmatch(value):
         raise BillingInvoiceV2Error("invalid_decimal_amount")
     amount = Decimal(value)
     if amount < 0:
         raise BillingInvoiceV2Error("negative_amount")
-    return int((amount * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    return _invoice_integer(int((amount * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)))
 
 
 def _canonical(value: dict[str, Any]) -> str:
@@ -113,7 +133,9 @@ def invoice_v2_out(invoice: BillingInvoiceV2) -> dict[str, Any]:
                 "id": row.id,
                 "description": row.description_snapshot,
                 "unit_price_kopecks": row.unit_price_kopecks,
-                "total_amount_kopecks": row.total_amount_kopecks,
+                "total_amount_kopecks": None
+                if "Нет ставки; сумма не рассчитана" in row.description_snapshot
+                else row.total_amount_kopecks,
                 "sort_order": row.sort_order,
             }
             for row in sorted(invoice.lines_v2, key=lambda row: row.sort_order)
@@ -259,6 +281,98 @@ async def _storage_line(
     }
 
 
+async def _selected_shipment_charge(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    source: dict[str, Any],
+    start: datetime,
+    end: datetime,
+    orders: dict[uuid.UUID, FbsOrder],
+    handovers: dict[uuid.UUID, datetime],
+) -> BillingLedgerEntry:
+    source_type = source["source_type"]
+    source_id = uuid.UUID(str(source["source_id"]))
+    service_code = source["service_code"]
+    if source_type == "fbs_order" and service_code in {"fbs_order", "packing"}:
+        order = orders.get(source_id)
+        if order is None or order.seller_id != seller_id:
+            raise BillingInvoiceV2Error("selected_source_not_found")
+        moment = handovers.get(order.id)
+        warehouse_id = order.warehouse_id
+        positions = await _positions(session, order)
+        lines = [
+            OperationalBillingLine(
+                product_id=pid,
+                quantity=Decimal(qty),
+                source_snapshot={"fbs_order_id": str(order.id)},
+            )
+            for pid, qty in positions
+        ]
+    elif source_type == "marketplace_unload" and service_code in {
+        "marketplace_outbound",
+        "packing",
+    }:
+        document = await session.scalar(
+            select(MarketplaceUnloadRequest).where(
+                MarketplaceUnloadRequest.tenant_id == tenant_id,
+                MarketplaceUnloadRequest.seller_id == seller_id,
+                MarketplaceUnloadRequest.id == source_id,
+                MarketplaceUnloadRequest.status == "shipped",
+            )
+        )
+        fact = await session.scalar(
+            select(OperationFact)
+            .options(selectinload(OperationFact.lines))
+            .where(
+                OperationFact.tenant_id == tenant_id,
+                OperationFact.seller_id == seller_id,
+                OperationFact.document_id == source_id,
+                OperationFact.operation_code == "marketplace_outbound_completed",
+            )
+        )
+        if document is None or fact is None:
+            raise BillingInvoiceV2Error("selected_source_not_found")
+        moment = document.shipped_at
+        warehouse_id = document.warehouse_id
+        lines = [
+            OperationalBillingLine(
+                product_id=line.product_id,
+                quantity=Decimal(line.item_quantity),
+                source_snapshot={},
+                operation_fact_line_id=line.id,
+            )
+            for line in fact.lines
+        ]
+    else:
+        raise BillingInvoiceV2Error("selected_source_not_found")
+    if moment is None:
+        raise BillingInvoiceV2Error("selected_source_not_found")
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    if not start <= moment < end:
+        raise BillingInvoiceV2Error("selected_source_outside_period")
+    entry = await record_operational_charge(
+        session,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        source_type=source_type,
+        source_id=source_id,
+        source="fbs" if source_type == "fbs_order" else "marketplace",
+        service_code=service_code,
+        quantity=sum((line.quantity for line in lines), Decimal(0)),
+        occurred_at=moment,
+        performer_id=None,
+        warehouse_id=warehouse_id,
+        lines=lines,
+        respect_billing_start=False,
+    )
+    if entry is None:
+        raise BillingInvoiceV2Error("selected_source_not_found")
+    return entry
+
+
 async def _preview_selected_operations(
     session: AsyncSession, *, tenant_id: uuid.UUID, request: dict[str, Any]
 ) -> dict[str, Any]:
@@ -281,6 +395,67 @@ async def _preview_selected_operations(
     if len(roots) != len(root_ids):
         raise BillingInvoiceV2Error("selected_source_not_found")
     period_start, period_end = moscow_interval(date_from, date_to)
+    shipment_roots: set[uuid.UUID] = set()
+    sources = list(request.get("selected_sources", []))
+    # A stored charge must not bypass the same proof required for a document.
+    sources.extend(
+        {
+            "source_type": root.source_type,
+            "source_id": root.source_id,
+            "service_code": root.service_code,
+        }
+        for root in roots
+        if root.source_type in {"fbs_order", "marketplace_unload"}
+    )
+    sources = list(
+        {
+            (source["source_type"], str(source["source_id"]), source["service_code"]): source
+            for source in sources
+        }.values()
+    )
+    order_ids = {
+        uuid.UUID(str(source["source_id"]))
+        for source in sources
+        if source["source_type"] == "fbs_order"
+    }
+    orders = (
+        {
+            order.id: order
+            for order in await session.scalars(
+                select(FbsOrder).where(
+                    FbsOrder.tenant_id == tenant_id,
+                    FbsOrder.seller_id == seller_id,
+                    FbsOrder.id.in_(order_ids),
+                )
+            )
+        }
+        if order_ids
+        else {}
+    )
+    handovers = (
+        await confirmed_order_handover_dates(
+            session,
+            tenant_id=tenant_id,
+            orders=list(orders.values()),
+        )
+        if orders
+        else {}
+    )
+    for source in sources:
+        entry = await _selected_shipment_charge(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            source=source,
+            start=period_start,
+            end=period_end,
+            orders=orders,
+            handovers=handovers,
+        )
+        shipment_roots.add(entry.id)
+        if entry.id not in root_ids:
+            roots.append(entry)
+            root_ids.add(entry.id)
     selected: dict[uuid.UUID, BillingLedgerEntry] = {}
     for root in roots:
         if root.seller_id != seller_id:
@@ -294,7 +469,7 @@ async def _preview_selected_operations(
         occurred_at = root.occurred_at
         if occurred_at.tzinfo is None:
             occurred_at = occurred_at.replace(tzinfo=UTC)
-        if not period_start <= occurred_at < period_end:
+        if root.id not in shipment_roots and not period_start <= occurred_at < period_end:
             raise BillingInvoiceV2Error("selected_source_outside_period")
         frontier = {root.id}
         while frontier:
@@ -311,7 +486,7 @@ async def _preview_selected_operations(
             )
             next_frontier: set[uuid.UUID] = set()
             for member in members:
-                if member.seller_id != seller_id or member.amount is None:
+                if member.seller_id != seller_id:
                     raise BillingInvoiceV2Error("unpriced_or_cross_seller_chain")
                 if member.id not in selected:
                     selected[member.id] = member
@@ -338,17 +513,20 @@ async def _preview_selected_operations(
     )
     if already_invoiced is not None:
         raise BillingInvoiceV2Error("selected_source_already_invoiced")
-    grouped: dict[str, list[BillingLedgerEntry]] = {}
+    grouped: dict[tuple[str, bool], list[BillingLedgerEntry]] = {}
     for entry in selected.values():
-        grouped.setdefault(entry.service_code, []).append(entry)
+        grouped.setdefault((entry.service_code, entry.amount is None), []).append(entry)
     lines: list[dict[str, Any]] = []
-    for order, (service_code, entries) in enumerate(sorted(grouped.items())):
+    for order, ((service_code, unpriced), entries) in enumerate(sorted(grouped.items())):
         lines.append(
             {
                 "id": uuid.uuid4(),
-                "description": SERVICE_LABELS.get(service_code, service_code),
+                "description": SERVICE_LABELS.get(service_code, service_code)
+                + (" — Нет ставки; сумма не рассчитана" if unpriced else ""),
                 "unit_price_kopecks": None,
-                "total_amount_kopecks": sum(int(entry.amount or 0) for entry in entries),
+                "total_amount_kopecks": None
+                if unpriced
+                else sum(int(entry.amount or 0) for entry in entries),
                 "sort_order": order,
                 "sources": [
                     {
@@ -378,6 +556,28 @@ async def _preview_selected_operations(
     lines.extend(extra_lines)
     if not lines:
         raise BillingInvoiceV2Error("selected_operations_required")
+    incomplete = any(line["total_amount_kopecks"] is None for line in lines)
+    known_total = sum(line["total_amount_kopecks"] or 0 for line in lines)
+    calculated_total = None if incomplete else known_total
+    final_amount = request.get("final_amount")
+    total = calculated_total
+    if final_amount is not None:
+        total = decimal_to_kopecks(str(final_amount))
+        difference = _invoice_integer(total - known_total)
+        if difference or incomplete:
+            lines.append(
+                {
+                    "id": uuid.uuid4(),
+                    "unit_price_kopecks": None,
+                    "description": "Сумма задана вручную; исходный расчёт неполный"
+                    if incomplete
+                    else "Ручная корректировка итога",
+                    "total_amount_kopecks": difference,
+                    "sort_order": len(lines),
+                }
+            )
+    if total is not None:
+        _invoice_integer(total)
     return {
         "id": uuid.uuid4(),
         "seller_id": seller_id,
@@ -387,7 +587,8 @@ async def _preview_selected_operations(
         "period_end": date_to,
         "status": "issued",
         "issued_at": None,
-        "total_amount_kopecks": sum(line["total_amount_kopecks"] for line in lines),
+        "total_amount_kopecks": total,
+        "calculated_amount_kopecks": calculated_total,
         "ff_profile": ff_profile,
         "seller_profile": seller_profile,
         "lines": lines,
@@ -404,7 +605,9 @@ async def create_invoice_v2(
 ) -> BillingInvoiceV2:
     if not idempotency_key.strip():
         raise BillingInvoiceV2Error("idempotency_key_required")
-    if request.get("creation_mode") == "selected_operations" and request.get("selected_root_ids"):
+    if request.get("creation_mode") == "selected_operations" and (
+        request.get("selected_root_ids") or request.get("selected_sources")
+    ):
         # Оба запроса одного селлера проходят проверку последовательно, до
         # записи счёта и до проверки повторного ключа. В PostgreSQL блокировка
         # живёт до commit вызывающего API; следующий запрос увидит его счёт.
@@ -439,6 +642,8 @@ async def create_invoice_v2(
         await session.refresh(invoice, attribute_names=["lines_v2"])
         return invoice
     preview = await preview_invoice_v2(session, tenant_id=tenant_id, request=request)
+    if preview["total_amount_kopecks"] is None:
+        raise BillingInvoiceV2Error("unpriced_or_cross_seller_chain")
     invoice = BillingInvoiceV2(
         tenant_id=tenant_id,
         seller_id=preview["seller_id"],
@@ -459,7 +664,7 @@ async def create_invoice_v2(
             invoice_id=invoice.id,
             description_snapshot=line["description"],
             unit_price_kopecks=line["unit_price_kopecks"],
-            total_amount_kopecks=line["total_amount_kopecks"],
+            total_amount_kopecks=line["total_amount_kopecks"] or 0,
             sort_order=line["sort_order"],
         )
         session.add(persisted_line)
@@ -618,9 +823,7 @@ async def list_invoices_v2(
             }
         )
     for invoice, seller_name in (
-        await session.execute(
-            v2_query.order_by(BillingInvoiceV2.issued_at.desc()).limit(limit + 1)
-        )
+        await session.execute(v2_query.order_by(BillingInvoiceV2.issued_at.desc()).limit(limit + 1))
     ).all():
         rows.append(
             {

@@ -125,14 +125,11 @@ function formatMoscowDate(value: string): string {
 
 /** Почему операцию нельзя выбрать в счёт. Молчащий серый квадрат бесполезен. */
 export function selectionReason(entry: SellerReportEntry): string | undefined {
-  if (!entry.billing_ledger_entry_id) {
-    return entry.priced_live
-      ? 'Сумма посчитана по тарифу на дату операции. В счёт документ попадёт, когда по нему пройдёт начисление'
-      : 'Документ ещё не начислен — счёт собирается из начислений'
-  }
-  if (entry.result === 'unpriced') return 'Нет ставки — задайте тариф в настройках'
-  if (entry.result === 'not_billable') return 'Документ не тарифицируется'
   if (entry.result === 'reversed') return 'Сторно попадёт в счёт вместе со своим начислением'
+  if (entry.result === 'not_billable') return 'Документ не тарифицируется'
+  if (!entry.billing_ledger_entry_id && !['fbs_order', 'marketplace_unload'].includes(entry.source_type)) {
+    return 'Документ ещё не начислен — счёт собирается из начислений'
+  }
   return undefined
 }
 
@@ -153,10 +150,12 @@ function storageReason(row: StorageReportRow): string | undefined {
 }
 
 /** Начисления раздела, которые можно положить в счёт. */
+export function invoiceSelectionKey(entry: SellerReportEntry): string {
+  return entry.billing_ledger_entry_id ?? `source:${entry.source_type}:${entry.source_id}:${entry.service_code}`
+}
+
 export function billableIds(entries: SellerReportEntry[]): string[] {
-  return entries
-    .filter((entry) => !selectionReason(entry) && entry.billing_ledger_entry_id)
-    .map((entry) => entry.billing_ledger_entry_id as string)
+  return entries.filter((entry) => !selectionReason(entry)).map(invoiceSelectionKey)
 }
 
 function sumItems(entries: SellerReportEntry[]): number {
@@ -267,9 +266,9 @@ export function FfBillingSellerDetails({
                   <CheckboxInput
                     label={`Выбрать документ ${row.entry.document_number ?? ''}`.trim()}
                     hideLabel
-                    checked={selectedRootIds.includes(row.entry.billing_ledger_entry_id ?? '')}
+                    checked={selectedRootIds.includes(invoiceSelectionKey(row.entry))}
                     onChange={(checked) =>
-                      onToggleRoot(row.entry.billing_ledger_entry_id ?? '', checked)
+                      onToggleRoot(invoiceSelectionKey(row.entry), checked)
                     }
                     disabledReason={selectionReason(row.entry)}
                     testId={`billing-pick-${row.entry.id}`}

@@ -295,8 +295,20 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
     setDetailsLoading(true); setDetailsError(false)
     const params = sellerReportSearchParams(reportRange, includeFinance)
     if (detailsCursor) params.set('cursor', detailsCursor)
-    fetch(`/api/billing/seller-report/sellers/${selectedReportSeller}/details?${params}`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
-      .then((response) => { if (!response.ok) throw new Error('seller-report-details'); return response.json() as Promise<SellerReportDetails> })
+    // Complete the seller selection before enabling group checkboxes.
+    const readAllPages = async () => {
+      let combined: SellerReportDetails | null = null
+      do {
+        const response = await fetch(`/api/billing/seller-report/sellers/${selectedReportSeller}/details?${params}`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
+        if (!response.ok) throw new Error('seller-report-details')
+        const page = await response.json() as SellerReportDetails
+        combined = combined ? { ...page, entries: [...combined.entries, ...page.entries], storage_row: combined.storage_row ?? page.storage_row } : page
+        if (!page.next_cursor) return combined
+        params.set('cursor', page.next_cursor)
+      } while (!controller.signal.aborted)
+      throw new Error('aborted')
+    }
+    readAllPages()
       .then((data) => { if (alive && requestId === detailsRequestId.current) setReportDetails((current) => {
         if (!detailsCursor) return data
         const existing = new Set((current?.entries ?? []).map((entry) => entry.id))
