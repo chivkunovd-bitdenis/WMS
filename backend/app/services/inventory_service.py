@@ -271,45 +271,13 @@ async def _deduct_inventory_from_fbs(
     warehouse_id: uuid.UUID,
     shortage: int,
 ) -> list[StockDeduction]:
-    """Недостача: сначала обычный свободный остаток, затем доступное ФБС."""
-    if not product.fbs_units_mode:
-        return [(product.id, None, shortage)]
-    from app.services.fbs_stock_availability_service import fbs_stock_breakdown_by_product
+    """Report physical shortage without inventing stock reserved by a cap.
 
-    pools = list(
-        (
-            await session.scalars(
-                select(FbsBindingStockPool)
-                .join(FbsWarehouseBinding)
-                .where(
-                    FbsBindingStockPool.tenant_id == product.tenant_id,
-                    FbsBindingStockPool.product_id == product.id,
-                    FbsWarehouseBinding.wms_warehouse_id == warehouse_id,
-                )
-                .order_by(FbsBindingStockPool.binding_id)
-                .execution_options(populate_existing=True)
-            )
-        ).all()
-    )
-    if not pools:
-        return [(product.id, None, shortage)]
-    stock = (
-        await fbs_stock_breakdown_by_product(session, product.tenant_id, warehouse_id, [product.id])
-    )[product.id]
-    # WMS-338/341: атрибуция шортажа операторскому потолку — только показ.
-    # Само число оператора не расходуется: физическая недостача уменьшает баланс,
-    # и следующая публикация уедет как min(cap, free) без отдельного счётчика.
-    ordinary_free = max(0, stock.free - sum(p.quantity for p in pools))
-    deductions: list[StockDeduction] = [(product.id, None, min(shortage, ordinary_free))]
-    remaining = max(0, shortage - ordinary_free)
-    for pool in pools:
-        take = min(remaining, pool.quantity)
-        if take:
-            deductions.append((product.id, pool.binding_id, take))
-        remaining -= take
-        if remaining == 0:
-            break
-    return deductions
+    Publication caps do not describe separate inventory. The actual movement
+    below reduces physical stock; order reservations and operator caps survive.
+    The tuple format is retained for the inventory document response.
+    """
+    return [(product.id, None, shortage)]
 
 
 async def _physical_on_hand(

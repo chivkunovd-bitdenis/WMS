@@ -162,14 +162,19 @@ function FbsStockDialogBody({
   const publishesAny = draft.publish || (draft.publishOzon ?? draft.publish)
   // В режиме штук ограничение то же самое, только в единицах: склады делят один
   // и тот же физический остаток, поэтому в сумме больше свободного не раздать.
-  const unitsSum = totalUnits(draft, enabledServed)
+  const unitsSum = totalUnits(draft, seller.warehouses)
   const enabledPlacesLabel = [
     draft.publish ? MARKETPLACE_NAMES.wb : null,
     (draft.publishOzon ?? draft.publish) ? MARKETPLACE_NAMES.ozon : null,
   ].filter(Boolean).join(" и ")
-  const overAllocated = publishesAny && (
-    draft.unitsMode ? unitsSum > base : percentSum > 100
+  // Existing caps can exceed free stock after an order or stock movement.
+  // For bulk edits the server compares every product with its own saved rule.
+  const increasesCap = !rule.unitsMode || Object.entries(draft.unitsByWarehouse).some(([key, value]) =>
+    value > (rule.unitsByWarehouse[key] ?? 0),
   )
+  const overAllocated = draft.unitsMode
+    ? !many && increasesCap && unitsSum > base
+    : publishesAny && percentSum > 100
   // Раскладка по складам — то же самое, что уедет в WB, склад за складом.
   // Считается по каждому товару отдельно и складывается, а не по сумме остатков:
   // округление вниз происходит у каждого товара своё, и на сервере точно так же.
@@ -310,7 +315,7 @@ function FbsStockDialogBody({
 
         {draft.unitsMode ? (
           <Typography variant="body2" color="text.secondary" data-testid="fbs-stock-units-total">
-            Распределено {unitsSum.toLocaleString('ru-RU')} из{' '}
+            Задано по складам {unitsSum.toLocaleString('ru-RU')} шт при{' '}
             {base.toLocaleString('ru-RU')} свободных
             {overAllocated ? ' — это больше, чем есть на складе' : ''}
           </Typography>
@@ -475,7 +480,7 @@ function FbsStockDialogBody({
                 // должен иметь возможность набрать больше и увидеть красное, а не
                 // упереться в молча не принимающееся поле.
                 <NumberInput
-                  label="Отгрузить на этот склад, шт"
+                  label="Потолок публикации, шт"
                   value={draft.unitsByWarehouse[warehouse.id] ?? 0}
                   onChange={(value) =>
                     setDraft((one) => ({
@@ -493,8 +498,7 @@ function FbsStockDialogBody({
                       : undefined
                   }
                   helperText={
-                    `Доступно новым заказам: ${(rule.unitsByWarehouse[warehouse.id] ?? 0).toLocaleString('ru-RU')} шт` +
-                    '. Резервы заказов сюда не входят; приёмка это число не увеличивает'
+                    'Потолок публикации. В кабинет уйдёт не больше свободного остатка; число меняется только вручную'
                   }
                   testId={`fbs-stock-units-${warehouse.id}`}
                 />
