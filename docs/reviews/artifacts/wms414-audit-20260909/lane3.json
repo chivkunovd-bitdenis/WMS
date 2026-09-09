@@ -1,0 +1,480 @@
+[
+  {
+    "id": "WMS-128",
+    "title": "Кабинет Комаровой в двух арендаторах",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "historical_data",
+    "canonical_status": "ИСТОРИЧЕСКАЯ АНОМАЛИЯ · ДАННЫЕ СВЕРЕНЫ 09.09.2026 19:37 UTC, ОБЩИЙ КАБИНЕТ НЕ ДОКАЗАН",
+    "code_state": "Свежая ограниченная read-only сверка нашла две строки продавца в двух tenant: у одной 87 заказов, 33 done, 2/2 served bindings, остаток 0, последний заказ 11.08; у второй 168 заказов, 86 done, 4/4 served bindings, остаток 719, последний заказ 20.08. Это не доказывает, что строки используют один внешний кабинет: credential-поля намеренно не читались. Эталонный код не запрещает один внешний кабинет в разных арендаторах: уникальность учётной записи ограничена tenant_id, seller_id, marketplace и account_slot.",
+    "remaining": "Без обращения к credential-полям принадлежность общего кабинета остаётся недоказанной. Владелец должен решить допустимый безопасный способ идентификации; только затем можно исправлять данные. Предотвращение повторения относится к WMS-127.",
+    "evidence": [
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/models/marketplace_account.py","line_start":30,"line_end":40,"finding":"Ограничение уникальности локально для арендатора и селлера; глобального запрета на повтор одного внешнего кабинета нет."},
+      {"ref":"production-readonly-2026-09-09","path":"docs/reviews/artifacts/wms414-audit-20260909/ownership-data.jsonl","line_start":1,"line_end":1,"finding":"Сохранённый read-only результат содержит две обезличенные WMS-128 seller-строки и их агрегаты на 19:37:38 UTC."}
+    ],
+    "test_evidence": "Read-only SQL из /private/tmp/wms414-audit/ownership-readonly.sql выполнен root 09.09.2026 19:37:38 UTC; результат в ownership-data.jsonl. Credential-поля не читались.",
+    "release_evidence": "Production source подтверждён как 0229831f; свежие агрегаты подтверждают две seller-строки, но не общий внешний кабинет.",
+    "confidence": "high",
+    "needs_root_check": "Старые числа 104 и 80/86 не совпадают напрямую со свежими агрегатами и не должны оставаться как текущие без восстановления исходного определения «задвоен/прошёл мимо»."
+  },
+  {
+    "id": "WMS-129",
+    "title": "Продавцы с той же болезнью, что была у Фадина",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "historical_data",
+    "canonical_status": "АКТУАЛЬНЫЕ АНОМАЛИИ ДАННЫХ · СВЕРЕНО 09.09.2026 19:37 UTC",
+    "code_state": "Свежая read-only сверка четырёх seller-строк нашла два отрицательных итога остатка: -148 у строки с 1/1 served binding и 1 646 заказами и -45 у строки с 3/3 served bindings и 400 заказами. Ещё одна строка имеет ноль bindings/orders/stock, четвёртая — 2/2 served, 159 заказов и остаток 183. Старые -154, «24 мимо» и привязка каждого агрегата к конкретному имени не воспроизведены в обезличенном результате; их нельзя объявлять текущими.",
+    "remaining": "Root должен сопоставить обезличенные seller_id с именами в защищённом контексте, установить причины двух отрицательных остатков и определить корректирующие операции. Признак общего кабинета с Фадиным без credential-полей не доказан.",
+    "evidence": [
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/models/marketplace_account.py","line_start":30,"line_end":40,"finding":"Уникальность учётной записи не распространяется на разные tenant_id, поэтому код модели не исключает описанный класс дублей."},
+      {"ref":"production-readonly-2026-09-09","path":"docs/reviews/artifacts/wms414-audit-20260909/ownership-data.jsonl","line_start":1,"line_end":1,"finding":"Сохранённый read-only результат подтверждает четыре WMS-129 строки, включая текущие отрицательные итоги -148 и -45."}
+    ],
+    "test_evidence": "Read-only агрегаты из ownership-data.jsonl получены root 09.09.2026 19:37:38 UTC без credential-полей.",
+    "release_evidence": "Production source соответствует эталонному SHA; текущие два отрицательных итога подтверждены отдельной read-only сверкой данных.",
+    "confidence": "high",
+    "needs_root_check": "Нужно безопасно сопоставить seller_id с именами и восстановить критерий «заказы прошли мимо»; текущий запрос считал внутренний status=done, что не эквивалентно этому критерию."
+  },
+  {
+    "id": "WMS-130",
+    "title": "Судьба арендатора «ИП Львова В.В.» и 10 410 штук",
+    "prior_status": "РЕШЕНИЕ ВЛАДЕЛЬЦА",
+    "verdict": "decision",
+    "canonical_status": "РЕШЕНИЕ ВЛАДЕЛЬЦА · ТЕКУЩИЙ ОСТАТОК 10 413 СВЕРЕН 09.09.2026 19:37 UTC",
+    "code_state": "Свежая read-only сверка tenant показала 6 продавцов и общий остаток 10 413, а не исторические 10 410; oldest balance update 10.07, latest 31.08. В коде и этих агрегатах нет факта, позволяющего определить владельца площадки или разрешить коррекцию.",
+    "remaining": "Владелец должен идентифицировать арендатора и отдельно разрешить конкретное действие с данными; перед самой операцией остаток следует перечитать ещё раз.",
+    "evidence": [
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/models/tenant.py","line_start":20,"line_end":42,"finding":"Модель хранит технические свойства арендатора, но не бизнес-владельца площадки и не решение о судьбе товара."},
+      {"ref":"production-readonly-2026-09-09","path":"docs/reviews/artifacts/wms414-audit-20260909/ownership-data.jsonl","line_start":2,"line_end":2,"finding":"Сохранённый read-only агрегат tenant подтверждает 6 продавцов, остаток 10413 и последнюю правку баланса 31.08."}
+    ],
+    "test_evidence": "Read-only aggregate ownership-data.jsonl получен root 09.09.2026 19:37:38 UTC; credential-поля не читались.",
+    "release_evidence": "Production source SHA не отвечает на вопрос о владельце; свежая БД изменила только числовой факт на 10 413.",
+    "confidence": "high",
+    "needs_root_check": "Нужно решение владельца; 10 413 — снимок на 19:37:38 UTC, а не разрешение на коррекцию."
+  },
+  {
+    "id": "WMS-131",
+    "title": "Блок ФБС в кабинете селлера",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · РАСЧЁТ ЕСТЬ НА ПРОДЕ, СЕЛЛЕРСКОГО UI НЕТ",
+    "code_state": "Сервер рассчитывает плановую дату поставки по московскому времени и настройке отсечки, но в фактически смонтированном SellerApp нет маршрута или экрана заказов и поставок FBS. Рабочий экран FBS смонтирован только в пространстве фулфилмента.",
+    "remaining": "Добавить селлерский, ограниченный своим seller_id, API/маршрут и экран собственных FBS-заказов и поставок; вывести уже рассчитываемую planned_shipment_date и проверить вручную до/после отсечки.",
+    "evidence": [
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/fbs_supply_service.py","line_start":253,"line_end":279,"finding":"Плановая дата вычисляется из московского времени, cutoff и максимальной даты заказов."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/apps/seller/SellerApp.tsx","line_start":360,"line_end":520,"finding":"Фактические маршруты кабинета селлера перечисляют документы, приёмки, товары, ЧЗ, отчёты и настройки; блока FBS нет."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/App.tsx","line_start":3060,"line_end":3069,"finding":"FfFbsOrdersScreen подключён в приложении фулфилмента."}
+    ],
+    "test_evidence": "backend/tests/test_fbs_supply_from_orders.py:531+ проверяет расчёт даты до и после отсечки; селлерского UI-сценария нет.",
+    "release_evidence": "Расчёт даты находится в подтверждённом production SHA; селлерский экран отсутствует в том же SHA.",
+    "confidence": "high",
+    "needs_root_check": "После реализации нужен ручной проход под ролью селлера; в текущем аудите UI не открывался."
+  },
+  {
+    "id": "WMS-132",
+    "title": "Виджет скорости доставки ФБС",
+    "prior_status": "НА ПРОДЕ, при этом описание утверждало, что виджет в интерфейс не доехал",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ ПО КОДУ · UI И ДАННЫЕ НЕ ПЕРЕПРОВЕРЕНЫ",
+    "code_state": "Противоречие канона разрешается в пользу кода: основной FfFbsOrdersScreen загружает /fbs/assembly-time и отображает FbsMetricPanel со средним, количеством заказов и долями до 12/24 часов. API вызывает сервис, который считает метрики по отгруженным заказам за период.",
+    "remaining": "Только ручная проверка отображения и фактических чисел в браузере; программного пробела по исходным критериям не найдено.",
+    "evidence": [
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/FfFbsOrdersScreen.tsx","line_start":710,"line_end":762,"finding":"Экран запрашивает метрики скорости сборки."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/FfFbsOrdersScreen.tsx","line_start":1186,"line_end":1202,"finding":"Метрика реально рендерится над рабочей областью заказов."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/api/fbs_orders.py","line_start":162,"line_end":191,"finding":"API /fbs/assembly-time передаёт период в сервис и возвращает агрегат."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/fbs_assembly_time_service.py","line_start":60,"line_end":94,"finding":"Сервис считает среднее, количество и проценты по доставленным заказам."}
+    ],
+    "test_evidence": "backend/tests/test_fbs_stock_share_wave2.py:264+ и 345+ проверяют пустой и заполненный агрегат API.",
+    "release_evidence": "Все эти файлы входят в production SHA 0229831f; frontend runtime совпадает с frontend-содержимым этого SHA по проверке root.",
+    "confidence": "high",
+    "needs_root_check": "UI не кликался; root должен отдельно подтвердить видимость и реальные данные."
+  },
+  {
+    "id": "WMS-133",
+    "title": "Не показывать пустые поставки, а не черновики",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "missing",
+    "canonical_status": "НЕ СДЕЛАНО · ПРОБЕЛ ЕСТЬ В PRODUCTION SHA",
+    "code_state": "Список активных поставок включает draft, assembling и packed и возвращает поставку даже при пустом массиве orders. Условия «ноль заказов и старше суток» в запросе и постфильтре нет.",
+    "remaining": "На чтении списка исключить только поставки с нулём заказов старше 24 часов, сохранив живые черновики с заказами и свежие пустые черновики; добавить тесты обеих границ.",
+    "evidence": [
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/fbs_supply_service.py","line_start":1350,"line_end":1408,"finding":"Запрос выбирает активные статусы без условия по возрасту и числу заказов."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/fbs_supply_service.py","line_start":1445,"line_end":1447,"finding":"Пустой список заказов сериализуется как допустимый результат, фильтра нет."}
+    ],
+    "test_evidence": "Целевого теста на сочетание zero orders + age > 24h в просмотренных тестах не найдено.",
+    "release_evidence": "Пробел присутствует в подтверждённом production SHA.",
+    "confidence": "high",
+    "needs_root_check": "После исправления проверить браузером, что живой draft с заказами остаётся видимым."
+  },
+  {
+    "id": "WMS-150",
+    "title": "Кнопка «Создать короб» ничего не создаёт",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ ПО КОДУ · UI НЕ ПРОВЕРЕН",
+    "code_state": "Кнопки создания тары вызывают page callback, API создаёт тару через сервис, а отдельная запись InventoryCountCreatedContainer защищает новую пустую тару от прунинга дерева документа.",
+    "remaining": "Нужен только ручной клик на production UI; кодовая цепочка завершена.",
+    "evidence": [
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/inventory/FfInventoryCountScreen.tsx","line_start":350,"line_end":370,"finding":"Экран вызывает создание короба, палеты или грузоместа."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/api/inventory_counts.py","line_start":746,"line_end":772,"finding":"API принимает вид тары и вызывает сервис."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/inventory_count_service.py","line_start":516,"line_end":568,"finding":"Сервис создаёт тару и отмечает её как созданную данным документом."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/api/inventory_counts.py","line_start":381,"line_end":420,"finding":"Прунинг сохраняет защищённые created container ids."}
+    ],
+    "test_evidence": "backend/tests/test_inventory_counts.py:1099+ и 1221+ проверяют создание и сохранение пустой тары в дереве.",
+    "release_evidence": "Цепочка входит в production SHA 0229831f.",
+    "confidence": "high",
+    "needs_root_check": "UI не кликался."
+  },
+  {
+    "id": "WMS-151",
+    "title": "Выделение строки «мы сейчас здесь»",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ ПО КОДУ · UI НЕ ПРОВЕРЕН",
+    "code_state": "Экран хранит selectedKey независимо от временной подсветки скана; клик по ячейке или таре выбирает её, повторный клик снимает выбор, а дерево поддерживает мышь и клавиатуру.",
+    "remaining": "Ручная проверка поведения и подписи места работы.",
+    "evidence": [
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/inventory/FfInventoryCountScreen.tsx","line_start":182,"line_end":185,"finding":"Постоянное выбранное место хранится в selectedKey."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/inventory/FfInventoryCountScreen.tsx","line_start":273,"line_end":282,"finding":"Повторный клик снимает выбор, новый клик меняет рабочее место."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/inventory/InventoryTree.tsx","line_start":165,"line_end":185,"finding":"Строки дерева вызывают selection handler с мыши и клавиатуры."}
+    ],
+    "test_evidence": "Целевой браузерный тест отсутствует по правилам проекта; UI в этой полосе не открывался.",
+    "release_evidence": "Код присутствует в production frontend baseline.",
+    "confidence": "medium",
+    "needs_root_check": "Нужен ручной клик по ячейке и коробу."
+  },
+  {
+    "id": "WMS-152",
+    "title": "Кнопка «Добавить товар»",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ ПО КОДУ · UI НЕ ПРОВЕРЕН",
+    "code_state": "Экран открывает выбор товара селлера; page callback отправляет каждый выбранный товар в выбранную тару/ячейку или без места. API валидирует вход и сервис добавляет либо объединяет ручную строку документа.",
+    "remaining": "Ручной проход трёх вариантов: короб, ячейка, ничего не выбрано.",
+    "evidence": [
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/inventory/FfInventoryCountScreen.tsx","line_start":80,"line_end":100,"finding":"Выбранное дерево преобразуется в placement для добавляемого товара."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/inventory/FfInventoryPage.tsx","line_start":302,"line_end":343,"finding":"Выбранные товары отправляются в API с выбранным placement."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/api/inventory_counts.py","line_start":818,"line_end":861,"finding":"API ручного добавления товара принимает товар, количество и место."}
+    ],
+    "test_evidence": "backend/tests/test_inventory_counts.py:1368-1594 покрывает отсутствие выбора, тару, ячейку, merge, чужого селлера, проведённый документ и невалидное количество.",
+    "release_evidence": "Код присутствует в production SHA и совпадающем frontend runtime.",
+    "confidence": "high",
+    "needs_root_check": "UI не кликался."
+  },
+  {
+    "id": "WMS-153",
+    "title": "Тара создаётся не в выбранной ячейке, нет «переложить» и удаления",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "partial",
+    "canonical_status": "НЕ СДЕЛАНО НА ПРОДЕ · ЕСТЬ НЕЗАМЕРЖЕННЫЙ СТАРЫЙ КОММИТ",
+    "code_state": "В production/reference создание тары принимает только kind и создаёт объект на складе без выбранной ячейки; действий переноса товара в тару и удаления пустой тары на текущем экране нет. Существует отдельный коммит bf9c2841 в старой ветке fix/inventory-wms-153-20260904 с реализацией по ID, но он не входит в origin/etalon и расходится со свежей базой.",
+    "remaining": "Перенести или заново применить три точечных поведения на текущий etalon, разрешить конфликты с новым экраном, прогнать целевые тесты и проверить в браузере. Старую ветку нельзя считать production.",
+    "evidence": [
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/api/inventory_counts.py","line_start":746,"line_end":769,"finding":"Create container принимает только kind, выбранная ячейка не передаётся."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/inventory_count_service.py","line_start":516,"line_end":564,"finding":"Тара создаётся для warehouse_id без размещения в выбранной ячейке."},
+      {"ref":"bf9c2841","path":"backend/app/services/inventory_count_service.py","line_start":516,"line_end":700,"finding":"Историческая незамерженная ветка содержит код WMS-153; SHA не является предком origin/etalon."}
+    ],
+    "test_evidence": "В старой ветке есть связанные тестовые изменения, но их прохождение и совместимость с 0229831f не подтверждены.",
+    "release_evidence": "bf9c2841 не содержится в origin/etalon; production соответствует 0229831f, где функции нет.",
+    "confidence": "high",
+    "needs_root_check": "Root следует решить, использовать ли старый коммит как источник для переноса, а не как готовый релиз."
+  },
+  {
+    "id": "WMS-154",
+    "title": "Пустая тара неотличима от непосчитанной",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · NULL/0 ЕСТЬ, КНОПКИ И СПИСАНИЯ ТАРЫ НЕТ",
+    "code_state": "Модель и экран уже различают null как «не считали» и числовой ноль как посчитанное значение; сохранение нуля покрыто тестом. Но явной команды «здесь пусто» для выбранного места нет, а проведение обрабатывает только введённые товарные строки и не удаляет подтверждённо пустую тару.",
+    "remaining": "Добавить явное действие для выбранной ячейки/тары, записать факт нулевого пересчёта и при проведении удалить подтверждённо пустую тару без превращения признака в отдельный жизненный цикл.",
+    "evidence": [
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/api/inventory_counts.py","line_start":65,"line_end":71,"finding":"actual_quantity nullable: протокол способен отличить отсутствие счёта от нуля."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/inventory/InventoryTree.tsx","line_start":92,"line_end":99,"finding":"UI показывает null прочерком, а ноль строкой 0."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/inventory_count_service.py","line_start":1134,"line_end":1227,"finding":"Проведение проходит по товарным строкам и не содержит удаления пустой тары по команде оператора."}
+    ],
+    "test_evidence": "backend/tests/test_inventory_counts.py:591-598 подтверждает, что введённый 0 сохраняется; сценария кнопки и списания пустой тары нет.",
+    "release_evidence": "Частичная поддержка null/0 находится в production SHA, оставшийся сценарий отсутствует.",
+    "confidence": "high",
+    "needs_root_check": "Нужна продуктовая проверка простого контракта команды «здесь пусто» перед реализацией."
+  },
+  {
+    "id": "WMS-155",
+    "title": "Поле комментария в инвентаризации",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · ПОЛЕ ЕСТЬ, РЕДАКТИРОВАНИЕ НЕ СОХРАНЯЕТСЯ",
+    "code_state": "Комментарий сохраняется при создании документа и поле показано на обеих формах. Однако обычная кнопка сохранения редактируемого документа формирует payload только из lines, а PUT API тоже принимает только lines, поэтому введённый или изменённый после создания комментарий не сохраняется.",
+    "remaining": "Добавить comment в update schema/service и в payload обеих форм, затем проверить создание, редактирование, повторное открытие и очистку комментария.",
+    "evidence": [
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/inventory/FfInventoryCountScreen.tsx","line_start":399,"line_end":407,"finding":"CommentField есть на основном экране."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/inventory/InventoryCountDialog.tsx","line_start":268,"line_end":277,"finding":"CommentField есть в диалоговой форме."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/inventory/inventoryCountApi.ts","line_start":239,"line_end":255,"finding":"actualPayload при сохранении содержит только lines и теряет comment."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/api/inventory_counts.py","line_start":727,"line_end":743,"finding":"PUT документа принимает и передаёт только строки пересчёта."}
+    ],
+    "test_evidence": "Тестов на редактирование и повторное чтение комментария после создания не найдено.",
+    "release_evidence": "Пробел подтверждён в production SHA.",
+    "confidence": "high",
+    "needs_root_check": "После исправления нужен ручной повторный вход в обе формы."
+  },
+  {
+    "id": "WMS-156",
+    "title": "Акт расхождений",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · СОЗДАНИЕ ДОСТУПНО, НО ИЗ ТЕКУЩЕГО UI НЕТ СВЯЗИ С ПРИЁМКОЙ ДЛЯ APPROVE; ПАРАЛЛЕЛЬНОЕ APPROVE НЕ ЗАЩИЩЕНО",
+    "code_state": "На фактической странице поставок фулфилмента есть создание акта и ввод знакового количества, но кнопка вызывает App callback, который отправляет пустой JSON. Созданный акт не привязан к приёмке, а экран не содержит setter этой связи; approve требует inbound_intake_request и поэтому такой акт завершить нельзя. Все ручки доступны только fulfillment_admin; при корректной привязке approve изменяет только сортировочное место склада приёмки. Дополнительно get_act не блокирует строку: два конкурентных approve могут оба увидеть confirmed до движений.",
+    "remaining": "Передавать выбранную inbound_intake_request_id при создании либо дать явный выбор и сохранение связи до submit; затем сделать approve атомарным под блокировкой строки акта или иной доказанной идемпотентностью. Проверить полный ручной сценарий и объяснить ограничения: только администратор, обязательная приёмка, изменение сортировки её склада.",
+    "evidence": [
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx","line_start":2145,"line_end":2153,"finding":"На основной странице есть кнопка создания акта расхождений."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx","line_start":3275,"line_end":3295,"finding":"Экран вызывает approve/reject и обновляет список."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/App.tsx","line_start":2749,"line_end":2764,"finding":"Callback кнопки создаёт акт с пустым JSON и не передаёт inbound_intake_request_id."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx","line_start":837,"line_end":848,"finding":"createAndOpenDiverge вызывает этот callback без аргументов и просто открывает полученный акт."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/api/discrepancy_acts.py","line_start":179,"line_end":219,"finding":"Approve/reject требуют fulfillment_admin и делегируют сервису."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/discrepancy_act_service.py","line_start":156,"line_end":201,"finding":"Approve требует confirmed и inbound link, выбирает sorting location склада приёмки и пишет движения, но не берёт блокировку строки акта перед status check."}
+    ],
+    "test_evidence": "backend/tests/test_marketplace_unload_and_discrepancy_acts.py:918-1112 проверяет API на заранее корректно связанном акте, но не путь кнопки с пустым create body и не конкурентный approve.",
+    "release_evidence": "Функциональная цепочка и конкурентный пробел находятся в production SHA 0229831f.",
+    "confidence": "high",
+    "needs_root_check": "UI не кликался; root отдельно проверяет production runtime. Конкурентную безопасность нельзя закрывать текущим status guard."
+  },
+  {
+    "id":"WMS-170","title":"Разбор экрана приёмки по пунктам","prior_status":"НА ПРОДЕ","verdict":"implemented","canonical_status":"НА ПРОДЕ ПО КОДУ · UI НЕ ПРОВЕРЕН",
+    "code_state":"Основной FfInboundRequestView не содержит старой предварительной плашки о расхождениях; габариты приходят из Product, импорт WB заполняет их и помечает source=wb, оператор может редактировать через PATCH. Глобальный сканер работает в draft/receiving. Диалог наполнения короба показывает стандартные товарные ячейки с фото и завершает кнопкой «Готово».",
+    "remaining":"Ручной браузерный проход всех пяти пунктов, включая карточку WB с габаритами и физический скан.",
+    "evidence":[
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/wildberries_product_import_service.py","line_start":227,"line_end":289,"finding":"Импорт разбирает габариты WB и записывает их в Product с источником wb."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfInboundRequestView.tsx","line_start":560,"line_end":590,"finding":"Основной экран включает глобальный сканер в приёмке и в FF-черновике."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfInboundRequestView.tsx","line_start":1318,"line_end":1374,"finding":"Редактор валидирует габариты и сохраняет их через products/{id}/dimensions."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfInboundBoxAddDialog.tsx","line_start":94,"line_end":122,"finding":"Строка короба использует FfProductLineCells, где есть фото и товарные поля."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfInboundBoxAddDialog.tsx","line_start":551,"line_end":560,"finding":"Внизу диалога есть явная кнопка «Готово»."}
+    ],
+    "test_evidence":"Просмотрен frontend/src/screens/ff/FfInboundRequestView.test.ts как структурное доказательство; браузерные тесты проектом сняты.",
+    "release_evidence":"Код присутствует в production SHA и совпадающем frontend runtime.","confidence":"high","needs_root_check":"UI и сканер руками не проверялись."
+  },
+  {
+    "id":"WMS-171","title":"Убрать ручное поле номера накладной","prior_status":"НА ПРОДЕ","verdict":"implemented","canonical_status":"НА ПРОДЕ ПО КОДУ · UI НЕ ПРОВЕРЕН",
+    "code_state":"Форма селлера сохраняет только плановую дату и количество коробов; waybill_number в её payload отсутствует. Человеческий номер документа берётся из созданного сервером документа.",
+    "remaining":"Ручно открыть создание заявки под селлером и убедиться, что старое поле не осталось в другом маршруте.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/SellerInboundDraftScreen.tsx","line_start":503,"line_end":537,"finding":"Сохраняемый черновик содержит planned_delivery_date и planned_box_count, ручного номера накладной нет."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/inbound_intake_service.py","line_start":329,"line_end":344,"finding":"Сервис создаёт документ и присваивает ему document/display number автоматически."}],
+    "test_evidence":"frontend/src/screens/v2/sellerInboundDocumentUi.test.ts прочитан как дополнительная проверка структуры формы.","release_evidence":"В production frontend source ручного поля нет.","confidence":"high","needs_root_check":"UI не открывался."
+  },
+  {
+    "id":"WMS-172","title":"Документы в любом статусе выглядят одинаково","prior_status":"НА ПРОДЕ","verdict":"implemented","canonical_status":"НА ПРОДЕ ПО КОДУ · UI НЕ ПРОВЕРЕН",
+    "code_state":"SellerInboundDraftScreen использует одну и ту же полную таблицу документа для всех статусов; sellerCanEdit меняет доступность действий и тексты пустого состояния, но не заменяет обработанный документ микро-таблицей.",
+    "remaining":"Ручно сравнить один draft и один обработанный документ на production.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/SellerInboundDraftScreen.tsx","line_start":850,"line_end":1148,"finding":"Полная таблица документа рендерится единым блоком, действия условны по sellerCanEdit."}],
+    "test_evidence":"frontend/src/screens/v2/sellerInboundDocumentUi.test.ts проверяет общие UI-контракты; живое сравнение не выполнялось.","release_evidence":"Единый экран присутствует в production baseline.","confidence":"medium","needs_root_check":"Нужна визуальная сверка статусов."
+  },
+  {
+    "id":"WMS-173","title":"Артикул продавца и штрихкод в приёмке и подборе","prior_status":"НЕ СДЕЛАНО","verdict":"implemented","canonical_status":"НА ПРОДЕ ПО КОДУ · СТАРЫЙ СТАТУС НЕАКТУАЛЕН, UI/ПЕЧАТЬ НЕ ПРОВЕРЕНЫ",
+    "code_state":"Основная приёмка использует FfProductLineCells с отдельными колонками артикула продавца и штрихкода. При построении листа подбора FBS identifiers включают seller_article и product.barcode, после чего попадают в печатный HTML.",
+    "remaining":"Ручно открыть приёмку и распечатать предпросмотр листа подбора с реальным товаром.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/components/FfProductLineCells.tsx","line_start":85,"line_end":100,"finding":"Общий компонент показывает barcode/size и wb_vendor_code как артикул продавца."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx","line_start":1260,"line_end":1268,"finding":"Лист подбора получает seller article и barcode в identifiers."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/fbsUx.ts","line_start":280,"line_end":288,"finding":"Печатный HTML выводит identifiers в строке товара."}],
+    "test_evidence":"Целевой печатный тест не запускался; код формирования HTML прочитан.","release_evidence":"Реализация входит в production frontend baseline.","confidence":"high","needs_root_check":"Печать и UI не проверены вручную."
+  },
+  {
+    "id":"WMS-174","title":"Расхождение по коробам не считается, «короб пришёл битым» записать негде","prior_status":"НЕ СДЕЛАНО","verdict":"partial","canonical_status":"ЧАСТИЧНО · РАСХОЖДЕНИЕ СЧИТАЕТСЯ В UI, ПОВРЕЖДЕНИЕ КОРОБА ОТСУТСТВУЕТ",
+    "code_state":"API возвращает actual_box_count как длину текущих boxes, а UI строит receivingTotals из boxes и planned_box_count и показывает расхождение при завершении. При этом begin_receiving всё ещё передаёт actual_box_count=None в legacy service, поэтому сохранённый boxes_discrepancy не обновляется этим путём. Поля, API и кнопки отметки повреждённого inbound-короба в production SHA не найдены.",
+    "remaining":"Сделать один авторитетный расчёт расхождения в сохраняемом состоянии или везде использовать динамический; добавить простой признак повреждения короба, API и кнопку без блокировки этапов.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/api/inbound_intake.py","line_start":697,"line_end":703,"finding":"Summary возвращает actual_box_count=len(boxes), но boxes_discrepancy берёт сохранённый флаг."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/inbound_intake_service.py","line_start":839,"line_end":866,"finding":"begin_receiving вызывает primary_accept_request с actual_box_count=None."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfInboundRequestView.tsx","line_start":608,"line_end":621,"finding":"UI вычисляет totals и box discrepancy из фактических boxes."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfInboundRequestView.tsx","line_start":4000,"line_end":4005,"finding":"Финальное подтверждение выводит динамическое расхождение коробов."}],
+    "test_evidence":"Теста на повреждение короба нет; существующие тесты расчёта UI не доказывают сохранение server flag.","release_evidence":"Частичный расчёт и отсутствие damage-flow относятся к production SHA.","confidence":"high","needs_root_check":"Нужно решить, нужен ли сохраняемый флаг расхождения при наличии динамического расчёта."
+  },
+  {
+    "id":"WMS-175","title":"Приёмка не защищена от повторного скана","prior_status":"ОТМЕНЕНО","verdict":"obsolete","canonical_status":"ОТМЕНЕНО · ПОВТОРНЫЙ СКАН ТОВАРА ЯВЛЯЕТСЯ ВТОРОЙ ЕДИНИЦЕЙ",
+    "code_state":"Снятие задачи обосновано: товарный scan endpoint увеличивает фактическое количество, что является требуемой семантикой приёмки. Начало работы проверяет статус документа на сервере; отдельная запретительная идемпотентность товарного скана сломала бы законный ввод нескольких единиц.",
+    "remaining":"Нет. Не возвращать запрет повторного товарного скана.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/inbound_intake_service.py","line_start":839,"line_end":866,"finding":"Начало приёмки принимает только допустимый статус и повторно не создаёт отдельную сущность задания."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfInboundRequestView.tsx","line_start":560,"line_end":590,"finding":"Каждый товарный скан намеренно передаётся в quantity operation."}],
+    "test_evidence":"Отмена основана на контракте операции, а не отсутствии теста.","release_evidence":"Отменённая постановка не требует релиза.","confidence":"high","needs_root_check":"Не требуется."
+  },
+  {
+    "id":"WMS-176","title":"Чистка экрана подбора","prior_status":"НЕ СДЕЛАНО","verdict":"implemented","canonical_status":"НА ПРОДЕ ПО КОДУ · СТАРАЯ ПЛАШКА/БЛОК УДАЛЕНЫ, КНОПКИ СКРЫТЫ; UI НЕ ПРОВЕРЕН",
+    "code_state":"В актуальном FBS workspace кнопка листа подбора стоит над единым экраном. FfUnloadPickPage сам передаёт hideFooterActions=true при source=fbs, поэтому «Отложить» и «Завершить подбор» не рендерятся. Старой голубой плашки и отдельного блока с формулировкой «снимаем с товаров коробов» в текущем рендере нет. Оставшееся PickPlacesTree — современный унифицированный выбор точного физического источника из WMS-058, а не доказательство сохранения старого блока; его удалять по WMS-176 нельзя.",
+    "remaining":"Только ручная визуальная проверка FBS-экрана: отсутствие старой плашки и нижних кнопок, положение/размер кнопки печати. Не менять полезное PickPlacesTree.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx","line_start":1798,"line_end":1823,"finding":"FBS показывает кнопку листа над единым экраном подбора и передаёт source=fbs."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/unload-pick/FfUnloadPickPage.tsx","line_start":537,"line_end":567,"finding":"Для source=fbs компонент явно включает hideFooterActions; обработчики нижних действий остаются только для других контекстов."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/unload-pick/UnloadPickScreen.tsx","line_start":550,"line_end":601,"finding":"Текущий верх экрана содержит сканер и выбранный точный источник без старой голубой плашки."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/unload-pick/PickPlacesTree.tsx","line_start":106,"line_end":126,"finding":"Нынешнее дерево подписано «Где лежит и что снимаем» и управляет точным источником на строке товара; это унифицированный поток WMS-058."}],
+    "test_evidence":"Исходный render-flow подтверждает условное скрытие действий; браузерный экран в этой проверке не открывался.","release_evidence":"Код чистки присутствует в production frontend; визуальная приёмка не выполнена.","confidence":"high","needs_root_check":"Ручно подтвердить внешний вид; не трактовать PickPlacesTree как старый удаляемый блок."
+  },
+  {
+    "id":"WMS-177","title":"Обновление страницы выкидывает в журнал документов","prior_status":"НЕ СДЕЛАНО","verdict":"partial","canonical_status":"ЧАСТИЧНО · FBS ВОССТАНАВЛИВАЕТСЯ ИЗ URL; MP И ПРИЁМКА FF ТЕРЯЮТ ОТКРЫТЫЙ ДОКУМЕНТ",
+    "code_state":"FBS открывает поставку по ?supply_id= и восстанавливает workspace после reload. Для MP несколько экранов пишут ?open_mp=, но эффект открытия после установки docModal/docModalId запускается повторно из-за собственных dependencies и удаляет open_mp; комментарий о сохранении параметра не соответствует фактическому второму проходу. Основная приёмка FF открывается только через React state selectedInboundId/ffDocModal без URL.",
+    "remaining":"Стабильно сохранять ID открытой MP-отгрузки и FF-приёмки в URL до явного закрытия, восстанавливать соответствующий state при загрузке и вручную проверить reload. Сохранить уже рабочий supply_id-путь FBS.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/FfFbsOrdersScreen.tsx","line_start":1111,"line_end":1117,"finding":"supply_id из URL восстанавливает FBS workspace."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx","line_start":670,"line_end":692,"finding":"Первый проход открывает MP modal, а второй проход при совпавших docModal/docModalId удаляет open_mp; эти state входят в dependencies эффекта."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfBillingScreen.tsx","line_start":121,"line_end":130,"finding":"Billing является одним из реальных writers ссылки open_mp, которая затем теряет параметр после открытия."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/App.tsx","line_start":2893,"line_end":2898,"finding":"FF-приёмка открывается только установкой локальных state без навигации."}],
+    "test_evidence":"Reload-сценарий вручную не выполнялся; повторный проход MP-эффекта следует непосредственно из его state updates и dependency list.","release_evidence":"FBS работает по production source; пробелы MP и FF находятся в production frontend.","confidence":"high","needs_root_check":"После исправления нужен ручной reload каждого типа документа."
+  },
+  {
+    "id":"WMS-178","title":"Курсор перескакивает в поле сканирования","prior_status":"НА ПРОДЕ","verdict":"implemented","canonical_status":"НА ПРОДЕ ПО КОДУ · UI НЕ ПРОВЕРЕН",
+    "code_state":"FfMpUnloadPickPanel возвращает фокус в scanner только в finally сканирования. Ручное сохранение количества в saveProductLocation не вызывает focus, поэтому прежний скачок после ручного ввода устранён по коду.",
+    "remaining":"Ручно изменить количество мышью/клавиатурой и убедиться, что фокус остаётся в поле количества.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfMpUnloadPickPanel.tsx","line_start":237,"line_end":244,"finding":"Фокус возвращается после операции скана."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfMpUnloadPickPanel.tsx","line_start":263,"line_end":299,"finding":"Ручное saveProductLocation не переводит фокус в scanner."}],
+    "test_evidence":"Браузерного теста фокуса нет по правилам проекта.","release_evidence":"Исправление присутствует в production frontend.","confidence":"medium","needs_root_check":"UI не кликался."
+  },
+  {
+    "id":"WMS-179","title":"Подтверждение при закрытии с несохранёнными изменениями","prior_status":"НЕ СДЕЛАНО","verdict":"partial","canonical_status":"ЧАСТИЧНО · ПРИЁМКА ЗАЩИЩЕНА, FBS WORKSPACE ЗАКРЫВАЕТСЯ БЕЗ ПРОВЕРКИ",
+    "code_state":"Основная FF-приёмка сообщает dirty state родителю, а App использует единый close handler; селлерская приёмка проверяет draftFieldsDirty. Однако крестик FfFbsSupplyWorkspace напрямую вызывает onClose и не отслеживает несохранённые поля; требование охватывало также печать, сканирование и создание поставки.",
+    "remaining":"Ввести общий простой guard только для реально несохранённых локальных значений во всех перечисленных модалках; отдельно не блокировать закрытие после уже сохранённых API-операций.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/App.tsx","line_start":3617,"line_end":3651,"finding":"FF document dialog использует closeFfDocument и получает onDirtyChange от inbound view."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/SellerInboundDraftScreen.tsx","line_start":514,"line_end":537,"finding":"Селлерская форма вычисляет draftFieldsDirty перед сохранением."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx","line_start":1665,"line_end":1670,"finding":"Крестик FBS напрямую вызывает onClose без dirty guard."}],
+    "test_evidence":"Полного теста матрицы закрытий нет; UI не проверялся.","release_evidence":"Частичная защита и оставшийся пробел находятся в production frontend.","confidence":"high","needs_root_check":"Нужна ручная проверка каждого типа окна с изменённым и неизменённым полем."
+  },
+  {
+    "id":"WMS-180","title":"Пропал фильтр по складам у фулфилмента","prior_status":"НЕ СДЕЛАНО","verdict":"implemented","canonical_status":"НА ПРОДЕ ПО КОДУ · ФИЛЬТР ЕСТЬ В «НОВЫХ», UI НЕ ПРОВЕРЕН",
+    "code_state":"На основном FfFbsOrdersScreen во вкладке новых заказов есть Select «Склад селлера / WB»; выбранный wb_warehouse_id передаётся в API worklist. В активных поставках фильтр намеренно не показывается.",
+    "remaining":"Уточнить только если владелец ожидает этот фильтр также во вкладке активных поставок; исходный регресс новых заказов закрыт по коду.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/FfFbsOrdersScreen.tsx","line_start":623,"line_end":648,"finding":"Выбранный склад передаётся как wb_warehouse_id для statusGroup=new."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/FfFbsOrdersScreen.tsx","line_start":1274,"line_end":1298,"finding":"Фильтр «Склад селлера / WB» реально рендерится во вкладке новых."}],
+    "test_evidence":"UI не кликался; наличие и request-flow проверены чтением.","release_evidence":"Фильтр присутствует в production frontend baseline.","confidence":"high","needs_root_check":"Ручной выбор склада и проверка списка."
+  },
+  {
+    "id":"WMS-181","title":"Кнопка «Добавить» не работает при создании заявки на приём","prior_status":"НА ПРОДЕ","verdict":"implemented","canonical_status":"НА ПРОДЕ ПО КОДУ · UI НЕ ПРОВЕРЕН",
+    "code_state":"Кнопка открывает SellerWbProductPickerDialog; onApply последовательно PATCH-ит существующие строки или POST-ит новые и перечитывает документ. Пустого обработчика нет.",
+    "remaining":"Ручно добавить новый и уже существующий товар под селлером.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/SellerInboundDraftScreen.tsx","line_start":411,"line_end":471,"finding":"applyPicker пишет выбранные количества в API и перечитывает документ."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/SellerInboundDraftScreen.tsx","line_start":1152,"line_end":1164,"finding":"Модалка подключена к applyPicker."}],
+    "test_evidence":"Исходный обработчик прочитан; ручной клиентский сценарий не выполнялся.","release_evidence":"Цепочка присутствует в production frontend.","confidence":"high","needs_root_check":"UI не кликался."
+  },
+  {
+    "id":"WMS-182","title":"Убрать заливку строк, оставить столбец расхождения","prior_status":"НА ПРОДЕ","verdict":"missing","canonical_status":"РЕГРЕСС НА ПРОДЕ · ЗЕЛЁНАЯ И КРАСНАЯ ЗАЛИВКА СТРОК ОСТАЛАСЬ",
+    "code_state":"В фактически смонтированном FfInboundRequestView совпавшие строки получают success background, строки с расхождением error background, а дополнительные состояния снова переопределяют фон. Это прямо противоречит правилу оставить только красный текст в столбце расхождения.",
+    "remaining":"Удалить только success/error backgroundColor, которые зависят от matchesExpected и hasDiscrepancy; оставить красный текст расхождения в своей колонке. Подсветка последнего скана и ошибок ЧЗ относится к более новым WMS-394/395/396/403 и должна сверяться с ними отдельно, а не удаляться этой старой задачей.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfInboundRequestView.tsx","line_start":2544,"line_end":2597,"finding":"TableRow сначала окрашивается success/error по совпадению и расхождению, затем отдельно обрабатывает последний скан и ошибки кодов."}],
+    "test_evidence":"Код рендера является прямым доказательством регресса; UI не открывался.","release_evidence":"Регресс находится в production frontend baseline.","confidence":"high","needs_root_check":"Нужна визуальная проверка после удаления заливки."
+  },
+  {
+    "id":"WMS-183","title":"Большие кнопки перехода между этапами","prior_status":"НЕ СДЕЛАНО","verdict":"implemented","canonical_status":"НА ПРОДЕ ПО КОДУ · UI НЕ ПРОВЕРЕН",
+    "code_state":"В FBS workspace есть единый nextStageControl с contained size=large и подписью «Далее: …»; упаковка и подбор имеют крупные основные действия завершения. Внешний вид без браузера не оценивался.",
+    "remaining":"Только визуальная проверка на рабочих разрешениях. Старые тексты причин блокировки в nextStageControl недостижимы, потому что доступный индекс всегда равен boxes; их удаление возможно как cleanup, но текущего навигационного блокера они не создают.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx","line_start":1484,"line_end":1525,"finding":"Крупная кнопка «Далее» ведёт на следующий этап."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/fbsUx.ts","line_start":70,"line_end":87,"finding":"Все четыре рабочие поверхности безусловно доступны для WB и Ozon; ветка disabled недостижима."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfPackagingPage.tsx","line_start":1251,"line_end":1274,"finding":"Упаковка имеет основную contained-кнопку завершения."}],
+    "test_evidence":"frontend/src/screens/v2/FfFbsSupplyWorkspace.test.ts:56-80 фиксирует доступность всех этапов; визуальный размер браузером не проверен.","release_evidence":"Кнопки и открытая навигация присутствуют в production frontend.","confidence":"high","needs_root_check":"Нужно только вручную оценить видимость кнопок."
+  },
+  {
+    "id":"WMS-184","title":"Не показывать фулфилменту черновики селлеров","prior_status":"НЕ СДЕЛАНО","verdict":"missing","canonical_status":"НЕ СДЕЛАНО · FF API ВОЗВРАЩАЕТ ВСЕ ЧЕРНОВИКИ TENANT",
+    "code_state":"list_inbound_requests передаёт seller scope только для роли селлера. Сервис при seller_product_owner_id=None выбирает все заявки tenant без условия, исключающего status=draft с created_by_seller_id, поэтому FF видит селлерские черновики вместе со своими.",
+    "remaining":"Для FF списка исключить только draft, где created_by_seller_id не null; сохранить FF draft, где created_by_seller_id null. Покрыть оба случая тестами.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/api/inbound_intake.py","line_start":673,"line_end":720,"finding":"API получает общий список и сериализует created_by_seller_id без фильтра FF."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/inbound_intake_service.py","line_start":356,"line_end":378,"finding":"Сервис фильтрует только tenant и необязательного seller owner, но не автора draft."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/utils/inboundQueues.ts","line_start":29,"line_end":31,"finding":"Клиентская очередь приёмки возвращает серверные rows без дополнительной фильтрации."}],
+    "test_evidence":"Теста FF-own-draft vs seller-draft не найдено.","release_evidence":"Пробел находится в production backend SHA.","confidence":"high","needs_root_check":"После исправления проверить оба вида черновика под FF."
+  },
+  {
+    "id":"WMS-185","title":"Скопировать экран фулфилмента на портал селлера","prior_status":"НА ПРОДЕ","verdict":"partial","canonical_status":"ЧАСТИЧНО НА ПРОДЕ · ЭКРАН ПОХОЖ, НО СЕЛЛЕР МОЖЕТ РЕДАКТИРОВАТЬ ТЗ И ЧЗ",
+    "code_state":"SellerProductsStockScreen повторяет таблицу, остатки, фильтры и резервы каталога FF, но это отдельная реализация. Она не read-only: селлер может синхронизировать по API, массово включать ЧЗ и PATCH-ить упаковочные инструкции. Это шире постановки «только смотрит; коды загрузить может».",
+    "remaining":"Выровнять вид и доступные действия на существующих экранах; убрать несогласованные write-actions селлера либо отдельно подтвердить их продуктом, сохранив разрешённую загрузку кодов. Архитектурный рефакторинг для этого не требуется.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/SellerProductsStockScreen.tsx","line_start":425,"line_end":481,"finding":"Экран заявляет read-only остатки, но показывает sync и массовое включение ЧЗ."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/SellerProductsStockScreen.tsx","line_start":262,"line_end":320,"finding":"Селлерский экран PATCH-ит ТЗ и requires_honest_sign."}],
+    "test_evidence":"Тест матрицы прав UI/API не найден в прочитанном наборе.","release_evidence":"Несогласованные действия доступны в production source.","confidence":"high","needs_root_check":"Нужна продуктовая проверка, какие из write-actions сейчас действительно разрешены владельцем."
+  },
+  {
+    "id":"WMS-186","title":"Синхронизировать каталог фулфилмента и селлера","prior_status":"ЧАСТИЧНО","verdict":"partial","canonical_status":"ЧАСТИЧНО НА ПРОДЕ · ОСТАТКИ/ФИЛЬТРЫ ЕСТЬ, ЭКРАНЫ И ПРАВА РАСХОДЯТСЯ",
+    "code_state":"Оба экрана читают один inventory summary и показывают поиск, категорию, остаток FF и резервы. FF дополнительно имеет seller/marketplace filters и управление направлениями/FBS. Селлерская таблица отдельна и позволяет менять ТЗ и ЧЗ, поэтому одинаковый вид и требуемое разделение прав не достигнуты.",
+    "remaining":"Выровнять вид, колонки total/FBS/reserved, фильтры и доступные действия на уже существующих экранах; оставить изменение остатков только FF, селлеру — только согласованные просмотр и загрузку кодов. Архитектурный рефакторинг для этого не требуется.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/SellerProductsStockScreen.tsx","line_start":132,"line_end":223,"finding":"Селлер имеет поиск/категорию и объединяет каталог с inventory summary."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/FfProductsCatalogScreen.tsx","line_start":275,"line_end":313,"finding":"FF имеет отдельные seller/marketplace/category filters и управление FBS/резервами."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/SellerProductsStockScreen.tsx","line_start":669,"line_end":741,"finding":"Селлер видит остаток и резервы, но не отдельный единообразный набор total/FBS/reserved."}],
+    "test_evidence":"Сквозного визуального контракта двух экранов нет.","release_evidence":"Частичная синхронизация присутствует в production frontend.","confidence":"high","needs_root_check":"Нужно сравнить экраны рядом в браузере."
+  },
+  {
+    "id":"WMS-187","title":"Убрать поля «WB/nmId», «FBS-пул», «Публикация WB»","prior_status":"НА ПРОДЕ","verdict":"partial","canonical_status":"ЧАСТИЧНО · СТАРЫЕ ПОЛЯ УБРАНЫ, ТЕРМИН «FBS-ПУЛ» ОСТАЛСЯ В РЕЗЕРВАХ",
+    "code_state":"В заголовках основной FF-таблицы нет «WB/nmId» и «Публикация WB», а кнопка называется «Резервы». Однако раскрытая строка резерва всё ещё подписывает is_fbs-направление как «FBS-пул», поэтому требуемая терминология удалена не полностью.",
+    "remaining":"Переименовать оставшуюся пользовательскую подпись FBS-пул в согласованный термин внутри раздела «Резервы»; не возвращать отдельный признак публикации.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/FfProductsCatalogScreen.tsx","line_start":1360,"line_end":1378,"finding":"Основная таблица показывает «Остаток» и «Резервы», старых заголовков нет."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/FfProductsCatalogScreen.tsx","line_start":1888,"line_end":1900,"finding":"Внутри резервов всё ещё выводится пользовательская подпись «FBS-пул»."}],
+    "test_evidence":"Прямое чтение UI-строк; браузер не открывался.","release_evidence":"Остаточная старая подпись присутствует в production frontend.","confidence":"high","needs_root_check":"Уточнить только целевой новый текст для is_fbs-направления."
+  },
+  {
+    "id":"WMS-188","title":"Предупреждение по остатку видно не на всех экранах упаковки","prior_status":"НЕ СДЕЛАНО","verdict":"obsolete","canonical_status":"СНЯТЬ КАК УСТАРЕВШЕЕ · УПАКОВКА БОЛЬШЕ НЕ ВЫБИРАЕТ ИСТОЧНИК И НЕ ДВИГАЕТ ОСТАТОК",
+    "code_state":"Историческое предупреждение относилось к выбору другого источника остатка во время упаковки. По действующему контракту упаковка только фиксирует признак и не выбирает источник, не двигает и не списывает склад. Для WB точный источник выбирается на подборе, а физическое списание выполняется при передаче; Ozon имеет отдельный путь. FBS workspace ещё умеет прочитать warnings, FfPackagingPage нет, но packaging service всегда возвращает пустой список и ни разу его не наполняет.",
+    "remaining":"Снять задачу как устаревшую по прямому действующему контракту AGENTS/WMS-392. Если возникнет реальный дефект выбора источника или списания, проверять его в соответствующем потоке подбора/передачи, не создавать packaging warning.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx","line_start":1190,"line_end":1196,"finding":"Workspace читает и показывает warnings из ответа упаковки."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfPackagingPage.tsx","line_start":451,"line_end":472,"finding":"Ручная упаковка использует только packaging_task и локальный success feedback."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/fbs_packaging_integration_service.py","line_start":620,"line_end":715,"finding":"Сервис возвращает список warnings, но в текущем пути его не наполняет."}],
+    "test_evidence":"В коде packaging service нет inventory movement и нет append в warnings; теста на несуществующий warning нет.","release_evidence":"Текущая разделённая архитектура picking/packing находится в production SHA.","confidence":"high","needs_root_check":"Root должен перенести снятие в канон; нового warning-flow добавлять не следует."
+  },
+  {
+    "id":"WMS-189","title":"Пропала подсказка, куда сканируется товар в короб","prior_status":"НЕ СДЕЛАНО","verdict":"implemented","canonical_status":"НА ПРОДЕ ПО КОДУ · UI НЕ ПРОВЕРЕН",
+    "code_state":"Актуальный диалог наполнения короба явно показывает boxLabel непосредственно под заголовком «Наполнить короб» до поля сканирования; оператор видит целевой короб на каждом скане.",
+    "remaining":"Ручно открыть два разных короба и проверить, что label однозначен и не исчезает при скане.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx","line_start":616,"line_end":639,"finding":"Диалог постоянно показывает boxLabel выбранного короба в заголовке."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx","line_start":593,"line_end":608,"finding":"Сканер работает внутри уже открытого диалога целевого короба."}],
+    "test_evidence":"UI не кликался; прямой render-flow подтверждён.","release_evidence":"Подсказка присутствует в production frontend.","confidence":"high","needs_root_check":"Ручная визуальная проверка."
+  },
+  {
+    "id":"WMS-190","title":"Товары не по текущему ключу помечать, но остатки показывать","prior_status":"НЕ СДЕЛАНО","verdict":"missing","canonical_status":"НЕ СДЕЛАНО · КАТАЛОГ ПОКАЗЫВАЕТ СТАРЫЕ ТОВАРЫ БЕЗ МАРКЕРА",
+    "code_state":"Seller catalog сначала выбирает все Products seller_id, затем подмешивает карточки текущего импорта только по nm_id. Если карточки нет, строка всё равно возвращается, что сохраняет остаток, но в DTO нет признака «нет в текущем кабинете», и UI его не показывает.",
+    "remaining":"Вычислять простой boolean присутствия товара в актуальном snapshot текущего кабинета, возвращать его в catalog DTO и показывать нейтральный маркер, не скрывая inventory summary.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/seller_wb_catalog_service.py","line_start":238,"line_end":288,"finding":"Сервис берёт все Products seller и необязательно находит imported card; строки без card не исключаются."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/seller_wb_catalog_service.py","line_start":37,"line_end":88,"finding":"Catalog DTO не содержит active/current-account marker."}],
+    "test_evidence":"Теста старого товара после смены ключа с сохранением остатка и marker нет.","release_evidence":"Пробел находится в production backend/frontend.","confidence":"high","needs_root_check":"Нужна свежая data-проверка после реализации на одном известном сменённом кабинете."
+  },
+  {
+    "id":"WMS-191","title":"Чистка чужих товаров из каталога селлера","prior_status":"НЕ СДЕЛАНО","verdict":"historical_data","canonical_status":"ИСТОРИЧЕСКИЕ ДАННЫЕ · API ТЕПЕРЬ СКОУПИТ SELLER, ЧУЖИЕ СТРОКИ НЕ ПЕРЕПРОВЕРЕНЫ",
+    "code_state":"Текущий /products/wb-catalog принудительно определяет catalog_seller_id из авторизованного пользователя, а сервис фильтрует Products и imported cards по тому же seller_id и tenant_id. Это предотвращает обычное чтение товара другого seller. Но если исторически чужие Products были ошибочно записаны с seller_id Горячкиной, текущий фильтр их не отличит; WMS-190 marker также отсутствует.",
+    "remaining":"Read-only проверить текущие product rows и актуальный imported-card snapshot Горячкиной по seller_id без чтения ключей. Удаление/перепривязка данных требует отдельного доказательства происхождения.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/api/products.py","line_start":691,"line_end":723,"finding":"Seller endpoint ограничивает каталог seller_id текущего пользователя."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/seller_wb_catalog_service.py","line_start":247,"line_end":276,"finding":"Products и imported cards выбираются по seller_id и tenant_id."}],
+    "test_evidence":"Кодовый scope подтверждён; текущие лампочки/удобрения в БД этой полосой не проверены.","release_evidence":"Scope работает в production SHA, историческая чистка данных не доказана.","confidence":"medium","needs_root_check":"Нужна bounded сверка products против imported cards конкретного seller_id без credential-полей."
+  },
+  {
+    "id":"WMS-192","title":"Валюта трёхбуквенным кодом","prior_status":"ОТМЕНЕНО","verdict":"obsolete","canonical_status":"ОТМЕНЕНО · ОПИСАННОГО ЭКРАНА И МОДЕЛИ В WMS НЕТ",
+    "code_state":"В production моделях нет поля/справочника currency для описанного экрана; совпадения frontend относятся к форматированию денежных сумм в других функциях. Возвращать эту постановку в WMS без конкретного экрана нельзя.",
+    "remaining":"Нет. Если появится конкретный экран, это должна быть новая постановка с указанием маршрута.",
+    "evidence":[{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/models/billing.py","line_start":75,"line_end":129,"finding":"Реальная тарифная модель хранит service/unit/amount и области действия, но не поле или справочник валюты."},{"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx","line_start":1,"line_end":20,"finding":"Существующий денежный экран относится к тарифам и не является описанным валютным полем."}],
+    "test_evidence":"Неприменимо для снятой ошибочно адресованной задачи.","release_evidence":"Отмена не требует релиза.","confidence":"high","needs_root_check":"Не требуется."
+  },
+  {
+    "id":"WMS-210","title":"Конструктор состава этикетки","prior_status":"ЧАСТИЧНО","verdict":"partial","canonical_status":"ЧАСТИЧНО В PRODUCTION SOURCE · 4 ИЗ 8 ПОЛЕЙ, RUNTIME-ФЛАГ ВЫКЛЮЧЕН 09.09.2026 19:57 UTC",
+    "code_state":"Панель привязана к seller_id и сохраняет четыре boolean: размер, цвет, бренд, состав. Артикул, страна, EAC и свободный текст отсутствуют и во frontend типе, и в backend schema. При label_template_enabled=false панель скрывается, а save не сохраняет настройки. Свежий несекретный production API read подтвердил false, поэтому конструктор сейчас недоступен оператору.",
+    "remaining":"Добавить недостающие четыре поля в простой seller-scoped template и печатный renderer, затем провести целевую проверку печати и включить функцию. Значение runtime уже установлено: на 19:57:24 UTC функция выключена.",
+    "evidence":[
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfLabelTemplatePanel.tsx","line_start":14,"line_end":19,"finding":"UI содержит только четыре чекбокса."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/utils/printTemplate.ts","line_start":9,"line_end":25,"finding":"Frontend contract содержит только size/color/brand/composition."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/api/marking_codes.py","line_start":352,"line_end":367,"finding":"Backend schema также поддерживает только четыре поля."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/core/settings.py","line_start":72,"line_end":79,"finding":"Feature flag label_template_enabled выключен по умолчанию."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/print_template_service.py","line_start":576,"line_end":634,"finding":"Настройка хранится как seller-scoped default и при выключенном флаге не сохраняется."},
+      {"ref":"production-readonly-2026-09-09","path":"docs/reviews/artifacts/wms414-audit-20260909/label-setting.json","line_start":1,"line_end":1,"finding":"Несекретный production API read в 19:57:24 UTC вернул label_template_enabled=false."}
+    ],
+    "test_evidence":"Тесты четырёх поддержанных полей существуют в print-template наборе, но недостающие поля и production UI ими не покрыты.",
+    "release_evidence":"Частичный код входит в production SHA; production API подтвердил выключенный feature flag без чтения env или секретов.",
+    "confidence":"high","needs_root_check":"После реализации недостающих полей нужны включение флага и ручная проверка панели/печати."
+  },
+  {
+    "id":"WMS-211","title":"Кнопки «Сохранить макет» в конструкторе нет","prior_status":"НА ПРОДЕ","verdict":"partial","canonical_status":"КНОПКА ЕСТЬ В PRODUCTION SOURCE, НО ПАНЕЛЬ ВЫКЛЮЧЕНА RUNTIME-ФЛАГОМ",
+    "code_state":"FfLabelTemplatePanel содержит PrimaryAction «Сохранить», который вызывает save(); save выполняет PUT seller-label-options с seller_id и текущими options. Успешный ответ показывает подтверждение. Однако вся панель скрыта при label_template_enabled=false, и production API на 09.09.2026 19:57:24 UTC подтвердил именно false. Поэтому исходный код кнопки реализован, но оператор на production её получить не может.",
+    "remaining":"После завершения WMS-210 включить функцию и вручную проверить видимость кнопки и фактическое сохранение. До этого статус «на проде» как доступная оператору функция неверен.",
+    "evidence":[
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfLabelTemplatePanel.tsx","line_start":101,"line_end":125,"finding":"save отправляет PUT с seller_id и label_options."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfLabelTemplatePanel.tsx","line_start":127,"line_end":129,"finding":"Панель скрывается при выключенном feature flag."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfLabelTemplatePanel.tsx","line_start":167,"line_end":180,"finding":"Кнопка «Сохранить» вызывает save и показывает состояние «Сохранено»."},
+      {"ref":"production-readonly-2026-09-09","path":"docs/reviews/artifacts/wms414-audit-20260909/label-setting.json","line_start":1,"line_end":1,"finding":"Production API подтвердил label_template_enabled=false."}
+    ],
+    "test_evidence":"Кнопочная цепочка подтверждена чтением; UI не кликался.",
+    "release_evidence":"Кнопка входит в production frontend baseline, но production runtime flag выключает всю панель.",
+    "confidence":"high","needs_root_check":"После включения нужна ручная UI-проверка; сейчас недоступность установлена через API."
+  },
+  {
+    "id":"WMS-212","title":"Единый макет этикетки во всех местах системы","prior_status":"ЧАСТИЧНО","verdict":"partial","canonical_status":"ЧАСТИЧНО НА ПРОДЕ · ЕДИНЫЙ RESOLVE ЕСТЬ ЗА ФЛАГОМ, КОД WB В FBS ГОТОВ",
+    "code_state":"ProductBarcodePrintDialog и общий MarkingPrintDialog получают layout через один /print-templates/resolve по productId; backend накладывает seller label options на пользовательскую ленту. При выключенном label_template_enabled сервер принудительно возвращает default fields, поэтому изменение конструктора не наследуется. Production API подтвердил false. В упаковке FBS sticker code вынесен в отдельный столбец, последние четыре символа показаны крупнее и жирнее.",
+    "remaining":"Закрыть WMS-210, включить единый seller template после печатной проверки и инвентаризировать редкие прямые print helpers; сейчас единый изменяемый состав фактически не действует из-за runtime flag=false.",
+    "evidence":[
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/components/ProductBarcodePrintDialog.tsx","line_start":49,"line_end":80,"finding":"Обычная печать товара получает seller template через resolvePrintTemplate."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/components/MarkingPrintDialog.tsx","line_start":495,"line_end":535,"finding":"Общая маркировочная печать также получает template по product id."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"backend/app/services/print_template_service.py","line_start":637,"line_end":695,"finding":"Backend объединяет operator tape и seller-scoped label options, но отключает options feature при flag=false."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx","line_start":202,"line_end":219,"finding":"stickerCodeParts отделяет последние четыре символа."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx","line_start":2094,"line_end":2105,"finding":"Отдельный столбец «Стикер» выводит хвост жирным размером 22."},
+      {"ref":"production-readonly-2026-09-09","path":"docs/reviews/artifacts/wms414-audit-20260909/label-setting.json","line_start":1,"line_end":1,"finding":"Production API read в 19:57:24 UTC подтвердил label_template_enabled=false."}
+    ],
+    "test_evidence":"frontend/src/screens/v2/FfFbsSupplyWorkspace.test.ts проверяет разбиение sticker code; полная матрица всех точек печати не запускалась.",
+    "release_evidence":"Обе половины присутствуют в production source, но единый изменяемый макет фактически выключен production runtime flag.",
+    "confidence":"high","needs_root_check":"После включения руками сравнить отпечаток из каталога и упаковки."
+  },
+  {
+    "id":"WMS-213","title":"Штрихкоды коробов печатать через стандартную модалку 58×40","prior_status":"НА ПРОДЕ","verdict":"implemented","canonical_status":"НА ПРОДЕ ПО КОДУ · ФИЗИЧЕСКАЯ ПЕЧАТЬ НЕ ПРОВЕРЕНА",
+    "code_state":"Единый BoxLabelPrintDialog выбирает физический размер, по умолчанию 58×40, и вызывается из приёмки, отгрузки MP, инвентаризации, карты склада и справочника тары. Приёмка и MP передают выбранный size в свои confirmPrint handlers вместо немедленного A4.",
+    "remaining":"Ручно открыть обе основные точки и проверить реальный print preview/термопринтер 58×40.",
+    "evidence":[
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/components/BoxLabelPrintDialog.tsx","line_start":24,"line_end":80,"finding":"Стандартная модалка предлагает размер и передаёт его в onConfirm; documented default 58×40."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfInboundRequestView.tsx","line_start":4024,"line_end":4035,"finding":"Печать короба/грузоместа приёмки идёт через BoxLabelPrintDialog."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx","line_start":3555,"line_end":3562,"finding":"Печать короба MP идёт через тот же диалог."}
+    ],
+    "test_evidence":"Компонентный контракт прочитан; browser/physical print не выполнялись.",
+    "release_evidence":"Единый диалог присутствует в production frontend baseline.",
+    "confidence":"high","needs_root_check":"Нужна физическая или browser print-preview проверка размера."
+  },
+  {
+    "id":"WMS-214","title":"Галку «печатать ЧЗ раздельно» вынести на форму печати","prior_status":"НА ПРОДЕ","verdict":"implemented","canonical_status":"НА ПРОДЕ ПО КОДУ · UI/ПРЕДПРОСМОТР НЕ ПРОКЛИКАНЫ",
+    "code_state":"MarkingPrintDialog содержит прямо на форме переключатель «Вместе на одной ленте / Раздельно», выбор немедленно меняет режим и сохраняется в локальном store. Для совместного и раздельного режимов рендерятся соответствующие size controls, секции и MarkingLabelPreview. Старый экран настроек больше не показывает этот control.",
+    "remaining":"Ручно переключить оба режима, проверить два preview и повторное открытие формы. Значение сохраняется локально, а не PATCH-ит tenant setting; если нужна межустройственная настройка, это отдельное решение.",
+    "evidence":[
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/components/MarkingPrintDialog.tsx","line_start":313,"line_end":370,"finding":"Форма хранит локальный выбор режима и вычисляет separateMode."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/components/MarkingPrintDialog.tsx","line_start":1263,"line_end":1267,"finding":"Toggle меняет режим и записывает его в общий local store."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/components/MarkingPrintDialog.tsx","line_start":1338,"line_end":1363,"finding":"Переключатель реально рендерится на форме печати."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/components/MarkingPrintDialog.tsx","line_start":1454,"line_end":1500,"finding":"Совместный/обычный режим имеет визуальный предпросмотр этикетки."},
+      {"ref":"0229831f7442823f086f0147ffa85aed05b8ca66","path":"frontend/src/screens/ff/FfSettingsScreen.tsx","line_start":90,"line_end":96,"finding":"Экран настроек документирует перенос переключателя и больше его не использует."}
+    ],
+    "test_evidence":"Тесты print utils не заменяют ручную визуальную проверку двух preview.",
+    "release_evidence":"Переключатель и preview входят в production frontend baseline.",
+    "confidence":"high","needs_root_check":"UI не прокликан; проверить режимы и сохранение при повторном открытии."
+  }
+]

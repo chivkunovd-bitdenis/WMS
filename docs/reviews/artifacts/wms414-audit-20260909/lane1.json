@@ -1,0 +1,1534 @@
+[
+  {
+    "id": "WMS-000",
+    "title": "Ежедневная сверка бэклога с кодом",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "unverified",
+    "canonical_status": "АВТОСВЕРКА ОПИСАНА · ФАКТИЧЕСКИЙ ЗАПУСК НЕ ПРОВЕРЕН",
+    "code_state": "В постоянный аудит-артефакт сохранена CLI-инструкция ежедневной сверки в 22:00. Root отдельно прочитал Codex automation.toml и не нашёл совпадений backlog/бэклог/22:00; в каталоге Claude-задачи был только SKILL.md.",
+    "remaining": "CLI-инструкция не является активным расписанием. Реестр Claude и история успешного запуска не подтверждены.",
+    "evidence": [
+      {
+        "ref": "local-instruction-copy-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/wms000-schedule-instruction.md",
+        "line_start": 1,
+        "line_end": 10,
+        "finding": "Сохранённая инструкция называет задачу и заявляет ежедневный запуск в 22:00."
+      },
+      {
+        "ref": "local-instruction-copy-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/wms000-schedule-instruction.md",
+        "line_start": 21,
+        "line_end": 35,
+        "finding": "Инструкция описывает сверку кода и поиск новых задач, но не содержит запись регистрации или журнал запусков."
+      }
+    ],
+    "test_evidence": "Тесты этим read-only аудитом не запускались.",
+    "release_evidence": "Это локальная внешняя автоматизация; production SHA WMS к её запуску неприменим.",
+    "confidence": "medium",
+    "needs_root_check": "При наличии отдельного реестра Claude проверить регистрацию и последний успешный запуск; Codex automation.toml задачу не содержит."
+  },
+  {
+    "id": "WMS-001",
+    "title": "Прод и стенд разошлись в две линии",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · ЛИНИИ СВЕДЕНЫ",
+    "code_state": "Разошедшиеся линии сведены merge-коммитом 3319da25; текущий эталон и production находятся на общей линии и содержат последующие merge-миграции.",
+    "remaining": "Операторский/UI шаг отсутствует. Дополнительных изменений кода не требуется.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/alembic/versions/20260905_0253_merge_wms060_and_staging.py",
+        "line_start": 1,
+        "line_end": 31,
+        "finding": "Миграция 0253 явно объединяет две головы 0250 и 0252 в один no-op merge."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/alembic/versions/20260908_0257_merge_stage_prod.py",
+        "line_start": 1,
+        "line_end": 14,
+        "finding": "Следующая merge-миграция объединяет 0255 и 0256; production SHA содержит этот граф."
+      }
+    ],
+    "test_evidence": "Тесты не запускались; проверены граф миграций и git history --all (3319da25).",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-002",
+    "title": "Цепочка миграций раздвоилась, слияние не стартует",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · ЦЕПОЧКА МИГРАЦИЙ СВЕДЕНА",
+    "code_state": "Раздвоение Alembic закрыто явной merge-ревизией 0253; последующий граф продолжен и снова сведён 0257.",
+    "remaining": "Ничего не осталось по исходному блокеру запуска миграций.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/alembic/versions/20260905_0253_merge_wms060_and_staging.py",
+        "line_start": 1,
+        "line_end": 31,
+        "finding": "down_revision содержит обе прежние головы и upgrade/downgrade не меняют данные."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/alembic/versions/20260908_0257_merge_stage_prod.py",
+        "line_start": 1,
+        "line_end": 14,
+        "finding": "Текущая линия имеет последующую точку слияния; файл входит в production SHA."
+      }
+    ],
+    "test_evidence": "Тесты не запускались; проверены git history (8056e009) и реальные revision/down_revision.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-003",
+    "title": "Линии кода квоты разошлись по существу, а не по хэшам",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "obsolete",
+    "canonical_status": "СНЯТА КАК УСТАРЕВШАЯ РАЗВИЛКА · RUNTIME БЕЗ ЖУРНАЛА",
+    "code_state": "Выбор между двумя историческими реализациями больше не актуален: runtime считает доступность из фактического остатка и резервов; FbsStockPoolDebit не используется сервисами. Таблица/модель старого журнала физически остаётся как наследие.",
+    "remaining": "Не возвращать старую механику расходного журнала. Если нужно удалить неиспользуемую таблицу, это отдельная задача миграции, а не незакрытая развилка WMS-003.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_stock_availability_service.py",
+        "line_start": 186,
+        "line_end": 253,
+        "finding": "Единый расчёт берёт on-hand и вычитает FBO, outbound, направления и FBS-резервы."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_stock_rule_service.py",
+        "line_start": 367,
+        "line_end": 405,
+        "finding": "Публикуемое количество ограничивается текущим свободным остатком; отдельного расходного счётчика нет."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/models/fbs_stock_pool_debit.py",
+        "line_start": 1,
+        "line_end": 70,
+        "finding": "Историческая модель журнала остаётся в схеме, но git grep production SHA находит её только в модели и models/__init__."
+      }
+    ],
+    "test_evidence": "Тесты не запускались; прочитаны test_fbs_stock_availability.py и test_fbs_stock_rule_service.py как границы расчёта.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-010",
+    "title": "Тариф «за документ» умножается на число строк",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09.2026",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · НОВЫЙ DOCUMENT-ТАРИФ ЗАПРЕЩЁН",
+    "code_state": "Живой экран/сервис матрицы разрешает хранению только liter_day, всем остальным услугам — item. Неизменённые исторические document-версии читаются, но новую такую ставку создать нельзя.",
+    "remaining": "История по старым document-тарифам не пересчитывалась; это осознанная граница решения. UI в этом аудите не открывался.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/billing_tariff_matrix_service.py",
+        "line_start": 249,
+        "line_end": 265,
+        "finding": "Сервер запрещает новую единицу document и сохраняет только неизменённую историческую версию."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/billing_ledger_service.py",
+        "line_start": 399,
+        "line_end": 418,
+        "finding": "Шапка legacy-начисления умеет quantity=1 для document; старый построчный путь остаётся только для исторических тарифов."
+      }
+    ],
+    "test_evidence": "Тесты не запускались; существующие billing configuration/tariff matrix тесты прочитаны. Канон фиксирует отдельную PostgreSQL/браузерную приёмку 09.09.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-011",
+    "title": "Одну операцию можно выставить в счёт дважды",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09.2026",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · ДУБЛЬ ОПЕРАЦИИ В АКТИВНОМ СЧЁТЕ ЗАПРЕЩЁН",
+    "code_state": "При создании счёта выбранные начисления проверяются на уже выставленные; два запроса одного селлера сериализуются блокировкой строки Seller до повторной проверки и записи.",
+    "remaining": "Интерфейс повторного выбора в этом аудите не нажат; код релиза подтверждён.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/billing_invoice_v2_service.py",
+        "line_start": 538,
+        "line_end": 547,
+        "finding": "Отменённый счёт освобождает источник, активный источник вызывает selected_source_already_invoiced."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/billing_invoice_v2_service.py",
+        "line_start": 630,
+        "line_end": 674,
+        "finding": "Создание selected_operations блокирует Seller и затем строит preview в той же транзакции; idempotency отдельно защищает повтор ключа."
+      }
+    ],
+    "test_evidence": "Прочитаны test_billing_invoice_v2_duplicates.py, test_billing_invoice_cross_format_duplicates.py и test_billing_invoice_shipment_selection.py; этим аудитом не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-012",
+    "title": "Даты начислений ФБС на проде неверны",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · ДАТЫ WB СВЕРЕНЫ ПО ПЕРЕДАЧЕ",
+    "code_state": "Для WB дата факта и начислений берётся только из сохранённой подтверждённой передачи поставки, а не из времени фонового опроса; Ozon сохраняет собственный подтверждённый путь.",
+    "remaining": "Исторические даты уже сверены свежими данными для доказанных WB-передач: 2185/2185 фактов, 0 расхождений свыше 60 секунд. UI не относится.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_order_billing_service.py",
+        "line_start": 51,
+        "line_end": 142,
+        "finding": "Подтверждение передачи восстанавливается из delivered supply или confirmed supply_deliver с прямыми связями."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_order_billing_service.py",
+        "line_start": 182,
+        "line_end": 248,
+        "finding": "WB без доказанной передачи пропускается; occurred_at факта равен handover_at."
+      },
+      {
+        "ref": "production-readonly-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/production-data.jsonl",
+        "line_start": 2,
+        "line_end": 2,
+        "finding": "READ ONLY 09.09: 2185 доказанных WB-заказов, 2185 фактов, 0 пропусков и 0 расхождений даты >60 секунд."
+      }
+    ],
+    "test_evidence": "Прочитан test_fbs_handover_billing.py; тесты этим аудитом не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-013",
+    "title": "История заказов ФБС без начислений, скрипт добора её не создаёт",
+    "prior_status": "READ ONLY 08.09.2026 · НЕТ ТАРИФОВ И ДАТЫ БИЛЛИНГА",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · ФАКТЫ ВОССТАНОВЛЕНЫ, 5340 БЕЗ НАЧИСЛЕНИЯ",
+    "code_state": "Генератор фактов создаёт недостающие OperationFact и не меняет уже учтённые даты. Все 2185 доказанных WB-передач имеют факты. Денежная история остаётся неполной: среди всех 6135 фактов fbs_order 5340 без начисления; это более широкий знаменатель, чем 2185 доказанных WB-передач. У Империи ФФ billing_enabled_from=NULL, а свежая проверка активных источников для fbs_order/packing дала V2=0 и legacy=0.",
+    "remaining": "Владелец должен определить исторический период и ставки. Затем нужен точный dry-run денег; складские операции переигрывать нельзя.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/scripts/backfill_fbs_order_facts.py",
+        "line_start": 167,
+        "line_end": 255,
+        "finding": "Скрипт использует подтверждённую передачу, защищает учтённые даты и создаёт отсутствующие факты."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/scripts/backfill_billing_charges.py",
+        "line_start": 143,
+        "line_end": 220,
+        "finding": "Денежный скрипт создаёт fbs_order и companion packing только по фактам и подтверждённой WB-передаче."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/billing_ledger_service.py",
+        "line_start": 132,
+        "line_end": 207,
+        "finding": "Родительская ставка разрешается из legacy BillingTariffVersion; это отдельный источник от V2-матрицы."
+      },
+      {
+        "ref": "production-readonly-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/production-data.jsonl",
+        "line_start": 2,
+        "line_end": 3,
+        "finding": "READ ONLY: 2185/2185 доказанных WB-передач имеют факты; отдельно 6135 всех fbs_order facts, 5340 без начисления."
+      },
+      {
+        "ref": "production-readonly-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/history-comparable-data.jsonl",
+        "line_start": 3,
+        "line_end": 3,
+        "finding": "READ ONLY 19:55 UTC: billing_enabled_from NULL, fbs_order/packing V2=0 и legacy=0."
+      }
+    ],
+    "test_evidence": "Скрипты не запускались даже dry-run; прочитан их код и свежие SELECT A–C и billing_coverage.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-014",
+    "title": "Двенадцать дыр в расчётах и отчётах",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · ВСЕ 12 ИСПРАВЛЕНИЙ В КОДЕ, UI НЕ ПЕРЕПРОВЕРЕН",
+    "code_state": "Исходный список всех двенадцати дефектов восстановлен из PEREDACHA_2026-09-03_RU.md и сопоставлен с production-кодом. Хранение выбирается в счёт без старого calculation_token; начисления упаковки связываются с фактом по документу; storage-only seller остаётся в сводке; догон хранения пересматривает частичные пропуски; начальный остаток считает сервер; группировка по операциям раскрывается до движений; отменённый заказ восстанавливается в истории поставки из событий; переданный заказ получает ссылку на поставку; лимит 200 теперь явно показан; CSV отделяет возврат и не выводит «Нетто»; фото загружается; три мёртвые функции отсутствуют.",
+    "remaining": "Код всех двенадцати исправлений находится на production SHA. UI этим аудитом не открывался, поэтому визуальный и кликабельный сценарии не перепроверены.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "docs/PEREDACHA_2026-09-03_RU.md",
+        "line_start": 33,
+        "line_end": 46,
+        "finding": "Первичный документ перечисляет ровно 12 дефектов, использованных как границы этого аудита."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfBillingInvoiceCreate.tsx",
+        "line_start": 260,
+        "line_end": 270,
+        "finding": "Выбранное хранение отправляет include_storage без calculation_token."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/billing_invoice_v2_service.py",
+        "line_start": 182,
+        "line_end": 220,
+        "finding": "Счёт берёт хранение из ночных ledger-строк storage_day; отдельного пересчёта и токена нет."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/billing_seller_report_service.py",
+        "line_start": 273,
+        "line_end": 435,
+        "finding": "Начисления находятся по документу; отдельная упаковка получает видимую строку и ledger id для счёта."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/billing_seller_report_service.py",
+        "line_start": 763,
+        "line_end": 824,
+        "finding": "Сводка отдельно включает storage money и не отбрасывает seller с одним хранением."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/storage_daily_charge_service.py",
+        "line_start": 429,
+        "line_end": 475,
+        "finding": "Догон пересматривает хвост при новом обмере и не считает весь день закрытым по одной строке."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/reporting_service.py",
+        "line_start": 659,
+        "line_end": 711,
+        "finding": "Начальный остаток откатывается от текущего по всем движениям после начала периода."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/reporting_service.py",
+        "line_start": 859,
+        "line_end": 934,
+        "finding": "Третий уровень принимает product или operation и возвращает явный truncated при лимите."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_order_history_service.py",
+        "line_start": 341,
+        "line_end": 399,
+        "finding": "История поставки включает заказы, найденные по event fbs_order_id, даже после снятия supply_id."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/billing_seller_report_service.py",
+        "line_start": 467,
+        "line_end": 549,
+        "finding": "Переданный неподтверждённый заказ получает supply и отображаемый номер для перехода."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/reporting_service.py",
+        "line_start": 362,
+        "line_end": 388,
+        "finding": "Сервис подгружает photo_url для строк товара."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/reporting_service.py",
+        "line_start": 420,
+        "line_end": 561,
+        "finding": "Потоковый CSV строится из актуальных группировок; возврат отделён на уровне запроса, колонки задаются без «Нетто»."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfReportsPage.tsx",
+        "line_start": 394,
+        "line_end": 406,
+        "finding": "UI показывает фактический movementsLimit и предупреждает, что движений больше; предлагает сузить период или фильтр. Признак API не потерян на клиенте."
+      }
+    ],
+    "test_evidence": "Прочитаны целевые тесты billing seller report, storage daily, reports overview/movements/CSV и FBS supply history. Этим аудитом они не запускались; UI не открывался.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-015",
+    "title": "Ночное начисление хранения",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · НОЧНОЙ КОД И РАСПИСАНИЕ ЕСТЬ",
+    "code_state": "Celery beat запускает ночное начисление хранения в 00:00 по Москве; задача вызывает единый сервис по всем арендаторам. Сервис идемпотентен по суткам и пишет литро-дни из истории движений/обмеров.",
+    "remaining": "Факт успешного последнего beat-выполнения и конкретные созданные строки root данным срезом не проверял; production содержит ровно этот beat/worker код.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/celery_app.py",
+        "line_start": 56,
+        "line_end": 62,
+        "finding": "Расписание billing-storage-daily задано crontab 00:00 с moscow_now."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/tasks/billing_tasks.py",
+        "line_start": 19,
+        "line_end": 24,
+        "finding": "Celery task вызывает run_daily_storage_charge_all_tenants."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/storage_daily_charge_service.py",
+        "line_start": 95,
+        "line_end": 143,
+        "finding": "Сервис считает прошедшие сутки после billing_enabled_from по истории движений."
+      }
+    ],
+    "test_evidence": "Прочитаны test_celery_schedule_persistence.py и test_storage_daily_charge.py; не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": "При необходимости подтвердить последний успешный запуск beat и строки за последние сутки."
+  },
+  {
+    "id": "WMS-016",
+    "title": "Поздний обмер не начисляет хранение задним числом",
+    "prior_status": "РЕШЕНИЕ ВЛАДЕЛЬЦА",
+    "verdict": "decision",
+    "canonical_status": "РЕШЕНИЕ ВЛАДЕЛЬЦА · ТЕКУЩИХ ЗАТРОНУТЫХ ОСТАТКОВ 0",
+    "code_state": "Код сознательно не применяет поздний обмер к периоду до первого dimension event; частично измеренные сутки оплачивает только за известный интервал. Свежий срез текущего остатка не нашёл товаров, которые сейчас лежат до первого обмера (387 товаров с остатком, affected=0), но это не решает историческое правило.",
+    "remaining": "Нужно продуктовое решение: ретроактивный обмер или обязательный обмер на приёмке. При изменении правила нужен отдельный расчёт уже выставленных/невыставленных суток.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/storage_measurement_service.py",
+        "line_start": 130,
+        "line_end": 170,
+        "finding": "До первого события обмера volume=None; позднее измерение назад не применяется."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/storage_daily_charge_service.py",
+        "line_start": 240,
+        "line_end": 253,
+        "finding": "Неизмеренный интервал пропускается, частично измеренный день начисляется частично."
+      },
+      {
+        "ref": "production-readonly-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/production-data.jsonl",
+        "line_start": 5,
+        "line_end": 5,
+        "finding": "READ ONLY 09.09: среди 387 товаров с остатком нет текущего остатка до первого обмера; исторический ущерб этим не измерен."
+      }
+    ],
+    "test_evidence": "Прочитаны test_storage_measurement_service.py и test_storage_daily_charge.py; не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-017",
+    "title": "Начальный остаток при смене продавца у карточки",
+    "prior_status": "ОТМЕНЕНО",
+    "verdict": "obsolete",
+    "canonical_status": "ОТМЕНЕНО · СМЕНЫ SELLER_ID У КАРТОЧКИ НЕТ",
+    "code_state": "Карточка товара не имеет API обновления seller_id: seller задаётся при создании, а WB-импорт записывает его только когда он пуст и отбрасывает конфликтующего продавца. Исходный сценарий смены владельца карточки отсутствует.",
+    "remaining": "Оставить отменённой. Передача собственности существует как отдельная складская операция и не должна превращаться в перепривязку карточки.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/api/products.py",
+        "line_start": 104,
+        "line_end": 116,
+        "finding": "seller_id присутствует только в схеме создания ProductCreate."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/wildberries_product_import_service.py",
+        "line_start": 178,
+        "line_end": 190,
+        "finding": "Импорт присваивает seller_id только если он ещё None."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/wildberries_product_import_service.py",
+        "line_start": 312,
+        "line_end": 319,
+        "finding": "Карточка с другим seller_id пропускается, а не переписывается."
+      }
+    ],
+    "test_evidence": "Тесты не запускались; API и importer прочитаны сквозным путём.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-018",
+    "title": "Габариты не приезжают по API с Wildberries",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · WB-ГАБАРИТЫ И РУЧНОЙ ОБМЕР В КОДЕ",
+    "code_state": "WB-импорт читает dimensions в сантиметрах, переводит в миллиметры, создаёт versioned dimension event и обновляет активные габариты, не перетирая защищённый ручной обмер. Ручной patch и restore-WB API остаются доступны.",
+    "remaining": "Интерфейс каталога и реальный вызов WB этим аудитом не проверялись.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/wildberries_product_import_service.py",
+        "line_start": 131,
+        "line_end": 148,
+        "finding": "Парсер валидирует dimensions и переводит cm в mm."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/wildberries_product_import_service.py",
+        "line_start": 350,
+        "line_end": 384,
+        "finding": "Импорт пишет WB dimension event и применяет его только если нет защищённого ручного измерения."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/api/products.py",
+        "line_start": 1151,
+        "line_end": 1193,
+        "finding": "Ручной API обновляет полный комплект габаритов через storage measurement service."
+      }
+    ],
+    "test_evidence": "Прочитаны test_product_dimension_history.py и tests products API; не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-019",
+    "title": "Раздел отчётности для селлера и ФФ",
+    "prior_status": "ЧАСТИЧНО",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · НАЗВАННЫЙ ОТЧЁТ НА ПРОДЕ, ОСТАТОК НЕ ОПИСАН",
+    "code_state": "Изначальный явно описанный минимум «Остатки и движения» реализован и достижим для FF и селлера: API строит приходы, расходы и остаток, UI загружает и раскрывает данные. Старый текст «только на стенде» противоречит подтверждённому production SHA. Однако карточка сохраняет статус ЧАСТИЧНО по «остальному объёму раздела отчётности», а самостоятельные критерии этого остатка в найденных источниках не перечислены.",
+    "remaining": "Нельзя закрыть широкую задачу целиком при информационном пробеле. Root должен либо связать неназванный остаток с конкретными задачами/требованиями, либо сузить WMS-019 до восстановленной первоначальной просьбы. UI этим аудитом не открыт.",
+    "evidence": [
+      {
+        "ref": "canonical-2026-09-09",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 364,
+        "line_end": 374,
+        "finding": "Канон задаёт минимальную таблицу и одновременно оставляет неназванный остальной объём причиной статуса ЧАСТИЧНО."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/App.tsx",
+        "line_start": 3165,
+        "line_end": 3197,
+        "finding": "Текущий router ведёт на один FfReportsPage из FF и seller разделов с проверками доступа."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/api/reports.py",
+        "line_start": 30,
+        "line_end": 87,
+        "finding": "API возвращает агрегированный inventory report и детальные движения."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfReportsPage.tsx",
+        "line_start": 161,
+        "line_end": 185,
+        "finding": "Экран хранит фильтры, группировки селлер/товар/операция и раскрытие движений."
+      }
+    ],
+    "test_evidence": "Прочитаны report API/CSV tests; не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": "Уточнить или удалить из постановки фразу про неназванный остальной объём; названный минимум реализован."
+  },
+  {
+    "id": "WMS-020",
+    "title": "Отчёт «Остатки и движения» — группировка и раскрывашки",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · КОД ГРУППИРОВОК ЕСТЬ, UI НЕ ПЕРЕПРОВЕРЕН",
+    "code_state": "Группировки и раскрывашки реализованы: селлер→товар или селлер→операция→движения; колонки показывают приход, расход, текущий остаток и фото. API поддерживает оба способа раскрытия.",
+    "remaining": "Кликабельность документов и внешний вид необходимо оценивать только ручным браузером; в этом аудите не проверено.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/api/reports.py",
+        "line_start": 54,
+        "line_end": 87,
+        "finding": "Детальная ручка принимает product_id либо operation и возвращает движения периода."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfReportsPage.tsx",
+        "line_start": 462,
+        "line_end": 508,
+        "finding": "UI раскрывает селлера в операции или товары, затем загружает движения; выводит фото, приход, расход и остаток."
+      }
+    ],
+    "test_evidence": "Прочитаны test_reports_inventory.py и frontend component tests; не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-021",
+    "title": "Упаковку в расчётах считать по отгруженным штукам FBS и FBO",
+    "prior_status": "ТРЕБОВАНИЕ НАЙДЕНО · ОТЧЁТ НЕ СООТВЕТСТВУЕТ · 09.09.2026",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · УПАКОВКА СЧИТАЕТСЯ ПО ОТГРУЖЕННЫМ ШТУКАМ",
+    "code_state": "Текущий производственный путь считает packing по тем же отгруженным штукам, что fbs_order, в момент подтверждённой передачи. FBO/marketplace outbound создаёт собственное packing начисление по распределённым штукам. События упаковщика не определяют натуральное количество отчёта.",
+    "remaining": "В свежих данных fbs/packing начисления существуют только там, где есть ставка; натуральные факты передачи полны. Интерфейс отчёта не открыт.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_order_billing_service.py",
+        "line_start": 259,
+        "line_end": 284,
+        "finding": "На одну подтверждённую передачу записываются fbs_order и packing с одинаковым количеством позиций."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marketplace_unload_service.py",
+        "line_start": 1045,
+        "line_end": 1101,
+        "finding": "FBO при проведении записывает marketplace_outbound и packing по sum(distributed)."
+      },
+      {
+        "ref": "production-readonly-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/production-data.jsonl",
+        "line_start": 2,
+        "line_end": 2,
+        "finding": "READ ONLY: по 2185 доказанным WB-передачам факты полны; начисления fbs_order и packing симметричны: 788/788."
+      }
+    ],
+    "test_evidence": "Прочитан test_fbs_handover_billing.py и billing report tests; не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-022",
+    "title": "Включить услугу «Заказ FBS» и задать ставку",
+    "prior_status": "РЕШЕНИЕ ВЛАДЕЛЬЦА",
+    "verdict": "decision",
+    "canonical_status": "РЕШЕНИЕ ВЛАДЕЛЬЦА · FBS ВЫКЛЮЧЕН, СТАВКИ НЕТ",
+    "code_state": "Код и UI позволяют независимо включить услугу и добавить item-ставку, но в production для Империи ФФ fbs_order выключена. Свежая проверка обоих реально используемых источников ставок дала для fbs_order/packing V2=0 и legacy=0. Это незавершённая бизнес-настройка, а не отсутствующий код.",
+    "remaining": "Владелец должен назвать ставку/период и разрешить включение. До этого новые денежные начисления остаются без суммы/не создаются согласно конфигурации.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx",
+        "line_start": 168,
+        "line_end": 203,
+        "finding": "Экран формирует item-версию и умеет добавить общую или селлерскую ставку."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/billing_tariff_matrix_service.py",
+        "line_start": 230,
+        "line_end": 280,
+        "finding": "Сервер блокирует tenant, проверяет revision, услуги и единицу item."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/billing_ledger_service.py",
+        "line_start": 132,
+        "line_end": 207,
+        "finding": "Parent-resolver читает legacy BillingTariffVersion, поэтому одного V2-среза было бы недостаточно."
+      },
+      {
+        "ref": "production-readonly-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/history-comparable-data.jsonl",
+        "line_start": 3,
+        "line_end": 3,
+        "finding": "READ ONLY 19:55 UTC: fbs_order/packing V2=0, legacy=0, billing_enabled_from=NULL."
+      }
+    ],
+    "test_evidence": "Тесты не запускались; прочитаны billing configuration API tests и оба resolver path.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-023",
+    "title": "Проставить дату начала биллинга",
+    "prior_status": "РЕШЕНИЕ ВЛАДЕЛЬЦА",
+    "verdict": "decision",
+    "canonical_status": "РЕШЕНИЕ ВЛАДЕЛЬЦА · ДАТА NULL, FBS УЖЕ НЕ ЗАБЛОКИРОВАН ДАТОЙ",
+    "code_state": "billing_enabled_from у Империи ФФ остаётся NULL. Текущий подтверждённый FBS/FBO путь специально умеет писать начисление независимо от общей даты, а ночное хранение без неё не начисляется. Поэтому старое утверждение «ничего вообще не пишется» уже неверно, но дата всё ещё нужна для хранения и общего старта биллинга.",
+    "remaining": "Владелец должен определить дату. Автоматически выводить её из сегодняшней настройки нельзя для исторических денег.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_order_billing_service.py",
+        "line_start": 259,
+        "line_end": 276,
+        "finding": "FBS charge вызывается с respect_billing_start=False после подтверждённой передачи."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/storage_daily_charge_service.py",
+        "line_start": 105,
+        "line_end": 111,
+        "finding": "Хранение возвращает 0 без billing_enabled_from."
+      },
+      {
+        "ref": "production-readonly-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/production-data.jsonl",
+        "line_start": 1,
+        "line_end": 1,
+        "finding": "READ ONLY: billing_enabled_from=NULL."
+      }
+    ],
+    "test_evidence": "Тесты не запускались; прочитаны handover billing и storage daily tests.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-024",
+    "title": "Единица тарифа приёмки: за документ или за штуку",
+    "prior_status": "РЕШЕНИЕ ВЛАДЕЛЬЦА",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · НОВЫЕ ТАРИФЫ ITEM, LEGACY ТАБЛИЦА ПУСТА",
+    "code_state": "Решение «за каждую штуку» закреплено сервером: новая non-storage версия может быть только item. Неизменённые legacy document-тарифы код допускает как историческую совместимость, поэтому проверен и этот источник: у Империи ФФ вся legacy BillingTariffVersion пуста, а V2-матрица по проверенным услугам также без ставок.",
+    "remaining": "Суммы ставок по WMS-022/023 остаются отдельным решением. Мигрировать legacy единицы у Империи ФФ не требуется по свежему полному агрегату таблицы.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/billing_tariff_matrix_service.py",
+        "line_start": 249,
+        "line_end": 265,
+        "finding": "Новая non-storage версия с unit не item отвергается; неизменённая историческая версия допускается только для совместимости."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/billing_ledger_service.py",
+        "line_start": 132,
+        "line_end": 207,
+        "finding": "Parent-resolver читает legacy BillingTariffVersion, поэтому legacy таблица проверена отдельно."
+      },
+      {
+        "ref": "production-readonly-sql-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/legacy-tariff-readonly.sql",
+        "line_start": 1,
+        "line_end": 1,
+        "finding": "READ ONLY агрегат охватывает все service_code/unit legacy BillingTariffVersion для Империи ФФ."
+      },
+      {
+        "ref": "production-readonly-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/legacy-tariff-data.jsonl",
+        "line_start": 1,
+        "line_end": 1,
+        "finding": "READ ONLY 19:59 UTC: legacy_tariff_units rows=[] по всему tenant."
+      }
+    ],
+    "test_evidence": "Тесты не запускались; прочитаны tariff matrix tests.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-025",
+    "title": "Ретроначисления «Империи ФФ» за две недели",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · ИНСТРУМЕНТ ЕСТЬ, КОНКРЕТНОЕ РЕТРОНАЧИСЛЕНИЕ НЕ ВЫПОЛНЕНО",
+    "code_state": "Универсальные scripts умеют создавать недостающие факты и начисления за выбранный период, включая companion packing. Однако конкретный двухнедельный денежный прогон Империи ФФ не выполнен: дата и исторические ставки отсутствуют, 5340 fbs_order фактов остаются без начисления.",
+    "remaining": "Определить даты/ставки; выполнить точный dry-run по всем четырём услугам; отдельно сверить storage/inbound/outbound/FBS; только после отдельного разрешения применять.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/scripts/backfill_billing_charges.py",
+        "line_start": 143,
+        "line_end": 220,
+        "finding": "Скрипт ограничивает период, проверяет существующее начисление и создаёт строки по фактам."
+      },
+      {
+        "ref": "production-readonly-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/production-data.jsonl",
+        "line_start": 1,
+        "line_end": 3,
+        "finding": "READ ONLY: billing_enabled_from NULL; 5340 всех fbs_order facts без начисления."
+      },
+      {
+        "ref": "production-readonly-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/history-comparable-data.jsonl",
+        "line_start": 3,
+        "line_end": 3,
+        "finding": "READ ONLY 19:55 UTC: для fbs_order/packing V2=0 и legacy=0."
+      }
+    ],
+    "test_evidence": "Ни dry-run, ни apply не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-026",
+    "title": "Произвольные строки в счёте",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · ПРОИЗВОЛЬНЫЕ СТРОКИ В КОДЕ, UI НЕ ПЕРЕПРОВЕРЕН",
+    "code_state": "Схема selected_operations принимает до десяти manual_lines; сервис добавляет их после рассчитанных строк, а экран формирует payload и редактор.",
+    "remaining": "UI этим аудитом не нажат; код production подтверждён.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/api/billing_invoice_v2_schemas.py",
+        "line_start": 29,
+        "line_end": 48,
+        "finding": "SelectedOperationsInvoiceV2In содержит manual_lines максимум 10 и discriminator creation_mode."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/billing_invoice_v2_service.py",
+        "line_start": 548,
+        "line_end": 590,
+        "finding": "Рассчитанные строки группируются, затем к ним добавляются manual_lines."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfBillingInvoiceCreate.tsx",
+        "line_start": 261,
+        "line_end": 277,
+        "finding": "Экран отправляет selected_operations с manual_lines либо полностью manual счёт."
+      }
+    ],
+    "test_evidence": "Прочитаны billing invoice v2 API tests; не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-027",
+    "title": "Структура экрана тарифов",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · КОД ЭКРАНА ЕСТЬ, UI НЕ ПЕРЕПРОВЕРЕН",
+    "code_state": "Экран держит общий блок тарифов сверху, ниже таблицу селлеров с раскрытием собственных/товарных ставок. Действующая версия отмечается зелёной галочкой; superseded строки не получают слово «Перебита» и сортируются перед planned/active.",
+    "remaining": "Фактический внешний вид/раскрытие в браузере этим аудитом не проверены.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx",
+        "line_start": 295,
+        "line_end": 326,
+        "finding": "Компонент сначала выводит общую матрицу, затем FfBillingTariffSellerRates."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfBillingTariffSellerRates.tsx",
+        "line_start": 33,
+        "line_end": 76,
+        "finding": "Вычисляются active/superseded/planned и порядок active внизу."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfBillingTariffSellerRates.tsx",
+        "line_start": 159,
+        "line_end": 200,
+        "finding": "Только active получает StatusChip «✓ Действует»; текста «Перебита» нет."
+      }
+    ],
+    "test_evidence": "Frontend tests не запускались; компонент прочитан до API сохранения.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-028",
+    "title": "Приёмки «Империи ФФ»: 476 движений на 8920 штук, а факт в строках ноль",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "historical_data",
+    "canonical_status": "ИСТОРИЧЕСКОЕ РАСХОЖДЕНИЕ НЕ ПОДТВЕРЖДЕНО · READ ONLY 09.09",
+    "code_state": "Свежая сопоставимая выборка подтверждает: 16 документов, 512 связанных строк/движений, actual_qty 9277 и receipt quantity 9277; нулевых actual при положительном приходе и расхождений нет. 471/7776 — обычный inbound_intake, ещё 41/1501 — ownership_transfer_receipt; у обоих типов NULL line_id=0. posted_qty=0 является другим полем. Отдельный submitted документ 732/actual0/движений0 не относится к проведённым приёмкам.",
+    "remaining": "Снять исходное расхождение 476/8920 как неподтверждённое и не использовать его для денег. Это доказывает только связанные receipt movements Империи ФФ; неизвестные исходные 13 ID 03.09 не восстановлены. Ставки/период/начисления проверять отдельно.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/inbound_intake_service.py",
+        "line_start": 1184,
+        "line_end": 1267,
+        "finding": "При завершении actual_qty фиксируется, а движения inbound_intake создаются с тем же inbound_intake_line_id."
+      },
+      {
+        "ref": "production-readonly-sql-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/lane1-production-readonly.sql",
+        "line_start": 271,
+        "line_end": 317,
+        "finding": "Сопоставимый H сначала агрегирует оба receipt-типа по line_id; I отдельно считает строки без line_id."
+      },
+      {
+        "ref": "production-readonly-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/inbound-comparable-data.jsonl",
+        "line_start": 1,
+        "line_end": 2,
+        "finding": "READ ONLY 09.09: H=16/512/9277=9277, zero/mismatch=0; I=471/7776 + 41/1501, NULL line_id=0."
+      },
+      {
+        "ref": "production-readonly-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/production-data.jsonl",
+        "line_start": 4,
+        "line_end": 4,
+        "finding": "Отдельный submitted документ: plan732, actual0, movements/facts0."
+      }
+    ],
+    "test_evidence": "Тесты не запускались; H/I выполнены READ ONLY с rollback.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": "Дополнительная проверка данных не нужна; не переносить вывод за пределы связанных receipt movements."
+  },
+  {
+    "id": "WMS-040",
+    "title": "Двойное проведение приёмки даёт двойной приход",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09.2026",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · ДВОЙНОЕ ПРОВЕДЕНИЕ СЕРИАЛИЗОВАНО",
+    "code_state": "API завершения приёмки вызывает сервис; сервис заново читает документ с SELECT FOR UPDATE и populate_existing до проверки статуса, затем в одной транзакции фиксирует actual, движения и status sorting.",
+    "remaining": "UI в этом аудите не нажат; конкурентная защита кода production подтверждена.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/inbound_intake_service.py",
+        "line_start": 381,
+        "line_end": 419,
+        "finding": "get_request(for_update=True) блокирует строку и принудительно обновляет уже загруженный ORM-объект."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/inbound_intake_service.py",
+        "line_start": 1184,
+        "line_end": 1267,
+        "finding": "complete_receiving блокирует до status-check, создаёт приходы и коммитит один раз."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/api/inbound_intake.py",
+        "line_start": 1196,
+        "line_end": 1223,
+        "finding": "HTTP route делегирует завершение сервису и возвращает перечитанный документ."
+      }
+    ],
+    "test_evidence": "Канон фиксирует реальную PostgreSQL-конкуренцию и ручную локальную проверку 09.09; этим аудитом тесты не повторялись.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-041",
+    "title": "Схлопнута в WMS-058",
+    "prior_status": "СХЛОПНУТА В WMS-058",
+    "verdict": "obsolete",
+    "canonical_status": "СХЛОПНУТА В WMS-058 · ОБЩИЙ РАСЧЁТ НА ПРОДЕ",
+    "code_state": "Симптом схлопнут в WMS-058. Текущий подбор под блокировкой товара использует общий расчёт доступного источника, который вычитает активные подборы и общий потолок места.",
+    "remaining": "Не вести отдельную реализацию WMS-041; проверка общего сценария относится к WMS-058. UI не проверен.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_picking_service.py",
+        "line_start": 1067,
+        "line_end": 1078,
+        "finding": "FBS pick блокирует Product и вызывает общий available_pick_source_quantity."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/pick_option_location_service.py",
+        "line_start": 143,
+        "line_end": 190,
+        "finding": "Общий расчёт учитывает физический источник, уже назначенные подборы и резервы места."
+      }
+    ],
+    "test_evidence": "Прочитаны связанные FBS picking tests; не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-042",
+    "title": "Отмена подбора не сбрасывает признак упаковки",
+    "prior_status": "СНЯТА 08.09.2026",
+    "verdict": "obsolete",
+    "canonical_status": "СНЯТА · УПАКОВКА НЕ БЛОКИРУЕТ UNDO",
+    "code_state": "Признак упаковки не является блокером отмены подбора. Ozon undo восстанавливает товар в исходную локацию/тару по сохранённому movement; WB подбор не двигает физический остаток до передачи.",
+    "remaining": "Оставить снятой. Отдельный Ozon-дефект возврата был исправлен в WMS-058; UI не проверен.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_picking_service.py",
+        "line_start": 1264,
+        "line_end": 1339,
+        "finding": "undo_pick ищет активный pick и его исходное inventory movement без проверки pack_status."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_picking_service.py",
+        "line_start": 1340,
+        "line_end": 1360,
+        "finding": "Для перемещённого Ozon товара undo делает обратный transfer в source location/container."
+      }
+    ],
+    "test_evidence": "Прочитаны cancellation/picking tests; не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-043",
+    "title": "Упаковка может списать с чужого склада",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09.2026",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · УПАКОВКА НЕ МЕНЯЕТ ОСТАТОК",
+    "code_state": "Одиночная и массовая упаковка вызывают общий record_fbs_pack_progress; он пишет fulfillment/order pack fields и прямо не трогает складской остаток. Физическое списание остаётся на передаче.",
+    "remaining": "Ручной Ozon-скан из канона — исторический факт 08.09; текущим аудитом UI не повторялся.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_packaging_integration_service.py",
+        "line_start": 593,
+        "line_end": 715,
+        "finding": "Общий pack progress создаёт idempotent fulfillment и меняет pack_status/qty_packed, без inventory service."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/packaging_task_service.py",
+        "line_start": 874,
+        "line_end": 943,
+        "finding": "Поштучный API использует record_fbs_pack_progress."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/packaging_task_service.py",
+        "line_start": 1211,
+        "line_end": 1328,
+        "finding": "Массовая упаковка использует тот же путь без складского списания."
+      }
+    ],
+    "test_evidence": "Прочитаны test_fbs_ozon_lane.py::test_*packing_entry_points* и test_fbs_packaging_fulfillment.py; не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-044",
+    "title": "Схлопнута в WMS-058",
+    "prior_status": "СХЛОПНУТА В WMS-058",
+    "verdict": "obsolete",
+    "canonical_status": "СХЛОПНУТА В WMS-058 · ОБЩИЙ РАСЧЁТ НА ПРОДЕ",
+    "code_state": "Симптом схлопнут в WMS-058. Marketplace unload и FBS используют один available_pick_source_quantity; для marketplace дополнительно применяется потолок склада с исключением текущей заявки.",
+    "remaining": "Не копировать старую формулу в отдельный сервис. Проверять весь операторский поток в WMS-058; UI не проверен.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/pick_option_location_service.py",
+        "line_start": 143,
+        "line_end": 190,
+        "finding": "Общий source ceiling вычитает активные FBS picks и place reservations."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marketplace_unload_collect_service.py",
+        "line_start": 287,
+        "line_end": 336,
+        "finding": "Marketplace collect вызывает тот же расчёт с marketplace_unload_request_id."
+      }
+    ],
+    "test_evidence": "Прочитаны тесты marketplace unload pick from container; не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-045",
+    "title": "Фоновая починка подтверждает передачу, которой не было",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09.2026",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · RECOVERY ФИЛЬТРУЕТ ТИП ОПЕРАЦИИ",
+    "code_state": "Оба recovery-запроса ограничены operation_kind=supply_from_orders, поэтому не могут подтвердить чужую pending-операцию той же поставки.",
+    "remaining": "Фоновый цикл production содержит этот код; конкретный recovery run не наблюдался.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_supply_service.py",
+        "line_start": 1528,
+        "line_end": 1550,
+        "finding": "Закрытие pending operation фильтрует local entity и operation_kind supply_from_orders."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_supply_service.py",
+        "line_start": 1678,
+        "line_end": 1700,
+        "finding": "Фоновый repair выбирает только pending_confirmation supply_from_orders."
+      }
+    ],
+    "test_evidence": "Прочитан тест test_fbs_supply_repair_from_wb.py::test_composition_repair_only_confirms_its_own_operation_kind; не запускался.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-046",
+    "title": "Скрипт сверки списанного остатка спишет уже списанное",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09.2026",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · ОПАСНЫЙ СКРИПТ УДАЛЁН",
+    "code_state": "Опасный standalone reconcile_fbs_shipped_stock.py удалён commit ee0f3056 и отсутствует в production tree; рабочий путь передачи использует ledger с реальным shipment_movement_id.",
+    "remaining": "Удаление не исправляет последствия возможных исторических запусков; их нельзя выводить из отсутствия файла.",
+    "evidence": [
+      {
+        "ref": "ffc8069f45119d47a904fc342b539ca6320c0244",
+        "path": "backend/app/cli/reconcile_fbs_shipped_stock.py",
+        "line_start": 24,
+        "line_end": 68,
+        "finding": "В родителе commit удаления старый SQL сопоставлял ожидаемое и фактическое списание через created_at вместо прямой shipment_movement_id."
+      },
+      {
+        "ref": "git-deletion-proof-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/wms046-deletion.txt",
+        "line_start": 1,
+        "line_end": 11,
+        "finding": "Протокол git фиксирует D в ee0f3056 и отсутствие пути в production tree."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_shipment_service.py",
+        "line_start": 1330,
+        "line_end": 1397,
+        "finding": "Текущий путь создаёт движение только при shipment_movement_id=None и затем сохраняет фактическую ссылку."
+      }
+    ],
+    "test_evidence": "Тесты не запускались; проверены git diff-tree ee0f3056, родительский файл и production tree.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-047",
+    "title": "Пропущенные списания: строка журнала есть, движения нет",
+    "prior_status": "READ ONLY 08.09.2026 · 48 КАНДИДАТОВ · APPLY НЕ РАЗРЕШЁН",
+    "verdict": "historical_data",
+    "canonical_status": "ИСТОРИЧЕСКИЕ ДАННЫЕ · 48 ID ПОДТВЕРЖДЕНЫ, APPLY НЕ РАЗРЕШЁН",
+    "code_state": "Текущий код исправлен: ledger без shipment_movement_id не считается завершённым и дописывается через apply_fbs_supply_write_off. Исторический хвост подтверждён точным повтором старого predicate в 19:55 UTC: все 48 ID на месте, counts и MD5 по каждому селлеру совпали со снимком 08.09 — Машнин 7, Рябов 5, Фадин 36. Это 18 exact-source групп; одна группа Машнина недостаточна на 11 единиц. Точный текущий остаток этой группы -8, после предлагаемого списания был бы -11. Предварительные 43 были результатом более узкого tenant=Империя ФФ отбора, который исключал 5 Рябова из FFAdam.",
+    "remaining": "Apply не разрешён. Массовое списание нельзя выполнять без отдельного решения владельца по отрицательному источнику Машнина; перед любым apply снова повторить exact predicate и expected-count/hash защиту.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_shipment_service.py",
+        "line_start": 1222,
+        "line_end": 1255,
+        "finding": "Ledger кандидатов блокируется по order; идемпотентность основана на shipment_movement_id."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_shipment_service.py",
+        "line_start": 1341,
+        "line_end": 1397,
+        "finding": "Если movement отсутствует, сервис делает write-off и только потом сохраняет movement id."
+      },
+      {
+        "ref": "production-readonly-sql-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/history-comparable-readonly.sql",
+        "line_start": 1,
+        "line_end": 11,
+        "finding": "Свежий SELECT повторяет старый predicate трёх продавцов и агрегирует exact sources отдельно."
+      },
+      {
+        "ref": "production-readonly-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/history-comparable-data.jsonl",
+        "line_start": 1,
+        "line_end": 4,
+        "finding": "READ ONLY 19:55 UTC: 48=7+5+36, 18 sources, shortage11; Машнин current=-8, proposed=-11."
+      },
+      {
+        "ref": "production-readonly-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/history-candidate-comparison.json",
+        "line_start": 1,
+        "line_end": 29,
+        "finding": "Counts и MD5 всех трёх seller-групп совпадают со снимком 08.09."
+      }
+    ],
+    "test_evidence": "Ни CLI dry-run, ни apply не запускались; exact SELECT выполнены в READ ONLY транзакции.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": "Нужно решение владельца по отрицательному exact source Машнина; apply не разрешён."
+  },
+  {
+    "id": "WMS-048",
+    "title": "Одна дыра в передаче: поставка наша, списания нет",
+    "prior_status": "READ ONLY 08.09.2026 · ВЛАДЕЛЕЦ КОРРЕКЦИИ НЕ ОПРЕДЕЛЁН",
+    "verdict": "historical_data",
+    "canonical_status": "ИСТОРИЧЕСКАЯ ДЫРА ПОДТВЕРЖДЕНА · РЕШЕНИЕ ВЛАДЕЛЬЦА",
+    "code_state": "Конкретная дыра сохраняется: заказ done, поставка WMS delivered 17.08, ledger=0, активный pick=1, текущий баланс товара=0. Текущий код гарантирует ledger+movement для сопоставленного товара, но историческую причину и владельца корректировки из данных восстановить нельзя.",
+    "remaining": "Владелец должен выбрать способ и сторону коррекции. Нельзя присваивать этому заказу движения другого заказа или списывать с текущего нулевого баланса без решения.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_shipment_service.py",
+        "line_start": 1277,
+        "line_end": 1328,
+        "finding": "Текущий путь создаёт ledger из подтверждённого source plan; для отсутствующего source останавливает передачу."
+      },
+      {
+        "ref": "production-readonly-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/production-data.jsonl",
+        "line_start": 7,
+        "line_end": 7,
+        "finding": "READ ONLY 09.09: целевой order done/source=wms/delivered_at 17.08, ledger0, active_pick1, balance0."
+      },
+      {
+        "ref": "historical-readonly-2026-09-08",
+        "path": "docs/reviews/wms-history-readiness-20260908.md",
+        "line_start": 66,
+        "line_end": 94,
+        "finding": "Исторический отчёт доказывает, что найденные shipment movements принадлежат другому заказу, а ownership transfer не выделяет эту единицу."
+      }
+    ],
+    "test_evidence": "Только READ ONLY запрос G; изменений нет.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": "Нужно отдельное решение владельца коррекции и её владельца."
+  },
+  {
+    "id": "WMS-049",
+    "title": "Резерв под отгрузку на маркетплейс не вычитается из доступного для ФБС",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · FBO-РЕЗЕРВ ВЫЧИТАЕТСЯ",
+    "code_state": "Единый расчёт FBS свободного остатка явно вычитает marketplace unload/FBO reservations вместе с обычными outbound, FBS и direction reserves. Этот же результат читает правило публикации.",
+    "remaining": "Живую публикацию в кабинете не вызывали.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_stock_availability_service.py",
+        "line_start": 186,
+        "line_end": 253,
+        "finding": "mp_map из _mp_reserved_by_product входит в reserved и уменьшает free."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_stock_rule_service.py",
+        "line_start": 219,
+        "line_end": 253,
+        "finding": "Настройка публикации читает тот же fbs_stock_breakdown_by_product."
+      }
+    ],
+    "test_evidence": "Прочитаны test_fbs_stock_availability.py и marketplace unload reservation tests; не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-050",
+    "title": "Диалог доли показывает не то число, которое уедет",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · ЧИСЛО ДИАЛОГА СОВПАДАЕТ С РАСКЛАДКОЙ КОДА",
+    "code_state": "Сервер и UI считают «уедет» одинаковой по-складской раскладкой: каждый процент округляется вниз отдельно, sameEverywhere применяется каждому складу, общий итог ограничен свободным остатком.",
+    "remaining": "UI не открыт, поэтому надпись и визуальная реакция не приняты вручную.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_stock_rule_service.py",
+        "line_start": 367,
+        "line_end": 405,
+        "finding": "split_amounts считает каждый binding отдельно и ограничивает remaining."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/products-fbs/FbsStockDialog.tsx",
+        "line_start": 144,
+        "line_end": 181,
+        "finding": "Диалог использует splitAmounts по каждому товару/складу и показывает willPublish/perWarehouse."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_stock_rule_service.py",
+        "line_start": 428,
+        "line_end": 445,
+        "finding": "API view возвращает published_now как сумму той же server split."
+      }
+    ],
+    "test_evidence": "Прочитаны test_fbs_stock_rule_service.py проверки split_amounts/published_now; не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-051",
+    "title": "Снятие «Обслуживаем склад» не шлёт в кабинет финальный ноль",
+    "prior_status": "ОТМЕНЕНО",
+    "verdict": "obsolete",
+    "canonical_status": "ОТМЕНЕНО · SERVED НЕ УПРАВЛЯЕТ ПУБЛИКАЦИЕЙ",
+    "code_state": "Отменённая постановка противоречит принятому поведению: served управляет видимостью/обслуживанием заказов и не меняет отдельный stock_sync_enabled. Финальный ноль относится к выключению публикации товара/площадки, а не к снятию обслуживания склада.",
+    "remaining": "Оставить отменённой; не отправлять ноль при снятии served. UI не проверен.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_warehouse_binding_service.py",
+        "line_start": 523,
+        "line_end": 549,
+        "finding": "Документирован независимый смысл served, mapping и stock_sync_enabled."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_warehouse_binding_service.py",
+        "line_start": 624,
+        "line_end": 632,
+        "finding": "Изменение served записывает только served; публикация меняется лишь через отдельный аргумент."
+      }
+    ],
+    "test_evidence": "Прочитаны WMS-351 publication-switch tests; не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-052",
+    "title": "Сохранение правила молча включает публикацию по всем складам",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · ПУБЛИКАЦИЯ ВКЛЮЧАЕТСЯ ТОЛЬКО ДЛЯ АДРЕСОВАННЫХ СКЛАДОВ",
+    "code_state": "Сохранение правила включает stock_sync_enabled только у обслуживаемых привязок, которые правило действительно адресует; untouched склады не включаются. Отключение публикации сначала подтверждает внешний ноль и лишь затем сохраняет off.",
+    "remaining": "Фактический внешний WB/Ozon вызов этим аудитом не выполнялся.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_stock_rule_service.py",
+        "line_start": 794,
+        "line_end": 826,
+        "finding": "Адресуемые binding keys вычисляются из units/byWarehouse/sameEverywhere; только они включают sync."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_stock_rule_service.py",
+        "line_start": 576,
+        "line_end": 617,
+        "finding": "При выключении публикации подтверждается explicit zero; при ошибке правило не сохраняется."
+      }
+    ],
+    "test_evidence": "Прочитаны test_wms351_marketplace_publication_switches.py и stock rule tests; не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-053",
+    "title": "Умолчание «обслуживаем» у новых привязок складов",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · НОВЫЕ ПРИВЯЗКИ ЧЕРЕЗ СЕРВИС ВЫКЛЮЧЕНЫ",
+    "code_state": "Новая привязка через живой service создаётся served=False, если оператор явно не передал served, и stock_sync_enabled=False без отдельного включения. ORM server_default=true остаётся наследием, но достижимый API путь задаёт безопасные значения явно.",
+    "remaining": "Проверить миграционный/ручной обход сервиса при будущих writers; текущий router/service путь безопасен. UI не проверен.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_warehouse_binding_service.py",
+        "line_start": 523,
+        "line_end": 550,
+        "finding": "Контракт сервиса: отсутствующий served создаёт новую привязку выключенной."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_warehouse_binding_service.py",
+        "line_start": 576,
+        "line_end": 603,
+        "finding": "initial_served=False и stock_sync_enabled=bool(arg) записываются явно."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/models/fbs_warehouse_binding.py",
+        "line_start": 76,
+        "line_end": 87,
+        "finding": "Модель всё ещё имеет server_default=true, поэтому прямой insert вне сервиса опасен; production writers проверены через сервис."
+      }
+    ],
+    "test_evidence": "Прочитаны test_fbs_orders_intake.py проверки новых binding и publication flags; не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "medium",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-054",
+    "title": "Карта склада вместо раздела «Ячейки»",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "implemented",
+    "canonical_status": "КОД НА ПРОДЕ · КАРТА СКЛАДА ЕСТЬ, UI НЕ ПЕРЕПРОВЕРЕН",
+    "code_state": "Карта склада реализована и достижима из текущего App: GET строит иерархию ячейка→палета/короб/грузоместо→товар, POST move переносит контейнер целиком или количество товара, пишет inventory movements и append-only журнал с автором; UI вызывает API, перечитывает карту, поддерживает drag-and-drop, фильтры и журнал.",
+    "remaining": "Несмотря на stale статус «НЕ СДЕЛАНО», код находится в production SHA. Сам экран и перетаскивание этим аудитом не проверены в браузере.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/App.tsx",
+        "line_start": 3275,
+        "line_end": 3287,
+        "finding": "Текущий router открывает FfWarehouseMapPage при canCellsOps."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/warehouse-map/FfWarehouseMapPage.tsx",
+        "line_start": 113,
+        "line_end": 146,
+        "finding": "Экран загружает /warehouses/{id}/map и хранит доказанное сервером состояние."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/warehouse-map/FfWarehouseMapPage.tsx",
+        "line_start": 163,
+        "line_end": 213,
+        "finding": "Move handler POST-ит move/disband, передаёт qty только товару и перечитывает карту."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/warehouse_map_service.py",
+        "line_start": 1129,
+        "line_end": 1278,
+        "finding": "Сервис валидирует источник/назначение, двигает balance/container, пишет WarehouseMapEvent и commit."
+      }
+    ],
+    "test_evidence": "Прочитаны warehouse map, inbound box reconciliation и container source tests; не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-055",
+    "title": "Единый номер короба через всю систему",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "missing",
+    "canonical_status": "НЕ СДЕЛАНО · НОМЕР ПО-ПРЕЖНЕМУ ЛОКАЛЬНЫЙ В ЗАЯВКЕ",
+    "code_state": "Единого сквозного номера короба нет: inbound box_number выдаётся как max+1 внутри request_id и уникален только (request_id, box_number). Глобально уникален лишь технический internal_barcode; FBS/marketplace используют отдельные сущности/номера.",
+    "remaining": "Нужен продуктовый выбор существующего канонического идентификатора и сквозное отображение/печать через приёмку, сортировку, отгрузку и инвентаризацию. В новых сущностях/счётчиках нет необходимости без отдельного решения.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/inbound_intake_box_service.py",
+        "line_start": 41,
+        "line_end": 67,
+        "finding": "Номер рассчитывается отдельно внутри request_id; штрихкод создаётся отдельным генератором."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/models/inbound_intake.py",
+        "line_start": 235,
+        "line_end": 263,
+        "finding": "UniqueConstraint номера ограничен request_id, а internal_barcode уникален по tenant."
+      }
+    ],
+    "test_evidence": "Тесты не запускались; git log --all --grep WMS-055 не нашёл реализации, затем проверены реальные writers и модель.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-056",
+    "title": "Снятие товара из короба стирает историю",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "missing",
+    "canonical_status": "НЕ СДЕЛАНО · СНЯТИЕ ИЗ ПРИЁМОЧНОЙ ТАРЫ ФИЗИЧЕСКИ УДАЛЯЕТ СТРОКУ",
+    "code_state": "При установке количества товара в открытом inbound коробе в 0 строка физически удаляется. У InboundIntakeBoxLine нет removed_at/removed_by; append-only WarehouseMapEvent появляется только после складского перемещения и не покрывает редактирование состава приёмочной тары. То же физическое удаление есть у cargo place.",
+    "remaining": "Сохранить факт снятия с автором и временем на существующей границе редактирования состава; затем возвращать актуальный состав отдельно от истории. UI не проверен.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/inbound_intake_box_service.py",
+        "line_start": 527,
+        "line_end": 558,
+        "finding": "quantity=0 вызывает session.delete(line), если строка ещё не проведена."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/models/inbound_intake.py",
+        "line_start": 300,
+        "line_end": 328,
+        "finding": "Модель строки короба содержит quantity/posted/created, но не removed_at/removed_by."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/inbound_cargo_place_service.py",
+        "line_start": 48,
+        "line_end": 89,
+        "finding": "Аналогичный путь грузоместа также физически удаляет line при quantity=0."
+      }
+    ],
+    "test_evidence": "Тесты не запускались; поиск всех delete(InboundIntakeBoxLine) и обработчиков UI подтверждает живой путь.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  },
+  {
+    "id": "WMS-057",
+    "title": "Наполнять грузоместа так же, как короба",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "implemented",
+    "canonical_status": "КОД НА ПРОДЕ · ГРУЗОМЕСТО НАПОЛНЯЕТСЯ, UI НЕ ПЕРЕПРОВЕРЕН",
+    "code_state": "Грузоместо наполняется тем же диалогом, что короб: UI переключает endpoint по containerKind, позволяет скан и ручное количество; API вызывает cargo-place service, который создаёт/обновляет строку и commit. Завершение приёмки проводит содержимое грузоместа в inventory balance с container_kind=cargo_place.",
+    "remaining": "Код находится в production SHA, но скан/кнопка «Наполнить» этим аудитом в браузере не нажимались.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfInboundRequestView.tsx",
+        "line_start": 3150,
+        "line_end": 3180,
+        "finding": "Каждое грузоместо показывает кнопку «Наполнить», открывающую общий диалог."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfInboundBoxAddDialog.tsx",
+        "line_start": 263,
+        "line_end": 304,
+        "finding": "Диалог для cargo_place PUT-ит количество в /cargo-places/{id}/lines/{product}."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfInboundBoxAddDialog.tsx",
+        "line_start": 339,
+        "line_end": 377,
+        "finding": "Тот же диалог POST-ит скан в /cargo-places/{id}/scan."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/api/inbound_intake.py",
+        "line_start": 998,
+        "line_end": 1046,
+        "finding": "API scan/PUT делегирует inbound_cargo_place_service."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/inbound_cargo_place_service.py",
+        "line_start": 48,
+        "line_end": 90,
+        "finding": "Service создаёт/обновляет/удаляет composition line и commit."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/inbound_intake_service.py",
+        "line_start": 1236,
+        "line_end": 1252,
+        "finding": "При завершении содержимое грузоместа проводится как inbound inventory movement в этой таре."
+      }
+    ],
+    "test_evidence": "Прочитаны inbound cargo place/frontend tests и сервис; не запускались.",
+    "release_evidence": "Root 09.09.2026 19:20:52 UTC подтвердил production HEAD 0229831f7442823f086f0147ffa85aed05b8ca66; 429 Python-файлов API/worker/beat и 179 web-файлов совпали с проверенным исходником; health/index 200. Артефакт docs/reviews/artifacts/wms414-audit-20260909/verification.json. Это доказательство состава релиза, но не ручная проверка интерфейса.",
+    "confidence": "high",
+    "needs_root_check": ""
+  }
+]

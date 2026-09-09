@@ -1,0 +1,29 @@
+[
+  {
+    "seller": "ИП Машнин",
+    "tenant": "Империя ФФ",
+    "old_count": 7,
+    "new_count": 7,
+    "old_hash": "55d9b416e0560bd4e456da72ac3dc91d",
+    "new_hash": "55d9b416e0560bd4e456da72ac3dc91d",
+    "ids_hash_equal": true
+  },
+  {
+    "seller": "ИП Рябов",
+    "tenant": "FFAdam",
+    "old_count": 5,
+    "new_count": 5,
+    "old_hash": "f9645650b802f14b93c7ded050772857",
+    "new_hash": "f9645650b802f14b93c7ded050772857",
+    "ids_hash_equal": true
+  },
+  {
+    "seller": "ИП Фадин",
+    "tenant": "Империя ФФ",
+    "old_count": 36,
+    "new_count": 36,
+    "old_hash": "5fe1a220fa1b8361f2fdd8610097db7d",
+    "new_hash": "5fe1a220fa1b8361f2fdd8610097db7d",
+    "ids_hash_equal": true
+  }
+]
