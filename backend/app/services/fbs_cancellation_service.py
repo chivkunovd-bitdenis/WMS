@@ -208,6 +208,15 @@ async def _finish_local_cancellation(
         actor_user_id=actor_user_id,
     )
     await _release_reservation(session, order)
+    # WMS-111: если поставка уже была передана WB, тот же WB-обмен, что и на
+    # автосинке статусов, должен завести документ возврата. Явного `cancelledAt`
+    # в этой ветке нет — оператор нажал «Отменить» руками, поэтому источник
+    # честно помечается как received_at.
+    from app.services.fbs_cancel_return_document_service import (
+        maybe_create_cancel_return_document,
+    )
+
+    await maybe_create_cancel_return_document(session, order)
     await session.flush()
 
 
