@@ -59,6 +59,11 @@ class SellerWbCatalogRow:
     fbs_stock_limit: int | None = None
     fbs_published_amount: int | None = None
     fbs_sync_status: str | None = None
+    # WMS-190: True — товар нашёлся в текущем импорте WB-кабинета селлера;
+    # False — товар остался от прежнего ключа или у него нет nm_id (например,
+    # ozon-only). UI использует признак, чтобы поставить нейтральный маркер
+    # «не в текущем кабинете», не пряча остаток и не удаляя карточку.
+    in_current_wb_catalog: bool = True
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -85,6 +90,7 @@ class SellerWbCatalogRow:
             "fbs_stock_limit": self.fbs_stock_limit,
             "fbs_published_amount": self.fbs_published_amount,
             "fbs_sync_status": self.fbs_sync_status,
+            "in_current_wb_catalog": self.in_current_wb_catalog,
         }
 
 
