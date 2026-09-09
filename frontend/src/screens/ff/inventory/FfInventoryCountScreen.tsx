@@ -110,8 +110,16 @@ type Props = {
    * Изменение документа. Второй аргумент — строка, которую тронул оператор:
    * по нему страница понимает, что именно отправлять на сервер, и не пишет
    * поверх работы второго кладовщика в том же документе.
+   *
+   * WMS-155: третий аргумент — правил ли оператор комментарий. По нему
+   * страница решает, слать ли комментарий на сервер: без правки не слать
+   * (иначе перезапишет чужой), с правкой — прислать текущее значение.
    */
-  onChange: (next: InventoryCount, touchedLineId?: string) => void
+  onChange: (
+    next: InventoryCount,
+    touchedLineId?: string,
+    commentChanged?: boolean,
+  ) => void
   onSave: () => void
   onPost: () => void
   onCancelDocument: () => void
@@ -406,7 +414,7 @@ export function FfInventoryCountScreen({
       <Box sx={{ maxWidth: 640, mb: 2 }}>
         <CommentField
           value={count.comment}
-          onCommit={(comment) => onChange({ ...count, comment })}
+          onCommit={(comment) => onChange({ ...count, comment }, undefined, true)}
           disabled={readOnly}
           helperText={
             readOnly

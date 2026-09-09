@@ -141,27 +141,36 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
   // сервер только их: документ один, а кладовщиков в нём может быть двое, и
   // запись всего документа целиком стирает чужую работу.
   const touchedRef = useRef<Set<string>>(new Set())
+  // WMS-155: тот же принцип для комментария. Правил ли этот оператор поле
+  // «Комментарий» в этом сеансе — только тогда посылаем его на сервер, иначе
+  // сохранение фактов затрёт чужой комментарий. Флаг сбрасывается после успеха.
+  const commentTouchedRef = useRef<boolean>(false)
   // Очередь работает асинхронно и обязана видеть документ, каким он стал
   // к моменту отправки, а не каким был при постановке в очередь.
   const countRef = useRef<InventoryCount | null>(null)
   countRef.current = count
 
-  function noteTouched(lineId?: string) {
+  function noteTouched(lineId?: string, commentChanged?: boolean) {
     if (lineId) touchedRef.current.add(lineId)
+    if (commentChanged) commentTouchedRef.current = true
   }
 
   async function save() {
     if (!count) return
     setLoading(true)
     try {
+      const commentOptions = commentTouchedRef.current
+        ? { updateComment: true, comment: count.comment }
+        : undefined
       const res = await fetch(apiUrl(`${BASE}/${count.id}/lines`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
-        body: JSON.stringify(actualPayload(count, touchedRef.current)),
+        body: JSON.stringify(actualPayload(count, touchedRef.current, commentOptions)),
       })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
       setCount(toCount((await res.json()) as ApiDetail))
       touchedRef.current = new Set()
+      commentTouchedRef.current = false
       setNote('Сохранено. Остатки не тронуты.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось сохранить')
@@ -176,12 +185,17 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     try {
       // Сначала кладём введённое, потом проводим: иначе проведём то, что сервер
       // помнит с прошлого сохранения, а не то, что человек видит на экране.
+      // WMS-155: комментарий, если оператор его редактировал, уходит здесь же.
+      const commentOptions = commentTouchedRef.current
+        ? { updateComment: true, comment: count.comment }
+        : undefined
       const saved = await fetch(apiUrl(`${BASE}/${count.id}/lines`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
-        body: JSON.stringify(actualPayload(count, touchedRef.current)),
+        body: JSON.stringify(actualPayload(count, touchedRef.current, commentOptions)),
       })
       if (!saved.ok) throw new Error(await readApiErrorMessage(saved))
+      commentTouchedRef.current = false
       const res = await fetch(apiUrl(`${BASE}/${count.id}/post`), {
         method: 'POST',
         headers: { ...authHeaders(token) },
@@ -396,7 +410,10 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         loading={loading}
         error={error}
         note={note}
-        onChange={(next, touchedLineId) => { noteTouched(touchedLineId); setCount(next) }}
+        onChange={(next, touchedLineId, commentChanged) => {
+          noteTouched(touchedLineId, commentChanged)
+          setCount(next)
+        }}
         onSave={() => void save()}
         onPost={() => void post()}
         onCancelDocument={() => void cancelDocument()}

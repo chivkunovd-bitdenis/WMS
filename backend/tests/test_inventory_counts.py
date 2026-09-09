@@ -1683,3 +1683,114 @@ async def test_inventory_count_create_container_without_cell_still_works(
         obj = await session.get(WarehouseBox, link_row.container_id)
         assert obj is not None
         assert obj.storage_location_id is None
+
+
+# WMS-155: комментарий редактируется через ту же ручку сохранения фактов —
+# отдельного PUT для документа не заводим (см. правило «Не плоди сущностей»).
+# По умолчанию — не трогаем комментарий, чтобы не затирать чужой.
+@pytest.mark.asyncio
+async def test_inventory_count_lines_put_preserves_comment_by_default(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "CommentDefault")
+    product = await _product(async_client, setup, name="Товар с комментарием")
+    await _balance(setup, product, 5)
+
+    created = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={
+            "source": "planned",
+            "filters": {"warehouse_id": str(setup.warehouse_id), "all": True},
+            "comment": "Первичный",
+        },
+    )
+    assert created.status_code == 201, created.text
+    count = created.json()
+
+    saved = await async_client.put(
+        f"/operations/inventory-counts/{count['id']}/lines",
+        headers=setup.headers,
+        json={"lines": [
+            {"line_id": count["lines"][0]["id"], "actual_quantity": 4},
+        ]},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["comment"] == "Первичный"
+
+
+# WMS-155: если оператор явно правил поле, шлём флаг + значение и сервер
+# сохраняет новое.
+@pytest.mark.asyncio
+async def test_inventory_count_lines_put_updates_comment_when_flag_set(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "CommentUpdate")
+    product = await _product(async_client, setup, name="Товар с новой причиной")
+    await _balance(setup, product, 5)
+
+    created = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={
+            "source": "planned",
+            "filters": {"warehouse_id": str(setup.warehouse_id), "all": True},
+            "comment": "Первичный",
+        },
+    )
+    count = created.json()
+
+    saved = await async_client.put(
+        f"/operations/inventory-counts/{count['id']}/lines",
+        headers=setup.headers,
+        json={
+            "lines": [{"line_id": count["lines"][0]["id"], "actual_quantity": 4}],
+            "update_comment": True,
+            "comment": "Пересорт, чужой товар",
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    body = saved.json()
+    assert body["comment"] == "Пересорт, чужой товар"
+
+    # Переоткрытие документа возвращает новое значение — сервер сохранил на бэке,
+    # а не только в ответе ручки.
+    reopened = await async_client.get(
+        f"/operations/inventory-counts/{count['id']}", headers=setup.headers
+    )
+    assert reopened.status_code == 200
+    assert reopened.json()["comment"] == "Пересорт, чужой товар"
+
+
+# WMS-155: пустая строка со включённым флагом = стереть комментарий.
+@pytest.mark.asyncio
+async def test_inventory_count_lines_put_clears_comment_with_empty_string(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "CommentClear")
+    product = await _product(async_client, setup, name="Товар без причины")
+    await _balance(setup, product, 5)
+
+    created = await async_client.post(
+        "/operations/inventory-counts",
+        headers=setup.headers,
+        json={
+            "source": "planned",
+            "filters": {"warehouse_id": str(setup.warehouse_id), "all": True},
+            "comment": "Раньше писали",
+        },
+    )
+    count = created.json()
+
+    cleared = await async_client.put(
+        f"/operations/inventory-counts/{count['id']}/lines",
+        headers=setup.headers,
+        json={
+            "lines": [{"line_id": count["lines"][0]["id"], "actual_quantity": 4}],
+            "update_comment": True,
+            "comment": "",
+        },
+    )
+    assert cleared.status_code == 200
+    # Пустая строка на выдаче — договор API уже был «строка, никогда null».
+    assert cleared.json()["comment"] == ""

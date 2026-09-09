@@ -236,7 +236,11 @@ export function toListItem(row: ApiSummary): CountListItem {
  * этот оператор не трогал, не должна попадать в запрос вообще: сервер её тогда
  * не тронет.
  */
-export function actualPayload(count: InventoryCount, touched?: ReadonlySet<string>) {
+export function actualPayload(
+  count: InventoryCount,
+  touched?: ReadonlySet<string>,
+  options?: { comment?: string | null; updateComment?: boolean },
+) {
   const lines: Array<{ line_id: string; actual_quantity: number | null }> = []
   function collect(nodes: InventoryNode[]) {
     for (const node of nodes) {
@@ -252,7 +256,18 @@ export function actualPayload(count: InventoryCount, touched?: ReadonlySet<strin
   for (const cell of count.cells) {
     collect(cell.children)
   }
-  return { lines }
+  const payload: {
+    lines: typeof lines
+    comment?: string | null
+    update_comment?: boolean
+  } = { lines }
+  // WMS-155: комментарий уходит вместе с фактическими значениями. Флаг
+  // `update_comment` отделяет «не менять» от «стереть», сентинел на сервере.
+  if (options?.updateComment) {
+    payload.update_comment = true
+    payload.comment = options.comment ?? null
+  }
+  return payload
 }
 
 /** Виды объектов, по которым сервер умеет заводить документ. */
@@ -407,11 +422,14 @@ export async function saveCountActuals(
   token: string,
   count: InventoryCount,
   touched?: ReadonlySet<string>,
+  // WMS-155: если оператор менял комментарий вручную — послать его вместе с
+  // фактическими количествами. Опущено — сервер не трогает комментарий.
+  options?: { comment?: string | null; updateComment?: boolean },
 ): Promise<InventoryCount> {
   const res = await fetch(apiUrl(`${INVENTORY_BASE}/${count.id}/lines`), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
-    body: JSON.stringify(actualPayload(count, touched)),
+    body: JSON.stringify(actualPayload(count, touched, options)),
   })
   if (!res.ok) throw new Error(await readApiErrorMessage(res))
   return toCount((await res.json()) as ApiDetail)
@@ -427,11 +445,12 @@ export async function postCount(
   token: string,
   count: InventoryCount,
   touched?: ReadonlySet<string>,
+  options?: { comment?: string | null; updateComment?: boolean },
 ): Promise<PostResult> {
   const saved = await fetch(apiUrl(`${INVENTORY_BASE}/${count.id}/lines`), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
-    body: JSON.stringify(actualPayload(count, touched)),
+    body: JSON.stringify(actualPayload(count, touched, options)),
   })
   if (!saved.ok) throw new Error(await readApiErrorMessage(saved))
   const res = await fetch(apiUrl(`${INVENTORY_BASE}/${count.id}/post`), {

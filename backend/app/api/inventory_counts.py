@@ -69,6 +69,10 @@ class InventoryCountActualIn(BaseModel):
 
 class InventoryCountActualBatchIn(BaseModel):
     lines: list[InventoryCountActualIn]
+    # WMS-155: комментарий редактируется вместе с фактическими количествами.
+    # Опущенное поле означает «не менять», пустая строка — стереть.
+    comment: str | None = Field(default=None, max_length=4000)
+    update_comment: bool = False
 
 
 class InventoryCountFoundIn(BaseModel):
@@ -732,12 +736,21 @@ async def save_inventory_count_lines(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InventoryCountDetailOut:
     try:
-        count = await service.save_actuals(
-            session,
-            user.tenant_id,
-            count_id,
-            [(line.line_id, line.actual_quantity) for line in body.lines],
-        )
+        if body.update_comment:
+            count = await service.save_actuals(
+                session,
+                user.tenant_id,
+                count_id,
+                [(line.line_id, line.actual_quantity) for line in body.lines],
+                comment=body.comment,
+            )
+        else:
+            count = await service.save_actuals(
+                session,
+                user.tenant_id,
+                count_id,
+                [(line.line_id, line.actual_quantity) for line in body.lines],
+            )
     except service.InventoryCountError as exc:
         raise _http_error(exc) from None
     return await _detail_out(session, count)

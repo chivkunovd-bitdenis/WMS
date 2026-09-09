@@ -329,7 +329,16 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
 
   async function saveCount(edited: InventoryCount) {
     try {
-      setCount(await saveCountActuals(token, edited))
+      // WMS-155: диалог — короткая сессия, оператор пришёл сюда посчитать один
+      // объект и мог оставить комментарий («пересорт»). Не гоняем «правил ли
+      // именно комментарий» через каждый рендер: диалог держит своё локальное
+      // состояние, поэтому просто присылаем текущее значение как обновление.
+      setCount(
+        await saveCountActuals(token, edited, undefined, {
+          updateComment: true,
+          comment: edited.comment,
+        }),
+      )
     } catch (err) {
       setOperationError(humanError(err, 'Не удалось сохранить пересчёт'))
     }
@@ -337,7 +346,10 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
 
   async function postAndClose(edited: InventoryCount) {
     try {
-      const result = await postCount(token, edited)
+      const result = await postCount(token, edited, undefined, {
+        updateComment: true,
+        comment: edited.comment,
+      })
       setCount(null)
       setCountTarget(null)
       // Проведение меняет остаток, поэтому карту читаем заново: старая картинка
