@@ -520,7 +520,7 @@ export function FfBillingInvoiceCreate({
                   header: 'Сумма',
                   width: 160,
                   align: 'right' as const,
-                  render: (line: PreviewLine) => line.total_amount_kopecks === null || line.description.includes('Нет ставки; сумма не рассчитана') ? <TextCell value="Нет ставки" /> : <MoneyCell minor={line.total_amount_kopecks} />,
+                  render: (line: PreviewLine) => line.total_amount_kopecks === null ? <TextCell value="Нет ставки" /> : <MoneyCell minor={line.total_amount_kopecks} />,
                 },
               ]}
               rows={shown.lines}
