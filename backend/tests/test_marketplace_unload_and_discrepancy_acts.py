@@ -7,7 +7,6 @@ import uuid
 import pytest
 from httpx import AsyncClient
 from inbound_box_intake_helpers import (
-    complete_inbound_to_storage,
     fulfill_inbound_via_box_scans,
     post_primary_accept,
     set_planned_boxes,
@@ -2556,18 +2555,24 @@ async def test_marketplace_unload_attach_allow_over_plan(
     assert got.status_code == 200, got.text
     body = got.json()
     whb = body["boxes"][0]["internal_barcode"]
+    inb_id = body["boxes"][0]["id"]
     sku = body["lines"][0]["sku_code"]
     await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, 15)
     verify = await async_client.post(f"{base_in}/{rid}/verify", headers=ah)
     assert verify.status_code == 200, verify.text
-    await complete_inbound_to_storage(
-        async_client,
-        ah,
-        rid,
-        product_id=pid,
-        storage_location_id=loc_id,
-        quantity=15,
+    # Keep the received goods inside this ready box. Explicit putaway lines
+    # unpack into loose stock and leave only historical box distribution.
+    putaway = await async_client.post(
+        f"{base_in}/{rid}/boxes/{inb_id}/putaway",
+        headers=ah,
+        json={"storage_location_id": loc_id},
     )
+    assert putaway.status_code == 200, putaway.text
+    from test_marketplace_unload_pick_from_container import _balances_by_container
+
+    before = await _balances_by_container(loc_id, pid)
+    assert before[None] == 30
+    assert before[inb_id] == 15
 
     blocked = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes/attach",
@@ -2576,6 +2581,7 @@ async def test_marketplace_unload_attach_allow_over_plan(
     )
     assert blocked.status_code == 422, blocked.text
     assert blocked.json()["detail"] == "plan_limit_exceeded"
+    assert await _balances_by_container(loc_id, pid) == before
 
     ok = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes/attach",
@@ -2593,6 +2599,9 @@ async def test_marketplace_unload_attach_allow_over_plan(
         if ln["product_id"] == pid
     )
     assert picked == 15
+    after = await _balances_by_container(loc_id, pid)
+    assert after[None] == 30
+    assert after[inb_id] == 0
 
 
 @pytest.mark.asyncio

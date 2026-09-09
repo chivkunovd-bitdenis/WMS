@@ -152,6 +152,22 @@ async def test_legacy_box_barcodes_attach_through_real_database_path(
         session.add_all([legacy_warehouse_box, legacy_inbound_box, cargo_place])
         await session.flush()
 
+        # Old labels remain valid, but a ready box needs current physical contents.
+        # Distribution history alone must never borrow the neighbouring loose unit.
+        container_balances = [
+            InventoryBalance(
+                tenant_id=tenant.id,
+                storage_location_id=location.id,
+                product_id=product.id,
+                container_kind="box",
+                container_id=box.id,
+                quantity=1,
+                quantity_unpacked=1,
+                quantity_packed=0,
+            )
+            for box in (legacy_warehouse_box, legacy_inbound_box)
+        ]
+        session.add_all(container_balances)
         session.add_all(
             [
                 InventoryBalance(
@@ -172,7 +188,7 @@ async def test_legacy_box_barcodes_attach_through_real_database_path(
                 MarketplaceUnloadLine(
                     request_id=unload_request.id,
                     product_id=product.id,
-                    quantity=1,
+                    quantity=2,
                 ),
             ]
         )
@@ -188,6 +204,8 @@ async def test_legacy_box_barcodes_attach_through_real_database_path(
         assert attached_whb.warehouse_box_id == legacy_warehouse_box.id
         assert attached_whb.warehouse_box is not None
         assert attached_whb.warehouse_box.internal_barcode == "WHB-ABCDEF123456"
+        assert len(attached_whb.lines) == 1
+        assert attached_whb.lines[0].quantity == 1
 
         attached_inb = await attach_existing_box_by_barcode(
             session,
@@ -200,6 +218,20 @@ async def test_legacy_box_barcodes_attach_through_real_database_path(
         assert len(attached_inb.lines) == 1
         assert attached_inb.lines[0].product_id == product.id
         assert attached_inb.lines[0].quantity == 1
+        for balance in container_balances:
+            await session.refresh(balance)
+            assert balance.quantity == 0
+        from sqlalchemy import select
+
+        loose_quantity = await session.scalar(
+            select(InventoryBalance.quantity).where(
+                InventoryBalance.tenant_id == tenant.id,
+                InventoryBalance.product_id == product.id,
+                InventoryBalance.storage_location_id == location.id,
+                InventoryBalance.container_id.is_(None),
+            )
+        )
+        assert loose_quantity == 1
 
         # Негатив: грузоместо имеет собственный смысл в отгрузке и не может
         # пройти старый сценарий «привязать готовый короб» только из-за общей таблицы.
