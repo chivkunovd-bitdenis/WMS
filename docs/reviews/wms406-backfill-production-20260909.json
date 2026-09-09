@@ -1,0 +1,658 @@
+{
+  "task": "WMS-406",
+  "production_sha": "8dfb216d4061b15789982b72f7c1b82c57e3e897",
+  "api_image": "sha256:d5ccea71742417e9f0b07d95fe6c1890036845cf4e2cb41c8a014944345415c7",
+  "runtime_helper_sha256": "579b482ed6e10e32a74d2572ba15bebaaf1614ed51341a67a5a9b28e8066843c",
+  "tracked_script_sha256": "01de7238b6219f8cbe1a768f5cbbea334215d4933df0cbc942deeb559a53b9a7",
+  "delivery": "Exact verified script bytes via stdin, ModuleType and compile; no container or application files written.",
+  "backup": {
+    "path": "/opt/wms/.deploy-backups/before-wms406-407-20260909/database.dump",
+    "bytes": 410699177,
+    "sha256": "afdc17cd9518a5a609b5026dc962e177454df6519517f096965ab4aa64cda819",
+    "pg_restore_list_passed": true
+  },
+  "run_guards": {
+    "production_sha_asserted": true,
+    "helper_and_script_sha256_asserted": true,
+    "backup_nonempty_asserted": true,
+    "dry_runs_transaction_read_only_verified": true,
+    "statement_timeout_ms": 30000,
+    "lock_timeout_ms": 3000,
+    "per_tenant_batch": 200,
+    "from_filter": null,
+    "skip_dates": false
+  },
+  "runs": {
+    "dry_run_before": {
+      "started_at": "2026-09-09T09:30:44.428745+00:00",
+      "completed_at": "2026-09-09T09:30:52.884233+00:00",
+      "stdout_sha256": "959dbd07812b9e29cb42251c50529cddc8b12e67f70ed260c5da12bf4d12fe96",
+      "exit_code": 0,
+      "failed": 0,
+      "tenants": [
+        {
+          "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+          "tenant": "FFAdam",
+          "created": 2,
+          "redated": 423,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 2590
+        },
+        {
+          "tenant_id": "5baaf211-7cb7-495d-9c2b-b42121606bf9",
+          "tenant": "Руспро",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 0
+        },
+        {
+          "tenant_id": "5fbf633c-3ea9-4c29-b5f5-f549b122bcae",
+          "tenant": "ИП Львова В.В.",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 104
+        },
+        {
+          "tenant_id": "63979f0b-2405-4eeb-a000-541baa00b1da",
+          "tenant": "WMS Test",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 0
+        },
+        {
+          "tenant_id": "6dc7a501-d500-4a96-a691-b31ff53ff7b9",
+          "tenant": "ИП Тестовый",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 17
+        },
+        {
+          "tenant_id": "7b98a8aa-c03c-4649-9677-a645be45c622",
+          "tenant": "Империя ФФ",
+          "created": 154,
+          "redated": 2103,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 7674
+        },
+        {
+          "tenant_id": "a69067c1-e6b3-458c-93d1-e5121aaa4966",
+          "tenant": "ПакХаб",
+          "created": 0,
+          "redated": 4,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 5557
+        },
+        {
+          "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+          "tenant": "Бамбук",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 0
+        },
+        {
+          "tenant_id": "d6e1ad21-8afa-4acf-8d0b-907b9f2adcfe",
+          "tenant": "AVpack",
+          "created": 5,
+          "redated": 12,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 11
+        },
+        {
+          "tenant_id": "db45d56c-ecec-4575-b247-dacbdaca052f",
+          "tenant": "Фулфёдор",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 0
+        },
+        {
+          "tenant_id": "e7ef1f3a-709b-4074-92b5-9b8653045316",
+          "tenant": "Diag Org",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 0
+        }
+      ],
+      "totals": {
+        "created": 161,
+        "redated": 2542,
+        "skipped_accounted": 0,
+        "skipped_unconfirmed": 15953
+      },
+      "stock_before": [
+        {
+          "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+          "balance_rows": 47,
+          "quantity": 1301
+        },
+        {
+          "tenant_id": "5fbf633c-3ea9-4c29-b5f5-f549b122bcae",
+          "balance_rows": 49,
+          "quantity": 10413
+        },
+        {
+          "tenant_id": "6dc7a501-d500-4a96-a691-b31ff53ff7b9",
+          "balance_rows": 36,
+          "quantity": 1556
+        },
+        {
+          "tenant_id": "7b98a8aa-c03c-4649-9677-a645be45c622",
+          "balance_rows": 1596,
+          "quantity": 5032
+        },
+        {
+          "tenant_id": "a69067c1-e6b3-458c-93d1-e5121aaa4966",
+          "balance_rows": 8,
+          "quantity": 280
+        },
+        {
+          "tenant_id": "d6e1ad21-8afa-4acf-8d0b-907b9f2adcfe",
+          "balance_rows": 33,
+          "quantity": 1018
+        }
+      ],
+      "stock_after": [
+        {
+          "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+          "balance_rows": 47,
+          "quantity": 1301
+        },
+        {
+          "tenant_id": "5fbf633c-3ea9-4c29-b5f5-f549b122bcae",
+          "balance_rows": 49,
+          "quantity": 10413
+        },
+        {
+          "tenant_id": "6dc7a501-d500-4a96-a691-b31ff53ff7b9",
+          "balance_rows": 36,
+          "quantity": 1556
+        },
+        {
+          "tenant_id": "7b98a8aa-c03c-4649-9677-a645be45c622",
+          "balance_rows": 1596,
+          "quantity": 5032
+        },
+        {
+          "tenant_id": "a69067c1-e6b3-458c-93d1-e5121aaa4966",
+          "balance_rows": 8,
+          "quantity": 280
+        },
+        {
+          "tenant_id": "d6e1ad21-8afa-4acf-8d0b-907b9f2adcfe",
+          "balance_rows": 33,
+          "quantity": 1018
+        }
+      ]
+    },
+    "apply": {
+      "started_at": "2026-09-09T09:32:40.549808+00:00",
+      "completed_at": "2026-09-09T09:32:57.325192+00:00",
+      "stdout_sha256": "3c10c37b676831146688f13f6854a12c20df929163b234e6704011ed48a8b61a",
+      "exit_code": 0,
+      "failed": 0,
+      "tenants": [
+        {
+          "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+          "tenant": "FFAdam",
+          "created": 2,
+          "redated": 423,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 2590
+        },
+        {
+          "tenant_id": "5baaf211-7cb7-495d-9c2b-b42121606bf9",
+          "tenant": "Руспро",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 0
+        },
+        {
+          "tenant_id": "5fbf633c-3ea9-4c29-b5f5-f549b122bcae",
+          "tenant": "ИП Львова В.В.",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 104
+        },
+        {
+          "tenant_id": "63979f0b-2405-4eeb-a000-541baa00b1da",
+          "tenant": "WMS Test",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 0
+        },
+        {
+          "tenant_id": "6dc7a501-d500-4a96-a691-b31ff53ff7b9",
+          "tenant": "ИП Тестовый",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 17
+        },
+        {
+          "tenant_id": "7b98a8aa-c03c-4649-9677-a645be45c622",
+          "tenant": "Империя ФФ",
+          "created": 154,
+          "redated": 2103,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 7674
+        },
+        {
+          "tenant_id": "a69067c1-e6b3-458c-93d1-e5121aaa4966",
+          "tenant": "ПакХаб",
+          "created": 0,
+          "redated": 4,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 5557
+        },
+        {
+          "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+          "tenant": "Бамбук",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 0
+        },
+        {
+          "tenant_id": "d6e1ad21-8afa-4acf-8d0b-907b9f2adcfe",
+          "tenant": "AVpack",
+          "created": 5,
+          "redated": 12,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 11
+        },
+        {
+          "tenant_id": "db45d56c-ecec-4575-b247-dacbdaca052f",
+          "tenant": "Фулфёдор",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 0
+        },
+        {
+          "tenant_id": "e7ef1f3a-709b-4074-92b5-9b8653045316",
+          "tenant": "Diag Org",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 0
+        }
+      ],
+      "totals": {
+        "created": 161,
+        "redated": 2542,
+        "skipped_accounted": 0,
+        "skipped_unconfirmed": 15953
+      },
+      "stock_before": [
+        {
+          "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+          "balance_rows": 47,
+          "quantity": 1301
+        },
+        {
+          "tenant_id": "5fbf633c-3ea9-4c29-b5f5-f549b122bcae",
+          "balance_rows": 49,
+          "quantity": 10413
+        },
+        {
+          "tenant_id": "6dc7a501-d500-4a96-a691-b31ff53ff7b9",
+          "balance_rows": 36,
+          "quantity": 1556
+        },
+        {
+          "tenant_id": "7b98a8aa-c03c-4649-9677-a645be45c622",
+          "balance_rows": 1596,
+          "quantity": 5032
+        },
+        {
+          "tenant_id": "a69067c1-e6b3-458c-93d1-e5121aaa4966",
+          "balance_rows": 8,
+          "quantity": 280
+        },
+        {
+          "tenant_id": "d6e1ad21-8afa-4acf-8d0b-907b9f2adcfe",
+          "balance_rows": 33,
+          "quantity": 1018
+        }
+      ],
+      "stock_after": [
+        {
+          "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+          "balance_rows": 47,
+          "quantity": 1301
+        },
+        {
+          "tenant_id": "5fbf633c-3ea9-4c29-b5f5-f549b122bcae",
+          "balance_rows": 49,
+          "quantity": 10413
+        },
+        {
+          "tenant_id": "6dc7a501-d500-4a96-a691-b31ff53ff7b9",
+          "balance_rows": 36,
+          "quantity": 1556
+        },
+        {
+          "tenant_id": "7b98a8aa-c03c-4649-9677-a645be45c622",
+          "balance_rows": 1596,
+          "quantity": 5032
+        },
+        {
+          "tenant_id": "a69067c1-e6b3-458c-93d1-e5121aaa4966",
+          "balance_rows": 8,
+          "quantity": 280
+        },
+        {
+          "tenant_id": "d6e1ad21-8afa-4acf-8d0b-907b9f2adcfe",
+          "balance_rows": 33,
+          "quantity": 1018
+        }
+      ]
+    },
+    "dry_run_after": {
+      "started_at": "2026-09-09T09:33:35.795434+00:00",
+      "completed_at": "2026-09-09T09:33:39.381711+00:00",
+      "stdout_sha256": "8945c579e9b94db33ca0ee88317a456124b94660cffd214113ca063c06f9dcac",
+      "exit_code": 0,
+      "failed": 0,
+      "tenants": [
+        {
+          "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+          "tenant": "FFAdam",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 2590
+        },
+        {
+          "tenant_id": "5baaf211-7cb7-495d-9c2b-b42121606bf9",
+          "tenant": "Руспро",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 0
+        },
+        {
+          "tenant_id": "5fbf633c-3ea9-4c29-b5f5-f549b122bcae",
+          "tenant": "ИП Львова В.В.",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 104
+        },
+        {
+          "tenant_id": "63979f0b-2405-4eeb-a000-541baa00b1da",
+          "tenant": "WMS Test",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 0
+        },
+        {
+          "tenant_id": "6dc7a501-d500-4a96-a691-b31ff53ff7b9",
+          "tenant": "ИП Тестовый",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 17
+        },
+        {
+          "tenant_id": "7b98a8aa-c03c-4649-9677-a645be45c622",
+          "tenant": "Империя ФФ",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 7674
+        },
+        {
+          "tenant_id": "a69067c1-e6b3-458c-93d1-e5121aaa4966",
+          "tenant": "ПакХаб",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 5557
+        },
+        {
+          "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+          "tenant": "Бамбук",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 0
+        },
+        {
+          "tenant_id": "d6e1ad21-8afa-4acf-8d0b-907b9f2adcfe",
+          "tenant": "AVpack",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 11
+        },
+        {
+          "tenant_id": "db45d56c-ecec-4575-b247-dacbdaca052f",
+          "tenant": "Фулфёдор",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 0
+        },
+        {
+          "tenant_id": "e7ef1f3a-709b-4074-92b5-9b8653045316",
+          "tenant": "Diag Org",
+          "created": 0,
+          "redated": 0,
+          "skipped_accounted": 0,
+          "skipped_unconfirmed": 0
+        }
+      ],
+      "totals": {
+        "created": 0,
+        "redated": 0,
+        "skipped_accounted": 0,
+        "skipped_unconfirmed": 15953
+      },
+      "stock_before": [
+        {
+          "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+          "balance_rows": 47,
+          "quantity": 1301
+        },
+        {
+          "tenant_id": "5fbf633c-3ea9-4c29-b5f5-f549b122bcae",
+          "balance_rows": 49,
+          "quantity": 10413
+        },
+        {
+          "tenant_id": "6dc7a501-d500-4a96-a691-b31ff53ff7b9",
+          "balance_rows": 36,
+          "quantity": 1556
+        },
+        {
+          "tenant_id": "7b98a8aa-c03c-4649-9677-a645be45c622",
+          "balance_rows": 1596,
+          "quantity": 5032
+        },
+        {
+          "tenant_id": "a69067c1-e6b3-458c-93d1-e5121aaa4966",
+          "balance_rows": 8,
+          "quantity": 280
+        },
+        {
+          "tenant_id": "d6e1ad21-8afa-4acf-8d0b-907b9f2adcfe",
+          "balance_rows": 33,
+          "quantity": 1018
+        }
+      ],
+      "stock_after": [
+        {
+          "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+          "balance_rows": 47,
+          "quantity": 1301
+        },
+        {
+          "tenant_id": "5fbf633c-3ea9-4c29-b5f5-f549b122bcae",
+          "balance_rows": 49,
+          "quantity": 10413
+        },
+        {
+          "tenant_id": "6dc7a501-d500-4a96-a691-b31ff53ff7b9",
+          "balance_rows": 36,
+          "quantity": 1556
+        },
+        {
+          "tenant_id": "7b98a8aa-c03c-4649-9677-a645be45c622",
+          "balance_rows": 1596,
+          "quantity": 5032
+        },
+        {
+          "tenant_id": "a69067c1-e6b3-458c-93d1-e5121aaa4966",
+          "balance_rows": 8,
+          "quantity": 280
+        },
+        {
+          "tenant_id": "d6e1ad21-8afa-4acf-8d0b-907b9f2adcfe",
+          "balance_rows": 33,
+          "quantity": 1018
+        }
+      ]
+    }
+  },
+  "table_audit_before": {
+    "at": "2026-09-09T09:32:10.906929+00:00",
+    "tables": {
+      "inventory_balances": {
+        "rows": 1769,
+        "digest": "3568de0264d682dc38ad8bae3165620f"
+      },
+      "fbs_order_reservations": {
+        "rows": 140,
+        "digest": "4d8513a7153931fc12b185580a94c0e6"
+      },
+      "fbs_order_product_reservations": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "fbs_orders": {
+        "rows": 18692,
+        "digest": "fb46033491b498b1adbbe749363d52f6"
+      },
+      "fbs_order_products": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "billing_ledger_entries": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "billing_ledger_lines": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "billing_invoices": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "billing_invoices_v2": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "billing_invoice_v2_lines": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "billing_invoice_v2_sources": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "billing_tariff_versions": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "billing_tariff_versions_v2": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      }
+    },
+    "protected_fact_dates": [],
+    "facts": {
+      "rows": 11374,
+      "quantity": 11374
+    },
+    "completed_at": "2026-09-09T09:32:12.034203+00:00"
+  },
+  "table_audit_after": {
+    "at": "2026-09-09T09:33:31.973871+00:00",
+    "tables": {
+      "inventory_balances": {
+        "rows": 1769,
+        "digest": "3568de0264d682dc38ad8bae3165620f"
+      },
+      "fbs_order_reservations": {
+        "rows": 140,
+        "digest": "4d8513a7153931fc12b185580a94c0e6"
+      },
+      "fbs_order_product_reservations": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "fbs_orders": {
+        "rows": 18692,
+        "digest": "fb46033491b498b1adbbe749363d52f6"
+      },
+      "fbs_order_products": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "billing_ledger_entries": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "billing_ledger_lines": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "billing_invoices": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "billing_invoices_v2": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "billing_invoice_v2_lines": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "billing_invoice_v2_sources": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "billing_tariff_versions": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "billing_tariff_versions_v2": {
+        "rows": 0,
+        "digest": "d41d8cd98f00b204e9800998ecf8427e"
+      }
+    },
+    "protected_fact_dates": [],
+    "facts": {
+      "rows": 11535,
+      "quantity": 11535
+    },
+    "completed_at": "2026-09-09T09:33:32.485522+00:00"
+  },
+  "table_audit_method": "md5(coalesce(string_agg(md5(row_to_json(t)::text), '' ORDER BY t.id), '')) plus count(*) in read-only repeatable-read transaction",
+  "all_13_table_fingerprints_equal": true,
+  "stock_aggregates_equal_all_snapshots": true,
+  "private_raw_log_directory": "tmp/wms406-backfill-execution"
+}
