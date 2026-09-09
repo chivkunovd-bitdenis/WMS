@@ -71,15 +71,28 @@ async def register_fulfillment(
     return user, tenant
 
 
+# WMS-270. Постоянный «пустой» хеш для веток, где реального пользователя нет
+# или пароль ещё не задан. Мы всё равно прогоняем bcrypt: если пропустить его,
+# по времени ответа снаружи легко отличить «такой почты нет» от «пароль неверен»,
+# и это оракул для перебора почт. Значение зашивается один раз при старте.
+_DUMMY_PASSWORD_HASH = hash_password("wms-270-dummy-timing-guard")
+
+
 async def login(session: AsyncSession, *, email: str, password: str) -> tuple[User, str]:
+    """Единая проверка входа без утечки состояния аккаунта.
+
+    Любой отказ уходит одинаковым `AuthError("invalid_credentials")`: нет такой
+    почты, не задан пароль, аккаунт заблокирован, неверный пароль — снаружи всё
+    выглядит одинаково. Так входная форма перестаёт работать оракулом для
+    перебора адресов и обнаружения аккаунтов с несозданным паролем (WMS-270).
+    """
     stmt = select(User).where(User.email == email.strip().lower())
     result = await session.execute(stmt)
     user = result.scalar_one_or_none()
-    if user is None:
-        raise AuthError("invalid_credentials")
-    if user.must_set_password:
-        if password.strip() == "":
-            raise AuthError("password_setup_required")
+    # Всегда считаем bcrypt: это выравнивает время ответа для «нет пользователя»
+    # и «пароль неверен». Без этого таймингом можно перебирать почты.
+    if user is None or user.must_set_password:
+        verify_password(password, _DUMMY_PASSWORD_HASH)
         raise AuthError("invalid_credentials")
     if not verify_password(password, user.password_hash):
         raise AuthError("invalid_credentials")

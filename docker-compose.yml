@@ -105,8 +105,13 @@ services:
       dockerfile: frontend/Dockerfile.prod
     depends_on:
       - api
+    # WMS-377. Порт биндится на loopback, а не на 0.0.0.0: внешним клиентам
+    # приходить прямым HTTP запрещено. HTTPS раздаёт домен через отдельный
+    # обратный proxy (Caddy на этом же хосте, соседний проект), для него
+    # loopback-адрес доступен нормально. WMS_WEB_PORT_BIND можно поднять до
+    # 0.0.0.0 руками только для локальной разработки без proxy.
     ports:
-      - "${WMS_WEB_PORT:-15173}:80"
+      - "${WMS_WEB_PORT_BIND:-127.0.0.1}:${WMS_WEB_PORT:-15173}:80"
     volumes:
       - ./frontend/deploy/Caddyfile.ff.local:/etc/caddy/Caddyfile:ro
 
@@ -117,8 +122,9 @@ services:
     restart: unless-stopped
     depends_on:
       - api
+    # WMS-377. Порт селлерского портала (15174) — тоже только на loopback.
     ports:
-      - "${WMS_SELLER_WEB_PORT:-15174}:80"
+      - "${WMS_SELLER_WEB_PORT_BIND:-127.0.0.1}:${WMS_SELLER_WEB_PORT:-15174}:80"
     volumes:
       - ./frontend/deploy/Caddyfile.seller.local:/etc/caddy/Caddyfile:ro
 

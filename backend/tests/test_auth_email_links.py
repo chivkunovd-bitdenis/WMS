@@ -72,12 +72,14 @@ async def test_invite_link_sets_password_and_logs_in(async_client: AsyncClient) 
     email = "seller-invite-flow@example.com"
     await _create_seller_account(async_client, headers, email)
 
-    # До установки пароля вход закрыт.
+    # До установки пароля вход закрыт. WMS-270: отвечает тем же 401
+    # invalid_credentials, что и любой другой отказ — снаружи по ответу
+    # нельзя понять, существует ли аккаунт и в каком он состоянии.
     login_before = await async_client.post(
         "/auth/login", json={"email": email, "password": ""}
     )
-    assert login_before.status_code == 403
-    assert login_before.json()["detail"] == "password_setup_required"
+    assert login_before.status_code == 401
+    assert login_before.json()["detail"] == "invalid_credentials"
 
     accepted = await set_password_via_link(async_client, email, "novyparol123")
     assert accepted.status_code == 200, accepted.text
