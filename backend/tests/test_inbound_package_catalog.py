@@ -79,8 +79,10 @@ async def _create_staff(
 
 async def _seed_packages(tenant_id: uuid.UUID) -> dict[str, uuid.UUID]:
     now = datetime(2026, 8, 23, 10, 15, tzinfo=UTC)
-    warehouse_one = Warehouse(id=uuid.uuid4(), tenant_id=tenant_id, name="Основной", code="main")
-    warehouse_two = Warehouse(id=uuid.uuid4(), tenant_id=tenant_id, name="Резерв", code="reserve")
+    # WMS-062: у нового арендатора уже есть склад code=main; сидовые склады
+    # используют другие коды, чтобы не ловить UNIQUE.
+    warehouse_one = Warehouse(id=uuid.uuid4(), tenant_id=tenant_id, name="Основной", code="pkg-main")
+    warehouse_two = Warehouse(id=uuid.uuid4(), tenant_id=tenant_id, name="Резерв", code="pkg-reserve")
     seller = Seller(id=uuid.uuid4(), tenant_id=tenant_id, name="Селлер короба")
     product = Product(
         id=uuid.uuid4(),

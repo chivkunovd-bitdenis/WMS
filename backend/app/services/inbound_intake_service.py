@@ -1201,7 +1201,22 @@ async def complete_receiving(
         line.actual_qty = effective
         if effective != line.expected_qty:
             line_discrepancy = True
-    req.has_discrepancy = bool(req.boxes_discrepancy) or line_discrepancy
+    # WMS-174: считаем box-discrepancy тут же по факту, не полагаясь на
+    # сохранённый флаг. Раньше begin_receiving передавал actual_box_count=None,
+    # и флаг никогда не обновлялся, даже когда план и факт коробов расходились.
+    #
+    # Пустой list boxes — приёмка «россыпью»: короба не создавались вовсе,
+    # это законный сценарий, там расхождения нет. Если хоть один короб есть,
+    # значит оператор действительно набивал по коробам, и число обязано
+    # совпасть с плановым.
+    live_box_discrepancy = (
+        req.planned_box_count is not None
+        and len(req.boxes) > 0
+        and req.planned_box_count != len(req.boxes)
+    )
+    req.boxes_discrepancy = live_box_discrepancy
+    req.actual_box_count = len(req.boxes)
+    req.has_discrepancy = live_box_discrepancy or line_discrepancy
     req.status = STATUS_SORTING
     req.verified_at = datetime.now(UTC)
     sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
