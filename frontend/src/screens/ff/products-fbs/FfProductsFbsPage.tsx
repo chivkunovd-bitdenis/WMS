@@ -191,6 +191,11 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
 
   async function saveRule(productIds: string[], rule: FbsRule): Promise<string | null> {
     setError(null)
+    // WMS-060/WMS-338: сюда нужно передавать поштучный режим и числа по складам,
+    // иначе API подставит `units_mode=false` и `units_by_warehouse={}`, а сервис
+    // молча запишет получившееся правило поверх операторского. То есть открытие
+    // окна с любым сохранением через /ff/fbs-stock раньше сбрасывало режим
+    // штук и операторский потолок. Отправляем всё, что нужно правилу целиком.
     const body = {
       publish: rule.changedPublication && !rule.changedPublication.includes("wb")
                           ? undefined : rule.publish,
@@ -199,6 +204,8 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
       same_everywhere: rule.sameEverywhere,
       percent: rule.percent,
       by_warehouse: rule.byWarehouse,
+      units_mode: rule.unitsMode,
+      units_by_warehouse: rule.unitsByWarehouse,
     }
     try {
       if (productIds.length === 1) {
