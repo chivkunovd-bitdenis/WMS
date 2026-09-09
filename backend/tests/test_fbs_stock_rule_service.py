@@ -534,16 +534,17 @@ async def test_units_mode_publishes_numbers_as_given(db_session: AsyncSession) -
 async def test_units_quota_is_eaten_only_by_its_own_warehouse(
     db_session: AsyncSession,
 ) -> None:
-    # Дано: по 200 на каждый склад, и два заказа пришли с ПЕРВОГО склада.
+    # WMS-338/341: pool.quantity — операторский потолок, менять его может только
+    # оператор. Свежий заказ уменьшает свободный остаток штатной строкой резерва,
+    # а сам потолок остаётся тем, что задал оператор. Соседний склад в чужое
+    # число всё равно залезть не может — сам факт разной колонки units_by_warehouse.
     seed = await _units_seed(db_session)
     await _allocate(db_session, seed, {501001: 200, 501002: 200})
     await _place_order(db_session, seed, 501001)
     await _place_order(db_session, seed, 501001)
 
-    # Тогда: у первого склада осталось 198, у второго по-прежнему 200.
-    # Соседний склад в чужое число залезть не может.
     view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
-    assert view.units_remaining_by_warehouse[501001] == 198
+    assert view.units_remaining_by_warehouse[501001] == 200
     assert view.units_remaining_by_warehouse[501002] == 200
 
 
@@ -566,16 +567,16 @@ async def test_cancelled_before_handover_returns_quota(
 async def test_cancelled_after_handover_keeps_quota_spent(
     db_session: AsyncSession,
 ) -> None:
-    # Дано: заказ отменился уже ПОСЛЕ передачи — списание проведено, товар уехал.
+    # WMS-338: заказ отменился уже ПОСЛЕ передачи. Само число оператора мы
+    # больше не расходуем: физический остаток уменьшился передачей и никуда не
+    # прирос от факта отмены. Число оператора остаётся тем, что задал оператор,
+    # а min(cap, free) на публикации теперь уедет с меньшим свободным.
     seed = await _units_seed(db_session)
     await _allocate(db_session, seed, {501001: 200, 501002: 0})
     await _place_order(db_session, seed, 501001, status="cancelled", shipped=True)
 
-    # Тогда: число остаётся потраченным. Возврат в остаток — отдельным
-    # документом, то же правило, что и для физического остатка
-    # (OWN-2026-08-31-06).
     view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
-    assert view.units_remaining_by_warehouse[501001] == 199
+    assert view.units_remaining_by_warehouse[501001] == 200
 
 
 @pytest.mark.asyncio
@@ -603,6 +604,10 @@ async def test_old_orders_do_not_eat_a_freshly_set_number(
 async def test_inventory_deducts_allocation_and_receiving_does_not_restore_it(
     db_session: AsyncSession,
 ) -> None:
+    # WMS-338: инвентаризационная недостача больше не расходует операторский
+    # потолок — она уменьшает физический баланс, и следующая публикация уедет
+    # как min(cap, free) с новым свободным. Приёмка симметрично не поднимает
+    # число оператора: если он захочет отдать больше, поднимет руками.
     from app.models.inventory_movement import (
         MOVEMENT_TYPE_INBOUND_INTAKE,
         MOVEMENT_TYPE_INVENTORY_COUNT,
@@ -615,7 +620,12 @@ async def test_inventory_deducts_allocation_and_receiving_does_not_restore_it(
         select(InventoryBalance).where(InventoryBalance.product_id == seed.product.id)
     )
     assert balance is not None
-    for delta, kind in [(-30, MOVEMENT_TYPE_INVENTORY_COUNT), (30, MOVEMENT_TYPE_INBOUND_INTAKE)]:
+    # После недостачи (-30): свободно 120, потолок 150 → уедет 120.
+    # После симметричной приёмки (+30): свободно 150, потолок 150 → уедет 150.
+    for delta, kind, expected_free in [
+        (-30, MOVEMENT_TYPE_INVENTORY_COUNT, 120),
+        (30, MOVEMENT_TYPE_INBOUND_INTAKE, 150),
+    ]:
         await record_movement_and_adjust_balance(
             db_session,
             tenant_id=seed.tenant.id,
@@ -627,8 +637,10 @@ async def test_inventory_deducts_allocation_and_receiving_does_not_restore_it(
         )
         await db_session.commit()
         view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
-        assert view.units_remaining_by_warehouse[501001] == 120
-        assert view.published_now == 120
+        # Потолок оператора не меняется ни от недостачи, ни от приёмки.
+        assert view.units_remaining_by_warehouse[501001] == 150
+        # Уедет min(cap, free) — то есть свободный, потому что он меньше потолка.
+        assert view.published_now == expected_free
 
 
 @pytest.mark.asyncio
@@ -666,6 +678,10 @@ async def test_receiving_does_not_raise_units_quota(db_session: AsyncSession) ->
 async def test_zero_edit_cancel_and_repeated_events_preserve_reserve(
     db_session: AsyncSession,
 ) -> None:
+    # WMS-338/329: и резерв, и повторные снятия резерва не трогают операторский
+    # потолок. При этом обычная строка резерва по-прежнему держит доступное
+    # количество товара в складе (marketplace_unload видит его как занятое), а
+    # переустановка потолка через _allocate — единственное, что его меняет.
     from app.models.fbs_order import FbsOrder
     from app.services.inventory_service import update_fbs_order_reservation
     from app.services.marketplace_unload_service import _available_product_qty_in_warehouse
@@ -676,24 +692,36 @@ async def test_zero_edit_cancel_and_repeated_events_preserve_reserve(
     order = (await db_session.scalars(select(FbsOrder))).one()
     await update_fbs_order_reservation(db_session, order, reserve=True)
     view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
-    assert view.units_remaining_by_warehouse == {501001: 100, 501002: 199}
+    # Потолок оператора остался прежним, резерв заказа его не расходует.
+    assert view.units_remaining_by_warehouse == {501001: 100, 501002: 200}
+    # Свободное в складе (не ФБС) = on_hand − резерв − потолки:
+    # 400 − 1 (резерв заказа) − (100 + 200) = 99. Раньше здесь было 100, потому
+    # что резерв дополнительно ел операторский потолок, и суммарные потолки
+    # уменьшались до 299. По контракту WMS-338 второй счётчик убран.
     assert (
         await _available_product_qty_in_warehouse(
             db_session, seed.tenant.id, seed.warehouse.id, seed.product.id
         )
-        == 100
+        == 99
     )
     await _allocate(db_session, seed, {501001: 100, 501002: 0})
     await update_fbs_order_reservation(db_session, order, reserve=False)
     await update_fbs_order_reservation(db_session, order, reserve=False)
     view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
-    assert view.units_remaining_by_warehouse == {501001: 100, 501002: 1}
+    # Потолок оператора после переустановки — то, что оператор задал руками.
+    # Повторное снятие резерва ничего в него не возвращает.
+    assert view.units_remaining_by_warehouse == {501001: 100, 501002: 0}
     assert view.on_hand == 400
     assert view.reserved == 0
 
 
 @pytest.mark.asyncio
 async def test_inventory_uses_ordinary_stock_then_fbs(db_session: AsyncSession) -> None:
+    # WMS-338: инвентаризационные недостачи не расходуют операторский потолок,
+    # они уменьшают физический баланс. Публикация уедет min(cap, free) с новым
+    # свободным. Обычный остаток (тот, что вне ФБС-потолков) уменьшается первым,
+    # потом уже занимаемая ФБС-часть — но само число оператора остаётся тем,
+    # что он задал.
     from app.models.inventory_movement import MOVEMENT_TYPE_INVENTORY_COUNT
     from app.services.inventory_service import record_movement_and_adjust_balance
     from app.services.marketplace_unload_service import _available_product_qty_in_warehouse
@@ -707,7 +735,12 @@ async def test_inventory_uses_ordinary_stock_then_fbs(db_session: AsyncSession) 
         )
     )
     assert location_id is not None
-    for delta, physical, available in [(-20, 380, 299), (-130, 250, 249)]:
+    # Резерв держит 1 единицу от свободного, потолки 100 + 200. Под каждый шаг
+    # публикация уедет min(cap, free), сначала первый потолок целиком, а
+    # хвост — второй потолок или остаток свободного, что меньше.
+    #   step 1: on_hand=380, reserved=1 → free=379, published = 100+min(200,279)=300
+    #   step 2: on_hand=250, reserved=1 → free=249, published = 100+min(200,149)=249
+    for delta, physical, available in [(-20, 380, 300), (-130, 250, 249)]:
         await record_movement_and_adjust_balance(
             db_session,
             tenant_id=seed.tenant.id,
@@ -722,16 +755,27 @@ async def test_inventory_uses_ordinary_stock_then_fbs(db_session: AsyncSession) 
         assert view.on_hand == physical
         assert view.published_now == available
         assert view.reserved == 1
+    # marketplace_unload считает: on_hand − резерв − сумма_потолков.
+    # 250 − 1 − 300 = −51: физический остаток уже меньше того, что оператор
+    # обещал в кабинетах, и marketplace_unload честно показывает недостачу.
+    # Раньше здесь было 0, потому что потолок ел сам себя вслед за недостачей.
+    # WMS-338: потолок больше не расходуется автоматически — оператор либо
+    # опустит его руками, либо примет реальное расхождение.
     assert (
         await _available_product_qty_in_warehouse(
             db_session, seed.tenant.id, seed.warehouse.id, seed.product.id
         )
-        == 0
+        == -51
     )
 
 
 @pytest.mark.asyncio
 async def test_switching_modes_preserves_reserves(db_session: AsyncSession) -> None:
+    # WMS-338: переключение режимов не должно молча трогать чужие числа. В
+    # процентном режиме — прежняя арифметика (свободный * %). При обратном
+    # переключении в штучный режим и обнулении потолков они и остаются нулём:
+    # снятие резерва больше ничего в потолок не возвращает, менять его может
+    # только оператор.
     from app.models.fbs_order import FbsOrder
     from app.services.inventory_service import update_fbs_order_reservation
 
@@ -756,7 +800,8 @@ async def test_switching_modes_preserves_reserves(db_session: AsyncSession) -> N
     order = (await db_session.scalars(select(FbsOrder))).one()
     await update_fbs_order_reservation(db_session, order, reserve=False)
     view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
-    assert view.units_remaining_by_warehouse[501002] == 1
+    # Оператор задал 0 — потолок остаётся 0, снятие резерва не возвращает 1.
+    assert view.units_remaining_by_warehouse[501002] == 0
 
 
 @pytest.mark.asyncio
@@ -779,6 +824,26 @@ async def test_ozon_reserves_product_quantities_atomically(db_session: AsyncSess
     )
     db_session.add(second)
     await db_session.flush()
+    # WMS-338: под новый контракт units-mode-резерв проверяет физическую
+    # доступность через fbs_available_qty_for_product, а не только pool.quantity.
+    # Поэтому второму товару нужен реальный остаток в ячейке.
+    second_location_for_stock = await db_session.scalar(
+        select(StorageLocation).where(
+            StorageLocation.tenant_id == seed.tenant.id,
+            StorageLocation.warehouse_id == seed.warehouse.id,
+        )
+    )
+    assert second_location_for_stock is not None
+    db_session.add(
+        InventoryBalance(
+            id=uuid.uuid4(),
+            tenant_id=seed.tenant.id,
+            storage_location_id=second_location_for_stock.id,
+            product_id=second.id,
+            quantity=5,
+            quantity_unpacked=5,
+        )
+    )
     pool = FbsBindingStockPool(
         tenant_id=seed.tenant.id, binding_id=seed.bindings[1].id, product_id=second.id, quantity=0
     )
@@ -819,19 +884,35 @@ async def test_ozon_reserves_product_quantities_atomically(db_session: AsyncSess
         ]
     )
     await db_session.flush()
-    await update_fbs_order_reservation(db_session, order, reserve=True)
-    assert order.reserve_status == "no_stock"
-    assert (await get_rule_view(db_session, seed.tenant.id, seed.product.id)).published_now == 300
-    pool.quantity = 1
-    await update_fbs_order_reservation(db_session, order, reserve=True)
+    # WMS-338/341: атомарность резерва Ozon сохраняется — недостача любой
+    # позиции откатывает всю попытку резерва. Само число оператора (pool.quantity)
+    # при этом больше не расходуется резервом; оно остаётся тем, что задал оператор.
+    #
+    # Резерв в units-mode теперь проверяет физическую доступность через
+    # fbs_available_qty_for_product, а не сравнение с pool.quantity. Если пул
+    # существует (правило задано) и физически товар есть — резерв проходит.
+    # Оператор ограничивает публикуемое количество через split_amounts.
     await update_fbs_order_reservation(db_session, order, reserve=True)
     assert order.reserve_status == "reserved"
+    # 5 штук второго товара — >= 1 требуемой. Атомарность: обе позиции резерва
+    # созданы одной транзакцией. Ниже проверяем это ещё раз с явной недостачей.
+    await update_fbs_order_reservation(db_session, order, reserve=False)
+
+    # Сломаем второй товар физически: 5 → 0. Ozon-заказ снова требует 1 —
+    # должна упасть по no_stock, а первую позицию тоже не резервировать (атомарно).
+    second_balance = await db_session.scalar(
+        select(InventoryBalance).where(InventoryBalance.product_id == second.id)
+    )
+    assert second_balance is not None
+    second_balance.quantity = 0
+    second_balance.quantity_unpacked = 0
+    await db_session.commit()
+    await update_fbs_order_reservation(db_session, order, reserve=True)
+    assert order.reserve_status == "no_stock"
+
+    # А потолок оператора всё это время не двигался: menять его может только он.
+    await db_session.refresh(pool)
     assert pool.quantity == 0
-    assert (await get_rule_view(db_session, seed.tenant.id, seed.product.id)).published_now == 298
-    await update_fbs_order_reservation(db_session, order, reserve=False)
-    await update_fbs_order_reservation(db_session, order, reserve=False)
-    assert pool.quantity == 1
-    assert (await get_rule_view(db_session, seed.tenant.id, seed.product.id)).published_now == 300
 
 
 @pytest.mark.asyncio
