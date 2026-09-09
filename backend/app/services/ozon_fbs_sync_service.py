@@ -15,7 +15,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -510,39 +510,30 @@ async def _binding_for_row(
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
-async def _stock_is_published_for_row(
-    session: AsyncSession,
-    binding: FbsWarehouseBinding | None,
-    positions: list[FbsOrderProduct],
-    fallback_product_id: uuid.UUID | None,
-) -> bool:
-    """Наш ли это заказ: выставлен ли по его складу и товару остаток (WMS-352).
+def _warehouse_is_served_for_row(binding: FbsWarehouseBinding | None) -> bool:
+    """Наш ли это склад для заказа Ozon (WMS-352 / WMS-386).
 
-    Кабинет Ozon отдаёт все отправления продавца, включая те, что он собирает
-    сам на другом складе. Своими считаем ровно те, по которым остаток публикуем
-    мы: склад продавца отмечен обслуживаемым, а у товара включена публикация.
-    Правило и его место — те же, что у Wildberries в
-    ``fbs_order_import_scope_service.import_wb_order_rows``: отсев до записи в
-    локальную базу, без отдельного признака «чужой» у заказа.
+    Кабинет Ozon отдаёт все отправления продавца — в том числе те, что он
+    собирает сам на другом складе. Своими считаем ровно те, что пришли на
+    склад с активной привязкой Ozon и признаком ``served`` — то есть тот
+    склад, за приёмку и отгрузку которого отвечаем мы.
+
+    Импорт заказа НЕ зависит от публикации остатка по товару.
+    Публикация — отдельный шаг: ``inventory_service`` считает
+    ``min(cap, free_stock)`` и передаёт его в
+    ``fbs_stock_sync_service`` в момент выкладки. Раньше эта функция
+    дополнительно требовала у товара включённую галку публикации
+    (``fbs_ozon_stock_sync_enabled`` / ``fbs_stock_sync_enabled``); из-за
+    этого при снятии галки оператор терял видимость новых заказов Ozon
+    по этому товару. Прямое поручение владельца развязать импорт и
+    публикацию (WMS-386): импорт идёт по обслуживаемому складу,
+    публикация остаётся отдельной операцией.
+
+    Правило и место отсева — те же, что у Wildberries в
+    ``fbs_order_import_scope_service.import_wb_order_rows``: отсеиваем до
+    записи в локальную базу, без отдельного признака «чужой» у заказа.
     """
-    if binding is None or not binding.served:
-        return False
-    product_ids = {position.product_id for position in positions if position.product_id is not None}
-    if fallback_product_id is not None:
-        product_ids.add(fallback_product_id)
-    if not product_ids:
-        return False
-    published = await session.scalar(
-        select(Product.id)
-        .where(
-            Product.id.in_(product_ids),
-            func.coalesce(
-                Product.fbs_ozon_stock_sync_enabled, Product.fbs_stock_sync_enabled,
-            ).is_(True),
-        )
-        .limit(1)
-    )
-    return published is not None
+    return binding is not None and binding.served
 
 
 async def _posting_products_for_row(
