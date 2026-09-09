@@ -1146,6 +1146,14 @@ async def _get_or_create_wb_origin_supply(
         seller_id=seller_id,
         warehouse_id=warehouse_id,
         wb_supply_id=wb_supply_id,
+        # WMS-122: без external_supply_id уникальное ограничение
+        # (seller_id, marketplace, external_supply_id) не мешает завести
+        # второй ряд под тем же WB-номером — NULLы в Postgres не равны.
+        # Импорт как раз тот путь, где параллельно с ручным `from-orders`
+        # можно проскочить существующий read-then-insert поиск и создать
+        # дубль. Дублирование колонки в external_supply_id даёт ограничению
+        # реальную защиту без новых сущностей и таблиц.
+        external_supply_id=wb_supply_id,
         name=supply_name,
         source=FBS_SUPPLY_SOURCE_WB,
         status=supply_status,

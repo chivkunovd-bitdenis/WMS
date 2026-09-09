@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, UniqueConstraint, Uuid, func
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, String, Uuid, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -35,12 +35,22 @@ FBS_SUPPLY_SOURCE_WB = "wb"
 
 class FbsSupply(Base):
     __tablename__ = "fbs_supplies"
+    # WMS-122: обычный UNIQUE(seller_id, marketplace, external_supply_id) не
+    # ловил параллельные insert'ы на WB, потому что WB-путь оставлял
+    # `external_supply_id = NULL`, а Postgres считает NULLы уникальными.
+    # Частичный уникальный индекс `WHERE external_supply_id IS NOT NULL`
+    # решает обе части: WB после заполнения защищён от гонок, а Ozon-путь
+    # до отгрузки по-прежнему может держать NULL как «внешний идентификатор
+    # ещё не выдан».
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_fbs_supplies_seller_marketplace_external_supply_notnull",
             "seller_id",
             "marketplace",
             "external_supply_id",
-            name="uq_fbs_supplies_seller_marketplace_external_supply",
+            unique=True,
+            postgresql_where=text("external_supply_id IS NOT NULL"),
+            sqlite_where=text("external_supply_id IS NOT NULL"),
         ),
     )
 

@@ -783,6 +783,16 @@ async def create_supply_from_orders(
             warehouse_id=summary.wms_warehouse_id,
             marketplace=marketplace,
             wb_supply_id=wb_supply_id if marketplace == "wb" else f"PENDING-{operation.id}",
+            # WMS-122: `external_supply_id` — стабильный идентификатор поставки
+            # у маркетплейса. Раньше на WB-путях он оставался NULL, поэтому
+            # уникальное ограничение (seller_id, marketplace, external_supply_id)
+            # не срабатывало: Postgres считает NULLы разными, и параллельный
+            # импорт/ручное создание могли завести два ряда под одним WB-номером.
+            # Кладём wb_supply_id туда же — тогда ограничение защищает WB так же,
+            # как оно защищало Ozon после отгрузки. Для Ozon поле останется NULL
+            # до момента, пока `handoff` не заполнит его carriage_id (см.
+            # fbs_shipment_service.py:2151), это уже штатный путь.
+            external_supply_id=wb_supply_id if marketplace == "wb" and wb_supply_id else None,
             name=name,
             source=FBS_SUPPLY_SOURCE_WMS,
             status=FBS_SUPPLY_STATUS_DRAFT,
@@ -1322,6 +1332,10 @@ async def create_supply(
         seller_id=seller_id,
         warehouse_id=warehouse_id,
         wb_supply_id=wb_supply_id,
+        # WMS-122: см. комментарий в create_supply_from_orders — держим
+        # external_supply_id заполненным на WB-путях, чтобы уникальное
+        # ограничение реально мешало параллельным insert.
+        external_supply_id=wb_supply_id,
         name=name,
         source=FBS_SUPPLY_SOURCE_WMS,
         status=FBS_SUPPLY_STATUS_DRAFT,
