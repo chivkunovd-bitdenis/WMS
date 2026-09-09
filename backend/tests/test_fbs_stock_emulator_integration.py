@@ -45,6 +45,7 @@ from app.models.marketplace_unload_reservation import MarketplaceUnloadReservati
 from app.models.product import Product
 from app.services import inventory_service
 from app.services.fbs_autopoll_service import SellerStockSyncResult, sync_seller_stocks
+from app.services.fbs_stock_publish_service import drain_background_stock_publish_tasks
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import sync_seller_orders
 from tests.inventory_actor_helpers import resolve_test_actor_user_id
@@ -444,6 +445,7 @@ async def test_wms_emulator_fbs_stock_full_cycle(
         await session.commit()
 
     seller_uuid = uuid.UUID(seller_id)
+    await drain_background_stock_publish_tasks()
 
     async with SessionLocal() as session:
         stock_result = await _sync_stocks_with_lease_retry(
@@ -467,6 +469,11 @@ async def test_wms_emulator_fbs_stock_full_cycle(
         intake = await sync_seller_orders(session, tenant_id, seller_uuid, emu_client)
     assert intake["orders_created"] >= 1
 
+    # Reserving the imported order publishes free stock after commit. Wait for
+    # that publication so the explicit sync below cannot race it for the zero.
+    await drain_background_stock_publish_tasks()
+    assert await _emulator_read_stock(emu_client, CHRT_ID) == 0
+
     async with SessionLocal() as session:
         order = (
             await session.execute(
@@ -489,14 +496,6 @@ async def test_wms_emulator_fbs_stock_full_cycle(
         )
         assert int(reserve_qty) == 1
 
-        # The imported order reserves the only unit on the served FBS warehouse.
-        # Re-syncing recalculates 100% of free stock as zero and publishes it.
-        stock_result2 = await _sync_stocks_with_lease_retry(
-            session,
-            tenant_id,
-            seller_uuid,
-            emu_client,
-        )
         sync_item = (
             await session.execute(
                 select(FbsStockSyncItem).where(
@@ -505,10 +504,25 @@ async def test_wms_emulator_fbs_stock_full_cycle(
             )
         ).scalar_one()
         assert sync_item.status == STOCK_SYNC_STATUS_CONFIRMED
+        assert sync_item.last_target_amount == 0
         assert sync_item.last_confirmed_amount == 0
 
-    assert stock_result2.products_targeted == 1
-    assert stock_result2.products_confirmed == 1
+        # WMS-376: the after-commit publisher already confirmed zero. An explicit
+        # reconciliation must preserve it without sending another zero.
+        stock_result2 = await _sync_stocks_with_lease_retry(
+            session,
+            tenant_id,
+            seller_uuid,
+            emu_client,
+        )
+        await session.refresh(sync_item)
+        assert sync_item.status == STOCK_SYNC_STATUS_CONFIRMED
+        assert sync_item.last_target_amount == 0
+        assert sync_item.last_confirmed_amount == 0
+
+    assert stock_result2.bindings_processed == 1
+    assert stock_result2.products_targeted == 0
+    assert stock_result2.products_confirmed == 0
     assert stock_result2.errors == 0
     assert await _emulator_read_stock(emu_client, CHRT_ID) == 0
 
