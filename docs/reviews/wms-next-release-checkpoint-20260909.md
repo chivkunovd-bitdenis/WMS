@@ -1,4 +1,4 @@
-# WMS release checkpoint — 09.09.2026, 07:15 MSK
+# WMS release checkpoint — 09.09.2026, 07:32 MSK
 
 The WMS-058/084/277/395 release is deployed to production. Do not redeploy the
 old candidate or repeat completed CI/reviews. Production is
@@ -21,11 +21,18 @@ Startup logs at07:11 had noERROR/Traceback/CRITICAL. Public Chrome login and
 recovery pages passed, reportproduction-public-smoke-20260909.md. This was
 unauthenticated and is NOT protected productionFBS browser acceptance.
 
-Immediate remaining observation: mobile_publish_ci waits for the scheduled
-07:17MSK WMS277 run, then its finalsummary/tasksuccess and scoped comparison
-for two formerSKU-conflict sellers. No manual import, credentials or schedule
-changes. ozon_terminal_guard checks whether the final mobile401 focused tests
-can run offline with existing tools; no downloads, signing or publication.
+Final scheduled import is verified: taskfaf2efe5-ca95-478d-abc2-55c9d0de8afc,
+07:17–07:27MSK,23sellerimportsOK/5previousWB401,summaryandsucceeded recorded.
+Both previousSKUfailedsellers nowcompleted; this does not prove everyhistorical
+SKUunchanged. FBSautopoll/reconcile succeeded duringimport, twoDBsnapshots had
+0blocks/0longtransactions. No manualsync. Evidencewms277-postrelease-20260909.md.
+PublicproductionChrome passedlogin/recovery with0JSerrors and0mutationattempts.
+
+Mobile401offlinecheck foundJDK17/SDK35but noGradle8.11.1distribution or modules-2
+cache; only~495MiBfree, so no downloads/compilation/signing/publication performed.
+Reportwms401-mobile-offline-check-20260909.md. Next boundedparallelwork: Astrahigh
+mobile_publish_ci derives minimumbackendcontract for397 from exactOpus399mocks,
+withoutchangingdesignorapplication; report-only, nonewentitiescreatedyet.
 
 Canonical statuses and all reports are published in codex/wms396-stage,
 currently documents ahead of the frozen production branch. Do not move the
