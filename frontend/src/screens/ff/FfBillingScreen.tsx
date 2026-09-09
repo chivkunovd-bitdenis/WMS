@@ -294,6 +294,7 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
     let alive = true
     setDetailsLoading(true); setDetailsError(false)
     const params = sellerReportSearchParams(reportRange, includeFinance)
+    params.set('limit', '1000')
     if (detailsCursor) params.set('cursor', detailsCursor)
     // Complete the seller selection before enabling group checkboxes.
     const readAllPages = async () => {
