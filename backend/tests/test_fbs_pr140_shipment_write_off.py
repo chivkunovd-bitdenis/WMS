@@ -575,7 +575,13 @@ async def test_units_shipment_consumes_once_with_or_without_reserve(
     await _write_off_case(db_session, case)
     await _apply_status(db_session, case.order, "cancelled")
     await _apply_status(db_session, case.order, "cancelled")
-    assert [p.quantity for p in pools] == [4 - q for q in quantities]
+    # WMS-338: pool.quantity — операторский потолок; ни передача, ни отмена
+    # его не расходуют. Раньше здесь ожидалось `4 - quantities`, потому что
+    # передача автоматически ела число оператора; убрано. Единожды расходуется
+    # физический баланс — за ним и следим.
+    for pool in pools:
+        await db_session.refresh(pool)
+    assert [p.quantity for p in pools] == [4 for _ in quantities]
     assert await _balances(db_session, case) == {
         pid: case.initial_quantity - q for pid, q in zip(case.product_ids, quantities, strict=True)
     }
