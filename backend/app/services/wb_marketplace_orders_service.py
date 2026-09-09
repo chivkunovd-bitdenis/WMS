@@ -1548,12 +1548,19 @@ async def list_orders(
     tenant_id: uuid.UUID,
     *,
     seller_id: uuid.UUID | None = None,
+    marketplace: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[FbsOrder]:
     stmt = select(FbsOrder).where(FbsOrder.tenant_id == tenant_id)
     if seller_id is not None:
         stmt = stmt.where(FbsOrder.seller_id == seller_id)
+    # WMS-363: ТСД теперь фильтрует список по маркетплейсу (wb или ozon). Без
+    # параметра поведение прежнее — отдаём смешанный список, чтобы веб не
+    # ломать. Поле помечено индексом в FbsOrder, отдельного счётчика заводить
+    # не пришлось.
+    if marketplace is not None:
+        stmt = stmt.where(FbsOrder.marketplace == marketplace)
     stmt = stmt.order_by(FbsOrder.created_at_wb.desc()).limit(limit).offset(offset)
     res = await session.execute(stmt)
     return list(res.scalars().all())
