@@ -169,6 +169,16 @@ type Props = {
       containerId: string | null
     },
   ) => void | Promise<void>
+  /**
+   * WMS-154: пометить содержимое выбранной ячейки/тары нулём — «здесь пусто».
+   *
+   * До этого пустое место и непосчитанное выглядели одинаково; оператору
+   * приходилось руками ставить 0 у каждой строки, чтобы отделить одно от
+   * другого. Один клик — все ещё не тронутые строки внутри выбранного места
+   * получают actual = 0; уже введённые значения не трогаем (человек мог
+   * посчитать несколько строк и потом ошибиться кнопкой).
+   */
+  onMarkEmpty?: (target: { kind: 'cell' | 'container'; id: string }) => void
   onBack: () => void
 }
 
@@ -188,6 +198,7 @@ export function FfInventoryCountScreen({
   productCatalog = null,
   catalogLoading = false,
   onAddProduct,
+  onMarkEmpty,
   onBack,
 }: Props) {
   const [filters, setFilters] = useState<InvFilters>(EMPTY_FILTERS)
@@ -399,6 +410,30 @@ export function FfInventoryCountScreen({
             data-testid="inv-add-product-button"
           >
             Добавить товар
+          </SecondaryAction>
+          {/* WMS-154: явная кнопка «Здесь пусто» для выбранной ячейки/тары.
+              Пока место не выбрано — кнопка мертва: непонятно, где пусто. */}
+          <SecondaryAction
+            onClick={() => {
+              if (!selectedRow || !onMarkEmpty) return
+              if (selectedRow.kind === 'cell') {
+                onMarkEmpty({ kind: 'cell', id: selectedRow.id })
+              } else if (selectedRow.kind !== 'product') {
+                onMarkEmpty({ kind: 'container', id: selectedRow.id })
+              }
+            }}
+            disabledReason={
+              readOnly
+                ? 'Документ уже проведён'
+                : !onMarkEmpty
+                  ? 'Действие «здесь пусто» недоступно'
+                  : !selectedRow || selectedRow.kind === 'product'
+                    ? 'Сначала встаньте на ячейку или тару'
+                    : undefined
+            }
+            data-testid="inv-mark-empty"
+          >
+            Здесь пусто
           </SecondaryAction>
         </ActionGroup>
         {selectedRow ? (
