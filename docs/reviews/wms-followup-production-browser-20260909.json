@@ -1,0 +1,20 @@
+{
+  "checkedAt": "2026-09-09T01:12:44.721Z",
+  "sha": "40b722a4d2d0ff1a6a5899cdb2713a98d1265bc5",
+  "realBrowser": "Chrome headless",
+  "ff": {
+    "url": "https://wms.sellerfocus.pro/app/ff/fbs",
+    "text": "Короб ВМС\nВход\nEmail *\nEmail *\nПароль\nПароль\n\nТолько сотрудники фулфилмента. Селлеры входят на /seller/ (кнопка ниже).\n\nВойти\nЗабыли пароль?Вход для селлера (портал /seller/)"
+  },
+  "recovery": {
+    "url": "https://wms.sellerfocus.pro/app/ff/fbs",
+    "text": "Короб ВМС\nВосстановление пароля\n\nУкажите почту, на которую заведён кабинет. Пришлём ссылку для нового пароля.\n\nEmail *\nEmail *\nПрислать ссылку\nНазад ко входу"
+  },
+  "seller": {
+    "url": "https://wms.sellerfocus.pro/seller/",
+    "text": "WMS · Портал селлера\nВход\nEmail *\nEmail *\nПароль\nПароль\n\nПервый вход — по ссылке из письма-приглашения.\n\nВойти\nЗабыли пароль?"
+  },
+  "errors": [],
+  "protectedFbsVerified": false,
+  "passwordResetSubmitted": false
+}

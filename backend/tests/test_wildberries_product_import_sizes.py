@@ -8,9 +8,11 @@ import uuid
 import pytest
 from fastapi import BackgroundTasks
 from httpx import AsyncClient
+from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.models.product import Product
+from app.models.product_dimension_event import ProductDimensionEvent
 from app.services.tokens import decode_access_token
 
 
@@ -108,9 +110,11 @@ async def test_self_sync_creates_product_per_size(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("swap_sizes", [False, True], ids=["merged_size", "swapped_sizes"])
 async def test_self_content_token_skips_packhub_duplicate_sku_conflict_idempotently(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
+    swap_sizes: bool,
 ) -> None:
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(
@@ -192,10 +196,19 @@ async def test_self_content_token_skips_packhub_duplicate_sku_conflict_idempoten
         )
         await session.commit()
 
+        original_identity = {
+            p.id: (p.sku_code, p.wb_barcode, p.wb_chrt_id, p.wb_size)
+            for p in (await session.scalars(select(Product).where(
+                Product.tenant_id == tenant_id, Product.seller_id == seller_id,
+            ))).all()
+        }
+
     card = {
         "nmID": nm_id,
         "vendorCode": "Trous_BluVelvet",
         "title": "Trous Blu Velvet",
+        # WMS-277: dimensions trigger a SELECT/autoflush before the commit guard.
+        "dimensions": {"length": 31, "width": 23, "height": 7},
         "sizes": [
             {
                 "chrtID": chrt_id,
@@ -204,7 +217,7 @@ async def test_self_content_token_skips_packhub_duplicate_sku_conflict_idempoten
             },
             {
                 "chrtID": chrt_id,
-                "techSize": size_second,
+                "techSize": size_first if swap_sizes else size_second,
                 "skus": [barcode_second],
             },
         ],
@@ -259,11 +272,27 @@ async def test_self_content_token_skips_packhub_duplicate_sku_conflict_idempoten
         "cards_received": 1,
         "cards_saved": 1,
         "products_created": 0,
-        "products_updated": 1,
-        "products_skipped": 1,
+        "products_updated": 0 if swap_sizes else 1,
+        "products_skipped": 2 if swap_sizes else 1,
     }
     assert first.json() == expected
     assert second.json() == expected
+
+    async with SessionLocal() as session:
+        products = (await session.scalars(select(Product).where(
+            Product.tenant_id == tenant_id, Product.seller_id == seller_id,
+        ))).all()
+        assert {p.id: (p.sku_code, p.wb_barcode, p.wb_chrt_id, p.wb_size)
+                for p in products} == original_identity
+        skipped_product = next(p for p in products if p.wb_barcode == barcode_first)
+        assert (skipped_product.length_mm, skipped_product.width_mm,
+                skipped_product.height_mm) == (10, 10, 10)
+        assert await session.scalar(select(ProductDimensionEvent.id).where(
+            ProductDimensionEvent.product_id == skipped_product.id,
+        )) is None
+        updated_product = next(p for p in products if p.wb_barcode == barcode_second)
+        assert (updated_product.length_mm, updated_product.width_mm,
+                updated_product.height_mm) == ((10, 10, 10) if swap_sizes else (310, 230, 70))
 
     imported = await async_client.get(
         f"/integrations/wildberries/sellers/{seller_id}/imported-cards",

@@ -1,0 +1,15 @@
+{
+  "applicationSha": "7259d630af123df0fe57e74824e99324e564190d",
+  "checkedAt": "2026-09-09T00:28:48.693Z",
+  "realBrowser": "Chrome headless",
+  "stage": true,
+  "repeatedReset": true,
+  "buttonReset": true,
+  "escape": {
+    "dialog": true,
+    "focused": true
+  },
+  "inlineCancel": 0,
+  "tabsNavigable": true,
+  "writes": []
+}

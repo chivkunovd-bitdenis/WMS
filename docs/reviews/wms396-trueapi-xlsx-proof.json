@@ -1,0 +1,71 @@
+{
+  "sheets": [
+    "Проблемные КИЗ"
+  ],
+  "row_count": 3,
+  "column_count": 3,
+  "rows": [
+    [
+      {
+        "cell": "A1",
+        "type": "inlineStr",
+        "value": "Артикул",
+        "formula": false
+      },
+      {
+        "cell": "B1",
+        "type": "inlineStr",
+        "value": "Код Честного знака",
+        "formula": false
+      },
+      {
+        "cell": "C1",
+        "type": "inlineStr",
+        "value": "Причина",
+        "formula": false
+      }
+    ],
+    [
+      {
+        "cell": "A2",
+        "type": "inlineStr",
+        "value": "EMU-KIZ-REQUIRED",
+        "formula": false
+      },
+      {
+        "cell": "B2",
+        "type": "inlineStr",
+        "value": "010200000000001221QA39609090001\\u001d91ABCD\\u001d92QA396-TEST-NOT-FOR-SALE",
+        "formula": false
+      },
+      {
+        "cell": "C2",
+        "type": "inlineStr",
+        "value": "У селлера не настроен токен Честного знака. Проверьте интеграцию.",
+        "formula": false
+      }
+    ],
+    [
+      {
+        "cell": "A3",
+        "type": "inlineStr",
+        "value": "EMU-NORMAL-B2C",
+        "formula": false
+      },
+      {
+        "cell": "B3",
+        "type": "inlineStr",
+        "value": "010200000000001121QA39609090002\\u001d91ABCD\\u001d92QA396-TEST-NOT-FOR-SALE",
+        "formula": false
+      },
+      {
+        "cell": "C3",
+        "type": "inlineStr",
+        "value": "У селлера не настроен токен Честного знака. Проверьте интеграцию.",
+        "formula": false
+      }
+    ]
+  ],
+  "codes_match_api": true,
+  "articles_match_api": true
+}

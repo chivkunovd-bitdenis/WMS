@@ -169,13 +169,13 @@ function kizTail(order: FbsWorkspace['orders'][number]): string | null {
   return state?.value_tail ?? null
 }
 
-function hasOperatorKiz(order: FbsWorkspace['orders'][number], includeRejected = false) {
+function hasRemovableKiz(order: FbsWorkspace['orders'][number], marketplace: 'wb' | 'ozon') {
   return order.metadata.states.some(
     (state) =>
       state.kind === 'sgtin' &&
-      state.source === 'operator' &&
+      (state.source === 'operator' || (marketplace === 'wb' && state.source === 'pool')) &&
       state.status !== 'missing' &&
-      (includeRejected || state.status !== 'rejected'),
+      (marketplace === 'wb' || state.status !== 'rejected'),
   )
 }
 
@@ -2124,7 +2124,7 @@ export function FfFbsSupplyWorkspace({
                               ) : (
                                 <Typography sx={{ color: 'text.disabled', fontSize: 15 }}>—</Typography>
                               )}
-                              {!isOzonSupply && hasOperatorKiz(order, true) ? (
+                              {!isOzonSupply && hasRemovableKiz(order, 'wb') ? (
                                 <IconButton size="small" disabled={busy || kizScanBusy} aria-label="Отменить КИЗ"
                                   onClick={() => setKizUndoOrderId(order.id)} data-testid="fbs-kiz-undo-inline">
                                   <CloseIcon fontSize="small" />
@@ -2631,7 +2631,7 @@ export function FfFbsSupplyWorkspace({
         >
           Перепечатать
         </MenuItem>
-        {reprintOrder && hasOperatorKiz(reprintOrder, !isOzonSupply) ? (
+        {reprintOrder && hasRemovableKiz(reprintOrder, isOzonSupply ? 'ozon' : 'wb') ? (
           <MenuItem
             data-testid="fbs-kiz-undo"
             onClick={() => {
