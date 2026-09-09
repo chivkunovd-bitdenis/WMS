@@ -1,6 +1,49 @@
-# WMS-084 / WMS-395: stage Chrome checkpoint, 9 September 2026
+# WMS-084 / WMS-395: stage Chrome verification, 9 September 2026
 
-Status: **BLOCKED at the inline cancel button; cancellation/rebinding not yet exercised**.
+Final status: **PASS for actual UI cancellation and reuse of the same physical pool code**,
+on staging `50c9c88e0e56097e857fa26e0bda419d69125f9f`. Runtime SHA was checked by the
+continuation before any browser mutation. This is stage evidence, not a production claim.
+
+## Successful continuation after the WMS-395 patch
+
+The existing supply and orders were reused without setup. Chrome showed the inline cross
+beside the code on A. It was clicked, the real "Отменить КИЗ?" dialog was confirmed, and
+the resulting application DELETE returned204. The page then showed "КИЗ отменён" and no
+code on A. Scoped SQL showed zero bindings, the same applied physical code and a null
+packaging-task-line association. Its source and physical timestamps remained unchanged.
+The code did not enter the public available-label list.
+
+The existing ordinary sticker of B was then entered through the scanner, followed by the
+same physical KIZ. The live commit returned status ok. The final screen shows A without
+the KIZ and B with its tail and inline cancellation cross. SQL confirms exactly one new
+binding `ac260815-c7bf-41d1-a168-1ee70fd1b114` on B
+`88eaff48-cd04-4a9c-93fc-c6957694099d` / WB500044, referencing the original
+MarkingCode `1be09c79-4fd1-465e-9688-a77183af289f`. That code remains applied and absent
+from the available-label list. There was no manual status reset.
+
+Complete balance rows, movement IDs and reservation rows were compared with the original
+snapshot taken immediately before the first KIZ scan. They matched before cancellation,
+after cancellation and after binding B. The two reservations introduced during the earlier
+order preparation remain separate from these KIZ actions.
+
+The final marketplace metadata still has status unknown/check_status error, as it did
+before continuation. The actual screen says WB has not confirmed the code. **This check
+proves local detach/rebind and inventory conservation; it does not claim WB acceptance.**
+
+Evidence is in `wms084-stage-browser-20260909/continuation.json` and screenshots02–06.
+Screenshots02,04,05 were opened and visually inspected. Screenshot03 caught the confirmation
+dialog during its fade-in and is not used as a legible visual record. For a clear dialog
+record, screenshot06 opens the same inline dialog on final B and then clicks **Не отменять**;
+it does not detach B. Every owned Chrome instance was closed in finally. The final named
+supply and the single binding on B are intentionally retained.
+
+The continuation must not be rerun now: its initial assertion requires the former binding
+on A and will correctly reject the final state. No additional orders, picking, shipment,
+physical label printing, mocked HTTP or direct API cancellation was performed.
+
+## Initial blocker record (superseded by the successful continuation above)
+
+Initial status: **BLOCKED at the inline cancel button; cancellation/rebinding not yet exercised**.
 Application deployment authorized by root: staging `27400e5ff45d4e93eb6afc174f60710f3930abb4`.
 This checkpoint contains QA scripts/evidence only, no application changes.
 
