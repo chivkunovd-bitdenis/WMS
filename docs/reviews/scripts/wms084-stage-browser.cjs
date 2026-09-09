@@ -16,12 +16,12 @@ const FIXTURE = Object.freeze({
   tenant: '9c31f3f4-ce62-4c1f-891a-295b278f1e69',
   seller: '50110328-fa03-4604-b2e4-8ca27fc8bb41',
   product: '3d6050c5-0d29-4612-9e30-e90ecbf9408a',
-  orders: ['cf303d12-426b-4a38-a59f-ac0c18ccb68b', 'b620419c-79b3-4369-beb0-5fdc21c53ddb'],
-  wbOrders: [500033, 500035],
+  orders: ['24744eed-ab3e-4625-95ef-68c994adad44', '88eaff48-cd04-4a9c-93fc-c6957694099d'],
+  wbOrders: [500043, 500044],
   code: '1be09c79-4fd1-465e-9688-a77183af289f',
   pool: '80a718dd-2487-4951-a1dd-9e13aee562e6',
-  name: 'WMS-084 QA 2026-09-09 · 500033 → 500035',
-  operationKey: 'wms084-browser-20260909-500033-500035',
+  name: 'WMS-084 QA 2026-09-09 · 500043 → 500044',
+  operationKey: 'wms084-browser-20260909-500043-500044',
 });
 const arg = process.argv.slice(2).find(v => v.startsWith('--execute-after-deployment-ready='));
 const approvedSha = arg?.split('=')[1];
@@ -122,6 +122,9 @@ async function main() {
       product: beforeSetup.product, provider_host: beforeSetup.provider_host, runtime_sha: beforeSetup.runtime_sha }));
     return;
   }
+  const preflight = await api('/operations/fbs-supplies/preflight', 'POST', { order_ids: FIXTURE.orders, planned_delivery_type: 'warehouse_sc' });
+  evidence.preflight = preflight;
+  assert.equal(preflight.compatible, true, 'Public supply preflight rejected fixture');
   const created = await api('/operations/fbs-supplies/from-orders', 'POST', {
     name: FIXTURE.name, order_ids: FIXTURE.orders, planned_delivery_type: 'warehouse_sc',
     idempotency_key: FIXTURE.operationKey,
@@ -170,10 +173,10 @@ async function main() {
       const url = new URL(`${ORIGIN}/api${asset.preview_url}`);
       assert.equal(url.origin, ORIGIN, 'Same-origin sticker preview only');
       const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30000) });
-      assert(response.ok(), 'Sticker image unavailable');
+      assert(response.ok, 'Sticker image unavailable');
       images.push(Buffer.from(await response.arrayBuffer()).toString('base64'));
     }
-    await preview.setContent(`<html><body><h1>WMS-084 · WB500033 / WB500035</h1>${images.map(image => `<img style="width:464px;margin:20px" src="data:image/png;base64,${image}">`).join('')}</body></html>`);
+    await preview.setContent(`<html><body><h1>WMS-084 · WB500043 / WB500044</h1>${images.map(image => `<img style="width:464px;margin:20px" src="data:image/png;base64,${image}">`).join('')}</body></html>`);
     await preview.waitForFunction(() => [...document.images].every(img => img.complete && img.naturalWidth > 0));
     await preview.screenshot({ path: path.join(output, '00-sticker-preview.png') });
     await preview.close();
@@ -232,14 +235,15 @@ async function main() {
     await page.screenshot({ path: path.join(output, '03-bound-b.png') });
     assert(!evidence.checks.some(check => check.pageerror), 'Browser page error recorded');
     evidence.result = 'PASS';
-    evidence.finalState = 'One binding on WB500035; named QA supply retained; no state reset or shipment.';
+    evidence.finalState = 'One binding on WB500044; named QA supply retained; no state reset or shipment.';
   } finally {
     if (browser) await browser.close();
     save();
   }
   console.log(JSON.stringify({ result: evidence.result, supplyId, evidence: output }));
 }
-main().catch(error => {
+module.exports = { snapshot, FIXTURE };
+if (require.main === module) main().catch(error => {
   // Never dump HTTP bodies, SSH output, token, or scanner input on failure.
   evidence.result = 'FAIL_OR_INCOMPLETE';
   evidence.error = error.message.replaceAll(token, '[redacted]');
