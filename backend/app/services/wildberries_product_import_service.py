@@ -312,6 +312,7 @@ async def upsert_products_from_wb_cards(
             if p.seller_id is not None and p.seller_id != seller_id:
                 skipped += 1
                 continue
+            sku_changed = p.sku_code != sku
             _apply_variant_fields(
                 p,
                 seller_id=seller_id,
@@ -322,6 +323,16 @@ async def upsert_products_from_wb_cards(
                 variant=variant,
                 category=category,
             )
+            try:
+                # WMS-277: WB size changes can map a known barcode onto another
+                # Product's SKU. Detect this before dimension queries autoflush
+                # outside the commit guard; preserve both existing identities.
+                if sku_changed:
+                    await session.flush()
+            except IntegrityError:
+                await session.rollback()
+                skipped += 1
+                continue
             # Fill empty dimension fields with values from WB card, and also correct
             # the legacy DEFAULT_PRODUCT_DIM_MM stub (10x10x10) that an old, now
             # removed sync default used to write in place of real data. Product has
