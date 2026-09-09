@@ -1,0 +1,14 @@
+{
+  "phase": "finishing_audit",
+  "quota_session_id": "5ed12390-4d22-4b83-b183-114202609010",
+  "quota_tool_pty": 75581,
+  "last_weekly_used_percent": 75,
+  "last_weekly_remaining_percent": 25,
+  "quota_observed_window_utc": "2026-09-09 21:05–21:07",
+  "recorded_at_utc": "2026-09-09T21:10:11.500624+00:00",
+  "last_full_progress_check_utc": null,
+  "coordinator_session_id": null,
+  "automation_id": "wms-claude",
+  "quota_minutes": 10,
+  "progress_minutes": 20
+}

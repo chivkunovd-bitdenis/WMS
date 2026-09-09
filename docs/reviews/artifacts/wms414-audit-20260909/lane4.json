@@ -1,0 +1,1422 @@
+[
+  {
+    "id": "WMS-215",
+    "title": "Склеить «Печать накладной» и «Печать ТЗ» в одну кнопку",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · КОД СВЕРЕН 09.09 · UI/БУМАГА НЕ ПРОВЕРЕНЫ",
+    "code_state": "Единая клиентская печатная форма есть: фото, товар, ШК, количество, инструкции и пустой факт.",
+    "remaining": "Нажать кнопку в production и подтвердить физический лист.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfPackagingPage.tsx",
+        "line_start": 406,
+        "line_end": 430,
+        "finding": "Handler собирает один payload с фото, артикулами, ШК, инструкцией и плановым количеством."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfPackagingPage.tsx",
+        "line_start": 901,
+        "line_end": 917,
+        "finding": "Для MP unload показана одна кнопка Печать накладной, вызывающая handler."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/utils/printShipmentPackagingSheet.ts",
+        "line_start": 45,
+        "line_end": 62,
+        "finding": "Строка печати содержит фото, товар, ШК, количество, инструкцию и пустой факт."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-216",
+    "title": "Вернуть кнопку печати накладной в приёмке",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · КОД СВЕРЕН 09.09 · UI/БУМАГА НЕ ПРОВЕРЕНЫ",
+    "code_state": "Кнопка не скрыта: waybillPrintEnabled по умолчанию true; форма содержит фото и пустой факт.",
+    "remaining": "Ручная UI/бумажная приёмка.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfInboundRequestView.tsx",
+        "line_start": 542,
+        "line_end": 542,
+        "finding": "Локальный waybillPrintEnabled жёстко равен true, скрытого parent prop нет."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfInboundRequestView.tsx",
+        "line_start": 2414,
+        "line_end": 2444,
+        "finding": "Кнопка формирует лист из текущих detail.lines и каталожных фото/ШК."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/utils/printInboundReceivingSheet.ts",
+        "line_start": 43,
+        "line_end": 52,
+        "finding": "Каждая строка листа содержит пустую ячейку Факт."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-217",
+    "title": "Печать больших пачек этикеток вешает окно",
+    "prior_status": "ЧАСТИЧНО · СВЕРЕНО 08.09.2026",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · КОД НА ПРОДЕ · ФИЗИЧЕСКАЯ ПЕЧАТЬ НЕ ЗАКРЫТА",
+    "code_state": "QR загружаются конкурентно и затем печатаются одной лентой; прежняя серия остановилась на 10-м из 16 коробов.",
+    "remaining": "Повторить большую физическую печать до последнего листа.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/components/MarkingPrintDialog.tsx",
+        "line_start": 900,
+        "line_end": 953,
+        "finding": "Пачка собирается с прогрессом, объединяется и передаётся в одну printTapeSections; затем подтверждаются QR."
+      },
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 1668,
+        "line_end": 1698,
+        "finding": "Физическая серия 01.09 остановилась на десятом из шестнадцати коробов."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "medium",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-218",
+    "title": "В модалке печати ФБС нельзя обнулить штрихкоды",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · КОД СВЕРЕН 09.09 · UI/БУМАГА НЕ ПРОВЕРЕНЫ",
+    "code_state": "Поле допускает 0, QR заказов сохраняются, подсказка прямо описывает QR-only режим.",
+    "remaining": "Нажать в production и проверить бумагу.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/components/MarkingPrintDialog.tsx",
+        "line_start": 1454,
+        "line_end": 1469,
+        "finding": "В FBS tape поле имеет min=0 и прямо обещает печать только QR заказов."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-219",
+    "title": "Универсальная поддержка сканеров",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · КЛАВИАТУРНЫЙ СКАНЕР ПОДДЕРЖАН · ЖЕЛЕЗО НЕ ПРОВЕРЕНО",
+    "code_state": "Общий hook обрабатывает быстрые/медленные keyboard-wedge сканеры, Tab/Enter, GS и русскую раскладку.",
+    "remaining": "Проверить реальные модели сканеров на нужных экранах.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/hooks/useBarcodeScanner.ts",
+        "line_start": 149,
+        "line_end": 305,
+        "finding": "Общий hook обрабатывает быстрые/медленные keyboard-wedge сканеры, Tab/Enter, GS и русскую раскладку."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "medium",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-230",
+    "title": "Ozon доведён до живой интеграции",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "partial",
+    "canonical_status": "НА ПРОДЕ · LIVE-ФЛАГ ВКЛЮЧЁН 09.09 · СВЕЖИЙ ВЫЗОВ OZON НЕ ДОКАЗАН",
+    "code_state": "При включённом флаге factory создаёт HTTP transport; root подтвердил production=true.",
+    "remaining": "Подтвердить новый успешный внешний вызов Ozon.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/ozon_provider_factory.py",
+        "line_start": 30,
+        "line_end": 48,
+        "finding": "При включённом флаге factory создаёт HTTP transport; root подтвердил production=true."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "Подтвердить новый успешный внешний вызов Ozon."
+  },
+  {
+    "id": "WMS-231",
+    "title": "Возвраты Ozon",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "partial",
+    "canonical_status": "НА ПРОДЕ · КОД СВЕРЕН · ЖИВОЙ ВОЗВРАТ/ПЕЧАТЬ НЕ ПРОВЕРЕНЫ",
+    "code_state": "UI вызывает preview/import/groups/pass/defect API, после мутаций перечитывает документ; сервис сохраняет выбранные возвраты.",
+    "remaining": "Пройти живой возврат, скан и физическую печать.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/useOzonReturnWorkflow.ts",
+        "line_start": 45,
+        "line_end": 215,
+        "finding": "UI загружает группы, preview, импортирует выбранные giveout_ids, перечитывает detail/groups, скачивает пропуск, печатает сверку и PATCH-ит брак."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/ozon_return_service.py",
+        "line_start": 346,
+        "line_end": 582,
+        "finding": "Сервис получает живой preview, сопоставляет товары и сохраняет выбранные возвраты в существующий документ."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/inbound_intake_service.py",
+        "line_start": 228,
+        "line_end": 280,
+        "finding": "При проведении возврата good qty и defective qty разделяются; дефект идёт в get_or_create_defect_location через apply_return_defect_putaway."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "medium",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-232",
+    "title": "Живая проверка Ozon невозможна: кабинет отдаёт 403",
+    "prior_status": "ОТМЕНЕНО",
+    "verdict": "obsolete",
+    "canonical_status": "ОТМЕНЕНО · ИСТОРИЧЕСКИЙ БЛОКЕР СНЯТ",
+    "code_state": "403 был временным внешним блокером, задача уже снята решением 05.09.",
+    "remaining": "Нет.",
+    "evidence": [
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 3524,
+        "line_end": 3535,
+        "finding": "403 был временным внешним блокером, задача уже снята решением 05.09."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-250",
+    "title": "Приложение для терминалов сбора данных",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · APK8 ОПУБЛИКОВАН · ФИЗИЧЕСКИЙ ATOL НЕ ПРОВЕРЕН",
+    "code_state": "Mobile SHA 364e8aed содержит маршруты приёмки, сортировки, обычной отгрузки и FBS. APK8 опубликован; обновление 7→8 нажато и проверено на emulator-5554 Android 15. Полный складской поток на физическом ATOL Android 7 не проверен.",
+    "remaining": "Проверить приёмку, сортировку и обычную отгрузку на физическом ATOL Android 7; APK уже опубликован, новый push mobile history не нужен.",
+    "evidence": [
+      {
+        "ref": "364e8aed004069ced37b9692fa788dd0eb8d95b2",
+        "path": "android/app/src/main/java/ru/wms/tsd/Navigation.kt",
+        "line_start": 37,
+        "line_end": 177,
+        "finding": "Навигационный граф подключает FBS, inbound с коробами/приёмкой, sorting и outbound к рабочим экранам."
+      },
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/reviews/wms412-network-update-20260909.md",
+        "line_start": 20,
+        "line_end": 74,
+        "finding": "Постоянный отчёт фиксирует APK8, публикацию, реальное обновление 7→8 на Android 15 и границу: не физический ATOL/сканер/принтер/live WB."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "APK 0.1.7 versionCode 8 для mobile SHA 364e8aed опубликован в GitHub release; обновление 7→8 и сохранение PIN/server/FBS supply проверены на emulator-5554 Android 15. Физический ATOL Android 7, scanner/printer/live WB не проверены. Полную mobile history не публиковать.",
+    "confidence": "medium",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-251",
+    "title": "Операторский флоу ФБС в мобилке написан и не влит никуда",
+    "prior_status": "В ВЕТКЕ",
+    "verdict": "partial",
+    "canonical_status": "КОД В MOBILE MAIN · APK8 ОПУБЛИКОВАН · LIVE FBS НЕ ПРОВЕРЕН",
+    "code_state": "FBS Android-поток находится в mobile SHA 364e8aed и APK8 опубликован. Mobile checkout clean и намеренно без remote; это не долг публикации истории. Реальный WB FBS handover с физического терминала не проверен.",
+    "remaining": "Проверить существующий APK8 на физическом ATOL Android 7 и реальном FBS-процессе; историю mobile не публиковать.",
+    "evidence": [
+      {
+        "ref": "364e8aed004069ced37b9692fa788dd0eb8d95b2",
+        "path": "android/app/src/main/java/ru/wms/tsd/Navigation.kt",
+        "line_start": 67,
+        "line_end": 78,
+        "finding": "FBS список, поставка и операция подключены к навигации."
+      },
+      {
+        "ref": "364e8aed004069ced37b9692fa788dd0eb8d95b2",
+        "path": "android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt",
+        "line_start": 1,
+        "line_end": 120,
+        "finding": "Файл содержит реальные FBS экраны mobile SHA."
+      },
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/reviews/wms412-network-update-20260909.md",
+        "line_start": 20,
+        "line_end": 74,
+        "finding": "Постоянный отчёт фиксирует APK8, публикацию, реальное обновление 7→8 на Android 15 и границу: не физический ATOL/сканер/принтер/live WB."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "APK 0.1.7 versionCode 8 для mobile SHA 364e8aed опубликован в GitHub release; обновление 7→8 и сохранение PIN/server/FBS supply проверены на emulator-5554 Android 15. Физический ATOL Android 7, scanner/printer/live WB не проверены. Полную mobile history не публиковать.",
+    "confidence": "medium",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-252",
+    "title": "Наполнение короба в мобилке физически невозможно",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · РУЧНОЕ КОЛИЧЕСТВО ЕСТЬ · УДАЛЁННОЙ ПЕЧАТИ НЕТ",
+    "code_state": "ManualQtySheet есть; кнопка этикетки лишь отмечает label printed через API, физическую печать не запускает.",
+    "remaining": "Реализовать и проверить физический контур Android → WMS → складской ПК → принтер. Найденные print asset/background job сами по себе не доказывают установленный сетевой агент.",
+    "evidence": [
+      {
+        "ref": "364e8aed004069ced37b9692fa788dd0eb8d95b2",
+        "path": "android/app/src/main/java/ru/wms/tsd/features/inbound/InboundBoxesViewModel.kt",
+        "line_start": 79,
+        "line_end": 93,
+        "finding": "Кнопка принтера вызывает только API mark-label-printed и refresh."
+      },
+      {
+        "ref": "364e8aed004069ced37b9692fa788dd0eb8d95b2",
+        "path": "android/app/src/main/java/ru/wms/tsd/features/inbound/InboundReceivingScreen.kt",
+        "line_start": 237,
+        "line_end": 283,
+        "finding": "ManualQtySheet сохраняет абсолютный факт в короб или без короба."
+      },
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/reviews/wms412-network-update-20260909.md",
+        "line_start": 20,
+        "line_end": 74,
+        "finding": "Постоянный отчёт фиксирует APK8, публикацию, реальное обновление 7→8 на Android 15 и границу: не физический ATOL/сканер/принтер/live WB."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "APK 0.1.7 versionCode 8 для mobile SHA 364e8aed опубликован в GitHub release; обновление 7→8 и сохранение PIN/server/FBS supply проверены на emulator-5554 Android 15. Физический ATOL Android 7, scanner/printer/live WB не проверены. Полную mobile history не публиковать.",
+    "confidence": "medium",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-253",
+    "title": "Второй короб в мобилке не кликабельный",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "canonical_status": "КОД В mobile main · ФИЗИЧЕСКИЙ UI НЕ ПРОВЕРЕН",
+    "code_state": "Каждая карточка BoxCard обёрнута в кликабельный Surface и получает id выбранного короба.",
+    "remaining": "Проверить второй короб на ТСД.",
+    "evidence": [
+      {
+        "ref": "364e8aed004069ced37b9692fa788dd0eb8d95b2",
+        "path": "android/app/src/main/java/ru/wms/tsd/features/inbound/InboundBoxesScreen.kt",
+        "line_start": 130,
+        "line_end": 136,
+        "finding": "Каждый box получает onSelectBox(box.id)."
+      },
+      {
+        "ref": "364e8aed004069ced37b9692fa788dd0eb8d95b2",
+        "path": "android/app/src/main/java/ru/wms/tsd/features/inbound/InboundBoxesScreen.kt",
+        "line_start": 186,
+        "line_end": 206,
+        "finding": "BoxCard целиком clickable и показывает номер."
+      },
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/reviews/wms412-network-update-20260909.md",
+        "line_start": 20,
+        "line_end": 74,
+        "finding": "Постоянный отчёт фиксирует APK8, публикацию, реальное обновление 7→8 на Android 15 и границу: не физический ATOL/сканер/принтер/live WB."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "APK 0.1.7 versionCode 8 для mobile SHA 364e8aed опубликован в GitHub release; обновление 7→8 и сохранение PIN/server/FBS supply проверены на emulator-5554 Android 15. Физический ATOL Android 7, scanner/printer/live WB не проверены. Полную mobile history не публиковать.",
+    "confidence": "medium",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-254",
+    "title": "Вход в приложение без ввода адреса сервера",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · DEFAULT URL ЕСТЬ · РУЧНАЯ НАСТРОЙКА СОХРАНЕНА",
+    "code_state": "ApiProvider использует BuildConfig URL по умолчанию, но LoginScreen всё ещё содержит редактируемый адрес сервера.",
+    "remaining": "Решить, допустима ли скрытая настройка; проверить чистую установку.",
+    "evidence": [
+      {
+        "ref": "364e8aed004069ced37b9692fa788dd0eb8d95b2",
+        "path": "android/app/src/main/java/ru/wms/tsd/features/auth/LoginScreen.kt",
+        "line_start": 294,
+        "line_end": 341,
+        "finding": "Логин хранит baseUrl и передаёт его в login/check; настройка сервера опционально раскрывается."
+      },
+      {
+        "ref": "364e8aed004069ced37b9692fa788dd0eb8d95b2",
+        "path": "android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt",
+        "line_start": 16,
+        "line_end": 53,
+        "finding": "Клиент использует сохранённый URL либо BuildConfig.DEFAULT_API_BASE_URL."
+      },
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/reviews/wms412-network-update-20260909.md",
+        "line_start": 20,
+        "line_end": 74,
+        "finding": "Постоянный отчёт фиксирует APK8, публикацию, реальное обновление 7→8 на Android 15 и границу: не физический ATOL/сканер/принтер/live WB."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "APK 0.1.7 versionCode 8 для mobile SHA 364e8aed опубликован в GitHub release; обновление 7→8 и сохранение PIN/server/FBS supply проверены на emulator-5554 Android 15. Физический ATOL Android 7, scanner/printer/live WB не проверены. Полную mobile history не публиковать.",
+    "confidence": "medium",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-270",
+    "title": "Ручка установки первого пароля принимает почту и пароль без токена",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · TOKENLESS РУЧКА УБРАНА · ORACLE/RATE LIMIT ОСТАЛИСЬ",
+    "code_state": "/set-password требует подписанный токен; reset отвечает одинаково. Login с пустым паролем всё ещё выдаёт password_setup_required для ожидающих, route rate limit не найден.",
+    "remaining": "Убрать oracle и ввести доказуемое ограничение запросов без новой предметной сущности.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/api/auth.py",
+        "line_start": 268,
+        "line_end": 317,
+        "finding": "Установка пароля требует token; password reset всегда отвечает 204."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/auth_service.py",
+        "line_start": 66,
+        "line_end": 84,
+        "finding": "Login отличает ожидающий установку пароля при пустом password, сохраняя узкий oracle."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-271",
+    "title": "Ключ шифрования выводится из JWT-секрета",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · PROD-ВАЛИДАТОР НЕ АКТИВЕН",
+    "code_state": "Fallback из JWT остаётся; validator действует только app_env=production, а root подтвердил, что production runtime не в этом режиме. Наличие отдельного ключа не проверено.",
+    "remaining": "Отдельно решить конфигурацию APP_ENV/ключа и проверить без чтения значения секрета.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/core/settings.py",
+        "line_start": 364,
+        "line_end": 370,
+        "finding": "Обязательность отдельного Fernet ключа проверяется только при app_env=production."
+      },
+      {
+        "ref": "runtime",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/runtime.json",
+        "line_start": 1,
+        "line_end": 1,
+        "finding": "Root подтвердил production runtime composition; отдельная свежая проверка сообщила, что app_env не production. Наличие ключа не читалось."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "Отдельно решить конфигурацию APP_ENV/ключа и проверить без чтения значения секрета."
+  },
+  {
+    "id": "WMS-272",
+    "title": "Пул соединений к базе не настроен",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09.2026",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · ШТАТНЫЙ ПУТЬ СВЕРЕН 09.09",
+    "code_state": "WB HTTP вынесен до короткой блокировки/сохранения; release-waiter закрывает конкурентного победителя.",
+    "remaining": "Нагрузочный production сценарий не выполнялся; наблюдать реальные пики.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_supply_service.py",
+        "line_start": 530,
+        "line_end": 568,
+        "finding": "Повторный запрос на тот же набор заказов находит существующую незавершённую/подтверждённую операцию."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_supply_service.py",
+        "line_start": 571,
+        "line_end": 646,
+        "finding": "Create-from-orders сначала переиспользует idempotent operation или resume path."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_supply_service.py",
+        "line_start": 666,
+        "line_end": 729,
+        "finding": "Перед WB HTTP сессия commit-ится; локальная блокировка начинается после внешнего create, повторно проверяет победителя и resume-ит его."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "medium",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-273",
+    "title": "Один процесс API, тяжёлая работа в главном цикле",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09.2026",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · КОД СВЕРЕН · ПЕЧАТЬ/НАГРУЗКА НЕ ПРОВЕРЕНЫ",
+    "code_state": "PDF validation, import parsing и PNG preview вынесены через asyncio.to_thread.",
+    "remaining": "Проверить большой реальный документ и физическую печать.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/api/marking_codes.py",
+        "line_start": 1263,
+        "line_end": 1270,
+        "finding": "PDF validation, import parsing и PNG preview вынесены через asyncio.to_thread."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "medium",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-274",
+    "title": "На стенде фоновые задачи не запускаются вообще",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "unverified",
+    "canonical_status": "НЕ ПОДТВЕРЖДЕНО ДЛЯ ТЕКУЩЕГО STAGING",
+    "code_state": "Railway Dockerfile по умолчанию стартует только API. Репозиторный production compose имеет отдельные worker/beat, а актуальный runtime staging в этом аудите не проверялся.",
+    "remaining": "Read-only подтвердить список процессов и последний beat/worker task именно текущего staging.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/Dockerfile.railway",
+        "line_start": 1,
+        "line_end": 18,
+        "finding": "Railway image CMD запускает миграции и uvicorn, без worker/beat."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "docker-compose.prod.yml",
+        "line_start": 87,
+        "line_end": 124,
+        "finding": "Production compose отдельно определяет celery_worker и celery_beat; это не доказательство staging."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-275",
+    "title": "Медленное сканирование, 15–20 секунд на пик",
+    "prior_status": "ЧАСТИЧНО · БРАУЗЕР STAGING 09.09.2026 · ТСД/НАГРУЗКА НЕ ПРОВЕРЕНЫ",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · STAGING БРАУЗЕР 09.09 · ТСД/НАГРУЗКА НЕ ПРОВЕРЕНЫ",
+    "code_state": "Синтетика и staging браузер быстрее; MP box scan вернул 422, физический ТСД и большие документы не проверялись.",
+    "remaining": "Закрыть 422 и измерить на ТСД под нагрузкой.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "docs/reviews/wms275-measure-20260908.md",
+        "line_start": 1,
+        "line_end": 90,
+        "finding": "Сохранены целевые API/кодовые измерения, отделённые от физического ТСД."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "docs/reviews/wms275-browser-20260909.md",
+        "line_start": 1,
+        "line_end": 160,
+        "finding": "Сохранена ручная staging browser проверка, включая 422 на MP box scan и границы измерений."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "medium",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-276",
+    "title": "Импорт каталога обрывается после первой сотни карточек",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09.2026",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · КОД И СИНТЕТИКА СВЕРЕНЫ · UI НЕ ОТКРЫТ",
+    "code_state": "Все страницы WB cards собирает общий cursor paginator; импорт использует полный список.",
+    "remaining": "На экране каталога/маппинга проверить реальный каталог больше 100 карточек; кабинет ключей не открывать.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/wildberries_sync_service.py",
+        "line_start": 31,
+        "line_end": 75,
+        "finding": "Все страницы WB cards собирает общий cursor paginator; импорт использует полный список."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-277",
+    "title": "Фоновая синхронизация каталога WB",
+    "prior_status": "см. исходный блок",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · ШТАТНЫЙ ЦИКЛ ПРОВЕРЕН 09.09",
+    "code_state": "Hourly beat minute 17 вызвал общий sync; постоянный отчёт фиксирует 23 success, 5 прежних 401, без повторения SKU IntegrityError.",
+    "remaining": "401 остаются внешними; индивидуальная неизменность старых SKU не доказана.",
+    "evidence": [
+      {
+        "ref": "canonical/history/runtime",
+        "path": "docs/reviews/wms277-postrelease-20260909.md",
+        "line_start": 1,
+        "line_end": 80,
+        "finding": "Hourly beat minute 17 вызвал общий sync; постоянный отчёт фиксирует 23 success, 5 прежних 401, без повторения SKU IntegrityError."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-278",
+    "title": "Нет сводного экрана «состояние ключей по всем продавцам»",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09.2026",
+    "verdict": "implemented",
+    "canonical_status": "НА ПРОДЕ · БРАУЗЕР ПРИНЯТ 09.09",
+    "code_state": "Список строит четыре состояния из сохранённых scope_ok/checked_at и наличия credentials без расшифровки.",
+    "remaining": "Помнить: это состояние WB Marketplace, не всех API.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/wildberries_credentials_service.py",
+        "line_start": 66,
+        "line_end": 90,
+        "finding": "Пакетное чтение возвращает только наличие шифротекста и сохранённые scope_ok/checked_at, без decrypt."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/api/sellers.py",
+        "line_start": 95,
+        "line_end": 104,
+        "finding": "API списка селлеров присоединяет эти три публичных поля к каждой строке."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-279",
+    "title": "Тормоза прода",
+    "prior_status": "ОТМЕНЕНО",
+    "verdict": "obsolete",
+    "canonical_status": "ОТМЕНЕНО · ДУБЛЬ",
+    "code_state": "Содержание распределено в WMS-272/273; polling 30 секунд и останавливается на скрытой вкладке.",
+    "remaining": "Нет.",
+    "evidence": [
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 4534,
+        "line_end": 4547,
+        "finding": "Содержание распределено в WMS-272/273; polling 30 секунд и останавливается на скрытой вкладке."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-280",
+    "title": "Ключ DaData не прописан на проде",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "missing",
+    "canonical_status": "НЕ СДЕЛАНО · ОТСУТСТВИЕ НАСТРОЙКИ ПОДТВЕРЖДЕНО В PRODUCTION",
+    "code_state": "Root 09.09.2026 подтвердил dadata_configured=false без чтения значения секрета; DaData service требует token и иначе не выполняет внешний запрос.",
+    "remaining": "Следующая настройка секрета и перезапуск только по отдельному прямому запросу владельца.",
+    "evidence": [
+      {
+        "ref": "runtime",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/dadata-config.json",
+        "line_start": 1,
+        "line_end": 1,
+        "finding": "2026-09-09T20:29:15Z: dadata_configured=false; значение секрета не выводилось."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/dadata_party_service.py",
+        "line_start": 48,
+        "line_end": 59,
+        "finding": "Сервис останавливается при отсутствии token до HTTP вызова."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-300",
+    "title": "Полная пользовательская документация",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "missing",
+    "canonical_status": "НЕ СДЕЛАНО",
+    "code_state": "В фиксированном SHA нет полного пользовательского PDF-workbook по всем блокам.",
+    "remaining": "Создать понятный PDF со скриншотами, начиная с настройки после обновления.",
+    "evidence": [
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 2262,
+        "line_end": 2268,
+        "finding": "В фиксированном SHA нет полного пользовательского PDF-workbook по всем блокам."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "medium",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-301",
+    "title": "База знаний внутри приложения",
+    "prior_status": "ЧАСТИЧНО",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · КОД НА ПРОДЕ · КАЧЕСТВО UI НЕ ПРОВЕРЕНО",
+    "code_state": "Статическая база знаний загружает markdown+images; ScenarioPlayer уже проигрывает шаги и подсвечивает элемент.",
+    "remaining": "Проверить качество/полноту снимков и сценариев вручную; канон устарел в части отсутствия player.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/knowledge/ScenarioPlayer.tsx",
+        "line_start": 156,
+        "line_end": 280,
+        "finding": "Статическая база знаний загружает markdown+images; ScenarioPlayer уже проигрывает шаги и подсвечивает элемент."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-302",
+    "title": "Лендинг Corep WMS",
+    "prior_status": "ЧАСТИЧНО",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · MOCKUP-КОД НА ПРОДЕ · ДОМЕН НЕ ПРОВЕРЕН",
+    "code_state": "Commit ad20a6d9 добавил пять preview-входов и является предком production SHA. Публичная страница/домен не найдены в release evidence.",
+    "remaining": "Найти точный публичный URL, выложить страницу и проверить её в браузере.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/fbs-orders-preview.tsx",
+        "line_start": 1,
+        "line_end": 40,
+        "finding": "Один из preview-экранов лендинга присутствует в production SHA; commit ad20a6d9 является предком SHA."
+      },
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 2276,
+        "line_end": 2283,
+        "finding": "Исходная постановка отдельно говорит, что доменная публикация отсутствовала."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-303",
+    "title": "Требования владельца от 31.08 не влиты в ствол",
+    "prior_status": "В ВЕТКЕ",
+    "verdict": "partial",
+    "canonical_status": "ИСТОЧНИК СВЕРЕН · ЧЕТЫРЕ НЕЯВНЫХ КРИТЕРИЯ ВОССТАНОВЛЕНЫ, ИХ РЕАЛИЗАЦИЮ УТОЧНИТЬ",
+    "code_state": "Все OWN-01…33 сопоставлены поштучно: прямые получатели есть у 29 пунктов (01–03, 06–09, 11–14, 16–33); OWN-04/05/15 представлены только соседними задачами без полного критерия; OWN-10 в каноне не найден. Сам документ остаётся только в origin/docs/owner-requirements-20260831 и отсутствует в production SHA.",
+    "remaining": "При продолжении проверить по текущему коду эти восстановленные критерии, не считать отсутствие их прежней явной формулировки отсутствием реализации. В существующем каноне явно сохранить четыре критерия либо прямое решение владельца об их снятии: OWN-04 — сумма количеств по таре не позволяет провести приёмку с меньшим общим фактом; OWN-05 — проведение приёмки создаёт физический остаток на выбранном внутреннем складе; OWN-10 — исправить пропорции колонок таблицы сортировки; OWN-15 — жёстко изолировать FBS-данные одновременно по tenant и seller. Сохранить ссылку на исходный commit; второй backlog не создавать.",
+    "evidence": [
+      {
+        "ref": "5d019bc31a4fa70458cbab4a91ea0ab6c3018e17",
+        "path": "docs/requirements/OWNER_REQUIREMENTS_2026-08-31_CRITICAL_WMS_FLOW_RU.md",
+        "line_start": 56,
+        "line_end": 218,
+        "finding": "OWN-01–05 задают пять точных требований приёмки и тары; критерии OWN-04/05 шире соседних задач канона."
+      },
+      {
+        "ref": "5d019bc31a4fa70458cbab4a91ea0ab6c3018e17",
+        "path": "docs/requirements/OWNER_REQUIREMENTS_2026-08-31_CRITICAL_WMS_FLOW_RU.md",
+        "line_start": 220,
+        "line_end": 359,
+        "finding": "OWN-06–11 задают правила внутренних/внешних складов; OWN-10 отдельно требует исправить пропорции таблицы сортировки."
+      },
+      {
+        "ref": "5d019bc31a4fa70458cbab4a91ea0ab6c3018e17",
+        "path": "docs/requirements/OWNER_REQUIREMENTS_2026-08-31_CRITICAL_WMS_FLOW_RU.md",
+        "line_start": 361,
+        "line_end": 599,
+        "finding": "OWN-12–20 описывают подбор, резерв, изоляцию, публикацию и списание; они сопоставлены WMS-049/053/058/060/063/127–129/376/386."
+      },
+      {
+        "ref": "5d019bc31a4fa70458cbab4a91ea0ab6c3018e17",
+        "path": "docs/requirements/OWNER_REQUIREMENTS_2026-08-31_CRITICAL_WMS_FLOW_RU.md",
+        "line_start": 601,
+        "line_end": 959,
+        "finding": "OWN-21–33 покрывают неблокирующую упаковку, ЧЗ, отмены, Ozon и сквозную сверку; для них есть WMS-080–095/110–124/230–231/345–375/392–403."
+      },
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 474,
+        "line_end": 491,
+        "finding": "Канонический обзор содержит карту склада, грузоместа, адресное хранение, историю FBS и связанные UI-задачи, но не отдельный критерий пропорций таблицы сортировки."
+      },
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 899,
+        "line_end": 1075,
+        "finding": "Детальные WMS-054/057/058/059/061/062 принимают большинство складских требований OWN-01–14; OWN-10 в этих критериях отсутствует."
+      },
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 1161,
+        "line_end": 1475,
+        "finding": "WMS-085 и WMS-110–133 принимают требования ЧЗ, отмен, статусов, внешних поставок и истории."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "AGENTS.md",
+        "line_start": 163,
+        "line_end": 176,
+        "finding": "Поздний прямой контракт запрещает прогресс-навигационные блокеры и согласуется с OWN-21/33."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-304",
+    "title": "Постановка по инвентаризации от 03.09 потерялась при слиянии",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "obsolete",
+    "canonical_status": "СНЯТЬ · ИСТОЧНИК НАЙДЕН, ТРИ ТРЕБОВАНИЯ УЖЕ WMS-150/151/152",
+    "code_state": "Три требования exact source сопоставлены один к одному: создание пустой тары и защита от pruning → WMS-150; устойчивое выбранное место → WMS-151; ручное добавление товара в выбранное место или без ячейки → WMS-152. Исторический commit является предком production, а соответствующий код присутствует в production SHA.",
+    "remaining": "Для WMS-304 работы нет: снять задачу восстановления. Приёмку самих трёх экранных сценариев вести в WMS-150/151/152; отдельный backlog-файл не восстанавливать.",
+    "evidence": [
+      {
+        "ref": "4b5edcc022fa7c7a26c428ed01f5221ed14984e4",
+        "path": "docs/ZADACHI_INVENTARIZACIYA_2026-09-03.md",
+        "line_start": 9,
+        "line_end": 107,
+        "finding": "Источник содержит ровно три постановки: создать тару, удерживать выбранное место и добавить товар вручную."
+      },
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 3295,
+        "line_end": 3333,
+        "finding": "Канон уже содержит эти требования как WMS-150, WMS-151 и WMS-152 с отдельными критериями."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/inventory_count_service.py",
+        "line_start": 516,
+        "line_end": 568,
+        "finding": "Production service создаёт пустую тару и сохраняет InventoryCountCreatedContainer, чтобы она не исчезла при перечитывании."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/inventory/FfInventoryCountScreen.tsx",
+        "line_start": 175,
+        "line_end": 185,
+        "finding": "Экран хранит устойчивое selectedKey отдельно от временной подсветки скана."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/inventory/FfInventoryCountScreen.tsx",
+        "line_start": 375,
+        "line_end": 390,
+        "finding": "Экран показывает кнопку «Добавить товар» и выбранное место назначения."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "AGENTS.md",
+        "line_start": 114,
+        "line_end": 140,
+        "finding": "Действующее правило делает канонический backlog единственным и запрещает восстанавливать отдельные списки задач."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-305",
+    "title": "Диктовка от 27.08 на 1559 строк не разобрана",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "partial",
+    "canonical_status": "ДИКТОВКА РАЗОБРАНА · НЕПОЛНЫЕ КРИТЕРИИ ВОССТАНОВЛЕНЫ, ИХ КОДОВЫЙ ОСТАТОК УТОЧНИТЬ",
+    "code_state": "Прочитаны все 1559+193+113 строк и сопоставлены все 28 заголовков BACKLOG. 14 прямо представлены в каноне, два вопроса о WB-кодах сняты решением владельца, 12 не имеют полной канонической формулировки. Это документальный разрыв: production-код части этих 12 уже реализует полностью или частично, поэтому их нельзя автоматически объявить двенадцатью отсутствующими фичами.",
+    "remaining": "Внутри существующей WMS-305 сохранить двенадцать неперенесённых критериев и найденное состояние кода: дата создания не показана в карточке приёмки; comment/free_text есть в моделях/сервисах, но не подключены к API/UI; тёмный code-style и состав внутренней этикетки только title+barcode остаются; из сортировки нельзя создать ячейку, но неразложенный товар уже можно назначить строкой; управление FBS-остатками уже в каталоге, однако FF-пункт всё ещё «Каталог»; ручной +N есть, но отдельной редактируемой колонки с пометкой нет; блок коробов в каталоге остаётся. Цвет строк оценивать только в браузере. Решения о произвольном периоде/селлере и закрытом грузоместе уже есть в коде; FBO-код имеет лишь self-generated валидатор без доказанной живой приёмки WB. Второй backlog не создавать. После переноса точных критериев сверить соответствующие поведения по текущему маршруту; отсутствие прежней записи в каноне само по себе не доказывает отсутствия кода.",
+    "evidence": [
+      {
+        "ref": "81779bfbad7f86f024eb9b9d6a4bae180b194920",
+        "path": "tasks/backlog-20260827-dictation/BACKLOG.md",
+        "line_start": 1,
+        "line_end": 40,
+        "finding": "Источник прямо называет диктовку 27.08; основной файл содержит 28 заголовков требований и 1559 строк."
+      },
+      {
+        "ref": "81779bfbad7f86f024eb9b9d6a4bae180b194920",
+        "path": "tasks/backlog-20260827-dictation/PO-EKRANAM.md",
+        "line_start": 1,
+        "line_end": 16,
+        "finding": "Сопутствующий документ подтверждает ровно 28 задач и группирует их по шести экранам."
+      },
+      {
+        "ref": "81779bfbad7f86f024eb9b9d6a4bae180b194920",
+        "path": "tasks/backlog-20260827-dictation/PO-EKRANAM.md",
+        "line_start": 78,
+        "line_end": 158,
+        "finding": "Перечень экранов фиксирует 6 требований приёмки, 2 печати, 4 сортировки, 2 упаковки и 4 товаров/FBS; здесь видны неперенесённые критерии."
+      },
+      {
+        "ref": "81779bfbad7f86f024eb9b9d6a4bae180b194920",
+        "path": "tasks/backlog-20260827-dictation/RESHENIYA-28-08.md",
+        "line_start": 3,
+        "line_end": 57,
+        "finding": "Решения задают период/селлера, правило закрытого грузоместа и снимают переделку внутренних кодов под WB, но оставляют отдельный вопрос FBO-кода."
+      },
+      {
+        "ref": "81779bfbad7f86f024eb9b9d6a4bae180b194920",
+        "path": "tasks/backlog-20260827-dictation/RESHENIYA-28-08.md",
+        "line_start": 75,
+        "line_end": 113,
+        "finding": "Наши FBS-заказы определяются обслуживаемым складом; непривязанные заказы нельзя скрывать."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfInboundRequestView.tsx",
+        "line_start": 2187,
+        "line_end": 2281,
+        "finding": "Карточка показывает номер, накладную, тип, селлера, количества, плановую дату и статус; created_at и комментарий в шапке не выводятся."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/models/inbound_intake.py",
+        "line_start": 60,
+        "line_end": 165,
+        "finding": "Модель приёмки уже имеет comment, а короб — free_text; наличие полей не доказывает доступный оператору маршрут."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfInboundRequestView.tsx",
+        "line_start": 3035,
+        "line_end": 3189,
+        "finding": "Короб и грузоместо наполняются, объединяются с палетой и печатаются; в заголовках нет free_text, номер остаётся component=\"code\"."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfInboundRequestView.tsx",
+        "line_start": 1582,
+        "line_end": 1655,
+        "finding": "Внутренняя этикетка получает только вид, id, номер и barcode; seller/date/document/quantity/free_text не передаются."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfInboundSortingPanel.tsx",
+        "line_start": 1237,
+        "line_end": 1467,
+        "finding": "При отсутствии ячеек экран отправляет создавать их в каталоге; для неразложенного товара уже есть строки выбора и кнопка «Добавить ячейку» в смысле строки распределения."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfProductsCatalogScreen.tsx",
+        "line_start": 1110,
+        "line_end": 1127,
+        "finding": "В каталоге есть вкладка «Короба и грузоместа», то есть требование убрать этот блок не выполнено буквально."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfProductsCatalogScreen.tsx",
+        "line_start": 1593,
+        "line_end": 1605,
+        "finding": "Настройка FBS-остатка уже перенесена в каталог товара."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/layouts/AuthedAppLayout.tsx",
+        "line_start": 232,
+        "line_end": 263,
+        "finding": "Для FF пункт каталога всё ещё подписан «Каталог»/«Каталог и ячейки», хотя у селлера уже «Товары»."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfPackagingPage.tsx",
+        "line_start": 1031,
+        "line_end": 1043,
+        "finding": "ЧЗ показывается как printed/needed; отдельной колонки редактируемого количества с пометкой здесь нет."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfPackagingPage.tsx",
+        "line_start": 1141,
+        "line_end": 1171,
+        "finding": "Production UI позволяет ручной ввод +N, но это не запрошенное редактирование итоговой колонки с признаком изменения."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "line_start": 710,
+        "line_end": 750,
+        "finding": "Решение 28.08 о неделе/месяце/произвольном периоде и фильтре селлера реализовано в запросе метрики."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/sorting-objects/ObjectsTree.tsx",
+        "line_start": 310,
+        "line_end": 337,
+        "finding": "Правило закрытой тары реализовано: товар из короба/грузоместа сначала вынимается, прямое размещение блокируется."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/box_barcode_service.py",
+        "line_start": 1,
+        "line_end": 39,
+        "finding": "Есть self-generated WB-compatible код, но он не доказывает получение назначенного WB значения для FBO или живую приёмку."
+      },
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 899,
+        "line_end": 1075,
+        "finding": "WMS-054/056/057/059/061 принимают карту, историю, грузоместа, массовое правило и адресное хранение, но не двенадцать критериев целиком."
+      },
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 1161,
+        "line_end": 1166,
+        "finding": "WMS-085 прямо принимает колонку доступных кодов ЧЗ и массовые операции."
+      },
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 1636,
+        "line_end": 1666,
+        "finding": "WMS-210/212 относятся к товарной этикетке и не формулируют состав этикетки тары."
+      },
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 2284,
+        "line_end": 2302,
+        "finding": "Канон сохраняет WMS-303–305 как долги источников; WMS-305 подтверждает отсутствие полного сопоставления до этого аудита."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-306",
+    "title": "Итерационный бэклог от 14.08 на 68 фич ни разу не сверялся",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "decision",
+    "canonical_status": "РЕШЕНИЕ ВЛАДЕЛЬЦА",
+    "code_state": "Точный источник найден в commit 379a45cf: docs/WMS_ITERATION_BACKLOG_2026-08-14_FULL_RU.md, 934 строки и 156760 байт. В production дереве он удалён канонизацией; полного mapping evidence нет.",
+    "remaining": "Владелец выбирает между полной сверкой exact source с каноном и явной архивацией; не восстанавливать параллельный backlog.",
+    "evidence": [
+      {
+        "ref": "379a45cfd78fb5f43356f6741c8ce235eae36483",
+        "path": "docs/WMS_ITERATION_BACKLOG_2026-08-14_FULL_RU.md",
+        "line_start": 1,
+        "line_end": 60,
+        "finding": "Exact исторический источник на 68 фич сохранён в Git; размер 156760 байт, 934 строки."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-320",
+    "title": "Три готовых пул-реквеста висят невлитыми",
+    "prior_status": "В ВЕТКЕ",
+    "verdict": "partial",
+    "canonical_status": "В ВЕТКАХ · PR #176/#177/#182 ОТКРЫТЫ 09.09",
+    "code_state": "GitHub: #176 OPEN/CLEAN к etalon; #177 OPEN/mergeState UNKNOWN к etalon; #182 OPEN/UNSTABLE к main. Значит «все три готовы» неверно.",
+    "remaining": "Разобрать #177 и #182, затем решить отдельное вливание каждого; не считать их одной готовой пачкой.",
+    "evidence": [
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 2315,
+        "line_end": 2329,
+        "finding": "Статус трёх PR относится к внешнему состоянию; локальные refs не доказывают, что PR всё ещё открыты/конфликтуют."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Read-only gh pr view 09.09.2026; production composition этих commits не подтверждена.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-321",
+    "title": "Настройка «упаковка необязательна» не влита никуда",
+    "prior_status": "ОТМЕНЕНО",
+    "verdict": "obsolete",
+    "canonical_status": "ОТМЕНЕНО · НЕ ВОССТАНАВЛИВАТЬ",
+    "code_state": "Специальной WB настройки нет; упаковка не должна блокировать переходы по актуальному AGENTS.",
+    "remaining": "Нет.",
+    "evidence": [
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 4549,
+        "line_end": 4555,
+        "finding": "Специальной WB настройки нет; упаковка не должна блокировать переходы по актуальному AGENTS."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-322",
+    "title": "Файл экрана приёмки 3938 строк, разрез не сделан",
+    "prior_status": "РЕШЕНИЕ ВЛАДЕЛЬЦА",
+    "verdict": "decision",
+    "canonical_status": "РЕШЕНИЕ ВЛАДЕЛЬЦА",
+    "code_state": "Файл FfInboundRequestView остаётся очень большим; это поддерживаемость, а не подтверждённая поломка потока.",
+    "remaining": "Владелец решает резать сейчас или отказаться.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfInboundRequestView.tsx",
+        "line_start": 1,
+        "line_end": 3938,
+        "finding": "Файл FfInboundRequestView остаётся очень большим; это поддерживаемость, а не подтверждённая поломка потока."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-323",
+    "title": "126 невлитых веток из 258",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "historical_data",
+    "canonical_status": "НЕ СДЕЛАНО · ИСТОРИЧЕСКИЕ 126/258 НЕ СООТВЕТСТВУЮТ СРЕЗУ 09.09",
+    "code_state": "Атомарный snapshot 2026-09-09T20:49:25.174075+00:00: 385 local heads = 171 merged + 214 not merged; 338 origin refs = 148 merged + 190 not merged. Классификация выполнена по одному сохранённому массиву ref→SHA относительно production SHA. Она не доказывает уникальность содержимого или безопасность удаления.",
+    "remaining": "Дедуплицировать 190 origin refs по commit/patch и содержательно классифицировать. По одному признаку merge-base ничего не удалять.",
+    "evidence": [
+      {
+        "ref": "snapshot-sha256:642ee334b652df08e551a258c24e2c68a283a13ad012238f9b4d6044a386e804",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/lane4.md",
+        "line_start": 1,
+        "line_end": 14,
+        "finding": "Сохранён единый ref→SHA snapshot: local 385=171+214, origin 338=148+190; tip ancestor production помечен merged."
+      },
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 2338,
+        "line_end": 2344,
+        "finding": "Канон содержит исторические 126 из 258; эти числа не совпадают со свежим атомарным snapshot."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "да — перенести snapshot в постоянный docs/reviews artifact при интеграции; содержимое веток не классифицировано"
+  },
+  {
+    "id": "WMS-324",
+    "title": "Липкая шапка таблиц просвечивает при прокрутке",
+    "prior_status": "РЕШЕНИЕ ВЛАДЕЛЬЦА",
+    "verdict": "decision",
+    "canonical_status": "РЕШЕНИЕ ВЛАДЕЛЬЦА · UI НЕ ПРОВЕРЕН",
+    "code_state": "Глобальная визуальная правка не должна делаться без решения; браузер в этом аудите не открыт.",
+    "remaining": "Владелец выбирает, менять ли непрозрачность шапок.",
+    "evidence": [
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 2345,
+        "line_end": 2350,
+        "finding": "Глобальная визуальная правка не должна делаться без решения; браузер в этом аудите не открыт."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-325",
+    "title": "Полное логирование действий пользователей",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · ДОКУМЕНТЫ И ДВИЖЕНИЯ ИМЕЮТ АВТОРА, ИЗМЕНЕНИЕ ПРАВ — НЕТ",
+    "code_state": "OperationFact хранит автора, а глобальный middleware извлекает пользователя из проверенного access token. Но автоматический DocumentEvent отслеживает только inbound/FBS/MP-модели. PATCH прав сотрудника вызывает update_staff_permissions и возвращает DTO; сервис коммитит permission row без OperationFact/DocumentEvent. Это один доказанный пробел, а не полный перечень всех мутаций.",
+    "remaining": "Добавить изменение прав сотрудников в существующий аудит-контур с acting_user и before/after; затем отдельно инвентаризировать остальные мутации. Новую параллельную таблицу журнала не заводить.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/models/operation_fact.py",
+        "line_start": 69,
+        "line_end": 107,
+        "finding": "OperationFact хранит actor_user_id и actor_name_snapshot для покрытых операций."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/document_event_service.py",
+        "line_start": 102,
+        "line_end": 126,
+        "finding": "Глобальный middleware связывает проверенную JWT-личность с автоматическим аудитом текущего запроса."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/document_event_service.py",
+        "line_start": 363,
+        "line_end": 397,
+        "finding": "Автоматический сбор событий перечисляет только inbound, FBS order/supply и marketplace unload; staff permissions не входят."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/api/staff_accounts.py",
+        "line_start": 311,
+        "line_end": 361,
+        "finding": "PATCH permissions передаёт acting_user в сервис, затем только возвращает обновлённый DTO."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/staff_permissions_service.py",
+        "line_start": 121,
+        "line_end": 156,
+        "finding": "Сервис использует acting_user для авторизации, меняет permissions и commit, но не создаёт существующий audit event/fact."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-326",
+    "title": "Разобрать видимость заказа WB 5602141824",
+    "prior_status": "РАЗОБРАНО",
+    "verdict": "historical_data",
+    "canonical_status": "РАЗОБРАНО · ИСТОРИЧЕСКАЯ КАРТИНКА НЕВОССТАНОВИМА",
+    "code_state": "Канон фиксирует импорт, включение в поставку и отсутствие сохранённых старых UI/HTTP логов.",
+    "remaining": "Новых действий нет; при повторе собирать свежие данные.",
+    "evidence": [
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 4563,
+        "line_end": 4574,
+        "finding": "Канон фиксирует импорт, включение в поставку и отсутствие сохранённых старых UI/HTTP логов."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "medium",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-327",
+    "title": "Сверить возраст и видимость пяти новых заказов ИП Фадин",
+    "prior_status": "РАЗОБРАНО",
+    "verdict": "historical_data",
+    "canonical_status": "РАЗОБРАНО · ПРИЧИНА served=false",
+    "code_state": "Канон фиксирует пять импортов и два скрытых рабочим фильтром склада served=false; это не отсутствие импорта.",
+    "remaining": "Не менять требование всех вкладок: served должен объяснять операционную видимость, а не блокировать навигацию.",
+    "evidence": [
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 4575,
+        "line_end": 4595,
+        "finding": "Канон фиксирует пять импортов и два скрытых рабочим фильтром склада served=false; это не отсутствие импорта."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "medium",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-328",
+    "title": "В отгруженных стоит не дата отгрузки, а плановая — и всегда три часа ночи",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "missing",
+    "canonical_status": "НЕ СДЕЛАНО · WORKLIST НЕ ПЕРЕДАЁТ ДАТУ ОТГРУЗКИ",
+    "code_state": "Экран отгруженных поставок читает /supplies/worklist. Его schema, service result и клиентский тип содержат только planned_shipment_date; delivered_at в этом маршруте отсутствует. UI поэтому может показать только плановую дату.",
+    "remaining": "Добавить delivered_at в worklist query/result/schema и клиентский тип, затем для отгруженной вкладки показывать его вместо planned_shipment_date. После выпуска открыть браузер и сверить конкретную поставку и часовой пояс.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/api/fbs_supplies.py",
+        "line_start": 144,
+        "line_end": 166,
+        "finding": "Worklist schema, который читает экран, содержит только planned_shipment_date и не содержит delivered_at."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_supply_service.py",
+        "line_start": 1350,
+        "line_end": 1483,
+        "finding": "Сервис строит supply worklist и кладёт в строку только planned_shipment_date."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/fbsApi.ts",
+        "line_start": 312,
+        "line_end": 327,
+        "finding": "Клиентский тип worklist также не имеет delivered_at."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "line_start": 598,
+        "line_end": 620,
+        "finding": "Вкладки поставок загружают именно /supplies/worklist."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "line_start": 1425,
+        "line_end": 1448,
+        "finding": "Строка таблицы показывает supply.planned_shipment_date."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  },
+  {
+    "id": "WMS-329",
+    "title": "Отмена с возвратом товара не возвращает квоту",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "partial",
+    "canonical_status": "ЧАСТИЧНО · ОТМЕНА ВОЗВРАЩАЕТ ЧИСЛО, НО ПОТОЛОК ВСЁ ЕЩЁ РАСХОДУЕТСЯ",
+    "code_state": "В production reserve уменьшает pool.quantity, release увеличивает, inventory shortage и unreserved handoff снова уменьшают. Поэтому узкая отмена работает, но позднее правило неизменяемого операторского потолка нарушено. Незамерженный 5a349323 добавляет ledger-расчёт и не подходит.",
+    "remaining": "Переделать WMS-329 вместе с WMS-338/WMS-341 на единый свободный физический остаток и неизменяемый операторский потолок; не переносить ledger fix 5a349323.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/inventory_service.py",
+        "line_start": 190,
+        "line_end": 265,
+        "finding": "Резерв уменьшает pool.quantity, отмена без отгрузки увеличивает его обратно; операторское число служит расходуемым счётчиком."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/inventory_service.py",
+        "line_start": 268,
+        "line_end": 310,
+        "finding": "Инвентаризационная недостача дополнительно уменьшает те же pool.quantity."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/inventory_service.py",
+        "line_start": 1695,
+        "line_end": 1721,
+        "finding": "Передача незарезервированного количества ещё раз уменьшает pool.quantity."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/wb_marketplace_orders_service.py",
+        "line_start": 480,
+        "line_end": 502,
+        "finding": "WB import вызывает update_fbs_order_reservation для reserve и release."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "AGENTS.md",
+        "line_start": 75,
+        "line_end": 89,
+        "finding": "Позднее решение требует min(operator ceiling, free stock); число оператора не уменьшается."
+      },
+      {
+        "ref": "5a3493235ea2",
+        "path": "backend/app/services/fbs_stock_units_service.py",
+        "line_start": 58,
+        "line_end": 99,
+        "finding": "Незамерженный fix считает расход по fbs_stock_pool_debits, то есть сохраняет запрещённый журналный подход."
+      },
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 2476,
+        "line_end": 2485,
+        "finding": "WMS-338 требует убрать остатки журнала/старых функций, чтобы их не оживляли."
+      },
+      {
+        "ref": "4b2590b3bd2184d9d15c2633c632b38e5b161591",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 3549,
+        "line_end": 3567,
+        "finding": "WMS-341 фиксирует существующую разбивку по binding/marketplace и общий физический потолок без новой сущности."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита; учитывались только существующие тесты/отчёты, где указано.",
+    "release_evidence": "Production composition: docs/reviews/artifacts/wms414-audit-20260909/verification.json и runtime.json; это не ручной UI/печать/данные.",
+    "confidence": "high",
+    "needs_root_check": "нет"
+  }
+]
