@@ -8,6 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.document_event import (
+    DOCUMENT_TYPE_INBOUND_INTAKE,
+    EVENT_TARE_LINE_QTY_CHANGED,
+)
 from app.models.inbound_intake import (
     InboundIntakeCargoPlace,
     InboundIntakeCargoPlaceLine,
@@ -15,6 +19,10 @@ from app.models.inbound_intake import (
 )
 from app.models.product import Product
 from app.services import inbound_intake_service as intake_svc
+from app.services.document_event_service import (
+    current_document_event_actor,
+    record_document_event_safely,
+)
 from app.services.inbound_intake_service import InboundIntakeError
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
@@ -70,6 +78,7 @@ async def set_line_quantity(
         raise InboundIntakeError("product_not_found")
 
     line = next((row for row in place.lines if row.product_id == product_id), None)
+    qty_before = int(line.quantity) if line is not None else 0
     if line is not None and quantity < line.posted_qty:
         raise InboundIntakeError("actual_below_posted")
     if quantity == 0:
@@ -86,6 +95,27 @@ async def set_line_quantity(
         )
     else:
         line.quantity = quantity
+    # WMS-056: пишем append-only факт правки состава грузоместа: qty=0 удаляет
+    # строку, поэтому иначе восстановить, кто и когда снял, невозможно.
+    if qty_before != quantity:
+        actor = current_document_event_actor()
+        await record_document_event_safely(
+            session,
+            tenant_id=tenant_id,
+            document_type=DOCUMENT_TYPE_INBOUND_INTAKE,
+            document_id=request_id,
+            event_type=EVENT_TARE_LINE_QTY_CHANGED,
+            source=actor.source,
+            actor_user_id=actor.actor_user_id,
+            qty=quantity,
+            product_id=product_id,
+            payload_json={
+                "container_kind": "cargo_place",
+                "container_id": str(place.id),
+                "qty_before": qty_before,
+                "qty_after": quantity,
+            },
+        )
     await session.commit()
     return await _load_cargo_place(session, tenant_id, request_id, place_id)
 
