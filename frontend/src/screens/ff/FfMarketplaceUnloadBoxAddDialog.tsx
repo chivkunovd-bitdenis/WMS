@@ -455,10 +455,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
         },
       )
       let scanRes = await postScan(scanBody)
-      if (!isCurrent()) {
-        if (scanRes.ok) void onUpdated()
-        return
-      }
+      if (!isCurrent()) return
       if (scanRes.status === 422) {
         const refusal = await scanRes.clone().json().catch(() => null) as { detail?: unknown } | null
         if (!isCurrent()) return
@@ -471,10 +468,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
           })
           if (!confirmed || !isCurrent()) return
           scanRes = await postScan({ ...scanBody, allow_over_plan: true })
-          if (!isCurrent()) {
-            if (scanRes.ok) void onUpdated()
-            return
-          }
+          if (!isCurrent()) return
         }
       }
       if (scanRes.ok) {
@@ -493,10 +487,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
           quantity?: number | null
           picked_qty?: number | null
         }
-        if (!isCurrent()) {
-          void onUpdated()
-          return
-        }
+        if (!isCurrent()) return
         if (j.kind === 'container' && j.container_kind && j.container_id) {
           const container = {
             kind: j.container_kind, id: j.container_id, code: j.container_code ?? j.container_id,
