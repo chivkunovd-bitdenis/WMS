@@ -1,44 +1,69 @@
-# WMS-058 / WMS-084 / WMS-277 / WMS-395: перед финальным Opus
+# WMS release checkpoint — 09.09.2026, 07:32 MSK
 
-09.09.2026, 05:21 МСК. Подготовлен черновик
-[PR207](https://github.com/chivkunovd-bitdenis/WMS/pull/207) в etalon,
-ветка `codex/wms-next-production`, точный HEAD
-`8cc97a07e6a8fa89e9506f7b79ef2474eb8a735b`. Конфликтов с текущим etalon нет.
-Код приложения, миграции и тесты совпали с развёрнутым и проверенным
-staging `50c9c88e0e56097e857fa26e0bda419d69125f9f`.
+The WMS-058/084/277/395 release is deployed to production. Do not redeploy the
+old candidate or repeat completed CI/reviews. Production is
+743a794bf0ee9e20cccf7f87c05138b035604ec9 (PR207); staging is
+1a508b98c01d55e3462f104c1523f4ff6721704d (PR208). Both match application/test code
+of b09b7d9fd87cb18b5ce34e5d6c7ca848d81f4ad0.
 
-CI34302161540 завершился успешно в05:20МСК: **2234 passed,49 skipped,
-1 xfailed**, pytest535.25с. Frontend build/typecheck, Ruff, mypy и проверка
-канонического номера задачи также успешны. Это полный CI самого
-production-PR, отдельно от ранее прошедшего CI34300792441 на staging-PR.
+CI34308619194 and34308639195 passed:2234passed49skipped1xfailed. Final Opus
+claude-opus-4-7 effortmax and independent Astra adjudication are finished.
+The confirmed over-plan source race and stale callback were fixed in39c84d09
+and a8053cf9. Actual staging Chrome GREEN verified immutable sourceA,
+queuedB waiting, exactly one A-1 movement and unchangedB. OwnMP000042 was
+cancelled normally. Do not repeat this or the earlier084 A500043→B500044 setup.
 
-Браузер WMS058 и WMS084/395 завершён; новые операции для повторения этих
-сценариев не нужны. Конечная QA-привязка остаётся на WB500044. Доказательства
-сохранены в этом кандидате. Независимое итоговое чтение Astra xhigh не нашло
-обязательных дополнительных исправлений.
+Production proof: wms-next-production-743a794b-20260909.json. All428 runtime
+Python files in api/worker/beat matchGit; webimage matchesbuild; migration0257;
+servicesrunning/restarts0. DB andRedis remained the existing11Augustcontainers,
+healthy. Freshbackup before-release-b09b7d9f-20260909,392M, restore-list checked.
+Startup logs at07:11 had noERROR/Traceback/CRITICAL. Public Chrome login and
+recovery pages passed, reportproduction-public-smoke-20260909.md. This was
+unauthenticated and is NOT protected productionFBS browser acceptance.
 
-**Production ещё не обновлён:** он остаётся на
-`40b722a4d2d0ff1a6a5899cdb2713a98d1265bc5`. Контрольный API health вернул200
-и status=ok; этот запрос не является проверкой защищённого FBS в production.
+Final scheduled import is verified: taskfaf2efe5-ca95-478d-abc2-55c9d0de8afc,
+07:17–07:27MSK,23sellerimportsOK/5previousWB401,summaryandsucceeded recorded.
+Both previousSKUfailedsellers nowcompleted; this does not prove everyhistorical
+SKUunchanged. FBSautopoll/reconcile succeeded duringimport, twoDBsnapshots had
+0blocks/0longtransactions. No manualsync. Evidencewms277-postrelease-20260909.md.
+PublicproductionChrome passedlogin/recovery with0JSerrors and0mutationattempts.
 
-Единственный оставшийся обязательный шаг для этой партии перед merge —
-финальный Opus CLI max, затем независимая оценка его результата Astra xhigh.
-Лимит Opus действует до06:10МСК. Подготовлены
-`scripts/wms-next-opus-review.sh` и `wms-next-opus-request-20260909.txt`.
-Скрипт проверяет время, фиксированный чистый HEAD и отсутствие уже записанного
-результата; до срока не отправляет запрос. Frozen checkout
-`.worktrees/wms396-staging-release` стоит на8cc97a07, diff относительно40b
-сохранён в его `tmp/wms-next-frozen.diff`. Результат будет в
-`tmp/wms-next-opus-result.json`. Само ревью пока **не выполнено**.
+Mobile401offlinecheck foundJDK17/SDK35but noGradle8.11.1distribution or modules-2
+cache; only~495MiBfree, so no downloads/compilation/signing/publication performed.
+Reportwms401-mobile-offline-check-20260909.md. Next boundedparallelwork: Astrahigh
+mobile_publish_ci derives minimumbackendcontract for397 from exactOpus399mocks,
+withoutchangingdesignorapplication; report-only, nonewentitiescreatedyet.
 
-При чистом вердикте: обновить описание PR207, снять черновик, объединить
-проверенный HEAD в etalon, сделать новый backup и штатную выкладку, затем
-проверить реальные SHA/файлы/сервисы/миграцию/HTTP/логи. Если замечания требуют
-изменения кода, сначала исправление, целевые тесты и повторный staging/CI.
-Документационные коммиты после8cc сохраняются в `codex/wms396-stage`; они
-не двигают стабильный HEAD production-PR и не запускают лишний полный CI.
+Canonical statuses and all reports are published in codex/wms396-stage,
+currently documents ahead of the frozen production branch. Do not move the
+production branch merely to republish reports or rerunfullCI. Rootcheckout has
+unrelated dirtybilling/frontendfiles, unchanged. Emulator has44orders and no
+volume: do not restart or restore old42backup. QA084 finalBbinding remains.
 
-Это не завершение всех сорока задач: исторические047/048/013, аппаратная
-проверка275, мобильное приложение, локальная печать и сервер чата имеют
-отдельные незавершённые части. Их нельзя объявлять выпущенными вместе с этой
-партией. Повторная задача `wms-40-staging` остаётся ACTIVE, интервал20минут.
+Not complete: historical013needs billingdate/rates;047specific historicalstock
+apply not authorized;048currentowneroflostunitnotproven;275physicalTSD/load
+notverified. Mobile401localdfcb762 is not published and physicalacceptance is
+missing; tracked signingkey discovered earlier must not be published/changed
+withoutdirectauthorization. LAN402 is a designcontract with an unresolved
+printer-agent binding decision. Chat399Opusmockups exist, backend397notconnected.
+Do not call all40or theseparallelfeatures production-ready.
+
+Automationwms-40-staging remainsACTIVE every20minutes in the same thread.
+Packaging is onlyaflag, noinventory/reservationeffects/navigationblockers;
+frontendesignunchanged. Continue autonomous work where evidence/authorization
+allows, keep meaningful notifications only, and preserve precise status limits.
+
+
+Follow-up: WMS-397 backend contract independently reviewed and corrected.
+Published integration commit6dd443ce9998861591a6f6dc9058eafab59a88cc includes
+required attachments/screenshots, existing FF access, and seller membership.
+One owner decision has been requested under AGENTS.md:105 for four records
+and25MB/file,100MB/message,10files. Do not repeat the question or treat
+waiting as approval. No chat application/schema changes made.
+
+Production SSH still reports743a794b; correct public health endpoint
+https://wms.sellerfocus.pro/api/health returns ok.
+Local disk hitENOSPC (180MiB then132MiB available). Bounded read-only audit
+found only16.7MiB of unused reproducible WMS web dist outputs. That cannot
+unblock mobile dependencies; nothing deleted. Existing APK/build outputs
+and active browser profiles preserved. Automation remains ACTIVE every20min.

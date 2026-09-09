@@ -1,4 +1,50 @@
-# WMS-058: real stage RED for a queued source scan during over-plan confirmation
+# WMS-058: real stage RED → GREEN for a queued source scan during over-plan confirmation
+
+**Final result: GREEN confirmed** on staging
+`1a508b98c01d55e3462f104c1523f4ff6721704d`. The actual browser continuation used the same
+controlled delay of a genuine422 and confirmed both the original-source stock effect
+and subsequent execution of queuedB. The initial RED evidence below remains preserved.
+
+## Final GREEN browser run
+
+Fresh owned MP **№000042 / ОТГР-26-09-09-7**, ID
+`de10f403-dad1-432d-8c1e-a588586457a1`, plan1 of the same authorized QA product,
+packing box `WHB-5HA1B21F0NPVE5`. Runtime SHA was checked before creation and at each
+scoped warehouse snapshot. No previous MP or WMS084 object was mutated.
+
+One ordinary product scan from A fulfilled the plan. During delivery delay of the next
+real422, B was entered into the scanner queue. With the over-plan modal open, the source
+chip remained **FBSVID-BOX-03 (A)**, and a real SQL/API reread completed with **zero B
+requests sent** and identical balances/movement IDs. The pending input still displayed
+B's barcode, demonstrating that B had been entered but had not replaced the active source.
+
+Clicking **Добавить всё** sent the original request field-for-field, changing only
+`allow_over_plan` to true. That request started at `2026-09-09T04:04:59.666Z`. It removed
+one unit from A and left B unchanged. Exactly one new movement was recorded:
+`deb623f1-1616-4872-a86c-2b3f808c30b9`, containerA, quantity_delta=-1.
+The queued B request started afterward at `04:05:00.178Z`, returned200 and selected B.
+The final browser screen showed two boxed units and B as the next selected source.
+
+| GREEN read point | A | B | Loose sorting | Movement rows |
+|---|---:|---:|---:|---:|
+| Before creating own MP | 34 | 19 | 9 | 22 |
+| Plan fulfilled from A | 33 | 19 | 9 | 23 |
+| Modal open, queued B waiting | 33 | 19 | 9 | 23 |
+| Confirmation from A, then B selected | 32 | 19 | 9 | 24 |
+| After ordinary MP cancellation | 32 | 19 | 11 | 25 |
+
+The own MP was cancelled normally and reread as `cancelled`. Its two units returned to
+sorting; total physical quantity remained62. There was no manual restoration of source
+container quantities. Chrome closed in finally. Both GREEN screenshots were opened and
+visually inspected. Safe request bodies, immutable-request comparison result, exact
+movement and balance snapshots are retained in `wms058-queued-source-20260909/green.json`.
+
+This accepts the demonstrated A/B over-plan race fix on stage. A separate case with two
+over-plan products waiting for two decisions was not run against stage; no claim is made
+for that additional scenario. No production, shipment, printing, dependency installation,
+application edits or full test suites were involved.
+
+## Initial RED record
 
 **RED confirmed** on staging `50c9c88e0e56097e857fa26e0bda419d69125f9f`.
 The run used the actual Chrome UI, actual stage API and actual warehouse balances.
@@ -81,3 +127,30 @@ node docs/reviews/scripts/wms058-queued-source-browser.cjs --execute-red-approve
 Do not rerun RED: it deliberately exercises the defect and consumes container stock
 before returning it to sorting. The report records an observed defect, not acceptance
 of this deployed version.
+
+## GREEN mode prepared for the final fix
+
+The same QA script now has a separate GREEN mode and writes `green.json` and `green-*`
+screenshots, preserving all RED evidence. The final component at
+`a8053cf984c5cfb56a0f83fc17557fe21fbcff16` was read: it holds the active queue item
+while awaiting the over-plan decision and retries its captured request with only
+`allow_over_plan` changed. The GREEN assertions follow that concrete contract.
+
+After root explicitly confirms a newly deployed full staging SHA, the command is:
+
+```sh
+node docs/reviews/scripts/wms058-queued-source-browser.cjs --execute-green-approved=<verified new staging SHA>
+```
+
+GREEN rejects the old deployment SHA and checks runtime SHA before creating a fresh
+owned MP. After one unit fulfills its plan, the script queues B during the same controlled
+delivery delay of the real422. With the modal open, it performs a real SQL/API reread and
+asserts that no request for B has reached the server and sourceA remains selected.
+After confirmation, it compares the retry body field-for-field with the rejected request
+except `allow_over_plan=true`, verifies A-1/B unchanged, and verifies exactly one new
+movement with containerA and quantity_delta=-1. The queued B must then execute and become
+selected. The owned MP is cancelled normally, with total physical quantity conserved.
+
+Only syntax, diff checks and the default live read-only preflight have been run for this
+mode so far. That preflight passed on the still-old50c9c88 stage with A34/B19 and the same
+verified QA seller/product. No GREEN browser, new MP or stage mutation has been started.

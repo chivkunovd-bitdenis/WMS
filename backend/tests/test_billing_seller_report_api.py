@@ -10,9 +10,18 @@ from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.main import app
-from app.models.billing import BillingInvoice, BillingLedgerEntry, BillingLedgerLine
+from app.models.billing import (
+    BillingInvoice,
+    BillingLedgerEntry,
+    BillingLedgerLine,
+    BillingTariffVersionV2,
+)
+from app.models.fbs_order import FbsOrder
+from app.models.fbs_supply import FbsSupply
+from app.models.fbs_wb_operation import FbsWbOperation
 from app.models.operation_fact import OperationFact, OperationFactCutover, OperationFactLine
 from app.models.user import User
+from app.models.warehouse import Warehouse
 
 
 async def _admin(async_client):
@@ -24,6 +33,214 @@ async def _admin(async_client):
     seller = await async_client.post("/sellers", headers=headers, json={"name": "Селлер"})
     me = await async_client.get("/auth/me", headers=headers)
     return headers, uuid.UUID(seller.json()["id"]), me.json()["email"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("include_finance", [False, True])
+async def test_wms406_confirmed_handover_drives_both_reports_despite_old_fact_dates(async_client, include_finance) -> None:
+    headers, seller_id, email = await _admin(async_client)
+    handover = datetime(2026, 8, 20, 12, tzinfo=UTC)
+    stale = datetime(2026, 8, 1, 12, tzinfo=UTC)
+    async with SessionLocal() as session:
+        user = await session.scalar(select(User).where(User.email == email))
+        assert user is not None
+        warehouse = Warehouse(tenant_id=user.tenant_id, name="Склад", code="WMS406")
+        session.add(warehouse)
+        await session.flush()
+        supplies = [FbsSupply(
+            tenant_id=user.tenant_id, seller_id=seller_id, warehouse_id=warehouse.id,
+            name=f"Поставка {index}", wb_supply_id=f"WB-406-{index}", delivery_type="warehouse_sc",
+            delivered_at=moment,
+        ) for index, moment in enumerate((handover, stale, None))]
+        session.add_all(supplies)
+        await session.flush()
+        orders = [FbsOrder(
+            tenant_id=user.tenant_id, seller_id=seller_id, wb_order_id=406000 + index,
+            marketplace="wb", status="cancelled" if index == 3 else "packed",
+            supply_id=supplies[index].id if index < 3 else None,
+            created_at_wb=stale, deadline_at=stale, updated_at=stale,
+            mapping_status="unmapped", reserve_status="none",
+        ) for index in range(4)]
+        session.add_all(orders)
+        await session.flush()
+        detached = orders[3]
+        session.add(FbsWbOperation(
+            tenant_id=user.tenant_id, seller_id=seller_id, operation_kind="supply_deliver",
+            idempotency_key="wms406-detached", state="confirmed", confirmed_at=handover,
+            local_entity_type="fbs_supply", local_entity_id=supplies[0].id,
+            request_summary_json={"checkpoint_source_plan": {"resolutions": [{"fbs_order_id": str(detached.id)}]}},
+        ))
+        # The real handover is inside/outside the window in the opposite order
+        # to these historical facts. An imported packed order has no handover.
+        for index, order in enumerate(orders[:3]):
+            session.add(OperationFact(
+                tenant_id=user.tenant_id, seller_id=seller_id, marketplace="wb",
+                operation_code="fbs_order", billable_service_code="fbs_order", source_kind="fbs_order",
+                source_event_id=order.id, document_type="fbs_order", document_id=order.id,
+                occurred_at=stale if index == 0 else handover, item_quantity=1, source="system",
+            ))
+        packing_id = uuid.uuid4()
+        session.add(BillingLedgerEntry(
+            id=packing_id, tenant_id=user.tenant_id, seller_id=seller_id, service_code="packing",
+            source="fbs", source_type="fbs_order", source_id=orders[0].id,
+            unit="document", quantity=1, rate=250, amount=250, occurred_at=stale,
+        ))
+        session.add(BillingInvoice(
+            tenant_id=user.tenant_id, seller_id=seller_id, number="WMS406-1", period=date(2026, 8, 1),
+            status="cancelled", total_amount=250, ff_profile_snapshot={}, seller_profile_snapshot={},
+            lines=[{"documents": [{"id": str(packing_id)}]}],
+        ))
+        await session.commit()
+        expected_ids = {str(orders[0].id), str(detached.id)}
+    params = f"date_from=2026-08-20&date_to=2026-08-20&include_finance={str(include_finance).lower()}"
+    summary = await async_client.get(f"/billing/seller-report/summary?{params}", headers=headers)
+    details = await async_client.get(f"/billing/seller-report/sellers/{seller_id}/details?{params}", headers=headers)
+    assert summary.status_code == details.status_code == 200, (summary.text, details.text)
+    entries = details.json()["entries"]
+    assert len(entries) == 4
+    assert {row["source_id"] for row in entries} == expected_ids
+    assert {row["occurred_at"] for row in entries} == {"2026-08-20T15:00:00+03:00"}
+    for totals in (summary.json()["totals"], summary.json()["rows"][0], details.json()["totals"]):
+        assert totals["fbs_items"] == totals["packing_items"] == 2
+        assert totals["operation_count"] == 4
+        if include_finance:
+            assert totals["net_total_kopecks"] == 250
+    if include_finance:
+        priced = next(row for row in entries if row.get("billing_ledger_entry_id") == str(packing_id))
+        assert priced["amount_kopecks"] == 250 and priced["item_quantity"] == 1
+        assert priced["invoice_history"] == {"state": "known", "count": 1}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("with_packing_charge", [False, True])
+async def test_wms406_fbo_shipped_units_define_packing_without_standalone_events(async_client, with_packing_charge) -> None:
+    headers, seller_id, email = await _admin(async_client)
+    moment = datetime(2026, 8, 20, 12, tzinfo=UTC)
+    document_id = uuid.uuid4()
+    async with SessionLocal() as session:
+        user = await session.scalar(select(User).where(User.email == email))
+        assert user is not None
+        session.add_all([
+            OperationFact(
+                tenant_id=user.tenant_id, seller_id=seller_id, operation_code="marketplace_outbound_completed",
+                billable_service_code="marketplace_outbound", source_kind="marketplace_unload_request",
+                source_event_id=document_id, document_type="marketplace_unload", document_id=document_id,
+                occurred_at=moment, item_quantity=7, source="system",
+            ),
+            OperationFact(
+                tenant_id=user.tenant_id, seller_id=seller_id, operation_code="packing_completed",
+                billable_service_code="packing", source_kind="packaging_task", source_event_id=uuid.uuid4(),
+                document_type="packaging_task", document_id=uuid.uuid4(), occurred_at=moment,
+                item_quantity=100, source="system",
+            ),
+            BillingLedgerEntry(
+                tenant_id=user.tenant_id, seller_id=seller_id, service_code="packing", source="packaging",
+                source_type="packaging_task", source_id=uuid.uuid4(), unit="item", quantity=100,
+                rate=10, amount=1000, occurred_at=moment,
+            ),
+        ])
+        if with_packing_charge:
+            session.add(BillingLedgerEntry(
+                tenant_id=user.tenant_id, seller_id=seller_id, service_code="packing", source="marketplace_unload",
+                source_type="marketplace_unload", source_id=document_id, unit="document", quantity=1,
+                rate=300, amount=300, occurred_at=moment,
+            ))
+        await session.commit()
+    for finance in (False, True):
+        params = f"date_from=2026-08-20&date_to=2026-08-20&include_finance={str(finance).lower()}"
+        summary = await async_client.get(f"/billing/seller-report/summary?{params}", headers=headers)
+        details = await async_client.get(f"/billing/seller-report/sellers/{seller_id}/details?{params}", headers=headers)
+        assert summary.status_code == details.status_code == 200, (summary.text, details.text)
+        assert len(details.json()["entries"]) == 2
+        packing = next(row for row in details.json()["entries"] if row["service_code"] == "packing")
+        assert packing["item_quantity"] == 7 and packing["source_id"] == str(document_id)
+        for totals in (summary.json()["totals"], details.json()["totals"]):
+            assert totals["packing_items"] == totals["outbound_items"] == 7
+            if finance:
+                assert totals["net_total_kopecks"] == (300 if with_packing_charge else 0)
+
+
+@pytest.mark.asyncio
+async def test_wms406_legacy_fbo_packing_and_ozon_contract_remain_visible(async_client) -> None:
+    headers, seller_id, email = await _admin(async_client)
+    moment = datetime(2026, 8, 20, 12, tzinfo=UTC)
+    document_id = uuid.uuid4()
+    async with SessionLocal() as session:
+        user = await session.scalar(select(User).where(User.email == email))
+        assert user is not None
+        session.add(OperationFactCutover(id=1, occurred_at=datetime(2026, 8, 21, tzinfo=UTC)))
+        order = FbsOrder(
+            tenant_id=user.tenant_id, seller_id=seller_id, marketplace="ozon", wb_order_id=-40601,
+            external_order_id="OZON406", status="sorted", created_at_wb=moment, deadline_at=moment,
+            mapping_status="unmapped", reserve_status="none",
+        )
+        session.add(order)
+        await session.flush()
+        for source_type, source_id, service, quantity in (("marketplace_unload", document_id, "marketplace_outbound", 5), ("fbs_order", order.id, "fbs_order", 3)):
+            session.add(BillingLedgerEntry(
+                tenant_id=user.tenant_id, seller_id=seller_id, service_code=service, source="test",
+                source_type=source_type, source_id=source_id, unit="item", quantity=quantity,
+                rate=100, amount=quantity * 100, occurred_at=moment,
+            ))
+        await session.commit()
+    response = await async_client.get(
+        f"/billing/seller-report/sellers/{seller_id}/details?date_from=2026-08-20&date_to=2026-08-20&include_finance=true", headers=headers
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert len(payload["entries"]) == 4
+    assert payload["totals"]["packing_items"] == 8
+    assert payload["totals"]["fbs_items"] == 3
+    assert payload["totals"]["outbound_items"] == 5
+    assert payload["totals"]["net_total_kopecks"] == 800
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("with_priced_part", [False, True])
+async def test_wms406_fbo_existing_unpriced_charge_is_not_zero_or_live_repriced(async_client, with_priced_part) -> None:
+    headers, seller_id, email = await _admin(async_client)
+    moment = datetime(2026, 8, 20, 12, tzinfo=UTC)
+    document_id = uuid.uuid4()
+    async with SessionLocal() as session:
+        user = await session.scalar(select(User).where(User.email == email))
+        assert user is not None
+        session.add(OperationFact(
+            tenant_id=user.tenant_id, seller_id=seller_id, operation_code="marketplace_outbound_completed",
+            billable_service_code="marketplace_outbound", source_kind="marketplace_unload_request",
+            source_event_id=document_id, document_type="marketplace_unload", document_id=document_id,
+            occurred_at=moment, item_quantity=3, source="system",
+        ))
+        for service_code in ("marketplace_outbound", "packing"):
+            session.add_all([
+                BillingLedgerEntry(
+                    tenant_id=user.tenant_id, seller_id=seller_id, service_code=service_code,
+                    source="marketplace_unload", source_type="marketplace_unload", source_id=document_id,
+                    unit="item", quantity=3, rate=None, amount=None, occurred_at=moment,
+                ),
+                # A now-available tariff must not replace an existing unpriced ledger.
+                BillingTariffVersionV2(
+                    tenant_id=user.tenant_id, seller_id=seller_id, service_code=service_code,
+                    unit="item", rate=100, valid_from_at=datetime(2026, 8, 1, tzinfo=UTC),
+                ),
+            ])
+        if with_priced_part:
+            session.add(BillingLedgerEntry(
+                tenant_id=user.tenant_id, seller_id=seller_id, service_code="marketplace_outbound",
+                source="marketplace_unload", source_type="marketplace_unload", source_id=document_id,
+                event_kind="correction", unit="item", quantity=1, rate=100, amount=100, occurred_at=moment,
+            ))
+        await session.commit()
+    params = "date_from=2026-08-20&date_to=2026-08-20&include_finance=true"
+    summary = await async_client.get(f"/billing/seller-report/summary?{params}", headers=headers)
+    details = await async_client.get(f"/billing/seller-report/sellers/{seller_id}/details?{params}", headers=headers)
+    assert summary.status_code == details.status_code == 200, (summary.text, details.text)
+    entries = details.json()["entries"]
+    assert {row["service_code"] for row in entries} == {"marketplace_outbound", "packing"}
+    assert all(row["amount_kopecks"] is None and row["result"] == "unpriced" for row in entries)
+    assert all(row.get("priced_live") is False for row in entries)
+    for totals in (summary.json()["totals"], details.json()["totals"]):
+        assert totals["unpriced_count"] == 2
+        assert totals["packing_items"] == totals["outbound_items"] == 3
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,14 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "duration_ms": 671252,
+  "num_turns": 8,
+  "session_id": "4a26b04b-0320-44f7-9938-c38793d43bcb",
+  "reviewer": [
+    "claude-opus-4-7"
+  ],
+  "effort": "max",
+  "reviewedHead": "39c84d093087c3a0ac3e8c11eeed47174c4c3859",
+  "integratedCandidate": "b09b7d9fd87cb18b5ce34e5d6c7ca848d81f4ad0"
+}

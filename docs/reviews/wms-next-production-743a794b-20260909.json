@@ -1,0 +1,109 @@
+{
+  "checkedAt": "2026-09-09T04:10:24.078267+00:00",
+  "gitSha": "743a794bf0ee9e20cccf7f87c05138b035604ec9",
+  "expectedPythonFiles": 428,
+  "services": {
+    "api": {
+      "image": "sha256:5fccf07f1202cb949685cf8f91ba360e19dfcd2e2bef29b7c9ac1f6b8d56b8c7",
+      "state": "running",
+      "restarts": 0,
+      "startedAt": "2026-09-09T04:09:20.892403914Z",
+      "pythonFiles": 428,
+      "mismatch": [],
+      "extra": []
+    },
+    "celery_worker": {
+      "image": "sha256:c12c9b39419a99845eb23c1f417151af98c8c7dfe2726e918683807ed964ea8b",
+      "state": "running",
+      "restarts": 0,
+      "startedAt": "2026-09-09T04:09:20.890644779Z",
+      "pythonFiles": 428,
+      "mismatch": [],
+      "extra": []
+    },
+    "celery_beat": {
+      "image": "sha256:c51a96610740c97b146525b8539bd8dacb37a5935e010f8b7228dc065d362d53",
+      "state": "running",
+      "restarts": 0,
+      "startedAt": "2026-09-09T04:09:21.175972168Z",
+      "pythonFiles": 428,
+      "mismatch": [],
+      "extra": []
+    },
+    "web": {
+      "image": "sha256:3f710322dba36e2d33294f06ae1fbca74a8fa325bf86b6c53f935c07427f7b1b",
+      "state": "running",
+      "restarts": 0,
+      "startedAt": "2026-09-09T04:09:21.192222692Z"
+    }
+  },
+  "builtWebImage": "sha256:3f710322dba36e2d33294f06ae1fbca74a8fa325bf86b6c53f935c07427f7b1b",
+  "webImageMatchesBuild": true,
+  "migration": "20260908_0257",
+  "http": [
+    {
+      "url": "https://wms.sellerfocus.pro/api/health",
+      "status": 200,
+      "seconds": 0.081,
+      "body": "{\"status\":\"ok\"}"
+    },
+    {
+      "url": "https://wms.sellerfocus.pro/app/ff/fbs",
+      "status": 200,
+      "seconds": 0.031
+    },
+    {
+      "url": "https://wms.sellerfocus.pro/seller",
+      "status": 200,
+      "seconds": 0.054
+    }
+  ],
+  "allCodeMatches": true,
+  "allRunning": true,
+  "postDeployLogs": {
+    "checkedAt": "2026-09-09T04:11:32.608204+00:00",
+    "since": "2026-09-09T04:09:20Z",
+    "services": {
+      "api": {
+        "logLines": 7,
+        "errorLines": 0,
+        "criticalLines": 0
+      },
+      "celery_worker": {
+        "logLines": 48,
+        "errorLines": 0,
+        "criticalLines": 0
+      },
+      "celery_beat": {
+        "logLines": 12,
+        "errorLines": 0,
+        "criticalLines": 0
+      },
+      "web": {
+        "logLines": 16,
+        "errorLines": 0,
+        "criticalLines": 0
+      }
+    },
+    "infrastructure": {
+      "db": {
+        "status": "running",
+        "startedAt": "2026-08-11T11:21:42.488140149Z",
+        "restarts": 0,
+        "health": "healthy"
+      },
+      "redis": {
+        "status": "running",
+        "startedAt": "2026-08-11T11:21:42.484771282Z",
+        "restarts": 0,
+        "health": "healthy"
+      }
+    }
+  },
+  "backup": {
+    "directory": ".deploy-backups/before-release-b09b7d9f-20260909",
+    "sha256": "88d54092a117abfad9a91f203cdb1e6c7d2d468246d2025c4768392a8cc7ec3c",
+    "reportedSize": "392M",
+    "pgRestoreListChecked": true
+  }
+}

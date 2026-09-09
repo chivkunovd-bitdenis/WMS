@@ -551,7 +551,7 @@ async def get_seller_report_details(
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> SellerReportFinancialDetailsOut | SellerReportPhysicalDetailsOut:
-    if not 1 <= limit <= 100:
+    if not 1 <= limit <= 1000:
         raise HTTPException(status_code=422, detail="invalid_limit")
     try:
         payload = await seller_details(

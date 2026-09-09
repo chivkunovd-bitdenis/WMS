@@ -1,0 +1,425 @@
+{
+  "productionSha": "743a794bf0ee9e20cccf7f87c05138b035604ec9",
+  "deploymentVerification": {
+    "source": "root",
+    "checkedAt": "2026-09-09T04:10:24Z",
+    "servicesStartedAt": "2026-09-09T04:09:20Z",
+    "statement": "428 Python files matched in api/worker/beat; exact web image; migration 0257; restart counts 0; health 200"
+  },
+  "scheduledAt": "2026-09-09T04:17:00Z",
+  "baseline": {
+    "sampled_at": "2026-09-09T04:12:35.897649+00:00",
+    "transaction_read_only": "on",
+    "sellers": [
+      {
+        "seller_id": "06b2e991-0533-4adf-83f3-d6cf21251433",
+        "products": 279,
+        "product_id_sku_digest": "7e6e754064be1bf42730b5bc85ff8c74",
+        "products_created_since_tick": 0,
+        "card_snapshots": 68,
+        "snapshots_updated_since_tick": 0,
+        "latest_snapshot": "2026-09-09T03:25:21.437205+00:00"
+      },
+      {
+        "seller_id": "bf8eea6b-eaa6-47ea-8dfc-289142372dab",
+        "products": 9372,
+        "product_id_sku_digest": "12d7dfa848b47eacaeafd8b3d33abe85",
+        "products_created_since_tick": 0,
+        "card_snapshots": 1657,
+        "snapshots_updated_since_tick": 0,
+        "latest_snapshot": "2026-09-09T03:23:47.285735+00:00"
+      }
+    ],
+    "blocked_other_sessions": 0,
+    "other_transactions_older_than_30s": 0
+  },
+  "taskId": "faf2efe5-ca95-478d-abc2-55c9d0de8afc",
+  "logEvents": [
+    {
+      "timestamp": "2026-09-09T04:17:00.004283556Z",
+      "event": "task",
+      "task_id": "faf2efe5-ca95-478d-abc2-55c9d0de8afc",
+      "state": "received",
+      "duration_s": null
+    },
+    {
+      "timestamp": "2026-09-09T04:17:04.578257782Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "eca60890-c78a-4183-af53-4006270e8a0e",
+      "cards": 138,
+      "created": 0,
+      "updated": 138,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:17:05.419228093Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "6a84a567-a5be-428c-bbdf-fd8587b39644",
+      "cards": 10,
+      "created": 0,
+      "updated": 10,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:17:06.309329498Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "65f4aa92-c187-4faf-a7fc-ab8935a54164",
+      "cards": 4,
+      "created": 0,
+      "updated": 4,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:17:07.850326168Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "a852f30d-bb63-42f9-ac7f-a701ee857cca",
+      "cards": 38,
+      "created": 0,
+      "updated": 93,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:17:15.091263216Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "8c86a2a7-1d88-49cb-931a-c32940613abe",
+      "cards": 190,
+      "created": 0,
+      "updated": 449,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:17:15.795382355Z",
+      "event": "seller",
+      "state": "failed",
+      "seller_id": "d18e384f-6faa-4ff3-961f-9d3a5f308f17",
+      "code": "wb_upstream_error_401"
+    },
+    {
+      "timestamp": "2026-09-09T04:17:16.362323521Z",
+      "event": "seller",
+      "state": "failed",
+      "seller_id": "2eadaf08-c9b7-48f8-b8e7-efe633483cc1",
+      "code": "wb_upstream_error_401"
+    },
+    {
+      "timestamp": "2026-09-09T04:17:22.739448777Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "91e060c7-f0ad-4fee-8302-3fcce08bf531",
+      "cards": 100,
+      "created": 0,
+      "updated": 197,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:17:26.950490422Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "080f5f98-195e-49b5-9dd5-908dbc862a13",
+      "cards": 100,
+      "created": 0,
+      "updated": 197,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:17:28.475499255Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "089b2f1d-0bac-415a-981b-354f17c943c3",
+      "cards": 30,
+      "created": 0,
+      "updated": 30,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:17:30.917970135Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "9819f2c6-b28e-401e-a163-6ffe9e420da6",
+      "cards": 31,
+      "created": 0,
+      "updated": 158,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:17:34.656542515Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "115c765e-bafa-4909-8dfd-0681f15cc620",
+      "cards": 103,
+      "created": 0,
+      "updated": 103,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:18:31.272375402Z",
+      "event": "neighbor_task",
+      "task_name": "wms.fbs_orders_autopoll",
+      "task_id": "6a8889d0-4d6a-462a-8c06-5d12c0443db2",
+      "duration_s": 6.499672659672797,
+      "state": "succeeded"
+    },
+    {
+      "timestamp": "2026-09-09T04:19:29.954345708Z",
+      "event": "neighbor_task",
+      "task_name": "wms.fbs_stock_reconcile",
+      "task_id": "ef4e13b5-142b-4528-8682-eec915cc8907",
+      "duration_s": 5.174819598905742,
+      "state": "succeeded"
+    },
+    {
+      "timestamp": "2026-09-09T04:21:31.046740883Z",
+      "event": "neighbor_task",
+      "task_name": "wms.fbs_orders_autopoll",
+      "task_id": "6fb0a103-8950-4127-b144-9a28c467b025",
+      "duration_s": 6.273212738800794,
+      "state": "succeeded"
+    },
+    {
+      "timestamp": "2026-09-09T04:22:55.029929544Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "405fad7c-672f-49cb-b691-6f2c0b7fc49a",
+      "cards": 6929,
+      "created": 0,
+      "updated": 18913,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:22:55.729791324Z",
+      "event": "seller",
+      "state": "failed",
+      "seller_id": "4e67e471-5cc4-4732-bc0b-f8f1143b5271",
+      "code": "wb_upstream_error_401"
+    },
+    {
+      "timestamp": "2026-09-09T04:22:56.307354044Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "184f4b05-e623-4746-8edf-c5e408e6d026",
+      "cards": 15,
+      "created": 0,
+      "updated": 15,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:22:58.818721869Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "57d501e0-d451-4609-884e-091e71914c39",
+      "cards": 84,
+      "created": 0,
+      "updated": 85,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:23:19.902015878Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "d1f26146-e99a-41af-9471-9c80ec990db3",
+      "cards": 336,
+      "created": 0,
+      "updated": 1990,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:24:27.740848212Z",
+      "event": "neighbor_task",
+      "task_name": "wms.fbs_stock_reconcile",
+      "task_id": "0d2901e5-eb35-4bf7-ad75-2f16b455cfaa",
+      "duration_s": 2.9619280379265547,
+      "state": "succeeded"
+    },
+    {
+      "timestamp": "2026-09-09T04:24:30.952556769Z",
+      "event": "neighbor_task",
+      "task_name": "wms.fbs_orders_autopoll",
+      "task_id": "dd1b2957-187c-4fa3-a167-498a56a824df",
+      "duration_s": 6.17953391186893,
+      "state": "succeeded"
+    },
+    {
+      "timestamp": "2026-09-09T04:26:02.602275217Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "bf8eea6b-eaa6-47ea-8dfc-289142372dab",
+      "cards": 1657,
+      "created": 245,
+      "updated": 9791,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:27:11.133075916Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "77b66021-25e9-4127-8c01-b8408eccde37",
+      "cards": 933,
+      "created": 0,
+      "updated": 5508,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:27:11.843972388Z",
+      "event": "seller",
+      "state": "failed",
+      "seller_id": "0746134b-f252-4543-91b9-fd872d008322",
+      "code": "wb_upstream_error_401"
+    },
+    {
+      "timestamp": "2026-09-09T04:27:17.460194632Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "23026dae-c31b-41f1-a9c1-50385f02e78a",
+      "cards": 220,
+      "created": 0,
+      "updated": 220,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:27:24.589228141Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "06b2e991-0533-4adf-83f3-d6cf21251433",
+      "cards": 68,
+      "created": 0,
+      "updated": 497,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:27:25.288848885Z",
+      "event": "seller",
+      "state": "failed",
+      "seller_id": "0d9c9932-c32e-47f9-af25-8719746e2e07",
+      "code": "wb_upstream_error_401"
+    },
+    {
+      "timestamp": "2026-09-09T04:27:25.635350140Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "cc899801-2b40-41c8-a660-92541f17dad4",
+      "cards": 1,
+      "created": 0,
+      "updated": 1,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:27:26.064356652Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "54503d48-5189-4fad-a7f8-c966f0a0360e",
+      "cards": 5,
+      "created": 0,
+      "updated": 6,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:27:26.879566216Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "0b8da5d8-f43a-42f5-a2ec-43173ea844bd",
+      "cards": 30,
+      "created": 0,
+      "updated": 30,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:27:27.375463370Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "df59f310-30fa-40f2-98a6-8566b3368e38",
+      "cards": 7,
+      "created": 0,
+      "updated": 16,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:27:27.786513421Z",
+      "event": "seller",
+      "state": "ok",
+      "seller_id": "fef183d0-0dd9-4170-9351-ea8631c47b18",
+      "cards": 12,
+      "created": 0,
+      "updated": 12,
+      "legacy_old": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:27:27.786994531Z",
+      "event": "summary",
+      "ok": 23,
+      "failed": 5,
+      "skipped": 0
+    },
+    {
+      "timestamp": "2026-09-09T04:27:27.792259636Z",
+      "event": "task",
+      "task_id": "faf2efe5-ca95-478d-abc2-55c9d0de8afc",
+      "state": "succeeded in 627.7813028451055s",
+      "duration_s": 627.7813028451055
+    },
+    {
+      "timestamp": "2026-09-09T04:27:30.090586171Z",
+      "event": "neighbor_task",
+      "task_name": "wms.fbs_orders_autopoll",
+      "task_id": "a507bbca-9b0c-4a3f-a3bc-8fb33803c23d",
+      "duration_s": 5.314822886139154,
+      "state": "succeeded"
+    }
+  ],
+  "final": {
+    "sampled_at": "2026-09-09T04:28:39.134752+00:00",
+    "transaction_read_only": "on",
+    "sellers": [
+      {
+        "seller_id": "06b2e991-0533-4adf-83f3-d6cf21251433",
+        "products": 279,
+        "product_id_sku_digest": "7e6e754064be1bf42730b5bc85ff8c74",
+        "pre_tick_product_id_sku_digest": "7e6e754064be1bf42730b5bc85ff8c74",
+        "products_created_since_tick": 0,
+        "card_snapshots": 68,
+        "snapshots_updated_since_tick": 68,
+        "latest_snapshot": "2026-09-09T04:27:18.333098+00:00"
+      },
+      {
+        "seller_id": "bf8eea6b-eaa6-47ea-8dfc-289142372dab",
+        "products": 9617,
+        "product_id_sku_digest": "d9d10ba732f51cab8d3c242c502f9a92",
+        "pre_tick_product_id_sku_digest": "3d53b5a3c8432a0be0576e867c2b58c6",
+        "products_created_since_tick": 245,
+        "card_snapshots": 1657,
+        "snapshots_updated_since_tick": 1657,
+        "latest_snapshot": "2026-09-09T04:23:47.411625+00:00"
+      }
+    ],
+    "blocked_other_sessions": 0,
+    "other_transactions_older_than_30s": 0
+  },
+  "comparison": [
+    {
+      "sellerId": "06b2e991-0533-4adf-83f3-d6cf21251433",
+      "productsBefore": 279,
+      "productsAfter": 279,
+      "productDelta": 0,
+      "preTickIdSkuDigestMatchesBaseline": true,
+      "updatedSnapshots": 68
+    },
+    {
+      "sellerId": "bf8eea6b-eaa6-47ea-8dfc-289142372dab",
+      "productsBefore": 9372,
+      "productsAfter": 9617,
+      "productDelta": 245,
+      "preTickIdSkuDigestMatchesBaseline": false,
+      "updatedSnapshots": 1657
+    }
+  ],
+  "method": {
+    "logs": "docker logs since 04:17 UTC, filtered remotely to typed catalog events and FBS task completion timestamps/durations; no payloads or tracebacks retained",
+    "sql": "Two bounded SELECT samples using existing DB container environment; PGOPTIONS default_transaction_read_only=on and statement_timeout=8000",
+    "baselineQueryNote": "Baseline preceded the tick; products_created_since_tick was zero for both. The pre_tick digest field was added only for final query to exclude newly imported products.",
+    "limitations": "Timestamp counts do not uniquely attribute concurrent writes. A changed aggregate Product ID/SKU digest does not identify which prior SKU changed. No full-catalog identity conservation claim for bf8eea6b."
+  }
+}

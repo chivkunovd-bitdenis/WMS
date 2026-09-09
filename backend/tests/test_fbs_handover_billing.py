@@ -16,6 +16,7 @@ from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.billing import BillingLedgerEntry
 from app.models.fbs_order import FbsOrder, FbsOrderProduct
+from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_wb_operation import FbsWbOperation
 from app.models.operation_fact import OperationFact
@@ -138,7 +139,10 @@ async def test_deliver_api_records_work_before_marketplace_sorting(
             if fact.source_event_id == order.id
         ]
         assert len(facts) == 1
-        assert facts[0].occurred_at == saved_supply.delivered_at
+        assert saved_supply.delivered_at is not None
+        assert facts[0].occurred_at.replace(tzinfo=UTC) == saved_supply.delivered_at.replace(
+            tzinfo=UTC
+        )
         if confirmed_at is not None:
             assert facts[0].occurred_at == confirmed_at
         entries = list(await session.scalars(select(BillingLedgerEntry)))
@@ -158,6 +162,44 @@ async def test_deliver_api_records_work_before_marketplace_sorting(
         assert {
             entry.id for entry in await session.scalars(select(BillingLedgerEntry))
         } == original_ids
+        if outcome == "success":
+            operation = await session.scalar(
+                select(FbsWbOperation).where(FbsWbOperation.idempotency_key == key)
+            )
+            ledger = await session.scalar(select(FbsShipmentReversalLedger).where(
+                FbsShipmentReversalLedger.fbs_order_id == order.id
+            ))
+            assert operation is not None and ledger is not None
+            assert operation.confirmed_at is not None
+            expected = operation.confirmed_at.replace(tzinfo=UTC)
+            order.supply_id = None
+            order.status = "cancelled"
+            await reverse_fbs_order_billing(session, order)
+            await reverse_fbs_order_billing(session, order)
+            assert {
+                entry.id for entry in await session.scalars(select(BillingLedgerEntry))
+            } == original_ids
+            snapshot = operation.request_summary_json
+            operation.request_summary_json = {}
+            await session.flush()
+            # The public handover's ledger proves a detached, later cancelled order.
+            assert await billing.confirmed_order_handover_dates(
+                session, tenant, [order]
+            ) == {order.id: expected}
+            ledger.wb_operation_id = None
+            operation.request_summary_json = snapshot
+            await session.flush()
+            # The confirmed request snapshot independently proves the same handover.
+            assert await billing.confirmed_order_handover_dates(
+                session, tenant, [order]
+            ) == {order.id: expected}
+            operation.state = "failed"
+            await session.flush()
+            assert await billing.confirmed_order_handover_dates(session, tenant, [order]) == {}
+            operation.state = "confirmed"
+            operation.operation_kind = "supply_from_orders"
+            await session.flush()
+            assert await billing.confirmed_order_handover_dates(session, tenant, [order]) == {}
 
 
 @pytest.mark.asyncio
@@ -211,6 +253,14 @@ async def test_handover_quantities_import_guard_and_cancellation(
     await billing.record_fbs_order_confirmed(session, order)
     assert list(await session.scalars(select(BillingLedgerEntry))) == []
     assert list(await session.scalars(select(OperationFact))) == []
+    if marketplace == "wb":
+        for imported_status in ("sorted", "done"):
+            order.status = imported_status
+            await billing.record_fbs_order_confirmed(
+                session, order, occurred_at=datetime.now(UTC)
+            )
+        assert list(await session.scalars(select(BillingLedgerEntry))) == []
+        assert list(await session.scalars(select(OperationFact))) == []
     moment = datetime.now(UTC)
     order.status = "cancelled"
     await billing.charge_handed_over_orders(session, [order], occurred_at=moment)

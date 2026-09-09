@@ -18,9 +18,12 @@ from app.models.billing import (
     BillingLedgerEntry,
 )
 from app.models.fbs_order import FbsOrder
+from app.models.fbs_supply import FbsSupply
 from app.models.operation_fact import OperationFact
 from app.models.seller import Seller
 from app.models.tenant import Tenant
+from app.models.warehouse import Warehouse
+from scripts import backfill_billing_charges as charge_script
 from scripts import backfill_fbs_order_facts as script
 
 WORK = datetime(2026, 8, 20, 10, tzinfo=UTC)
@@ -46,6 +49,17 @@ async def _seed(session: AsyncSession) -> tuple[Tenant, Seller, FbsOrder, Operat
     )
     session.add(order)
     await session.flush()
+    warehouse = Warehouse(tenant_id=tenant.id, name="History", code="HIST-SEED")
+    session.add(warehouse)
+    await session.flush()
+    supply = FbsSupply(
+        tenant_id=tenant.id, seller_id=seller.id, warehouse_id=warehouse.id,
+        name="Confirmed historical handover", wb_supply_id="WB-GI-SEED",
+        delivery_type="sc", delivered_at=WORK,
+    )
+    session.add(supply)
+    await session.flush()
+    order.supply_id = supply.id
     fact = OperationFact(
         tenant_id=tenant.id,
         seller_id=seller.id,
@@ -57,6 +71,7 @@ async def _seed(session: AsyncSession) -> tuple[Tenant, Seller, FbsOrder, Operat
         document_id=order.id,
         idempotency_key=f"fbs-order:{order.id}",
         source="system",
+        marketplace="wb",
         item_quantity=1,
         occurred_at=STORED,
     )
@@ -198,8 +213,36 @@ async def test_unaccounted_fact_dates_dry_run_and_apply(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("confirmed", [False, True])
+async def test_billing_backfill_uses_handover_period_not_old_fact_date(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch, confirmed: bool,
+) -> None:
+    tenant, _, order, _ = await _seed(db_session)
+    if not confirmed:
+        order.supply_id = None
+    await db_session.commit()
+    monkeypatch.setattr(sys, "argv", [
+        "backfill", "--tenant", str(tenant.id), "--from", "2026-08-20",
+        "--to", "2026-08-20", "--apply",
+    ])
+    await charge_script.main()
+    async with SessionLocal() as reread:
+        entries = list(await reread.scalars(select(BillingLedgerEntry)))
+        assert len(entries) == (2 if confirmed else 0)
+        assert all(entry.occurred_at.replace(tzinfo=UTC) == WORK for entry in entries)
+        assert all(entry.rate is None and entry.amount is None for entry in entries)
+        ids = {entry.id for entry in entries}
+    await charge_script.main()
+    async with SessionLocal() as reread:
+        assert {entry.id for entry in await reread.scalars(select(BillingLedgerEntry))} == ids
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "status,confirmed", [("in_delivery", False), ("in_delivery", True), ("sorted", True)]
+    "status,confirmed", [
+        ("in_delivery", False), ("in_delivery", True), ("sorted", True),
+        ("sorted", False), ("done", False), ("cancelled", True), ("defect", True),
+    ]
 )
 async def test_backfill_uses_persisted_handover_and_ignores_unconfirmed_import(
     db_session: AsyncSession,
@@ -243,3 +286,29 @@ async def test_backfill_uses_persisted_handover_and_ignores_unconfirmed_import(
         assert list(await reread.scalars(select(BillingLedgerEntry))) == []
         saved_tenant = await reread.get(Tenant, tenant.id)
         assert saved_tenant and saved_tenant.billing_enabled_from is None
+
+
+@pytest.mark.asyncio
+async def test_redating_commits_at_batch_boundary_without_new_facts(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant, _, _, fact = await _seed(db_session)
+    await db_session.commit()
+    commits = 0
+    original_commit = AsyncSession.commit
+
+    async def counted_commit(session: AsyncSession) -> None:
+        nonlocal commits
+        commits += 1
+        await original_commit(session)
+
+    monkeypatch.setattr(AsyncSession, "commit", counted_commit)
+    monkeypatch.setattr(script, "BATCH", 1)
+    monkeypatch.setattr(sys, "argv", ["backfill", "--tenant", str(tenant.id), "--apply"])
+    await script.main()
+    # One boundary commit and the final commit, even with no create branch.
+    assert commits == 2
+    async with SessionLocal() as reread:
+        saved = await reread.get(OperationFact, fact.id)
+        assert saved and saved.occurred_at.replace(tzinfo=UTC) == WORK
+        assert len(list(await reread.scalars(select(OperationFact)))) == 1

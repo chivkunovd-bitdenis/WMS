@@ -21,18 +21,15 @@ from app.models.billing import (
     BillingInvoiceV2Source,
     BillingLedgerEntry,
     BillingLedgerLine,
+    BillingTariffVersionV2,
 )
-from app.models.fbs_order import (
-    FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
-    FBS_ORDER_STATUS_IN_DELIVERY,
-    FBS_ORDER_STATUS_PACKED,
-    FbsOrder,
-    FbsOrderProduct,
-)
+from app.models.fbs_order import FbsOrder, FbsOrderProduct
 from app.models.fbs_supply import FbsSupply
 from app.models.operation_fact import OperationFact, OperationFactCutover, OperationFactLine
+from app.models.product import Product
 from app.models.seller import Seller
 from app.services.billing_ledger_service import _resolve_v2_tariff
+from app.services.fbs_order_billing_service import confirmed_order_handover_dates
 from app.services.marketplace_scope import MARKETPLACE_NAMES, order_display_number
 from app.services.storage_measurement_service import (
     MOSCOW,
@@ -210,6 +207,45 @@ async def _live_price(
     return tariff.rate, tariff.unit, tariff.rate * quantity
 
 
+async def _shipment_service_entries(
+    session: AsyncSession,
+    *, tenant_id: uuid.UUID, host: dict[str, Any], service_code: str,
+    charges: list[BillingLedgerEntry], include_finance: bool,
+    product_id: uuid.UUID | None = None,
+    allow_live_price: bool = True,
+) -> list[dict[str, Any]]:
+    """Shipment units are counted once; existing charges retain their money and invoice IDs."""
+    codes = {"packing", "packaging"} if service_code == "packing" else {service_code}
+    reversed_operation = host["result"] == "reversed"
+    entry_type = "reversal" if reversed_operation else "charge"
+    priced = [entry for entry in charges if entry.service_code in codes and entry.entry_type == entry_type]
+    base = {**host, "id": f"{host['id']}:{service_code}", "kind": "operation_fact", "service_code": service_code}
+    for key in ("billing_ledger_entry_id", "priced_live", "rate_kopecks", "amount_kopecks", "unit", "invoice_history"):
+        base.pop(key, None)
+    base["result"] = "reversed" if reversed_operation else ("unpriced" if include_finance else "completed")
+    if include_finance:
+        base.update(rate_kopecks=None, amount_kopecks=None, unit=None, invoice_history={"state": "unknown"})
+    if priced:
+        rows = []
+        for index, entry in enumerate(priced):
+            row = {**base, "id": f"billing_entry:{entry.id}", "item_quantity": host["item_quantity"] if index == 0 else 0}
+            row["result"] = "reversed" if reversed_operation else ("unpriced" if include_finance and entry.amount is None else "completed")
+            if include_finance:
+                row.update(rate_kopecks=entry.rate, amount_kopecks=entry.amount, unit=entry.unit, billing_ledger_entry_id=str(entry.id))
+            rows.append(row)
+        return rows
+    if include_finance and allow_live_price and not reversed_operation:
+        tariff = await _resolve_v2_tariff(
+            session, tenant_id=tenant_id, seller_id=uuid.UUID(host["seller_id"]),
+            product_id=product_id, service_code=service_code,
+            occurred_at=datetime.fromisoformat(host["occurred_at"]),
+        )
+        quantity = (1 if tariff.unit == "document" else int(host["item_quantity"] or 0)) if tariff else 0
+        if tariff is not None and quantity > 0:
+            base.update(rate_kopecks=tariff.rate, amount_kopecks=tariff.rate * quantity, unit=tariff.unit, result="completed", priced_live=True)
+    return [base]
+
+
 async def _operation_entries(
     session: AsyncSession,
     *, tenant_id: uuid.UUID, start: datetime, end: datetime, seller_id: uuid.UUID | None, include_finance: bool,
@@ -223,6 +259,10 @@ async def _operation_entries(
     facts_query = select(OperationFact).where(
         OperationFact.tenant_id == tenant_id, OperationFact.seller_id.is_not(None),
         OperationFact.occurred_at >= start, OperationFact.occurred_at < end,
+        # WMS-406: FBS is projected from confirmed handovers below, never from
+        # historical packed/processing dates. Packing events are warehouse audit.
+        (OperationFact.document_type.not_in(("fbs_order", "fbs_supply"))) | (OperationFact.marketplace == "ozon"),
+        OperationFact.operation_code.not_in(("packing_completed", "packing_reversal")),
     )
     if cutover is not None:
         facts_query = facts_query.where(OperationFact.occurred_at >= cutover)
@@ -280,55 +320,6 @@ async def _operation_entries(
         )
         for line in lines:
             fact_lines[line.operation_fact_id].append(line)
-    # Имя поставки FBS для старых фактов. Снимок номера пишется в момент
-    # события, и у фактов, созданных до того, как витрина научилась брать
-    # отображаемый номер, там пусто — в расчётах строка выходила «Документ без
-    # номера». Достраиваем на чтении, чтобы починились и уже накопленные записи.
-    # Поставка заказа FBS: по ней открывается и карточка поставки, и её история.
-    # Отдельного экрана заказа в системе нет, поэтому «документ» заказа — это
-    # поставка, в которой он уехал.
-    order_supplies: dict[uuid.UUID, tuple[uuid.UUID, str]] = {}
-    fbs_order_ids = {
-        fact.document_id for fact in facts if fact.document_type == FBS_ORDER_DOCUMENT_TYPE
-    }
-    if fbs_order_ids:
-        supply_rows = await session.execute(
-            select(
-                FbsOrder.id, FbsSupply.id, FbsSupply.display_number,
-                FbsSupply.wb_supply_id, FbsSupply.name,
-            )
-            .join(FbsSupply, FbsSupply.id == FbsOrder.supply_id)
-            .where(FbsOrder.tenant_id == tenant_id, FbsOrder.id.in_(fbs_order_ids))
-        )
-        for supply_row in supply_rows:
-            label = next(
-                (str(value).strip() for value in supply_row[2:] if str(value or "").strip()),
-                None,
-            )
-            if label is not None:
-                order_supplies[supply_row[0]] = (supply_row[1], label)
-
-    supply_names: dict[uuid.UUID, str] = {}
-    supply_ids = {
-        fact.document_id
-        for fact in facts
-        if fact.document_type == "fbs_supply" and not fact.document_number_snapshot
-    }
-    if supply_ids:
-        supply_rows = await session.execute(
-            select(
-                FbsSupply.id, FbsSupply.document_number, FbsSupply.display_number,
-                FbsSupply.wb_supply_id, FbsSupply.name,
-            ).where(FbsSupply.tenant_id == tenant_id, FbsSupply.id.in_(supply_ids))
-        )
-        for supply_row in supply_rows:
-            label = next(
-                (str(value).strip() for value in supply_row[1:] if str(value or "").strip()),
-                None,
-            )
-            if label is not None:
-                supply_names[supply_row[0]] = f"Поставка {label}"
-
     result: list[dict[str, Any]] = []
     covered: set[tuple[str, uuid.UUID]] = set()
     consumed: set[uuid.UUID] = set()
@@ -350,7 +341,7 @@ async def _operation_entries(
         # старой веткой отчёта: у сторно свой адрес источника, и по документу
         # оно бы не отсеклось.
         covered.update((entry.source_type, entry.source_id) for entry in priced)
-        money = sum(_amount(entry.amount) for entry in priced) if priced else None
+        money = sum(_amount(entry.amount) for entry in priced) if priced and all(entry.amount is not None for entry in priced) else None
         product_lines = fact_lines[fact.id]
         product_names = [line.product_name_snapshot for line in product_lines if line.product_name_snapshot]
         skus = [line.sku_snapshot for line in product_lines if line.sku_snapshot]
@@ -360,16 +351,11 @@ async def _operation_entries(
             "seller_name": fact.seller_name_snapshot or "Не указан", "occurred_at": _as_moscow(fact.occurred_at).isoformat(),
             "service_code": fact.billable_service_code or fact.operation_code, "item_quantity": fact.item_quantity,
             "source_type": fact.document_type, "source_id": str(fact.document_id),
-            "document_number": fact.document_number_snapshot or supply_names.get(fact.document_id),
+            "document_number": fact.document_number_snapshot,
             "product_name": ", ".join(dict.fromkeys(product_names)) or None,
             "sku": ", ".join(dict.fromkeys(skus)) or None,
             "source_target": _source_target(fact.document_type, fact.document_id),
-            "supply": (
-                {"id": str(order_supplies[fact.document_id][0]),
-                 "number": order_supplies[fact.document_id][1]}
-                if fact.document_id in order_supplies
-                else None
-            ),
+            "supply": None,
             "result": "reversed" if fact.reversal_of_id else ("not_billable" if not fact.billable_service_code else (finance_result if include_finance else "completed")),
         }
         if fact.document_type == FBS_ORDER_DOCUMENT_TYPE:
@@ -383,7 +369,7 @@ async def _operation_entries(
                 # Id начисления — это то, чем операцию кладут в счёт. Без него
                 # галочка выбора остаётся выключенной, даже когда деньги есть.
                 row["billing_ledger_entry_id"] = str(priced[0].id)
-            if money is None and not fact.reversal_of_id:
+            if not priced and not fact.reversal_of_id:
                 single_product = (
                     product_lines[0].product_id if len(product_lines) == 1 else None
                 )
@@ -399,18 +385,23 @@ async def _operation_entries(
                     # выбрать: галочка объяснит причину сама.
                     row["priced_live"] = True
         result.append(row)
+        if fact.operation_code in {"marketplace_outbound_completed", "marketplace_outbound_reversal", "fbs_order"}:
+            result.extend(await _shipment_service_entries(
+                session, tenant_id=tenant_id, host=row, service_code="packing",
+                charges=charges[document], include_finance=include_finance,
+                product_id=product_lines[0].product_id if len(product_lines) == 1 else None,
+            ))
+            consumed.update(entry.id for entry in charges[document] if entry.service_code in {"packing", "packaging"})
         by_document[document] = row
 
-    # Упаковка своего факта не пишет: она начисляется по тому же документу, что
-    # и отгрузка или заказ FBS. Без отдельной строки эти деньги не видел никто —
-    # ни отчёт, ни счёт. Строку собираем из начисления, а имя документа,
-    # товары и переход берём у факта, к которому оно относится.
+    # Other document charges retain their existing financial rows. Packing
+    # is represented only by the shipment projection above.
     for document, document_charges in charges.items():
         host = by_document.get(document)
         if host is None:
             continue
         for entry in document_charges:
-            if entry.id in consumed or entry.seller_id is None:
+            if entry.id in consumed or entry.seller_id is None or entry.service_code in {"packing", "packaging"}:
                 continue
             consumed.add(entry.id)
             covered.add((entry.source_type, entry.source_id))
@@ -457,96 +448,111 @@ def _handed_label(marketplace: str | None) -> str:
     if not marketplace or marketplace == "wb":
         return FBS_STATUS_HANDED_LABEL
     return f"Передан {MARKETPLACE_NAMES.get(marketplace, marketplace)}"
-_FBS_HANDED_STATUSES = (
-    FBS_ORDER_STATUS_PACKED,
-    FBS_ORDER_STATUS_IN_DELIVERY,
-    FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
-)
 
 
 async def _fbs_handed_entries(
     session: AsyncSession,
-    *, tenant_id: uuid.UUID, start: datetime, end: datetime, seller_id: uuid.UUID,
+    *, tenant_id: uuid.UUID, start: datetime, end: datetime, seller_id: uuid.UUID | None,
+    include_finance: bool,
 ) -> list[dict[str, Any]]:
-    """Переданные, но ещё не подтверждённые заказы FBS.
-
-    В сумму раздела они не идут: работа считается сделанной только когда
-    маркетплейс подтвердил, что забрал заказ. Но спрятать их нельзя — оператор
-    должен видеть, что заказ уехал и ждёт подтверждения, а не потерялся.
-    """
-    orders = list(
-        (
-            await session.scalars(
-                select(FbsOrder)
-                .where(
-                    FbsOrder.tenant_id == tenant_id,
-                    FbsOrder.seller_id == seller_id,
-                    FbsOrder.status.in_(_FBS_HANDED_STATUSES),
-                    FbsOrder.updated_at >= start,
-                    FbsOrder.updated_at < end,
-                )
-                .order_by(FbsOrder.updated_at.desc())
-                .limit(200)
-            )
-        ).all()
-    )
-    # Поставка, в которой заказ уехал: по ней открывается история. Без неё
-    # номер заказа в расчётах рисовался ссылкой, но нажатие ничего не делало —
-    # у строки просто не было, куда вести.
-    # Сколько штук в заказе. Строка без количества читается как «ноль штук
-    # передано», хотя заказ уехал целиком: у Wildberries это одна единица, у
-    # Ozon в отправлении может быть несколько позиций.
-    units: dict[uuid.UUID, int] = {}
-    if orders:
-        for order_id, quantity in (
-            await session.execute(
-                select(FbsOrderProduct.order_id, func.sum(FbsOrderProduct.quantity))
-                .where(FbsOrderProduct.order_id.in_([order.id for order in orders]))
-                .group_by(FbsOrderProduct.order_id)
-            )
-        ).all():
-            units[order_id] = int(quantity or 0)
-
-    supplies: dict[uuid.UUID, tuple[uuid.UUID, str]] = {}
-    supply_ids = {order.supply_id for order in orders if order.supply_id is not None}
-    if supply_ids:
-        for supply_row in await session.execute(
-            select(
-                FbsSupply.id, FbsSupply.display_number, FbsSupply.wb_supply_id, FbsSupply.name
-            ).where(FbsSupply.tenant_id == tenant_id, FbsSupply.id.in_(supply_ids))
-        ):
-            label = next(
-                (str(value).strip() for value in supply_row[1:] if str(value or "").strip()),
-                None,
-            )
-            if label is not None:
-                supplies[supply_row[0]] = (supply_row[0], label)
+    """Successful handovers are shared by the summary and details, regardless of later status."""
+    query = select(FbsOrder).where(FbsOrder.tenant_id == tenant_id, FbsOrder.marketplace == "wb", FbsOrder.seller_id.is_not(None))
+    if seller_id is not None:
+        query = query.where(FbsOrder.seller_id == seller_id)
+    orders = list((await session.scalars(query)).all())
+    # Do not prefilter by updated_at or historical fact dates: either can be
+    # outside this period while the actual handover is inside it (and vice versa).
+    moments = await confirmed_order_handover_dates(session, tenant_id, orders)
+    orders = [order for order in orders if order.id in moments]
+    if not orders:
+        return []
+    # One request-local existence check avoids two tariff lookups per order
+    # when the tenant has no seller tariffs at all.
+    allow_live_price = include_finance and (await session.scalar(select(BillingTariffVersionV2.id).where(
+        BillingTariffVersionV2.tenant_id == tenant_id,
+        BillingTariffVersionV2.employee_user_id.is_(None), BillingTariffVersionV2.enabled.is_(True),
+        BillingTariffVersionV2.service_code.in_((FBS_ORDER_DOCUMENT_TYPE, "packing")),
+    ).limit(1))) is not None
+    order_ids = {order.id for order in orders}
+    units = {
+        order_id: int(quantity or 0)
+        for order_id, quantity in (await session.execute(
+            select(FbsOrderProduct.order_id, func.sum(FbsOrderProduct.quantity))
+            .where(FbsOrderProduct.order_id.in_(order_ids))
+            .group_by(FbsOrderProduct.order_id)
+        )).all()
+    }
+    seller_names = {
+        seller_key: seller_name for seller_key, seller_name in (await session.execute(
+            select(Seller.id, Seller.name).where(Seller.tenant_id == tenant_id)
+        )).all()
+    }
+    products = {
+        product.id: product for product in (await session.scalars(select(Product).where(
+            Product.tenant_id == tenant_id,
+            Product.id.in_({order.product_id for order in orders if order.product_id}),
+        ))).all()
+    }
+    supplies = {
+        supply.id: supply
+        for supply in (await session.scalars(select(FbsSupply).where(
+            FbsSupply.tenant_id == tenant_id,
+            FbsSupply.id.in_({order.supply_id for order in orders if order.supply_id is not None}),
+        ))).all()
+    }
+    charges: dict[uuid.UUID, list[BillingLedgerEntry]] = defaultdict(list)
+    own_charges = list((await session.scalars(select(BillingLedgerEntry).where(
+        BillingLedgerEntry.tenant_id == tenant_id,
+        BillingLedgerEntry.source_type == FBS_ORDER_DOCUMENT_TYPE,
+        BillingLedgerEntry.source_id.in_(order_ids),
+    ))).all())
+    for entry in own_charges:
+        charges[entry.source_id].append(entry)
+    order_of_charge = {entry.id: entry.source_id for entry in own_charges}
+    reversals: dict[uuid.UUID, list[BillingLedgerEntry]] = defaultdict(list)
+    if order_of_charge:
+        for reversal in (await session.scalars(select(BillingLedgerEntry).where(
+            BillingLedgerEntry.tenant_id == tenant_id,
+            BillingLedgerEntry.reversal_of_id.in_(order_of_charge),
+            BillingLedgerEntry.occurred_at >= start, BillingLedgerEntry.occurred_at < end,
+        ))).all():
+            if reversal.reversal_of_id is not None:
+                reversals[order_of_charge[reversal.reversal_of_id]].append(reversal)
     rows: list[dict[str, Any]] = []
     for order in orders:
-        supply = supplies.get(order.supply_id) if order.supply_id is not None else None
-        rows.append(
-            {
-                "id": f"fbs_order:{order.id}",
-                "kind": "fbs_order_handed",
-                "supply": (
-                    {"id": str(supply[0]), "number": supply[1]} if supply is not None else None
-                ),
-                "seller_id": str(order.seller_id),
-                "seller_name": "",
-                "occurred_at": _as_moscow(order.updated_at).isoformat(),
-                "service_code": FBS_ORDER_DOCUMENT_TYPE,
-                "item_quantity": units.get(order.id) or 1,
-                "source_type": FBS_ORDER_DOCUMENT_TYPE,
-                "source_id": str(order.id),
-                "document_number": f"Заказ {order_display_number(order)}",
-                "product_name": None,
-                "sku": None,
-                "source_target": {"kind": "fbs_order", "source_id": str(order.id)},
-                "result": "not_billable",
-                "fbs_status_label": _handed_label(order.marketplace),
-            }
-        )
+        supply = supplies.get(order.supply_id) if order.supply_id else None
+        supply_label = (supply.display_number or supply.wb_supply_id or supply.name) if supply else None
+        product = products.get(order.product_id) if order.product_id else None
+        host = {
+            "id": f"fbs_order:{order.id}", "kind": "operation_fact",
+            "seller_id": str(order.seller_id), "seller_name": seller_names.get(order.seller_id, "Не указан"),
+            "occurred_at": _as_moscow(moments[order.id]).isoformat(),
+            "service_code": FBS_ORDER_DOCUMENT_TYPE, "item_quantity": units.get(order.id, 1),
+            "source_type": FBS_ORDER_DOCUMENT_TYPE, "source_id": str(order.id),
+            "document_number": f"Заказ {order_display_number(order)}",
+            "product_name": product.name if product else None, "sku": product.sku_code if product else order.wb_article,
+            "source_target": _source_target(FBS_ORDER_DOCUMENT_TYPE, order.id),
+            "supply": {"id": str(supply.id), "number": supply_label} if supply and supply_label else None,
+            "result": "completed", "fbs_status_label": _handed_label(order.marketplace),
+        }
+        order_charges = [entry for entry in charges[order.id] if entry.seller_id == order.seller_id]
+        if start <= _as_moscow(moments[order.id]) < end:
+            for service_code in (FBS_ORDER_DOCUMENT_TYPE, "packing"):
+                rows.extend(await _shipment_service_entries(
+                    session, tenant_id=tenant_id, host=host, service_code=service_code,
+                    charges=order_charges, include_finance=include_finance, product_id=order.product_id,
+                    allow_live_price=allow_live_price,
+                ))
+        for reversal in reversals[order.id]:
+            if reversal.seller_id != order.seller_id or reversal.service_code not in {FBS_ORDER_DOCUMENT_TYPE, "packing", "packaging"}:
+                continue
+            reversed_host = {**host, "result": "reversed", "occurred_at": _as_moscow(reversal.occurred_at).isoformat(), "item_quantity": 0}
+            rows.extend(await _shipment_service_entries(
+                session, tenant_id=tenant_id, host=reversed_host, service_code=reversal.service_code,
+                charges=[reversal], include_finance=include_finance,
+            ))
     return rows
+
 
 async def _legacy_entries(
     session: AsyncSession,
@@ -554,12 +560,17 @@ async def _legacy_entries(
     exclude_documents: set[tuple[str, uuid.UUID]] | None = None,
 ) -> list[dict[str, Any]]:
     cutover = await _cutover(session)
+    ozon_order_ids = set((await session.scalars(select(FbsOrder.id).where(
+        FbsOrder.tenant_id == tenant_id, FbsOrder.marketplace == "ozon",
+    ))).all())
     query = select(BillingLedgerEntry, Seller.name).outerjoin(Seller, Seller.id == BillingLedgerEntry.seller_id).where(
         BillingLedgerEntry.tenant_id == tenant_id, BillingLedgerEntry.seller_id.is_not(None),
         # Хранение показывается отдельной строкой раскрывашки и отдельной
         # суммой в сводке. Строкой операции оно приезжало вторым разом и
         # удваивало деньги там, где точка отсечки не проставлена.
-        BillingLedgerEntry.service_code.not_in(("storage_liter_day", "storage")),
+        BillingLedgerEntry.service_code.not_in(("storage_liter_day", "storage", "packing", "packaging")),
+        BillingLedgerEntry.source_type.not_in(("fbs_supply", "packaging_task")),
+        (BillingLedgerEntry.source_type != "fbs_order") | (BillingLedgerEntry.source_id.in_(ozon_order_ids)),
         BillingLedgerEntry.occurred_at >= start,
         BillingLedgerEntry.occurred_at < end,
     )
@@ -568,6 +579,33 @@ async def _legacy_entries(
     if seller_id is not None:
         query = query.where(BillingLedgerEntry.seller_id == seller_id)
     rows = (await session.execute(query.order_by(BillingLedgerEntry.occurred_at.desc(), BillingLedgerEntry.id.desc()))).all()
+    originals = {
+        entry.id: entry for entry in (await session.scalars(select(BillingLedgerEntry).where(
+            BillingLedgerEntry.tenant_id == tenant_id,
+            BillingLedgerEntry.id.in_({entry.reversal_of_id for entry, _ in rows if entry.reversal_of_id}),
+        ))).all()
+    }
+    packing: dict[uuid.UUID, list[BillingLedgerEntry]] = defaultdict(list)
+    shipment_ids = {
+        (originals.get(entry.reversal_of_id) or entry).source_id
+        for entry, _ in rows if entry.service_code in {"marketplace_outbound", "fbs_order"}
+    }
+    packing_charges = list((await session.scalars(select(BillingLedgerEntry).where(
+        BillingLedgerEntry.tenant_id == tenant_id,
+        BillingLedgerEntry.source_type.in_(("marketplace_unload", "fbs_order")),
+        BillingLedgerEntry.source_id.in_(shipment_ids),
+        BillingLedgerEntry.service_code.in_(("packing", "packaging")),
+    ))).all())
+    for charge in packing_charges:
+        packing[charge.source_id].append(charge)
+    packing_documents = {entry.id: entry.source_id for entry in packing_charges}
+    if packing_documents:
+        for reversal in (await session.scalars(select(BillingLedgerEntry).where(
+            BillingLedgerEntry.tenant_id == tenant_id,
+            BillingLedgerEntry.reversal_of_id.in_(packing_documents),
+        ))).all():
+            if reversal.reversal_of_id is not None:
+                packing[packing_documents[reversal.reversal_of_id]].append(reversal)
     entry_ids = {entry.id for entry, _seller_name in rows}
     line_snapshots: dict[uuid.UUID, list[dict[str, Any]]] = defaultdict(list)
     if entry_ids:
@@ -576,8 +614,12 @@ async def _legacy_entries(
         )).all():
             line_snapshots[line.ledger_entry_id].append(line.product_snapshot)
     result: list[dict[str, Any]] = []
+    packed_documents: set[tuple[uuid.UUID, str]] = set()
     skip = exclude_documents or set()
     for entry, seller_name in rows:
+        original = originals.get(entry.reversal_of_id) or entry
+        if entry.service_code == "fbs_order" and original.source_id not in ozon_order_ids:
+            continue
         # Документ, у которого есть факт операции, уже показан строкой факта
         # вместе со своими деньгами. Здесь он дал бы вторую строку и удвоил
         # сумму — в средах, где точка отсечки не проставлена, это как раз и
@@ -602,6 +644,15 @@ async def _legacy_entries(
         if include_finance:
             row.update({"unit": entry.unit, "rate_kopecks": entry.rate, "amount_kopecks": entry.amount, "billing_ledger_entry_id": str(entry.id)})
         result.append(row)
+        if entry.service_code in {"marketplace_outbound", "fbs_order"}:
+            key = (original.source_id, entry.entry_type)
+            if original.source_type in {"marketplace_unload", "fbs_order"} and key not in packed_documents:
+                packed_documents.add(key)
+                host = {**row, "source_type": original.source_type, "source_id": str(original.source_id), "source_target": _source_target(original.source_type, original.source_id)}
+                result.extend(await _shipment_service_entries(
+                    session, tenant_id=tenant_id, host=host, service_code="packing",
+                    charges=packing[original.source_id], include_finance=include_finance,
+                ))
     return result
 
 
@@ -766,6 +817,7 @@ async def build_seller_report(
     start, end = moscow_interval(date_from, date_to)
     entries, covered = await _operation_entries(session, tenant_id=tenant_id, start=start, end=end, seller_id=seller_id, include_finance=include_finance)
     entries.extend(await _legacy_entries(session, tenant_id=tenant_id, start=start, end=end, seller_id=seller_id, include_finance=include_finance, exclude_documents=covered))
+    entries.extend(await _fbs_handed_entries(session, tenant_id=tenant_id, start=start, end=end, seller_id=seller_id, include_finance=include_finance))
     entries.sort(key=lambda row: (row["occurred_at"], row["kind"], row["id"]), reverse=True)
     sellers = list((await session.scalars(select(Seller).where(Seller.tenant_id == tenant_id).order_by(Seller.name))).all())
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -878,12 +930,7 @@ async def seller_details(
         raise SellerReportError("seller_not_found")
     report = await build_seller_report(session, tenant_id=tenant_id, seller_id=seller_id, date_from=date_from, date_to=date_to, include_finance=include_finance)
     entries = report["entries"]
-    # Итоги считаем до того, как подмешаем переданные заказы FBS: они денег не
-    # приносят и не должны раздувать ни суммы, ни счётчики документов.
     totals = _totals(entries, include_finance=include_finance)
-    entries = entries + await _fbs_handed_entries(
-        session, tenant_id=tenant_id, seller_id=seller_id, start=report["start"], end=report["end"]
-    )
     # Stable multi-key ordering: occurrence desc, source kind asc, UUID desc.
     entries.sort(key=lambda row: row["id"], reverse=True)
     entries.sort(key=lambda row: row["kind"])

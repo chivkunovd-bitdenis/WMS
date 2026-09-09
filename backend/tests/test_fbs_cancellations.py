@@ -23,6 +23,8 @@ from app.models.fbs_order import (
     FbsOrder,
     FbsOrderReservation,
 )
+from app.models.fbs_supply import FbsSupply
+from app.models.fbs_wb_operation import FbsWbOperation
 from app.models.product import Product
 from app.models.tenant import Tenant
 from app.services import inventory_service
@@ -391,17 +393,18 @@ async def _ledger_entries(order_id: uuid.UUID) -> tuple[list[Any], list[Any]]:
 
 
 @pytest.mark.asyncio
-async def test_cancel_after_confirmation_reverses_the_seller_charge(
+@pytest.mark.parametrize(
+    "handed_over", [False, True], ids=["sorted-without-handover", "confirmed-handover"]
+)
+async def test_cancel_after_confirmation_preserves_only_handed_over_charges(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
+    handed_over: bool,
 ) -> None:
-    """Заказ отменили после того, как за него уже начислили деньги.
+    """WMS-406: sorted без передачи не оплачивается; отмена после передачи — без сторно.
 
-    Начисление появляется, когда маркетплейс подтвердил, что забрал заказ. После
-    этого заказ всё равно может отмениться — и до сих пор начисление оставалось
-    в счёте: селлер платил за работу, которой не было. Руками такой заказ не
-    отменить (статус `sorted` в отмену не пускают), поэтому сторно проверяем на
-    том пути, которым отмена реально приходит, — на опросе статусов.
+    Оба статуса приходят через публичный опрос WB. Связь с поставкой сама по
+    себе недостаточна: только сохранённая дата успешной передачи доказывает работу.
     """
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
@@ -411,10 +414,42 @@ async def test_cancel_after_confirmation_reverses_the_seller_charge(
         wb_order_id=810401,
         barcode="FBS-CANCEL-BILLING",
     )
+    handover_at = datetime.now(UTC) - timedelta(days=1)
     async with SessionLocal() as session:
         tenant = await session.get(Tenant, tenant_id)
         assert tenant is not None
         tenant.billing_enabled_from = date(2020, 1, 1)
+        supply = FbsSupply(
+            tenant_id=tenant_id,
+            seller_id=uuid.UUID(seller_id),
+            warehouse_id=uuid.UUID(warehouse_id),
+            marketplace="wb",
+            name="WMS-406 cancellation billing",
+            delivery_type="warehouse_sc",
+            status="in_delivery" if handed_over else "assembling",
+            delivered_at=handover_at if handed_over else None,
+        )
+        session.add(supply)
+        await session.flush()
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        order.supply_id = supply.id
+        if handed_over:
+            session.add(FbsWbOperation(
+                tenant_id=tenant_id,
+                seller_id=uuid.UUID(seller_id),
+                operation_kind="supply_deliver",
+                idempotency_key=f"wms406-cancel-{order_id}",
+                local_entity_type="fbs_supply",
+                local_entity_id=supply.id,
+                state="confirmed",
+                confirmed_at=handover_at,
+                request_summary_json={
+                    "checkpoint_source_plan": {
+                        "resolutions": [{"fbs_order_id": str(order_id)}],
+                    },
+                },
+            ))
         await session.commit()
 
     reported = {"wb_status": "sorted"}
@@ -441,8 +476,14 @@ async def test_cancel_after_confirmation_reverses_the_seller_charge(
     assert confirmed.status_code == 200, confirmed.text
 
     charges, reversals = await _ledger_entries(order_id)
-    assert sorted(entry.service_code for entry in charges) == ["fbs_order", "packing"]
+    expected_services = ["fbs_order", "packing"] if handed_over else []
+    assert sorted(entry.service_code for entry in charges) == expected_services
     assert reversals == []
+    original_charges = {
+        entry.id: (entry.quantity, entry.rate, entry.amount, entry.occurred_at)
+        for entry in charges
+    }
+    assert all(entry.occurred_at.replace(tzinfo=UTC) == handover_at for entry in charges)
 
     reported["wb_status"] = "canceled"
     cancelled = await async_client.post(
@@ -458,19 +499,22 @@ async def test_cancel_after_confirmation_reverses_the_seller_charge(
         assert order.status == FBS_ORDER_STATUS_CANCELLED
 
     charges, reversals = await _ledger_entries(order_id)
-    assert sorted(entry.service_code for entry in reversals) == ["fbs_order", "packing"]
-    assert all(entry.quantity < 0 for entry in reversals)
+    assert {
+        entry.id: (entry.quantity, entry.rate, entry.amount, entry.occurred_at)
+        for entry in charges
+    } == original_charges
+    assert reversals == []
 
-    # Повторная отмена не сторнирует второй раз: у начисления со сторно нет
-    # активной строки, и повтор возвращает прежнюю, ничего не создавая.
+    # Повторная обработка отмены также не создаёт начислений или сторно.
     async with SessionLocal() as session:
         order = await session.get(FbsOrder, order_id)
         assert order is not None
         await reverse_fbs_order_billing(session, order)
         await session.commit()
 
-    _charges, repeated = await _ledger_entries(order_id)
-    assert {entry.id for entry in repeated} == {entry.id for entry in reversals}
+    repeated_charges, repeated = await _ledger_entries(order_id)
+    assert {entry.id for entry in repeated_charges} == set(original_charges)
+    assert repeated == []
 
 
 # TC-NEW-FBS-CANCEL-003

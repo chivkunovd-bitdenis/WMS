@@ -75,12 +75,16 @@ async def preview_billing_invoice_v2(
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
+    # Preview may calculate missing charges, but must never retain them.
+    savepoint = await session.begin_nested()
     try:
         return await preview_invoice_v2(
             session, tenant_id=user.tenant_id, request=body.model_dump(mode="json")
         )
     except BillingInvoiceV2Error as exc:
         raise _invoice_v2_error(exc) from exc
+    finally:
+        await savepoint.rollback()
 
 
 @router.post("/invoices-v2", response_model=InvoiceV2Out, status_code=status.HTTP_201_CREATED)
@@ -99,7 +103,7 @@ async def create_billing_invoice_v2(
             idempotency_key=idempotency_key or "",
         )
         await session.commit()
-        return invoice_v2_out(invoice)
+        return await invoice_v2_out(session, invoice)
     except BillingInvoiceV2Error as exc:
         await session.rollback()
         raise _invoice_v2_error(exc) from exc
@@ -112,8 +116,8 @@ async def get_billing_invoice_v2(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     try:
-        return invoice_v2_out(
-            await get_invoice_v2(session, tenant_id=user.tenant_id, invoice_id=invoice_id)
+        return await invoice_v2_out(
+            session, await get_invoice_v2(session, tenant_id=user.tenant_id, invoice_id=invoice_id)
         )
     except BillingInvoiceV2Error as exc:
         raise _invoice_v2_error(exc) from exc
@@ -128,7 +132,7 @@ async def cancel_billing_invoice_v2(
     try:
         invoice = await cancel_invoice_v2(session, tenant_id=user.tenant_id, invoice_id=invoice_id)
         await session.commit()
-        return invoice_v2_out(invoice)
+        return await invoice_v2_out(session, invoice)
     except BillingInvoiceV2Error as exc:
         await session.rollback()
         raise _invoice_v2_error(exc) from exc
