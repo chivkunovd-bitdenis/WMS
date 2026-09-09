@@ -129,28 +129,3 @@ export function NotificationsScreen() {
     </Stack>
   )
 }
- </Stack>
-      )}
-    </Stack>
-  )
-}
-.name ?? '—'}: {n.preview}
-                    </Typography>
-                  </Stack>
-                  {!n.read ? (
-                    <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: 'primary.main', mt: 1 }} />
-                  ) : null}
-                </Row>
-              </Paper>
-            )
-          })}
-        </Stack>
-      )}
-    </Stack>
-  )
-}
- </Stack>
-      )}
-    </Stack>
-  )
-}
