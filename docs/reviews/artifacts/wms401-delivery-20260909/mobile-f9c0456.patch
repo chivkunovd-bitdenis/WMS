@@ -1,0 +1,590 @@
+From f9c04562f4e940cded7ceb553a5bd1d7bca3a483 Mon Sep 17 00:00:00 2001
+From: Denis Civkunov <denischivkunov@icloud.com>
+Date: Wed, 9 Sep 2026 17:40:00 +0300
+Subject: [PATCH] WMS-401 connect Android WB delivery with durable confirmed
+ retries
+
+---
+ android/app/build.gradle.kts                  |   4 +-
+ .../java/ru/wms/tsd/core/api/ApiProvider.kt   |  11 ++
+ .../ru/wms/tsd/core/api/fbs/FbsDelivery.kt    |  28 +++
+ .../java/ru/wms/tsd/core/api/fbs/FbsModels.kt |  16 +-
+ .../java/ru/wms/tsd/core/auth/AuthStore.kt    |  11 ++
+ .../ru/wms/tsd/features/fbs/FbsScreens.kt     |  45 ++++-
+ .../ru/wms/tsd/features/fbs/FbsViewModel.kt   |  82 +++++++-
+ .../tsd/features/fbs/FbsApiContractTest.kt    |  28 +++
+ .../wms/tsd/features/fbs/FbsDeliveryTest.kt   | 176 ++++++++++++++++++
+ .../wms/tsd/features/fbs/FbsViewModelTest.kt  |   6 +-
+ 10 files changed, 399 insertions(+), 8 deletions(-)
+ create mode 100644 android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsDelivery.kt
+ create mode 100644 android/app/src/test/java/ru/wms/tsd/features/fbs/FbsDeliveryTest.kt
+
+diff --git a/android/app/build.gradle.kts b/android/app/build.gradle.kts
+index 6c8612d..53e094b 100644
+--- a/android/app/build.gradle.kts
++++ b/android/app/build.gradle.kts
+@@ -13,8 +13,8 @@ android {
+         applicationId = "ru.wms.tsd"
+         minSdk = 24
+         targetSdk = 35
+-        versionCode = 5
+-        versionName = "0.1.4-atol7"
++        versionCode = 6
++        versionName = "0.1.5-fbs-delivery"
+         buildConfigField(
+             "String",
+             "DEFAULT_API_BASE_URL",
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt b/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
+index c7f3eb9..6599df7 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/ApiProvider.kt
+@@ -1,6 +1,10 @@
+ package ru.wms.tsd.core.api
+ 
+ import okhttp3.OkHttpClient
++import kotlinx.serialization.json.Json
++import kotlinx.serialization.encodeToString
++import kotlinx.serialization.decodeFromString
++import ru.wms.tsd.core.api.fbs.DeliverBody
+ import ru.wms.tsd.core.api.fbs.FbsApi
+ import ru.wms.tsd.BuildConfig
+ import ru.wms.tsd.core.api.generated.apis.OperationsApi
+@@ -55,6 +59,13 @@ class ApiProvider(
+         return client
+     }
+ 
++    fun pendingFbsDelivery(supplyId: String): DeliverBody? =
++        authStore.getFbsDelivery(baseUrl(), supplyId)?.let { Json.decodeFromString<DeliverBody>(it) }
++
++    fun saveFbsDelivery(supplyId: String, body: DeliverBody?) {
++        authStore.saveFbsDelivery(baseUrl(), supplyId, body?.let { Json.encodeToString(it) })
++    }
++
+     fun operations(): OperationsApi {
+         val client = client()
+         return cachedOperations ?: client.createService(OperationsApi::class.java).also { cachedOperations = it }
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsDelivery.kt b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsDelivery.kt
+new file mode 100644
+index 0000000..d537f5c
+--- /dev/null
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsDelivery.kt
+@@ -0,0 +1,28 @@
++package ru.wms.tsd.core.api.fbs
++
++import kotlinx.serialization.json.*
++import retrofit2.Response
++
++/** Retain the complete request when the server cannot establish WB's result. */
++class FbsDeliveryError(message: String, val keepRequest: Boolean) : Exception(message)
++
++fun <T> Response<T>.deliveryBody(): T {
++    if (isSuccessful) return body() ?: throw FbsDeliveryError("Сервер не вернул результат передачи. Проверьте результат ещё раз.", true)
++    val detail = runCatching {
++        Json.parseToJsonElement(errorBody()?.string().orEmpty()).jsonObject["detail"] as? JsonObject
++    }.getOrNull()
++    val code = (detail?.get("code") as? JsonPrimitive)?.contentOrNull
++    val suppliedMessage = (detail?.get("message") as? JsonPrimitive)?.contentOrNull
++    val pending = code in setOf("wb_timeout", "wb_pending_confirmation", "operation_in_progress")
++    val message = when {
++        code() == 401 -> "Сессия истекла. Войдите заново и проверьте результат передачи."
++        pending -> "WB ещё не подтвердил передачу. Результат пока неизвестен. Повторите проверку через минуту."
++        code == "stale_preflight" -> "Данные поставки изменились. Проверьте поставку и подтвердите передачу ещё раз."
++        !suppliedMessage.isNullOrBlank() -> suppliedMessage
++        else -> "Не удалось получить результат передачи (HTTP ${code()}). Повторите проверку."
++    }
++    // A proxy error or expired session says nothing about an earlier request's outcome.
++    throw FbsDeliveryError(message, pending || code == null || code() in setOf(401, 403))
++}
++
++fun FbsWorkspace.deliveryConfirmed(): Boolean = supply.status in setOf("in_delivery", "done")
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
+index d6a99ed..b683911 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
+@@ -56,6 +56,7 @@ data class FbsWorkspaceSupply(
+     @SerialName("planned_shipment_date") val plannedShipmentDate: String? = null,
+     @SerialName("nearest_deadline_at") val nearestDeadlineAt: String,
+     @SerialName("packaging_task_id") val packagingTaskId: String? = null,
++    val marketplace: String = "wb",
+ )
+ 
+ @Serializable
+@@ -205,6 +206,19 @@ data class FbsDeliveryPreflight(
+     val version: String,
+     @SerialName("checked_at") val checkedAt: String,
+     val checks: List<FbsDeliveryCheck> = emptyList(),
++    @SerialName("cancelled_orders") val cancelledOrders: List<FbsCancelledDeliveryOrder> = emptyList(),
++)
++
++@Serializable data class FbsCancelledDeliveryOrder(
++    @SerialName("order_id") val orderId: String,
++    @SerialName("wb_order_id") val wbOrderId: Long,
++    val article: String? = null,
++    @SerialName("product_name") val productName: String? = null,
++    val boxes: List<FbsCancelledDeliveryBox> = emptyList(),
++)
++@Serializable data class FbsCancelledDeliveryBox(
++    @SerialName("box_number") val boxNumber: Int,
++    @SerialName("box_barcode") val boxBarcode: String,
+ )
+ 
+ @Serializable
+@@ -218,7 +232,7 @@ data class FbsDeliveryCheck(
+ 
+ @Serializable data class DeliverBody(
+     @SerialName("idempotency_key") val idempotencyKey: String,
+-    @SerialName("confirmed_preflight_version") val confirmedPreflightVersion: String,
++    @SerialName("confirmed_preflight_version") val confirmedPreflightVersion: String? = null,
+ )
+ 
+ @Serializable data class FbsOrderPage(
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
+index 16b9b89..4243fa6 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt
+@@ -44,6 +44,17 @@ class AuthStore(context: Context) {
+         encryptedPrefs.edit().putString(KEY_BASE_URL, url).apply()
+     }
+ 
++    // Persist only the already confirmed request; never a second stock/operation counter.
++    fun getFbsDelivery(server: String, supplyId: String): String? =
++        encryptedPrefs.getString("fbs_delivery:$server:$supplyId", null)
++
++    fun saveFbsDelivery(server: String, supplyId: String, body: String?) {
++        val key = "fbs_delivery:$server:$supplyId"
++        val edit = encryptedPrefs.edit()
++        if (body == null) edit.remove(key) else edit.putString(key, body)
++        check(edit.commit()) { "Не удалось сохранить запрос передачи на устройстве. Повторите попытку." }
++    }
++
+     fun getSavedStaff(): List<SavedStaff> {
+         val jsonStr = encryptedPrefs.getString(KEY_SAVED_STAFF, null) ?: return emptyList()
+         return try {
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
+index e901db5..f5eba7a 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
+@@ -2,6 +2,8 @@ package ru.wms.tsd.features.fbs
+ 
+ import androidx.compose.foundation.background
+ import androidx.compose.foundation.clickable
++import androidx.compose.foundation.rememberScrollState
++import androidx.compose.foundation.verticalScroll
+ import androidx.compose.foundation.layout.*
+ import androidx.compose.foundation.lazy.LazyColumn
+ import androidx.compose.foundation.lazy.items
+@@ -110,7 +112,7 @@ internal fun displayTime(value: String): String = runCatching {
+     val vm = fbsViewModel(); val state by vm.state.collectAsState()
+     LifecycleResumeEffect(supplyId) { vm.loadSupply(supplyId); onPauseOrDispose {} }
+     ScanScaffold(title = "Поставка FBS", flash = state.flash, onExit = onBack, cameraScanner = false) {
+-        Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
++        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+             ErrorPanel(state, vm)
+             state.workspace?.let { ws ->
+                 Text(ws.supply.name, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+@@ -118,9 +120,50 @@ internal fun displayTime(value: String): String = runCatching {
+                 for ((mode, label) in listOf("pick" to "Подбор", "pack" to "Упаковка и этикетки", "boxes" to "Короба")) {
+                     Button(onClick = { onStep(mode) }, modifier = Modifier.fillMaxWidth().height(72.dp)) { Text(label, fontSize = 20.sp) }
+                 }
++                if (ws.supply.marketplace == "wb") {
++                    if (ws.deliveryConfirmed()) {
++                        Text("Поставка передана в WB", color = Color(0xff176b31), fontWeight = FontWeight.Bold)
++                        OutlinedButton(onClick = vm::syncDelivery, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text("Обновить статус WB") }
++                    } else {
++                        if (state.pendingDelivery != null) Text("Результат передачи пока неизвестен. Проверьте результат перед новой попыткой.")
++                        OutlinedButton(onClick = vm::openDeliveryConfirmation, enabled = !state.busy, modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp)) {
++                            Text(if (state.pendingDelivery != null) "Проверить результат передачи" else "Передать поставку в WB", fontSize = 20.sp)
++                        }
++                    }
++                }
+             }
+         }
+     }
++    if (state.deliveryConfirmationOpen) AlertDialog(
++        onDismissRequest = vm::cancelDelivery,
++        title = { Text("Передать поставку в WB?") },
++        text = {
++            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
++                Text("После передачи поставку нельзя будет отменить или вернуть в работу.")
++                if (state.busy) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Проверяем поставку…") }
++                state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
++                state.deliveryPreflight?.let { preflight ->
++                    for (check in preflight.checks.filter { it.severity in setOf("blocker", "warning") }) {
++                        val order = state.workspace?.orders?.firstOrNull { it.id == check.orderId }
++                        Text(check.message + (order?.let { " (WB ${it.wbOrderId})" } ?: ""), color = if (check.severity == "blocker") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
++                    }
++                    if (preflight.cancelledOrders.isNotEmpty()) {
++                        Text("Отменённые заказы: выньте товары из коробов. Они будут исключены из поставки.", fontWeight = FontWeight.Bold)
++                        for (order in preflight.cancelledOrders) {
++                            Text(listOfNotNull("WB ${order.wbOrderId}", order.article, order.productName).joinToString(" · "))
++                            Text(order.boxes.joinToString { "Короб ${it.boxNumber} (${it.boxBarcode})" }.ifEmpty { "Короб не назначен" })
++                        }
++                    }
++                    if (!preflight.canDeliver) Text("Передача сейчас недоступна. Исправьте указанные причины и повторите проверку.")
++                }
++                if (!state.busy) TextButton(onClick = vm::openDeliveryConfirmation) { Text("Проверить ещё раз") }
++            }
++        },
++        dismissButton = { TextButton(onClick = vm::cancelDelivery, enabled = !state.busy) { Text("Не передавать") } },
++        confirmButton = { Button(onClick = vm::confirmDelivery, enabled = !state.busy && state.deliveryPreflight?.canDeliver != false) {
++            Text(if (state.deliveryPreflight?.cancelledOrders?.isNotEmpty() == true) "Товары вынуты — передать" else "Передать в WB")
++        } },
++    )
+ }
+ 
+ @Composable fun FbsOperationScreen(supplyId: String, mode: String, onBack: () -> Unit) {
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+index ae34ad1..d21b693 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+@@ -61,6 +61,9 @@ data class FbsState(
+     val pendingKiz: String? = null,
+     val kizResult: String? = null,
+     val printDocument: String? = null,
++    val deliveryConfirmationOpen: Boolean = false,
++    val deliveryPreflight: FbsDeliveryPreflight? = null,
++    val pendingDelivery: DeliverBody? = null,
+ )
+ 
+ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+@@ -105,7 +108,9 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+         }
+     }
+     private fun launch(action: suspend () -> Unit) {
+-        if (!state.value.busy) viewModelScope.launch { perform(action) }
++        if (state.value.busy) return
++        mutable.value = state.value.copy(busy = true)
++        viewModelScope.launch { perform(action) }
+     }
+     fun retry() { retryAction?.let(::launch) }
+     fun dismissError() { retryAction = null; mutable.value = state.value.copy(error = null) }
+@@ -132,7 +137,7 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+             openedSupplyId = supplyId
+             cancelPickSource()
+             retryAction = null
+-            mutable.value = state.value.copy(workspace = null, source = null, selectedBoxId = null, kizOrder = null, pendingKiz = null, error = null)
++            mutable.value = state.value.copy(workspace = null, source = null, selectedBoxId = null, kizOrder = null, pendingKiz = null, error = null, deliveryConfirmationOpen = false, deliveryPreflight = null, pendingDelivery = null)
+         }
+         viewModelScope.launch {
+             state.first { !it.busy }
+@@ -141,7 +146,78 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+     }
+     private suspend fun refresh(supplyId: String) {
+         val workspace = required { api.fbs().workspace(supplyId) }
+-        if (openedSupplyId == supplyId) mutable.value = state.value.copy(workspace = workspace)
++        if (openedSupplyId == supplyId) {
++            var pending = api.pendingFbsDelivery(supplyId)
++            if (workspace.deliveryConfirmed() && pending != null) {
++                api.saveFbsDelivery(supplyId, null)
++                pending = null
++            }
++            mutable.value = state.value.copy(workspace = workspace, pendingDelivery = pending)
++        }
++    }
++    private suspend fun prepareDelivery(supplyId: String) {
++        if (openedSupplyId != supplyId) return
++        mutable.value = state.value.copy(deliveryConfirmationOpen = true, deliveryPreflight = null)
++        val preflight = required { api.fbs().deliveryPreflight(supplyId) }
++        if (openedSupplyId == supplyId) mutable.value = state.value.copy(deliveryPreflight = preflight)
++    }
++    fun openDeliveryConfirmation() {
++        val ws = state.value.workspace ?: return
++        if (ws.deliveryConfirmed() || ws.supply.marketplace != "wb") return
++        val pending = state.value.pendingDelivery
++        if (pending != null) launch(deliveryAction(ws.supply.id, pending))
++        else launch { prepareDelivery(ws.supply.id) }
++    }
++    fun cancelDelivery() {
++        if (state.value.busy) return
++        dismissError()
++        mutable.value = state.value.copy(deliveryConfirmationOpen = false, deliveryPreflight = null)
++    }
++    fun confirmDelivery() {
++        val current = state.value
++        val ws = current.workspace ?: return
++        if (current.busy || !current.deliveryConfirmationOpen || ws.deliveryConfirmed() || ws.supply.marketplace != "wb" || current.deliveryPreflight?.canDeliver == false) return
++        val body = current.pendingDelivery ?: DeliverBody(UUID.randomUUID().toString(), current.deliveryPreflight?.version)
++        mutable.value = current.copy(deliveryConfirmationOpen = false)
++        launch(deliveryAction(ws.supply.id, body))
++    }
++    private fun deliveryAction(supplyId: String, body: DeliverBody): suspend () -> Unit {
++        var needsConfirmation = false
++        return action@{
++            if (openedSupplyId != supplyId || state.value.workspace?.deliveryConfirmed() == true) return@action
++            if (needsConfirmation) { prepareDelivery(supplyId); return@action }
++            // Disk write must succeed BEFORE sending; a process restart reuses key AND version.
++            api.saveFbsDelivery(supplyId, body)
++            mutable.value = state.value.copy(pendingDelivery = body)
++            val result = try {
++                api.fbs().deliver(supplyId, body).deliveryBody()
++            } catch (cancel: CancellationException) { throw cancel }
++            catch (error: Exception) {
++                if (error is FbsDeliveryError && !error.keepRequest) {
++                    api.saveFbsDelivery(supplyId, null)
++                    needsConfirmation = true
++                    if (openedSupplyId == supplyId) mutable.value = state.value.copy(pendingDelivery = null, deliveryPreflight = null)
++                }
++                if (openedSupplyId != supplyId) return@action
++                if (error is FbsDeliveryError) throw error
++                throw FbsDeliveryError("Нет подтверждённого ответа сервера. Результат передачи неизвестен. Повторите проверку.", true)
++            }
++            if (openedSupplyId == supplyId) mutable.value = state.value.copy(workspace = result)
++            if (!result.deliveryConfirmed()) {
++                if (openedSupplyId != supplyId) return@action
++                throw FbsDeliveryError("WB ещё не подтвердил передачу. Повторите проверку результата.", true)
++            }
++            api.saveFbsDelivery(supplyId, null)
++            if (openedSupplyId == supplyId) mutable.value = state.value.copy(pendingDelivery = null, deliveryPreflight = null)
++        }
++    }
++    fun syncDelivery() {
++        val ws = state.value.workspace ?: return
++        if (!ws.deliveryConfirmed()) return
++        launch {
++            val result = required { api.fbs().syncTracking(ws.supply.id) }
++            if (openedSupplyId == ws.supply.id) mutable.value = state.value.copy(workspace = result)
++        }
+     }
+     fun scan(mode: String, value: String) {
+         val supplyId = state.value.workspace?.supply?.id ?: return
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsApiContractTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsApiContractTest.kt
+index 8398769..a394c47 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsApiContractTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsApiContractTest.kt
+@@ -13,6 +13,34 @@ import ru.wms.tsd.core.api.generated.infrastructure.ApiClient
+ import ru.wms.tsd.core.api.readableError
+ 
+ class FbsApiContractTest {
++    @Test fun `delivery transport retains cancellation details and replays exact request body`() = runTest {
++        val server = MockWebServer(); server.start()
++        try {
++            val api = ApiClient(baseUrl = server.url("/api/").toString()).createService(FbsApi::class.java)
++            server.enqueue(MockResponse().setBody("""{"can_deliver":true,"version":"v1","checked_at":"2026-09-09T10:00:00Z","checks":[],"cancelled_orders":[{"order_id":"o","wb_order_id":42,"article":"SKU","product_name":"Товар","boxes":[{"box_id":"b","box_number":1,"box_barcode":"BOX"}]}]}"""))
++            val preflight = api.deliveryPreflight("supply").body()!!
++            assertEquals("BOX", preflight.cancelledOrders.single().boxes.single().boxBarcode)
++            val check = server.takeRequest()
++            assertEquals("POST", check.method)
++            assertEquals("/api/operations/fbs-supplies/supply/delivery-preflight", check.path)
++            val body = DeliverBody("one-key", preflight.version)
++            repeat(2) {
++                server.enqueue(MockResponse().setResponseCode(504).setBody("""{"detail":{"code":"wb_timeout","message":"Unknown","retryable":true}}"""))
++                val error = runCatching { api.deliver("supply", body).deliveryBody() }.exceptionOrNull() as FbsDeliveryError
++                assertTrue(error.keepRequest)
++                val request = server.takeRequest()
++                assertEquals("POST", request.method)
++                assertEquals("/api/operations/fbs-supplies/supply/deliver", request.path)
++                val json = Json.parseToJsonElement(request.body.readUtf8()).jsonObject
++                assertEquals("one-key", json["idempotency_key"]!!.jsonPrimitive.content)
++                assertEquals("v1", json["confirmed_preflight_version"]!!.jsonPrimitive.content)
++            }
++            server.enqueue(MockResponse().setResponseCode(403).setBody("{}"))
++            api.syncTracking("supply")
++            assertEquals("/api/operations/fbs-supplies/supply/sync-tracking", server.takeRequest().path)
++        } finally { server.shutdown() }
++    }
++
+     @Test fun `print tape transport retains per order errors despite zero counters`() = runTest {
+         val server = MockWebServer(); server.start()
+         try {
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsDeliveryTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsDeliveryTest.kt
+new file mode 100644
+index 0000000..a9c44b8
+--- /dev/null
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsDeliveryTest.kt
+@@ -0,0 +1,176 @@
++package ru.wms.tsd.features.fbs
++
++import io.mockk.*
++import java.io.IOException
++import kotlinx.coroutines.*
++import kotlinx.coroutines.test.*
++import okhttp3.ResponseBody.Companion.toResponseBody
++import org.junit.*
++import org.junit.Assert.*
++import retrofit2.Response
++import ru.wms.tsd.core.api.ApiProvider
++import ru.wms.tsd.core.api.fbs.*
++
++@OptIn(ExperimentalCoroutinesApi::class)
++class FbsDeliveryTest {
++    private lateinit var service: FbsApi
++    private lateinit var provider: ApiProvider
++    private val saved = mutableMapOf<String, DeliverBody>()
++    private fun workspace(status: String = "assembling", id: String = "supply") = FbsWorkspace(
++        supply = FbsWorkspaceSupply(id, name = "Поставка", status = status, seller = FbsNamedRef(), wbWarehouse = FbsNamedRef(), wmsWarehouse = FbsNamedRef(), nearestDeadlineAt = "2026-09-10T10:00:00Z"),
++        stage = "boxes", progress = FbsProgress(0, 0, 0, 0, 2), serverNow = "2026-09-09T10:00:00Z",
++    )
++    private fun preflight(version: String = "version-1", canDeliver: Boolean = true) = FbsDeliveryPreflight(canDeliver, version, "2026-09-09T10:00:00Z")
++    private fun failure(code: String, status: Int = 409, retryable: Boolean = true) = Response.error<FbsWorkspace>(status,
++        """{"detail":{"code":"$code","message":"Отказ WB","retryable":$retryable}}""".toResponseBody())
++    @Before fun setup() {
++        Dispatchers.setMain(UnconfinedTestDispatcher())
++        saved.clear()
++        service = mockk()
++        provider = mockk {
++            every { fbs() } returns service
++            every { pendingFbsDelivery(any()) } answers { saved[firstArg()] }
++            every { saveFbsDelivery(any(), any()) } answers {
++                val id = firstArg<String>(); val body = secondArg<DeliverBody?>()
++                if (body == null) saved.remove(id) else saved[id] = body
++                Unit
++            }
++        }
++        coEvery { service.workspace(any()) } answers { Response.success(workspace(id = firstArg())) }
++        coEvery { service.deliveryPreflight("supply") } returns Response.success(preflight())
++        coEvery { service.deliver("supply", any()) } returns Response.success(workspace("in_delivery"))
++    }
++    @After fun teardown() { Dispatchers.resetMain() }
++
++    @Test fun `confirmation sends preflight version once and exposes confirmed server workspace`() = runTest {
++        val checks = listOf(FbsDeliveryCheck("marking", "Проверьте маркировку", false, "warning"))
++        val cancelled = listOf(FbsCancelledDeliveryOrder("order", 500047, "SKU", "Товар", listOf(FbsCancelledDeliveryBox(1, "BOX"))))
++        coEvery { service.deliveryPreflight("supply") } returns Response.success(preflight().copy(checks = checks, cancelledOrders = cancelled))
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.openDeliveryConfirmation()
++        assertTrue(vm.state.value.deliveryConfirmationOpen)
++        assertEquals(cancelled, vm.state.value.deliveryPreflight?.cancelledOrders)
++        coVerify(exactly = 0) { service.deliver(any(), any()) }
++        vm.confirmDelivery(); vm.confirmDelivery(); vm.openDeliveryConfirmation()
++        coVerify(exactly = 1) { service.deliver("supply", match { it.confirmedPreflightVersion == "version-1" && it.idempotencyKey.isNotBlank() }) }
++        assertTrue(vm.state.value.workspace!!.deliveryConfirmed())
++        assertNull(vm.state.value.pendingDelivery); assertTrue(saved.isEmpty())
++        assertNull(vm.state.value.error)
++        // Delivery does not call a client-side pick, pack or write-off method.
++        coVerify(exactly = 0) { service.scan(any(), any(), any()); service.pack(any(), any(), any()) }
++    }
++    @Test fun `blocked preflight cannot deliver and cancelling never mutates supply`() = runTest {
++        coEvery { service.deliveryPreflight("supply") } returns Response.success(preflight(canDeliver = false))
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.openDeliveryConfirmation(); vm.confirmDelivery()
++        assertTrue(vm.state.value.deliveryConfirmationOpen)
++        vm.cancelDelivery()
++        assertFalse(vm.state.value.deliveryConfirmationOpen)
++        assertEquals("boxes", vm.state.value.workspace?.stage)
++        assertEquals(0, vm.state.value.workspace?.progress?.packed)
++        coVerify(exactly = 0) { service.deliver(any(), any()) }
++    }
++    @Test fun `failed preflight retains web option to confirm without a version`() = runTest {
++        coEvery { service.deliveryPreflight("supply") } throws IOException("offline")
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.openDeliveryConfirmation()
++        assertNotNull(vm.state.value.error); assertTrue(vm.state.value.deliveryConfirmationOpen)
++        vm.confirmDelivery()
++        coVerify(exactly = 1) { service.deliver("supply", match { it.confirmedPreflightVersion == null }) }
++        assertTrue(vm.state.value.workspace!!.deliveryConfirmed())
++    }
++    @Test fun `unknown response keeps exact request across reopening and never refreshes its version`() = runTest {
++        val bodies = mutableListOf<DeliverBody>()
++        coEvery { service.deliver("supply", capture(bodies)) } returnsMany listOf(failure("wb_timeout", 504), Response.success(workspace("in_delivery")))
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.openDeliveryConfirmation(); vm.confirmDelivery()
++        assertFalse(vm.state.value.workspace!!.deliveryConfirmed())
++        assertTrue(vm.state.value.error!!.contains("неизвестен"))
++        assertEquals(bodies.single(), saved["supply"])
++        vm.dismissError()
++        val reopened = FbsViewModel(provider); reopened.loadSupply("supply"); reopened.openDeliveryConfirmation()
++        assertEquals(2, bodies.size); assertEquals(bodies[0], bodies[1])
++        assertTrue(reopened.state.value.workspace!!.deliveryConfirmed()); assertTrue(saved.isEmpty())
++        coVerify(exactly = 1) { service.deliveryPreflight("supply") }
++    }
++    @Test fun `connection loss preserves identity for explicit retry`() = runTest {
++        val bodies = mutableListOf<DeliverBody>(); var count = 0
++        coEvery { service.deliver("supply", capture(bodies)) } answers {
++            assertEquals(secondArg<DeliverBody>(), saved["supply"])
++            if (count++ == 0) throw IOException("response lost")
++            Response.success(workspace("in_delivery"))
++        }
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.openDeliveryConfirmation(); vm.confirmDelivery()
++        assertNotNull(vm.state.value.pendingDelivery); vm.retry()
++        assertEquals(bodies[0], bodies[1]); assertTrue(saved.isEmpty())
++    }
++    @Test fun `definitive WB refusal requires new confirmation and a new key even when retryable`() = runTest {
++        val bodies = mutableListOf<DeliverBody>()
++        coEvery { service.deliver("supply", capture(bodies)) } returnsMany listOf(failure("meta_validation_fail"), Response.success(workspace("in_delivery")))
++        coEvery { service.deliveryPreflight("supply") } returnsMany listOf(Response.success(preflight()), Response.success(preflight("version-2")))
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.openDeliveryConfirmation(); vm.confirmDelivery()
++        assertTrue(saved.isEmpty()); assertNull(vm.state.value.pendingDelivery)
++        vm.retry()
++        assertEquals(1, bodies.size); assertTrue(vm.state.value.deliveryConfirmationOpen)
++        vm.confirmDelivery()
++        assertNotEquals(bodies[0].idempotencyKey, bodies[1].idempotencyKey)
++        assertEquals("version-2", bodies[1].confirmedPreflightVersion)
++    }
++    @Test fun `disk write failure prevents delivery request`() = runTest {
++        every { provider.saveFbsDelivery(any(), any()) } throws IllegalStateException("disk unavailable")
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.openDeliveryConfirmation(); vm.confirmDelivery()
++        assertEquals("disk unavailable", vm.state.value.error)
++        coVerify(exactly = 0) { service.deliver(any(), any()) }
++    }
++    @Test fun `double tap while response pending sends only one request`() = runTest {
++        val response = CompletableDeferred<Response<FbsWorkspace>>()
++        coEvery { service.deliver("supply", any()) } coAnswers { response.await() }
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.openDeliveryConfirmation(); vm.confirmDelivery(); vm.confirmDelivery(); vm.openDeliveryConfirmation()
++        assertTrue(vm.state.value.busy)
++        coVerify(exactly = 1) { service.deliver(any(), any()) }
++        response.complete(Response.success(workspace("in_delivery")))
++        assertFalse(vm.state.value.busy)
++    }
++    @Test fun `unconfirmed successful HTTP response cannot become delivered`() = runTest {
++        coEvery { service.deliver("supply", any()) } returns Response.success(workspace())
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.openDeliveryConfirmation(); vm.confirmDelivery()
++        assertFalse(vm.state.value.workspace!!.deliveryConfirmed())
++        assertNotNull(vm.state.value.error); assertNotNull(vm.state.value.pendingDelivery)
++    }
++    @Test fun `confirmed workspace on reopen clears pending request and refresh uses tracking only`() = runTest {
++        saved["supply"] = DeliverBody("pending-key", "old-version")
++        coEvery { service.workspace("supply") } returns Response.success(workspace("in_delivery"))
++        coEvery { service.syncTracking("supply") } returns Response.success(workspace("done"))
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.openDeliveryConfirmation(); vm.syncDelivery()
++        assertTrue(saved.isEmpty()); assertEquals("done", vm.state.value.workspace?.supply?.status)
++        coVerify(exactly = 0) { service.deliver(any(), any()); service.deliveryPreflight(any()) }
++        coVerify(exactly = 1) { service.syncTracking("supply") }
++    }
++    @Test fun `pending request never migrates to a different supply`() = runTest {
++        saved["supply"] = DeliverBody("old-key", "old-version")
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.loadSupply("other")
++        assertNull(vm.state.value.pendingDelivery); assertFalse(vm.state.value.deliveryConfirmationOpen)
++        vm.retry()
++        assertEquals("old-key", saved["supply"]?.idempotencyKey)
++        coVerify(exactly = 0) { service.deliver(any(), any()) }
++    }
++    @Test fun `late delivery error stays attached to old supply after navigation`() = runTest {
++        val response = CompletableDeferred<Response<FbsWorkspace>>()
++        coEvery { service.deliver("supply", any()) } coAnswers { response.await() }
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.openDeliveryConfirmation(); vm.confirmDelivery()
++        vm.loadSupply("other")
++        response.complete(failure("wb_timeout", 504))
++        assertEquals("other", vm.state.value.workspace?.supply?.id)
++        assertNull(vm.state.value.error); assertNull(vm.state.value.pendingDelivery)
++        assertNotNull(saved["supply"]); assertNull(saved["other"])
++        vm.retry()
++        coVerify(exactly = 1) { service.deliver("supply", any()) }
++        coVerify(exactly = 0) { service.deliver("other", any()) }
++    }
++    @Test fun `pending and unstructured errors preserve the request but definitive refusal does not`() {
++        for (code in listOf("wb_timeout", "wb_pending_confirmation", "operation_in_progress")) {
++            val error = runCatching { failure(code, 503).deliveryBody() }.exceptionOrNull() as FbsDeliveryError
++            assertTrue(error.keepRequest)
++        }
++        val proxy = runCatching { Response.error<Unit>(502, "Bad gateway".toResponseBody()).deliveryBody() }.exceptionOrNull() as FbsDeliveryError
++        assertTrue(proxy.keepRequest)
++        val refusal = runCatching { failure("meta_validation_fail").deliveryBody() }.exceptionOrNull() as FbsDeliveryError
++        assertFalse(refusal.keepRequest)
++    }
++}
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+index 8518296..78587b0 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+@@ -34,7 +34,11 @@ class FbsViewModelTest {
+         Dispatchers.setMain(UnconfinedTestDispatcher())
+         service = mockk()
+         coEvery { service.pickOptions(any()) } returns Response.success(listOf(FbsPickOptionProduct("product", listOf(FbsPickOptionLocation("cell", "CELL", 10)))))
+-        provider = mockk { every { fbs() } returns service }
++        provider = mockk {
++            every { fbs() } returns service
++            every { pendingFbsDelivery(any()) } returns null
++            every { saveFbsDelivery(any(), any()) } just Runs
++        }
+     }
+     @After fun teardown() { Dispatchers.resetMain() }
+ 
+-- 
+2.39.2 (Apple Git-143)
+

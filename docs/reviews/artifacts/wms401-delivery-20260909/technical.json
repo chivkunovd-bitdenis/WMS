@@ -1,0 +1,44 @@
+{
+  "tests": [
+    {
+      "name": "ru.wms.tsd.features.fbs.FbsApiContractTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-09-09T14:39:18"
+    },
+    {
+      "name": "ru.wms.tsd.features.fbs.FbsDeliveryTest",
+      "tests": "13",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-09-09T14:39:19"
+    },
+    {
+      "name": "ru.wms.tsd.features.fbs.FbsViewModelTest",
+      "tests": "20",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-09-09T14:39:20"
+    }
+  ],
+  "total": 37,
+  "apk_sha256": "32d24694679636eb8025eb965126009b17538552742adeeba49a561019ea4e06",
+  "apk_bytes": 45424966,
+  "mobile_commit": "f9c04562f4e940cded7ceb553a5bd1d7bca3a483",
+  "base_commit": "7bb418103819e5d823627bd30408d2344c4ac554",
+  "version_code": 6,
+  "version_name": "0.1.5-fbs-delivery",
+  "ui_delivery_verified": false,
+  "server_deployed": false,
+  "source_patch_pushed": false,
+  "github_repo": "chivkunovd-bitdenis/WMS",
+  "github_repo_is_private": false,
+  "blocked_actions": [
+    "history QA password retrieval",
+    "public GitHub source patch push"
+  ]
+}

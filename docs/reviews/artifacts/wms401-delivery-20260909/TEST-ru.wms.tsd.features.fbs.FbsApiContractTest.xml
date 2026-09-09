@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ru.wms.tsd.features.fbs.FbsApiContractTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-09T14:39:18" hostname="MacBook-Air-Denis.local" time="0.298">
+  <properties/>
+  <testcase name="all orders query and FBS error envelope retain human message" classname="ru.wms.tsd.features.fbs.FbsApiContractTest" time="0.26"/>
+  <testcase name="print tape transport retains per order errors despite zero counters" classname="ru.wms.tsd.features.fbs.FbsApiContractTest" time="0.012"/>
+  <testcase name="delivery transport retains cancellation details and replays exact request body" classname="ru.wms.tsd.features.fbs.FbsApiContractTest" time="0.016"/>
+  <testcase name="generated transport preserves explicit target and full CIS" classname="ru.wms.tsd.features.fbs.FbsApiContractTest" time="0.01"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
