@@ -18,7 +18,6 @@ from app.services.object_storage_service import (
     get_object_storage_backend,
 )
 
-
 _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 # 25 MB per file per contract §Одно минимальное решение владельца.

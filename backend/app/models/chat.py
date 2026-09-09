@@ -29,6 +29,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -37,7 +38,6 @@ from app.models.base import Base
 if TYPE_CHECKING:
     from app.models.seller import Seller
     from app.models.tenant import Tenant
-    from app.models.user import User
 
 
 CHAT_KIND_MAIN = "main"
@@ -61,8 +61,8 @@ class ChatConversation(Base):
             "tenant_id",
             "seller_id",
             unique=True,
-            postgresql_where="kind = 'main'",
-            sqlite_where="kind = 'main'",
+            postgresql_where=text("kind = 'main'"),
+            sqlite_where=text("kind = 'main'"),
         ),
         Index("ix_chat_conversations_seller", "tenant_id", "seller_id"),
     )
