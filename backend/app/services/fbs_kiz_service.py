@@ -70,7 +70,7 @@ _POOL_MARKING_SOURCE = "pool"
 _OPERATOR_MARKING_SOURCE = "operator"
 _EXTERNAL_FBS_MARKING_SOURCE = "external_fbs"
 _VOID_REPLACED_REASON = "replaced_by_external_fbs_kiz"
-_VOID_OPERATOR_CANCEL_REASON = "отмена оператором"
+_VOID_OPERATOR_CANCEL_REASON = marking_code_svc.MARKING_OPERATOR_CANCEL_REASON
 _REPLACEMENT_RESTORE_FAILED = "wb_replacement_restore_failed"
 _GS = "\x1d"
 _AIM_PREFIXES = ("]d2", "]d1", "]Q1", "]Q3", "]C1")
@@ -834,6 +834,8 @@ async def _ensure_kiz_not_occupied_in_pool(
             return
     if product_id is not None and code.product_id is not None and code.product_id != product_id:
         raise FbsKizError("code_product_mismatch")
+    if is_wildberries(order) and await marking_code_svc.is_unbound_cancelled_wb_code(session, code):
+        return
     if await marking_code_svc.is_unbound_received_code(session, code):
         return
     if code.status != STATUS_AVAILABLE:
@@ -1036,9 +1038,10 @@ async def _prepare_code_for_binding(
         raise _marking_error_to_kiz(exc) from exc
     if pool_code is not None:
         received = await marking_code_svc.is_unbound_received_code(session, pool_code)
+        cancelled = await marking_code_svc.is_unbound_cancelled_wb_code(session, pool_code)
         pool_code.packaging_task_line_id = line.id
         await session.flush()
-        return pool_code, not received
+        return pool_code, pool_code.source == "pool" if cancelled else not received
     return (
         await _create_or_apply_external_code(
             session,
@@ -1106,14 +1109,29 @@ async def _void_existing_sgtin_marking_locally(
     actor_user_id: uuid.UUID | None,
     reason: str,
 ) -> None:
-    code = marking.marking_code
-    if code is None and marking.marking_code_id is not None:
-        code = await session.get(MarkingCode, marking.marking_code_id)
+    code = None
+    if marking.marking_code_id is not None:
+        code = await session.scalar(
+            select(MarkingCode).where(MarkingCode.id == marking.marking_code_id)
+            .with_for_update().execution_options(populate_existing=True)
+        )
     if code is not None:
         line: PackagingTaskLine | None = None
         if code.packaging_task_line_id is not None:
             line = await session.get(PackagingTaskLine, code.packaging_task_line_id)
-        code.status = STATUS_VOID
+        order = await session.get(FbsOrder, marking.order_id)
+        operator_detach = (
+            reason == _VOID_OPERATOR_CANCEL_REASON
+            and order is not None and is_wildberries(order)
+        )
+        if operator_detach:
+            if code.status in {STATUS_RESERVED, STATUS_PRINTED, STATUS_APPLIED, STATUS_INTRODUCED}:
+                if code.status != STATUS_INTRODUCED:
+                    code.status = STATUS_APPLIED
+                code.packaging_task_line_id = None
+            # Terminal/defective codes keep their state; detaching never revives them.
+        else:
+            code.status = STATUS_VOID
         await marking_code_svc.record_event(
             session,
             code=code,
@@ -1309,7 +1327,8 @@ async def _commit_one_kiz_pair(
     )
     # A scan records physical application; WB acceptance remains a separate result.
     was_printed = code.status == STATUS_PRINTED
-    code.status = STATUS_APPLIED
+    if code.status != STATUS_INTRODUCED:
+        code.status = STATUS_APPLIED
     code.applied_at = code.applied_at or datetime.now(UTC)
     token = await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
     await marking_code_svc.record_event(

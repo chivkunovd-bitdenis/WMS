@@ -423,7 +423,8 @@ async def test_postgres_tape_with_concurrent_packing_or_kiz(
         assert line.qty_marking_printed == (0 if operation == "unbind" else 1)
         assert line.qty_marking_external == 0
         assert (
-            code.status == {"scan": "applied", "unbind": "void", "pack_all": "printed"}[operation]
+            code.status
+            == {"scan": "applied", "unbind": "applied", "pack_all": "printed"}[operation]
         )
         following = await print_tape(session, async_client, seed)
         assert following.orders and not following.order_errors
@@ -501,5 +502,5 @@ async def test_postgres_unbind_then_waiting_tape_refreshes_deleted_binding(
                 )
             ).all()
         )
-        assert statuses == {"void": 1, "printed": 1}
+        assert statuses == {"applied": 1, "printed": 1}
     assert await stock_snapshot() == before
