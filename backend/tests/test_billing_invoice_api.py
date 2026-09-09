@@ -9,6 +9,7 @@ from decimal import Decimal
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
 from app.models.billing import BillingInvoice, BillingLedgerEntry, BillingRunIssue
@@ -108,6 +109,7 @@ async def _add_priced_ledger_entry(
 @pytest.mark.asyncio
 async def test_billing_http_parallel_form_uses_date_alias_and_keeps_document_snapshot(
     async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """S-31-TC-006/014/015: one immutable invoice and idempotent cancellation."""
     headers, tenant_id, seller_id, warehouse_id = await _billing_context(async_client)
@@ -149,6 +151,31 @@ async def test_billing_http_parallel_form_uses_date_alias_and_keeps_document_sna
     assert ledger.status_code == 200, ledger.text
     assert len(ledger.json()["entries"]) == 1
     assert ledger.json()["entries"][0]["document_number"] == "ПР-101"
+
+    # SQLite ignores FOR UPDATE. Both requests pass the initial lookup
+    # before either writes, exercising the late-winner branch reliably.
+    from app.db.session import engine
+    from app.services import billing_invoice_service
+
+    if engine.dialect.name == "sqlite":
+        original_inputs = billing_invoice_service._invoice_inputs
+        both_read = asyncio.Event()
+        readers = 0
+
+        async def simultaneous_inputs(
+            session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID, period: date
+        ) -> billing_invoice_service._InvoiceInputs:
+            nonlocal readers
+            result = await original_inputs(
+                session, tenant_id=tenant_id, seller_id=seller_id, period=period
+            )
+            readers += 1
+            if readers == 2:
+                both_read.set()
+            await asyncio.wait_for(both_read.wait(), timeout=5)
+            return result
+
+        monkeypatch.setattr(billing_invoice_service, "_invoice_inputs", simultaneous_inputs)
 
     form_url = f"/billing/invoices/{seller_id}/2026-07/form"
     first, second = await asyncio.gather(

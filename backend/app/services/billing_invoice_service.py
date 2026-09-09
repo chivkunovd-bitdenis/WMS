@@ -532,6 +532,17 @@ async def form_invoice(
         seller_id=seller_id,
         entry_ids={entry.id for entry in inputs.entries if entry.id is not None},
     ):
+        # SQLite has no seller row lock: a concurrent legacy request can commit
+        # after our initial lookup. Return its immutable monthly snapshot.
+        concurrent_invoice = await session.scalar(
+            select(BillingInvoice).where(
+                BillingInvoice.tenant_id == tenant_id,
+                BillingInvoice.seller_id == seller_id,
+                BillingInvoice.period == period,
+            )
+        )
+        if concurrent_invoice is not None:
+            return concurrent_invoice
         raise ValueError("selected_source_already_invoiced")
     assert inputs.ff_profile is not None and inputs.seller_profile is not None
     source_numbers = await _source_numbers(session, inputs.entries, period)
