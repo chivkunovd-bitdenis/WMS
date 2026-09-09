@@ -11,3 +11,17 @@ Limited read-only SQL confirmed persistence and continuing progress. The first s
 The first PostgreSQL activity sample showed no blocked sessions and no long-running transaction. At **01:22:54 UTC**, the second sample explicitly returned **zero blocked sessions and zero transactions older than 30 seconds**, excluding the observer's own session. API `/health` returned HTTP **200** with `status=ok`; the production PostgreSQL container reported healthy. The neighboring FBS stock reconciliation task completed at **01:19:45.737 UTC** in **3.8057 seconds**, and the FBS order autopoll task completed at **01:19:46.655 UTC** in **4.7263 seconds**. These observations show that the catalog run had not stopped the worker or produced a database-wide blocking condition during the measured interval; they are not a new browser acceptance of every FBS operation.
 
 Conclusion at the observation boundary: real successful catalog imports and continuing database writes are confirmed; completion of the full first hourly cycle remains unconfirmed. The large import was left running normally. No manual synchronization, process termination, service restart, application/configuration change, marketplace mutation, or credential management was performed by this inspection.
+
+## Final observation by root at01:32UTC
+
+The same task completed at01:25:51.477UTC in531.4716seconds:21seller imports
+succeeded,7failed,0skipped. Five failures were WB HTTP401. The other two were
+confirmed PostgreSQL unique-constraint failures while updating existing Product
+sku_code in wildberries_product_import_service.py. They affect sellers
+bf8eea6b-eaa6-47ea-8dfc-289142372dab and06b2e991-0533-4adf-83f3-d6cf21251433.
+These two are application failures, not authentication failures. The task
+continued to later sellers and finished; failed imports are not accepted as
+working. Huygens is assigned a bounded importer correction preserving existing
+product identities, stock and reservations, with a reproduced targeted test.
+No direct production repair, manual repeat sync or credential change was made.
+[Final log evidence](wms277-production-final-log-proof.json).
