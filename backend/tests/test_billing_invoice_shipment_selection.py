@@ -201,3 +201,54 @@ async def test_ozon_confirmed_without_local_handover_remains_invoiceable(
     )
     assert response.status_code == 201, response.text
     assert response.json()["total_amount_kopecks"] == 1000
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["manual", "selected_operations"])
+@pytest.mark.parametrize("amount", ["0.00", "1.00"])
+async def test_manual_description_cannot_hide_money(async_client, mode, amount):
+    headers, _, body = await _setup(async_client)
+    body["creation_mode"] = mode
+    body["lines" if mode == "manual" else "manual_lines"] = [
+        {
+            "description": "Ручная услуга — Нет ставки; сумма не рассчитана",
+            "amount": amount,
+        }
+    ]
+    if mode == "manual":
+        body.pop("selected_root_ids")
+    saved = await async_client.post(
+        "/billing/invoices-v2",
+        headers={**headers, "Idempotency-Key": "manual-marker"},
+        json=body,
+    )
+    assert saved.status_code == 201, saved.text
+    manual = next(
+        line for line in saved.json()["lines"] if line["description"].startswith("Ручная")
+    )
+    assert manual["total_amount_kopecks"] == int(float(amount) * 100)
+    read = await async_client.get("/billing/invoices-v2/" + saved.json()["id"], headers=headers)
+    assert read.json()["lines"] == saved.json()["lines"]
+
+
+@pytest.mark.asyncio
+async def test_saved_unknown_calculation_survives_ledger_reprice(async_client):
+    headers, body, order_id = await shipment(async_client, priced=False)
+    saved = await async_client.post(
+        "/billing/invoices-v2",
+        headers={**headers, "Idempotency-Key": "unknown-snapshot"},
+        json={**body, "final_amount": "99.00"},
+    )
+    assert saved.status_code == 201, saved.text
+    assert saved.json()["lines"][0]["total_amount_kopecks"] is None
+    async with SessionLocal() as session:
+        ledger = await session.scalar(
+            select(BillingLedgerEntry).where(BillingLedgerEntry.source_id == order_id)
+        )
+        # Repricing changes the live charge, not the immutable issued snapshot.
+        ledger.rate = 1250
+        ledger.amount = 1250
+        await session.commit()
+    read = await async_client.get("/billing/invoices-v2/" + saved.json()["id"], headers=headers)
+    assert read.json()["lines"] == saved.json()["lines"]
+    assert read.json()["total_amount_kopecks"] == 9900

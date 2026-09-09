@@ -117,7 +117,28 @@ async def _profiles(
     return snapshot(by_seller.get(None)), snapshot(by_seller.get(seller_id))
 
 
-def invoice_v2_out(invoice: BillingInvoiceV2) -> dict[str, Any]:
+async def invoice_v2_out(session: AsyncSession, invoice: BillingInvoiceV2) -> dict[str, Any]:
+    # The persisted source and generated snapshot identify an unknown calculation.
+    # Current ledger amounts may be repriced after this invoice was issued.
+    sourced_line_ids = (
+        set(
+            await session.scalars(
+                select(BillingInvoiceV2Source.invoice_line_id)
+                .join(
+                    BillingInvoiceV2Line,
+                    BillingInvoiceV2Source.invoice_line_id == BillingInvoiceV2Line.id,
+                )
+                .where(
+                    BillingInvoiceV2Source.tenant_id == invoice.tenant_id,
+                    BillingInvoiceV2Line.tenant_id == invoice.tenant_id,
+                    BillingInvoiceV2Line.invoice_id == invoice.id,
+                    BillingInvoiceV2Source.billing_ledger_entry_id.is_not(None),
+                )
+            )
+        )
+        if invoice.creation_mode == "selected_operations"
+        else set()
+    )
     return {
         "id": invoice.id,
         "seller_id": invoice.seller_id,
@@ -136,7 +157,12 @@ def invoice_v2_out(invoice: BillingInvoiceV2) -> dict[str, Any]:
                 "description": row.description_snapshot,
                 "unit_price_kopecks": row.unit_price_kopecks,
                 "total_amount_kopecks": None
-                if "Нет ставки; сумма не рассчитана" in row.description_snapshot
+                if (
+                    invoice.creation_mode == "selected_operations"
+                    and row.id in sourced_line_ids
+                    and row.total_amount_kopecks == 0
+                    and row.description_snapshot.endswith(" — Нет ставки; сумма не рассчитана")
+                )
                 else row.total_amount_kopecks,
                 "sort_order": row.sort_order,
             }
