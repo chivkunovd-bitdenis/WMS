@@ -1,0 +1,68 @@
+{
+  "verified_at_utc": "2026-09-09T19:20:52.486257+00:00",
+  "production_sha": "0229831f7442823f086f0147ffa85aed05b8ca66",
+  "expected_production_sha": "0229831f7442823f086f0147ffa85aed05b8ca66",
+  "python_source_sha": "0229831f7442823f086f0147ffa85aed05b8ca66",
+  "baseline_frontend_sha": "c3aa4dfaccbc99c6d58cf9e5a864bc248cc8ae3f",
+  "python": {
+    "wms_prod-api-1": {
+      "expected_count": 429,
+      "runtime_count": 429,
+      "missing": [],
+      "extra": [],
+      "mismatch": []
+    },
+    "wms_prod-celery_worker-1": {
+      "expected_count": 429,
+      "runtime_count": 429,
+      "missing": [],
+      "extra": [],
+      "mismatch": []
+    },
+    "wms_prod-celery_beat-1": {
+      "expected_count": 429,
+      "runtime_count": 429,
+      "missing": [],
+      "extra": [],
+      "mismatch": []
+    }
+  },
+  "frontend": {
+    "expected_count": 179,
+    "runtime_count": 179,
+    "missing": [],
+    "extra": [],
+    "mismatch": []
+  },
+  "containers": {
+    "wms_prod-api-1": {
+      "image": "sha256:832bac5cd4e423e0eaebee10e245ad18361716b44c970bad97a0b390d0f0e29c",
+      "state": "running=true restarting=false"
+    },
+    "wms_prod-celery_worker-1": {
+      "image": "sha256:c562d2f184c34a9616bc77b6e0e50a8f79858bf1b054876e10b347bb92c6dde1",
+      "state": "running=true restarting=false"
+    },
+    "wms_prod-celery_beat-1": {
+      "image": "sha256:edb74949d1af4f30b9ee1f679e0051c69d6795c9073c6952d7de65198351523c",
+      "state": "running=true restarting=false"
+    },
+    "wms_prod-web-1": {
+      "image": "sha256:d99e505a225baae27d36e73458e2227d69431ce99afeff8f3714c0837c65ec4a",
+      "state": "running=true restarting=false"
+    }
+  },
+  "public": {
+    "/api/health": {
+      "status": 200,
+      "sha256": "a29ee2b15c494311c52521766e44af56a3ad2248e7a8ab465e5206463c13d288",
+      "body": "{\"status\":\"ok\"}"
+    },
+    "/": {
+      "status": 200,
+      "sha256": "6bfb9bbb3fd2a6a3d3342ba5101728f79b2fb6511403c7cfbacde2821086a4a0",
+      "runtime_hash_match": true
+    }
+  },
+  "pass": true
+}
