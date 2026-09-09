@@ -1,0 +1,18 @@
+Runtime: host JDK17
+Instant 2026-09-09T10:43:24+00:00 => 2026-09-09T10:43:24Z
+OffsetDateTime 2026-09-09T10:43:24+00:00 => 2026-09-09T10:43:24Z
+Instant 2026-09-09T10:43:24Z => 2026-09-09T10:43:24Z
+OffsetDateTime 2026-09-09T10:43:24Z => 2026-09-09T10:43:24Z
+Instant 2026-09-09T13:43:24+03:00 => 2026-09-09T10:43:24Z
+OffsetDateTime 2026-09-09T13:43:24+03:00 => 2026-09-09T10:43:24Z
+Instant 2026-09-09T10:43:24.123456+00:00 => 2026-09-09T10:43:24.123456Z
+OffsetDateTime 2026-09-09T10:43:24.123456+00:00 => 2026-09-09T10:43:24.123456Z
+Runtime: desugar_jdk_libs 2.1.4 java.time
+Instant 2026-09-09T10:43:24+00:00 => java.time.format.DateTimeParseException: Text '2026-09-09T10:43:24+00:00' could not be parsed at index 19
+OffsetDateTime 2026-09-09T10:43:24+00:00 => 2026-09-09T10:43:24Z
+Instant 2026-09-09T10:43:24Z => 2026-09-09T10:43:24Z
+OffsetDateTime 2026-09-09T10:43:24Z => 2026-09-09T10:43:24Z
+Instant 2026-09-09T13:43:24+03:00 => java.time.format.DateTimeParseException: Text '2026-09-09T13:43:24+03:00' could not be parsed at index 19
+OffsetDateTime 2026-09-09T13:43:24+03:00 => 2026-09-09T10:43:24Z
+Instant 2026-09-09T10:43:24.123456+00:00 => java.time.format.DateTimeParseException: Text '2026-09-09T10:43:24.123456+00:00' could not be parsed at index 26
+OffsetDateTime 2026-09-09T10:43:24.123456+00:00 => 2026-09-09T10:43:24.123456Z
