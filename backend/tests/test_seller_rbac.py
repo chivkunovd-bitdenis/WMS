@@ -111,12 +111,15 @@ async def test_seller_sees_only_own_products_and_filtered_inbound(
     )
     assert acc.status_code == 201, acc.text
 
+    # WMS-270: пустой пароль по аккаунту с must_set_password возвращает тот же
+    # 401 invalid_credentials — прежний 403 password_setup_required утекал
+    # состояние аккаунта.
     need_pw = await async_client.post(
         "/auth/login",
         json={"email": seller_email, "password": ""},
     )
-    assert need_pw.status_code == 403
-    assert need_pw.json()["detail"] == "password_setup_required"
+    assert need_pw.status_code == 401
+    assert need_pw.json()["detail"] == "invalid_credentials"
 
     bad_guess = await async_client.post(
         "/auth/login",

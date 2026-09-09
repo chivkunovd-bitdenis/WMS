@@ -1,8 +1,13 @@
 # Optional overlay on servers where 80/443 are taken — expose HTTP on 8088.
+# WMS-377. Порт 8088 биндится только на loopback: раньше он смотрел в интернет
+# голым HTTP, и пароли шли по сети открытым текстом. HTTPS раздаёт домен через
+# отдельный Caddy на этом же хосте (сосед по 80/443), ему loopback-адрес
+# доступен. Для локальной разработки без proxy можно временно поднять
+# WMS_HTTP8088_BIND=0.0.0.0, но в бою — только 127.0.0.1.
 services:
   web:
     ports: !override
-      - "8088:80"
+      - "${WMS_HTTP8088_BIND:-127.0.0.1}:8088:80"
     volumes: !override
       - ./deploy/Caddyfile.http:/etc/caddy/Caddyfile:ro
     environment:

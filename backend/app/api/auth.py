@@ -28,6 +28,11 @@ from app.services.auth_service import (
     send_auth_link,
     set_password_by_link,
 )
+from app.services.login_rate_limit import (
+    check_login_rate_limit,
+    register_login_failure,
+    register_login_success,
+)
 from app.services.seller_shop_service import (
     SellerShopError,
     can_act_as_seller,
@@ -245,23 +250,27 @@ async def create_seller_account(
 @router.post("/login", response_model=TokenResponse)
 async def login_route(
     body: LoginBody,
+    request: Request,
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> TokenResponse:
+    # WMS-270. Ограничитель частоты — до всех обращений к базе, чтобы перебор
+    # почт не мог просто нагружать бэкенд запросами. На каждый неуспех счётчик
+    # растёт, на успех — сбрасывается.
+    check_login_rate_limit(request=request, email=str(body.email))
     try:
         _user, token = await login(
             session, email=str(body.email), password=body.password
         )
-    except AuthError as exc:
-        code = exc.args[0] if exc.args else ""
-        if code == "password_setup_required":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="password_setup_required",
-            ) from None
+    except AuthError:
+        # WMS-270. Все причины отказа (нет пользователя, пароль не установлен,
+        # неверный пароль, аккаунт заблокирован) отвечают одинаково: 401 и
+        # неизменяемый invalid_credentials. Никаких оракулов на состояние аккаунта.
+        register_login_failure(request=request, email=str(body.email))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="invalid_credentials",
         ) from None
+    register_login_success(request=request, email=str(body.email))
     return TokenResponse(access_token=token)
 
 
