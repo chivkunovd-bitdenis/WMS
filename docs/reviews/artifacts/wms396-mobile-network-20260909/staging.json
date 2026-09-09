@@ -1,0 +1,23 @@
+{
+  "started_at_utc": "2026-09-09T12:28:54.105050+00:00",
+  "url": "https://mobile.api.crpt.ru/mobile/check",
+  "method": "POST",
+  "request_json": {
+    "code": "WMS396_SYNTHETIC_INVALID_CODE"
+  },
+  "tls_verify": true,
+  "follow_redirects": false,
+  "httpx_version": "0.28.1",
+  "outcome": "http_response",
+  "status_code": 451,
+  "response_headers": {
+    "server": "nginx",
+    "date": "Wed, 09 Sep 2026 12:28:55 GMT",
+    "content-length": "0"
+  },
+  "response_bytes": 0,
+  "response_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "body_format": "empty",
+  "finished_at_utc": "2026-09-09T12:28:55.290120+00:00",
+  "origin": "Railway staging WMS service e4a67f11-4318-4386-b9f9-fe5ae0d4f5cc"
+}
