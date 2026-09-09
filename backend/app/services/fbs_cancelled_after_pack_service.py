@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import String, and_, cast, delete, exists, func, or_, select
@@ -29,6 +29,11 @@ from app.models.fbs_supply import (
 from app.models.fbs_trbx import FbsTrbx
 from app.models.product import Product
 from app.models.warehouse_box import WarehouseBox
+from app.services.fbs_cancel_return_document_service import (
+    CANCEL_TIME_SOURCE_RECEIVED_AT,
+    cancel_return_marker,
+)
+from app.services.fbs_order_billing_service import confirmed_order_handover_dates
 from app.services.wb_marketplace_orders_service import CANCEL_LIKE_WB_STATUSES
 
 
@@ -66,6 +71,73 @@ def cancellation_reason(order: FbsOrder) -> str:
 
 def cancelled_operation_message(order: FbsOrder, action: str) -> str:
     return f"{cancellation_reason(order)}, {action}."
+
+
+def _parse_marker_datetime(raw: Any) -> datetime | None:
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    text = raw.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+
+
+def resolved_cancelled_at(order: FbsOrder) -> tuple[datetime, str]:
+    """Момент отмены заказа с источником.
+
+    WMS-112: если есть маркер, поставленный обработчиком отмены, берём момент
+    оттуда — это либо честный WB-момент, либо received_at. Иначе — общий
+    updated_at (это старое поведение реестра; так же явно помечаем, что момент
+    не является событием отмены, а всего лишь моментом последнего изменения
+    строки).
+    """
+    marker = cancel_return_marker(order)
+    if marker is not None:
+        parsed = _parse_marker_datetime(marker.get("cancelled_at"))
+        if parsed is not None:
+            source_raw = marker.get("cancelled_at_source")
+            source = (
+                str(source_raw).strip().lower()
+                if isinstance(source_raw, str) and source_raw.strip()
+                else CANCEL_TIME_SOURCE_RECEIVED_AT
+            )
+            return parsed, source
+    # Legacy row without a marker (созданы до WMS-111): вернуть updated_at и
+    # честно пометить, что источника события отмены у нас нет.
+    updated_at = order.updated_at
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=UTC)
+    return updated_at, "updated_at"
+
+
+def _supply_handover_at(supply: FbsSupply | None) -> datetime | None:
+    if supply is None:
+        return None
+    handover_at = supply.delivered_at
+    if handover_at is None:
+        return None
+    return handover_at if handover_at.tzinfo is not None else handover_at.replace(tzinfo=UTC)
+
+
+def _supply_departed_before(
+    cancelled_at: datetime,
+    handover_at: datetime | None,
+) -> bool | None:
+    """Была ли поставка передана до момента отмены (историческая граница).
+
+    Возвращает True, если передача была строго раньше отмены; False, если
+    передача была позже (тогда отмена случилась до передачи); None, если по
+    имеющимся данным вопрос неразрешим (нет момента передачи или нет момента
+    отмены). Никакого нового флага — только сравнение двух существующих
+    моментов.
+    """
+    if handover_at is None:
+        return None
+    if cancelled_at.tzinfo is None:
+        cancelled_at = cancelled_at.replace(tzinfo=UTC)
+    return handover_at <= cancelled_at
 
 
 def _assembly_trace_condition() -> Any:
@@ -536,6 +608,12 @@ async def fetch_cancelled_after_pack_page(
     printed_at, _pick_supply, trace_at, _pack_task, cargo, supplies = await _load_supplemental_rows(
         session, tenant_id, orders
     )
+    # WMS-112: историческая граница «до передачи / после передачи» —
+    # это сравнение момента отмены с моментом фактической передачи, а не
+    # моментальный признак «поставка сейчас передана». Момент передачи
+    # берём из того же источника, которому доверяет биллинг: подтверждённая
+    # операция передачи или delivered_at на поставке.
+    handover_by_order = await confirmed_order_handover_dates(session, tenant_id, orders)
 
     items: list[dict[str, Any]] = []
     for order in orders:
@@ -548,6 +626,15 @@ async def fetch_cancelled_after_pack_page(
             order.product.name if order.product is not None else (order.wb_article or "Товар")
         )
         product_article = order.product.sku_code if order.product is not None else order.wb_article
+        cancelled_at, cancelled_at_source = resolved_cancelled_at(order)
+        handover_at = handover_by_order.get(order.id) or _supply_handover_at(supply)
+        supply_departed_current = (
+            supply.delivered_at is not None
+            or supply.status in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}
+            if supply is not None
+            else None
+        )
+        historical_before_transfer = _supply_departed_before(cancelled_at, handover_at)
         items.append(
             {
                 "order_id": str(order.id),
@@ -579,16 +666,24 @@ async def fetch_cancelled_after_pack_page(
                 "assembled_at": assembled_at,
                 "picked_at": order.picked_at,
                 "packed_at": order.packed_at,
-                "cancelled_at": order.updated_at,
+                "cancelled_at": cancelled_at,
+                "cancelled_at_source": cancelled_at_source,
                 "cancellation_code": cancellation_code(order),
                 "cancellation_reason": cancellation_reason(order),
                 "sticker_printed": sticker_printed_at is not None
                 or order.sticker_status in {STICKER_STATUS_PRINT_OPENED, STICKER_STATUS_APPLIED},
                 "sticker_printed_at": sticker_printed_at,
-                "supply_departed": (
-                    supply.delivered_at is not None
-                    or supply.status in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}
-                    if supply is not None
+                "supply_departed": supply_departed_current,
+                # Историческая граница до/после передачи в момент отмены. None,
+                # когда момент передачи неизвестен: тогда UI обязан честно
+                # промолчать, а не подставлять «после передачи» по умолчанию.
+                "transfer_at": handover_at,
+                "cancelled_after_transfer": historical_before_transfer,
+                # Ссылка на существующий документ возврата, если он уже создан
+                # автоматикой WMS-111. UI может напрямую вести оператора туда.
+                "return_document_id": (
+                    marker.get("inbound_request_id")
+                    if (marker := cancel_return_marker(order)) is not None
                     else None
                 ),
             }
