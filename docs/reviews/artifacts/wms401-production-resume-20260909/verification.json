@@ -1,0 +1,47 @@
+{
+  "verified_at_utc": "2026-09-09T11:38:18.316921+00:00",
+  "production_sha": "c3aa4dfaccbc99c6d58cf9e5a864bc248cc8ae3f",
+  "expected_production_sha": "c3aa4dfaccbc99c6d58cf9e5a864bc248cc8ae3f",
+  "production_sha_match": true,
+  "backend": {
+    "expected_count": 428,
+    "runtime_count": 428,
+    "missing": [],
+    "extra": [],
+    "mismatch": []
+  },
+  "frontend": {
+    "expected_count": 179,
+    "runtime_count": 179,
+    "missing": [],
+    "extra": [],
+    "mismatch": []
+  },
+  "public": {
+    "/api/health": {
+      "http_status": 200,
+      "sha256": "a29ee2b15c494311c52521766e44af56a3ad2248e7a8ab465e5206463c13d288",
+      "bytes": 15,
+      "body": "{\"status\":\"ok\"}"
+    },
+    "/": {
+      "http_status": 200,
+      "sha256": "6bfb9bbb3fd2a6a3d3342ba5101728f79b2fb6511403c7cfbacde2821086a4a0",
+      "bytes": 8394,
+      "runtime_hash_match": true
+    },
+    "/assets/ff-DFfJOXYQ.js": {
+      "http_status": 200,
+      "sha256": "49880525b7024bef73843bdaad78e22c70f3f3afbedcb344e68ed942d05a111f",
+      "bytes": 305983,
+      "runtime_hash_match": true
+    },
+    "/assets/FfInboundQueuePage-CmHWjBe5.js": {
+      "http_status": 200,
+      "sha256": "a8d4a5486317574ee7e4cda2bb44b05eec0bfa8fe708697c59c239f115aa1d63",
+      "bytes": 13079,
+      "runtime_hash_match": true
+    }
+  },
+  "pass": true
+}
