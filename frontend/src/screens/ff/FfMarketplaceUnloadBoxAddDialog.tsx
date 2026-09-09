@@ -200,10 +200,36 @@ export function FfMarketplaceUnloadBoxAddDialog({
   })
   const [manualQtyByProduct, setManualQtyByProduct] = useState<Record<string, string>>({})
   const [readyBoxOverPlanOpen, setReadyBoxOverPlanOpen] = useState(false)
-  const [pendingReadyBoxBarcode, setPendingReadyBoxBarcode] = useState<string | null>(null)
+  const overPlanDecisionRef = useRef<((confirmed: boolean) => void) | null>(null)
   const [lastScannedProductId, setLastScannedProductId] = useState<string | null>(null)
   const scanQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const scanSessionRef = useRef(0)
+  const scanOpenRef = useRef(false)
   const scanChangedRef = useRef(false)
+
+  const resolveOverPlan = (confirmed: boolean) => {
+    const resolve = overPlanDecisionRef.current
+    overPlanDecisionRef.current = null
+    setReadyBoxOverPlanOpen(false)
+    resolve?.(confirmed)
+  }
+
+  useEffect(() => {
+    scanOpenRef.current = open && !readOnly
+    scanSessionRef.current += 1
+    scanQueueRef.current = Promise.resolve()
+    sourceRef.current = { locationId: null, container: null }
+    setActiveLocationId(null)
+    setActiveLocationCode(null)
+    setActiveContainer(null)
+    setReadyBoxOverPlanOpen(false)
+    return () => {
+      scanOpenRef.current = false
+      scanSessionRef.current += 1
+      overPlanDecisionRef.current?.(false)
+      overPlanDecisionRef.current = null
+    }
+  }, [open, requestId, boxId, readOnly, token])
 
   const catalogRows = useMemo(
     () =>
@@ -301,7 +327,6 @@ export function FfMarketplaceUnloadBoxAddDialog({
       setManualQtyByProduct({})
       setError(null)
       setReadyBoxOverPlanOpen(false)
-      setPendingReadyBoxBarcode(null)
       setLastScannedProductId(null)
       scanChangedRef.current = false
       return
@@ -310,6 +335,9 @@ export function FfMarketplaceUnloadBoxAddDialog({
   }, [open, loadPickOptions])
 
   const closeDialog = () => {
+    scanOpenRef.current = false
+    scanSessionRef.current += 1
+    resolveOverPlan(false)
     const needsRefresh = scanChangedRef.current
     scanChangedRef.current = false
     onClose()
@@ -385,7 +413,9 @@ export function FfMarketplaceUnloadBoxAddDialog({
     }
   }
 
-  const runScan = async (barcode: string, allowOverPlan: boolean) => {
+  const runScan = async (barcode: string, session: number) => {
+    const isCurrent = () => scanOpenRef.current && scanSessionRef.current === session
+    if (!isCurrent()) return
     setError(null)
     try {
       const scanBody: {
@@ -399,7 +429,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
       } = {
         barcode,
         quantity: 1,
-        allow_over_plan: allowOverPlan,
+        allow_over_plan: false,
       }
       const productId = resolveProductIdByBarcode(catalogRows, barcode)
       if (productId) {
@@ -414,16 +444,33 @@ export function FfMarketplaceUnloadBoxAddDialog({
         scanBody.container_id = selected.container.id
       }
 
-      const scanRes = await fetch(
+      const postScan = (body: typeof scanBody) => fetch(
         apiUrl(
           `/operations/marketplace-unload-requests/${requestId}/boxes/${boxId}/scan`,
         ),
         {
           method: 'POST',
           headers: authHeaders,
-          body: JSON.stringify(scanBody),
+          body: JSON.stringify(body),
         },
       )
+      let scanRes = await postScan(scanBody)
+      if (!isCurrent()) return
+      if (scanRes.status === 422) {
+        const refusal = await scanRes.clone().json().catch(() => null) as { detail?: unknown } | null
+        if (!isCurrent()) return
+        if (refusal?.detail === 'plan_limit_exceeded') {
+          // Keep this queue item and its exact source until the operator decides.
+          // Later source scans cannot replace either the request or its confirmation.
+          const confirmed = await new Promise<boolean>((resolve) => {
+            overPlanDecisionRef.current = resolve
+            setReadyBoxOverPlanOpen(true)
+          })
+          if (!confirmed || !isCurrent()) return
+          scanRes = await postScan({ ...scanBody, allow_over_plan: true })
+          if (!isCurrent()) return
+        }
+      }
       if (scanRes.ok) {
         const j = (await scanRes.json()) as {
           kind: string
@@ -440,6 +487,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
           quantity?: number | null
           picked_qty?: number | null
         }
+        if (!isCurrent()) return
         if (j.kind === 'container' && j.container_kind && j.container_id) {
           const container = {
             kind: j.container_kind, id: j.container_id, code: j.container_code ?? j.container_id,
@@ -509,17 +557,13 @@ export function FfMarketplaceUnloadBoxAddDialog({
         return
       }
       const errText = await scanRes.text()
+      if (!isCurrent()) return
       let errDetail: string | null = null
       try {
         const errBody = JSON.parse(errText) as { detail?: unknown }
         errDetail = typeof errBody.detail === 'string' ? errBody.detail : null
       } catch {
         errDetail = null
-      }
-      if (errDetail === 'plan_limit_exceeded' && !allowOverPlan) {
-        setPendingReadyBoxBarcode(barcode)
-        setReadyBoxOverPlanOpen(true)
-        return
       }
       if (addressStorageEnabled && !activeLocationId && errDetail === 'location_required') {
         setError('Сначала выберите ячейку или отсканируйте её штрихкод.')
@@ -535,12 +579,13 @@ export function FfMarketplaceUnloadBoxAddDialog({
         ? 'Тара недоступна или находится в другой ячейке. Отсканируйте источник заново.'
         : errDetail ?? errText.slice(0, 200) ?? 'Не удалось выполнить скан.')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось выполнить скан.')
+      if (isCurrent()) setError(e instanceof Error ? e.message : 'Не удалось выполнить скан.')
     }
   }
 
-  const enqueueScan = (barcode: string, allowOverPlan: boolean) => {
-    const job = scanQueueRef.current.then(() => runScan(barcode, allowOverPlan))
+  const enqueueScan = (barcode: string) => {
+    const session = scanSessionRef.current
+    const job = scanQueueRef.current.then(() => runScan(barcode, session))
     scanQueueRef.current = job.catch(() => undefined)
     return job
   }
@@ -554,7 +599,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
       setError('Введите штрихкод.')
       return
     }
-    void enqueueScan(raw, false)
+    void enqueueScan(raw)
   }
 
   useBarcodeScanner({
@@ -563,12 +608,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
   })
 
   const confirmReadyBoxOverPlan = () => {
-    setReadyBoxOverPlanOpen(false)
-    const barcode = pendingReadyBoxBarcode
-    if (!barcode) {
-      return
-    }
-    void enqueueScan(barcode, true)
+    resolveOverPlan(true)
   }
 
   const gateBlocked = readOnly
@@ -829,10 +869,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
 
       <Dialog
         open={readyBoxOverPlanOpen}
-        onClose={() => {
-          setReadyBoxOverPlanOpen(false)
-          setPendingReadyBoxBarcode(null)
-        }}
+        onClose={() => resolveOverPlan(false)}
         data-testid="ff-mp-box-add-over-plan-dialog"
       >
         <DialogTitle>Больше, чем в плане</DialogTitle>
@@ -843,10 +880,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
         </DialogContent>
         <DialogActions>
           <Button
-            onClick={() => {
-              setReadyBoxOverPlanOpen(false)
-              setPendingReadyBoxBarcode(null)
-            }}
+            onClick={() => resolveOverPlan(false)}
             disabled={busy}
           >
             Отмена
