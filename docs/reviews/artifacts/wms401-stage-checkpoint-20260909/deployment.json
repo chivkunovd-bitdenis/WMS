@@ -1,0 +1,13 @@
+{
+  "id": "a4ec12eb-3607-40e9-813f-36f9e2195d66",
+  "status": "BUILDING",
+  "createdAt": "2026-09-09T11:00:41.444Z",
+  "deploymentStopped": null,
+  "instances": null,
+  "metadata": {
+    "cliMessage": "WMS-401 aa7de3de8a965d1088ec44db1bb5f41a766d9dc5 verified backend archive",
+    "rootDirectory": "/backend",
+    "configFile": "/backend/railway.toml",
+    "imageDigest": null
+  }
+}
