@@ -1,0 +1,130 @@
+{
+  "at": "2026-09-09T12:25:52.078935+00:00",
+  "commands": [
+    {
+      "argv": [
+        "shell",
+        "wm",
+        "size",
+        "reset"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "shell",
+        "wm",
+        "density",
+        "reset"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "shell",
+        "settings",
+        "put",
+        "global",
+        "window_animation_scale",
+        "1.0"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "shell",
+        "settings",
+        "put",
+        "global",
+        "transition_animation_scale",
+        "1.0"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "shell",
+        "settings",
+        "delete",
+        "global",
+        "animator_duration_scale"
+      ],
+      "exit": 0,
+      "stdout": "Deleted 1 rows",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "shell",
+        "wm",
+        "size"
+      ],
+      "exit": 0,
+      "stdout": "Physical size: 1080x2280",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "shell",
+        "wm",
+        "density"
+      ],
+      "exit": 0,
+      "stdout": "Physical density: 440",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "shell",
+        "settings",
+        "get",
+        "global",
+        "window_animation_scale"
+      ],
+      "exit": 0,
+      "stdout": "1.0",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "shell",
+        "settings",
+        "get",
+        "global",
+        "transition_animation_scale"
+      ],
+      "exit": 0,
+      "stdout": "1.0",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "shell",
+        "settings",
+        "get",
+        "global",
+        "animator_duration_scale"
+      ],
+      "exit": 0,
+      "stdout": "null",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "shell",
+        "id"
+      ],
+      "exit": 0,
+      "stdout": "uid=2000(shell) gid=2000(shell) groups=2000(shell),1004(input),1007(log),1011(adb),1015(sdcard_rw),1028(sdcard_r),1078(ext_data_rw),1079(ext_obb_rw),3001(net_bt_admin),3002(net_bt),3003(inet),3006(net_bw_stats),3009(readproc),3011(uhid),3012(readtracefs) context=u:r:shell:s0",
+      "stderr": ""
+    }
+  ]
+}

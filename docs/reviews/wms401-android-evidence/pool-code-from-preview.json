@@ -1,0 +1,11 @@
+{
+  "source_screenshot": "113-pool-datamatrix-preview.png",
+  "source_sha256": "9b083981a4a2bae9a897e4986c4346f428335a8c230955ca5294ab342d61b4c6",
+  "decoder": "zxingcpp.read_barcodes on original full screenshot",
+  "results": [
+    {
+      "format": "Data Matrix",
+      "text": "010200000000001321EMU030001STAGE01"
+    }
+  ]
+}
