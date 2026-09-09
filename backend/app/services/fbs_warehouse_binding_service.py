@@ -709,7 +709,8 @@ async def set_binding_stock_pool_quantity(
         await lock_stock_product(session, tenant_id, product_id)
         view = await get_rule_view(session, tenant_id, product_id)
         amounts = dict(view.rule.units_by_warehouse)
-        amounts[int(binding.wb_warehouse_id)] = quantity
+        amounts.pop(int(binding.wb_warehouse_id), None)
+        amounts[f"{binding.marketplace}:{binding.wb_warehouse_id}"] = quantity
         await set_rule_for_products(
             session,
             tenant_id,

@@ -694,15 +694,12 @@ async def test_zero_edit_cancel_and_repeated_events_preserve_reserve(
     view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
     # Потолок оператора остался прежним, резерв заказа его не расходует.
     assert view.units_remaining_by_warehouse == {501001: 100, 501002: 200}
-    # Свободное в складе (не ФБС) = on_hand - резерв - потолки:
-    # 400 - 1 (резерв заказа) - (100 + 200) = 99. Раньше здесь было 100, потому
-    # что резерв дополнительно ел операторский потолок, и суммарные потолки
-    # уменьшались до 299. По контракту WMS-338 второй счётчик убран.
+    # Only the real order reservation holds one physical unit.
     assert (
         await _available_product_qty_in_warehouse(
             db_session, seed.tenant.id, seed.warehouse.id, seed.product.id
         )
-        == 99
+        == 399
     )
     await _allocate(db_session, seed, {501001: 100, 501002: 0})
     await update_fbs_order_reservation(db_session, order, reserve=False)
@@ -755,17 +752,12 @@ async def test_inventory_uses_ordinary_stock_then_fbs(db_session: AsyncSession) 
         assert view.on_hand == physical
         assert view.published_now == available
         assert view.reserved == 1
-    # marketplace_unload считает: on_hand - резерв - сумма_потолков.
-    # 250 - 1 - 300 = -51: физический остаток уже меньше того, что оператор
-    # обещал в кабинетах, и marketplace_unload честно показывает недостачу.
-    # Раньше здесь было 0, потому что потолок ел сам себя вслед за недостачей.
-    # WMS-338: потолок больше не расходуется автоматически — оператор либо
-    # опустит его руками, либо примет реальное расхождение.
+    # A cap above stock is not a shortage: 250 physical - 1 order reserve.
     assert (
         await _available_product_qty_in_warehouse(
             db_session, seed.tenant.id, seed.warehouse.id, seed.product.id
         )
-        == -51
+        == 249
     )
 
 
@@ -909,6 +901,14 @@ async def test_ozon_reserves_product_quantities_atomically(db_session: AsyncSess
     await db_session.commit()
     await update_fbs_order_reservation(db_session, order, reserve=True)
     assert order.reserve_status == "no_stock"
+    from app.models.fbs_order import FbsOrderProductReservation
+
+    assert not (await db_session.scalars(select(FbsOrderProductReservation))).all()
+    positions = (await db_session.scalars(
+        select(FbsOrderProduct).where(FbsOrderProduct.order_id == order.id)
+    )).all()
+    assert [position.reserved_quantity for position in positions] == [0, 0]
+    assert (await get_rule_view(db_session, seed.tenant.id, seed.product.id)).reserved == 0
 
     # А потолок оператора всё это время не двигался: menять его может только он.
     await db_session.refresh(pool)
@@ -1365,3 +1365,151 @@ async def test_unused_mode_warehouse_keys_do_not_block_saving_the_active_rule(
     assert (await publish_amounts_for_binding(db_session, ozon, [seed.product])) == {
         seed.product.id: 30,
     }
+
+
+@pytest.mark.asyncio
+async def test_unchanged_or_lower_cap_can_be_saved_after_stock_falls(
+    db_session: AsyncSession,
+) -> None:
+    from dataclasses import replace
+
+    from app.services.fbs_warehouse_binding_service import set_binding_stock_pool_quantity
+
+    seed = await _units_seed(db_session, on_hand=5)
+    await _allocate(db_session, seed, {501001: 5, 501002: 0})
+    await _place_order(db_session, seed, 501001)
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert (view.free_stock, view.published_now) == (4, 4)
+    # Reopen/save and edit another setting, retaining the original cap of five.
+    await set_rule_for_products(
+        db_session, seed.tenant.id, [seed.product.id], replace(view.rule, percent=30),
+    )
+    pool = await set_binding_stock_pool_quantity(
+        db_session, seed.tenant.id, seed.seller.id, seed.bindings[0].id, seed.product.id, 5,
+    )
+    assert pool.quantity == 5
+    # Lowering an already valid cap is legal even if it still exceeds current stock.
+    balance = await db_session.scalar(select(InventoryBalance).where(
+        InventoryBalance.product_id == seed.product.id,
+    ))
+    assert balance is not None
+    balance.quantity = balance.quantity_unpacked = 2
+    await db_session.commit()
+    await _allocate(db_session, seed, {501001: 4, 501002: 0})
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert (view.free_stock, view.published_now, view.reserved) == (1, 1, 1)
+    assert view.units_remaining_by_warehouse == {501001: 4, 501002: 0}
+    with pytest.raises(FbsStockRuleError) as exc:
+        await _allocate(db_session, seed, {501001: 5, 501002: 0})
+    assert exc.value.code == "units_sum_exceeded"
+    await db_session.rollback()
+
+
+@pytest.mark.asyncio
+async def test_bulk_new_cap_is_validated_for_each_product(db_session: AsyncSession) -> None:
+    seed = await _units_seed(db_session, on_hand=5)
+    await _allocate(db_session, seed, {501001: 5, 501002: 0})
+    second = Product(tenant_id=seed.tenant.id, seller_id=seed.seller.id,
+                     name="No stock", sku_code="bulk-no-stock", fbs_units_mode=True)
+    db_session.add(second)
+    await db_session.commit()
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    with pytest.raises(FbsStockRuleError) as exc:
+        await set_rule_for_products(db_session, seed.tenant.id,
+                                    [seed.product.id, second.id], view.rule)
+    assert exc.value.code == "units_sum_exceeded"
+    assert not (await db_session.scalars(select(FbsBindingStockPool).where(
+        FbsBindingStockPool.product_id == second.id,
+    ))).all()
+
+
+@pytest.mark.asyncio
+async def test_cap_is_not_fbo_reservation_but_order_is(db_session: AsyncSession) -> None:
+    from app.services.marketplace_unload_service import (
+        MarketplaceUnloadError,
+        _assert_available_for_unload_quantity,
+        list_available_products,
+    )
+    from app.services.stock_direction_service import distributions_by_product
+
+    seed = await _units_seed(db_session, on_hand=5)
+    await _allocate(db_session, seed, {501001: 5, 501002: 0})
+    await _place_order(db_session, seed, 501001)
+    await _assert_available_for_unload_quantity(
+        db_session, seed.tenant.id, seed.warehouse.id, seed.product.id, 4,
+    )
+    with pytest.raises(MarketplaceUnloadError) as exc:
+        await _assert_available_for_unload_quantity(
+            db_session, seed.tenant.id, seed.warehouse.id, seed.product.id, 5,
+        )
+    assert exc.value.code == "insufficient_available"
+    rows = await list_available_products(db_session, seed.tenant.id,
+                                         warehouse_id=seed.warehouse.id, seller_id=seed.seller.id)
+    assert next(row.available for row in rows if row.product_id == seed.product.id) == 4
+    distribution = (await distributions_by_product(
+        db_session, seed.tenant.id, [seed.product.id], warehouse_id=seed.warehouse.id,
+    ))[seed.product.id]
+    assert distribution.quantity_free_fbo == 4
+    assert distribution.quantity_fbs == 1
+
+
+@pytest.mark.asyncio
+async def test_disabled_publication_cannot_bypass_new_cap_validation(
+    db_session: AsyncSession,
+) -> None:
+    seed = await _units_seed(db_session, on_hand=1)
+    with pytest.raises(FbsStockRuleError) as exc:
+        await set_rule_for_products(
+            db_session, seed.tenant.id, [seed.product.id],
+            FbsRule(publish=False, publish_ozon=False, same_everywhere=False, percent=0,
+                    units_mode=True, units_by_warehouse={501001: 2}),
+        )
+    assert exc.value.code == "units_sum_exceeded"
+
+
+@pytest.mark.asyncio
+async def test_manual_cap_endpoint_keeps_marketplace_identity(db_session: AsyncSession) -> None:
+    from app.services.fbs_warehouse_binding_service import set_binding_stock_pool_quantity
+
+    seed = await _seed(db_session, on_hand=2)
+    ozon = await _ozon_binding(db_session, seed, wb_warehouse_id=501001)
+    await set_rule_for_products(
+        db_session, seed.tenant.id, [seed.product.id],
+        FbsRule(publish=True, publish_ozon=True, same_everywhere=False, percent=0,
+                units_mode=True, units_by_warehouse={"wb:501001": 1, "ozon:501001": 1}),
+    )
+    await set_binding_stock_pool_quantity(
+        db_session, seed.tenant.id, seed.seller.id, ozon.id, seed.product.id, 0,
+    )
+    view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    assert view.rule.units_by_warehouse == {"wb:501001": 1, "ozon:501001": 0}
+
+
+@pytest.mark.asyncio
+async def test_old_session_cap_is_refreshed_before_exempting_unchanged_save(
+    db_session: AsyncSession,
+) -> None:
+    seed = await _units_seed(db_session, on_hand=5)
+    await _allocate(db_session, seed, {501001: 5, 501002: 0})
+    original_view = await get_rule_view(db_session, seed.tenant.id, seed.product.id)
+    # Keep the ORM object alive in this session to exercise its identity cache.
+    cached_pool = await db_session.scalar(select(FbsBindingStockPool).where(
+        FbsBindingStockPool.binding_id == seed.bindings[0].id,
+    ))
+    assert cached_pool is not None and cached_pool.quantity == 5
+    await db_session.commit()
+    async with AsyncSession(bind=db_session.bind) as other:
+        pool = await other.get(FbsBindingStockPool, cached_pool.id)
+        balance = await other.scalar(select(InventoryBalance).where(
+            InventoryBalance.product_id == seed.product.id,
+        ))
+        assert pool is not None and balance is not None
+        pool.quantity = 4
+        balance.quantity = balance.quantity_unpacked = 3
+        await other.commit()
+    with pytest.raises(FbsStockRuleError) as exc:
+        await set_rule_for_products(
+            db_session, seed.tenant.id, [seed.product.id], original_view.rule,
+        )
+    assert exc.value.code == "units_sum_exceeded"
+    assert cached_pool.quantity == 4

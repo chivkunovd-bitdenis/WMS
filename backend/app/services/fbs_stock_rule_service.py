@@ -1,4 +1,4 @@
-"""Проценты свободного остатка либо выделенное доступное ФБС (WMS-060)."""
+"""Проценты свободного остатка либо операторские потолки публикации (WMS-060)."""
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ class FbsRule:
     # прежний процент.
     units_mode: bool = False
     # Ключ — склад в кабинете WB, значение — сколько штук задал оператор.
-    # Доступное новым заказам; резерв и физический расход учитывает inventory_service.
+    # Потолок публикации; резерв и физический расход учитывает inventory_service.
     units_by_warehouse: dict[int | str, int] = field(default_factory=dict)
     publish_ozon: bool | None = None
 
@@ -90,7 +90,7 @@ class FbsRuleView:
     free_stock: int
     published_now: int
     # Числа по складам WB — только в режиме штук. Именно они подставляются в
-    # поля ввода, когда оператор открывает окно: текущая доступность.
+    # поля ввода, когда оператор открывает окно: операторские потолки.
     units_remaining_by_warehouse: dict[int | str, int] = field(default_factory=dict)
 
 
@@ -113,10 +113,10 @@ def validate_rule(
     склады в кабинете WB — это направления отгрузки. Отдать сто процентов одному
     и семьдесят другому нельзя, столько товара просто нет.
 
-    В режиме штук то же самое ограничение, только в единицах: сумма чисел по
-    складам не может быть больше свободного остатка. ``free_stock`` при этом
-    обязателен и должен быть прочитан в той же транзакции, что и запись, — иначе
-    между показом окна и нажатием «Сохранить» приедет заказ, и проверка пройдёт
+    Для нового или увеличенного потолка сумма по складам не может быть больше
+    свободного остатка. Сохранение прежних чисел проверяет set_rule_for_products.
+    ``free_stock`` читается в той же транзакции, что и запись, — иначе между
+    показом окна и нажатием «Сохранить» приедет заказ, и проверка пройдёт
     по устаревшему числу.
     """
     if rule.units_mode:
@@ -230,7 +230,7 @@ async def _pool_rows(
     stmt = select(FbsBindingStockPool).where(
         FbsBindingStockPool.product_id == product_id,
         FbsBindingStockPool.binding_id.in_(binding_ids),
-    )
+    ).execution_options(populate_existing=True)
     return {row.binding_id: row for row in (await session.execute(stmt)).scalars().all()}
 
 
@@ -731,69 +731,41 @@ async def set_rule_for_products(
             # одно число на всех сойдётся у одного, а у соседнего окажется перебором.
             for product in products:
                 effective_rule = product_rules[product.id]
-                enabled_keys = {
-                    _binding_key(b) for b in bindings if effective_rule.publishes(b.marketplace)
-                }
-                validation_rule = replace(effective_rule, units_by_warehouse={
-                    key: value for key, value in rule.units_by_warehouse.items()
-                    if key in enabled_keys
-                })
+                validation_rule = effective_rule
                 _, _, product_free = await _free_stock_for_bindings(
                     session, tenant_id, product.id, bindings
                 )
-                # Выделение выключенных/неактивных направлений тоже занимает товар.
-                hidden_pools = (
-                    list(
-                        (
-                            await session.scalars(
-                                select(FbsBindingStockPool).where(
-                                    FbsBindingStockPool.product_id == product.id,
-                                    FbsBindingStockPool.binding_id.notin_([b.id for b in bindings]),
-                                )
-                            )
-                        ).all()
-                    )
-                    if product.fbs_units_mode
-                    else []
-                )
-                hidden_by_warehouse: dict[uuid.UUID, int] = {}
-                for hidden_pool in hidden_pools:
-                    hidden_binding = await session.get(FbsWarehouseBinding, hidden_pool.binding_id)
-                    if (hidden_binding is not None
-                            and effective_rule.publishes(hidden_binding.marketplace)):
-                        wid = hidden_binding.wms_warehouse_id
-                        hidden_by_warehouse[wid] = (
-                            hidden_by_warehouse.get(wid, 0) + hidden_pool.quantity
-                        )
-                product_free = max(
-                    0,
-                    product_free
-                    - sum(
-                        hidden_by_warehouse.get(wid, 0)
-                        for wid in {b.wms_warehouse_id for b in bindings}
-                    ),
-                )
-                validate_rule(
-                    validation_rule,
-                    served_warehouse_count=len(served),
-                    free_stock=product_free,
-                )
+                # Caps are publication settings, not physical reservations.
+                # Unchanged/decreased caps remain valid when stock falls. A new
+                # or increased cap must fit current free stock, under Product lock.
+                old_rule = old_rules[product.id]
+                _validate_units(effective_rule, None)
+                if any(
+                    value > (old_rule.units_by_warehouse.get(key, 0)
+                             if old_rule.units_mode else 0)
+                    for key, value in validation_rule.units_by_warehouse.items()
+                ):
+                    _validate_units(validation_rule, product_free)
                 for warehouse_id in {b.wms_warehouse_id for b in bindings}:
                     local_bindings = [b for b in bindings if b.wms_warehouse_id == warehouse_id]
+                    local_keys = {_binding_key(b) for b in local_bindings}
+                    increases = any(
+                        value > (old_rule.units_by_warehouse.get(key, 0)
+                                 if old_rule.units_mode else 0)
+                        for key, value in validation_rule.units_by_warehouse.items()
+                        if key in local_keys
+                    )
+                    if not increases:
+                        continue
                     _, _, local_free = await _free_stock_for_bindings(
                         session, tenant_id, product.id, local_bindings
                     )
-                    local_free = max(0, local_free - hidden_by_warehouse.get(warehouse_id, 0))
-                    local_total = sum(
-                        validation_rule.units_by_warehouse.get(_binding_key(b), 0)
-                        for b in local_bindings
-                    )
-                    if local_total > local_free:
-                        raise FbsStockRuleError(
-                            "units_sum_exceeded",
-                            message="На физическом складе не хватает свободного товара.",
-                            context={"total": local_total, "free_stock": local_free},
-                        )
+                    local_rule = replace(validation_rule, units_by_warehouse={
+                        key: value for key, value in validation_rule.units_by_warehouse.items()
+                        if key in local_keys
+                    })
+                    _validate_units(local_rule, min(product_free, local_free))
+
         else:
             for effective_rule in product_rules.values():
                 enabled_bindings = [b for b in served if effective_rule.publishes(b.marketplace)]
@@ -852,8 +824,7 @@ async def set_rule_for_products(
         #
         # Правило распоряжается ровно тем, что охватывает: привязками ЭТОГО продавца
         # и ТЕХ площадок, чьи склады оно перечисляет. Неактивные привязки охваченных
-        # площадок из зачистки не исключаем — их выделение продолжает занимать товар
-        # (см. hidden_pools выше), и оставленное там число опубликовалось бы, как
+        # площадок из зачистки не исключаем: оставленное там число опубликовалось бы, как
         # только привязку вернут в строй.
         governed_bindings = select(FbsWarehouseBinding.id).where(
             FbsWarehouseBinding.tenant_id == tenant_id,
@@ -903,7 +874,7 @@ async def set_rule_for_products(
                 if rule.units_mode:
                     pool.quantity = int(units or 0)
                 else:
-                    # Выделение возвращается в общий остаток; резервы заказов остаются.
+                    # Оператор переключил режим; резервы заказов остаются.
                     pool.quantity = 0
                 pool.updated_by = updated_by
         for marketplace in sorted(changed):

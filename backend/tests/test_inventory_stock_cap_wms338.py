@@ -5,9 +5,7 @@
     Publish min(cap, free_stock). No journals, no counters, no reservation ledger,
     no recharges."
 
-Эти регрессы прибивают гвоздями пять точек, которые исторически расходовали и
-возвращали операторский потолок и один раз уже стоили владельцу 335 единиц
-товара, выпавших из витрины:
+Проверки четырёх прежних мутаций потолка и расчёта публикации:
 
     1) резервирование FBS-заказа НЕ трогает pool.quantity
     2) отмена до передачи НЕ трогает pool.quantity
@@ -23,12 +21,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
@@ -37,16 +36,18 @@ from app.models.fbs_order import (
     MAPPING_STATUS_MAPPED,
     RESERVE_STATUS_NO_STOCK,
     FbsOrder,
+    FbsOrderReservation,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inventory_balance import InventoryBalance
+from app.models.inventory_movement import MOVEMENT_TYPE_INVENTORY_COUNT, InventoryMovement
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
 from app.services import inventory_service
-from app.services.fbs_stock_rule_service import FbsRule, split_amounts
+from app.services.fbs_stock_rule_service import FbsRule, get_rule_view, split_amounts
 
 WB_WAREHOUSE_ID = 501001
 OPERATOR_CAP = 5
@@ -87,6 +88,7 @@ async def _seed(
         marketplace="wb",
         is_active=True,
         stock_sync_enabled=True,
+        served=True,
     )
     location = StorageLocation(
         id=uuid.uuid4(),
@@ -181,6 +183,10 @@ async def test_reservation_does_not_change_operator_cap(db_session: AsyncSession
     await inventory_service.update_fbs_order_reservation(db_session, order, reserve=True)
     await db_session.commit()
 
+    view = await get_rule_view(db_session, scen.tenant.id, scen.product.id)
+    assert (view.on_hand, view.reserved, view.free_stock) == (10, 1, 9)
+    assert await db_session.scalar(select(func.count()).select_from(FbsOrderReservation)) == 1
+
     cap = await _reload_pool_quantity(db_session, scen.pool.id)
     assert cap == OPERATOR_CAP, (
         "pool.quantity — операторский потолок, резерв заказа не должен его "
@@ -206,6 +212,8 @@ async def test_cancel_before_transfer_does_not_change_operator_cap(
     # 1. Ставим резерв. По WMS-338 потолок не тронется.
     await inventory_service.update_fbs_order_reservation(db_session, order, reserve=True)
     await db_session.commit()
+    assert await db_session.scalar(select(func.count()).select_from(FbsOrderReservation)) == 1
+    assert (await get_rule_view(db_session, scen.tenant.id, scen.product.id)).free_stock == 9
     cap_after_reserve = await _reload_pool_quantity(db_session, scen.pool.id)
     assert cap_after_reserve == OPERATOR_CAP
 
@@ -213,6 +221,8 @@ async def test_cancel_before_transfer_does_not_change_operator_cap(
     await inventory_service.update_fbs_order_reservation(db_session, order, reserve=False)
     await db_session.commit()
 
+    assert await db_session.scalar(select(func.count()).select_from(FbsOrderReservation)) == 0
+    assert (await get_rule_view(db_session, scen.tenant.id, scen.product.id)).free_stock == 10
     cap = await _reload_pool_quantity(db_session, scen.pool.id)
     assert cap == OPERATOR_CAP, (
         "Отмена резерва до передачи не имеет права возвращать что-либо в "
@@ -231,7 +241,7 @@ async def test_inventory_shortage_does_not_change_operator_cap(
     физическое уменьшение баланса пойдёт через движение, а публикация возьмёт
     min(cap, свободный) на следующем тике.
     """
-    scen = await _seed(db_session, on_hand=10)
+    scen = await _seed(db_session, on_hand=5)
     pool_id = scen.pool.id
 
     # Прямой вызов приватного расчёта: он же используется в реальной
@@ -261,9 +271,17 @@ async def test_inventory_shortage_does_not_change_operator_cap(
         "Инвентаризационная недостача не расходует операторский потолок; "
         f"было {OPERATOR_CAP}, стало {cap}"
     )
-    # Сплит по «своё/фбс» может распределиться в оба ведёрка — это
-    # представление, а не мутация числа оператора.
-    assert deductions, "должен вернуть хотя бы одну строку списания"
+    assert deductions == [(scen.product.id, None, 3)]
+    # Exercise the real inventory movement, not just its explanatory breakdown.
+    await inventory_service.record_movement_and_adjust_balance(
+        db_session, tenant_id=scen.tenant.id, product_id=scen.product.id,
+        storage_location_id=scen.location.id, quantity_delta=-3,
+        movement_type=MOVEMENT_TYPE_INVENTORY_COUNT, actor_user_id=None,
+    )
+    await db_session.commit()
+    view = await get_rule_view(db_session, scen.tenant.id, scen.product.id)
+    assert (view.on_hand, view.reserved, view.free_stock, view.published_now) == (2, 0, 2, 2)
+    assert await _reload_pool_quantity(db_session, pool_id) == OPERATOR_CAP
 
 
 @pytest.mark.asyncio
@@ -296,6 +314,9 @@ async def test_transfer_without_reserve_does_not_change_operator_cap(
     )
     await db_session.commit()
 
+    view = await get_rule_view(db_session, scen.tenant.id, scen.product.id)
+    assert (view.on_hand, view.free_stock) == (8, 8)
+    assert await db_session.scalar(select(func.sum(InventoryMovement.quantity_delta))) == -2
     cap = await _reload_pool_quantity(db_session, pool_id)
     assert cap == OPERATOR_CAP, (
         "Передача без резерва не расходует операторский потолок; "
@@ -370,3 +391,69 @@ async def test_publication_is_min_cap_and_free_stock(
     # Само число оператора split_amounts трогать не имеет права.
     cap = await _reload_pool_quantity(db_session, scen.pool.id)
     assert cap == OPERATOR_CAP
+
+
+@pytest.mark.asyncio
+async def test_concurrent_orders_reserve_last_unit_once(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Real PostgreSQL contention, proven with pg_blocking_pids, not SQLite SQL."""
+    assert db_session.bind is not None
+    if db_session.bind.dialect.name != "postgresql":
+        pytest.skip("requires isolated PostgreSQL via WMS_TEST_DATABASE_URL")
+    monkeypatch.setattr(inventory_service, "schedule_seller_stock_publish", lambda *_: None)
+    scen = await _seed(db_session, on_hand=1)
+    orders = [_fbs_order(scen, wb_order_id=n) for n in (300001, 300002)]
+    db_session.add_all(orders)
+    await db_session.commit()
+    order_ids = [order.id for order in orders]
+    first_locked, release_first, second_started = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    original_lock = inventory_service.lock_stock_product
+    second_pid: list[int] = []
+
+    async def observed_lock(session: AsyncSession, tenant_id: uuid.UUID, product_id: uuid.UUID):
+        result = await original_lock(session, tenant_id, product_id)
+        if session.info.get("first"):
+            first_locked.set()
+            await asyncio.wait_for(release_first.wait(), 10)
+        return result
+
+    monkeypatch.setattr(inventory_service, "lock_stock_product", observed_lock)
+
+    async def reserve(index: int) -> None:
+        async with AsyncSession(bind=db_session.bind, expire_on_commit=False) as session:
+            session.info["first"] = index == 0
+            order = await session.get(FbsOrder, order_ids[index])
+            assert order is not None
+            if index == 1:
+                second_pid.append(int(await session.scalar(text("select pg_backend_pid()"))))
+                second_started.set()
+            await inventory_service.update_fbs_order_reservation(session, order, reserve=True)
+            await session.commit()
+
+    first = asyncio.create_task(reserve(0))
+    second = None
+    try:
+        await asyncio.wait_for(first_locked.wait(), 10)
+        second = asyncio.create_task(reserve(1))
+        await asyncio.wait_for(second_started.wait(), 10)
+        blocked = False
+        for _ in range(200):
+            blocked = bool(await db_session.scalar(
+                text("select cardinality(pg_blocking_pids(:pid)) > 0"), {"pid": second_pid[0]},
+            ))
+            if blocked:
+                break
+            await asyncio.sleep(0.01)
+        assert blocked, "second transaction never waited on the real Product row lock"
+    finally:
+        release_first.set()
+        await asyncio.wait_for(asyncio.gather(first, *([second] if second else [])), 10)
+    assert await db_session.scalar(select(func.sum(FbsOrderReservation.quantity))) == 1
+    statuses = (await db_session.scalars(
+        select(FbsOrder.reserve_status).where(FbsOrder.id.in_(order_ids))
+    )).all()
+    assert sorted(statuses) == ["no_stock", "reserved"]
+    view = await get_rule_view(db_session, scen.tenant.id, scen.product.id)
+    assert (view.on_hand, view.reserved, view.free_stock, view.published_now) == (1, 1, 0, 0)
+    assert await _reload_pool_quantity(db_session, scen.pool.id) == OPERATOR_CAP

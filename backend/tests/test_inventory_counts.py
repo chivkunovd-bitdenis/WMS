@@ -1300,7 +1300,7 @@ async def test_inventory_count_records_found_into_container_dropped_as_empty(
 
 
 @pytest.mark.asyncio
-async def test_inventory_count_reports_ordinary_and_fbs_deductions(
+async def test_inventory_count_reports_physical_shortage_without_consuming_cap(
     async_client: AsyncClient,
 ) -> None:
     from app.models.fbs_binding_stock_pool import FbsBindingStockPool
@@ -1343,14 +1343,13 @@ async def test_inventory_count_reports_ordinary_and_fbs_deductions(
     )
     assert summary.status_code == 200, summary.text
     stock = next(row for row in summary.json() if row["product_id"] == str(product_id))
-    assert stock["quantity_fbs"] == 250
-    assert stock["quantity_free_fbo"] == 0
-    assert stock["available"] == 0
+    assert stock["quantity_fbs"] == 0
+    assert stock["quantity_free_fbo"] == 250
+    assert stock["available"] == 250
     deductions = posted.json()["stock_write_off"]
-    assert sum(row["quantity"] for row in deductions if row["marketplace"] is None) == 100
+    assert sum(row["quantity"] for row in deductions if row["marketplace"] is None) == 150
     fbs = [row for row in deductions if row["marketplace"] == "wb"]
-    assert sum(row["quantity"] for row in fbs) == 50
-    assert all(row["warehouse_id"] in {"501001", "501002"} for row in fbs)
+    assert not fbs
     assert all(row["product_id"] == str(product_id) for row in deductions)
     repeat = await async_client.post(
         f"/operations/inventory-counts/{count['id']}/post", headers=setup.headers,
@@ -1362,7 +1361,7 @@ async def test_inventory_count_reports_ordinary_and_fbs_deductions(
         )) == 250
         assert await session.scalar(select(func.sum(FbsBindingStockPool.quantity)).where(
             FbsBindingStockPool.product_id == product_id,
-        )) == 250
+        )) == 300
 
 
 async def test_inventory_count_manual_line_without_selection_uses_sorting_zone(
