@@ -131,6 +131,10 @@ class FbsCancelledAfterPackItemOut(BaseModel):
     picked_at: datetime | None
     packed_at: datetime | None
     cancelled_at: datetime
+    cancelled_at_source: str
+    cancelled_after_transfer: bool | None
+    transfer_at: datetime | None
+    return_document_id: str | None
     cancellation_code: str
     cancellation_reason: str
     sticker_printed: bool

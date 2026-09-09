@@ -485,6 +485,7 @@ async def _sync_supply_orders_from_wb(
                 event="fbs shipment WB supply status sync failed",
                 extra_context={"wb_order_ids": batch},
             ) from exc
+        observed_at = datetime.now(UTC)
         by_id = {int(row["id"]): row for row in status_rows if row.get("id") is not None}
         for order in orders:
             row = by_id.get(int(order.wb_order_id))
@@ -499,6 +500,8 @@ async def _sync_supply_orders_from_wb(
                     wb_status,
                     supplier_status=supplier_status,
                     actor_user_id=actor_user_id,
+                    row=row,
+                    received_at=observed_at,
                 )
 
     for order in orders:

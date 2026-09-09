@@ -189,8 +189,12 @@ async def _finish_local_cancellation(
     вписан в вайлдберрисовскую ветку, и озоновской отмене пришлось бы его
     повторить — то есть завести второе место, где легко забыть про резерв.
     """
+    observed_at = datetime.now(UTC)
     order.status = FBS_ORDER_STATUS_CANCELLED
     order.wb_status = "cancelled"
+    from app.services.fbs_cancel_return_document_service import maybe_create_cancel_return_document
+
+    await maybe_create_cancel_return_document(session, order, received_at=observed_at)
     await reverse_fbs_shipment_if_needed(
         session,
         order,
@@ -208,15 +212,6 @@ async def _finish_local_cancellation(
         actor_user_id=actor_user_id,
     )
     await _release_reservation(session, order)
-    # WMS-111: если поставка уже была передана WB, тот же WB-обмен, что и на
-    # автосинке статусов, должен завести документ возврата. Явного `cancelledAt`
-    # в этой ветке нет — оператор нажал «Отменить» руками, поэтому источник
-    # честно помечается как received_at.
-    from app.services.fbs_cancel_return_document_service import (
-        maybe_create_cancel_return_document,
-    )
-
-    await maybe_create_cancel_return_document(session, order)
     await session.flush()
 
 
@@ -344,6 +339,13 @@ async def cancel_order(
         raise FbsCancellationError("order_not_found")
 
     if order.status == FBS_ORDER_STATUS_CANCELLED:
+        from app.services.fbs_cancel_return_document_service import (
+            cancel_return_marker,
+            maybe_create_cancel_return_document,
+        )
+
+        if cancel_return_marker(order):
+            await maybe_create_cancel_return_document(session, order)
         return order
 
     if order.status in NON_CANCELLABLE_STATUSES:
