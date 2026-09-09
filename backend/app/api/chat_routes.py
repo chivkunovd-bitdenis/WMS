@@ -258,7 +258,7 @@ async def get_main_chat(
     user: Annotated[User, Depends(require_ff_or_seller)],
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
-    seller_id: uuid.UUID | None = Query(default=None),
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
 ) -> ConversationOut:
     """Return the seller's main chat, creating it on first call."""
     resolved_seller_id = seller_id or effective_seller_id
@@ -614,12 +614,12 @@ async def download_attachment(
     )
 
 
+# Re-exported for tests to avoid touching internals.
 __all__ = [
-    "router",
-    # Re-exported for tests to avoid touching internals.
     "ConversationOut",
-    "MessageOut",
     "MessageIn",
+    "MessageOut",
+    "router",
 ]
 
 
