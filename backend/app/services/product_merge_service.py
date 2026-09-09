@@ -130,16 +130,16 @@ async def _sum_inventory_balances(
     Итог по товару поэтому равен сумме двух прежних итогов, ни одна штука не
     теряется.
 
-    Оба SELECT читают строки с ``FOR UPDATE``: сам по себе лок на Product строке
-    (см. :func:`merge_products`) сериализует конкурентную запись, а лок на
-    balance-строке дополнительно исключает то, что новая балансовая строка
-    появится между чтением и суммированием и не попадёт в свод.
+    Product-lock сериализует складских писателей, включая создание новых строк.
+    Перечитываем баланс после ожидания блокировки, даже если вызывающий код
+    уже загрузил старое значение в ORM-сессию.
     """
     target_rows = (
         await session.execute(
             select(InventoryBalance)
             .where(InventoryBalance.product_id == target_id)
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
     ).scalars().all()
     by_cell = {(row.storage_location_id, row.container_id): row for row in target_rows}
@@ -149,6 +149,7 @@ async def _sum_inventory_balances(
             select(InventoryBalance)
             .where(InventoryBalance.product_id == source_id)
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
     ).scalars().all()
     for row in source_rows:
