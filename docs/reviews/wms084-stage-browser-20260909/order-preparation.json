@@ -1,0 +1,37 @@
+{
+  "before": {
+    "orders_count": 42,
+    "old_orders_digest": "0000fe2e881a57621d2a77da174712f4a991a632c9d2bb30f383fcaaab0a71aa",
+    "selected_stock": 51
+  },
+  "template_count": 1,
+  "fresh_createdAt": true,
+  "warehouse": 501001,
+  "chrt": 111005,
+  "seller": "seller_a",
+  "created": 2,
+  "rejected_no_stock": 0,
+  "orders": [
+    {
+      "id": 500043,
+      "createdAt": "2026-09-09T01:37:27+00:00",
+      "chrtId": 111005,
+      "warehouseId": 501001,
+      "supplierStatus": null,
+      "wbStatus": null
+    },
+    {
+      "id": 500044,
+      "createdAt": "2026-09-09T01:37:27+00:00",
+      "chrtId": 111005,
+      "warehouseId": 501001,
+      "supplierStatus": null,
+      "wbStatus": null
+    }
+  ],
+  "after": {
+    "orders_count": 44,
+    "old_orders_digest": "0000fe2e881a57621d2a77da174712f4a991a632c9d2bb30f383fcaaab0a71aa",
+    "selected_stock": 49
+  }
+}
