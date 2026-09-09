@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ru.wms.tsd.features.fbs.FbsViewModelTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-09-09T11:25:21" hostname="MacBook-Air-Denis.local" time="1.368">
+  <properties/>
+  <testcase name="oldest matching order respects offsets and fractions before WB id" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="1.192"/>
+  <testcase name="scan retry keeps same order source and request identity after lost response" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.076"/>
+  <testcase name="full KIZ scan is preserved through WB commit" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.02"/>
+  <testcase name="box quantity retry rereads successful deletes after lost response" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.017"/>
+  <testcase name="oldest matching SKU uses instants and skips picked orders" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.002"/>
+  <testcase name="cancel chooser preserves queued scan oldest order and explicit cell stays loose" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.019"/>
+  <testcase name="switching supply cancels chooser and discards scans queued for previous supply" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.011"/>
+  <testcase name="serial product scans use refreshed server progress and distinct identities" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.008"/>
+  <testcase name="deadline and label escaping preserve operator data without script execution" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.015"/>
+  <testcase name="deadline offsets preserve the exclusive six hour boundary" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.002"/>
+  <testcase name="display time accepts API offsets fractions and UTC in local timezone" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.004"/>
+  <testcase name="physical choices use server availability and the deepest container" classname="ru.wms.tsd.features.fbs.FbsViewModelTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

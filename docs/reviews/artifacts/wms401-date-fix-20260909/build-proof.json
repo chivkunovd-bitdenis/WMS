@@ -1,0 +1,28 @@
+{
+  "source_sha": "e2d43b5cc7817bf5be164b53ef9e2ef723c4f718",
+  "base_sha": "d15f09d4c09c74438ebd6b31632db0c346525a6f",
+  "verified_at_utc": "2026-09-09T11:26:54.672001+00:00",
+  "apk": "/Users/deniscivkunov/Projects/WMS/outputs/wms401-android-20260909/WMS-TSD-FBS-e2d43b5-debug.apk",
+  "apk_bytes": 45350978,
+  "apk_sha256": "68ec5a4bba8f07fa0c801c942d9df26f33bc1a7c8ee0d48d791bc9d79516a087",
+  "variant": "debug",
+  "debug_certificate_sha256": "e343ab0cccc6284b271a72da42a67b14a0f0893d92b9ca461f1cac3d0be1aeb6",
+  "same_signature_as_previous_apk": true,
+  "api_default": "http://10.0.2.2:18080/",
+  "host_jdk17_tests": {
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "desugar_2_1_4_java_time_tests": {
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "desugar_jar_sha256": "d7604feeef3a771d5d616b68fcc2c42f516243311ea286cfd41e1962829a6d28",
+  "test_scope": "FbsViewModelTest; Android java.time implementation patched into host JDK17, not AVD",
+  "apk_live_tested": false,
+  "safe_patch_sha256": "563d6b8ff3193fdb9a9d0d78b70dcac80ff1388c6f62a093b30185c98ee71200"
+}

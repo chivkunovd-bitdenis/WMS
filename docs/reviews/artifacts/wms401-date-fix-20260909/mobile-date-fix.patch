@@ -1,0 +1,108 @@
+From e2d43b5cc7817bf5be164b53ef9e2ef723c4f718 Mon Sep 17 00:00:00 2001
+From: Denis Civkunov <denischivkunov@icloud.com>
+Date: Wed, 9 Sep 2026 14:26:27 +0300
+Subject: [PATCH] WMS-401: parse API date offsets on Android desugar runtime
+
+---
+ .../ru/wms/tsd/features/fbs/FbsScreens.kt     |  6 ++--
+ .../ru/wms/tsd/features/fbs/FbsViewModel.kt   |  5 ++--
+ .../wms/tsd/features/fbs/FbsViewModelTest.kt  | 28 +++++++++++++++++++
+ 3 files changed, 34 insertions(+), 5 deletions(-)
+
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
+index 6dca035..e901db5 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
+@@ -17,15 +17,15 @@ import androidx.compose.ui.unit.sp
+ import androidx.lifecycle.compose.LifecycleResumeEffect
+ import androidx.lifecycle.viewmodel.compose.viewModel
+ import coil.compose.AsyncImage
+-import java.time.Instant
++import java.time.OffsetDateTime
+ import java.time.ZoneId
+ import java.time.format.DateTimeFormatter
+ import ru.wms.tsd.AppGraph
+ import ru.wms.tsd.core.api.fbs.*
+ import ru.wms.tsd.ui.patterns.ScanScaffold
+ 
+-private fun displayTime(value: String): String = runCatching {
+-    DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.systemDefault()).format(Instant.parse(value))
++internal fun displayTime(value: String): String = runCatching {
++    DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.systemDefault()).format(OffsetDateTime.parse(value).toInstant())
+ }.getOrDefault(value)
+ 
+ @Composable private fun fbsViewModel(): FbsViewModel = viewModel(factory = FbsViewModel.Factory(AppGraph.apiProvider))
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+index 390b559..c8d045b 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
+ import androidx.lifecycle.ViewModelProvider
+ import androidx.lifecycle.viewModelScope
+ import java.time.Instant
++import java.time.OffsetDateTime
+ import java.util.UUID
+ import kotlinx.coroutines.CancellationException
+ import kotlinx.coroutines.CompletableDeferred
+@@ -21,10 +22,10 @@ import ru.wms.tsd.ui.patterns.ScanFlash
+ fun oldestMatchingOrder(orders: List<FbsOrder>, barcode: String): FbsOrder? = orders
+     .filter { it.pick.status != "picked" && it.status !in setOf("cancelled", "done", "in_delivery") }
+     .filter { barcode in listOfNotNull(it.product.barcode, it.product.sku, it.product.sellerArticle) }
+-    .minWithOrNull(compareBy<FbsOrder> { runCatching { Instant.parse(it.createdAt) }.getOrDefault(Instant.MAX) }.thenBy { it.wbOrderId })
++    .minWithOrNull(compareBy<FbsOrder> { runCatching { OffsetDateTime.parse(it.createdAt).toInstant() }.getOrDefault(Instant.MAX) }.thenBy { it.wbOrderId })
+ 
+ fun isDeadlineNear(deadline: String, now: Instant = Instant.now()): Boolean =
+-    runCatching { Instant.parse(deadline).isBefore(now.plusSeconds(6 * 3600)) }.getOrDefault(false)
++    runCatching { OffsetDateTime.parse(deadline).toInstant().isBefore(now.plusSeconds(6 * 3600)) }.getOrDefault(false)
+ 
+ fun isKizScan(value: String): Boolean = value.startsWith("]d2", true) || value.startsWith("(01)") ||
+     (value.startsWith("01") && value.length >= 20 && value.substring(2, 16).all(Char::isDigit) && value.substring(16, 18) == "21")
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+index 723e87d..cfdf91c 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+@@ -3,6 +3,7 @@ package ru.wms.tsd.features.fbs
+ import io.mockk.*
+ import java.io.IOException
+ import java.time.Instant
++import java.util.TimeZone
+ import kotlinx.coroutines.Dispatchers
+ import kotlinx.coroutines.ExperimentalCoroutinesApi
+ import kotlinx.coroutines.test.*
+@@ -41,6 +42,33 @@ class FbsViewModelTest {
+         assertEquals(newer, oldestMatchingOrder(listOf(oldest.copy(pick = FbsPickState("picked")), newer), "4600000000001"))
+         assertNull(oldestMatchingOrder(listOf(oldest), "unknown"))
+     }
++    @Test fun `oldest matching order respects offsets and fractions before WB id`() {
++        val oldest = order("99", "2026-09-09T12:00:00.123456+03:00")
++        val laterFraction = order("2", "2026-09-09T09:00:00.123457+00:00")
++        val later = order("1", "2026-09-09T10:00:00+00:00")
++        assertEquals(oldest, oldestMatchingOrder(listOf(later, laterFraction, oldest), "4600000000001"))
++        assertEquals(laterFraction, oldestMatchingOrder(listOf(later, oldest.copy(pick = FbsPickState("picked")), laterFraction), "4600000000001"))
++    }
++    @Test fun `display time accepts API offsets fractions and UTC in local timezone`() {
++        val originalZone = TimeZone.getDefault()
++        try {
++            TimeZone.setDefault(TimeZone.getTimeZone("GMT+03:00"))
++            listOf("2026-09-09T10:43:24+00:00", "2026-09-09T10:43:24Z", "2026-09-09T13:43:24+03:00", "2026-09-09T10:43:24.123456+00:00").forEach {
++                assertEquals(it, "09.09.2026 13:43", displayTime(it))
++            }
++            assertEquals("invalid", displayTime("invalid"))
++        } finally {
++            TimeZone.setDefault(originalZone)
++        }
++    }
++    @Test fun `deadline offsets preserve the exclusive six hour boundary`() {
++        val now = Instant.parse("2026-09-09T10:00:00Z")
++        assertTrue(isDeadlineNear("2026-09-09T18:59:59.999999+03:00", now))
++        assertTrue(isDeadlineNear("2026-09-09T15:59:59+00:00", now))
++        assertFalse(isDeadlineNear("2026-09-09T19:00:00+03:00", now))
++        assertFalse(isDeadlineNear("2026-09-09T20:00:00+03:00", now))
++        assertFalse(isDeadlineNear("invalid", now))
++    }
+     @Test fun `scan retry keeps same order source and request identity after lost response`() = runTest {
+         val initial = workspace(listOf(order("1", "2026-09-08T09:00:00Z"), order("2", "2026-09-08T10:00:00Z")))
+         coEvery { service.workspace("supply") } returns Response.success(initial)
+-- 
+2.39.2 (Apple Git-143)
+
