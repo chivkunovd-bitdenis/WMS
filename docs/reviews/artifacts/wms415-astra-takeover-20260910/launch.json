@@ -1,0 +1,12 @@
+{
+  "pid": 75014,
+  "started_at_utc": "2026-09-09T22:31:27.804352+00:00",
+  "model": "gpt-6-astra",
+  "reasoning_effort": "high",
+  "cwd": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord",
+  "events": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/events.jsonl",
+  "last_message": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/last-message.md",
+  "reason": "Claude session window exhausted, weekly remaining15%, not weekly threshold",
+  "thread_id": "01a0884c-2c18-7d22-a2a8-8bef2f3d8fe3",
+  "accepted_after_connection_retries": true
+}
