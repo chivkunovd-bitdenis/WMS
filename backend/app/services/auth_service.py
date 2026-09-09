@@ -213,7 +213,7 @@ async def create_staff_user(
             document_id=user.id,
             event_type=EVENT_STAFF_USER_CREATED,
             source=actor.source,
-            actor_user_id=actor.actor_user_id,
+            actor_user_id=acting_user.id,
             payload_json={
                 "role": "fulfillment_staff",
                 "target_user_id": str(user.id),

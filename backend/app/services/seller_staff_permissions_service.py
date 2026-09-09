@@ -173,7 +173,7 @@ async def create_seller_staff_user(
         document_id=user.id,
         event_type=EVENT_STAFF_USER_CREATED,
         source=actor.source,
-        actor_user_id=actor.actor_user_id,
+        actor_user_id=acting_user.id,
         payload_json={
             "role": "fulfillment_seller",
             "target_user_id": str(user.id),
@@ -204,10 +204,12 @@ async def update_seller_staff_permissions(
         raise PermissionError("forbidden")
     if acting_user.seller_id is None:
         raise PermissionError("seller_not_linked")
-    user = await session.get(
-        User,
-        staff_user_id,
-        options=(selectinload(User.seller_staff_permissions),),
+    user = await session.scalar(
+        select(User)
+        .where(User.id == staff_user_id, User.tenant_id == acting_user.tenant_id)
+        .options(selectinload(User.seller_staff_permissions))
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if (
         user is None
@@ -239,7 +241,7 @@ async def update_seller_staff_permissions(
             document_id=user.id,
             event_type=EVENT_PERMISSIONS_CHANGED,
             source=actor.source,
-            actor_user_id=actor.actor_user_id,
+            actor_user_id=acting_user.id,
             payload_json={
                 "role": "fulfillment_seller",
                 "target_user_id": str(user.id),
