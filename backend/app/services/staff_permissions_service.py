@@ -8,8 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_STAFF
+from app.models.document_event import (
+    DOCUMENT_TYPE_STAFF_USER,
+    EVENT_PERMISSIONS_CHANGED,
+)
 from app.models.ff_staff_permissions import FfStaffPermissions
 from app.models.user import User
+from app.services.document_event_service import (
+    current_document_event_actor,
+    record_document_event_safely,
+)
 
 PERM_SETTINGS = "settings"
 PERM_MP_SHIPMENTS = "mp_shipments"
@@ -139,6 +147,7 @@ async def update_staff_permissions(
     if user.role != FULFILLMENT_STAFF:
         raise PermissionError("not_staff_user")
     row = user.ff_staff_permissions
+    before = _from_row(row).as_dict()
     if row is None:
         row = FfStaffPermissions(user_id=user.id)
         session.add(row)
@@ -150,6 +159,28 @@ async def update_staff_permissions(
     row.can_inventory = permissions.inventory
     row.can_packaging = permissions.packaging
     row.can_shift_lead = permissions.shift_lead
+    after = permissions.as_dict()
+    # WMS-325: append-only факт смены прав в существующем document_event; acting_user
+    # — тот, кто нажал кнопку, target — тот, кому меняют права. Пишем ДО commit,
+    # чтобы событие и права уехали в одну транзакцию. Новую таблицу не заводим.
+    if before != after:
+        actor = current_document_event_actor()
+        await record_document_event_safely(
+            session,
+            tenant_id=user.tenant_id,
+            document_type=DOCUMENT_TYPE_STAFF_USER,
+            document_id=user.id,
+            event_type=EVENT_PERMISSIONS_CHANGED,
+            source=actor.source,
+            actor_user_id=actor.actor_user_id,
+            payload_json={
+                "role": "fulfillment_staff",
+                "target_user_id": str(user.id),
+                "acting_user_id": str(acting_user.id),
+                "before": before,
+                "after": after,
+            },
+        )
     await session.commit()
     await session.refresh(user)
     await session.refresh(row)
