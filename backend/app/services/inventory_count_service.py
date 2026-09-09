@@ -470,12 +470,22 @@ async def list_counts(
     return list(result.scalars().unique().all())
 
 
+_SENTINEL: Any = object()
+
+
 async def save_actuals(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     count_id: uuid.UUID,
     values: list[tuple[uuid.UUID, int | None]],
+    *,
+    comment: str | Any | None = _SENTINEL,
 ) -> InventoryCount:
+    """Сохранить фактические количества по строкам пересчёта.
+
+    WMS-155: комментарий тоже редактируется этой ручкой. Значение по умолчанию —
+    сентинел, чтобы отличить «оставить как было» от «стереть» (`None` = пусто).
+    """
     result = await session.execute(
         select(InventoryCount)
         .where(
@@ -492,21 +502,29 @@ async def save_actuals(
     line_ids = [line_id for line_id, _ in values]
     if len(line_ids) != len(set(line_ids)):
         raise InventoryCountError("duplicate_line")
-    lines_result = await session.execute(
-        select(InventoryCountLine)
-        .where(
-            InventoryCountLine.count_id == count.id,
-            InventoryCountLine.id.in_(line_ids),
+    if line_ids:
+        lines_result = await session.execute(
+            select(InventoryCountLine)
+            .where(
+                InventoryCountLine.count_id == count.id,
+                InventoryCountLine.id.in_(line_ids),
+            )
+            .with_for_update()
         )
-        .with_for_update()
-    )
-    lines = {line.id: line for line in lines_result.scalars()}
+        lines = {line.id: line for line in lines_result.scalars()}
+    else:
+        lines = {}
     if len(lines) != len(line_ids):
         raise InventoryCountError("line_not_found")
     for line_id, actual_quantity in values:
         if actual_quantity is not None and actual_quantity < 0:
             raise InventoryCountError("invalid_actual_quantity")
         lines[line_id].actual_quantity = actual_quantity
+    if comment is not _SENTINEL:
+        normalized = comment.strip() if isinstance(comment, str) else comment
+        if isinstance(normalized, str) and not normalized:
+            normalized = None
+        count.comment = normalized
     await session.commit()
     loaded = await get_count(session, tenant_id, count.id)
     assert loaded is not None
