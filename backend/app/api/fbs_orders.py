@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -352,7 +352,9 @@ class FbsWorklistPositionOut(BaseModel):
 
 class FbsWorklistOrderOut(BaseModel):
     id: str
-    marketplace: str = "wb"
+    # WMS-363: маркетплейс проставляет сервис из FbsOrder.marketplace. Явный
+    # Literal фиксирует контракт: TSD и веб ждут либо "wb", либо "ozon".
+    marketplace: Literal["wb", "ozon"] = "wb"
     external_order_id: str | None = None
     wb_order_id: int
     status: str
@@ -397,7 +399,9 @@ class FbsWorklistPageOut(BaseModel):
 
 class FbsOrderOut(BaseModel):
     id: str
-    marketplace: str = "wb"
+    # WMS-363: маркетплейс проставляется из FbsOrder.marketplace в _order_out.
+    # Literal фиксирует контракт: только "wb" или "ozon".
+    marketplace: Literal["wb", "ozon"] = "wb"
     external_order_id: str | None = None
     seller_id: str
     warehouse_id: str | None
@@ -428,9 +432,14 @@ class FbsOrderOut(BaseModel):
 
 
 def _order_out(order: FbsOrder) -> FbsOrderOut:
+    # WMS-363: FbsOrder.marketplace хранится строкой (СУБД-агностично, гоняем
+    # тот же код на sqlite/pg), но семантически всегда "wb" или "ozon" —
+    # инвариант enforce'ится импортом и sync-сервисами. cast говорит только
+    # mypy, что мы согласны с сужением; Pydantic отбракует посторонние
+    # значения на границе ответа.
     return FbsOrderOut(
         id=str(order.id),
-        marketplace=order.marketplace,
+        marketplace=cast(Literal["wb", "ozon"], order.marketplace),
         external_order_id=order.external_order_id,
         seller_id=str(order.seller_id),
         warehouse_id=str(order.warehouse_id) if order.warehouse_id is not None else None,
@@ -580,6 +589,10 @@ async def get_fbs_orders(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
     seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    # WMS-363: ТСД-приложение исторически подразумевало WB и параметра не слало.
+    # Оставляем default пустым (без фильтра) — обратная совместимость сохраняется,
+    # а новый клиент может передать marketplace=ozon и получить только Ozon.
+    marketplace: Annotated[str | None, Query(pattern="^(wb|ozon)$")] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[FbsOrderOut]:
@@ -595,6 +608,7 @@ async def get_fbs_orders(
         session,
         user.tenant_id,
         seller_id=filter_seller,
+        marketplace=marketplace,
         limit=limit,
         offset=offset,
     )
