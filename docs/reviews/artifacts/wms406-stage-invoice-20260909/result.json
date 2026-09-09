@@ -1,0 +1,394 @@
+{
+  "mode": "actual_invoice",
+  "sha": "d7d38935628805b90e3cc0295861bac4a7a0824f",
+  "started": "2026-09-09T07:34:03.984Z",
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/api/billing/invoices-v2/preview",
+      "body": {
+        "creation_mode": "selected_operations",
+        "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+        "date_from": "2026-08-11",
+        "date_to": "2026-09-09",
+        "selected_root_ids": [
+          "6997a612-d2c9-402e-b3f3-6c985e36f2a2",
+          "24f9470e-07ca-4f71-a35b-2fb8ee981bfe",
+          "a207f4d0-5776-4c96-a291-6734cb88201b",
+          "624cd944-0a88-4bea-a19f-eec64c9a0674",
+          "40761fc4-495d-47fa-b38f-0596b24f4a4d"
+        ],
+        "selected_sources": [],
+        "manual_lines": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/billing/invoices-v2/preview",
+      "body": {
+        "creation_mode": "selected_operations",
+        "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+        "date_from": "2026-08-11",
+        "date_to": "2026-09-09",
+        "selected_root_ids": [
+          "6997a612-d2c9-402e-b3f3-6c985e36f2a2",
+          "24f9470e-07ca-4f71-a35b-2fb8ee981bfe",
+          "a207f4d0-5776-4c96-a291-6734cb88201b",
+          "624cd944-0a88-4bea-a19f-eec64c9a0674",
+          "40761fc4-495d-47fa-b38f-0596b24f4a4d"
+        ],
+        "selected_sources": [],
+        "manual_lines": [],
+        "final_amount": "407.23"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/billing/invoices-v2",
+      "body": {
+        "creation_mode": "selected_operations",
+        "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+        "date_from": "2026-08-11",
+        "date_to": "2026-09-09",
+        "selected_root_ids": [
+          "6997a612-d2c9-402e-b3f3-6c985e36f2a2",
+          "24f9470e-07ca-4f71-a35b-2fb8ee981bfe",
+          "a207f4d0-5776-4c96-a291-6734cb88201b",
+          "624cd944-0a88-4bea-a19f-eec64c9a0674",
+          "40761fc4-495d-47fa-b38f-0596b24f4a4d"
+        ],
+        "selected_sources": [],
+        "manual_lines": [],
+        "final_amount": "407.23"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/billing/invoices-v2/731bbec1-3afb-4bd7-b71a-1a0090610286/cancel",
+      "body": null
+    }
+  ],
+  "pageErrors": [],
+  "blocked": [],
+  "auth": {
+    "tenant": "9c31f3f4-ce62-4c1f-891a-295b278f1e69",
+    "role": "fulfillment_admin"
+  },
+  "seller": {
+    "id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+    "name": "Эмулятор WB"
+  },
+  "beforeInvoices": {
+    "invoices": [],
+    "next_cursor": null
+  },
+  "available": [
+    {
+      "id": "billing_entry:c664c928-6c92-44da-91c0-cff8ac54f3ed",
+      "source_id": "ec351b77-74f3-473a-81bb-774b0bc10479",
+      "service": "packing",
+      "result": "completed",
+      "ledger": "c664c928-6c92-44da-91c0-cff8ac54f3ed",
+      "amount": 2500
+    },
+    {
+      "id": "billing_entry:ae781b78-fa88-4ad9-b38a-d3b0afee7e64",
+      "source_id": "1fd4d301-d43a-4c4a-b905-dc9830ddc1bd",
+      "service": "packing",
+      "result": "completed",
+      "ledger": "ae781b78-fa88-4ad9-b38a-d3b0afee7e64",
+      "amount": 2500
+    },
+    {
+      "id": "billing_entry:6997a612-d2c9-402e-b3f3-6c985e36f2a2",
+      "source_id": "1fd4d301-d43a-4c4a-b905-dc9830ddc1bd",
+      "service": "fbs_order",
+      "result": "completed",
+      "ledger": "6997a612-d2c9-402e-b3f3-6c985e36f2a2",
+      "amount": 2500
+    },
+    {
+      "id": "billing_entry:24f9470e-07ca-4f71-a35b-2fb8ee981bfe",
+      "source_id": "ec351b77-74f3-473a-81bb-774b0bc10479",
+      "service": "fbs_order",
+      "result": "completed",
+      "ledger": "24f9470e-07ca-4f71-a35b-2fb8ee981bfe",
+      "amount": 2500
+    },
+    {
+      "id": "billing_entry:a207f4d0-5776-4c96-a291-6734cb88201b",
+      "source_id": "1950820b-dfe1-46c3-bc82-742b76489969",
+      "service": "fbs_order",
+      "result": "completed",
+      "ledger": "a207f4d0-5776-4c96-a291-6734cb88201b",
+      "amount": 2500
+    },
+    {
+      "id": "billing_entry:624cd944-0a88-4bea-a19f-eec64c9a0674",
+      "source_id": "36134bd6-8072-40bb-b617-51ade1563774",
+      "service": "fbs_order",
+      "result": "completed",
+      "ledger": "624cd944-0a88-4bea-a19f-eec64c9a0674",
+      "amount": 2500
+    },
+    {
+      "id": "billing_entry:4ce38de7-c33f-47a8-9e77-66e7651319ef",
+      "source_id": "27c43a05-e700-44dc-a888-10f527302c64",
+      "service": "packing",
+      "result": "completed",
+      "ledger": "4ce38de7-c33f-47a8-9e77-66e7651319ef",
+      "amount": 2500
+    },
+    {
+      "id": "billing_entry:40761fc4-495d-47fa-b38f-0596b24f4a4d",
+      "source_id": "27c43a05-e700-44dc-a888-10f527302c64",
+      "service": "fbs_order",
+      "result": "completed",
+      "ledger": "40761fc4-495d-47fa-b38f-0596b24f4a4d",
+      "amount": 2500
+    },
+    {
+      "id": "billing_entry:3674c332-1697-4128-8906-cd80d704ea82",
+      "source_id": "1950820b-dfe1-46c3-bc82-742b76489969",
+      "service": "packing",
+      "result": "completed",
+      "ledger": "3674c332-1697-4128-8906-cd80d704ea82",
+      "amount": 2500
+    },
+    {
+      "id": "billing_entry:0ca9c23a-8916-46a0-96cd-5e65351ea337",
+      "source_id": "36134bd6-8072-40bb-b617-51ade1563774",
+      "service": "packing",
+      "result": "completed",
+      "ledger": "0ca9c23a-8916-46a0-96cd-5e65351ea337",
+      "amount": 2500
+    }
+  ],
+  "visibleBefore": "Расчёты\n\nНачисления за работу склада и счета селлерам за выбранный период.\n\nСеллеры\nВыставленные счета\nПериод\nс\nс\nпо\nпо\nСегодня\n7 дней\n30 дней\nЭтот месяц\nПрошлый месяц\nСеллер\nВсе селлеры\nDenmarcs\nВектор Плюс\nЛуна Трейд\nРомашка\nСеверный ветер\nТестовый селлер WMS-378\nЭмулятор WB\nСеллер\nСЕЛЛЕРОВ\n\n1\n\nшт.\n\nПРИНЯТО\n\n2\n\nшт.\n\nУПАКОВАНО\n\n5\n\nшт.\n\nОТГРУЖЕНО ФБО\n\n0\n\nшт.\n\nОТГРУЖЕНО FBS\n\n5\n\nшт.\n\nХРАНЕНИЕ\n\n0\n\nл·дн\n\nСТОИМОСТЬ УСЛУГ\n\n400,00 ₽\n\nРеквизиты\nВыставить счёт\n\tСеллер\tДокументов\tШтук\tСтоимость услуг\tНе тарифицируется\tНет ставки\n\n\t\nЭмулятор WB\n\t11\t12\t\n400,00 ₽\n\t0\t0\n\n\t\tУслуга\tДокументов\tШтук\tСтавка\tСумма\n\n\t\n\t\nПриёмка\n\t1\t2\t\n150,00 ₽\n\t\n150,00 ₽\n\n\n\t\n\t\nУпаковка\n\t5\t5\t\n25,00 ₽\n\t\n125,00 ₽\n\n\n\t\n\t\nFBS\n\t5\t5\t\n25,00 ₽\n\t\n125,00 ₽\n\n\n\t\n\nЗа период хранение не начислено — выставлять нечего\n\n\t\nХранение\n\t\nза период\n\t\n0,00 л·дн\n\t\n—\n\t\n0,00 ₽",
+  "initialPreview": {
+    "id": "0af1ae31-85e9-492f-acf8-3140ed0e7fa2",
+    "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+    "number": "Новый счёт",
+    "creation_mode": "selected_operations",
+    "period_start": "2026-08-11",
+    "period_end": "2026-09-09",
+    "status": "issued",
+    "issued_at": null,
+    "total_amount_kopecks": 12500,
+    "calculated_amount_kopecks": 12500,
+    "ff_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "seller_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "lines": [
+      {
+        "id": "fc5491df-faf9-4cfc-8b27-ef71aef0281f",
+        "description": "FBS",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 12500,
+        "sort_order": 0
+      }
+    ]
+  },
+  "adjustedPreview": {
+    "id": "a342bb0e-8a7d-4619-836d-f9df287e0581",
+    "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+    "number": "Новый счёт",
+    "creation_mode": "selected_operations",
+    "period_start": "2026-08-11",
+    "period_end": "2026-09-09",
+    "status": "issued",
+    "issued_at": null,
+    "total_amount_kopecks": 40723,
+    "calculated_amount_kopecks": 12500,
+    "ff_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "seller_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "lines": [
+      {
+        "id": "3226bc37-842a-48bc-9801-26e8131a3298",
+        "description": "FBS",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 12500,
+        "sort_order": 0
+      },
+      {
+        "id": "51a2c42a-1a65-49a7-bb81-436953dca0d3",
+        "description": "Ручная корректировка итога",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 28223,
+        "sort_order": 1
+      }
+    ]
+  },
+  "created": {
+    "id": "731bbec1-3afb-4bd7-b71a-1a0090610286",
+    "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+    "number": "СЧЕТ-26-09-09-1",
+    "creation_mode": "selected_operations",
+    "period_start": "2026-08-11",
+    "period_end": "2026-09-09",
+    "status": "issued",
+    "issued_at": "2026-09-09T07:34:13.452054Z",
+    "total_amount_kopecks": 40723,
+    "calculated_amount_kopecks": null,
+    "ff_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "seller_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "lines": [
+      {
+        "id": "94dad7fa-5b3b-461d-83bc-139f737a8543",
+        "description": "FBS",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 12500,
+        "sort_order": 0
+      },
+      {
+        "id": "4ce33984-eab3-43e1-854d-8ba1bfec4060",
+        "description": "Ручная корректировка итога",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 28223,
+        "sort_order": 1
+      }
+    ]
+  },
+  "reopened": {
+    "id": "731bbec1-3afb-4bd7-b71a-1a0090610286",
+    "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+    "number": "СЧЕТ-26-09-09-1",
+    "creation_mode": "selected_operations",
+    "period_start": "2026-08-11",
+    "period_end": "2026-09-09",
+    "status": "issued",
+    "issued_at": "2026-09-09T07:34:13.452054Z",
+    "total_amount_kopecks": 40723,
+    "calculated_amount_kopecks": null,
+    "ff_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "seller_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "lines": [
+      {
+        "id": "94dad7fa-5b3b-461d-83bc-139f737a8543",
+        "description": "FBS",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 12500,
+        "sort_order": 0
+      },
+      {
+        "id": "4ce33984-eab3-43e1-854d-8ba1bfec4060",
+        "description": "Ручная корректировка итога",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 28223,
+        "sort_order": 1
+      }
+    ]
+  },
+  "printText": "Счёт на оплату № СЧЕТ-26-09-09-1 от 09.09.2026\nРЕКВИЗИТЫ ДЛЯ ОПЛАТЫ\nПолучатель\tФулфилмент\nИНН / КПП\t\tСч. №\t\nБанк получателя\t\tБИК\t\nКорр. счёт\t\nИсполнитель\nФулфилмент\nПлательщик\nЭмулятор WB\nПериод оказания услуг: 11.08.2026 — 09.09.2026\n№\tНаименование услуги\tСумма\n1\tFBS\t125,00 ₽\n2\tРучная корректировка итога\t282,23 ₽\nИтого: 407,23 ₽\nБез налога (НДС)\nВсего к оплате: 407,23 ₽\nВсего наименований 2, на сумму 407,23 ₽\nЧетыреста семь рублей 23 копейки\nРуководитель\nБухгалтер\nМ.П.",
+  "cancelled": {
+    "id": "731bbec1-3afb-4bd7-b71a-1a0090610286",
+    "seller_id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+    "number": "СЧЕТ-26-09-09-1",
+    "creation_mode": "selected_operations",
+    "period_start": "2026-08-11",
+    "period_end": "2026-09-09",
+    "status": "cancelled",
+    "issued_at": "2026-09-09T07:34:13.452054Z",
+    "total_amount_kopecks": 40723,
+    "calculated_amount_kopecks": null,
+    "ff_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "seller_profile": {
+      "legal_name": null,
+      "inn": null,
+      "kpp": null,
+      "bank_name": null,
+      "bik": null,
+      "settlement_account": null,
+      "correspondent_account": null
+    },
+    "lines": [
+      {
+        "id": "94dad7fa-5b3b-461d-83bc-139f737a8543",
+        "description": "FBS",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 12500,
+        "sort_order": 0
+      },
+      {
+        "id": "4ce33984-eab3-43e1-854d-8ba1bfec4060",
+        "description": "Ручная корректировка итога",
+        "unit_price_kopecks": null,
+        "total_amount_kopecks": 28223,
+        "sort_order": 1
+      }
+    ]
+  },
+  "result": "PASS",
+  "finished": "2026-09-09T07:34:17.372Z"
+}
