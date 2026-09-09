@@ -1,0 +1,9 @@
+{
+  "assigned": 247,
+  "covered": 247,
+  "missing": [],
+  "citations_checked": 796,
+  "source_files_checked": 259,
+  "errors": [],
+  "note": "Coverage/source-range validation only; human root review judges findings."
+}
