@@ -1,0 +1,158 @@
+From 7bb418103819e5d823627bd30408d2344c4ac554 Mon Sep 17 00:00:00 2001
+From: Denis Civkunov <denischivkunov@icloud.com>
+Date: Wed, 9 Sep 2026 15:13:08 +0300
+Subject: [PATCH] WMS-401: reject incomplete KIZ print tapes before preview
+
+---
+ .../java/ru/wms/tsd/core/api/fbs/FbsModels.kt | 14 +++++-
+ .../ru/wms/tsd/features/fbs/FbsViewModel.kt   | 21 +++++++++
+ .../tsd/features/fbs/FbsApiContractTest.kt    | 11 +++++
+ .../wms/tsd/features/fbs/FbsViewModelTest.kt  | 43 +++++++++++++++++++
+ 4 files changed, 88 insertions(+), 1 deletion(-)
+
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
+index 3d0a62b..d6a99ed 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
+@@ -310,4 +310,16 @@ data class FbsDeliveryCheck(
+     @SerialName("qr_asset") val qrAsset: FbsPrintAsset? = null,
+     val codes: List<String> = emptyList(),
+ )
+-@Serializable data class FbsPrintTape(val orders: List<TapeOrder> = emptyList(), val shortage: Int = 0, val missing: Int = 0, val failed: Int = 0)
++@Serializable data class FbsPrintOrderError(
++    @SerialName("order_id") val orderId: String,
++    @SerialName("wb_order_id") val wbOrderId: Long,
++    val code: String,
++    val message: String,
++)
++@Serializable data class FbsPrintTape(
++    val orders: List<TapeOrder> = emptyList(),
++    val shortage: Int = 0,
++    val missing: Int = 0,
++    val failed: Int = 0,
++    @SerialName("order_errors") val orderErrors: List<FbsPrintOrderError> = emptyList(),
++)
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+index fb0262c..ae34ad1 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+@@ -305,6 +305,27 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+         launch {
+             val pages = mutableListOf<String>()
+             if (kizCopies > 0 && tape == null) tape = required { api.fbs().printTape(workspace.supply.id, PrintTapeBody(ids, includeQr)) }
++            if (kizCopies > 0) {
++                val currentTape = tape ?: error("Не получены данные для печати ЧЗ")
++                if (currentTape.orderErrors.isNotEmpty()) {
++                    tape = null
++                    error(currentTape.orderErrors.joinToString("\n") { failure ->
++                        val reason = when (failure.code) {
++                            "operator_kiz_print_forbidden" -> "Печать введённого оператором кода ЧЗ запрещена."
++                            else -> failure.message.takeIf { it.isNotBlank() && it != failure.code }
++                                ?: "Не удалось подготовить этикетки. Обновите поставку и повторите печать."
++                        }
++                        "WB ${failure.wbOrderId}: $reason"
++                    })
++                }
++                val absent = ids.filter { id -> currentTape.orders.none { it.orderId == id } || workspace.orders.none { it.id == id } }
++                if (absent.isNotEmpty()) {
++                    tape = null
++                    error("Не получены данные для печати ЧЗ: " + absent.joinToString { id ->
++                        workspace.orders.firstOrNull { it.id == id }?.let { "WB ${it.wbOrderId}" } ?: "заказ $id"
++                    })
++                }
++            }
+             if ((tape?.missing ?: 0) != 0 || (tape?.failed ?: 0) != 0) {
+                 tape = null
+                 error("WB не вернул все этикетки. Повторите печать после обновления поставки.")
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsApiContractTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsApiContractTest.kt
+index 8d8712d..8398769 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsApiContractTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsApiContractTest.kt
+@@ -13,6 +13,17 @@ import ru.wms.tsd.core.api.generated.infrastructure.ApiClient
+ import ru.wms.tsd.core.api.readableError
+ 
+ class FbsApiContractTest {
++    @Test fun `print tape transport retains per order errors despite zero counters`() = runTest {
++        val server = MockWebServer(); server.start()
++        try {
++            val api = ApiClient(baseUrl = server.url("/api/").toString()).createService(FbsApi::class.java)
++            server.enqueue(MockResponse().setBody("""{"orders":[],"requested":1,"ready":1,"missing":0,"failed":0,"shortage":0,"order_errors":[{"order_id":"order","wb_order_id":500045,"code":"operator_kiz_print_forbidden","message":"operator_kiz_print_forbidden"}]}"""))
++            val result = api.printTape("supply", PrintTapeBody(listOf("order"))).body()!!
++            assertEquals(0, result.failed)
++            assertEquals(FbsPrintOrderError("order", 500045, "operator_kiz_print_forbidden", "operator_kiz_print_forbidden"), result.orderErrors.single())
++            assertEquals("/api/operations/fbs-supplies/supply/order-print-tape", server.takeRequest().path)
++        } finally { server.shutdown() }
++    }
+     @Test fun `generated transport preserves explicit target and full CIS`() = runTest {
+         val server = MockWebServer(); server.start()
+         try {
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+index cd3c0f1..8518296 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+@@ -1,5 +1,6 @@
+ package ru.wms.tsd.features.fbs
+ 
++import android.util.Base64
+ import io.mockk.*
+ import java.io.IOException
+ import java.time.Instant
+@@ -8,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
+ import kotlinx.coroutines.ExperimentalCoroutinesApi
+ import kotlinx.coroutines.test.*
+ import okhttp3.ResponseBody.Companion.toResponseBody
++import okhttp3.MediaType.Companion.toMediaType
+ import org.junit.*
+ import org.junit.Assert.*
+ import retrofit2.Response
+@@ -189,6 +191,47 @@ class FbsViewModelTest {
+         }
+         coVerify(exactly = cases.size) { service.commitKiz(any()) }
+     }
++    @Test fun `print tape order error blocks all preview pages and is retried freshly`() = runTest {
++        val initial = workspace(listOf(order("1", "2026-09-08T09:00:00Z"), order("2", "2026-09-08T10:00:00Z")))
++        coEvery { service.workspace("supply") } returns Response.success(initial)
++        val partial = FbsPrintTape(orders = listOf(TapeOrder("1", 1, codes = listOf("CODE"))), orderErrors = listOf(FbsPrintOrderError("2", 2, "operator_kiz_print_forbidden", "operator_kiz_print_forbidden")))
++        val complete = FbsPrintTape(orders = listOf(TapeOrder("1", 1, codes = listOf("CODE1")), TapeOrder("2", 2, codes = listOf("CODE2"))))
++        coEvery { service.printTape("supply", any()) } returnsMany listOf(Response.success(partial), Response.success(complete))
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.printOrders("", listOf("1", "2"), 1, 1, false)
++        assertEquals("WB 2: Печать введённого оператором кода ЧЗ запрещена.", vm.state.value.error)
++        assertNull(vm.state.value.printDocument)
++        coVerify(exactly = 0) { service.asset(any()); service.printAssets(any(), any()) }
++        vm.retry()
++        assertNull(vm.state.value.error)
++        assertNotNull(vm.state.value.printDocument)
++        coVerify(exactly = 2) { service.printTape("supply", any()) }
++    }
++    @Test fun `missing requested tape order cannot fall back to QR only success`() = runTest {
++        val initial = workspace(listOf(order("1", "2026-09-08T09:00:00Z"), order("2", "2026-09-08T10:00:00Z")))
++        coEvery { service.workspace("supply") } returns Response.success(initial)
++        coEvery { service.printTape("supply", any()) } returns Response.success(FbsPrintTape(orders = listOf(TapeOrder("1", 1, codes = listOf("CODE")))))
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.printOrders("", listOf("1", "2"), 1, 1, true)
++        assertEquals("Не получены данные для печати ЧЗ: WB 2", vm.state.value.error)
++        assertNull(vm.state.value.printDocument)
++        coVerify(exactly = 0) { service.asset(any()); service.printAssets(any(), any()) }
++    }
++    @Test fun `QR only printing retains the asset path without requesting KIZ tape`() = runTest {
++        val initial = workspace(listOf(order("1", "2026-09-08T09:00:00Z")))
++        val asset = FbsPrintAsset("00000000-0000-0000-0000-000000000001", "order_sticker", "ready", previewUrl = "/api/operations/fbs-print-assets/00000000-0000-0000-0000-000000000001/content")
++        coEvery { service.workspace("supply") } returns Response.success(initial)
++        coEvery { service.printAssets("supply", PrintBatchBody("order_sticker", listOf("1"))) } returns Response.success(FbsPrintBatch(listOf(asset)))
++        val image = java.util.Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jL1sAAAAASUVORK5CYII=")
++        coEvery { service.asset(any()) } returns Response.success(image.toResponseBody("image/png".toMediaType()))
++        mockkStatic(Base64::class)
++        try {
++            every { Base64.encodeToString(any<ByteArray>(), Base64.NO_WRAP) } answers { java.util.Base64.getEncoder().encodeToString(firstArg()) }
++            val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.printOrders("", listOf("1"), 0, 0, true)
++            assertNull(vm.state.value.error)
++            assertNotNull(vm.state.value.printDocument)
++            coVerify(exactly = 0) { service.printTape(any(), any()) }
++            coVerify(exactly = 1) { service.printAssets("supply", PrintBatchBody("order_sticker", listOf("1"))) }
++        } finally { unmockkStatic(Base64::class) }
++    }
+     @Test fun `box technical QR resolves its exact order without marking gates`() = runTest {
+         val box = FbsBox("box", 1, "BOX")
+         val initial = workspace(listOf(order("1", "2026-09-08T09:00:00Z"), order("2", "2026-09-08T10:00:00Z"))).copy(boxes = listOf(box))
+-- 
+2.39.2 (Apple Git-143)
+
