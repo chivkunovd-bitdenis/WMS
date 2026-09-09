@@ -306,6 +306,7 @@ async def _clear_previous_ozon_stock(
     *, product_ids: set[uuid.UUID] | None = None,
 ) -> None:
     """Clear the known own target before its address/publication flag is lost."""
+    from app.services.fbs_stock_rule_service import product_has_rule_predicate
     from app.services.marketplace_account_service import (
         MarketplaceAccountError,
         MarketplaceAccountService,
@@ -328,7 +329,8 @@ async def _clear_previous_ozon_stock(
             ProductMarketplaceLink.seller_id == binding.seller_id,
             ProductMarketplaceLink.marketplace == MARKETPLACE_OZON,
             ProductMarketplaceLink.is_active.is_(True),
-            or_(Product.fbs_percent.is_not(None), Product.fbs_units_mode.is_(True)),
+            # WMS-384: единый предикат наличия правила из fbs_stock_rule_service.
+            product_has_rule_predicate(),
         )
     )).all())
     stocks: list[dict[str, object]] = []
