@@ -1,29 +1,9 @@
-"""WMS-111/WMS-112: automatic return document after a confirmed-transfer cancel.
+"""WMS-111/112: persist cancellation evidence and create an existing draft return.
 
-Owner directive 2026-09-10 (see AGENTS.md "ВТОРОЕ ГЛАВНОЕ ПРАВИЛО"): reuse the
-existing return-document family. WMS already has a return kind — it is the
-same `InboundIntakeRequest` used for a manual return, distinguished by
-`operation_type = "return"` and `marketplace = "wildberries"`. This module
-creates that same request automatically when the sole legitimate trigger fires:
-the buyer has cancelled a WB FBS order that WMS had already handed over.
-
-Why this stays a "document, not a movement":
-
-* The card explicitly says the created document must NOT increment stock.
-  Physical acceptance is a separate operator action. Here we only leave a
-  draft in the `draft` status with lines whose `expected_qty` is the shipped
-  quantity and `posted_qty=0` — the intake service only touches stock when
-  `posted_qty` moves, which is guarded by the operator's scan flow.
-* The transfer boundary is checked against existing state
-  (`confirmed_order_handover_dates`, the same signal billing already trusts),
-  not by adding a new "was_transferred" flag on the order.
-* The idempotency key is the natural WB order id: it is already unique per
-  seller for FBS. The first successful creation writes a marker into the
-  order's `meta_details_json`; every retry sees that marker and returns the
-  existing request. No separate table, no separate counter.
-* The cancel-time is honestly stored: WB payload's `cancelledAt` when present,
-  otherwise the moment WMS observed the cancel — with the source recorded next
-  to it so a reader can tell them apart. No synthesised historic timestamps.
+The order row lock serializes retries. Observation survives a failed document
+savepoint; a later seller sync retries missing documents. Nothing here receives
+stock. The original supply link is retained as evidence before detach, and its
+current confirmed handover is read for both document creation and the registry.
 """
 
 from __future__ import annotations
@@ -34,10 +14,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.fbs_order import FbsOrder, FbsOrderProduct
+from app.models.fbs_order import FBS_ORDER_STATUS_CANCELLED, FbsOrder, FbsOrderProduct
+from app.models.fbs_supply import FbsSupply
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.services.document_number_service import (
     DOC_TYPE_INBOUND,
@@ -52,20 +33,15 @@ from app.services.inbound_intake_service import (
 
 logger = logging.getLogger(__name__)
 
-# Ключ в meta_details_json заказа, куда пишется факт создания документа
-# возврата. Он же — источник идемпотентности: повторный вызов на том же заказе
-# видит этот ключ и не заводит второй документ.
+# Existing order JSON holds cancellation evidence and the draft document link.
+# The existing order row lock, not the marker alone, makes creation idempotent.
 CANCEL_RETURN_META_KEY = "wb_cancel_return"
-
-# Источники времени отмены. WB в открытой части API момент отмены заказа не
-# отдаёт вовсе, но мы предусмотрительно читаем `cancelledAt`, если он появится в
-# полезной нагрузке. Иначе фиксируем момент, когда WMS увидел отмену, и явным
-# маркером сообщаем читателю: время не от WB.
 CANCEL_TIME_SOURCE_WB_PAYLOAD = "wb_payload"
-CANCEL_TIME_SOURCE_RECEIVED_AT = "received_at"
+CANCEL_TIME_SOURCE_OBSERVED_AT = "observed_at"
+# Compatibility name for callers; new records explicitly mean WMS observation.
+CANCEL_TIME_SOURCE_RECEIVED_AT = CANCEL_TIME_SOURCE_OBSERVED_AT
 
-# Известные ключи в строках WB, где мог бы жить момент отмены. Проверяем все —
-# WB может добавить одно из них, а мы не будем гадать.
+# Accepted event-time fields when provided; absence is explicitly labelled.
 _CANCEL_TIME_ROW_KEYS: tuple[str, ...] = (
     "cancelledAt",
     "cancelled_at",
@@ -83,12 +59,7 @@ _WB_MARKETPLACE = "wildberries"
 
 @dataclass(frozen=True)
 class CancelTime:
-    """Момент отмены плюс маркер, откуда он взят.
-
-    Хранится вместе с документом возврата — сам момент нужен реестру отмен
-    (WMS-112), а маркер источника обязателен: без него читатель не отличит
-    честный WB-момент от нашего received-at, и это уже приводило к спорам.
-    """
+    """WB event time or first WMS observation, labelled and stored on the order."""
 
     at: datetime
     source: str
@@ -96,7 +67,7 @@ class CancelTime:
 
 def _parse_iso(raw: Any) -> datetime | None:
     if isinstance(raw, datetime):
-        return raw if raw.tzinfo is not None else raw.replace(tzinfo=UTC)
+        return (raw if raw.tzinfo is not None else raw.replace(tzinfo=UTC)).astimezone(UTC)
     if not isinstance(raw, str) or not raw.strip():
         return None
     text = raw.strip().replace("Z", "+00:00")
@@ -104,7 +75,7 @@ def _parse_iso(raw: Any) -> datetime | None:
         parsed = datetime.fromisoformat(text)
     except ValueError:
         return None
-    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+    return (parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)).astimezone(UTC)
 
 
 def cancel_time_from_row(
@@ -112,10 +83,10 @@ def cancel_time_from_row(
     *,
     received_at: datetime | None = None,
 ) -> CancelTime:
-    """Достать момент отмены из строки WB или взять received-at.
+    """Prefer an explicit WB event time; otherwise use the WMS observation.
 
-    `received_at` можно передать явно для тестов; в проде это всегда
-    `datetime.now(UTC)`. Публично отдаём только время в UTC.
+    Callers pass the observation captured before pagination, locks or cancellation
+    side effects. Direct callers observe the cancellation when entering here.
     """
     if row is not None:
         for key in _CANCEL_TIME_ROW_KEYS:
@@ -125,7 +96,7 @@ def cancel_time_from_row(
     fallback = received_at if received_at is not None else datetime.now(UTC)
     if fallback.tzinfo is None:
         fallback = fallback.replace(tzinfo=UTC)
-    return CancelTime(at=fallback, source=CANCEL_TIME_SOURCE_RECEIVED_AT)
+    return CancelTime(at=fallback.astimezone(UTC), source=CANCEL_TIME_SOURCE_OBSERVED_AT)
 
 
 def has_cancel_return_marker(order: FbsOrder) -> bool:
@@ -141,18 +112,39 @@ def cancel_return_marker(order: FbsOrder) -> dict[str, Any] | None:
     return marker if isinstance(marker, dict) else None
 
 
-async def was_transferred(
-    session: AsyncSession,
-    order: FbsOrder,
-) -> bool:
-    """Была ли уже подтверждённая передача поставки маркетплейсу.
+def cancelled_after_transfer(cancelled_at: datetime, transfer_at: datetime | None) -> bool | None:
+    if transfer_at is None:
+        return None
+    return (_parse_iso(transfer_at) or transfer_at) <= (_parse_iso(cancelled_at) or cancelled_at)
 
-    Один в один сигнал, которым пользуется биллинг (`confirmed_order_handover_dates`).
-    Никакого нового флага заводить нельзя: одна и та же величина, посчитанная в
-    двух местах, обязательно разъедется.
-    """
-    handovers = await confirmed_order_handover_dates(session, order.tenant_id, [order])
-    return order.id in handovers
+
+async def cancellation_handover_dates(
+    session: AsyncSession, tenant_id: uuid.UUID, orders: list[FbsOrder],
+) -> dict[uuid.UUID, datetime]:
+    dates = await confirmed_order_handover_dates(session, tenant_id, orders)
+    original_ids: dict[uuid.UUID, uuid.UUID] = {}
+    for order in orders:
+        marker = cancel_return_marker(order) or {}
+        try:
+            original_ids[order.id] = uuid.UUID(str(marker.get("source_supply_id")))
+        except ValueError:
+            continue
+    supplies = {supply.id: supply for supply in await session.scalars(
+        select(FbsSupply).where(FbsSupply.tenant_id == tenant_id,
+                                FbsSupply.id.in_(original_ids.values()))
+    )} if original_ids else {}
+    for order in orders:
+        supply = supplies.get(original_ids[order.id]) if order.id in original_ids else None
+        if (order.id not in dates and supply is not None
+                and supply.seller_id == order.seller_id
+                and supply.marketplace == order.marketplace
+                and supply.delivered_at is not None):
+            dates[order.id] = _parse_iso(supply.delivered_at) or supply.delivered_at
+    return dates
+
+
+async def was_transferred(session: AsyncSession, order: FbsOrder) -> bool:
+    return order.id in await cancellation_handover_dates(session, order.tenant_id, [order])
 
 
 async def _lines_for_order(
@@ -181,47 +173,74 @@ async def _lines_for_order(
 
 
 async def ensure_cancel_return_document(
-    session: AsyncSession,
-    order: FbsOrder,
-    *,
-    cancel_time: CancelTime,
+    session: AsyncSession, order: FbsOrder, *, cancel_time: CancelTime,
 ) -> InboundIntakeRequest | None:
-    """Создать документ возврата ровно один раз для отмены после передачи.
+    """Lock/re-read evidence, persist observation, then isolate document writes.
 
-    Возвращает уже созданный (или только что созданный) документ. Возвращает
-    None, если создать нельзя по причине, которую документ поправить не может:
-    заказу не назначен склад (тогда физически возвращать некуда), или у заказа
-    нет привязки к товару — в обоих случаях эту дырку закрывает оператор, а не
-    автоматика. Функция не бросает исключений, чтобы отмена не падала из-за
-    невозможности завести приёмку-возврат.
-
-    Никаких движений остатка: документ создаётся в статусе DRAFT со строкой
-    `expected_qty` и `posted_qty=0`. Физическая приёмка — отдельное действие
-    оператора, оно и передвигает остаток.
+    Do not refresh the whole object: callers have pending status changes. Read
+    metadata under the lock before any autoflush can overwrite a concurrent
+    marker from a stale ORM object. Caller owns the outer transaction.
     """
-    existing_marker = cancel_return_marker(order)
-    if existing_marker is not None:
-        request_id_raw = existing_marker.get("inbound_request_id")
-        if isinstance(request_id_raw, str):
-            try:
-                existing_id = uuid.UUID(request_id_raw)
-            except ValueError:
-                existing_id = None
-            if existing_id is not None:
-                existing = await session.get(InboundIntakeRequest, existing_id)
-                if existing is not None:
-                    return existing
-        # Маркер оказался повреждённым (внутрилежащий UUID нечитаем или строку
-        # удалили руками из базы). Молча его пересоздавать нельзя — это
-        # спрячет расхождение. Логируем и возвращаем None: следующая попытка
-        # либо получит корректный маркер, либо снова придёт сюда и разберём.
-        logger.warning(
-            "wms111_cancel_return_marker_broken order_id=%s marker=%s",
-            order.id,
-            existing_marker,
-        )
+    if order.marketplace != "wb":
+        return None
+    with session.no_autoflush:
+        stored = (await session.execute(select(FbsOrder.meta_details_json).where(
+            FbsOrder.id == order.id, FbsOrder.tenant_id == order.tenant_id,
+            FbsOrder.seller_id == order.seller_id,
+        ).with_for_update())).one()
+    details = dict(stored[0] or {})
+    # Preserve this caller's pending edits to unrelated metadata without copying
+    # a stale cancellation marker over the row just read under the lock.
+    history = inspect(order).attrs.meta_details_json.history
+    if history.has_changes():
+        previous = dict(history.deleted[0] or {}) if history.deleted else {}
+        pending = dict(history.added[0] or {}) if history.added else {}
+        for key in (previous.keys() | pending.keys()) - {CANCEL_RETURN_META_KEY}:
+            if previous.get(key) != pending.get(key):
+                if key in pending:
+                    details[key] = pending[key]
+                else:
+                    details.pop(key, None)
+    marker = dict(details.get(CANCEL_RETURN_META_KEY) or {})
+    if not marker.get("cancelled_at") or (
+        cancel_time.source == CANCEL_TIME_SOURCE_WB_PAYLOAD
+        and marker.get("cancelled_at_source") != CANCEL_TIME_SOURCE_WB_PAYLOAD
+    ):
+        marker.update(cancelled_at=cancel_time.at.astimezone(UTC).isoformat(),
+                      cancelled_at_source=cancel_time.source)
+    if not marker.get("source_supply_id") and order.supply_id is not None:
+        marker["source_supply_id"] = str(order.supply_id)
+    marker["wb_order_id"] = int(order.wb_order_id)
+    details[CANCEL_RETURN_META_KEY] = marker
+    order.meta_details_json = details
+    # Observation and pending cancellation changes must survive a document error.
+    await session.flush()
+    existing_id = marker.get("inbound_request_id")
+    if existing_id:
+        try:
+            return await session.get(InboundIntakeRequest, uuid.UUID(str(existing_id)))
+        except ValueError:
+            logger.error("wms111_invalid_return_reference order_id=%s", order.id)
+            return None
+    at = _parse_iso(marker.get("cancelled_at"))
+    handover = (await cancellation_handover_dates(session, order.tenant_id, [order])).get(order.id)
+    if at is None or cancelled_after_transfer(at, handover) is not True:
+        return None
+    order_id = order.id
+    try:
+        async with session.begin_nested():
+            return await _create_document(session, order, marker)
+    except Exception:
+        # A rollback expires mutated ORM fields. Refresh explicitly before the
+        # cancellation caller continues to detach and commit its own changes.
+        await session.refresh(order)
+        logger.exception("wms111_cancel_return_failed order_id=%s", order_id)
         return None
 
+
+async def _create_document(
+    session: AsyncSession, order: FbsOrder, marker: dict[str, Any],
+) -> InboundIntakeRequest | None:
     if order.warehouse_id is None:
         logger.info(
             "wms111_cancel_return_skipped_no_warehouse order_id=%s wb_order_id=%s",
@@ -268,10 +287,8 @@ async def ensure_cancel_return_document(
 
     details = dict(order.meta_details_json or {})
     details[CANCEL_RETURN_META_KEY] = {
+        **marker,
         "inbound_request_id": str(req.id),
-        "wb_order_id": int(order.wb_order_id),
-        "cancelled_at": cancel_time.at.isoformat(),
-        "cancelled_at_source": cancel_time.source,
         "created_at": datetime.now(UTC).isoformat(),
     }
     order.meta_details_json = details
@@ -281,7 +298,7 @@ async def ensure_cancel_return_document(
         order.id,
         order.wb_order_id,
         req.id,
-        cancel_time.source,
+        marker["cancelled_at_source"],
     )
     return req
 
@@ -293,48 +310,30 @@ async def maybe_create_cancel_return_document(
     row: dict[str, Any] | None = None,
     received_at: datetime | None = None,
 ) -> InboundIntakeRequest | None:
-    """Точка входа для внешнего кода.
+    """Record a WB cancellation, including those that do not need a return.
 
-    Собирает воедино три проверки:
-      1) отмена относится к WB (для Ozon возвратом занимается отдельный сервис),
-      2) заказ уже был передан (иначе документ возврата не нужен — товар не
-         покидал склад),
-      3) документ ещё не создавался (маркер в meta_details_json).
-
-    После этого просит `ensure_cancel_return_document` создать документ.
-    Ошибка на любом шаге не должна валить внешнюю транзакцию: отмена в кабинете
-    маркетплейса уже необратима, локальная часть обязана дойти до конца, а
-    документ возврата в худшем случае заведёт оператор руками, как и раньше.
+    received_at is retained as a keyword for existing callers; it denotes the
+    time this response was observed by WMS, never a claimed WB event time.
     """
-    if order.marketplace != "wb":
-        return None
-    if not await was_transferred(session, order):
-        return None
-    cancel_time = cancel_time_from_row(row, received_at=received_at)
-    try:
-        return await ensure_cancel_return_document(
-            session,
-            order,
-            cancel_time=cancel_time,
-        )
-    except Exception:
-        logger.exception(
-            "wms111_cancel_return_failed order_id=%s wb_order_id=%s",
-            order.id,
-            order.wb_order_id,
-        )
-        return None
+    return await ensure_cancel_return_document(
+        session, order, cancel_time=cancel_time_from_row(row, received_at=received_at),
+    )
 
 
-__all__ = [
-    "CANCEL_RETURN_META_KEY",
-    "CANCEL_TIME_SOURCE_RECEIVED_AT",
-    "CANCEL_TIME_SOURCE_WB_PAYLOAD",
-    "CancelTime",
-    "cancel_return_marker",
-    "cancel_time_from_row",
-    "ensure_cancel_return_document",
-    "has_cancel_return_marker",
-    "maybe_create_cancel_return_document",
-    "was_transferred",
-]
+async def retry_pending_cancel_returns(
+    session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID,
+) -> None:
+    """Retry recorded cancellations locally even though WB polling skips terminals.
+
+    Legacy rows without evidence are deliberately excluded: retry time cannot
+    be substituted for an unknown historical cancellation time.
+    """
+    meta = FbsOrder.meta_details_json[CANCEL_RETURN_META_KEY]
+    orders = list(await session.scalars(select(FbsOrder).where(
+        FbsOrder.tenant_id == tenant_id, FbsOrder.seller_id == seller_id,
+        FbsOrder.marketplace == "wb", FbsOrder.status == FBS_ORDER_STATUS_CANCELLED,
+        meta["cancelled_at"].as_string().is_not(None),
+        meta["inbound_request_id"].as_string().is_(None),
+    ).order_by(FbsOrder.id)))
+    for order in orders:
+        await maybe_create_cancel_return_document(session, order)
