@@ -31,14 +31,13 @@ from app.models.marking_code import (
     MarkingReprintRequest,
 )
 from app.models.product import Product
-from app.services import true_api_marking_check as true_api
+from app.services import public_marking_check as public_check
 from app.services.inbound_intake_service import (
     RECEIVING_STATUSES,
     InboundIntakeError,
     effective_actual_qty,
 )
 from app.services.marking_code_service import extract_gtin_from_cis
-from app.services.seller_marking_credentials_service import get_cz_token_for_seller
 
 JOB_TYPE = "inbound_marking_check"
 
@@ -465,52 +464,44 @@ async def _run_check_job(job_id: uuid.UUID) -> None:
                     await session.commit()
                     return
                 await session.commit()
-            async with SessionLocal() as session:
-                rows = (await session.execute(
-                    select(MarkingCodeEvent.id, MarkingCode.cis_code, MarkingCode.seller_id)
-                    .join(MarkingCode, MarkingCode.id == MarkingCodeEvent.code_id)
-                    .where(
-                        MarkingCodeEvent.id.in_(event_ids),
-                        MarkingCodeEvent.tenant_id == tenant_id,
-                        MarkingCode.tenant_id == tenant_id,
+            for event_id in event_ids:
+                async with SessionLocal() as session:
+                    event = await session.get(MarkingCodeEvent, event_id)
+                    if (
+                        event is None
+                        or event.tenant_id != tenant_id
+                        or (_meta(event).get("cz_check") or {}).get("status")
+                        not in {None, "pending"}
+                    ):
+                        continue
+                    code = await session.get(MarkingCode, event.code_id)
+                    if code is None or code.tenant_id != tenant_id:
+                        continue
+                    code_text = code.cis_code
+                check = await public_check.check_code(client, code_text)
+                async with SessionLocal() as session:
+                    # Keep schedule_check lock order: an expired worker must not
+                    # overwrite snapshots owned by a replacement job.
+                    await _request(session, tenant_id, request_id, lock=True)
+                    job = await session.get(BackgroundJob, job_id, populate_existing=True)
+                    if job is None or job.status != "running":
+                        return
+                    event = await session.scalar(
+                        select(MarkingCodeEvent)
+                        .where(
+                            MarkingCodeEvent.id == event_id,
+                            MarkingCodeEvent.tenant_id == tenant_id,
+                        )
+                        .with_for_update()
                     )
-                )).all()
-                by_seller: dict[uuid.UUID, list[tuple[uuid.UUID, str]]] = {}
-                for event_id, code_text, seller_id in rows:
-                    by_seller.setdefault(seller_id, []).append((event_id, code_text))
-                tokens = {
-                    seller_id: await get_cz_token_for_seller(session, tenant_id, seller_id)
-                    for seller_id in by_seller
-                }
-            for seller_id, entries in by_seller.items():
-                for offset in range(0, len(entries), true_api.BATCH_SIZE):
-                    batch = entries[offset:offset + true_api.BATCH_SIZE]
-                    checks = await true_api.check_batch(
-                        client, [code for _, code in batch], tokens[seller_id]
-                    )
-                    async with SessionLocal() as session:
-                        # Same lock order as schedule_check: a replacement owns its
-                        # pending snapshots before an expired worker can write back.
-                        await _request(session, tenant_id, request_id, lock=True)
-                        job = await session.get(BackgroundJob, job_id, populate_existing=True)
-                        if job is None or job.status != "running":
-                            return
-                        events = (await session.scalars(
-                            select(MarkingCodeEvent)
-                            .where(
-                                MarkingCodeEvent.id.in_([event_id for event_id, _ in batch]),
-                                MarkingCodeEvent.tenant_id == tenant_id,
-                            )
-                            .with_for_update()
-                        )).all()
-                        by_event = dict(batch)
-                        for event in events:
-                            meta = _meta(event)
-                            if (meta.get("cz_check") or {}).get("status") not in {None, "pending"}:
-                                continue
-                            meta["cz_check"] = checks[by_event[event.id]]
-                            event.meta_json = json.dumps(meta)
-                        await session.commit()
+                    if event is None:
+                        continue
+                    meta = _meta(event)
+                    if (meta.get("cz_check") or {}).get("status") not in {None, "pending"}:
+                        continue
+                    meta["cz_check"] = check
+                    event.meta_json = json.dumps(meta)
+                    await session.commit()
 
 
 async def run_check_job(job_id: uuid.UUID) -> None:
@@ -536,7 +527,7 @@ async def run_check_job(job_id: uuid.UUID) -> None:
                 for event in await _attachments(session, req):
                     meta = _meta(event)
                     if (meta.get("cz_check") or {}).get("status") == "pending":
-                        meta["cz_check"] = true_api.unavailable()
+                        meta["cz_check"] = public_check.unavailable()
                         event.meta_json = json.dumps(meta)
                 await session.commit()
             except Exception:

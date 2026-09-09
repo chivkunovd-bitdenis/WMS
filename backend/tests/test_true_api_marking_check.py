@@ -16,7 +16,9 @@ from app.models.background_job import BackgroundJob
 from app.models.product import Product
 from app.models.seller_marking_credentials import SellerMarkingCredentials
 from app.services import inbound_marking_service as receiving
+from app.services import public_marking_check as public_api
 from app.services import true_api_marking_check as api
+from app.services.integration_fernet import encrypt_secret
 from app.services.seller_marking_credentials_service import get_cz_token_for_seller
 from tests.test_inbound_marking import CIS, _setup
 
@@ -177,7 +179,11 @@ async def test_credential_scope_and_only_cz_is_decrypted(async_client: httpx.Asy
     async with SessionLocal() as session:
         product = await session.scalar(select(Product).where(Product.tenant_id == tenant))
         seller = product.seller_id
-        row = await session.get(SellerMarkingCredentials, seller)
+        assert await session.get(SellerMarkingCredentials, seller) is None
+        row = SellerMarkingCredentials(
+            tenant_id=tenant, seller_id=seller, cz_token_enc=encrypt_secret("test-cz-token")
+        )
+        session.add(row)
         row.suz_oms_token_enc = "invalid-encrypted-OMS-must-not-be-decrypted"
         row.mp_api_key_enc = "invalid-encrypted-MP-must-not-be-decrypted"
         await session.commit()
@@ -190,13 +196,14 @@ async def test_credential_scope_and_only_cz_is_decrypted(async_client: httpx.Asy
 
 
 @pytest.mark.asyncio
-async def test_receiving_batches_two_pending_codes_and_preserves_full_values(
+async def test_receiving_checks_two_pending_codes_without_token_and_preserves_full_values(
     async_client: httpx.AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(api._PACING, "remaining_seconds", lambda _: 0.0)
+    monkeypatch.setattr(public_api._PACING, "remaining_seconds", lambda _: 0.0)
     tenant, user, req, line = await _setup(async_client)
     async with SessionLocal() as session:
+        assert await session.scalar(select(SellerMarkingCredentials)) is None
         for code in CODES:
             await receiving.attach_code(
                 session, tenant, req, line_id=line, cis_code=code, actor_user_id=user
@@ -205,24 +212,22 @@ async def test_receiving_batches_two_pending_codes_and_preserves_full_values(
     calls = []
 
     async def fake_post(_client: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
-        calls.append(url)
-        assert kwargs["headers"]["Authorization"] == "Bearer test-cz-token"
-        body = kwargs["json"]
-        if url.endswith("/info"):
-            assert set(body) == {api.short_ki(code) for code in CODES}
-            data: Any = [
-                {"cisInfo": {"requestedCis": code, "cis": code, "status": "INTRODUCED"}}
-                for code in body
-            ]
-        else:
-            assert set(body["codes"]) == set(CODES)
-            data = {"result": True, "quantity": 2}
+        assert url == public_api.CHECK_URL
+        assert set(kwargs) == {"json"}  # No Authorization or credential headers.
+        assert set(kwargs["json"]) == {"code"}
+        full_code = kwargs["json"]["code"]
+        assert full_code in CODES and "\x1d" in full_code
+        calls.append(full_code)
+        data = {
+            "outerStatus": "INTRODUCED", "checkResult": True,
+            "codeResolveData": {"verified": True},
+        }
         return httpx.Response(200, request=httpx.Request("POST", url), json=data)
 
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
     assert job is not None
     await receiving.run_check_job(job)
-    assert calls == [api.BASE_URL + "/cises/info", api.BASE_URL + "/cises/check"]
+    assert len(calls) == 2 and set(calls) == set(CODES)
     async with SessionLocal() as session:
         listed = await receiving.list_codes(session, tenant, req)
         assert not listed["checking"]
@@ -253,15 +258,15 @@ async def test_expired_worker_cannot_overwrite_retry_while_saving_response(
     release_retry_commit = asyncio.Event()
     calls = []
 
-    async def check_batch(_client: Any, codes: list[str], _token: str | None) -> Any:
-        calls.append(codes)
+    async def check_code(_client: Any, code: str) -> Any:
+        calls.append(code)
         if len(calls) == 1:
             response_ready.set()
             await release_response.wait()
-            return {CIS: {**api.unavailable(), "status": "introduced", "reason": "old response"}}
-        return {CIS: {**api.unavailable(), "status": "problem", "reason": "fresh retry response"}}
+            return {**public_api.unavailable(), "status": "introduced", "reason": "old response"}
+        return {**public_api.unavailable(), "status": "problem", "reason": "fresh retry response"}
 
-    monkeypatch.setattr(api, "check_batch", check_batch)
+    monkeypatch.setattr(public_api, "check_code", check_code)
     old_task = asyncio.create_task(receiving.run_check_job(old_id))
     retry_task = None
     try:
@@ -314,7 +319,7 @@ async def test_expired_worker_cannot_overwrite_retry_while_saving_response(
             listed = await receiving.list_codes(session, tenant, req)
             assert listed["items"][0]["cz_status"] == "pending"
         await receiving.run_check_job(new_id)
-        assert calls == [[CIS], [CIS]]
+        assert calls == [CIS, CIS]
         async with SessionLocal() as session:
             listed = await receiving.list_codes(session, tenant, req)
             assert listed["items"][0]["cz_reason"] == "fresh retry response"

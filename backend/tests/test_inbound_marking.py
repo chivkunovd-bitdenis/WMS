@@ -3,12 +3,15 @@ from __future__ import annotations
 import io
 import json
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
 import pytest
 from openpyxl import load_workbook  # type: ignore[import-untyped]
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
 from app.models.fbs_order import FbsOrder
@@ -17,13 +20,11 @@ from app.models.inventory_movement import InventoryMovement
 from app.models.marking_code import MarkingCode, MarkingCodeEvent
 from app.models.product import Product
 from app.models.seller import Seller
-from app.models.seller_marking_credentials import SellerMarkingCredentials
 from app.services import fbs_marking_service as wb
 from app.services import inbound_intake_service as intake
 from app.services import inbound_marking_service as svc
 from app.services import marking_code_service as marking
-from app.services import true_api_marking_check as true_api
-from app.services.integration_fernet import encrypt_secret
+from app.services import public_marking_check as public_check
 from tests.test_inbound_intake_service_be01 import _auth_ids, _setup_request
 
 CIS = "010460123456789021SERIAL1234567\x1d91KEY1\x1d92SIGNATURE+/="
@@ -31,13 +32,14 @@ CIS = "010460123456789021SERIAL1234567\x1d91KEY1\x1d92SIGNATURE+/="
 
 @pytest.fixture(autouse=True)
 def no_real_check_pacing(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(true_api._PACING, "remaining_seconds", lambda _key: 0.0)
+    monkeypatch.setattr(public_check._PACING, "remaining_seconds", lambda _key: 0.0)
 
 
-def _info_response(url: str, codes: list[str], status: str = "APPLIED") -> httpx.Response:
-    return httpx.Response(200, request=httpx.Request("POST", url), json=[
-        {"cisInfo": {"requestedCis": code, "cis": code, "status": status}} for code in codes
-    ])
+def _check_response(url: str, status: str = "APPLIED") -> httpx.Response:
+    return httpx.Response(200, request=httpx.Request("POST", url), json={
+        "outerStatus": status, "checkResult": status == "INTRODUCED",
+        "codeResolveData": {"verified": True},
+    })
 
 
 async def _setup(client: httpx.AsyncClient) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID]:
@@ -50,9 +52,6 @@ async def _setup(client: httpx.AsyncClient) -> tuple[uuid.UUID, uuid.UUID, uuid.
         session.add(seller)
         await session.flush()
         product.seller_id = seller.id
-        session.add(SellerMarkingCredentials(
-            tenant_id=tenant, seller_id=seller.id, cz_token_enc=encrypt_secret("test-cz-token")
-        ))
         await session.commit()
         req = await intake.begin_receiving(session, tenant, req_id, actor_user_id=user)
         line_id = req.lines[0].id
@@ -125,11 +124,11 @@ async def test_capacity_and_existing_lifecycle_are_not_overwritten(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("offline", [False, True])
+@pytest.mark.parametrize("outcome", ["applied", "introduced", "http451", "offline"])
 async def test_background_check_is_idempotent_and_has_no_stock_effect(
     async_client: httpx.AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
-    offline: bool,
+    outcome: str,
 ) -> None:
     tenant, user, req, line = await _setup(async_client)
     async with SessionLocal() as session:
@@ -140,18 +139,30 @@ async def test_background_check_is_idempotent_and_has_no_stock_effect(
         assert job is not None
         assert await svc.schedule_check(session, tenant, req) is None
     calls = []
+    open_sessions = 0
+
+    @asynccontextmanager
+    async def counted_session() -> AsyncIterator[AsyncSession]:
+        nonlocal open_sessions
+        async with SessionLocal() as session:
+            open_sessions += 1
+            try:
+                yield session
+            finally:
+                open_sessions -= 1
+
+    monkeypatch.setattr(svc, "SessionLocal", counted_session)
 
     async def fake_post(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
-        if url.endswith("/cises/info"):
-            return _info_response(url, kwargs["json"])
-        calls.extend(kwargs["json"]["codes"])
-        if offline:
+        assert open_sessions == 0  # No receiving DB session spans external HTTP.
+        assert url == public_check.CHECK_URL
+        assert kwargs == {"json": {"code": CIS}}
+        calls.append(kwargs["json"]["code"])
+        if outcome == "offline":
             raise httpx.ConnectError("offline")
-        return httpx.Response(
-            200,
-            request=httpx.Request("POST", url),
-            json={"result": True, "quantity": len(kwargs["json"]["codes"])},
-        )
+        if outcome == "http451":
+            return httpx.Response(451, request=httpx.Request("POST", url), text="")
+        return _check_response(url, "INTRODUCED" if outcome == "introduced" else "APPLIED")
 
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
     await svc.run_check_job(job)
@@ -160,7 +171,14 @@ async def test_background_check_is_idempotent_and_has_no_stock_effect(
     async with SessionLocal() as session:
         result = await svc.list_codes(session, tenant, req)
         assert not result["checking"]
-        assert result["items"][0]["cz_status"] == ("unavailable" if offline else "problem")
+        expected = {"applied": "problem", "introduced": "introduced"}.get(outcome, "unavailable")
+        assert result["items"][0]["cz_status"] == expected
+        event = await session.scalar(select(MarkingCodeEvent))
+        snapshot = json.loads(event.meta_json)["cz_check"]
+        assert snapshot["provider"] == "mobile_check"
+        assert "токен" not in snapshot["reason"].lower()
+        if outcome == "http451":
+            assert snapshot["raw_response"] == "" and snapshot["http_status"] == 451
         code = await session.get(MarkingCode, uuid.UUID(item["id"]))
         assert code.status == "applied"
         assert await session.scalar(select(func.count(InventoryMovement.id))) == 0
@@ -528,14 +546,8 @@ async def test_automatic_check_preserves_finished_answers_manual_check_rechecks(
     calls = []
 
     async def fake_post(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
-        if url.endswith("/cises/info"):
-            return _info_response(url, kwargs["json"], "INTRODUCED")
-        calls.extend(kwargs["json"]["codes"])
-        return httpx.Response(
-            200,
-            request=httpx.Request("POST", url),
-            json={"result": True, "quantity": len(kwargs["json"]["codes"])},
-        )
+        calls.append(kwargs["json"]["code"])
+        return _check_response(url, "INTRODUCED")
 
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
     async with SessionLocal() as session:
@@ -616,9 +628,7 @@ async def test_deletion_during_check_and_rescan_are_drained_without_stuck_job(
     calls = []
 
     async def fake_post(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
-        if url.endswith("/cises/info"):
-            return _info_response(url, kwargs["json"])
-        calls.extend(kwargs["json"]["codes"])
+        calls.append(kwargs["json"]["code"])
         if len(calls) == 1:
             async with SessionLocal() as session:
                 await svc.delete_code(session, tenant, req, uuid.UUID(first["id"]))
@@ -632,11 +642,7 @@ async def test_deletion_during_check_and_rescan_are_drained_without_stuck_job(
                 )
                 # The automatic posting trigger meets the currently running job.
                 assert await svc.schedule_check(session, tenant, req) is None
-        return httpx.Response(
-            200,
-            request=httpx.Request("POST", url),
-            json={"result": True, "quantity": len(kwargs["json"]["codes"])},
-        )
+        return _check_response(url)
 
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
     await svc.run_check_job(job_id)
@@ -728,13 +734,7 @@ async def test_printed_pool_inspection_and_removal_preserve_original_code_and_hi
         job_id = await svc.schedule_check(session, tenant, req)
 
     async def fake_post(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
-        if url.endswith("/cises/info"):
-            return _info_response(url, kwargs["json"])
-        return httpx.Response(
-            200,
-            request=httpx.Request("POST", url),
-            json={"result": True, "quantity": len(kwargs["json"]["codes"])},
-        )
+        return _check_response(url)
 
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
     await svc.run_check_job(job_id)
@@ -821,3 +821,36 @@ async def test_delete_api_is_authenticated_and_returns_no_content(
     response = await async_client.delete(url, headers=headers)
     assert response.status_code == 204 and response.content == b""
     assert (await async_client.delete(url, headers=headers)).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_expired_check_cannot_overwrite_replacement_pending_snapshot(
+    async_client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from app.models.background_job import BackgroundJob
+
+    tenant, user, req, line = await _setup(async_client)
+    async with SessionLocal() as session:
+        await svc.attach_code(session, tenant, req, line_id=line, cis_code=CIS, actor_user_id=user)
+        old_job = await svc.schedule_check(session, tenant, req)
+    replacement = None
+
+    async def fake_post(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
+        nonlocal replacement
+        async with SessionLocal() as session:
+            job = await session.get(BackgroundJob, old_job)
+            job.created_at = datetime.now(UTC) - timedelta(hours=2)
+            await session.commit()
+            replacement = await svc.schedule_check(session, tenant, req, force=True)
+        return _check_response(url, "INTRODUCED")
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    await svc.run_check_job(old_job)
+    async with SessionLocal() as session:
+        assert replacement is not None
+        assert (await session.get(BackgroundJob, old_job)).status == "failed"
+        assert (await session.get(BackgroundJob, replacement)).status == "pending"
+        assert (await svc.list_codes(session, tenant, req))["items"][0]["cz_status"] == "pending"
+        assert await session.scalar(select(func.count(InventoryMovement.id))) == 0
