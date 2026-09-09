@@ -1,0 +1,7 @@
+# Excerpts observed in live docker logs --timestamps --since 2026-09-09T09:45:00Z wms_prod-celery_worker-1; filtered by warehouse/seller/task.
+2026-09-09T10:15:22.739564095Z [2026-09-09 10:15:22,739: INFO/MainProcess] Task wms.fbs_stock_reconcile[03bfffb3-7e7c-4a7e-85b8-28e1fbcdc1f5] received
+2026-09-09T10:15:23.303588485Z [2026-09-09 10:15:23,302: INFO/ForkPoolWorker-2] HTTP Request: PUT https://marketplace-api.wildberries.ru/api/v3/stocks/2103525 "HTTP/1.1 204 No Content"
+2026-09-09T10:15:23.564676572Z [2026-09-09 10:15:23,564: INFO/ForkPoolWorker-2] HTTP Request: POST https://marketplace-api.wildberries.ru/api/v3/stocks/2103525 "HTTP/1.1 200 OK"
+2026-09-09T10:15:26.123828636Z [2026-09-09 10:15:26,123: INFO/ForkPoolWorker-2] Task wms.fbs_stock_reconcile[03bfffb3-7e7c-4a7e-85b8-28e1fbcdc1f5] succeeded in 3.3833500226028264s: None
+2026-09-09T10:25:30.312360750Z [2026-09-09 10:25:30,311: INFO/ForkPoolWorker-3] fbs stock publish done: seller=77b66021-25e9-4127-8c01-b8408eccde37 marketplace=wb bindings=4 targeted=0 confirmed=0 errors=0
+2026-09-09T10:31:26.886888449Z [2026-09-09 10:31:26,886: INFO/ForkPoolWorker-2] fbs stock publish done: seller=77b66021-25e9-4127-8c01-b8408eccde37 marketplace=wb bindings=4 targeted=0 confirmed=0 errors=0
