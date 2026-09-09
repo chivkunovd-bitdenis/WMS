@@ -1,0 +1,14 @@
+{
+  "verified_at_utc": "2026-09-09T12:39:14.365700+00:00",
+  "source_sha": "4f124cfa646431aa6ae4a1d949bcfdb8155eab1b",
+  "deployment_id": "de3f683a-adde-4580-ae0d-341356178d7a",
+  "expected_deployment_id": "de3f683a-adde-4580-ae0d-341356178d7a",
+  "deployment_status": "SUCCESS",
+  "source_count": 429,
+  "runtime_count": 429,
+  "missing": [],
+  "extra": [],
+  "mismatches": [],
+  "public_marking_check_sha256": "59c4a8606ded5b889e81989618a9b822a89c8ada1519629374dfda6510ca5660",
+  "pass": true
+}

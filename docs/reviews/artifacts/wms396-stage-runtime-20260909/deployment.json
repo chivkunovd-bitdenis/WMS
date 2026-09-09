@@ -1,0 +1,10 @@
+{
+  "id": "de3f683a-adde-4580-ae0d-341356178d7a",
+  "status": "SUCCESS",
+  "createdAt": "2026-09-09T12:35:35.775Z",
+  "meta": {
+    "imageDigest": "sha256:7105da3c593f7235375637f03e6054ff15c9d069a4ac0b244ba14469e7a7d337",
+    "cliMessage": "WMS-396 4f124cfa646431aa6ae4a1d949bcfdb8155eab1b token-free receiving checks",
+    "rootDirectory": "/backend"
+  }
+}
