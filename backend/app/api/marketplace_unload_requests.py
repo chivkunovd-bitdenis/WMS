@@ -114,6 +114,9 @@ class MarketplaceUnloadManualBoxLineBody(BaseModel):
     storage_location_id: uuid.UUID | None = None
     quantity: int = Field(ge=1, le=1_000_000_000)
 
+    container_kind: Literal["pallet", "box", "cargo_place"] | None = None
+    container_id: uuid.UUID | None = None
+
 
 class MarketplaceUnloadBoxLineRemoveBody(BaseModel):
     quantity: int | None = Field(default=None, ge=1, le=1_000_000_000)
@@ -134,6 +137,9 @@ class MarketplaceUnloadBoxScanOut(BaseModel):
     """TSD scan response: location step, ready box, or product added to box."""
 
     kind: str
+    container_kind: str | None = None
+    container_id: str | None = None
+    container_code: str | None = None
     storage_location_id: str | None = None
     location_code: str | None = None
     id: str | None = None
@@ -169,6 +175,15 @@ class MarketplaceUnloadScanBody(BaseModel):
     storage_location_id: uuid.UUID | None = None
     quantity: int = Field(default=1, ge=1, le=1_000_000_000)
     allow_over_plan: bool = False
+
+    container_kind: Literal["pallet", "box", "cargo_place"] | None = None
+    container_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _container_pair(self) -> MarketplaceUnloadScanBody:
+        if (self.container_kind is None) != (self.container_id is None):
+            raise ValueError("container_kind and container_id must be set together")
+        return self
 
 
 class MarketplaceUnloadLineCreate(BaseModel):
@@ -357,6 +372,14 @@ def _box_scan_out(
     *,
     reveal_storage: bool,
 ) -> MarketplaceUnloadBoxScanOut:
+    if result.kind == "container":
+        return MarketplaceUnloadBoxScanOut(
+            kind="container",
+            storage_location_id=str(result.storage_location_id) if reveal_storage else None,
+            container_kind=result.container_kind,
+            container_id=str(result.container_id),
+            container_code=result.container_code,
+        )
     if result.kind == "location":
         return MarketplaceUnloadBoxScanOut(
             kind="location",
@@ -717,6 +740,7 @@ def _map_box_err(exc: MarketplaceUnloadBoxError) -> HTTPException:
     if exc.code in (
         "invalid_preset",
         "invalid_quantity",
+        "invalid_container_reference",
         "invalid_batch_count",
         "barcode_empty",
         "barcode_unknown",
@@ -1732,6 +1756,8 @@ async def scan_marketplace_unload_box(
             quantity=body.quantity,
             allow_over_plan=body.allow_over_plan,
             actor_user_id=user.id,
+            container_kind=body.container_kind,
+            container_id=body.container_id,
         )
     except MarketplaceUnloadBoxError as exc:
         raise _map_box_err(exc) from None
@@ -1766,6 +1792,8 @@ async def manual_marketplace_unload_box_line(
             storage_location_id=body.storage_location_id,
             quantity=body.quantity,
             actor_user_id=user.id,
+            container_kind=body.container_kind,
+            container_id=body.container_id,
         )
     except MarketplaceUnloadBoxError as exc:
         raise _map_box_err(exc) from None
