@@ -1,0 +1,27 @@
+{
+  "wm size reset": {
+    "exit": 0,
+    "output": ""
+  },
+  "wm density reset": {
+    "exit": 0,
+    "output": ""
+  },
+  "settings put global window_animation_scale 1.0": {
+    "exit": 0,
+    "output": ""
+  },
+  "settings put global transition_animation_scale 1.0": {
+    "exit": 0,
+    "output": ""
+  },
+  "settings delete global animator_duration_scale": {
+    "exit": 0,
+    "output": "Deleted 1 rows"
+  },
+  "reread wm size": "Physical size: 1080x2280",
+  "reread wm density": "Physical density: 440",
+  "reread settings get global window_animation_scale": "1.0",
+  "reread settings get global transition_animation_scale": "1.0",
+  "reread settings get global animator_duration_scale": "null"
+}
