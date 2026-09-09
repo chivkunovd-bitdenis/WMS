@@ -1,0 +1,50 @@
+{
+  "agents": [
+    {
+      "at": "2026-09-09T21:22:03.902Z",
+      "agent": "chat-lane",
+      "requested_model": "opus",
+      "isolation": "worktree",
+      "background": true,
+      "agent_id": "a6e9bcf0dbbdafa7b",
+      "launched": true,
+      "per_child_effort_verified": false
+    },
+    {
+      "at": "2026-09-09T21:22:34.392Z",
+      "agent": "stock-lane",
+      "requested_model": "opus",
+      "isolation": "worktree",
+      "background": true,
+      "agent_id": "a254e6d9b275d4afb",
+      "launched": true,
+      "per_child_effort_verified": false
+    },
+    {
+      "at": "2026-09-09T21:24:39.709Z",
+      "agent": "mobile-lane",
+      "requested_model": "opus",
+      "isolation": "worktree",
+      "background": true,
+      "agent_id": "a6bcd38a653b6a036",
+      "launched": true,
+      "per_child_effort_verified": false
+    },
+    {
+      "at": "2026-09-09T21:25:09.169Z",
+      "agent": "warehouse-lane",
+      "requested_model": "opus",
+      "isolation": "worktree",
+      "background": true,
+      "agent_id": "a7a57b97a3faeba40",
+      "launched": true,
+      "per_child_effort_verified": false
+    }
+  ],
+  "coordinator_ack": [
+    {
+      "at": "2026-09-09T21:25:13.603Z",
+      "text": "All four lanes running in parallel. Updating the launch journal with real agent facts + limitations."
+    }
+  ]
+}
