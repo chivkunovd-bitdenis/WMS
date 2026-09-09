@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { FfInventoryCountScreen } from './FfInventoryCountScreen'
-import { mergeInFlightActuals } from './InventoryRows'
+import { markUncountedEmptyIn, mergeInFlightActuals } from './InventoryRows'
 import { createFoundQueue, FoundPlaceDeferredError, type FoundPlace } from './foundQueue'
 import type { WbProductPickerCatalogRow } from '../../../components/WbProductPickerDialog'
 
@@ -423,6 +423,19 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         productCatalog={pickerCatalog}
         catalogLoading={catalogLoading}
         onAddProduct={(selections, placement) => addProduct(selections, placement)}
+        onMarkEmpty={(target) => {
+          // WMS-154: одна кнопка «Здесь пусто» — обходим поддерево выбранного
+          // места и ставим 0 всем ещё не тронутым строкам. Каждую тронутую
+          // строку кладём в touchedRef, иначе save отправит только «пустой»
+          // список и сервер ничего не изменит.
+          const applied =
+            target.kind === 'cell'
+              ? markUncountedEmptyIn(count, { kind: 'cell', cellId: target.id })
+              : markUncountedEmptyIn(count, { kind: 'container', containerId: target.id })
+          if (applied.touched.length === 0) return
+          for (const productId of applied.touched) touchedRef.current.add(productId)
+          setCount(applied.count)
+        }}
         onBack={() => {
           setCount(null)
           setNote(null)

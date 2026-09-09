@@ -411,6 +411,85 @@ export function setActual(
   return changed ? { ...count, cells } : count
 }
 
+/**
+ * WMS-154: пометить всё содержимое выбранной ячейки/тары как «здесь пусто».
+ *
+ * До этого пустое место и непосчитанное выглядели одинаково: у оператора нет
+ * очевидного способа сказать «я подошёл и там ничего нет» — единственное, что
+ * он делал, это набивал 0 в каждую строку руками. Кнопка «Здесь пусто» кладёт
+ * `actual = 0` только на непосчитанные листья внутри выделенного места. Уже
+ * посчитанные значения не трогаем: если оператор насчитал 3, а потом нажал
+ * пустоту по ошибке, три штуки не должны молча исчезнуть.
+ *
+ * Возвращает пару: обновлённый документ и список тронутых product id — они
+ * попадают в `touchedRef`, чтобы сохранение отправило именно их.
+ */
+export function markUncountedEmptyIn(
+  count: InventoryCount,
+  target: { kind: 'cell'; cellId: string } | { kind: 'container'; containerId: string },
+): { count: InventoryCount; touched: string[] } {
+  const touched: string[] = []
+
+  function zeroProducts(nodes: InventoryNode[]): InventoryNode[] {
+    let changed = false
+    const next = nodes.map((node) => {
+      if (node.kind === 'product') {
+        if (node.actual !== null) return node
+        changed = true
+        touched.push(node.id)
+        return { ...node, actual: 0 }
+      }
+      const children = zeroProducts(node.children)
+      if (children === node.children) return node
+      changed = true
+      return { ...node, children }
+    })
+    return changed ? next : nodes
+  }
+
+  function walkContainers(nodes: InventoryNode[]): InventoryNode[] {
+    let changed = false
+    const next = nodes.map((node) => {
+      if (node.kind === 'product') return node
+      if (target.kind === 'container' && node.id === target.containerId) {
+        const children = zeroProducts(node.children)
+        if (children === node.children) return node
+        changed = true
+        return { ...node, children }
+      }
+      const children = walkContainers(node.children)
+      if (children === node.children) return node
+      changed = true
+      return { ...node, children }
+    })
+    return changed ? next : nodes
+  }
+
+  let cells = count.cells
+  if (target.kind === 'cell') {
+    let cellsChanged = false
+    cells = count.cells.map((cell) => {
+      if (cell.id !== target.cellId) return cell
+      const children = zeroProducts(cell.children)
+      if (children === cell.children) return cell
+      cellsChanged = true
+      return { ...cell, children }
+    })
+    if (!cellsChanged) return { count, touched: [] }
+  } else {
+    let cellsChanged = false
+    cells = count.cells.map((cell) => {
+      const children = walkContainers(cell.children)
+      if (children === cell.children) return cell
+      cellsChanged = true
+      return { ...cell, children }
+    })
+    if (!cellsChanged) return { count, touched: [] }
+  }
+  return { count: { ...count, cells }, touched }
+}
+
+
 export function collapseAllKeys(count: InventoryCount): Set<string> {
   const keys = new Set<string>()
   function walkNodes(nodes: InventoryNode[]) {
