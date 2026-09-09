@@ -363,13 +363,14 @@ async def record_operational_charge(
     performer_id: uuid.UUID | None,
     warehouse_id: uuid.UUID | None = None,
     lines: list[OperationalBillingLine] | None = None,
+    respect_billing_start: bool = True,
 ) -> BillingLedgerEntry | None:
     """Record the first final operational fact, without blocking on a missing tariff."""
     fact_date = occurred_at.astimezone(MOSCOW).date()
     billing_enabled_from = await session.scalar(
         select(Tenant.billing_enabled_from).where(Tenant.id == tenant_id)
     )
-    if billing_enabled_from is None or fact_date < billing_enabled_from:
+    if respect_billing_start and (billing_enabled_from is None or fact_date < billing_enabled_from):
         return None
 
     existing = await _active_charge_for_source(
