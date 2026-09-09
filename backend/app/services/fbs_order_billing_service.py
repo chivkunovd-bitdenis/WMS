@@ -1,8 +1,8 @@
 """Тарификация сборки заказов FBS.
 
 Начисляем при подтверждённой передаче поставки маркетплейсу. Сам по себе
-импортированный статус `in_delivery` не доказывает выполненную складом работу.
-Последующие подтверждения `sorted` и `done` используют то же начисление.
+импортированный статус WB, включая `sorted` и `done`, не доказывает передачу
+через WMS. Повторное подтверждение использует сохранённую дату передачи.
 
 Считаем **за штуку товара**, а не за заказ: у Wildberries в заказе всегда одна
 штука, у Ozon в отправлении может быть несколько позиций.
@@ -25,7 +25,9 @@ from app.models.fbs_order import (
     FbsOrder,
     FbsOrderProduct,
 )
+from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_supply import FbsSupply
+from app.models.fbs_wb_operation import FbsWbOperation
 from app.models.product import Product
 from app.models.seller import Seller
 from app.services.billing_ledger_service import (
@@ -44,6 +46,100 @@ CONFIRMED_STATUSES = frozenset(
     {FBS_ORDER_STATUS_IN_DELIVERY, FBS_ORDER_STATUS_SORTED, FBS_ORDER_STATUS_DONE}
 )
 SOURCE_TYPE = "fbs_order"
+
+
+async def confirmed_order_handover_dates(
+    session: AsyncSession, tenant_id: uuid.UUID, orders: list[FbsOrder]
+) -> dict[uuid.UUID, datetime]:
+    """Persisted successful handovers, never an imported order status/date."""
+    own_orders = [order for order in orders if order.tenant_id == tenant_id]
+    if not own_orders:
+        return {}
+    by_id = {order.id: order for order in own_orders}
+    operations = list(await session.scalars(
+        select(FbsWbOperation).where(
+            FbsWbOperation.tenant_id == tenant_id,
+            FbsWbOperation.seller_id.in_(
+                {order.seller_id for order in own_orders if order.seller_id}
+            ),
+            FbsWbOperation.operation_kind == "supply_deliver",
+            FbsWbOperation.state == "confirmed",
+            FbsWbOperation.local_entity_type == "fbs_supply",
+            FbsWbOperation.confirmed_at.is_not(None),
+        )
+    ))
+    supply_ids = {order.supply_id for order in own_orders if order.supply_id is not None}
+    supply_ids.update(op.local_entity_id for op in operations if op.local_entity_id is not None)
+    supplies = {
+        supply.id: supply
+        for supply in await session.scalars(
+            select(FbsSupply).where(
+                FbsSupply.tenant_id == tenant_id,
+                FbsSupply.id.in_(supply_ids),
+            )
+        )
+    }
+    result: dict[uuid.UUID, datetime] = {}
+
+    def remember(order: FbsOrder, moment: datetime) -> None:
+        moment = moment if moment.tzinfo else moment.replace(tzinfo=UTC)
+        result[order.id] = min(result.get(order.id, moment), moment)
+
+    for order in own_orders:
+        supply = supplies.get(order.supply_id) if order.supply_id else None
+        if (
+            supply is not None
+            and supply.seller_id == order.seller_id
+            and supply.marketplace == order.marketplace
+            and supply.delivered_at is not None
+        ):
+            remember(order, supply.delivered_at)
+    operation_by_id = {op.id: op for op in operations}
+    ledger_orders: dict[uuid.UUID, list[uuid.UUID]] = {}
+    if operation_by_id:
+        for op_id, order_id in await session.execute(
+            select(
+                FbsShipmentReversalLedger.wb_operation_id,
+                FbsShipmentReversalLedger.fbs_order_id,
+            )
+            .where(
+                FbsShipmentReversalLedger.tenant_id == tenant_id,
+                FbsShipmentReversalLedger.fbs_order_id.in_(by_id),
+                FbsShipmentReversalLedger.wb_operation_id.in_(operation_by_id),
+            )
+        ):
+            ledger_orders.setdefault(op_id, []).append(order_id)
+    proven_orders: set[uuid.UUID] = set()
+    for op in operations:
+        summary = op.request_summary_json or {}
+        checkpoint = summary.get("checkpoint_source_plan")
+        # Source resolutions are only the mapped write-off subset. Their absence
+        # must not discard linked unmapped orders that were handed over too.
+        raw_rows = checkpoint.get("resolutions", []) if isinstance(checkpoint, dict) else []
+        candidate_ids = list(ledger_orders.get(op.id, []))
+        if isinstance(raw_rows, list):
+            for row in raw_rows:
+                if isinstance(row, dict):
+                    try:
+                        candidate_ids.append(uuid.UUID(str(row.get("fbs_order_id"))))
+                    except ValueError:
+                        continue
+        for order_id in candidate_ids:
+            candidate = by_id.get(order_id)
+            supply = supplies.get(op.local_entity_id) if op.local_entity_id else None
+            if (
+                candidate is not None and candidate.seller_id == op.seller_id
+                and (supply is None or supply.marketplace == candidate.marketplace)
+                and op.confirmed_at is not None
+            ):
+                # Confirmed operation is stronger evidence than a mutable link.
+                if candidate.id not in proven_orders:
+                    result.pop(candidate.id, None)
+                    remember(candidate, op.confirmed_at)
+                    proven_orders.add(candidate.id)
+                else:
+                    remember(candidate, op.confirmed_at)
+    return result
 
 
 async def _positions(session: AsyncSession, order: FbsOrder) -> list[tuple[uuid.UUID | None, int]]:
@@ -99,14 +195,16 @@ async def record_fbs_order_confirmed(
         return
     if order.seller_id is None:
         return
-    handover_at = confirmed_handover_at
-    if handover_at is None and order.supply_id is not None:
-        handover_at = await session.scalar(
-            select(FbsSupply.delivered_at).where(
-                FbsSupply.id == order.supply_id, FbsSupply.tenant_id == order.tenant_id
-            )
-        )
-    moment = confirmed_handover_at or occurred_at or handover_at or order_work_moment(order)
+    handover_at = confirmed_handover_at or (
+        await confirmed_order_handover_dates(session, order.tenant_id, [order])
+    ).get(order.id)
+    if order.marketplace == "wb":
+        if handover_at is None:
+            return
+        moment = handover_at
+    else:
+        # WMS-406 changes WB; retain Ozon's existing confirmed-status contract.
+        moment = confirmed_handover_at or occurred_at or handover_at or order_work_moment(order)
     positions = await _positions(session, order)
     quantity = sum(count for _, count in positions)
 
@@ -174,6 +272,7 @@ async def record_fbs_order_confirmed(
                 quantity=Decimal(quantity),
                 occurred_at=moment,
                 performer_id=None,
+                respect_billing_start=False,
                 warehouse_id=order.warehouse_id,
                 # Без строк ставка ищется только в старой таблице тарифов, а
                 # матрица — единственный живой экран — пишет в новую:

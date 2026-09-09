@@ -22,11 +22,10 @@
     3. владелец заводит тарифы и дату начала биллинга
     4. python -m scripts.backfill_billing_charges --from … --to … --tenant <id> --apply
 
-Дата работы берётся из сохранённого подтверждения передачи поставки. Если его
-нет у исторического sorted/done, используем сам заказ: когда упаковали, иначе когда подобрали,
-иначе когда заказ появился у маркетплейса. Импортированный in_delivery без
-подтверждения передачи пропускается. Первые два — это и есть работа
-склада; третий заполнен всегда и отличается от неё на день-два.
+WMS-406: для WB дата берётся только из сохранённого подтверждения передачи
+через WMS, включая снимок операции для отвязанных заказов. Sorted/done без
+передачи не создают услугу. Последующая отмена или брак не отменяют выполненную
+работу. Прежний fallback дат Ozon здесь сохранён отдельно.
 
 Безопасность:
   * по умолчанию — сухой прогон, ничего не пишется;
@@ -34,9 +33,7 @@
   * складских таблиц скрипт не касается вовсе — только летопись операций;
   * даты фактов с начислениями или ссылкой из счёта не меняются: сохранённое
     денежное основание требует отдельной сверки, а не автоматической передатировки;
-  * дата правится только у фактов заказов FBS и только если она расходится с
-    датой работы больше чем на сутки: у нормально записанных фактов расхождение
-    в минуты, и трогать их незачем.
+  * неучтённая дата приводится точно к подтверждённой передаче без допуска в сутки.
 """
 
 from __future__ import annotations
@@ -45,16 +42,15 @@ import argparse
 import asyncio
 import uuid
 from collections import defaultdict
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
 from app.models.billing import BillingInvoiceV2Source, BillingLedgerEntry
 from app.models.fbs_order import FBS_ORDER_STATUS_IN_DELIVERY, FbsOrder, FbsOrderProduct
-from app.models.fbs_supply import FbsSupply
 from app.models.operation_fact import OperationFact
 from app.models.product import Product
 from app.models.seller import Seller
@@ -63,15 +59,12 @@ from app.services.fbs_order_billing_service import (
     CONFIRMED_STATUSES,
     FBS_ORDER_SERVICE_CODE,
     SOURCE_TYPE,
+    confirmed_order_handover_dates,
     order_work_moment,
 )
 from app.services.operation_fact_service import OperationFactError, line_input, write_operation_fact
 
 MOSCOW = ZoneInfo("Europe/Moscow")
-# Насколько дата факта может отличаться от даты работы, чтобы считаться верной.
-# Нормальный путь пишет факт в тот же миг; расхождение в сутки и больше значит,
-# что факт проставлен моментом обработки, а не работой.
-DATE_DRIFT_TOLERANCE = timedelta(days=1)
 BATCH = 200
 
 
@@ -128,7 +121,10 @@ async def main() -> None:
                     select(FbsOrder)
                     .where(
                         FbsOrder.tenant_id == tenant_id,
-                        FbsOrder.status.in_(tuple(CONFIRMED_STATUSES)),
+                        or_(
+                            FbsOrder.marketplace == "wb",
+                            FbsOrder.status.in_(tuple(CONFIRMED_STATUSES)),
+                        ),
                     )
                     .order_by(FbsOrder.created_at_wb)
                 )
@@ -168,27 +164,14 @@ async def main() -> None:
                 ).all()
             }
 
-        supply_ids = {order.supply_id for order in orders if order.supply_id is not None}
-        handed_over_at: dict[uuid.UUID, datetime] = {}
-        if supply_ids:
-            handed_over_at = {
-                supply_id: delivered_at
-                for supply_id, delivered_at in (
-                    await session.execute(
-                        select(FbsSupply.id, FbsSupply.delivered_at).where(
-                            FbsSupply.tenant_id == tenant_id,
-                            FbsSupply.id.in_(supply_ids),
-                            FbsSupply.delivered_at.is_not(None),
-                        )
-                    )
-                ).all()
-                if delivered_at is not None
-            }
+        handed_over_at = await confirmed_order_handover_dates(session, tenant_id, orders)
 
         pending = 0
         for order in orders:
-            handover = handed_over_at.get(order.supply_id) if order.supply_id else None
-            if order.status == FBS_ORDER_STATUS_IN_DELIVERY and handover is None:
+            handover = handed_over_at.get(order.id)
+            if handover is None and (
+                order.marketplace == "wb" or order.status == FBS_ORDER_STATUS_IN_DELIVERY
+            ):
                 skipped_unconfirmed += 1
                 continue
             moment = handover or order_work_moment(order)
@@ -205,7 +188,7 @@ async def main() -> None:
                     continue
                 fact_id, occurred_at = found
                 stored = occurred_at if occurred_at.tzinfo else occurred_at.replace(tzinfo=UTC)
-                if abs(stored - moment) <= DATE_DRIFT_TOLERANCE:
+                if stored == moment:
                     continue
                 # Ledger entries are immutable. This also covers legacy invoices,
                 # which keep entry IDs in their JSON snapshot, and cancelled invoices.
@@ -294,7 +277,7 @@ async def main() -> None:
     if skipped_accounted:
         print(f"даты сохранены: есть начисление или ссылка из счёта: {skipped_accounted}")
     if skipped_unconfirmed:
-        print(f"пропущено in_delivery без подтверждения передачи: {skipped_unconfirmed}")
+        print(f"пропущено без подтверждения передачи: {skipped_unconfirmed}")
     if skipped_no_seller:
         print(f"пропущено без селлера: {skipped_no_seller}")
     if skipped_early:
