@@ -457,3 +457,135 @@ async def test_fbs_pick_scan_works_for_container_in_sorting_without_cell(
     assert response.json()["location_code"] is None
     assert response.json()["picked_qty"] == 1
     assert await _active_pick_count(supply_id) == 1
+
+
+@pytest.mark.asyncio
+async def test_fbs_pick_scan_switches_source_and_keeps_it_on_product_alias(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, product_id, location_id, order_ids, _location_code = (
+        await _seed_two_order_supply(async_client)
+    )
+    async with SessionLocal() as session:
+        location = await session.get(StorageLocation, location_id)
+        product = await session.get(Product, product_id)
+        assert location is not None
+        assert product is not None
+        box = WarehouseBox(
+            tenant_id=location.tenant_id,
+            warehouse_id=location.warehouse_id,
+            internal_barcode=f"FBS-SOURCE-{uuid.uuid4().hex[:12]}",
+            container_kind="box",
+            storage_location_id=location.id,
+        )
+        first_box = WarehouseBox(
+            tenant_id=location.tenant_id, warehouse_id=location.warehouse_id,
+            internal_barcode="FBSVID-BOX-03", container_kind="box",
+            storage_location_id=location.id,
+        )
+        next_location = StorageLocation(
+            tenant_id=location.tenant_id, warehouse_id=location.warehouse_id,
+            code="SOURCE-04", barcode="LOCATION-SOURCE-04",
+        )
+        session.add_all([first_box, next_location])
+        await session.flush()
+        box.storage_location_id = next_location.id
+        session.add(box)
+        await session.flush()
+        balance = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.tenant_id == location.tenant_id,
+                InventoryBalance.storage_location_id == location.id,
+                InventoryBalance.product_id == product.id,
+            )
+        )
+        assert balance is not None
+        balance.storage_location_id = next_location.id
+        balance.container_kind = "box"
+        balance.container_id = box.id
+        session.add(InventoryBalance(
+            tenant_id=location.tenant_id, product_id=product.id,
+            storage_location_id=location.id, container_kind="box", container_id=first_box.id,
+            quantity=2, quantity_unpacked=2,
+        ))
+        for order_id in order_ids:
+            order = await session.get(FbsOrder, order_id)
+            assert order is not None
+            order.wb_barcode = "WB-ORDER-ALIAS-401"
+        await session.commit()
+        first_id, next_location_id = first_box.id, next_location.id
+        box_id = box.id
+        box_barcode = box.internal_barcode
+        product_barcode = product.wb_barcode
+        assert product_barcode is not None
+
+    async def snapshot() -> tuple[Any, Any]:
+        async with SessionLocal() as session:
+            stock = (await session.execute(select(
+                InventoryBalance.id, InventoryBalance.quantity,
+                InventoryBalance.quantity_unpacked, InventoryBalance.quantity_packed,
+                InventoryBalance.storage_location_id, InventoryBalance.container_id,
+            ).where(InventoryBalance.product_id == product_id).order_by(InventoryBalance.id))).all()
+            reserves = (await session.execute(select(FbsOrder.id, FbsOrder.reserve_status)
+                .where(FbsOrder.id.in_(order_ids)).order_by(FbsOrder.id))).all()
+            return stock, reserves
+
+    before = await snapshot()
+    malformed = await async_client.post(
+        f"{BASE}/{supply_id}/pick/scan", headers=headers,
+        json={"barcode": box_barcode, "container_kind": "box"},
+    )
+    assert malformed.status_code == 422, malformed.text
+    first = await async_client.post(
+        f"{BASE}/{supply_id}/pick/scan", headers=headers,
+        json={"barcode": "FBSVID-BOX-03"},
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["container_id"] == str(first_id)
+    selected = await async_client.post(
+        f"{BASE}/{supply_id}/pick/scan",
+        headers=headers,
+        json={"barcode": box_barcode, "storage_location_id": str(location_id),
+              "container_kind": "box", "container_id": str(first_id)},
+    )
+    assert selected.status_code == 200, selected.text
+    assert selected.json()["kind"] == "container"
+    assert selected.json()["container_kind"] == "box"
+    assert selected.json()["container_id"] == str(box_id)
+
+    assert selected.json()["storage_location_id"] == str(next_location_id)
+    assert await snapshot() == before
+    assert await _active_pick_count(supply_id) == 0
+
+    picked = await async_client.post(
+        f"{BASE}/{supply_id}/pick/scan",
+        headers={**headers, "Idempotency-Key": "fbs-container-product"},
+        json={
+            "barcode": "WB-ORDER-ALIAS-401",
+            "storage_location_id": str(next_location_id),
+            "container_kind": "box",
+            "container_id": str(box_id),
+        },
+    )
+    assert picked.status_code == 200, picked.text
+    assert picked.json()["kind"] == "product"
+    async with SessionLocal() as session:
+        stored_pick = await session.scalar(
+            select(FbsOrderPick).where(
+                FbsOrderPick.fbs_supply_id == supply_id,
+                FbsOrderPick.undone_at.is_(None),
+            )
+        )
+        assert stored_pick is not None
+        assert stored_pick.source_container_kind == "box"
+        assert stored_pick.source_container_id == box_id
+
+    replay = await async_client.post(
+        f"{BASE}/{supply_id}/pick/scan",
+        headers={**headers, "Idempotency-Key": "fbs-container-product"},
+        json={"barcode": "WB-ORDER-ALIAS-401", "storage_location_id": str(next_location_id),
+              "container_kind": "box", "container_id": str(box_id)},
+    )
+    assert replay.status_code == 200, replay.text
+    assert await _active_pick_count(supply_id) == 1
+    assert await snapshot() == before
