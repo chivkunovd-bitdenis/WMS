@@ -1,0 +1,46 @@
+{
+  "checked_at_utc": "2026-09-09T21:36:28.837326+00:00",
+  "worktrees": [
+    {
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord",
+      "branch": "codex/wms415-coord-20260910",
+      "head": "1092538776b697ae613c3d62aa5adc095d8e7fc4",
+      "based_on_audited_code": true,
+      "status": ""
+    },
+    {
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms397-chat-mvp",
+      "branch": "feat/wms397-chat-mvp",
+      "head": "d73c05f0e19a8c31de95e4b21b5ff9c6064b7f1d",
+      "based_on_audited_code": true,
+      "status": "?? backend/tests/test_chat_api.py"
+    },
+    {
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms338-stock-min-formula",
+      "branch": "feat/wms338-stock-min-formula",
+      "head": "bc7f760c11b032fbb94376f042bb6d0f2dd7c13b",
+      "based_on_audited_code": true,
+      "status": "M backend/app/services/inventory_service.py"
+    },
+    {
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms062-warehouse-docs",
+      "branch": "feat/wms062-warehouse-docs",
+      "head": "5fee5efd4a6a090f373e6f566bdbd3530447e366",
+      "based_on_audited_code": true,
+      "status": "M backend/app/api/inventory_counts.py\n M backend/app/services/inventory_count_service.py\n M backend/app/services/warehouse_map_service.py\n M frontend/src/screens/ff/inventory/inventoryCountApi.ts"
+    },
+    {
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms401-mobile-followup",
+      "branch": "feat/wms401-mobile-followup",
+      "head": "bc7f760c11b032fbb94376f042bb6d0f2dd7c13b",
+      "based_on_audited_code": true,
+      "status": ""
+    }
+  ],
+  "preserved_file_bytes_equal": {
+    "inventory_service.py.stock-lane-edit": true,
+    "test_chat_api.py.chat-lane-new": true
+  },
+  "old_shared_checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-claude",
+  "old_shared_checkout_rule": "Quarantined source for recovery; no future worker writes there. Verify coordinator acknowledgement."
+}
