@@ -1,0 +1,339 @@
+{
+  "source_sha": "0d101a3e37316aa558f34c583416495ea7ec9e84",
+  "read_only": true,
+  "apply": false,
+  "statement_timeout_ms": 30000,
+  "source_injected_in_memory_only": true,
+  "started": "2026-09-09T08:20:53.432079+00:00",
+  "completed": "2026-09-09T08:21:02.948567+00:00",
+  "seconds": 10.321,
+  "totals": {
+    "created": 161,
+    "redated": 2544,
+    "skipped_accounted": 0,
+    "wb_orders": 18665,
+    "wb_proven": 2726,
+    "wb_unproven_with_fact": 8794,
+    "wb_detached_unproven": 15144,
+    "wb_detached_proven": 159,
+    "ozon_candidates": 0
+  },
+  "tenants": [
+    {
+      "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+      "tenant": "FFAdam",
+      "seconds": 1.55,
+      "summary": [
+        "арендатор: FFAdam",
+        "подтверждённых заказов: 3010",
+        "из них с фактом: 2514",
+        "сухой прогон: ничего не записано, повторите с --apply",
+        "фактов создано: 2, дат исправлено: 423",
+        "пропущено без подтверждения передачи: 2585",
+        "работа по дням (то, что попадёт в счёт):"
+      ],
+      "wb_orders": 3010,
+      "wb_proven": 425,
+      "wb_proven_missing_fact": 2,
+      "wb_unproven_with_fact": 2091,
+      "wb_detached_unproven": 2395,
+      "wb_detached_proven": 5,
+      "ozon_candidates": 0,
+      "created": 2,
+      "redated": 423,
+      "skipped_accounted": 0
+    },
+    {
+      "tenant_id": "5baaf211-7cb7-495d-9c2b-b42121606bf9",
+      "tenant": "Руспро",
+      "seconds": 0.009,
+      "summary": [
+        "арендатор: Руспро",
+        "подтверждённых заказов: 0",
+        "из них с фактом: 0",
+        "сухой прогон: ничего не записано, повторите с --apply",
+        "фактов создано: 0, дат исправлено: 0"
+      ],
+      "wb_orders": 0,
+      "wb_proven": 0,
+      "wb_proven_missing_fact": 0,
+      "wb_unproven_with_fact": 0,
+      "wb_detached_unproven": 0,
+      "wb_detached_proven": 0,
+      "ozon_candidates": 0,
+      "created": 0,
+      "redated": 0,
+      "skipped_accounted": 0
+    },
+    {
+      "tenant_id": "5fbf633c-3ea9-4c29-b5f5-f549b122bcae",
+      "tenant": "ИП Львова В.В.",
+      "seconds": 0.032,
+      "summary": [
+        "арендатор: ИП Львова В.В.",
+        "подтверждённых заказов: 104",
+        "из них с фактом: 54",
+        "сухой прогон: ничего не записано, повторите с --apply",
+        "фактов создано: 0, дат исправлено: 0",
+        "пропущено без подтверждения передачи: 104"
+      ],
+      "wb_orders": 104,
+      "wb_proven": 0,
+      "wb_proven_missing_fact": 0,
+      "wb_unproven_with_fact": 54,
+      "wb_detached_unproven": 103,
+      "wb_detached_proven": 0,
+      "ozon_candidates": 0,
+      "created": 0,
+      "redated": 0,
+      "skipped_accounted": 0
+    },
+    {
+      "tenant_id": "63979f0b-2405-4eeb-a000-541baa00b1da",
+      "tenant": "WMS Test",
+      "seconds": 0.014,
+      "summary": [
+        "арендатор: WMS Test",
+        "подтверждённых заказов: 0",
+        "из них с фактом: 0",
+        "сухой прогон: ничего не записано, повторите с --apply",
+        "фактов создано: 0, дат исправлено: 0"
+      ],
+      "wb_orders": 0,
+      "wb_proven": 0,
+      "wb_proven_missing_fact": 0,
+      "wb_unproven_with_fact": 0,
+      "wb_detached_unproven": 0,
+      "wb_detached_proven": 0,
+      "ozon_candidates": 0,
+      "created": 0,
+      "redated": 0,
+      "skipped_accounted": 0
+    },
+    {
+      "tenant_id": "6dc7a501-d500-4a96-a691-b31ff53ff7b9",
+      "tenant": "ИП Тестовый",
+      "seconds": 0.035,
+      "summary": [
+        "арендатор: ИП Тестовый",
+        "подтверждённых заказов: 17",
+        "из них с фактом: 0",
+        "сухой прогон: ничего не записано, повторите с --apply",
+        "фактов создано: 0, дат исправлено: 0",
+        "пропущено без подтверждения передачи: 17"
+      ],
+      "wb_orders": 17,
+      "wb_proven": 0,
+      "wb_proven_missing_fact": 0,
+      "wb_unproven_with_fact": 0,
+      "wb_detached_unproven": 17,
+      "wb_detached_proven": 0,
+      "ozon_candidates": 0,
+      "created": 0,
+      "redated": 0,
+      "skipped_accounted": 0
+    },
+    {
+      "tenant_id": "7b98a8aa-c03c-4649-9677-a645be45c622",
+      "tenant": "Империя ФФ",
+      "seconds": 6.843,
+      "summary": [
+        "арендатор: Империя ФФ",
+        "подтверждённых заказов: 9945",
+        "из них с фактом: 5834",
+        "сухой прогон: ничего не записано, повторите с --apply",
+        "фактов создано: 154, дат исправлено: 2105",
+        "пропущено без подтверждения передачи: 7665",
+        "работа по дням (то, что попадёт в счёт):"
+      ],
+      "wb_orders": 9945,
+      "wb_proven": 2280,
+      "wb_proven_missing_fact": 154,
+      "wb_unproven_with_fact": 3708,
+      "wb_detached_unproven": 7136,
+      "wb_detached_proven": 154,
+      "ozon_candidates": 0,
+      "created": 154,
+      "redated": 2105,
+      "skipped_accounted": 0
+    },
+    {
+      "tenant_id": "a69067c1-e6b3-458c-93d1-e5121aaa4966",
+      "tenant": "ПакХаб",
+      "seconds": 0.942,
+      "summary": [
+        "арендатор: ПакХаб",
+        "подтверждённых заказов: 5561",
+        "из них с фактом: 2934",
+        "сухой прогон: ничего не записано, повторите с --apply",
+        "фактов создано: 0, дат исправлено: 4",
+        "пропущено без подтверждения передачи: 5557",
+        "работа по дням (то, что попадёт в счёт):"
+      ],
+      "wb_orders": 5561,
+      "wb_proven": 4,
+      "wb_proven_missing_fact": 0,
+      "wb_unproven_with_fact": 2930,
+      "wb_detached_unproven": 5488,
+      "wb_detached_proven": 0,
+      "ozon_candidates": 0,
+      "created": 0,
+      "redated": 4,
+      "skipped_accounted": 0
+    },
+    {
+      "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+      "tenant": "Бамбук",
+      "seconds": 0.015,
+      "summary": [
+        "арендатор: Бамбук",
+        "подтверждённых заказов: 0",
+        "из них с фактом: 0",
+        "сухой прогон: ничего не записано, повторите с --apply",
+        "фактов создано: 0, дат исправлено: 0"
+      ],
+      "wb_orders": 0,
+      "wb_proven": 0,
+      "wb_proven_missing_fact": 0,
+      "wb_unproven_with_fact": 0,
+      "wb_detached_unproven": 0,
+      "wb_detached_proven": 0,
+      "ozon_candidates": 0,
+      "created": 0,
+      "redated": 0,
+      "skipped_accounted": 0
+    },
+    {
+      "tenant_id": "d6e1ad21-8afa-4acf-8d0b-907b9f2adcfe",
+      "tenant": "AVpack",
+      "seconds": 0.05,
+      "summary": [
+        "арендатор: AVpack",
+        "подтверждённых заказов: 28",
+        "из них с фактом: 23",
+        "сухой прогон: ничего не записано, повторите с --apply",
+        "фактов создано: 5, дат исправлено: 12",
+        "пропущено без подтверждения передачи: 11",
+        "работа по дням (то, что попадёт в счёт):"
+      ],
+      "wb_orders": 28,
+      "wb_proven": 17,
+      "wb_proven_missing_fact": 5,
+      "wb_unproven_with_fact": 11,
+      "wb_detached_unproven": 5,
+      "wb_detached_proven": 0,
+      "ozon_candidates": 0,
+      "created": 5,
+      "redated": 12,
+      "skipped_accounted": 0
+    },
+    {
+      "tenant_id": "db45d56c-ecec-4575-b247-dacbdaca052f",
+      "tenant": "Фулфёдор",
+      "seconds": 0.008,
+      "summary": [
+        "арендатор: Фулфёдор",
+        "подтверждённых заказов: 0",
+        "из них с фактом: 0",
+        "сухой прогон: ничего не записано, повторите с --apply",
+        "фактов создано: 0, дат исправлено: 0"
+      ],
+      "wb_orders": 0,
+      "wb_proven": 0,
+      "wb_proven_missing_fact": 0,
+      "wb_unproven_with_fact": 0,
+      "wb_detached_unproven": 0,
+      "wb_detached_proven": 0,
+      "ozon_candidates": 0,
+      "created": 0,
+      "redated": 0,
+      "skipped_accounted": 0
+    },
+    {
+      "tenant_id": "e7ef1f3a-709b-4074-92b5-9b8653045316",
+      "tenant": "Diag Org",
+      "seconds": 0.01,
+      "summary": [
+        "арендатор: Diag Org",
+        "подтверждённых заказов: 0",
+        "из них с фактом: 0",
+        "сухой прогон: ничего не записано, повторите с --apply",
+        "фактов создано: 0, дат исправлено: 0"
+      ],
+      "wb_orders": 0,
+      "wb_proven": 0,
+      "wb_proven_missing_fact": 0,
+      "wb_unproven_with_fact": 0,
+      "wb_detached_unproven": 0,
+      "wb_detached_proven": 0,
+      "ozon_candidates": 0,
+      "created": 0,
+      "redated": 0,
+      "skipped_accounted": 0
+    }
+  ],
+  "stock_before": [
+    {
+      "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+      "balance_rows": 47,
+      "quantity": 1301
+    },
+    {
+      "tenant_id": "5fbf633c-3ea9-4c29-b5f5-f549b122bcae",
+      "balance_rows": 49,
+      "quantity": 10413
+    },
+    {
+      "tenant_id": "6dc7a501-d500-4a96-a691-b31ff53ff7b9",
+      "balance_rows": 36,
+      "quantity": 1556
+    },
+    {
+      "tenant_id": "7b98a8aa-c03c-4649-9677-a645be45c622",
+      "balance_rows": 1596,
+      "quantity": 5047
+    },
+    {
+      "tenant_id": "a69067c1-e6b3-458c-93d1-e5121aaa4966",
+      "balance_rows": 8,
+      "quantity": 280
+    },
+    {
+      "tenant_id": "d6e1ad21-8afa-4acf-8d0b-907b9f2adcfe",
+      "balance_rows": 33,
+      "quantity": 1018
+    }
+  ],
+  "stock_after": [
+    {
+      "tenant_id": "561e0810-b95e-4b1c-a478-ad6f24d99523",
+      "balance_rows": 47,
+      "quantity": 1301
+    },
+    {
+      "tenant_id": "5fbf633c-3ea9-4c29-b5f5-f549b122bcae",
+      "balance_rows": 49,
+      "quantity": 10413
+    },
+    {
+      "tenant_id": "6dc7a501-d500-4a96-a691-b31ff53ff7b9",
+      "balance_rows": 36,
+      "quantity": 1556
+    },
+    {
+      "tenant_id": "7b98a8aa-c03c-4649-9677-a645be45c622",
+      "balance_rows": 1596,
+      "quantity": 5047
+    },
+    {
+      "tenant_id": "a69067c1-e6b3-458c-93d1-e5121aaa4966",
+      "balance_rows": 8,
+      "quantity": 280
+    },
+    {
+      "tenant_id": "d6e1ad21-8afa-4acf-8d0b-907b9f2adcfe",
+      "balance_rows": 33,
+      "quantity": 1018
+    }
+  ]
+}
