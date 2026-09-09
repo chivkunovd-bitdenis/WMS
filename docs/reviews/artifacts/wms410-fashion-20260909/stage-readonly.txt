@@ -1,0 +1,1 @@
+{"fashion_sellers": [], "product_flags": [], "bindings": [], "binding_states": [], "positive_2103525": [], "marketplace_api_base": "http://wb-emulator.railway.internal:8000"}
