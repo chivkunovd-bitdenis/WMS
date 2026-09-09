@@ -51,6 +51,7 @@ import type { ProductThermalLabelData } from '../../utils/printProductThermalLab
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
 import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
+import { ChatOpenButton } from '../../components/chat/ChatOpenButton'
 import {
   buildFbsPickingListPrintHtml,
   fbsAccessibleStageIndex,
@@ -113,6 +114,7 @@ type Props = {
   initialWorkspace?: FbsWorkspace | null
   open: boolean; addressStorageEnabled?: boolean
   onClose: () => void
+  currentUserId?: string | null
 }
 
 const STAGES = [
@@ -305,6 +307,7 @@ export function FfFbsSupplyWorkspace({
   initialWorkspace,
   open, addressStorageEnabled = true,
   onClose,
+  currentUserId = null,
 }: Props) {
   const [workspace, setWorkspace] = useState<FbsWorkspace | null>(initialWorkspace ?? null)
   const [stage, setStage] = useState<StageKey>('composition')
@@ -1664,6 +1667,22 @@ export function FfFbsSupplyWorkspace({
               ) : null}
             </Stack>
           </Box>
+          {workspace ? (
+            <ChatOpenButton
+              token={token}
+              authHeaders={authHeaders}
+              currentUserId={currentUserId}
+              sellerId={workspace.supply.seller.id}
+              sellerName={workspace.supply.seller.name}
+              attachedDocument={{
+                kind: 'fbs_supply',
+                id: workspace.supply.id,
+                title: workspace.supply.name,
+                seller_id: workspace.supply.seller.id,
+                seller_name: workspace.supply.seller.name,
+              }}
+            />
+          ) : null}
           <IconButton onClick={onClose} disabled={busy} aria-label="Закрыть">
             <CloseIcon />
           </IconButton>

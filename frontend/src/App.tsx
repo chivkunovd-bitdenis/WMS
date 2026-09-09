@@ -13,6 +13,7 @@ import { useAuth } from './hooks/useAuth'
 import { Screen } from './screens/AppV2Screens'
 import { ProductsScreen } from './screens/v2/ProductsScreen'
 import { SellersScreen } from './screens/v2/SellersScreen'
+import { ChatScreen } from './screens/chat/ChatScreen'
 import { InboundScreen } from './screens/v2/InboundScreen'
 import { OutboundScreen } from './screens/v2/OutboundScreen'
 import { WildberriesScreen } from './screens/v2/WildberriesScreen'
@@ -3260,6 +3261,22 @@ export default function App() {
                   hint="Нет токена."
                   testId="ff-notifications-placeholder"
                 />
+              )
+            }
+          />
+
+          <Route
+            path="ff/chat"
+            element={
+              token ? (
+                <ChatScreen
+                  token={token}
+                  authHeaders={authHeaders}
+                  currentUserId={me.id ?? null}
+                  sellers={sellers}
+                />
+              ) : (
+                ffAccessDenied
               )
             }
           />
