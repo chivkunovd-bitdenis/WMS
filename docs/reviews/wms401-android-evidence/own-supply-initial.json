@@ -1,0 +1,168 @@
+{
+  "supply": {
+    "id": "85a8476c-05b4-46a8-a90f-77d5199257b4",
+    "marketplace": "wb",
+    "wb_supply_id": "WB-GI-928D876298FC",
+    "name": "WMS401-Android-0909-1346",
+    "status": "draft",
+    "seller": {
+      "id": "50110328-fa03-4604-b2e4-8ca27fc8bb41",
+      "name": "Эмулятор WB"
+    },
+    "wb_warehouse": {
+      "id": 501001,
+      "name": null
+    },
+    "wms_warehouse": {
+      "id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+      "name": "Тестовый"
+    },
+    "orders_count": 2,
+    "units_count": 2,
+    "boxes_count": 0,
+    "planned_shipment_date": null,
+    "can_add_orders": true
+  },
+  "pick_options": [
+    {
+      "product_id": "45587c50-451f-4d0a-b233-98c07be4dc9d",
+      "sku_code": "EMU-KIZ-OPTIONAL",
+      "product_name": "Куртка демо ЧЗ необязателен",
+      "planned_qty": 1,
+      "picked_qty": 0,
+      "locations": [
+        {
+          "storage_location_id": "43a2a23a-0653-49de-82f5-b60f2ba48530",
+          "location_code": "FBS-VIDEO-01",
+          "quantity": 51,
+          "reserved": 0,
+          "available": 49,
+          "picked": 0,
+          "sources": [
+            {
+              "quantity": 19,
+              "available": 17,
+              "picked": 0,
+              "is_loose": false,
+              "source_label": "Грузоместо FBSVID-CARGO-01",
+              "container_path": [
+                {
+                  "kind": "pallet",
+                  "id": "8ab29b41-23d6-44ad-acb6-427abd13eeed",
+                  "code": "П-001012",
+                  "label": "Палета П-001012"
+                },
+                {
+                  "kind": "cargo_place",
+                  "id": "7b100aa1-54c8-4efc-bd61-2bf1e1453374",
+                  "code": "FBSVID-CARGO-01",
+                  "label": "Грузоместо FBSVID-CARGO-01"
+                }
+              ]
+            },
+            {
+              "quantity": 32,
+              "available": 32,
+              "picked": 0,
+              "is_loose": false,
+              "source_label": "Короб FBSVID-BOX-03",
+              "container_path": [
+                {
+                  "kind": "pallet",
+                  "id": "8ab29b41-23d6-44ad-acb6-427abd13eeed",
+                  "code": "П-001012",
+                  "label": "Палета П-001012"
+                },
+                {
+                  "kind": "box",
+                  "id": "817b4384-17ba-4872-9a81-d8f62adc3dfe",
+                  "code": "FBSVID-BOX-03",
+                  "label": "Короб FBSVID-BOX-03"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "storage_location_id": "fb46f84c-252c-4e72-9a76-8136dfd549ff",
+          "location_code": "Без ячеек",
+          "quantity": 11,
+          "reserved": 0,
+          "available": 10,
+          "picked": 0,
+          "sources": [
+            {
+              "quantity": 11,
+              "available": 10,
+              "picked": 0,
+              "is_loose": true,
+              "source_label": "Россыпью",
+              "container_path": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "product_id": "1f0cefc8-5224-407d-9882-66f5aa1008c4",
+      "sku_code": "EMU-KIZ-REQUIRED",
+      "product_name": "Куртка демо с ЧЗ",
+      "planned_qty": 1,
+      "picked_qty": 0,
+      "locations": [
+        {
+          "storage_location_id": "37d69433-b9e3-4315-b1e1-0c83c4307721",
+          "location_code": "FBS-VIDEO-02",
+          "quantity": 60,
+          "reserved": 0,
+          "available": 58,
+          "picked": 0,
+          "sources": [
+            {
+              "quantity": 20,
+              "available": 18,
+              "picked": 0,
+              "is_loose": false,
+              "source_label": "Грузоместо FBSVID-CARGO-02",
+              "container_path": [
+                {
+                  "kind": "pallet",
+                  "id": "18121c8c-b9be-4d29-995d-839842b3874d",
+                  "code": "П-001013",
+                  "label": "Палета П-001013"
+                },
+                {
+                  "kind": "cargo_place",
+                  "id": "c5f16aa4-0270-4093-b9ec-3a854a8572d7",
+                  "code": "FBSVID-CARGO-02",
+                  "label": "Грузоместо FBSVID-CARGO-02"
+                }
+              ]
+            },
+            {
+              "quantity": 40,
+              "available": 40,
+              "picked": 0,
+              "is_loose": false,
+              "source_label": "Короб FBSVID-BOX-04",
+              "container_path": [
+                {
+                  "kind": "pallet",
+                  "id": "18121c8c-b9be-4d29-995d-839842b3874d",
+                  "code": "П-001013",
+                  "label": "Палета П-001013"
+                },
+                {
+                  "kind": "box",
+                  "id": "a1100515-e580-4289-aecd-4eb9621f36b4",
+                  "code": "FBSVID-BOX-04",
+                  "label": "Короб FBSVID-BOX-04"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
