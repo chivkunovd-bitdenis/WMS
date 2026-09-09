@@ -1,0 +1,29 @@
+{
+  "checkedAt": "2026-09-09T04:04:12.812588+00:00",
+  "stageSha": "1a508b98c01d55e3462f104c1523f4ff6721704d",
+  "candidateSha": "b09b7d9fd87cb18b5ce34e5d6c7ca848d81f4ad0",
+  "runtimeFiles": 428,
+  "expectedFiles": 428,
+  "mismatch": [],
+  "extra": [],
+  "deployments": {
+    "backend": "f3d45f4b-4db5-4f55-a01b-6d8fedfb5ffd",
+    "web": "5b4b4919-756b-4562-a360-ccc1b155bfdf"
+  },
+  "ci": {
+    "stage": {
+      "run": 34308619194,
+      "passed": 2234,
+      "skipped": 49,
+      "xfailed": 1,
+      "seconds": 606.14
+    },
+    "productionCandidate": {
+      "run": 34308639195,
+      "passed": 2234,
+      "skipped": 49,
+      "xfailed": 1,
+      "seconds": 513.18
+    }
+  }
+}
