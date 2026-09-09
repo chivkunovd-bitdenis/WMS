@@ -165,9 +165,7 @@ function productNeedsExplicitLocation(
   return hasStorageCellBalances(row.locations)
 }
 
-function looksLikeReadyBoxBarcode(raw: string): boolean {
-  return raw.startsWith('INB-')
-}
+
 
 export function FfMarketplaceUnloadBoxAddDialog({
   open,
@@ -201,7 +199,6 @@ export function FfMarketplaceUnloadBoxAddDialog({
     locationId: null, container: null,
   })
   const [manualQtyByProduct, setManualQtyByProduct] = useState<Record<string, string>>({})
-  const [readyBoxConfirmOpen, setReadyBoxConfirmOpen] = useState(false)
   const [readyBoxOverPlanOpen, setReadyBoxOverPlanOpen] = useState(false)
   const [pendingReadyBoxBarcode, setPendingReadyBoxBarcode] = useState<string | null>(null)
   const [lastScannedProductId, setLastScannedProductId] = useState<string | null>(null)
@@ -303,7 +300,6 @@ export function FfMarketplaceUnloadBoxAddDialog({
       sourceRef.current = { locationId: null, container: null }
       setManualQtyByProduct({})
       setError(null)
-      setReadyBoxConfirmOpen(false)
       setReadyBoxOverPlanOpen(false)
       setPendingReadyBoxBarcode(null)
       setLastScannedProductId(null)
@@ -390,8 +386,6 @@ export function FfMarketplaceUnloadBoxAddDialog({
   }
 
   const runScan = async (barcode: string, allowOverPlan: boolean) => {
-    const readyBoxScan = looksLikeReadyBoxBarcode(barcode)
-    if (readyBoxScan) setBusy(true)
     setError(null)
     try {
       const scanBody: {
@@ -542,8 +536,6 @@ export function FfMarketplaceUnloadBoxAddDialog({
         : errDetail ?? errText.slice(0, 200) ?? 'Не удалось выполнить скан.')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось выполнить скан.')
-    } finally {
-      if (readyBoxScan) setBusy(false)
     }
   }
 
@@ -562,27 +554,13 @@ export function FfMarketplaceUnloadBoxAddDialog({
       setError('Введите штрихкод.')
       return
     }
-    if (looksLikeReadyBoxBarcode(raw)) {
-      setPendingReadyBoxBarcode(raw)
-      setReadyBoxConfirmOpen(true)
-      return
-    }
     void enqueueScan(raw, false)
   }
 
   useBarcodeScanner({
-    enabled: open && !readOnly && !readyBoxConfirmOpen && !readyBoxOverPlanOpen,
+    enabled: open && !readOnly && !readyBoxOverPlanOpen,
     onScan: doScan,
   })
-
-  const confirmReadyBox = () => {
-    setReadyBoxConfirmOpen(false)
-    const barcode = pendingReadyBoxBarcode
-    if (!barcode) {
-      return
-    }
-    void enqueueScan(barcode, false)
-  }
 
   const confirmReadyBoxOverPlan = () => {
     setReadyBoxOverPlanOpen(false)
@@ -847,41 +825,6 @@ export function FfMarketplaceUnloadBoxAddDialog({
             )}
           </Stack>
         </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={readyBoxConfirmOpen}
-        onClose={() => {
-          setReadyBoxConfirmOpen(false)
-          setPendingReadyBoxBarcode(null)
-        }}
-        data-testid="ff-mp-box-add-ready-box-dialog"
-      >
-        <DialogTitle>Добавить готовый короб?</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2">
-            Весь состав готового короба будет добавлен в этот короб отгрузки.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setReadyBoxConfirmOpen(false)
-              setPendingReadyBoxBarcode(null)
-            }}
-            disabled={busy}
-          >
-            Отмена
-          </Button>
-          <Button
-            variant="contained"
-            disabled={busy}
-            onClick={confirmReadyBox}
-            data-testid="ff-mp-box-add-ready-box-confirm"
-          >
-            Добавить
-          </Button>
-        </DialogActions>
       </Dialog>
 
       <Dialog

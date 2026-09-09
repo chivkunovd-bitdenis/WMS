@@ -329,9 +329,8 @@ async def test_box_scan_product_after_location_mp018(
 async def test_box_scan_ready_box_into_open_box_mp018(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """MP-018: scan ready inbound box → contents collected into open shipment box."""
+    """WMS-058: INB source scan and explicit attach use current container, never loose."""
     from inbound_box_intake_helpers import (
-        complete_inbound_to_storage,
         fulfill_inbound_via_box_scans,
         post_primary_accept,
     )
@@ -392,12 +391,20 @@ async def test_box_scan_ready_box_into_open_box_mp018(
     await post_primary_accept(async_client, base_in, rid, h)
     got = await async_client.get(f"{base_in}/{rid}", headers=h)
     inb_barcode = got.json()["boxes"][0]["internal_barcode"]
+    inb_id = got.json()["boxes"][0]["id"]
     sku = got.json()["lines"][0]["sku_code"]
     await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 4)
     await async_client.post(f"{base_in}/{rid}/verify", headers=h)
-    await complete_inbound_to_storage(
-        async_client, h, rid, product_id=pid, storage_location_id=loc_id, quantity=4
+    putaway = await async_client.post(
+        f"{base_in}/{rid}/boxes/{inb_id}/putaway", headers=h,
+        json={"storage_location_id": loc_id},
     )
+    assert putaway.status_code == 200, putaway.text
+    from test_marketplace_unload_pick_from_container import _balances_by_container
+    before = await _balances_by_container(loc_id, pid)
+    assert before[None] == 20
+    assert before[inb_id] == 4
+
 
     box = await async_client.post(
         f"{BASE}/{mid}/boxes",
@@ -413,9 +420,34 @@ async def test_box_scan_ready_box_into_open_box_mp018(
     )
     assert ready.status_code == 200, ready.text
     body = ready.json()
-    assert body["kind"] == "ready_box"
-    assert body["total_qty"] == 4
+    assert body["kind"] == "container"
+    assert body["container_id"] == inb_id
+    assert await _balances_by_container(loc_id, pid) == before
+    item = await async_client.post(
+        f"{BASE}/{mid}/boxes/{box_id}/scan", headers=h, json={
+            "barcode": sku, "product_id": pid, "storage_location_id": loc_id,
+            "container_kind": "box", "container_id": inb_id,
+        },
+    )
+    assert item.status_code == 200, item.text
+    current = await _balances_by_container(loc_id, pid)
+    assert current[None] == 20
+    assert current[inb_id] == 3
 
-    detail = await async_client.get(f"{BASE}/{mid}", headers=h)
-    open_box = next(b for b in detail.json()["boxes"] if b["id"] == box_id)
-    assert sum(ln["quantity"] for ln in open_box["lines"]) == 4
+    # Explicit whole-box operation consumes the remaining THREE, not historical FOUR.
+    attached = await async_client.post(
+        f"{BASE}/{mid}/boxes/attach", headers=h,
+        json={"barcode": inb_barcode, "box_preset": "60_40_40"},
+    )
+    assert attached.status_code == 201, attached.text
+    assert sum(line["quantity"] for line in attached.json()["lines"]) == 3
+    after = await _balances_by_container(loc_id, pid)
+    assert after[None] == 20
+    assert after[inb_id] == 0
+    empty = await async_client.post(
+        f"{BASE}/{mid}/boxes/attach", headers=h,
+        json={"barcode": inb_barcode, "box_preset": "60_40_40"},
+    )
+    assert empty.status_code == 422, empty.text
+    assert empty.json()["detail"] == "box_empty"
+    assert await _balances_by_container(loc_id, pid) == after

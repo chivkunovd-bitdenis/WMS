@@ -5,13 +5,13 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Literal, cast
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.inbound_intake import InboundIntakeBoxLine
+from app.models.inventory_balance import InventoryBalance
 from app.models.marketplace_unload import (
     MarketplaceUnloadBox,
     MarketplaceUnloadBoxLine,
@@ -19,6 +19,7 @@ from app.models.marketplace_unload import (
     MarketplaceUnloadPickAllocation,
     MarketplaceUnloadRequest,
 )
+from app.models.storage_location import StorageLocation
 from app.services import marketplace_unload_collect_service as collect_svc
 from app.services import marketplace_unload_service as mu_svc
 from app.services import tenant_settings_service as tenant_settings_svc
@@ -207,6 +208,108 @@ async def _product_in_shipment(
     return res.scalar_one_or_none() is not None
 
 
+async def _finish_box_collection(
+    session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID
+) -> None:
+    """Commit only after every requested line passed source and quantity checks."""
+    from app.services import packaging_task_service as pkg_svc
+
+    task = await pkg_svc.get_task_for_unload(session, tenant_id, request_id)
+    if task is not None:
+        # This existing synchronizer owns the final commit, including box/source changes.
+        await pkg_svc.sync_lines_from_pick_allocations(
+            session, tenant_id, task, reload_result=False
+        )
+    else:
+        await session.commit()
+
+
+async def _source_location(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    kind: ContainerKind,
+    container_id: uuid.UUID,
+) -> uuid.UUID:
+    """INB putaway can leave stale metadata; use its sole current stock location."""
+    await validate_container(session, tenant_id, warehouse_id, kind, container_id)
+    locations = list((await session.scalars(
+        select(StorageLocation)
+        .join(InventoryBalance, InventoryBalance.storage_location_id == StorageLocation.id)
+        .where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.container_kind == kind,
+            InventoryBalance.container_id == container_id,
+            InventoryBalance.quantity > 0,
+        ).distinct()
+    )).all())
+    if len(locations) > 1 or any(
+        location.tenant_id != tenant_id or location.warehouse_id != warehouse_id
+        for location in locations
+    ):
+        raise MarketplaceUnloadBoxError("invalid_container_reference")
+    if locations:
+        return locations[0].id
+    # Empty sources keep their identity; availability still checks this container only.
+    return await warehouse_map_service.resolve_container_location(
+        session, tenant_id, warehouse_id, kind, container_id
+    )
+
+
+async def _collect_current_box_contents(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    req: MarketplaceUnloadRequest,
+    box_id: uuid.UUID,
+    barcode: str,
+    *,
+    allow_over_plan: bool,
+    actor_user_id: uuid.UUID | None,
+) -> tuple[int, int]:
+    try:
+        source = await resolve_container_scan(session, tenant_id, req.warehouse_id, barcode)
+        location_id = await _source_location(
+            session, tenant_id, req.warehouse_id, source.kind, source.id
+        )
+    except (
+        InventoryContainerScanError, ValueError, warehouse_map_service.WarehouseMapError
+    ) as exc:
+        raise MarketplaceUnloadBoxError("invalid_container_reference") from exc
+    if source.kind != "box":
+        raise MarketplaceUnloadBoxError("box_barcode_unknown")
+    balances = list((await session.scalars(
+        select(InventoryBalance).where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.container_kind == source.kind,
+            InventoryBalance.container_id == source.id,
+            InventoryBalance.quantity > 0,
+        ).order_by(InventoryBalance.product_id)
+    )).all())
+    if not balances:
+        raise MarketplaceUnloadBoxError("box_empty")
+    if any(balance.storage_location_id != location_id for balance in balances):
+        raise MarketplaceUnloadBoxError("invalid_container_reference")
+    total = 0
+    for balance in balances:
+        quantity = int(balance.quantity)
+        try:
+            await collect_svc.collect_into_box(
+                session, tenant_id, req.id,
+                box_id=box_id,
+                storage_location_id=location_id,
+                product_id=balance.product_id,
+                quantity=quantity,
+                allow_over_plan=allow_over_plan,
+                actor_user_id=actor_user_id,
+                container_kind=source.kind,
+                container_id=source.id,
+            )
+        except MarketplaceUnloadPickError as exc:
+            raise _map_collect_err(exc) from None
+        total += quantity
+    return len(balances), total
+
+
 async def collect_ready_box_into_open_box(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -216,87 +319,18 @@ async def collect_ready_box_into_open_box(
     allow_over_plan: bool = False,
     actor_user_id: uuid.UUID | None,
 ) -> BoxScanResult:
-    """Развернуть состав готового короба (WHB / приёмочный) в открытый короб отгрузки."""
-    raw = barcode.strip()
-    if not raw:
-        raise MarketplaceUnloadBoxError("barcode_empty")
-
+    """Explicit whole-box operation: consume only this container's current stock."""
     box = await session.get(MarketplaceUnloadBox, box_id)
     if box is None:
         raise MarketplaceUnloadBoxError("box_not_found")
-
     req = await _request_for_picking(session, tenant_id, box.request_id)
-    wh_box, inb_box = await wh_box_svc.resolve_barcode(session, tenant_id, raw)
-    if wh_box is None and inb_box is None:
-        raise MarketplaceUnloadBoxError("box_barcode_unknown")
-    if wh_box is not None and wh_box.warehouse_id != req.warehouse_id:
-        raise MarketplaceUnloadBoxError("warehouse_mismatch")
-
-    if inb_box is None:
-        raise MarketplaceUnloadBoxError("box_needs_location")
-
-    picks_added = 0
-    total_qty = 0
-    if inb_box is not None:
-        distro = await wh_box_svc.distribution_lines_for_inbound_box(session, inb_box.id)
-        if distro:
-            for dl in distro:
-                if not await _product_in_shipment(session, req.id, dl.product_id):
-                    continue
-                qty = int(dl.quantity)
-                try:
-                    await collect_svc.collect_into_box(
-                        session,
-                        tenant_id,
-                        req.id,
-                        box_id=box_id,
-                        storage_location_id=dl.storage_location_id,
-                        product_id=dl.product_id,
-                        quantity=qty,
-                        allow_over_plan=allow_over_plan,
-                        actor_user_id=actor_user_id,
-                    )
-                except MarketplaceUnloadPickError as exc:
-                    raise _map_collect_err(exc) from None
-                picks_added += 1
-                total_qty += qty
-        else:
-            stmt = select(InboundIntakeBoxLine).where(InboundIntakeBoxLine.box_id == inb_box.id)
-            res = await session.execute(stmt)
-            for bl in res.scalars().all():
-                qty = int(bl.posted_qty) if int(bl.posted_qty) > 0 else int(bl.quantity)
-                if qty < 1:
-                    continue
-                if not await _product_in_shipment(session, req.id, bl.product_id):
-                    continue
-                if wh_box is not None and wh_box.storage_location_id is not None:
-                    try:
-                        await collect_svc.collect_into_box(
-                            session,
-                            tenant_id,
-                            req.id,
-                            box_id=box_id,
-                            storage_location_id=wh_box.storage_location_id,
-                            product_id=bl.product_id,
-                            quantity=qty,
-                            allow_over_plan=allow_over_plan,
-                            actor_user_id=actor_user_id,
-                        )
-                    except MarketplaceUnloadPickError as exc:
-                        raise _map_collect_err(exc) from None
-                    picks_added += 1
-                    total_qty += qty
-
-    if inb_box is not None and picks_added < 1:
-        raise MarketplaceUnloadBoxError("box_needs_location")
-
-    mu_svc.enter_collecting_if_needed(req)
-    await session.commit()
-    return BoxScanResult(
-        kind="ready_box",
-        lines_added=picks_added,
-        total_qty=total_qty,
+    lines_added, total_qty = await _collect_current_box_contents(
+        session, tenant_id, req, box_id, barcode,
+        allow_over_plan=allow_over_plan, actor_user_id=actor_user_id,
     )
+    mu_svc.enter_collecting_if_needed(req)
+    await _finish_box_collection(session, tenant_id, req.id)
+    return BoxScanResult(kind="ready_box", lines_added=lines_added, total_qty=total_qty)
 
 
 async def scan_barcode_into_box(
@@ -339,17 +373,6 @@ async def scan_barcode_into_box(
                 location_code=loc.code,
             )
 
-    _wh_box, inb_box = await wh_box_svc.resolve_barcode(session, tenant_id, raw)
-    if inb_box is not None:
-        return await collect_ready_box_into_open_box(
-            session,
-            tenant_id,
-            box_id,
-            barcode=raw,
-            allow_over_plan=allow_over_plan,
-            actor_user_id=actor_user_id,
-        )
-
     # A storage container selects the exact source; it does not move its contents.
     try:
         container = await resolve_container_scan(session, tenant_id, req.warehouse_id, raw)
@@ -358,7 +381,7 @@ async def scan_barcode_into_box(
             raise MarketplaceUnloadBoxError("invalid_container_reference") from exc
     else:
         try:
-            location_id = await warehouse_map_service.resolve_container_location(
+            location_id = await _source_location(
                 session, tenant_id, req.warehouse_id, container.kind, container.id
             )
         except (ValueError, warehouse_map_service.WarehouseMapError) as exc:
@@ -451,9 +474,8 @@ async def _place_picked_into_box(
     if task is not None:
         await pkg_svc.sync_mp_task_packed_from_boxes(session, tenant_id, task)
     line_id = line.id
-    await session.commit()
-    # После commit объект просрочен, а товар в нём подтягивается лениво — читать
-    # его в сериализаторе уже нельзя. Забираем строку заново вместе с товаром.
+    await session.flush()
+    # Load the product for serialization; the public operation owns the commit.
     loaded = (
         await session.execute(
             select(MarketplaceUnloadBoxLine)
@@ -495,7 +517,7 @@ async def add_manual_qty_to_box(
             await validate_container(
                 session, tenant_id, req.warehouse_id, container_kind, container_id
             )
-            source_location_id = await warehouse_map_service.resolve_container_location(
+            source_location_id = await _source_location(
                 session, tenant_id, req.warehouse_id, container_kind, container_id
             )
         except (ValueError, warehouse_map_service.WarehouseMapError) as exc:
@@ -546,6 +568,7 @@ async def add_manual_qty_to_box(
             raise _map_collect_err(exc) from None
         line = result.box_line
     assert line is not None
+    await _finish_box_collection(session, tenant_id, req.id)
     return line
 
 
@@ -580,58 +603,10 @@ async def attach_existing_box_by_barcode(
     session.add(mp_box)
     await session.flush()
 
-    picks_added = 0
-    if inb_box is not None:
-        distro = await wh_box_svc.distribution_lines_for_inbound_box(session, inb_box.id)
-        if distro:
-            for dl in distro:
-                if not await _product_in_shipment(session, req.id, dl.product_id):
-                    continue
-                try:
-                    await collect_svc.collect_into_box(
-                        session,
-                        tenant_id,
-                        request_id,
-                        box_id=mp_box.id,
-                        storage_location_id=dl.storage_location_id,
-                        product_id=dl.product_id,
-                        quantity=int(dl.quantity),
-                        require_open_box=False,
-                        allow_over_plan=allow_over_plan,
-                        actor_user_id=actor_user_id,
-                    )
-                except MarketplaceUnloadPickError as exc:
-                    raise _map_collect_err(exc) from None
-                picks_added += 1
-        else:
-            stmt = select(InboundIntakeBoxLine).where(InboundIntakeBoxLine.box_id == inb_box.id)
-            res = await session.execute(stmt)
-            for bl in res.scalars().all():
-                qty = int(bl.posted_qty) if int(bl.posted_qty) > 0 else int(bl.quantity)
-                if qty < 1:
-                    continue
-                if not await _product_in_shipment(session, req.id, bl.product_id):
-                    continue
-                if wh_box is not None and wh_box.storage_location_id is not None:
-                    try:
-                        await collect_svc.collect_into_box(
-                            session,
-                            tenant_id,
-                            request_id,
-                            box_id=mp_box.id,
-                            storage_location_id=wh_box.storage_location_id,
-                            product_id=bl.product_id,
-                            quantity=qty,
-                            require_open_box=False,
-                            allow_over_plan=allow_over_plan,
-                            actor_user_id=actor_user_id,
-                        )
-                    except MarketplaceUnloadPickError as exc:
-                        raise _map_collect_err(exc) from None
-                    picks_added += 1
-
-    if inb_box is not None and picks_added < 1:
-        raise MarketplaceUnloadBoxError("box_needs_location")
+    await _collect_current_box_contents(
+        session, tenant_id, req, mp_box.id, barcode,
+        allow_over_plan=allow_over_plan, actor_user_id=actor_user_id,
+    )
 
     if wh_box is not None and inb_box is None:
         dup_stmt = select(MarketplaceUnloadBox).where(
@@ -645,7 +620,7 @@ async def attach_existing_box_by_barcode(
 
     mp_box.closed_at = datetime.now(tz=UTC)
     mu_svc.enter_collecting_if_needed(req)
-    await session.commit()
+    await _finish_box_collection(session, tenant_id, req.id)
     await session.refresh(mp_box, attribute_names=["warehouse_box", "lines"])
     return mp_box
 
@@ -831,6 +806,8 @@ async def copy_box(
                     req.id,
                     box_id=new_box.id,
                     storage_location_id=alloc.storage_location_id,
+                    container_kind=cast(ContainerKind | None, alloc.container_kind),
+                    container_id=alloc.container_id,
                     product_id=ln.product_id,
                     quantity=chunk,
                     require_open_box=False,
@@ -843,7 +820,7 @@ async def copy_box(
             raise MarketplaceUnloadBoxError("insufficient_available")
 
     new_box.closed_at = datetime.now(tz=UTC)
-    await session.commit()
+    await _finish_box_collection(session, tenant_id, req.id)
 
     stmt = (
         select(MarketplaceUnloadBox)
