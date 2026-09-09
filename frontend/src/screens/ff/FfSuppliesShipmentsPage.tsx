@@ -682,14 +682,12 @@ export function FfSuppliesShipmentsPage({
     if (!openMp || !isMpShipmentsPage) {
       return
     }
-    // Тот же документ уже открыт: так бывает после «Завершить подбор» —
-    // экран подбора просит список открыть документ, из которого сам и запущен.
-    // Обнулять данные тут нельзя: идентификатор не меняется, перезагрузка не
-    // запустится, и окно останется пустым. Только убираем параметр из адреса.
+    // WMS-177: пока в адресе стоит open_mp — документ должен быть открыт,
+    // даже после reload. Если уже открыт тот же документ, ничего не делаем
+    // и, главное, НЕ стираем параметр из URL: раньше второй проход эффекта
+    // (docModalId и docModal в deps) обнулял открытую ссылку сразу после
+    // установки state — и reload снова показывал журнал.
     if (docModalId === openMp && docModal === 'marketplace_unload') {
-      const cleaned = new URLSearchParams(searchParams)
-      cleaned.delete('open_mp')
-      setSearchParams(cleaned, { replace: true })
       return
     }
     setUnloadDetail(null)
@@ -699,6 +697,7 @@ export function FfSuppliesShipmentsPage({
     setDocModalId(openMp)
     // Параметр НЕ стираем: пока окно открыто, документ живёт в адресе, и
     // обновление страницы возвращает оператора в тот же документ, а не в журнал.
+    // Уборка параметра — в closeDocModal, при явном закрытии окна.
   }, [docModal, docModalId, isMpShipmentsPage, searchParams, setSearchParams])
 
   useEffect(() => {
