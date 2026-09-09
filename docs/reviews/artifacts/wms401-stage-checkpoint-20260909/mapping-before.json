@@ -1,0 +1,68 @@
+{
+  "project_id": "c28e681d-4535-4c96-ac97-c7b600a7f8e4",
+  "project_name": "loyal-wonder",
+  "environment_id": "58a08b66-1290-45a2-8737-e3d7408389e5",
+  "environment_name": "production",
+  "services": [
+    {
+      "service_id": "e4a67f11-4318-4386-b9f9-fe5ae0d4f5cc",
+      "name": "WMS",
+      "deployment": "4b82ac4b-270c-471d-a71a-3d99e755ce85",
+      "status": "SUCCESS",
+      "root": "/backend",
+      "domains": {
+        "customDomains": [],
+        "serviceDomains": [
+          {
+            "domain": "wms-production-780c.up.railway.app",
+            "id": "93ec1104-519d-4f7b-8f83-30ba1e8efcf9",
+            "targetPort": null
+          }
+        ]
+      },
+      "message": "WMS-406 7b02fb98 legacy invoice idempotency backend"
+    },
+    {
+      "service_id": "f2ad51a8-009d-488c-9d64-7054072ccac6",
+      "name": "web",
+      "deployment": "b4134355-1542-4189-9567-6db5fbf61e79",
+      "status": "SUCCESS",
+      "root": "/frontend",
+      "domains": {
+        "customDomains": [],
+        "serviceDomains": [
+          {
+            "domain": "web-production-9e7c1.up.railway.app",
+            "id": "89bd5c32-476c-4858-9a52-6ff2c2817968",
+            "targetPort": null
+          }
+        ]
+      },
+      "message": "WMS-409 3f6f02c77db6ee777518f6dc55922297df907d67 verified frontend archive"
+    },
+    {
+      "service_id": "582b4add-d338-424c-be03-9bb66af6c8f0",
+      "name": "wb-emulator",
+      "deployment": "d66046a9-a26f-4e5d-aa3f-49574c912aa0",
+      "status": "SUCCESS",
+      "root": null,
+      "domains": {
+        "customDomains": [],
+        "serviceDomains": []
+      },
+      "message": "WMS-084 emulator DELETE 49803fd014fc300e208260a12fff36c6a8c79b37"
+    },
+    {
+      "service_id": "7ba030a6-5608-406f-838f-22cd19b44a11",
+      "name": "Postgres",
+      "deployment": "e13fe976-e04d-4102-bf0d-fe573576a808",
+      "status": "SUCCESS",
+      "root": null,
+      "domains": {
+        "customDomains": [],
+        "serviceDomains": []
+      },
+      "message": null
+    }
+  ]
+}
