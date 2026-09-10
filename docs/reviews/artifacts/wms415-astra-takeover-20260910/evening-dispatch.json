@@ -1,6 +1,6 @@
 {
-  "recorded_at_utc": "2026-09-10T13:51:00.952798+00:00",
-  "phase": "STAGE_UPDATED_APK_FILE_DELIVERED",
+  "recorded_at_utc": "2026-09-10T14:34:38.164337+00:00",
+  "phase": "BOUNDED_LOCAL_CHAT_ACCEPTANCE_COMPLETE",
   "mobile": {
     "pid": null,
     "thread_id": "01a0884d-9d82-7f41-a45a-91123f9ea9d8",
@@ -27,9 +27,12 @@
     "started_at": "2026-09-10T12:13:43.515335+00:00",
     "previous_pid": 45135,
     "scope": "Same chat session; correct source baseline for inbound document link; preserve scroll fix",
-    "status": "code committed and pushed; root UI acceptance in progress; separate from main release",
+    "status": "Manual remaining four document round trips PASS; separate candidate not deployed",
     "integration_sha": "32c3490d0f9859aaebe3dfb5bddd1cff6ba70f5f",
-    "integration_checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms-chat-evening-20260910"
+    "integration_checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms-chat-evening-20260910",
+    "acceptance_sha": "1f41b4b7",
+    "acceptance_document": "docs/reviews/wms397-root-ui-acceptance-20260910.md",
+    "remaining_release_boundary": "Chat code base03592c5b; must integrate with chosen current release before chat deployment. Primary stage85d802b1 and APK delivery already complete."
   },
   "release": {
     "agent": "/root/evening_release",
@@ -67,5 +70,6 @@
     "browser_status": "Stage login page inspected13:49UTC; authenticated workflow not accepted because no current login session",
     "api_runtime_proof": "stage-api-85d802b1-runtime.json",
     "web_runtime_status": "Existing web source unchanged between c3c41e53 and85d802b1; browser login page renders. Generated build names/preload order and seller URL default differ from local build; do not claim full byte equality."
-  }
+  },
+  "automation_status": "DELETED"
 }
