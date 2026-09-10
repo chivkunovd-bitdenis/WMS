@@ -1,11 +1,11 @@
 {
-  "phase": "EXECUTION_PAUSED_AFTER_OWNER_REQUESTED_SELF_AUDIT",
+  "phase": "BOUNDED_EVENING_RELEASE",
   "quota_session_id": "5ed12390-4d22-4b83-b183-114202609010",
-  "quota_tool_pty": 75581,
-  "last_weekly_used_percent": 87,
-  "last_weekly_remaining_percent": 13,
+  "quota_tool_pty": 87337,
+  "last_weekly_used_percent": 1,
+  "last_weekly_remaining_percent": 99,
   "recorded_at_utc": "2026-09-09T21:10:11.500624+00:00",
-  "last_full_progress_check_utc": "2026-09-10T11:33:34.115240+00:00",
+  "last_full_progress_check_utc": "2026-09-10T11:59:36.450989+00:00",
   "coordinator_session_id": "01a0884c-2c18-7d22-a2a8-8bef2f3d8fe3",
   "automation_id": "wms-claude",
   "quota_minutes": 10,
@@ -16,7 +16,7 @@
   "coordinator_branch": "codex/wms415-coord-20260910",
   "coordinator_initial_head": "bc7f760c11b032fbb94376f042bb6d0f2dd7c13b",
   "audit_head": "c91af35d1c96c3d0ab3678817f415ef1b86bd34d",
-  "quota_observed_at_utc": "2026-09-09T22:26:30Z",
+  "quota_observed_at_utc": "2026-09-10T11:53:00Z",
   "quota_terminal_tty": "ttys000",
   "workspace_issue_detected_at_utc": "2026-09-09T21:30:33.637747+00:00",
   "workspace_issue": "Agent tool worktrees used default main ff5555e2 under .claude/worktrees; chat switched coordinator checkout to feat/wms397-chat-mvp and stock edited its inventory_service.py. Root requested stop of worker Git operations and exact proper worktree/base verification. Preserve changes; no reset or stash.",
@@ -38,7 +38,7 @@
   ],
   "next_queue_commit": "aadac0b6039a70912bf12412aeca90028b675fc8",
   "last_heartbeat_utc": "2026-09-10T10:33:21.439051+00:00",
-  "intervention": "Root audited execution at owner request. Stopped and verified absent coordinator39993/chat40379/mobile40380/Opus40378; monitor PAUSED. No new tests/builds/reviews for audit. Findings:32 review launch/resume descriptors,8 auth/deploy review starts before flawedrelease;7CIruns fourreleasebranches; delayedfilterhandoff; scope325/111112; stale status/process monitor. Preserve work, do not restart old broad queue. Next work must be bounded APK/chat leftovers, no extra audit325 or repeated accepted tests. Production authorization remains revoked.",
+  "intervention": "Owner approved bounded evening plan: APK first, chat separate Opus5xhigh, one final review then stage. Physical TSD is tested after release. No production/public manifest changes now; no new broad backlog queue.",
   "last_full_progress_artifact": "progress-20260909T2215.json",
   "coordinator_provider": "codex",
   "coordinator_model": "gpt-6-astra",
@@ -47,7 +47,7 @@
   "claude_coordinator_stopped": true,
   "claude_coordinator_session_id": "2a1f478a-9d10-48fe-b183-114202609010",
   "claude_session_used_percent": 100,
-  "quota_check_enabled": false,
+  "quota_check_enabled": true,
   "takeover_reason": "Claude session quota exhausted; weekly remaining15% is above7% threshold",
   "takeover_handoff": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/WMS_ASTRA_TAKEOVER_2026-09-10.md",
   "takeover_commit": "2b46f82f0f0926053558bd6c39b11d0a4c502ad0",
@@ -58,8 +58,23 @@
     "mobile-lane": "a1e35af42df51c631",
     "merge-lane": "a3f469302a51bc5bb"
   },
-  "agent_count": 0,
-  "current_agents": {},
+  "agent_count": 3,
+  "current_agents": {
+    "mobile": {
+      "pid": 44687,
+      "thread": "01a0884d-9d82-7f41-a45a-91123f9ea9d8"
+    },
+    "chat": {
+      "pid": 45135,
+      "session": "721ac063-0581-4538-b254-422d08298a8e",
+      "model": "claude-opus-5",
+      "effort": "xhigh"
+    },
+    "release": {
+      "agent": "/root/evening_release",
+      "branch": "codex/wms-evening-release-20260910"
+    }
+  },
   "astra_wave1_directory": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/wave1",
   "owner_authorized_resume": true,
   "required_claude_model": "Opus 5",
@@ -71,7 +86,7 @@
   "opus5_review_count": 6,
   "opus5_review_scope": "WMS-417 static snapshots",
   "weekly_reset_utc": "2026-09-10T07:00:00Z",
-  "quota_source": "last completed review rate_limit_event; not a fresh independent usage poll",
+  "quota_source": "Claude Opus5 interactive /usage",
   "batch_reserve_override": "owner explicitly authorized consuming included remaining quota for WMS417",
   "opus5_reviews_complete": 6,
   "opus5_reviews_running": 0,
@@ -115,6 +130,8 @@
   },
   "production_deployment_authorized": false,
   "owner_deploy_stop_commit": "7b0178a7",
-  "automation_status": "PAUSED",
-  "execution_audit_commit": "fb270899340a6c0dc3bb60daecb1807f00992b82"
+  "automation_status": "ACTIVE",
+  "execution_audit_commit": "fb270899340a6c0dc3bb60daecb1807f00992b82",
+  "stage_deployment_authorized_after_final_review": true,
+  "dispatch_file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/evening-dispatch.json"
 }
