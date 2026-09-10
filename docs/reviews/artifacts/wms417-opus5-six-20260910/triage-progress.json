@@ -1,0 +1,41 @@
+{
+  "checked_at_utc": "2026-09-10T06:18:19.005262+00:00",
+  "completed": [
+    "mobile_update",
+    "auth_audit",
+    "chat",
+    "warehouse"
+  ],
+  "running": [
+    "stock_merge",
+    "cancel_identity"
+  ],
+  "quota_last_event": {
+    "week_used": 87,
+    "week_remaining": 13,
+    "overage": false
+  },
+  "delivery": "Saved in shared coordinator handoff; no live prompt sent to avoid duplicate active CLI writer. Coordinator must acknowledge reading before closing WMS417.",
+  "checks": [
+    {
+      "finding": "chat default conversation order",
+      "state": "snapshot finding stale in current worktree",
+      "evidence": "current chat_service.py seller branch now kind.desc()"
+    },
+    {
+      "finding": "chat file eager fetch",
+      "state": "still present in current worktree",
+      "evidence": "ChatAttachmentView.tsx useEffect fetch unconditional; is_image checked after blob fetch"
+    },
+    {
+      "finding": "warehouse empty_containers findings",
+      "state": "requires rebase of review on current implementation",
+      "evidence": "current service uses empty_places and _clear_empty_confirmation; snapshot empty_containers code has changed"
+    },
+    {
+      "finding": "mobile FbsKizError handler",
+      "state": "line references shifted; not yet adjudicated",
+      "evidence": "do not accept packet line numbers blindly; current handler read separately"
+    }
+  ]
+}
