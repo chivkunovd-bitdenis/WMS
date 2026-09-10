@@ -311,3 +311,11 @@ Before resume ps confirmed old28174/31512 absent. PID33326 thread01a08a49-1fd4-7
 Recovery33586 finished, runtime API5b0f5e9d44786522ec343c805c43903256abe44ee692c0f06bca7a0521d61517 started10:40:37UTC rebuilt from exact120b Git archive. Fourauth/catalog file hashes match120b; new login_rate_limit.py correctly ABSENT inoldsource/runtime. Initial verification mistakenly requested this absentfile and stopped; corrected check explicitly verifiesabsence. PublicHTTPS3paths200, stock_publication present, external8088/15174timeout. Servercheckout still1922; web remains1922 and brokenplaceholder while API is120b. This mixed recovery state is deliberate and not authrelease acceptance. Evidence resumed/wms270-recovery-runtime-20260910.json. Authimagefe66 taggedwms-security-api:1922a224 for subsequentcorrectedrelease. ActualproductionCaddyversion freshly read2.11.2.
 
 Markingreview33327 SAFE/ACCEPT both e36+019; transferred0caa6f6a+5ec40106+report852d277a. Root targetedPG PID34658 checks46selectors on ownwms415_review325_20260910, notlivefixture. Securitywriter33326 continues realCaddy2.11.4 tests; coordinator additionally checks same test on actualproductionversion2.11.2. No deployment ofhotfixyet.
+
+
+### WMS-415/416 · Запрет владельца на выкладку, 10.09.2026
+
+Последнее прямое указание владельца: «так давай ты на прод не будешь ничего катить».
+Все прежние разрешения на production-выпуски отозваны. Разрешены локальная разработка, проверки, review и сохранение в feature-ветках без автоматического production deploy. Запрещены выкладки, production-рестарты и миграции, изменение портов/настроек/живых данных, публикация APK и update manifest, merge/push в ветки с автодеплоем — в том числе через агентов и автоматизацию. Следующий выпуск требует нового явного разрешения владельца на конкретный кандидат. Текущий production не откатывать и не менять под видом исполнения этого запрета. Готовить результат для просмотра, останавливаться перед выпуском.
+
+Root остановил прежний coordinator38677 до передачи ограничения. Автоматическая задача wms-claude переведена в режим разработки без выкладки; прежние инструкции release ниже этой записи имеют только исторический смысл. Независимый reviewer38957 читает код, не владеет deployment.
