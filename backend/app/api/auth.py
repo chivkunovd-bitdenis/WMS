@@ -315,6 +315,7 @@ async def request_password_reset_route(
     Ответ всегда одинаковый, есть такая почта в системе или нет: иначе форма
     превращается в способ перебирать чужие адреса.
     """
+    check_login_rate_limit(request=request, email=str(body.email))
     await request_password_reset(
         session,
         email=str(body.email),
