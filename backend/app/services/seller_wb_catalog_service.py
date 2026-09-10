@@ -527,6 +527,7 @@ async def list_linked_wb_catalog_page_rows(
     search: str | None = None,
     category: str | None = None,
     marketplace: str | None = None,
+    stock_publication: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> tuple[list[FfCatalogRow], int, int, list[str]]:
@@ -548,6 +549,21 @@ async def list_linked_wb_catalog_page_rows(
     if marketplace_condition is not None:
         scope_filters.append(marketplace_condition)
     filters = list(scope_filters)
+    # Match the existing publication switches, including the legacy Ozon fallback.
+    # A zero balance does not mean publication was disabled by the operator.
+    wb_enabled = Product.fbs_stock_sync_enabled.is_(True)
+    ozon_enabled = func.coalesce(
+        Product.fbs_ozon_stock_sync_enabled, Product.fbs_stock_sync_enabled
+    ).is_(True)
+    publication_conditions = {
+        "wb": wb_enabled,
+        "ozon": ozon_enabled,
+        "both": and_(wb_enabled, ozon_enabled),
+        "any": or_(wb_enabled, ozon_enabled),
+        "none": and_(~wb_enabled, ~ozon_enabled),
+    }
+    if stock_publication is not None:
+        filters.append(publication_conditions[stock_publication])
     normalized_search = (search or "").strip()
     if normalized_search:
         pattern = f"%{normalized_search}%"
