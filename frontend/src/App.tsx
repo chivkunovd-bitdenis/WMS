@@ -45,7 +45,6 @@ import { NotificationsPage } from './screens/shared/NotificationsPage'
 import { HonestSignPoolPage } from './screens/shared/HonestSignPoolPage'
 import { HonestSignProductPage } from './screens/shared/HonestSignProductPage'
 import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
-import { FfStoragePage } from './screens/ff/FfStoragePage'
 import { FfStorageReportPage } from './screens/ff/FfStorageReportPage'
 import { FfInventoryPage } from './screens/ff/inventory/FfInventoryPage'
 import { FfProductsFbsPage } from './screens/ff/products-fbs/FfProductsFbsPage'
@@ -3301,13 +3300,11 @@ export default function App() {
             }
           />
 
+          {/* «Хранение» в меню ведёт сюда. Экран отвечает на один вопрос — сколько
+              лежало и на сколько, — а обмеры, ставки и печать ведомостей с него
+              убраны по прямому поручению владельца. */}
           <Route
             path="ff/inventory"
-            element={token && canInventoryOps ? <FfStoragePage isFulfillmentAdmin={isFulfillmentAdmin} token={token} /> : ffAccessDenied}
-          />
-
-          <Route
-            path="ff/storage-report"
             element={
               token && canInventoryOps ? (
                 <FfStorageReportPage
@@ -3368,7 +3365,7 @@ export default function App() {
           />
 
           {/* Пересчёт живёт отдельным адресом: «ff/inventory» занят экраном
-              расчёта хранения, и отбирать у него адрес — ломать работающее. */}
+              хранения, и отбирать у него адрес — ломать работающее. */}
           <Route
             path="ff/stocktaking"
             element={
