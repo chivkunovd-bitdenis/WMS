@@ -1,0 +1,20 @@
+v2.11.2 h1:iOlpsSiSKqEW+SIXrcZsZ/NO74SzB/ycqqvAIEfIm64=
+test_trusted_peer_preserves_distinct_clients_and_rejects_spoof_prefix (__main__.ClientIPRegression.test_trusted_peer_preserves_distinct_clients_and_rejects_spoof_prefix) ... {"caddy_pid": 38827, "trusted_peer": true, "listen": "127.0.0.1:55524", "upstream": "127.0.0.1:55523"}
+{"case": "client-a", "sent_xff": "203.0.113.10", "received": {"xff": ["203.0.113.10"], "path": "/probe"}, "expected_xff": "203.0.113.10"}
+{"case": "client-b", "sent_xff": "203.0.113.11", "received": {"xff": ["203.0.113.11"], "path": "/probe"}, "expected_xff": "203.0.113.11"}
+{"case": "trusted-hop", "sent_xff": "203.0.113.10, 172.18.0.4", "received": {"xff": ["203.0.113.10"], "path": "/probe"}, "expected_xff": "203.0.113.10"}
+{"case": "spoof-prefix", "sent_xff": "198.51.100.99, 203.0.113.10, 172.18.0.4", "received": {"xff": ["203.0.113.10"], "path": "/probe"}, "expected_xff": "203.0.113.10"}
+{"case": "missing-forwarded-header", "sent_xff": null, "received": {"xff": ["127.0.0.1"], "path": "/probe"}, "expected_xff": "127.0.0.1"}
+{"caddy_pid": 38827, "reaped": true}
+ok
+test_untrusted_peer_cannot_supply_client_ip (__main__.ClientIPRegression.test_untrusted_peer_cannot_supply_client_ip) ... {"caddy_pid": 38834, "trusted_peer": false, "listen": "127.0.0.1:55542", "upstream": "127.0.0.1:55541"}
+{"case": "direct", "sent_xff": null, "received": {"xff": ["127.0.0.1"], "path": "/probe"}, "expected_xff": "127.0.0.1"}
+{"case": "untrusted-spoof", "sent_xff": "198.51.100.99", "received": {"xff": ["127.0.0.1"], "path": "/probe"}, "expected_xff": "127.0.0.1"}
+{"case": "untrusted-spoof-chain", "sent_xff": "198.51.100.99, 172.18.0.4", "received": {"xff": ["127.0.0.1"], "path": "/probe"}, "expected_xff": "127.0.0.1"}
+{"caddy_pid": 38834, "reaped": true}
+ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 1.236s
+
+OK

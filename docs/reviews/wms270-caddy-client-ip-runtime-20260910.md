@@ -71,3 +71,9 @@ in this pass. It does not claim verification of the deployed outer-Caddy chain,
 Uvicorn client-IP handling, limiter state, external ports or browser behavior.
 Production rollback/deployment and independent release review remain with the
 coordinator. No production actions were performed. WMS-111/112 remain STOP.
+
+## Coordinator verification on the production version
+
+Production web `caddy version` returned v2.11.2. The coordinator independently downloaded the official macOS arm64 v2.11.2 asset367937506, verified its SHA-512 against the official release manifest and SHA-256 against the GitHub release asset digest, then extracted and executed it. An earlier wrapper compared SHA-256 with the SHA-512 manifest and stopped before extraction/execution; this was corrected explicitly, not bypassed. Both actual HTTP test methods / eight cases PASS in1.236s on2.11.2. Proof and exact hashes: artifacts/wms270-caddy-runtime-20260910/. No production change occurred in this check.
+
+Planned narrow recovery completion retains the current HTTPS URL and port bindings. Keep the recovered120b API while loading the reviewed Caddy configuration and verifying only unique synthetic health GETs from two origins. Only after the actual client addresses are correct may the previously accepted1922 auth API return. No repeated login saturation is permitted. Config reload should preserve active requests; a later exact-source container refresh may briefly interrupt a request and must be announced before execution. This is a plan, not deployment evidence.

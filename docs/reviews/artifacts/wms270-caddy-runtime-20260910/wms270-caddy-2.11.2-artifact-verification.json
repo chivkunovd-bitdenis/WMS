@@ -1,0 +1,10 @@
+{
+  "version": "2.11.2",
+  "asset_id": 367937506,
+  "asset_url": "https://github.com/caddyserver/caddy/releases/download/v2.11.2/caddy_2.11.2_mac_arm64.tar.gz",
+  "official_digest": "sha256:7ab765777e953574d5713a69cab3f5a2f643a5c1cc264d4239a60ff845b465d8",
+  "sha256": "7ab765777e953574d5713a69cab3f5a2f643a5c1cc264d4239a60ff845b465d8",
+  "official_sha512": "1738e3e6b661a9c3e9c0ebbfe2f00d3bd3d0137ae2b534dc8f477cd96e9849e719bce31b61c6407edbc4fe5da4e3de923ec435bf4e29bb53aee60a2fa882c500",
+  "sha512_verified": true,
+  "prior_failure": "Incorrectly compared SHA256 against official SHA512 manifest; binary had not been extracted or executed."
+}
