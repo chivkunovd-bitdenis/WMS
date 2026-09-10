@@ -2,12 +2,6 @@
 
 from app.models.background_job import BackgroundJob
 from app.models.base import Base
-from app.models.chat import (
-    ChatAttachment,
-    ChatConversation,
-    ChatMessage,
-    ChatParticipant,
-)
 from app.models.billing import (
     BillingInvoice,
     BillingInvoiceV2,
@@ -22,6 +16,12 @@ from app.models.billing import (
     BillingTariffServiceState,
     BillingTariffVersion,
     BillingTariffVersionV2,
+)
+from app.models.chat import (
+    ChatAttachment,
+    ChatConversation,
+    ChatMessage,
+    ChatParticipant,
 )
 from app.models.discrepancy_act import DiscrepancyAct, DiscrepancyActLine
 from app.models.document_event import DocumentEvent

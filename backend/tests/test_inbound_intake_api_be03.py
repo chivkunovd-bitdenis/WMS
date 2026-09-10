@@ -564,3 +564,76 @@ async def test_complete_receiving_zero_boxes_compares_with_plan(
     assert body["planned_box_count"] == 1
     assert body["boxes_discrepancy"] is True
     assert body["has_discrepancy"] is True
+
+
+async def test_ff_list_hides_only_seller_drafts_and_preserves_seller_scope(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(time.time_ns())
+    ah = await _admin_headers(async_client, suffix)
+    wh = await async_client.get("/warehouses", headers=ah)
+    assert wh.status_code == 200, wh.text
+    wid = wh.json()[0]["id"]
+    base = "/operations/inbound-intake-requests"
+    seller_ids = []
+    seller_headers = []
+    for index in range(2):
+        seller = await async_client.post("/sellers", headers=ah, json={"name": f"Draft {index}"})
+        assert seller.status_code == 201, seller.text
+        seller_id = seller.json()["id"]
+        seller_ids.append(seller_id)
+        email = f"draft-{suffix}-{index}@example.com"
+        account = await async_client.post(
+            "/auth/seller-accounts",
+            headers=ah,
+            json={
+                "seller_id": seller_id,
+                "email": email,
+                "password": "password123",
+            },
+        )
+        assert account.status_code == 201, account.text
+        login = await async_client.post(
+            "/auth/login", json={"email": email, "password": "password123"}
+        )
+        assert login.status_code == 200, login.text
+        seller_headers.append({"Authorization": f"Bearer {login.json()['access_token']}"})
+    ff = await async_client.post(
+        base, headers=ah, json={"warehouse_id": wid, "seller_id": seller_ids[0]}
+    )
+    assert ff.status_code == 201, ff.text
+    drafts = []
+    for sh in seller_headers:
+        response = await async_client.post(base, headers=sh, json={"warehouse_id": wid})
+        assert response.status_code == 201, response.text
+        drafts.append(response.json()["id"])
+    listed = await async_client.get(base, headers=ah)
+    assert listed.status_code == 200, listed.text
+    assert {row["id"] for row in listed.json()} == {ff.json()["id"]}
+    own = await async_client.get(base, headers=seller_headers[0])
+    assert own.status_code == 200, own.text
+    assert {row["id"] for row in own.json()} == {ff.json()["id"], drafts[0]}
+    product = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Draft product",
+            "sku_code": f"draft-{suffix}",
+            "seller_id": seller_ids[0],
+        },
+    )
+    assert product.status_code == 200, product.text
+    line = await async_client.post(
+        f"{base}/{drafts[0]}/lines",
+        headers=seller_headers[0],
+        json={
+            "product_id": product.json()["id"],
+            "expected_qty": 1,
+        },
+    )
+    assert line.status_code == 201, line.text
+    await set_planned_boxes(async_client, base, drafts[0], seller_headers[0])
+    submitted = await async_client.post(f"{base}/{drafts[0]}/submit", headers=seller_headers[0])
+    assert submitted.status_code == 200, submitted.text
+    listed = await async_client.get(base, headers=ah)
+    assert {row["id"] for row in listed.json()} == {ff.json()["id"], drafts[0]}

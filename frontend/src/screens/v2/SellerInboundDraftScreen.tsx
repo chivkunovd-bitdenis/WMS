@@ -1,3 +1,4 @@
+import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
 import { ChatDocumentAction } from '../../components/chat/ChatDocumentAction'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -630,7 +631,7 @@ export function SellerInboundDraftScreen({
   }
 
   const closeDocument = () => {
-    if (draftFieldsDirty && !window.confirm('Закрыть без сохранения?')) {
+    if (!confirmDiscardChanges(draftFieldsDirty)) {
       return
     }
     navigateToDocuments()

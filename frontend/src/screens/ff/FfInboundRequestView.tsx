@@ -1,3 +1,4 @@
+import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
 import { InboundDiscrepancyActEditor } from './InboundDiscrepancyActEditor'
 import {
   Fragment,
@@ -489,6 +490,8 @@ export function FfInboundRequestView({
   const [distBusy, setDistBusy] = useState(false)
   const [distError, setDistError] = useState<string | null>(null)
   const [distLines, setDistLines] = useState<DistributionLineDraft[]>([])
+  const [savedDistLines, setSavedDistLines] = useState<DistributionLineDraft[]>([])
+
   const [cellHintsByProductId, setCellHintsByProductId] = useState<Record<string, CellLocationHint[]>>({})
 
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -519,7 +522,6 @@ export function FfInboundRequestView({
   const [combinePalletBusy, setCombinePalletBusy] = useState(false)
   const [combinePalletId, setCombinePalletId] = useState('')
   const [inboundPallets, setInboundPallets] = useState<InboundPallet[]>([])
-  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null)
   const [newLocationCode, setNewLocationCode] = useState('')
   const [requestWarehouse, setRequestWarehouse] = useState<WarehouseRow | null>(null)
@@ -543,12 +545,6 @@ export function FfInboundRequestView({
 
   const sortingView = workspace === 'sorting'
 
-  useEffect(() => {
-    if (!sortingView) {
-      onDirtyChange?.(false)
-    }
-    return () => onDirtyChange?.(false)
-  }, [onDirtyChange, sortingView])
   const plannedDateFieldEnabled = false
   const waybillPrintEnabled = true
   const boxImportEnabled = false
@@ -811,14 +807,14 @@ export function FfInboundRequestView({
         return
       }
       const rows = (await res.json()) as DistributionLineOut[]
-      setDistLines(
-        rows.map((r) => ({
-          box_id: (r as { box_id?: string | null }).box_id ?? defaultPutawayBoxId,
-          product_id: r.product_id,
-          storage_location_id: r.storage_location_id,
-          quantity: String(r.quantity),
-        })),
-      )
+      const saved = rows.map((r) => ({
+        box_id: (r as { box_id?: string | null }).box_id ?? defaultPutawayBoxId,
+        product_id: r.product_id,
+        storage_location_id: r.storage_location_id,
+        quantity: String(r.quantity),
+      }))
+      setSavedDistLines(saved)
+      setDistLines(saved)
     } catch (e) {
       setDistLines([])
       setDistError(e instanceof Error ? e.message : 'Не удалось загрузить распределение.')
@@ -1156,14 +1152,14 @@ export function FfInboundRequestView({
         return
       }
       const rows = (await res.json()) as DistributionLineOut[]
-      setDistLines(
-        rows.map((r) => ({
-          box_id: (r as { box_id?: string | null }).box_id ?? defaultPutawayBoxId,
-          product_id: r.product_id,
-          storage_location_id: r.storage_location_id,
-          quantity: String(r.quantity),
-        })),
-      )
+      const saved = rows.map((r) => ({
+        box_id: (r as { box_id?: string | null }).box_id ?? defaultPutawayBoxId,
+        product_id: r.product_id,
+        storage_location_id: r.storage_location_id,
+        quantity: String(r.quantity),
+      }))
+      setSavedDistLines(saved)
+      setDistLines(saved)
       setDistOpen(true)
     } catch (e) {
       setDistError(e instanceof Error ? e.message : 'Не удалось сохранить распределение.')
@@ -1237,14 +1233,14 @@ export function FfInboundRequestView({
         return
       }
       const savedRows = (await putRes.json()) as DistributionLineOut[]
-      setDistLines(
-        savedRows.map((r) => ({
-          box_id: (r as { box_id?: string | null }).box_id ?? defaultPutawayBoxId,
-          product_id: r.product_id,
-          storage_location_id: r.storage_location_id,
-          quantity: String(r.quantity),
-        })),
-      )
+      const saved = savedRows.map((r) => ({
+        box_id: (r as { box_id?: string | null }).box_id ?? defaultPutawayBoxId,
+        product_id: r.product_id,
+        storage_location_id: r.storage_location_id,
+        quantity: String(r.quantity),
+      }))
+      setSavedDistLines(saved)
+      setDistLines(saved)
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-complete`),
         { method: 'POST', headers: authHeaders },
@@ -2103,12 +2099,27 @@ export function FfInboundRequestView({
     setSaveSuccessMsg('Документ сохранён.')
   }
 
+  const dimensionsDirty = dimensionsLine != null && (
+    dimensionDraft.length.trim() !== String(dimensionsLine.length_mm ?? '') ||
+    dimensionDraft.width.trim() !== String(dimensionsLine.width_mm ?? '') ||
+    dimensionDraft.height.trim() !== String(dimensionsLine.height_mm ?? '') ||
+    dimensionDraft.weight.trim() !== String(dimensionsLine.weight_g ?? '')
+  )
+  const unsavedLocalInput = hasUnsavedActualChange || dimensionsDirty ||
+    (distOpen && JSON.stringify(distLines) !== JSON.stringify(savedDistLines))
+  const closeDimensions = () => {
+    if (confirmDiscardChanges(dimensionsDirty)) setDimensionsLine(null)
+  }
+
+  useEffect(() => {
+    onDirtyChange?.(unsavedLocalInput)
+    return () => onDirtyChange?.(false)
+  }, [unsavedLocalInput, onDirtyChange])
+
   const handleClose = () => {
-    if (hasUnsavedActualChange) {
-      setCloseConfirmOpen(true)
-      return
-    }
-    onClose()
+    // The parent handles its titlebar/backdrop too. Standalone preview users
+    // without that callback use the same confirmation locally.
+    if (onDirtyChange || confirmDiscardChanges(unsavedLocalInput)) onClose()
   }
 
   const boxes = useMemo(
@@ -3658,7 +3669,7 @@ export function FfInboundRequestView({
       <Dialog
         open={dimensionsLine != null}
         onClose={() => {
-          if (!busy) setDimensionsLine(null)
+          if (!busy) closeDimensions()
         }}
         fullWidth
         maxWidth="xs"
@@ -3712,7 +3723,7 @@ export function FfInboundRequestView({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button disabled={busy} onClick={() => setDimensionsLine(null)}>
+          <Button disabled={busy} onClick={closeDimensions}>
             Отмена
           </Button>
           <Button
@@ -3953,34 +3964,6 @@ export function FfInboundRequestView({
         </Alert>
       </Snackbar>
 
-      <Dialog
-        open={closeConfirmOpen}
-        onClose={() => setCloseConfirmOpen(false)}
-        maxWidth="xs"
-        fullWidth
-        data-testid="ff-inbound-close-confirm-dialog"
-      >
-        <DialogTitle>Закрыть без сохранения?</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary">
-            В строке факта осталось несохранённое количество.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCloseConfirmOpen(false)}>Остаться</Button>
-          <Button
-            color="warning"
-            variant="contained"
-            onClick={() => {
-              setCloseConfirmOpen(false)
-              onClose()
-            }}
-            data-testid="ff-inbound-close-confirm"
-          >
-            Закрыть
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       <Dialog
         open={finishConfirmOpen}

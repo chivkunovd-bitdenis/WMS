@@ -1,3 +1,4 @@
+import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
 import { fbsErrorText } from './fbsUx'
 import { useEffect, useMemo, useState } from 'react'
 import {
@@ -64,6 +65,13 @@ export function FbsSupplyCreateDialog({
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState<string | null>(null)
   const [idempotencyKey, setIdempotencyKey] = useState(createFbsIdempotencyKey)
+
+  const requestClose = () => {
+    if (confirmDiscardChanges(deliveryType !== 'warehouse_sc')) {
+      setDeliveryType('warehouse_sc')
+      onClose()
+    }
+  }
 
   const orderKey = useMemo(() => orderIds.join(','), [orderIds])
 
@@ -145,7 +153,7 @@ export function FbsSupplyCreateDialog({
 
   const summary = preflight?.summary
   return (
-    <Dialog open={open} onClose={creating ? undefined : onClose} fullWidth maxWidth="md">
+    <Dialog open={open} onClose={creating ? undefined : requestClose} fullWidth maxWidth="md">
       <DialogTitle component="div" sx={{ pb: 1 }}>
         <Typography component="h2" variant="h6">Новая поставка FBS</Typography>
         <Typography variant="body2" color="text.secondary">
@@ -251,7 +259,7 @@ export function FbsSupplyCreateDialog({
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2 }}>
-        <Button onClick={onClose} disabled={creating}>
+        <Button onClick={requestClose} disabled={creating}>
           Отмена
         </Button>
         <Button

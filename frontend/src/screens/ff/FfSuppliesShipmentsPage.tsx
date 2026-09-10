@@ -678,23 +678,27 @@ export function FfSuppliesShipmentsPage({
     void loadDocDetail()
   }, [loadDocDetail])
 
+  const openMpDocument = useCallback((id: string) => {
+    const next = new URLSearchParams(searchParams)
+    next.set('open_mp', id)
+    setSearchParams(next)
+  }, [searchParams, setSearchParams])
+
   useEffect(() => {
-    if (!initialMarketplaceUnloadId) {
-      return
-    }
-    setUnloadDetail(null)
-    setDivergeDetail(null)
-    setModalError(null)
-    setSelectedInboundLineId('')
-    setLineProductId('')
-    setDocModal('marketplace_unload')
-    setDocModalId(initialMarketplaceUnloadId)
+    if (!initialMarketplaceUnloadId) return
+    openMpDocument(initialMarketplaceUnloadId)
     onInitialMarketplaceUnloadOpened?.()
-  }, [initialMarketplaceUnloadId, onInitialMarketplaceUnloadOpened])
+  }, [initialMarketplaceUnloadId, onInitialMarketplaceUnloadOpened, openMpDocument])
 
   useEffect(() => {
     const openMp = searchParams.get('open_mp')
-    if (!openMp || !isMpShipmentsPage) {
+    if (!openMp || !isMpShipmentsPage || !token) {
+      if (docModal === 'marketplace_unload') {
+        docDetailRequests.current.invalidate()
+        setDocModal(null)
+        setDocModalId(null)
+        setUnloadDetail(null)
+      }
       return
     }
     // WMS-177: пока в адресе стоит open_mp — документ должен быть открыт,
@@ -713,7 +717,7 @@ export function FfSuppliesShipmentsPage({
     // Параметр НЕ стираем: пока окно открыто, документ живёт в адресе, и
     // обновление страницы возвращает оператора в тот же документ, а не в журнал.
     // Уборка параметра — в closeDocModal, при явном закрытии окна.
-  }, [docModal, docModalId, isMpShipmentsPage, searchParams, setSearchParams])
+  }, [docModal, docModalId, isMpShipmentsPage, searchParams, setSearchParams, token])
 
   useEffect(() => {
     if (docModal !== 'marketplace_unload' || docModalId == null) {
@@ -854,8 +858,7 @@ export function FfSuppliesShipmentsPage({
     setModalError(null)
     setSelectedInboundLineId('')
     setLineProductId('')
-    setDocModal('marketplace_unload')
-    setDocModalId(created.id)
+    openMpDocument(created.id)
   }
 
   const createAndOpenDiverge = async () => {
@@ -872,6 +875,9 @@ export function FfSuppliesShipmentsPage({
     setModalError(null)
     setSelectedInboundLineId('')
     setLineProductId('')
+    const cleaned = new URLSearchParams(searchParams)
+    cleaned.delete('open_mp')
+    setSearchParams(cleaned, { replace: true })
     setDocModal('discrepancy_act')
     setDocModalId(created.id)
   }
@@ -2321,14 +2327,16 @@ export function FfSuppliesShipmentsPage({
                     setModalError(null)
                     setSelectedInboundLineId('')
                     setLineProductId('')
-                    setDocModal('marketplace_unload')
-                    setDocModalId(row.id)
+                    openMpDocument(row.id)
                   } else if (row.kind === 'discrepancy_act') {
                     setUnloadDetail(null)
                     setDivergeDetail(null)
                     setModalError(null)
                     setSelectedInboundLineId('')
                     setLineProductId('')
+                    const cleaned = new URLSearchParams(searchParams)
+                    cleaned.delete('open_mp')
+                    setSearchParams(cleaned, { replace: true })
                     setDocModal('discrepancy_act')
                     setDocModalId(row.id)
                   }

@@ -1,3 +1,4 @@
+import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import {
   Alert,
@@ -367,6 +368,14 @@ export function FfFbsSupplyWorkspace({
   const [skipHonestSignOpen, setSkipHonestSignOpen] = useState(false)
   const [skipHonestSignBusy, setSkipHonestSignBusy] = useState(false)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
+  const requestClose = () => {
+    const dirty = plannedShipmentDateDraft !== (workspace?.supply.planned_shipment_date ?? '') ||
+      boxCount !== '1' || Object.values(boxProductQty).some((value) => Boolean(value.trim())) ||
+      boxSelectedPositionIds.size > 0 || addableSelected.size > 0 ||
+      Boolean(kizScanValue.trim() || kizScanActive || kizConfirmTarget)
+    if (confirmDiscardChanges(dirty)) onClose()
+  }
+
   const isOzonSupply = workspace?.supply.marketplace === 'ozon'
   const boxesWithoutDistribution = !isOzonSupply && Boolean(workspace?.supply.boxes_without_distribution)
   const providerName = isOzonSupply ? 'Ozon' : 'WB'
@@ -876,7 +885,10 @@ export function FfFbsSupplyWorkspace({
       }),
       '',
     )
-    if (next) clearPersistentOperationKey(workspace.supply.id, 'box-create', `${boxMode}:${count}`)
+    if (next) {
+      clearPersistentOperationKey(workspace.supply.id, 'box-create', `${boxMode}:${count}`)
+      setBoxCount('1')
+    }
   }
 
   const assignBoxOrders = async () => {
@@ -1564,7 +1576,7 @@ export function FfFbsSupplyWorkspace({
           if (!kizScanBusy) dropKizScanActive()
           return
         }
-        onClose()
+        requestClose()
       }}
       maxWidth={false}
       fullScreen={false}
@@ -1683,7 +1695,7 @@ export function FfFbsSupplyWorkspace({
               }}
             />
           ) : null}
-          <IconButton onClick={onClose} disabled={busy} aria-label="Закрыть">
+          <IconButton onClick={requestClose} disabled={busy} aria-label="Закрыть">
             <CloseIcon />
           </IconButton>
         </Stack>
@@ -1833,7 +1845,7 @@ export function FfFbsSupplyWorkspace({
                     requestId={supplyId}
                     source="fbs"
                     hideHeader
-                    onPaused={onClose}
+                    onPaused={requestClose}
                     onFinished={() => { void load() }}
                   />
                 </Box>

@@ -1,3 +1,4 @@
+import { confirmDiscardChanges } from './utils/confirmDiscardChanges'
 import { ChatDocumentAction } from './components/chat/ChatDocumentAction'
 import { ChatDocumentScreen } from './screens/chat/ChatDocumentScreen'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -2795,7 +2796,7 @@ export default function App() {
   }, [token, authHeaders, refreshDiscrepancyActList])
 
   const closeFfDocument = useCallback(() => {
-    if (ffDocDirty && !window.confirm('Закрыть без сохранения?')) {
+    if (!confirmDiscardChanges(ffDocDirty)) {
       return
     }
     setFfDocDirty(false)
@@ -2808,6 +2809,7 @@ export default function App() {
     if (appSearchParams.get('open_inbound')) {
       const cleaned = new URLSearchParams(appSearchParams)
       cleaned.delete('open_inbound')
+      cleaned.delete('inbound_workspace')
       setAppSearchParams(cleaned, { replace: true })
     }
     if (token) {
@@ -2815,35 +2817,33 @@ export default function App() {
     }
   }, [ffDocDirty, refreshInboundList, token, appSearchParams, setAppSearchParams])
 
-  // WMS-177: при первом рендере (или после reload) читаем ?open_inbound=<id>
-  // и восстанавливаем открытый экран приёмки, если параметр совпадает с
-  // существующей заявкой из списка. Обновление сохранённого id в URL идёт
-  // отдельно, когда оператор открывает документ из списка.
+  // The URL owns the open document and workspace, including Back/Forward.
   useEffect(() => {
-    const openInbound = appSearchParams.get('open_inbound')
-    if (!openInbound) return
-    if (selectedInboundId === openInbound && ffDocModal === 'inbound') return
+    const id = appSearchParams.get('open_inbound')
+    const isInboundRoute = pathname === '/app/ff/reception' || pathname === '/app/ff/sorting'
+    if (!token || !me || !isInboundRoute || !id ||
+      !canAccessFfBlock(me.role, me.permissions, 'reception')) {
+      setFfDocModal((current) => current === 'inbound' ? null : current)
+      setSelectedInboundId(null)
+      return
+    }
+    const workspace = pathname === '/app/ff/sorting' ? 'sorting'
+      : appSearchParams.get('inbound_workspace') === 'full' ? 'full' : 'reception'
     setSelectedOutboundId(null)
-    setSelectedInboundId(openInbound)
-    setFfInboundWorkspace('reception')
+    setSelectedInboundId(id)
+    setFfInboundWorkspace(workspace)
     setFfDocModal('inbound')
-  }, [appSearchParams, selectedInboundId, ffDocModal])
+  }, [appSearchParams, pathname, token, me])
 
-  // WMS-177: одна точка входа в «открыть приёмку»: она же кладёт id в URL,
-  // чтобы reload вернул оператора в тот же документ, а не в журнал.
   const openInboundDocument = useCallback(
     (id: string, workspace: 'full' | 'reception' | 'sorting' = 'reception') => {
-      setSelectedOutboundId(null)
-      setSelectedInboundId(id)
-      setFfInboundWorkspace(workspace)
-      setFfDocModal('inbound')
-      if (appSearchParams.get('open_inbound') !== id) {
-        const next = new URLSearchParams(appSearchParams)
-        next.set('open_inbound', id)
-        setAppSearchParams(next, { replace: true })
-      }
+      const params = new URLSearchParams()
+      params.set('open_inbound', id)
+      params.set('inbound_workspace', workspace)
+      const route = workspace === 'sorting' ? '/app/ff/sorting' : '/app/ff/reception'
+      navigate(`${route}?${params}`)
     },
-    [appSearchParams, setAppSearchParams],
+    [navigate],
   )
 
   const rootElement = (() => {
