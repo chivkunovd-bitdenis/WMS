@@ -37,7 +37,8 @@ jobs:
             git fetch --prune origin
             # Execute the current trunk script, not the previous deployment's
             # version. The script retains its branch/SHA guard before building.
-            WMS_REPO_DIR="$PWD" bash -s < <(git show origin/etalon:scripts/deploy/prod-update.sh)
+            deploy_script="$(git show origin/etalon:scripts/deploy/prod-update.sh)"
+            WMS_REPO_DIR="$PWD" bash -c "$deploy_script" </dev/null
 
       - name: Smoke check (public HTTPS 200)
         run: |

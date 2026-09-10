@@ -86,7 +86,7 @@ BACKUP_FILE="${BACKUP_DIR}/pre-migration-$(date -u +%Y%m%dT%H%M%SZ)-${DEPLOY_SHA
 umask 077
 echo "==> save private pre-migration PostgreSQL backup"
 if ! "${COMPOSE[@]}" exec -T db sh -c \
-  'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$BACKUP_FILE"; then
+  'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' </dev/null > "$BACKUP_FILE"; then
   echo "ERROR: backup failed; application writers remain stopped. No migration was run." >&2
   exit 1
 fi
@@ -117,10 +117,13 @@ if [[ -f docker-compose.wms-host-8088.yml ]]; then
     echo "ERROR: unable to establish compose project for legacy listener." >&2
     exit 1
   fi
+  LEGACY_CONTAINERS="$(docker ps -q --filter "label=com.docker.compose.project=$PROJECT_NAME" \
+    --filter 'label=com.docker.compose.service=web_seller')"
   while IFS= read -r container_id; do
-    [[ -n "$container_id" ]] && docker stop "$container_id"
-  done < <(docker ps -q --filter "label=com.docker.compose.project=$PROJECT_NAME" \
-    --filter 'label=com.docker.compose.service=web_seller')
+    if [[ -n "$container_id" ]]; then
+      docker stop "$container_id"
+    fi
+  done <<< "$LEGACY_CONTAINERS"
 fi
 
 echo "==> status"

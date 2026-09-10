@@ -17,3 +17,11 @@ Compose project, установленного по метке контейнер
 backup, ошибку dump и испорченный архив. 3 PASS; bash -n, Ruff и Mypy PASS
 в общем локальном scoped проходе. Production не изменён; живой backup, миграция,
 закрытие порта и независимое review этого delta ещё не выполнены.
+
+
+После independent review27228 исправленыstdin и потеряexitstatus: workflow
+получаетскрипт checkedassignment ивыполняет bash-c </dev/null; pg_dumpтакже
+безstdin; dockerpsдляlegacycheckedassignment, пустойсписокуспешен.
+7целевыхtestsPASS: dump/archivefail, listingfail,emptylist, actualworkflow
+bootstrap gitshowfail и scriptcommandчитающаяstdin. Ruff/bash-nPASS.
+Повторноеindependentreviewэтогопоследнегоdeltaещёнепройдено.
