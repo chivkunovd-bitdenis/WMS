@@ -17,25 +17,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.models.billing import BillingLedgerEntry, BillingTariffVersionV2
+from app.models.product import Product
+from app.models.seller import Seller
 from app.models.storage_measurement import StorageMeasurement
 from app.models.storage_statement import StorageStatement
 from app.services.billing_ledger_service import (
     BillingLedgerError,
+    _resolve_v2_tariff,
     postgres_integer,
     postgres_numeric,
 )
+from app.services.billing_seller_report_service import SellerReportError, moscow_interval
 from app.services.billing_tariff_matrix_service import (
     BillingTariffMatrixError,
     TariffVersionDraft,
     get_tariff_matrix,
     save_tariff_matrix,
 )
+from app.services.catalog_service import volume_liters_from_mm
 from app.services.staff_packaging_billing_service import rub_to_kopecks
 from app.services.storage_daily_charge_service import (
     SOURCE_TYPE as STORAGE_DAY_SOURCE_TYPE,
 )
 from app.services.storage_daily_charge_service import (
     STORAGE_SERVICE_CODE,
+    STORAGE_UNIT,
     storage_day_event_kind,
     storage_day_source_id,
 )
@@ -456,3 +462,240 @@ async def get_storage_ledger_rows_batch(
         if statement_id is not None:
             result[statement_id].append(ledger_row)
     return result
+
+
+@dataclass(frozen=True)
+class StorageReportProduct:
+    """Строка товара в отчёте хранения за произвольный период.
+
+    ``amount_kopecks`` пуст, когда ни за одни сутки периода ставки не было:
+    литро-дни посчитаны, а платить не за что. Ноль здесь означал бы «хранение
+    бесплатно» — другое утверждение.
+    """
+
+    product_id: uuid.UUID
+    sku: str | None
+    product_name: str
+    seller_article: str | None
+    category: str | None
+    volume_liters: Decimal | None
+    liter_days: Decimal
+    amount_kopecks: int | None
+    current_rate_kopecks: int | None
+
+
+@dataclass(frozen=True)
+class StorageReportSeller:
+    seller_id: uuid.UUID
+    seller_name: str
+    liter_days: Decimal
+    amount_kopecks: int | None
+    products: list[StorageReportProduct]
+
+
+@dataclass(frozen=True)
+class StorageReport:
+    liter_days: Decimal
+    amount_kopecks: int | None
+    sellers: list[StorageReportSeller]
+
+
+async def _current_storage_rates(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_ids: Sequence[uuid.UUID],
+    *,
+    at: datetime,
+) -> dict[uuid.UUID, int]:
+    """Ставка хранения, действующая на момент ``at``, по каждому селлеру отчёта.
+
+    Её выбирает тот же резолвер тарифа, которым ночное начисление выбирает ставку
+    на сутки. Иначе «текущая ставка» на экране могла бы не совпасть с тем, по
+    чему начислят следующей ночью, и спорить было бы не с чем.
+
+    Ставка именно на селлера: ограничение таблицы тарифов разрешает товарный
+    охват только единице «штука», а хранение считается за литро-день — товарной
+    ставки хранения не существует.
+    """
+    rates: dict[uuid.UUID, int] = {}
+    for seller_id in seller_ids:
+        tariff = await _resolve_v2_tariff(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            product_id=None,
+            service_code=STORAGE_SERVICE_CODE,
+            occurred_at=at,
+        )
+        if tariff is not None and tariff.unit == STORAGE_UNIT:
+            rates[seller_id] = int(tariff.rate)
+    return rates
+
+
+def _report_volume_liters(product: Product) -> Decimal | None:
+    """Текущий объём одной штуки: из карточки, иначе из её же габаритов."""
+    if product.volume_liters is not None:
+        return Decimal(str(product.volume_liters))
+    computed = volume_liters_from_mm(product.length_mm, product.width_mm, product.height_mm)
+    return Decimal(str(computed)) if computed is not None else None
+
+
+async def build_storage_report(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    date_from: date,
+    date_to: date,
+    seller_id: uuid.UUID | None = None,
+    category: str | None = None,
+) -> StorageReport:
+    """Хранение за произвольный период: селлеры, их товары, литро-дни и деньги.
+
+    Источник один — ночные начисления за хранение, те же проводки, из которых
+    собирается строка хранения на экране «Расчёты» и счёт селлеру. Отчёт ничего
+    не пересчитывает по движениям: второй расчёт той же величины рано или поздно
+    разойдётся с первым, и выяснить, какая цифра настоящая, будет нельзя.
+
+    Товар в проводке не записан — она адресована устойчивым идентификатором
+    «склад + товар», — поэтому обратный путь строится тем же ``uuid5``, которым
+    его строит ночная задача: по товарам встретившихся селлеров и встретившимся
+    складам. Нового хранилища для этой связи не нужно.
+    """
+    try:
+        start, end = moscow_interval(date_from, date_to)
+    except SellerReportError as exc:
+        raise StorageStatementError(str(exc)) from exc
+
+    charge_query = (
+        select(
+            BillingLedgerEntry.seller_id,
+            BillingLedgerEntry.warehouse_id,
+            BillingLedgerEntry.source_id,
+            func.sum(BillingLedgerEntry.quantity),
+            func.sum(BillingLedgerEntry.amount),
+            # Сутки, за которые деньги посчитаны. Ноль таких суток и сумма ноль —
+            # разные вещи: первое «ставки не было», второе «бесплатно».
+            func.count(BillingLedgerEntry.amount),
+        )
+        .where(
+            BillingLedgerEntry.tenant_id == tenant_id,
+            BillingLedgerEntry.service_code == STORAGE_SERVICE_CODE,
+            BillingLedgerEntry.source_type == STORAGE_DAY_SOURCE_TYPE,
+            BillingLedgerEntry.entry_type == "charge",
+            BillingLedgerEntry.occurred_at >= start,
+            BillingLedgerEntry.occurred_at < end,
+            BillingLedgerEntry.seller_id.is_not(None),
+        )
+        .group_by(
+            BillingLedgerEntry.seller_id,
+            BillingLedgerEntry.warehouse_id,
+            BillingLedgerEntry.source_id,
+        )
+    )
+    if seller_id is not None:
+        charge_query = charge_query.where(BillingLedgerEntry.seller_id == seller_id)
+    charges = list((await session.execute(charge_query)).all())
+    if not charges:
+        return StorageReport(liter_days=Decimal(0), amount_kopecks=None, sellers=[])
+
+    seller_ids = {row[0] for row in charges if row[0] is not None}
+    warehouse_ids = {row[1] for row in charges if row[1] is not None}
+    if not seller_ids or not warehouse_ids:
+        return StorageReport(liter_days=Decimal(0), amount_kopecks=None, sellers=[])
+
+    product_query = select(Product).where(
+        Product.tenant_id == tenant_id,
+        Product.seller_id.in_(seller_ids),
+    )
+    if category is not None:
+        product_query = product_query.where(func.trim(Product.category) == category)
+    products = list((await session.scalars(product_query)).all())
+    owners: dict[tuple[uuid.UUID | None, uuid.UUID | None, uuid.UUID], Product] = {}
+    for product in products:
+        for warehouse_id in warehouse_ids:
+            owners[
+                (
+                    product.seller_id,
+                    warehouse_id,
+                    storage_day_source_id(warehouse_id=warehouse_id, product_id=product.id),
+                )
+            ] = product
+
+    # Один товар мог лежать на нескольких складах: в отчёте это одна строка, как
+    # и на экране «Расчёты», где склад не является разрезом хранения.
+    per_seller: dict[uuid.UUID, dict[uuid.UUID, tuple[Decimal, int | None]]] = {}
+    for charge in charges:
+        product = owners.get((charge[0], charge[1], charge[2]))
+        if product is None:
+            continue
+        bucket = per_seller.setdefault(charge[0], {})
+        liter_days, amount = bucket.get(product.id, (Decimal(0), None))
+        liter_days += Decimal(str(charge[3] or 0))
+        if charge[5]:
+            amount = (amount or 0) + int(charge[4] or 0)
+        bucket[product.id] = (liter_days, amount)
+    if not per_seller:
+        return StorageReport(liter_days=Decimal(0), amount_kopecks=None, sellers=[])
+
+    sellers = list(
+        (
+            await session.scalars(
+                select(Seller).where(
+                    Seller.tenant_id == tenant_id,
+                    Seller.id.in_(per_seller),
+                )
+            )
+        ).all()
+    )
+    products_by_id = {product.id: product for product in products}
+    current_rates = await _current_storage_rates(
+        session,
+        tenant_id,
+        [seller.id for seller in sellers],
+        at=datetime.now(UTC),
+    )
+
+    report_liter_days = Decimal(0)
+    report_amount: int | None = None
+    report_sellers: list[StorageReportSeller] = []
+    for seller in sorted(sellers, key=lambda row: (row.name or "", str(row.id))):
+        rows: list[StorageReportProduct] = []
+        seller_liter_days = Decimal(0)
+        seller_amount: int | None = None
+        for product_id, (liter_days, amount) in per_seller[seller.id].items():
+            product = products_by_id[product_id]
+            rows.append(
+                StorageReportProduct(
+                    product_id=product_id,
+                    sku=product.sku_code,
+                    product_name=product.name,
+                    seller_article=product.wb_vendor_code,
+                    category=product.category,
+                    volume_liters=_report_volume_liters(product),
+                    liter_days=liter_days,
+                    amount_kopecks=amount,
+                    current_rate_kopecks=current_rates.get(seller.id),
+                )
+            )
+            seller_liter_days += liter_days
+            if amount is not None:
+                seller_amount = (seller_amount or 0) + amount
+        rows.sort(key=lambda row: (-row.liter_days, row.product_name, str(row.product_id)))
+        report_sellers.append(
+            StorageReportSeller(
+                seller_id=seller.id,
+                seller_name=seller.name,
+                liter_days=seller_liter_days,
+                amount_kopecks=seller_amount,
+                products=rows,
+            )
+        )
+        report_liter_days += seller_liter_days
+        if seller_amount is not None:
+            report_amount = (report_amount or 0) + seller_amount
+
+    return StorageReport(
+        liter_days=report_liter_days,
+        amount_kopecks=report_amount,
+        sellers=report_sellers,
+    )

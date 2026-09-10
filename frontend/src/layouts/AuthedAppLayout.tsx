@@ -244,6 +244,13 @@ export function AuthedAppLayout({
                 <ListItemText primary="Хранение" />
               </ListItemButton>
             ) : null}
+            {/* Отчёт за произвольный период — отдельный пункт: экран «Хранение» ведёт
+                месячные ведомости и обмеры, а здесь только итоги литро-дней и денег. */}
+            {canStorage ? (
+              <ListItemButton component={NavLink} to={`${base}/storage-report`} data-testid="nav-ff-storage-report" data-task-id="NAV-01">
+                <ListItemText primary="Отчёт хранения" />
+              </ListItemButton>
+            ) : null}
             {/* Инвентаризация — документ, и его надо где-то заводить и искать.
                 Пересчёт по одной строке склада запускается значком на карте, а
                 список документов и создание по фильтрам живут здесь. */}
