@@ -8,6 +8,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.document_event import (
+    DOCUMENT_TYPE_OUTBOUND_SHIPMENT,
+    EVENT_DATA_CHANGED,
+    EVENT_DOCUMENT_CREATED,
+    EVENT_LINE_ADDED,
+    EVENT_LINE_REMOVED,
+    EVENT_STATUS_CHANGED,
+)
 from app.models.inventory_movement import InventoryMovement
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.product import Product
@@ -19,6 +27,41 @@ from app.services.catalog_service import (
     get_storage_location_in_warehouse,
     get_warehouse,
 )
+from app.services.document_event_service import record_document_mutation
+
+
+def _audit_state(
+    req: OutboundShipmentRequest, lines: list[OutboundShipmentLine]
+) -> dict[str, object]:
+    return {
+        "status": req.status,
+        "warehouse_id": req.warehouse_id,
+        "seller_id": req.seller_id,
+        "planned_shipment_date": req.planned_shipment_date,
+        "posted_at": req.posted_at,
+        "lines": [
+            {
+                "line_id": str(line.id),
+                "product_id": str(line.product_id),
+                "quantity": line.quantity,
+                "shipped_qty": line.shipped_qty,
+                "storage_location_id": str(line.storage_location_id)
+                if line.storage_location_id else None,
+            }
+            for line in sorted(lines, key=lambda line: str(line.id))
+        ],
+    }
+
+
+async def _audit_change(
+    session: AsyncSession, req: OutboundShipmentRequest, event_type: str,
+    before: dict[str, object] | None, lines: list[OutboundShipmentLine],
+) -> None:
+    await record_document_mutation(
+        session, tenant_id=req.tenant_id, document_type=DOCUMENT_TYPE_OUTBOUND_SHIPMENT,
+        document_id=req.id, event_type=event_type, before=before, after=_audit_state(req, lines),
+    )
+
 
 STATUS_DRAFT = "draft"
 STATUS_SUBMITTED = "submitted"
@@ -52,6 +95,8 @@ async def create_request(
         seller_id=seller_id,
     )
     session.add(req)
+    await session.flush()
+    await _audit_change(session, req, EVENT_DOCUMENT_CREATED, None, [])
     await session.commit()
     await session.refresh(req)
     return req
@@ -163,6 +208,7 @@ async def add_line(
         and product.seller_id != seller_product_owner_id
     ):
         raise OutboundShipmentError("product_seller_mismatch")
+    before = _audit_state(req, req.lines)
     if req.seller_id is None:
         req.seller_id = product.seller_id
     elif product.seller_id != req.seller_id:
@@ -194,6 +240,7 @@ async def add_line(
     try:
         await session.flush()
         await inv_svc.sync_outbound_line_reservation(session, tenant_id, req, line)
+        await _audit_change(session, req, EVENT_LINE_ADDED, before, [*req.lines, line])
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
@@ -223,6 +270,7 @@ async def set_line_storage_location(
         raise OutboundShipmentError("not_editable")
     if line.shipped_qty >= line.quantity:
         raise OutboundShipmentError("line_closed")
+    before = _audit_state(req, req.lines)
     address_enabled = await tenant_settings_svc.is_address_storage_enabled(
         session, tenant_id
     )
@@ -240,6 +288,7 @@ async def set_line_storage_location(
         line.storage_location_id = sorting_loc.id
     try:
         await inv_svc.sync_outbound_line_reservation(session, tenant_id, req, line)
+        await _audit_change(session, req, EVENT_DATA_CHANGED, before, req.lines)
         await session.commit()
     except ValueError as exc:
         await session.rollback()
@@ -262,6 +311,7 @@ async def delete_line(
     req, line = pair
     if req.status != STATUS_DRAFT:
         raise OutboundShipmentError("not_draft")
+    before = _audit_state(req, req.lines)
     await session.delete(line)
     await session.flush()
     remaining = int(
@@ -276,6 +326,10 @@ async def delete_line(
         root = await session.get(OutboundShipmentRequest, request_id)
         if root is not None:
             root.seller_id = None
+    await _audit_change(
+        session, req, EVENT_LINE_REMOVED, before,
+        [remaining_line for remaining_line in req.lines if remaining_line.id != line_id],
+    )
     await session.commit()
     session.expire_all()
     out = await get_request(session, tenant_id, request_id)
@@ -298,6 +352,7 @@ async def submit_request(
         raise OutboundShipmentError("not_draft")
     if len(req.lines) == 0:
         raise OutboundShipmentError("submit_empty")
+    before = _audit_state(req, req.lines)
     address_enabled = await tenant_settings_svc.is_address_storage_enabled(
         session, tenant_id
     )
@@ -324,6 +379,7 @@ async def submit_request(
         if planned_shipment_date is not None
         else datetime.now(UTC).date()
     )
+    await _audit_change(session, req, EVENT_STATUS_CHANGED, before, req.lines)
     await session.commit()
     await session.refresh(req)
     return req
@@ -353,6 +409,7 @@ async def ship_line(
         raise OutboundShipmentError("already_posted")
     if req.status != STATUS_SUBMITTED:
         raise OutboundShipmentError("not_submitted")
+    before = _audit_state(req, req.lines)
     remaining = line.quantity - line.shipped_qty
     if remaining <= 0:
         raise OutboundShipmentError("nothing_to_ship")
@@ -388,6 +445,11 @@ async def ship_line(
         if str(exc) == inv_svc.RESERVATION_ERROR:
             raise OutboundShipmentError("insufficient_available") from exc
         raise
+    await _audit_change(
+        session, req,
+        EVENT_STATUS_CHANGED if before["status"] != req.status else EVENT_DATA_CHANGED,
+        before, req.lines,
+    )
     await session.commit()
     await session.refresh(req)
     return req
@@ -407,6 +469,7 @@ async def post_request(
         raise OutboundShipmentError("already_posted")
     if req.status != STATUS_SUBMITTED:
         raise OutboundShipmentError("not_submitted")
+    before = _audit_state(req, req.lines)
     address_enabled = await tenant_settings_svc.is_address_storage_enabled(
         session, tenant_id
     )
@@ -454,6 +517,11 @@ async def post_request(
             raise OutboundShipmentError("insufficient_available") from exc
         raise
     _maybe_complete_request(req)
+    await _audit_change(
+        session, req,
+        EVENT_STATUS_CHANGED if before["status"] != req.status else EVENT_DATA_CHANGED,
+        before, req.lines,
+    )
     await session.commit()
     await session.refresh(req)
     return req

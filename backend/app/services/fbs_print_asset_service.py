@@ -15,6 +15,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.document_event import (
+    DOCUMENT_TYPE_FBS_ORDER,
+    DOCUMENT_TYPE_FBS_SUPPLY,
+    EVENT_PRINT_OPENED,
+)
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_CANCELLED,
     STICKER_STATUS_APPLIED,
@@ -36,6 +41,7 @@ from app.models.fbs_print_asset import (
 )
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_trbx import FbsTrbx
+from app.services.document_event_service import record_document_mutation
 from app.services.fbs_cancelled_after_pack_service import (
     cancelled_operation_message,
     order_belonged_to_supply,
@@ -333,11 +339,15 @@ async def _load_asset(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     asset_id: uuid.UUID,
+    *,
+    for_update: bool = False,
 ) -> FbsPrintAsset | None:
     stmt = select(FbsPrintAsset).where(
         FbsPrintAsset.id == asset_id,
         FbsPrintAsset.tenant_id == tenant_id,
     )
+    if for_update:
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
 
@@ -996,12 +1006,13 @@ async def get_asset_binary_content(
     user_id: uuid.UUID,
     record_print_opened: bool = True,
 ) -> tuple[bytes, str, FbsPrintAsset]:
-    asset = await _load_asset(session, tenant_id, asset_id)
+    asset = await _load_asset(session, tenant_id, asset_id, for_update=record_print_opened)
     if asset is None:
         raise FbsPrintAssetError(
             "asset_not_found",
             message="Печатный актив не найден.",
         )
+    order = None
     if asset.fbs_order_id is not None:
         order = await session.get(FbsOrder, asset.fbs_order_id)
         if order is not None and order.status == FBS_ORDER_STATUS_CANCELLED:
@@ -1035,6 +1046,10 @@ async def get_asset_binary_content(
             context={"asset_id": str(asset_id), "reason": exc.code},
         ) from exc
 
+    before: dict[str, object] = {
+        "asset_id": asset.id, "print_opened_at": asset.print_opened_at,
+        "sticker_status": order.sticker_status if order is not None else None,
+    }
     if record_print_opened and asset.print_opened_at is None:
         asset.print_opened_at = datetime.now(tz=UTC)
         if asset.fbs_order_id is not None:
@@ -1042,7 +1057,18 @@ async def get_asset_binary_content(
             if order is not None and order.sticker_status == STICKER_STATUS_READY:
                 order.sticker_status = STICKER_STATUS_PRINT_OPENED
 
-    _ = user_id
+    # user_id is kept for call compatibility; audit uses get_current_user's context.
+    document_id = asset.fbs_order_id or asset.fbs_supply_id
+    if document_id is not None:
+        await record_document_mutation(
+            session, tenant_id=tenant_id,
+            document_type=(
+                DOCUMENT_TYPE_FBS_ORDER if asset.fbs_order_id else DOCUMENT_TYPE_FBS_SUPPLY
+            ),
+            document_id=document_id, event_type=EVENT_PRINT_OPENED, before=before,
+            after={"asset_id": asset.id, "print_opened_at": asset.print_opened_at,
+                   "sticker_status": order.sticker_status if order is not None else None},
+        )
     await session.flush()
     return png_bytes, content_type, asset
 

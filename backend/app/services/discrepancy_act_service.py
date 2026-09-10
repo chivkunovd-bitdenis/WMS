@@ -8,12 +8,38 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.discrepancy_act import DiscrepancyAct, DiscrepancyActLine
+from app.models.document_event import (
+    DOCUMENT_TYPE_DISCREPANCY_ACT,
+    EVENT_DOCUMENT_CREATED,
+    EVENT_LINE_ADDED,
+    EVENT_LINE_REMOVED,
+    EVENT_STATUS_CHANGED,
+)
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.inventory_movement import MOVEMENT_TYPE_DISCREPANCY_ACT
 from app.models.product import Product
 from app.models.seller import Seller
 from app.services import inventory_service as inv_svc
 from app.services import sorting_location_service as sorting_loc_svc
+from app.services.document_event_service import record_document_mutation
+
+
+def _line_audit_state(line: DiscrepancyActLine) -> dict[str, object]:
+    return {
+        "line_id": line.id, "product_id": line.product_id, "quantity": line.quantity,
+        "inbound_intake_line_id": line.inbound_intake_line_id,
+    }
+
+
+async def _audit_change(
+    session: AsyncSession, act: DiscrepancyAct, event_type: str,
+    before: dict[str, object] | None, after: dict[str, object] | None,
+) -> None:
+    await record_document_mutation(
+        session, tenant_id=act.tenant_id, document_type=DOCUMENT_TYPE_DISCREPANCY_ACT,
+        document_id=act.id, event_type=event_type, before=before, after=after,
+    )
+
 
 STATUS_DRAFT = "draft"
 STATUS_CONFIRMED = "confirmed"
@@ -52,6 +78,11 @@ async def create_act(
         status=STATUS_DRAFT,
     )
     session.add(act)
+    await session.flush()
+    await _audit_change(session, act, EVENT_DOCUMENT_CREATED, None, {
+        "status": act.status, "seller_id": act.seller_id,
+        "inbound_intake_request_id": act.inbound_intake_request_id,
+    })
     await session.commit()
     await session.refresh(act)
     return act
@@ -130,6 +161,8 @@ async def add_line(
     )
     session.add(line)
     try:
+        await session.flush()
+        await _audit_change(session, act, EVENT_LINE_ADDED, None, _line_audit_state(line))
         await session.commit()
     except IntegrityError:
         await session.rollback()
@@ -150,7 +183,9 @@ async def submit_act(
         raise DiscrepancyActError("bad_status")
     if not act.lines:
         raise DiscrepancyActError("empty_act")
+    before: dict[str, object] = {"status": act.status}
     act.status = STATUS_CONFIRMED
+    await _audit_change(session, act, EVENT_STATUS_CHANGED, before, {"status": act.status})
     await session.commit()
     r2 = await get_act(session, tenant_id, act_id)
     assert r2 is not None
@@ -209,7 +244,9 @@ async def approve_act(
                 await session.rollback()
                 raise DiscrepancyActError("insufficient_stock") from exc
             raise
+    before: dict[str, object] = {"status": act.status}
     act.status = STATUS_APPROVED
+    await _audit_change(session, act, EVENT_STATUS_CHANGED, before, {"status": act.status})
     await session.commit()
     r2 = await get_act(session, tenant_id, act_id)
     assert r2 is not None
@@ -226,7 +263,9 @@ async def reject_act(
         raise DiscrepancyActError("not_found")
     if act.status != STATUS_CONFIRMED:
         raise DiscrepancyActError("bad_status")
+    before: dict[str, object] = {"status": act.status}
     act.status = STATUS_REJECTED
+    await _audit_change(session, act, EVENT_STATUS_CHANGED, before, {"status": act.status})
     await session.commit()
     r2 = await get_act(session, tenant_id, act_id)
     assert r2 is not None
@@ -247,5 +286,7 @@ async def delete_line(
     line = await session.get(DiscrepancyActLine, line_id)
     if line is None or line.act_id != act_id:
         raise DiscrepancyActError("line_not_found")
+    before = _line_audit_state(line)
     await session.delete(line)
+    await _audit_change(session, act, EVENT_LINE_REMOVED, before, None)
     await session.commit()
