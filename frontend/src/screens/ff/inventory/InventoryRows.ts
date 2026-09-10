@@ -221,7 +221,7 @@ function pushContainer(
     wbSize: null,
     photoUrl: null,
     expected: agg.expected,
-    actual: agg.actual,
+    actual: node.confirmedEmpty ? 0 : agg.actual,
     delta: agg.delta,
     surplus: agg.surplus,
     shortage: agg.shortage,
@@ -320,7 +320,7 @@ export function buildRows(
       wbSize: null,
       photoUrl: null,
       expected: agg.expected,
-      actual: agg.actual,
+      actual: cell.confirmedEmpty ? 0 : agg.actual,
       delta: agg.delta,
       surplus: agg.surplus,
       shortage: agg.shortage,
@@ -524,15 +524,22 @@ export function mergeInFlightActuals(
   sent: InventoryCount,
   current: InventoryCount,
 ): InventoryCount {
+  if (current.id !== server.id || sent.id !== server.id) return current
   const sentActuals = new Map(allProducts(sent).map((item) => [item.id, item.actual]))
   const changed = new Map<string, number | null>()
   for (const item of allProducts(current)) {
     if (!sentActuals.has(item.id)) continue
     if (sentActuals.get(item.id) !== item.actual) changed.set(item.id, item.actual)
   }
-  let merged = server
+  let merged = current.comment !== sent.comment ? { ...server, comment: current.comment } : server
   for (const [productId, actual] of changed) {
     merged = setActual(merged, productId, actual)
   }
   return merged
+}
+
+/** Only the values changed in this editing session may overwrite server values. */
+export function changedActualIds(edited: InventoryCount, original: InventoryCount): Set<string> {
+  const before = new Map(allProducts(original).map((item) => [item.id, item.actual]))
+  return new Set(allProducts(edited).filter((item) => before.get(item.id) !== item.actual).map((item) => item.id))
 }

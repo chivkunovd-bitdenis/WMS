@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    JSON,
     DateTime,
     ForeignKey,
     Index,
@@ -76,6 +77,9 @@ class InventoryCount(Base):
         index=True,
     )
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    empty_places: Mapped[list[dict[str, str]]] = mapped_column(
+        JSON, default=list, nullable=False,
+    )
 
     tenant: Mapped[Tenant] = relationship("Tenant")
     warehouse: Mapped[Warehouse | None] = relationship("Warehouse")
@@ -183,7 +187,10 @@ class InventoryCountFoundScan(Base):
 
 
 class InventoryCountCreatedContainer(Base):
-    """Тара, заведённая прямо в документе пересчёта — исключение из прунинга.
+    """Тара, созданная или явно выбранная для пересчёта — исключение из прунинга.
+
+    WMS-154 использует ту же связь для выбранного пустого объекта. Связь
+    отвечает только за видимость и не является подтверждением пустоты.
 
     Карта склада отдаёт всю тару склада, и `_prune_empty_containers` в
     `app/api/inventory_counts.py` выбрасывает из дерева документа ту, в

@@ -65,6 +65,7 @@ async def test_register_creates_default_warehouse(async_client: AsyncClient) -> 
     assert names == ["Основной"], names
     codes = [w["code"] for w in items]
     assert codes == ["main"], codes
+    assert items[0]["barcode"].startswith("WH-")
 
 
 @pytest.mark.asyncio

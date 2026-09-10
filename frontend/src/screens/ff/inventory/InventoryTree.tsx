@@ -3,6 +3,7 @@ import ExpandMore from '@mui/icons-material/ExpandMore'
 import GridViewOutlined from '@mui/icons-material/GridViewOutlined'
 import Inventory2Outlined from '@mui/icons-material/Inventory2Outlined'
 import LayersOutlined from '@mui/icons-material/LayersOutlined'
+import MoveDownOutlined from '@mui/icons-material/MoveDownOutlined'
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
 import ListAltOutlined from '@mui/icons-material/ListAltOutlined'
 import WidgetsOutlined from '@mui/icons-material/WidgetsOutlined'
@@ -58,7 +59,8 @@ export function isComplete(row: InvRow): boolean {
   if (row.kind === 'product') return row.actual !== null && row.actual === row.expected
   // Тара закрыта, только когда посчитаны все её строки и все сошлись: наполовину
   // пройденный короб зелёным быть не может, к нему ещё возвращаться.
-  return row.leaves > 0 && row.countedLeaves === row.leaves && !hasDiscrepancy(row)
+  return (row.leaves === 0 && row.actual === 0)
+    || (row.leaves > 0 && row.countedLeaves === row.leaves && !hasDiscrepancy(row))
 }
 
 function DeltaCell({ row }: { row: InvRow }) {
@@ -142,6 +144,15 @@ type Props = {
   empty?: { title: string; hint?: string; action?: ReactNode }
   onToggle: (row: InvRow) => void
   onActual: (row: InvRow, value: number | null) => void
+  /**
+   * Ключ и название тары, выделенной местом работы, — «Переложить сюда» на
+   * строке товара (задача 2 доработки от 03.09.2026, WMS-153). null, если
+   * выделения нет или выделена ячейка — переносить умеем только в тару.
+   */
+  moveTargetKey?: string | null
+  moveTargetTitle?: string | null
+  /** Переложить товар этой строки в выделенную тару. */
+  onMoveLine?: (row: InvRow) => void
 }
 
 export function InventoryTree({
@@ -155,6 +166,9 @@ export function InventoryTree({
   onToggle,
   onActual,
   onPrintContents,
+  moveTargetKey,
+  moveTargetTitle,
+  onMoveLine,
 }: Props) {
   const [printRow, setPrintRow] = useState<InvRow | null>(null)
   const columns: Column<InvRow>[] = [
@@ -239,6 +253,18 @@ export function InventoryTree({
               testId={`inv-contents-${row.key}`}
             >
               <ListAltOutlined fontSize="small" />
+            </IconAction>
+          ) : null}
+          {/* «Переложить сюда» — только у товара, только когда выделена тара
+              (не сама эта тара — тогда переносить некуда, он уже там). Задача
+              владельца 03.09.2026, WMS-153. */}
+          {row.kind === 'product' && onMoveLine && moveTargetKey && row.parentKey !== moveTargetKey ? (
+            <IconAction
+              title={`Переложить в ${moveTargetTitle ?? 'выделенную тару'}`}
+              onClick={() => onMoveLine(row)}
+              testId={`inv-move-${row.id}`}
+            >
+              <MoveDownOutlined fontSize="small" />
             </IconAction>
           ) : null}
           <Typography

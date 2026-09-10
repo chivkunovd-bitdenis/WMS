@@ -80,11 +80,11 @@ async def test_operational_warehouse_list_and_scan_resolver(async_client: AsyncC
     assert registered.status_code == 200, registered.text
     headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
 
-    warehouse = await async_client.post(
-        "/warehouses", headers=headers, json={"name": "Основной", "code": "main"}
-    )
+    warehouse = await async_client.get("/warehouses", headers=headers)
     assert warehouse.status_code == 200, warehouse.text
-    body = warehouse.json()
+    assert len(warehouse.json()) == 1
+    body = warehouse.json()[0]
+    assert body["code"] == "main"
     assert body["is_operational"] is True
     assert body["barcode"].startswith("WH-")
 

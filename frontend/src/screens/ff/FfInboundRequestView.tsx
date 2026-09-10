@@ -1,3 +1,4 @@
+import { InboundDiscrepancyActEditor } from './InboundDiscrepancyActEditor'
 import {
   Fragment,
   memo,
@@ -124,6 +125,7 @@ type InboundBoxLine = {
 }
 
 type InboundBox = {
+  is_damaged?: boolean
   id: string
   box_number: number
   internal_barcode: string
@@ -1891,6 +1893,28 @@ export function FfInboundRequestView({
     }
   }
 
+  const setBoxDamaged = async (boxId: string, isDamaged: boolean) => {
+    setBusy(true)
+    try {
+      const response = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}/boxes/${boxId}/damaged`), {
+        method: 'PATCH',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_damaged: isDamaged }),
+      })
+      if (!response.ok) throw new Error(await readApiErrorMessage(response))
+      const updated = await response.json() as InboundBox
+      setDetail((current) => current?.id === requestId
+        ? { ...current, boxes: current.boxes.map((box) => box.id === updated.id ? updated : box) }
+        : current)
+    } catch (error) {
+      if (scanDocument.current === requestId) {
+        setError(error instanceof Error ? error.message : 'Не удалось сохранить отметку')
+      }
+    } finally {
+      if (scanDocument.current === requestId) setBusy(false)
+    }
+  }
+
   const deleteInboundBox = async (boxId: string) => {
     setBusy(true)
     setError(null)
@@ -2833,9 +2857,7 @@ export function FfInboundRequestView({
             </Alert>
           ) : null}
 
-          {isFulfillmentAdmin &&
-          !sortingView &&
-          (linkedDiscrepancyActs.length > 0 || discrepancyActsError) ? (
+          {isFulfillmentAdmin ? (
             <Paper
               variant="outlined"
               sx={{ mt: 2, p: 1.5 }}
@@ -2850,6 +2872,8 @@ export function FfInboundRequestView({
                   <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
                     Акты расхождения
                   </Typography>
+                  <InboundDiscrepancyActEditor key={requestId} token={token} requestId={requestId}
+                    products={detail.lines} onChanged={loadLinkedDiscrepancyActs} />
                   {discrepancyActsBusy ? (
                     <CircularProgress size={18} data-testid="ff-inbound-discrepancy-acts-loading" />
                   ) : null}
@@ -2887,6 +2911,10 @@ export function FfInboundRequestView({
                           data-testid="ff-inbound-discrepancy-act-status"
                         />
                       </Stack>
+                      {act.status === 'draft' ? (
+                        <InboundDiscrepancyActEditor token={token} requestId={requestId}
+                          existingActId={act.id} products={detail.lines} onChanged={loadLinkedDiscrepancyActs} />
+                      ) : null}
                       {act.status === 'confirmed' ? (
                         <Stack direction="row" spacing={1}>
                           <Button
@@ -3080,6 +3108,13 @@ export function FfInboundRequestView({
                                 {box.internal_barcode}
                               </Typography>
                             </Typography>
+                            <CheckboxInput
+                              label="Короб пришёл повреждённым"
+                              checked={box.is_damaged ?? false}
+                              onChange={(checked) => void setBoxDamaged(box.id, checked)}
+                              disabled={busy}
+                              testId={`ff-inbound-box-damaged-${box.id}`}
+                            />
                             {box.pallet_code ? (
                               <StatusChip
                                 label={`Палета ${box.pallet_code}`}

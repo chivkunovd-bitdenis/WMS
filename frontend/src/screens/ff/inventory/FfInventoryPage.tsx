@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { FfInventoryCountScreen } from './FfInventoryCountScreen'
-import { markUncountedEmptyIn, mergeInFlightActuals } from './InventoryRows'
+import { changedActualIds, mergeInFlightActuals } from './InventoryRows'
 import { createFoundQueue, FoundPlaceDeferredError, type FoundPlace } from './foundQueue'
 import type { WbProductPickerCatalogRow } from '../../../components/WbProductPickerDialog'
 
@@ -29,8 +29,11 @@ import {
   type ApiSummary,
   recordCountFound,
   saveCountActuals,
+  markCountPlaceEmpty,
   createCountContainer,
   addManualLine,
+  moveCountLine,
+  deleteCountContainer,
   InventoryHttpError,
 } from './inventoryCountApi'
 
@@ -43,6 +46,32 @@ import {
 //
 // Разбор ответов сервера и отправка факта живут в inventoryCountApi: тем же
 // путём документ заводится со строки карты склада, и расходиться им нельзя.
+
+/**
+ * Коды ошибок «Переложить в тару» и «Удалить тару» (WMS-153), которых нет в
+ * общей таблице `readApiErrorMessage`: они специфичны для этих двух действий,
+ * а часть — коды `warehouse_map_service.move_object` (тот же перенос
+ * остатка, что и на карте склада), у которой уже есть своя локальная
+ * таблица в FfWarehouseMapPage. Тот файл не трогаем — берём те же
+ * формулировки здесь же, локально, а не правим общую таблицу под один экран.
+ */
+const INVENTORY_ERROR_MESSAGES: Record<string, string> = {
+  already_there: 'Товар уже лежит в этой таре.',
+  product_already_at_destination:
+    'В этой таре уже есть этот товар. Выберите пустую тару или обновите пересчёт.',
+  move_source_empty: 'Здесь по остатку сейчас пусто — переносить нечего.',
+  container_not_empty: 'В этой таре есть товар — сначала переложите его, потом удаляйте.',
+  comment_changed: 'Другой сотрудник изменил комментарий. Откройте документ заново и сверьте текст.',
+  container_linked_to_inbound: 'Тара привязана к приёмке — удалить её отсюда нельзя.',
+  object_not_found: 'Этот товар уже переместили или списали — обновите документ.',
+  insufficient_stock: 'На исходном месте уже нет нужного количества — обновите документ.',
+  destination_not_found: 'Тара назначения уже недоступна — обновите документ.',
+}
+
+function inventoryErrorMessage(err: unknown, fallback: string): string {
+  if (!(err instanceof Error)) return fallback
+  return INVENTORY_ERROR_MESSAGES[err.message] ?? err.message ?? fallback
+}
 
 type Props = {
   token: string
@@ -117,7 +146,10 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     })()
   }, [token])
 
+  const openVersionRef = useRef(0)
+
   async function open(id: string) {
+    const version = ++openVersionRef.current
     setLoading(true)
     setError(null)
     setNote(null)
@@ -125,15 +157,21 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
       const res = await fetch(apiUrl(`${BASE}/${id}`), { headers: { ...authHeaders(token) } })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
       const opened = toCount((await res.json()) as ApiDetail)
+      if (version !== openVersionRef.current) return
       setCount(opened)
       countRef.current = opened
+      savedCommentRef.current = opened.comment
+      touchedRef.current = new Set()
+      commentTouchedRef.current = false
       // Сканы, отложенные из-за ухода в другой документ, снова в работе — и
       // снова держат проведение, пока не доедут.
       foundQueueRef.current?.resumeFor(opened.id)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось открыть документ')
+      if (version === openVersionRef.current) {
+        setError(err instanceof Error ? err.message : 'Не удалось открыть документ')
+      }
     } finally {
-      setLoading(false)
+      if (version === openVersionRef.current) setLoading(false)
     }
   }
 
@@ -145,6 +183,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
   // «Комментарий» в этом сеансе — только тогда посылаем его на сервер, иначе
   // сохранение фактов затрёт чужой комментарий. Флаг сбрасывается после успеха.
   const commentTouchedRef = useRef<boolean>(false)
+  const savedCommentRef = useRef('')
   // Очередь работает асинхронно и обязана видеть документ, каким он стал
   // к моменту отправки, а не каким был при постановке в очередь.
   const countRef = useRef<InventoryCount | null>(null)
@@ -155,12 +194,26 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     if (commentChanged) commentTouchedRef.current = true
   }
 
+  async function saveSnapshot(snapshot: InventoryCount): Promise<InventoryCount> {
+    const saved = await saveCountActuals(token, snapshot, touchedRef.current,
+      commentTouchedRef.current
+        ? { updateComment: true, comment: snapshot.comment, expectedComment: savedCommentRef.current }
+        : undefined)
+    if (countRef.current?.id === snapshot.id) {
+      savedCommentRef.current = saved.comment
+      // Changes entered while a request was in flight remain local and dirty.
+      touchedRef.current = changedActualIds(countRef.current, snapshot)
+      commentTouchedRef.current = countRef.current.comment !== snapshot.comment
+    }
+    return saved
+  }
+
   async function save() {
-    if (!count) return
+    if (!count || loading) return
     setLoading(true)
     try {
       const commentOptions = commentTouchedRef.current
-        ? { updateComment: true, comment: count.comment }
+        ? { updateComment: true, comment: count.comment, expectedComment: savedCommentRef.current }
         : undefined
       const res = await fetch(apiUrl(`${BASE}/${count.id}/lines`), {
         method: 'PUT',
@@ -168,26 +221,29 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         body: JSON.stringify(actualPayload(count, touchedRef.current, commentOptions)),
       })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      setCount(toCount((await res.json()) as ApiDetail))
-      touchedRef.current = new Set()
-      commentTouchedRef.current = false
+      const saved = toCount((await res.json()) as ApiDetail)
+      if (countRef.current?.id !== saved.id) return
+      setCount((current) => current ? mergeInFlightActuals(saved, count, current) : current)
+      savedCommentRef.current = saved.comment
+      touchedRef.current = changedActualIds(countRef.current, count)
+      commentTouchedRef.current = countRef.current.comment !== count.comment
       setNote('Сохранено. Остатки не тронуты.')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось сохранить')
+      setError(inventoryErrorMessage(err, 'Не удалось сохранить'))
     } finally {
       setLoading(false)
     }
   }
 
   async function post() {
-    if (!count) return
+    if (!count || loading) return
     setLoading(true)
     try {
       // Сначала кладём введённое, потом проводим: иначе проведём то, что сервер
       // помнит с прошлого сохранения, а не то, что человек видит на экране.
       // WMS-155: комментарий, если оператор его редактировал, уходит здесь же.
       const commentOptions = commentTouchedRef.current
-        ? { updateComment: true, comment: count.comment }
+        ? { updateComment: true, comment: count.comment, expectedComment: savedCommentRef.current }
         : undefined
       const saved = await fetch(apiUrl(`${BASE}/${count.id}/lines`), {
         method: 'PUT',
@@ -195,7 +251,11 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         body: JSON.stringify(actualPayload(count, touchedRef.current, commentOptions)),
       })
       if (!saved.ok) throw new Error(await readApiErrorMessage(saved))
-      commentTouchedRef.current = false
+      const savedDetail = toCount(await saved.json() as ApiDetail)
+      if (countRef.current?.id === count.id) {
+        savedCommentRef.current = savedDetail.comment
+        commentTouchedRef.current = false
+      }
       const res = await fetch(apiUrl(`${BASE}/${count.id}/post`), {
         method: 'POST',
         headers: { ...authHeaders(token) },
@@ -205,6 +265,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         posted_lines: number
         changed_balance_count: number
       }
+      if (countRef.current?.id !== count.id) return
       await open(count.id)
       await loadList()
       setNote(postResultNote(result))
@@ -263,13 +324,13 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         if (live.status !== 'draft') throw new Error('Документ уже закрыт')
         // Кладём на сервер то, что оператор насчитал: автосохранения в экране
         // нет, факт живёт в состоянии React до нажатия «Сохранить».
-        await saveCountActuals(token, live, touchedRef.current)
-        sentSnapshotRef.current = live
+        const saved = await saveSnapshot(live)
+        sentSnapshotRef.current = { ...live, comment: saved.comment }
         return await recordCountFound(token, live.id, place)
       },
       onApplied: (found) => {
         setCount((live) => {
-          if (!live) return found.count
+          if (!live || live.id !== found.count.id) return live
           // Пока летел запрос, кладовщик продолжал сканировать. Эти пики есть
           // на экране, но не в том снимке, который мы отправили.
           return mergeInFlightActuals(found.count, sentSnapshotRef.current ?? live, live)
@@ -285,18 +346,15 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
   }
 
   function recordFound(place: Omit<FoundPlace, 'countId'>) {
-    if (!count || count.status !== 'draft') return
+    if (!count || loading || count.status !== 'draft') return
     setError(null)
     // Находка принадлежит тому документу, в котором её отсканировали, а не
     // тому, который открыт в момент повторной отправки.
     foundQueueRef.current?.push({ ...place, countId: count.id })
   }
 
-  async function createContainer(
-    kind: 'pallet' | 'box' | 'cargo_place',
-    cellId: string | null,
-  ) {
-    if (!count || count.status !== 'draft') return
+  async function createContainer(kind: 'pallet' | 'box' | 'cargo_place', cellId: string | null) {
+    if (!count || loading || count.status !== 'draft') return
     if (!count.warehouseId) {
       setError('Не удалось определить склад документа')
       return
@@ -307,11 +365,92 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
     try {
       // Ручка документа, а не общая /warehouses/{id}/sorting-objects: она же
       // запоминает тару за документом, чтобы прунинг пустой тары не выбросил
-      // её из дерева сразу после создания (см. inventoryCountApi).
-      // WMS-153: если оператор выбрал ячейку, тара сразу ложится в неё.
-      setCount(await createCountContainer(token, count.id, kind, cellId))
+      // её из дерева сразу после создания (см. inventoryCountApi). cellId —
+      // выделенная ячейка (задача 1 доработки 03.09.2026): без неё тара
+      // уезжает в зону сортировки, как и раньше.
+      await saveSnapshot(count)
+      const updated = await createCountContainer(token, count.id, kind, cellId)
+      setCount((current) => current?.id === updated.id ? updated : current)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось создать тару')
+      setError(inventoryErrorMessage(err, 'Не удалось создать тару'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  /**
+   * Переложить товар в тару — вторая доработка от 03.09.2026, WMS-153.
+   *
+   * Тот же перенос остатка, что и на карте склада: сервер сам находит
+   * остаток по адресу строки и переносит его (inventoryCountApi.moveCountLine).
+   */
+  async function moveLine(lineId: string, target: { containerKind: 'pallet' | 'box' | 'cargo_place'; containerId: string }) {
+    if (!count || loading || count.status !== 'draft') return
+    setLoading(true)
+    setError(null)
+    try {
+      await saveSnapshot(count)
+      const updated = await moveCountLine(token, count.id, lineId, target)
+      setCount((current) => current?.id === updated.id ? updated : current)
+      setNote('Товар перенесён.')
+    } catch (err) {
+      setError(inventoryErrorMessage(err, 'Не удалось перенести товар'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  /**
+   * Удалить пустую тару прямо из документа — третья доработка от 03.09.2026,
+   * WMS-153. Сервер сам отказывает понятным сообщением, если тара не пуста.
+   */
+  async function deleteContainer(target: { kind: 'pallet' | 'box' | 'cargo_place'; id: string }) {
+    if (!count || loading || count.status !== 'draft') return
+    setLoading(true)
+    setError(null)
+    try {
+      await saveSnapshot(count)
+      const updated = await deleteCountContainer(token, count.id, target)
+      setCount((current) => current?.id === updated.id ? updated : current)
+      setNote('Тара удалена.')
+    } catch (err) {
+      setError(inventoryErrorMessage(err, 'Не удалось удалить тару'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function markEmpty(target: { kind: 'cell' | 'container'; id: string }) {
+    if (!count || loading) return
+    const container = target.kind === 'container'
+      ? count.scannableContainers?.find((item) => item.id === target.id)
+      : undefined
+    function findKind(nodes: InventoryCount['cells'][number]['children']): 'pallet' | 'box' | 'cargo_place' | undefined {
+      for (const node of nodes) {
+        if (node.kind === 'product') continue
+        if (node.id === target.id) return node.kind
+        const nested = findKind(node.children)
+        if (nested) return nested
+      }
+    }
+    const kind = target.kind === 'cell' ? 'cell'
+      : container?.kind ?? count.cells.map((cell) => findKind(cell.children)).find(Boolean)
+    if (!kind) return
+    setLoading(true)
+    setError(null)
+    try {
+      await saveCountActuals(token, count, touchedRef.current, commentTouchedRef.current
+        ? { updateComment: true, comment: count.comment, expectedComment: savedCommentRef.current }
+        : undefined)
+      const updated = await markCountPlaceEmpty(token, count.id, { kind, id: target.id })
+      if (countRef.current?.id !== updated.id) return
+      setCount(updated)
+      savedCommentRef.current = updated.comment
+      touchedRef.current = new Set()
+      commentTouchedRef.current = false
+      setNote('Пустое место подтверждено. При проведении остатки здесь станут нулевыми; пустая складская тара будет удалена.')
+    } catch (err) {
+      setError(inventoryErrorMessage(err, 'Не удалось подтвердить пустое место'))
     } finally {
       setLoading(false)
     }
@@ -332,11 +471,11 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
       containerId: string | null
     },
   ) {
-    if (!count) return
+    if (!count || loading) return
     setLoading(true)
     setError(null)
     try {
-      let current = count
+      let current = await saveSnapshot(count)
       let lastNotice: string | null = null
       for (const [productId, rawQty] of Object.entries(selections)) {
         const quantity = Number.isFinite(rawQty) ? Math.floor(rawQty) : 0
@@ -351,7 +490,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         current = result.count
         lastNotice = result.notice
       }
-      setCount(current)
+      setCount((live) => live?.id === current.id ? current : live)
       if (lastNotice) setNote(lastNotice)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось добавить товар')
@@ -383,7 +522,11 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         }),
       })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      setCount(toCount((await res.json()) as ApiDetail))
+      const created = toCount((await res.json()) as ApiDetail)
+      savedCommentRef.current = created.comment
+      touchedRef.current = new Set()
+      commentTouchedRef.current = false
+      setCount(created)
       await loadList()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось создать документ')
@@ -411,6 +554,7 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         error={error}
         note={note}
         onChange={(next, touchedLineId, commentChanged) => {
+          if (loading) return
           noteTouched(touchedLineId, commentChanged)
           setCount(next)
         }}
@@ -419,24 +563,16 @@ export function FfInventoryPage({ token, sellers, warehouses }: Props) {
         onCancelDocument={() => void cancelDocument()}
         pendingFound={pendingFound}
         onCreateContainer={(kind, cellId) => void createContainer(kind, cellId)}
+        onMoveLine={(lineId, target) => void moveLine(lineId, target)}
+        onDeleteContainer={(target) => void deleteContainer(target)}
         onFound={(place) => recordFound(place)}
         productCatalog={pickerCatalog}
         catalogLoading={catalogLoading}
         onAddProduct={(selections, placement) => addProduct(selections, placement)}
-        onMarkEmpty={(target) => {
-          // WMS-154: одна кнопка «Здесь пусто» — обходим поддерево выбранного
-          // места и ставим 0 всем ещё не тронутым строкам. Каждую тронутую
-          // строку кладём в touchedRef, иначе save отправит только «пустой»
-          // список и сервер ничего не изменит.
-          const applied =
-            target.kind === 'cell'
-              ? markUncountedEmptyIn(count, { kind: 'cell', cellId: target.id })
-              : markUncountedEmptyIn(count, { kind: 'container', containerId: target.id })
-          if (applied.touched.length === 0) return
-          for (const productId of applied.touched) touchedRef.current.add(productId)
-          setCount(applied.count)
-        }}
+        onMarkEmpty={(target) => void markEmpty(target)}
         onBack={() => {
+          openVersionRef.current += 1
+          countRef.current = null
           setCount(null)
           setNote(null)
           setError(null)
