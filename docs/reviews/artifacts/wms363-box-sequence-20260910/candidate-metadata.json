@@ -1,0 +1,18 @@
+{
+  "mobile_commit": "c9d27e16e992a52ae80b9f7127aad16967f1915d",
+  "patch_base": "b77e31a8cc658a23d9c20a318f4f869e304752cc",
+  "supersedes_mobile_commit": "30bab83d94eada0ecc15f877be62fc8aa877ffa8",
+  "supersedes_main_commit": "125a50eb8ad72ba03c46e6a245c78cb86118f623",
+  "apk": "WMS-TSD-0.1.9-e2685e7772fc-debug.apk",
+  "sha256": "e2685e7772fcdcee00a871002b083043d90e2e7490b6f435bf291940c023c98b",
+  "size_bytes": 45624726,
+  "package": "ru.wms.tsd",
+  "version_code": 10,
+  "version_name": "0.1.9-ozon-tsd",
+  "min_sdk": 24,
+  "target_sdk": 35,
+  "certificate_sha256": "e343ab0cccc6284b271a72da42a67b14a0f0893d92b9ca461f1cac3d0be1aeb6",
+  "apksigner_verification": "pass",
+  "published": false,
+  "patch_sha256": "d27a996fb489d764785d065264ab2ce1de2780617c7e3831874337a536a081b3"
+}
