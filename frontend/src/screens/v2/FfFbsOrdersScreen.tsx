@@ -533,6 +533,14 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
 
   const location = useLocation()
   const navigate = useNavigate()
+  const linkedOrderId = new URLSearchParams(location.search).get('order_id')
+  const linkedSellerId = new URLSearchParams(location.search).get('seller_id')
+  const clearOrderLink = () => {
+    if (!linkedOrderId) return
+    const params = new URLSearchParams(location.search)
+    params.delete('order_id'); params.delete('seller_id')
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true })
+  }
   const [statusGroup, setStatusGroup] = useState<(typeof TABS)[number]['key']>('new')
   const [sellerId, setSellerId] = useState('__all__')
   const [marketplace, setMarketplace] = useState<'__all__' | 'wb' | 'ozon'>('__all__')
@@ -576,7 +584,16 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
   const registerRow = useCallback((id: string, node: HTMLTableRowElement | null) => {
     rowRefs.current[id] = node
-  }, [])
+    if (node) node.dataset.chatTarget = String(id === linkedOrderId)
+  }, [linkedOrderId])
+  const scrolledOrder = useRef<string | null>(null)
+  useEffect(() => {
+    if (!linkedOrderId) { scrolledOrder.current = null; return }
+    const row = rowRefs.current[linkedOrderId]
+    if (row && scrolledOrder.current !== linkedOrderId) {
+      row.scrollIntoView({ block: 'center' }); scrolledOrder.current = linkedOrderId
+    }
+  }, [orders, linkedOrderId])
   const goToCatalog = useCallback((productId: string | null) => {
     navigate(
       productId
@@ -587,6 +604,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
   const openedSupplyFromQuery = useRef<string | null>(null)
   const loadingRef = useRef(false)
   const loadSequence = useRef(0)
+  const resolvedLinkedOrder = useRef<string | null>(null)
   // Плавающая панель выбора (fbs-selection-bar) прибита к низу вьюпорта и накрывает
   // собой последние строки таблицы — оператор кликал по чекбоксу второго заказа и
   // попадал в панель (см. tests-e2e/ff-fbs-orders.spec.ts:277). Меряем реальную высоту
@@ -603,6 +621,25 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
     setBusy(true)
     setError(null)
     try {
+      if (linkedOrderId) {
+        const response = await fetch(apiUrl(`/operations/chat/documents/fbs_order/${encodeURIComponent(linkedOrderId)}/worklist?seller_id=${encodeURIComponent(linkedSellerId ?? '')}`), { headers: authHeaders(token) })
+        if (!response.ok) throw new Error('Заказ не найден или нет права его просматривать.')
+        const result = await response.json() as { order: FbsWorklistOrder; status_group: (typeof TABS)[number]['key']; server_now: string }
+        if (sequence !== loadSequence.current) return
+        if (resolvedLinkedOrder.current !== linkedOrderId) {
+          resolvedLinkedOrder.current = linkedOrderId
+          setSelected(new Set()); setSelectedCache(new Map())
+          setSearch(''); setActiveSearch('')
+        }
+        setStatusGroup(result.status_group); setSellerId(result.order.seller.id)
+        setMarketplace(result.order.marketplace); setWbWarehouseId('__all__')
+        setOrders([result.order]); setActiveSupplies([]); setExternalActiveOrders([])
+        setSelectedCache(new Map([[result.order.id, result.order]]))
+        setWarehouseOptions([]); setSearchTotal(1); setServerNow(result.server_now)
+        setLastLoadedAt(new Date().toISOString())
+        return
+      }
+      resolvedLinkedOrder.current = null
       if (isFbsSupplyGroup(statusGroup)) {
         // Задача 4 пула (HANDOFF-POLISH.md, решение П3): «В работе», «В доставке» и
         // «Завершённые» показывают поставки, не отдельные заказы; ordersPage тут нужен
@@ -658,6 +695,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
       setLastLoadedAt(new Date().toISOString())
     } catch (cause) {
       if (sequence !== loadSequence.current) return
+      if (linkedOrderId) {
+        setOrders([]); setActiveSupplies([]); setExternalActiveOrders([])
+        setSelected(new Set()); setSelectedCache(new Map())
+      }
       setError(cause instanceof Error ? cause.message : 'Не удалось загрузить заказы FBS.')
     } finally {
       if (sequence === loadSequence.current) {
@@ -665,7 +706,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
         loadingRef.current = false
       }
     }
-  }, [token, authHeaders, sellerId, marketplace, statusGroup, wbWarehouseId, activeSearch])
+  }, [token, authHeaders, sellerId, marketplace, statusGroup, wbWarehouseId, activeSearch, linkedOrderId, linkedSellerId])
 
   useEffect(() => {
     void load()
@@ -682,8 +723,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
   // одного контекста, а не смена контекста.
   useEffect(() => {
     setSelected(new Set())
-    setSelectedCache(new Map())
-  }, [sellerId, marketplace, wbWarehouseId, statusGroup])
+    // Exact-order load just populated the row; its server filters must not erase it.
+    if (!linkedOrderId) setSelectedCache(new Map())
+  }, [sellerId, marketplace, wbWarehouseId, statusGroup, linkedOrderId])
 
   useEffect(() => {
     const timer = window.setTimeout(() => setActiveSearch(search.trim()), 250)
@@ -904,7 +946,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
     [orders],
   )
   const exportRows = selected.size > 0 ? selectedOrders : orders
-  const visibleCount = isFbsSupplyGroup(statusGroup) ? activeSupplies.length : orders.length
+  const visibleCount = isFbsSupplyGroup(statusGroup) && !linkedOrderId ? activeSupplies.length : orders.length
   const searchNotice = search.trim()
     ? busy || search.trim() !== activeSearch ? 'Ищем…' : error ? 'Поиск не выполнен' :
       `Найдено ${searchTotal ?? 0}${(searchTotal ?? 0) > visibleCount ? ` · показано ${visibleCount}` : ''}`
@@ -1161,8 +1203,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
         maxWidth: 'calc(100vw - 308px)',
         boxSizing: 'border-box',
         overflowX: 'hidden',
+        '& tr[data-chat-target="true"]': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
       }}
     >
+      {linkedOrderId && <Alert severity="info" action={<Button color="inherit" onClick={clearOrderLink}>Снять фильтр</Button>}>
+        Заказ из сообщения. Показана его текущая строка; выбор фильтра вернёт обычный список.
+      </Alert>}
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         sx={{ justifyContent: 'space-between', gap: 2, mb: 1.5 }}
@@ -1240,7 +1286,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
         <Tabs
           value={statusGroup}
           onChange={(_, value) => {
-            setStatusGroup(value)
+            clearOrderLink(); setStatusGroup(value)
             setWbWarehouseId('__all__')
           }}
           variant="scrollable"
@@ -1277,7 +1323,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
               label="Селлер"
               value={sellerId}
               onChange={(event) => {
-                setSellerId(String(event.target.value))
+                clearOrderLink(); setSellerId(String(event.target.value))
                 setWbWarehouseId('__all__')
               }}
             >
@@ -1296,7 +1342,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
               label="Маркетплейс"
               value={marketplace}
               onChange={(event) => {
-                setMarketplace(event.target.value as '__all__' | 'wb' | 'ozon')
+                clearOrderLink(); setMarketplace(event.target.value as '__all__' | 'wb' | 'ozon')
                 setWbWarehouseId('__all__')
               }}
               data-testid="fbs-worklist-marketplace"
@@ -1314,7 +1360,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                 label="Склад селлера / WB"
                 value={wbWarehouseId}
                 onChange={(event) => {
-                  setWbWarehouseId(String(event.target.value))
+                  clearOrderLink(); setWbWarehouseId(String(event.target.value))
                 }}
                 data-testid="fbs-worklist-warehouse"
               >
@@ -1336,7 +1382,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
             label="Поиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер"
             value={search}
             onChange={(event) => {
-              setSearch(event.target.value)
+              clearOrderLink(); setSearch(event.target.value)
             }}
             onKeyDown={(event) => {
               if (event.key === 'Enter') setActiveSearch(search.trim())
@@ -1427,7 +1473,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
         </Alert>
       ) : null}
 
-      {isFbsSupplyGroup(statusGroup) ? (
+      {isFbsSupplyGroup(statusGroup) && !linkedOrderId ? (
         <TableContainer component={Paper} variant="outlined" sx={{ mt: 2, maxHeight: 'calc(100vh - 330px)' }}>
           <Table stickyHeader size="small" data-testid="fbs-18-supplies-table">
             <TableHead>

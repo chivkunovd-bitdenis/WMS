@@ -70,6 +70,7 @@ from app.services.chat_document_service import (
     DocumentKey,
     read_document,
     read_document_cards,
+    read_order_worklist,
     readable_document_kinds,
 )
 
@@ -229,6 +230,7 @@ def _raise_chat_error(exc: chat_service.ChatError) -> NoReturn:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=code)
     if code in {
         "attachment_not_owned",
+        "attachment_content_missing",
         "document_seller_mismatch",
         "bad_document_kind",
         "cross_tenant",
@@ -236,13 +238,15 @@ def _raise_chat_error(exc: chat_service.ChatError) -> NoReturn:
         "client_message_id_too_long",
     }:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=code)
+    if code == "attachment_storage_unavailable":
+        raise HTTPException(503, detail=code)
     if code == "main_participants_implicit":
         raise HTTPException(422, detail=code)
-    if code == "document_not_found":
+    if code in {"document_not_found", "attachment_not_found"}:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=code)
     if code in {"message_files_too_large", "draft_upload_budget_exceeded"}:
         raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, detail=code)
-    if code in {"deleted", "client_message_id_conflict"}:
+    if code in {"deleted", "client_message_id_conflict", "attachment_already_sent"}:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=code)
     raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=code)
 
@@ -664,6 +668,44 @@ async def upload_attachment(
     return _attachment_out(row)
 
 
+@router.get(
+    "/conversations/{conversation_id}/draft-attachments", response_model=list[AttachmentOut]
+)
+async def list_drafts(
+    conversation_id: uuid.UUID,
+    user: Annotated[User, Depends(require_ff_or_seller)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> list[AttachmentOut]:
+    conv = await _require_readable_conversation(conversation_id, user, session, effective_seller_id)
+    return [
+        _attachment_out(row)
+        for row in await chat_service.list_draft_attachments(session, conv, user)
+    ]
+
+
+@router.delete(
+    "/conversations/{conversation_id}/draft-attachments/{attachment_id}", status_code=204
+)
+async def discard_draft(
+    conversation_id: uuid.UUID,
+    attachment_id: uuid.UUID,
+    user: Annotated[User, Depends(require_ff_or_seller)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> Response:
+    conv = await _require_readable_conversation(conversation_id, user, session, effective_seller_id)
+    try:
+        await chat_service.discard_draft_attachment(session, conv, user, attachment_id)
+        await session.commit()
+    except chat_service.ChatError as exc:
+        _raise_chat_error(exc)
+    except Exception as exc:
+        await session.rollback()
+        raise HTTPException(503, detail="draft_discard_failed") from exc
+    return Response(status_code=204)
+
+
 @router.get("/attachments/{attachment_id}/content")
 async def download_attachment(
     attachment_id: uuid.UUID,
@@ -782,3 +824,17 @@ async def document_options(
     return [
         cards[(kind, document_id, sid)] for sid in seller_ids if (kind, document_id, sid) in cards
     ]
+
+
+@router.get("/documents/fbs_order/{document_id}/worklist")
+async def exact_order_worklist(
+    document_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    user: Annotated[User, Depends(require_ff_or_seller)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> dict[str, Any]:
+    try:
+        return await read_order_worklist(session, user, document_id, seller_id, effective_seller_id)
+    except chat_service.ChatError as exc:
+        _raise_chat_error(exc)

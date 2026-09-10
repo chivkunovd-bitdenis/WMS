@@ -124,7 +124,12 @@ async def read_document(
             for order in orders
         ]
     card = AttachedDocument(kind, document_id, title, seller_id, seller.name)
-    return {"document": card.to_json(), "status": doc.status, "lines": lines}
+    return {
+        "document": card.to_json(),
+        "status": doc.status,
+        "lines": lines,
+        "warehouse_id": str(doc.warehouse_id) if doc.warehouse_id else None,
+    }
 
 
 Document = (
@@ -269,3 +274,55 @@ async def read_document_cards(
                 kind, document_id, document_title(doc), seller_id, seller.name
             ).to_json()
     return result
+
+
+async def read_order_worklist(
+    session: AsyncSession,
+    user: User,
+    document_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    effective_seller_id: uuid.UUID | None,
+) -> dict[str, Any]:
+    """Resolve an exact chat order in the existing FF worklist, without writes."""
+    from datetime import UTC, datetime
+
+    from app.services.fbs_worklist_service import STATUS_GROUP_MAP, build_worklist_items
+
+    if user.role == FULFILLMENT_SELLER:
+        raise ChatError("forbidden")
+    await read_document(
+        session,
+        user,
+        kind="fbs_order",
+        document_id=document_id,
+        seller_id=seller_id,
+        effective_seller_id=effective_seller_id,
+    )
+    order = (
+        await session.execute(
+            select(FbsOrder).where(
+                FbsOrder.id == document_id,
+                FbsOrder.tenant_id == user.tenant_id,
+                FbsOrder.seller_id == seller_id,
+            )
+        )
+    ).scalar_one()
+    now = datetime.now(UTC)
+    group = next(
+        (key for key, statuses in STATUS_GROUP_MAP.items() if order.status in statuses), "new"
+    )
+    if (
+        group == "new"
+        and (
+            order.deadline_at.replace(tzinfo=UTC)
+            if order.deadline_at.tzinfo is None
+            else order.deadline_at.astimezone(UTC)
+        )
+        < now
+    ):
+        group = "expired"
+    return {
+        "order": (await build_worklist_items(session, user.tenant_id, [order], server_now=now))[0],
+        "status_group": group,
+        "server_now": now.isoformat(),
+    }

@@ -568,6 +568,13 @@ async def test_extra_participants_tenant_revocation_and_cross_chat_retry(
         url + "/attachments", headers=staff, files={"file": ("staff.txt", b"private", "text/plain")}
     )
     aid = uploaded.json()["id"]
+    recovery_draft = (
+        await async_client.post(
+            url + "/attachments",
+            headers=staff,
+            files={"file": ("recover.txt", b"revoked-draft", "text/plain")},
+        )
+    ).json()["id"]
     posted = await async_client.post(
         url + "/messages",
         headers=staff,
@@ -585,6 +592,10 @@ async def test_extra_participants_tenant_revocation_and_cross_chat_retry(
     assert (
         await async_client.get(f"/operations/chat/attachments/{aid}/content", headers=staff)
     ).status_code == 403
+    assert (await async_client.get(url + "/draft-attachments", headers=staff)).status_code == 403
+    assert (
+        await async_client.delete(url + "/draft-attachments/" + recovery_draft, headers=staff)
+    ).status_code == 403
     other_main = await async_client.get(
         f"/operations/chat/conversations/main?seller_id={other_sid}", headers=admin
     )
@@ -599,6 +610,7 @@ async def test_extra_participants_tenant_revocation_and_cross_chat_retry(
         url,
         url + "/messages",
         url + "/participants",
+        url + "/draft-attachments",
         f"/operations/chat/attachments/{aid}/content",
     ]:
         assert (await async_client.get(path, headers=outsider)).status_code == 404
@@ -1131,3 +1143,396 @@ async def test_bulk_main_creation_is_idempotent_and_bounded(async_client: AsyncC
         assert len(statements) < 15
     finally:
         event.remove(engine.sync_engine, "before_cursor_execute", capture)
+
+
+@pytest.mark.asyncio
+async def test_draft_recovery_discard_acl_and_storage_failure(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from unittest.mock import Mock
+
+    from app.services import chat_attachment_storage as storage
+
+    suffix, admin, _ = await _register_admin(async_client)
+    seller, sid, _ = await _create_seller(async_client, admin, suffix)
+    stranger, _, _ = await _create_seller(async_client, admin, suffix + "other")
+    main = (
+        await async_client.get(
+            f"/operations/chat/conversations/main?seller_id={sid}", headers=admin
+        )
+    ).json()
+    extra = (
+        await async_client.post(
+            "/operations/chat/conversations/extra",
+            headers=admin,
+            json={"seller_id": sid, "title": "recovery-private"},
+        )
+    ).json()
+    url = f"/operations/chat/conversations/{main['id']}"
+    extra_url = f"/operations/chat/conversations/{extra['id']}"
+    own = (
+        await async_client.post(
+            url + "/attachments",
+            headers=admin,
+            files={"file": ("own.txt", b"own-file", "text/plain")},
+        )
+    ).json()
+    other = (
+        await async_client.post(
+            url + "/attachments",
+            headers=seller,
+            files={"file": ("seller.txt", b"seller-file", "text/plain")},
+        )
+    ).json()
+    assert [
+        r["id"] for r in (await async_client.get(url + "/draft-attachments", headers=admin)).json()
+    ] == [own["id"]]
+    assert [
+        r["id"] for r in (await async_client.get(url + "/draft-attachments", headers=seller)).json()
+    ] == [other["id"]]
+    assert (await async_client.get(url + "/draft-attachments", headers=stranger)).status_code == 403
+    assert (
+        await async_client.get(extra_url + "/draft-attachments", headers=seller)
+    ).status_code == 403
+    assert (await async_client.get(url + "/draft-attachments")).status_code == 401
+    assert (
+        await async_client.delete(url + "/draft-attachments/" + other["id"], headers=admin)
+    ).status_code == 404
+    assert (
+        await async_client.delete(extra_url + "/draft-attachments/" + own["id"], headers=admin)
+    ).status_code == 404
+    backend = storage.get_backend()
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            storage,
+            "get_backend",
+            lambda: Mock(delete_object=Mock(side_effect=OSError("isolated failure"))),
+        )
+        assert (
+            await async_client.delete(url + "/draft-attachments/" + own["id"], headers=admin)
+        ).status_code == 503
+    assert (
+        await async_client.get(
+            "/operations/chat/attachments/" + own["id"] + "/content", headers=admin
+        )
+    ).content == b"own-file"
+    assert (
+        await async_client.delete(url + "/draft-attachments/" + own["id"], headers=admin)
+    ).status_code == 204
+    assert (await async_client.get(url + "/draft-attachments", headers=admin)).json() == []
+    assert (
+        await async_client.delete(url + "/draft-attachments/" + own["id"], headers=admin)
+    ).status_code == 404
+    sent = await async_client.post(
+        url + "/messages",
+        headers=seller,
+        json={"client_message_id": "recover-and-send", "attachment_ids": [other["id"]]},
+    )
+    assert sent.status_code == 201, sent.text
+    assert (await async_client.get(url + "/draft-attachments", headers=seller)).json() == []
+    delete = Mock(wraps=backend.delete_object)
+    with monkeypatch.context() as patch:
+        patch.setattr(storage, "get_backend", lambda: Mock(delete_object=delete))
+        assert (
+            await async_client.delete(url + "/draft-attachments/" + other["id"], headers=seller)
+        ).status_code == 409
+        delete.assert_not_called()
+    assert (
+        await async_client.get(
+            "/operations/chat/attachments/" + other["id"] + "/content", headers=admin
+        )
+    ).content == b"seller-file"
+    monkeypatch.setattr(storage, "MAX_MESSAGE_ATTACHMENTS", 1)
+    a = (
+        await async_client.post(
+            url + "/attachments", headers=admin, files={"file": ("a", b"a", "text/plain")}
+        )
+    ).json()
+    assert (
+        await async_client.post(
+            extra_url + "/attachments", headers=admin, files={"file": ("b", b"b", "text/plain")}
+        )
+    ).status_code == 413
+    assert (
+        await async_client.delete(url + "/draft-attachments/" + a["id"], headers=admin)
+    ).status_code == 204
+    assert (
+        await async_client.post(
+            extra_url + "/attachments", headers=admin, files={"file": ("b", b"b", "text/plain")}
+        )
+    ).status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_discard_and_attach_race_keeps_sent_file(async_client: AsyncClient) -> None:
+    from app.db.session import engine
+
+    if engine.dialect.name != "postgresql":
+        pytest.skip("Row-lock contention requires PostgreSQL")
+    suffix, admin, _ = await _register_admin(async_client)
+    _, sid, _ = await _create_seller(async_client, admin, suffix)
+    main = (
+        await async_client.get(
+            f"/operations/chat/conversations/main?seller_id={sid}", headers=admin
+        )
+    ).json()
+    url = f"/operations/chat/conversations/{main['id']}"
+    for n in range(5):
+        upload = (
+            await async_client.post(
+                url + "/attachments",
+                headers=admin,
+                files={"file": ("race.txt", b"keep-sent-file", "text/plain")},
+            )
+        ).json()
+        aid = upload["id"]
+        deleted, posted = await asyncio.gather(
+            async_client.delete(url + "/draft-attachments/" + aid, headers=admin),
+            async_client.post(
+                url + "/messages",
+                headers=admin,
+                json={"client_message_id": f"delete-attach-{n}", "attachment_ids": [aid]},
+            ),
+        )
+        assert (deleted.status_code, posted.status_code) in {(204, 422), (409, 201)}, (
+            deleted.text,
+            posted.text,
+        )
+        content = await async_client.get(
+            "/operations/chat/attachments/" + aid + "/content", headers=admin
+        )
+        if posted.status_code == 201:
+            assert content.status_code == 200 and content.content == b"keep-sent-file"
+        else:
+            assert content.status_code == 404
+            messages = (await async_client.get(url + "/messages", headers=admin)).json()["items"]
+            assert all(m["client_message_id"] != f"delete-attach-{n}" for m in messages)
+
+
+@pytest.mark.asyncio
+async def test_exact_order_worklist_preserves_identity_status_and_acl(
+    async_client: AsyncClient,
+) -> None:
+    from app.db.session import SessionLocal
+    from app.models.fbs_order import FbsOrder
+    from app.models.user import User
+
+    suffix, admin, uid = await _register_admin(async_client)
+    seller, sid, _ = await _create_seller(async_client, admin, suffix)
+    _, other_sid, _ = await _create_seller(async_client, admin, suffix + "other")
+    _, foreign, _ = await _register_admin(async_client)
+    async with SessionLocal() as session:
+        owner = await session.get(User, uuid.UUID(uid))
+        orders = []
+        for market, state, deadline in [
+            ("wb", "new", -1),
+            ("ozon", "done", 1),
+            ("wb", "packed", 1),
+        ]:
+            row = FbsOrder(
+                tenant_id=owner.tenant_id,
+                seller_id=uuid.UUID(sid),
+                marketplace=market,
+                wb_order_id=9000 + len(orders),
+                external_order_id="same-external-reference"
+                if len(orders) < 2
+                else "third-reference",
+                status=state,
+                created_at_wb=datetime.now(UTC),
+                deadline_at=datetime.now(UTC) + timedelta(days=deadline),
+                mapping_status="unmapped",
+                reserve_status="not_reserved",
+            )
+            session.add(row)
+            await session.flush()
+            orders.append((str(row.id), market, state))
+        await session.commit()
+    for (oid, market, state), group in zip(orders, ["expired", "done", "active"], strict=True):
+        base = f"/operations/chat/documents/fbs_order/{oid}/worklist"
+        result = await async_client.get(base + f"?seller_id={sid}", headers=admin)
+        assert result.status_code == 200, result.text
+        body = result.json()
+        assert (
+            body["order"]["id"],
+            body["order"]["marketplace"],
+            body["order"]["status"],
+            body["status_group"],
+        ) == (oid, market, state, group)
+        assert (
+            await async_client.get(base + f"?seller_id={other_sid}", headers=admin)
+        ).status_code == 404
+        assert (
+            await async_client.get(base + f"?seller_id={sid}", headers=foreign)
+        ).status_code == 404
+        assert (
+            await async_client.get(base + f"?seller_id={sid}", headers=seller)
+        ).status_code == 403
+    from app.models.ff_staff_permissions import FfStaffPermissions
+
+    async with SessionLocal() as session:
+        owner = await session.get(User, uuid.UUID(uid))
+        owner.role = "fulfillment_staff"
+        session.add(FfStaffPermissions(user_id=owner.id, can_packaging=False))
+        await session.commit()
+    assert (await async_client.get(base + f"?seller_id={sid}", headers=admin)).status_code == 403
+    assert (
+        await async_client.get(
+            f"/operations/chat/document-options/fbs_order/{orders[-1][0]}", headers=admin
+        )
+    ).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_discard_commit_failure_cannot_send_missing_object(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real SQL rollback + local object deletion, not a mocked attachment/session."""
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.db.session import SessionLocal
+    from app.models.chat import ChatAttachment, ChatMessage
+    from app.services import chat_attachment_storage as storage
+
+    suffix, admin, _ = await _register_admin(async_client)
+    _, sid, _ = await _create_seller(async_client, admin, suffix)
+    main = (
+        await async_client.get(
+            f"/operations/chat/conversations/main?seller_id={sid}", headers=admin
+        )
+    ).json()
+    url = f"/operations/chat/conversations/{main['id']}"
+    uploaded = (
+        await async_client.post(
+            url + "/attachments",
+            headers=admin,
+            files={"file": ("commit-failure.txt", b"disposable isolated bytes", "text/plain")},
+        )
+    ).json()
+    async with SessionLocal() as session:
+        row = await session.get(ChatAttachment, uuid.UUID(uploaded["id"]))
+        assert row is not None
+        key = row.storage_key
+    assert storage.get_bytes(key) == b"disposable isolated bytes"
+
+    async def fail_commit(session: AsyncSession) -> None:
+        # Called after the actual SQL DELETE/flush and physical object removal.
+        with pytest.raises(FileNotFoundError):
+            storage.get_bytes(key)
+        await session.rollback()
+        raise OSError("isolated commit failure")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(AsyncSession, "commit", fail_commit)
+        response = await async_client.delete(
+            url + "/draft-attachments/" + uploaded["id"], headers=admin
+        )
+        assert response.status_code == 503
+        assert response.json()["detail"] == "draft_discard_failed"
+    drafts = (await async_client.get(url + "/draft-attachments", headers=admin)).json()
+    assert [row["id"] for row in drafts] == [uploaded["id"]]
+    payload = {"client_message_id": "missing-object-recovery", "attachment_ids": [uploaded["id"]]}
+    refused = await async_client.post(url + "/messages", headers=admin, json=payload)
+    assert refused.status_code == 422, refused.text
+    assert refused.json()["detail"] == "attachment_content_missing"
+    async with SessionLocal() as session:
+        draft = await session.get(ChatAttachment, uuid.UUID(uploaded["id"]))
+        assert draft is not None and draft.message_id is None
+        assert (
+            await session.execute(
+                select(ChatMessage).where(ChatMessage.conversation_id == uuid.UUID(main["id"]))
+            )
+        ).scalars().all() == []
+    # Missing-object discard is idempotent at storage level and frees the SQL budget.
+    assert (
+        await async_client.delete(url + "/draft-attachments/" + uploaded["id"], headers=admin)
+    ).status_code == 204
+    replacement = (
+        await async_client.post(
+            url + "/attachments",
+            headers=admin,
+            files={"file": ("reuploaded.txt", b"replacement", "text/plain")},
+        )
+    ).json()
+    payload["attachment_ids"] = [replacement["id"]]
+    sent = await async_client.post(url + "/messages", headers=admin, json=payload)
+    assert sent.status_code == 201, sent.text
+    repeated = await async_client.post(url + "/messages", headers=admin, json=payload)
+    assert repeated.status_code == 201 and repeated.json()["id"] == sent.json()["id"]
+
+
+@pytest.mark.asyncio
+async def test_attachment_head_failure_is_retryable_without_partial_message(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from unittest.mock import Mock
+
+    from sqlalchemy import select
+
+    from app.db.session import SessionLocal
+    from app.models.chat import ChatAttachment, ChatMessage
+    from app.services import chat_attachment_storage as storage
+
+    suffix, admin, _ = await _register_admin(async_client)
+    _, sid, _ = await _create_seller(async_client, admin, suffix)
+    main = (
+        await async_client.get(
+            f"/operations/chat/conversations/main?seller_id={sid}", headers=admin
+        )
+    ).json()
+    url = f"/operations/chat/conversations/{main['id']}"
+    ids = []
+    for name in ["first", "second"]:
+        response = await async_client.post(
+            url + "/attachments", headers=admin, files={"file": (name, name.encode(), "text/plain")}
+        )
+        assert response.status_code == 201
+        ids.append(response.json()["id"])
+    payload = {"client_message_id": "transient-head-retry", "attachment_ids": ids, "text": "kept"}
+    backend = storage.get_backend()
+    with monkeypatch.context() as patch:
+        # First object validates; the second fails transiently. Neither may link.
+        patch.setattr(
+            storage,
+            "get_backend",
+            lambda: Mock(
+                object_exists=Mock(side_effect=[True, OSError("isolated storage timeout")])
+            ),
+        )
+        refused = await async_client.post(url + "/messages", headers=admin, json=payload)
+        assert (
+            refused.status_code == 503
+            and refused.json()["detail"] == "attachment_storage_unavailable"
+        )
+    async with SessionLocal() as session:
+        rows = (
+            (
+                await session.execute(
+                    select(ChatAttachment).where(
+                        ChatAttachment.id.in_([uuid.UUID(value) for value in ids])
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(rows) == 2 and all(row.message_id is None for row in rows)
+        assert all(backend.object_exists(row.storage_key) for row in rows)
+        assert (
+            await session.execute(
+                select(ChatMessage).where(ChatMessage.conversation_id == uuid.UUID(main["id"]))
+            )
+        ).scalars().all() == []
+    with monkeypatch.context() as patch:
+        patch.setattr(storage, "get_backend", Mock(side_effect=OSError("isolated adapter failure")))
+        refused = await async_client.post(url + "/messages", headers=admin, json=payload)
+        assert refused.status_code == 503
+        assert refused.json()["detail"] == "attachment_storage_unavailable"
+    sent = await async_client.post(url + "/messages", headers=admin, json=payload)
+    assert sent.status_code == 201
+    head = Mock(side_effect=AssertionError("idempotent message must not revalidate storage"))
+    with monkeypatch.context() as patch:
+        patch.setattr(storage, "get_backend", lambda: Mock(object_exists=head))
+        retry = await async_client.post(url + "/messages", headers=admin, json=payload)
+        assert retry.status_code == 201 and retry.json()["id"] == sent.json()["id"]
+        head.assert_not_called()
