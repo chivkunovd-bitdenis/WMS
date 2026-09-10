@@ -1,212 +1,107 @@
-// Full chat screen for the FF portal — WMS-397.
-//
-// Lists conversations on the left, opens the selected one in a right pane
-// with ChatFeed + ChatComposer. Sellers see only their conversations
-// (the API enforces that); FF admins see the whole tenant, sorted with
-// main chats first.
-
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  Alert,
-  Box,
-  Button,
-  CircularProgress,
-  List,
-  ListItemButton,
-  ListItemText,
-  Paper,
-  Stack,
-  Typography,
-} from '@mui/material'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { Alert, Box, Button, List, ListItemButton, ListItemText, Paper, Typography } from '@mui/material'
 import { ChatComposer } from '../../components/chat/ChatComposer'
 import { ChatFeed } from '../../components/chat/ChatFeed'
 import { ExtraChatCreateDialog } from '../../components/chat/ExtraChatCreateDialog'
-import {
-  listConversations,
-  listMessages,
-  type ChatConversation,
-  type ChatMessage,
-} from '../../components/chat/chatApi'
-
-type SellerRow = { id: string; name: string }
+import { ChatParticipants } from '../../components/chat/ChatParticipants'
+import { ChatApiError, listConversations, listMessages, type ChatConversation, type ChatMessage } from '../../components/chat/chatApi'
 
 type Props = {
   token: string
   authHeaders: (token: string) => Record<string, string>
   currentUserId: string | null
-  sellers: SellerRow[]
-  // WMS-397/399 gap 3: only FF admins may spin up an extra chat, so the
-  // "Новый чат" button hides for everyone else. The backend enforces the
-  // same rule (require_fulfillment_admin on POST /conversations/extra), so
-  // this flag is a UX affordance, not an access boundary.
+  sellers: { id: string; name: string }[]
   isFulfillmentAdmin?: boolean
 }
-
-function sellerLabel(sellers: SellerRow[], sellerId: string): string {
-  const row = sellers.find((item) => item.id === sellerId)
-  return row?.name ?? sellerId.slice(0, 8)
-}
-
-export function ChatScreen({
-  token,
-  authHeaders,
-  currentUserId,
-  sellers,
-  isFulfillmentAdmin = false,
-}: Props) {
+export function ChatScreen({ token, authHeaders, currentUserId, sellers, isFulfillmentAdmin = false }: Props) {
+  const [params] = useSearchParams()
   const [conversations, setConversations] = useState<ChatConversation[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
-
+  const [membersOpen, setMembersOpen] = useState(false)
+  const [olderBusy, setOlderBusy] = useState(false)
+  const selectedRef = useRef(selectedId)
+  selectedRef.current = selectedId
+  const desiredSeller = params.get('seller_id')
   const loadConversations = useCallback(async () => {
-    setLoading(true)
-    setError(null)
     try {
       const rows = await listConversations(token, authHeaders)
       setConversations(rows)
-      if (rows.length > 0 && selectedId === null) {
-        setSelectedId(rows[0].id)
-      }
-    } catch (exc) {
-      setError((exc as Error).message)
-    } finally {
-      setLoading(false)
-    }
-  }, [authHeaders, selectedId, token])
-
-  const loadMessages = useCallback(
-    async (conversationId: string) => {
+      setSelectedId((id) => id && rows.some((r) => r.id === id) ? id :
+        (rows.find((r) => r.kind === 'main' && r.seller_id === desiredSeller) ?? rows[0])?.id ?? null)
+    } catch { setError('Не удалось загрузить чаты. Повторите обновление.') }
+  }, [token, authHeaders, desiredSeller])
+  useEffect(() => { void loadConversations() }, [loadConversations])
+  useEffect(() => {
+    if (!selectedId) return
+    let active = true
+    setMessages([]); setError(null)
+    const load = async () => {
       try {
-        const items = await listMessages(token, authHeaders, conversationId)
-        setMessages(items)
-      } catch (exc) {
-        setError((exc as Error).message)
-      }
-    },
-    [authHeaders, token],
-  )
-
-  useEffect(() => {
-    void loadConversations()
-  }, [loadConversations])
-
-  useEffect(() => {
-    if (selectedId) void loadMessages(selectedId)
-  }, [loadMessages, selectedId])
-
-  const selected = useMemo(
-    () => conversations.find((row) => row.id === selectedId) ?? null,
-    [conversations, selectedId],
-  )
-
-  const handleSent = useCallback((msg: ChatMessage) => {
-    setMessages((prev) => [...prev, msg])
+        const items = await listMessages(token, authHeaders, selectedId)
+        if (active) setError(null)
+        if (active) setMessages((old) => {
+          const map = new Map(old.map((m) => [m.id, m]))
+          items.forEach((m) => map.set(m.id, m))
+          return Array.from(map.values()).sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
+        })
+      } catch (exc) { if (active) {
+        if (exc instanceof ChatApiError && [401, 403, 404].includes(exc.status)) setMessages([])
+        setError('Не удалось прочитать чат. Проверьте соединение и доступ.')
+      } }
+    }
+    void load()
+    const timer = window.setInterval(() => void load(), 4000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [selectedId, token, authHeaders])
+  const changed = useCallback((msg: ChatMessage) => {
+    if (msg.conversation_id !== selectedRef.current) return
+    setMessages((rows) => [...rows.filter((r) => r.id !== msg.id), msg]
+      .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)))
   }, [])
-
-  return (
-    <Box sx={{ display: 'flex', height: 'calc(100vh - 96px)', gap: 2, p: 2 }}>
-      <Paper variant="outlined" sx={{ width: 320, display: 'flex', flexDirection: 'column' }}>
-        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <Typography variant="h6">Чаты</Typography>
-          <Typography variant="caption" color="text.secondary">
-            Основной чат каждого продавца создаётся при первом обращении.
-          </Typography>
+  const selected = conversations.find((r) => r.id === selectedId)
+  const label = (c: ChatConversation) => c.title ?? sellers.find((s) => s.id === c.seller_id)?.name ?? 'Основной чат'
+  const older = async () => {
+    if (!selectedId || !messages.length || olderBusy) return
+    const id = selectedId
+    setOlderBusy(true)
+    try {
+      const rows = await listMessages(token, authHeaders, id, messages[0].id)
+      if (selectedRef.current === id) rows.forEach(changed)
+    } catch { setError('Не удалось загрузить предыдущие сообщения.') }
+    finally { setOlderBusy(false) }
+  }
+  return <Box sx={{ display: 'flex', height: 'calc(100vh - 110px)', gap: 1, p: 1 }}>
+    <Paper variant="outlined" sx={{ width: { xs: 170, md: 280 }, overflowY: 'auto' }}>
+      <Typography variant="h6" sx={{ p: 1 }}>Чаты</Typography>
+      <List>{conversations.map((c) => <ListItemButton key={c.id} selected={c.id === selectedId}
+        onClick={() => { setMessages([]); setSelectedId(c.id) }}>
+        <ListItemText primary={label(c)} secondary={c.kind === 'main' ? 'Основной чат' : 'Дополнительный чат'} />
+      </ListItemButton>)}</List>
+      {isFulfillmentAdmin && <Button onClick={() => setCreateOpen(true)}>Новый чат</Button>}
+      <Button onClick={() => void loadConversations()}>Обновить список</Button>
+    </Paper>
+    <Paper variant="outlined" sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      {error && <Alert severity="error">{error}</Alert>}
+      {selected ? <>
+        <Box sx={{ p: 1.5, borderBottom: 1, borderColor: 'divider' }}>
+          <Typography variant="h6">{label(selected)}</Typography>
+          {isFulfillmentAdmin && selected.kind === 'extra' && <Button onClick={() => setMembersOpen(true)}>Участники</Button>}
         </Box>
-        {error ? (
-          <Alert severity="error" sx={{ m: 1 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        ) : null}
-        {loading && conversations.length === 0 ? (
-          <Stack sx={{ py: 4, alignItems: 'center' }}>
-            <CircularProgress size={20} />
-          </Stack>
-        ) : (
-          <List sx={{ overflowY: 'auto', flex: 1, py: 0 }} data-testid="chat-conversation-list">
-            {conversations.map((conv) => (
-              <ListItemButton
-                key={conv.id}
-                selected={conv.id === selectedId}
-                onClick={() => setSelectedId(conv.id)}
-                data-testid="chat-conversation-row"
-              >
-                <ListItemText
-                  primary={conv.title ?? sellerLabel(sellers, conv.seller_id)}
-                  secondary={conv.kind === 'main' ? 'Основной чат' : sellerLabel(sellers, conv.seller_id)}
-                />
-              </ListItemButton>
-            ))}
-          </List>
-        )}
-        <Box sx={{ p: 1, borderTop: 1, borderColor: 'divider' }}>
-          {isFulfillmentAdmin ? (
-            <Button
-              size="small"
-              fullWidth
-              variant="contained"
-              onClick={() => setCreateOpen(true)}
-              data-testid="chat-extra-create-open"
-              sx={{ mb: 1 }}
-            >
-              Новый чат
-            </Button>
-          ) : null}
-          <Button size="small" fullWidth onClick={() => void loadConversations()}>
-            Обновить список
-          </Button>
+        <Box sx={{ flex: 1, overflowY: 'auto' }}>
+          {messages.length > 0 && <Button disabled={olderBusy} onClick={() => void older()}>Предыдущие сообщения</Button>}
+          <ChatFeed key={selected.id} token={token} authHeaders={authHeaders} currentUserId={currentUserId}
+            messages={messages} onChanged={changed} />
         </Box>
-      </Paper>
-
-      {isFulfillmentAdmin ? (
-        <ExtraChatCreateDialog
-          open={createOpen}
-          onClose={() => setCreateOpen(false)}
-          token={token}
-          authHeaders={authHeaders}
-          sellers={sellers}
-          onCreated={(conv) => {
-            setConversations((prev) => [conv, ...prev.filter((row) => row.id !== conv.id)])
-            setSelectedId(conv.id)
-          }}
-        />
-      ) : null}
-
-      <Paper
-        variant="outlined"
-        sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}
-      >
-        {selected ? (
-          <>
-            <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-              <Typography variant="subtitle1">
-                {selected.title ?? sellerLabel(sellers, selected.seller_id)}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {selected.kind === 'main' ? 'Основной чат' : 'Дополнительный чат'} ·{' '}
-                {sellerLabel(sellers, selected.seller_id)}
-              </Typography>
-            </Box>
-            <Box sx={{ flex: 1, overflowY: 'auto', bgcolor: 'grey.50' }}>
-              <ChatFeed currentUserId={currentUserId} messages={messages} />
-            </Box>
-            <ChatComposer
-              token={token}
-              authHeaders={authHeaders}
-              conversationId={selected.id}
-              onSent={handleSent}
-            />
-          </>
-        ) : (
-          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Typography color="text.secondary">
-              Выберите чат в списке слева или откройте его со страницы документа.
-            </Typography>
-          </Box>
-        )}
-      </Paper>
-    </Box>
-  )
+        <ChatComposer key={selected.id} token={token} authHeaders={authHeaders} conversationId={selected.id} onSent={changed} />
+        {membersOpen && <ChatParticipants token={token} authHeaders={authHeaders} conversation={selected}
+          onClose={() => setMembersOpen(false)} />}
+      </> : <Typography sx={{ p: 3 }}>Выберите чат.</Typography>}
+    </Paper>
+    {isFulfillmentAdmin && <ExtraChatCreateDialog open={createOpen} onClose={() => setCreateOpen(false)} token={token}
+      authHeaders={authHeaders} sellers={sellers} onCreated={(c) => { setConversations((rows) => [...rows, c]); setSelectedId(c.id) }} />}
+  </Box>
 }

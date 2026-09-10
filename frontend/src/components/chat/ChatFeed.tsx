@@ -1,19 +1,17 @@
-// Scrollable feed of messages.
-//
-// Renders text, image attachments inline (per WMS-397 paste flow), generic
-// files as compact download chips, and an AttachedDocCard when the message
-// originated from a document page. All rows are static; editing is not part
-// of the MVP UI yet — only the API supports it.
+// Message feed with authenticated files, document links and author editing.
 
-import { memo, useMemo } from 'react'
-import { Box, Chip, Link, Stack, Typography } from '@mui/material'
-import AttachFileOutlinedIcon from '@mui/icons-material/AttachFileOutlined'
+import { memo, useMemo, useState } from 'react'
+import { Alert, Box, Button, Stack, TextField, Typography } from '@mui/material'
+import { ChatAttachmentView } from './ChatAttachmentView'
 import { AttachedDocCard } from './AttachedDocCard'
-import { attachmentContentUrl, type ChatMessage } from './chatApi'
+import { editMessage, type ChatMessage } from './chatApi'
 
 type Props = {
   currentUserId: string | null
   messages: ChatMessage[]
+  token: string
+  authHeaders: (token: string) => Record<string, string>
+  onChanged: (message: ChatMessage) => void
 }
 
 function formatTime(iso: string): string {
@@ -29,7 +27,18 @@ function formatTime(iso: string): string {
   }
 }
 
-export const ChatFeed = memo(function ChatFeed({ currentUserId, messages }: Props) {
+export const ChatFeed = memo(function ChatFeed({ currentUserId, messages, token, authHeaders, onChanged }: Props) {
+  const [editing, setEditing] = useState<string | null>(null)
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const save = async () => {
+    if (!editing || busy) return
+    setBusy(true); setError(null)
+    try { onChanged(await editMessage(token, authHeaders, editing, text)); setEditing(null) }
+    catch { setError('Не удалось сохранить. Текст правки сохранён, повторите.') }
+    finally { setBusy(false) }
+  }
   const rows = useMemo(() => messages, [messages])
   if (rows.length === 0) {
     return (
@@ -62,59 +71,29 @@ export const ChatFeed = memo(function ChatFeed({ currentUserId, messages }: Prop
                 py: 1,
               }}
             >
+              <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>{message.author_label}</Typography>
               {message.attached_document ? (
                 <Box sx={{ mb: message.text ? 0.75 : 0 }}>
                   <AttachedDocCard document={message.attached_document} />
                 </Box>
               ) : null}
               {message.text ? (
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
                   {message.text}
                 </Typography>
               ) : null}
-              {message.attachments.length > 0 ? (
-                <Stack direction="row" spacing={1} sx={{ mt: 0.75, flexWrap: 'wrap' }}>
-                  {message.attachments.map((attachment) =>
-                    attachment.is_image ? (
-                      <Box
-                        key={attachment.id}
-                        component="a"
-                        href={attachmentContentUrl(attachment.id)}
-                        target="_blank"
-                        rel="noreferrer"
-                        sx={{ display: 'inline-block' }}
-                      >
-                        <Box
-                          component="img"
-                          src={attachmentContentUrl(attachment.id)}
-                          alt={attachment.filename}
-                          sx={{
-                            maxWidth: 220,
-                            maxHeight: 220,
-                            borderRadius: 1,
-                            display: 'block',
-                          }}
-                          data-testid="chat-message-image"
-                        />
-                      </Box>
-                    ) : (
-                      <Chip
-                        key={attachment.id}
-                        icon={<AttachFileOutlinedIcon fontSize="small" />}
-                        component={Link}
-                        href={attachmentContentUrl(attachment.id)}
-                        target="_blank"
-                        rel="noreferrer"
-                        clickable
-                        label={`${attachment.filename} · ${Math.max(1, Math.round(attachment.size_bytes / 1024))} КБ`}
-                        variant="outlined"
-                        size="small"
-                        data-testid="chat-message-file"
-                      />
-                    ),
-                  )}
-                </Stack>
-              ) : null}
+              <Stack spacing={1} sx={{ mt: 1 }}>
+                {message.attachments.map((attachment) => <ChatAttachmentView key={attachment.id}
+                  attachment={attachment} token={token} authHeaders={authHeaders} />)}
+              </Stack>
+              {editing === message.id ? <Box>
+                {error && <Alert severity="error">{error}</Alert>}
+                <TextField multiline fullWidth value={text} disabled={busy}
+                  onChange={(event) => setText(event.target.value)} label="Текст сообщения" />
+                <Button disabled={busy || !text.trim()} onClick={() => void save()}>Сохранить</Button>
+                <Button disabled={busy} onClick={() => setEditing(null)}>Отмена</Button>
+              </Box> : mine && <Button size="small" color="inherit"
+                onClick={() => { setEditing(message.id); setText(message.text); setError(null) }}>Изменить</Button>}
               <Typography
                 variant="caption"
                 sx={{

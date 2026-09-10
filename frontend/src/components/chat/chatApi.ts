@@ -37,6 +37,7 @@ export type ChatMessage = {
   id: string
   conversation_id: string
   author_user_id: string
+  author_label: string
   client_message_id: string
   text: string
   attached_document: AttachedDocument | null
@@ -48,10 +49,15 @@ export type ChatMessage = {
 
 type HeaderFn = (token: string) => Record<string, string>
 
+export class ChatApiError extends Error {
+  status: number
+  constructor(status: number, message: string) { super(message); this.status = status }
+}
+
 async function jsonOrThrow<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const text = await response.text().catch(() => '')
-    throw new Error(`chat_api_${response.status}:${text.slice(0, 200)}`)
+    throw new ChatApiError(response.status, `chat_api_${response.status}:${text.slice(0, 200)}`)
   }
   return (await response.json()) as T
 }
@@ -103,9 +109,10 @@ export async function listMessages(
   token: string,
   authHeaders: HeaderFn,
   conversationId: string,
+  before?: string,
 ): Promise<ChatMessage[]> {
   const response = await fetch(
-    apiUrl(`/operations/chat/conversations/${conversationId}/messages`),
+    apiUrl(`/operations/chat/conversations/${conversationId}/messages${before ? `?before=${before}` : ''}`),
     { headers: { ...authHeaders(token) } },
   )
   const body = await jsonOrThrow<{ items: ChatMessage[] }>(response)

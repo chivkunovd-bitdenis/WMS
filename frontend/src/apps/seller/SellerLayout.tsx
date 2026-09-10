@@ -91,6 +91,7 @@ export function SellerLayout({
                 {userRoleLabel ? <span> · {userRoleLabel}</span> : null}
               </Box>
             ) : null}
+            <MuiButton component={NavLink} to={`${base}/chat`}>Чат</MuiButton>
             <NotificationBell portal="seller" notificationsPath={`${base}/notifications`} />
             <MuiButton
               type="button"

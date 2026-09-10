@@ -27,9 +27,7 @@ MAX_MESSAGE_TOTAL_BYTES = 100 * 1024 * 1024
 # 10 files per message.
 MAX_MESSAGE_ATTACHMENTS = 10
 
-IMAGE_CONTENT_TYPES = frozenset(
-    {"image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp", "image/svg+xml"}
-)
+IMAGE_CONTENT_TYPES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"})
 
 
 class ChatStorageUnavailable(RuntimeError):

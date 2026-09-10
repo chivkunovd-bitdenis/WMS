@@ -1,3 +1,4 @@
+import { ChatOpenButton } from '../../components/chat/ChatOpenButton'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { apiUrl } from '../../api'
@@ -271,6 +272,8 @@ function blockingSelectionBlockers(blockers: Array<{ code: string; message: stri
 }
 
 type NewOrderRowProps = {
+  token: string
+  authHeaders: (token: string) => Record<string, string>
   order: FbsWorklistOrder
   selected: boolean
   serverNow: string | null
@@ -283,6 +286,7 @@ type NewOrderRowProps = {
 // Клик по одной галке меняет selected только у одной строки. React.memo не даёт
 // остальным 499 тяжёлым строкам заново строить фото, подсказки и типографику.
 const NewOrderRow = memo(function NewOrderRow({
+  token, authHeaders,
   order,
   selected,
   serverNow,
@@ -330,6 +334,9 @@ const NewOrderRow = memo(function NewOrderRow({
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
               {orderNumberLabel(order)}
             </Typography>
+            <ChatOpenButton token={token} authHeaders={authHeaders} currentUserId={null}
+              sellerId={order.seller.id} sellerName={order.seller.name} size="small" variant="text"
+              attachedDocument={{ kind: 'fbs_order', id: order.id, title: orderNumberLabel(order), seller_id: order.seller.id }} />
             {blocked ? (
               <Stack sx={{ mt: 0.75 }} spacing={0.25}>
                 {order.selection_blockers.map((blocker) => (
@@ -1542,7 +1549,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
             {orders.map((order) => {
               if (statusGroup === 'new') {
                 return (
-                  <NewOrderRow
+                  <NewOrderRow token={token} authHeaders={authHeaders}
                     key={order.id}
                     order={order}
                     selected={selected.has(order.id)}
@@ -1597,6 +1604,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                               Заказ {orderNumberLabel(order)}
                             </Typography>
+                            <ChatOpenButton token={token} authHeaders={authHeaders} currentUserId={null}
+              sellerId={order.seller.id} sellerName={order.seller.name} size="small" variant="text"
+              attachedDocument={{ kind: 'fbs_order', id: order.id, title: orderNumberLabel(order), seller_id: order.seller.id }} />
                           </Box>
                         </Stack>
                       </TableCell>

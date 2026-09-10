@@ -1,3 +1,5 @@
+import { ChatDocumentAction } from './components/chat/ChatDocumentAction'
+import { ChatDocumentScreen } from './screens/chat/ChatDocumentScreen'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { apiUrl } from './api'
@@ -332,6 +334,9 @@ export default function App() {
     null,
   )
   const [ffDocModal, setFfDocModal] = useState<null | 'inbound' | 'outbound'>(null)
+  useEffect(() => {
+    if (pathname.startsWith('/app/ff/chat')) setFfDocModal(null)
+  }, [pathname])
   const [ffDocDirty, setFfDocDirty] = useState(false)
   const [ffInboundWorkspace, setFfInboundWorkspace] =
     useState<InboundRequestWorkspace>('full')
@@ -3254,6 +3259,8 @@ export default function App() {
             }
           />
 
+          <Route path="ff/chat/documents/:kind/:documentId" element={token ?
+            <ChatDocumentScreen token={token} authHeaders={authHeaders} currentUserId={me.id ?? null} /> : ffAccessDenied} />
           <Route
             path="ff/chat"
             element={
@@ -3527,6 +3534,8 @@ export default function App() {
             element={
               token && isFulfillmentAdmin ? (
                 <OutboundScreen
+                chatAction={token && selectedOutboundId ? <ChatDocumentAction token={token} authHeaders={authHeaders}
+                  currentUserId={me.id ?? null} kind="outbound_shipment" documentId={selectedOutboundId} /> : null}
                   opsError={opsError}
                   opsBusy={opsBusy}
                   isFulfillmentAdmin={isFulfillmentAdmin}
@@ -3678,6 +3687,8 @@ export default function App() {
               )
             ) : ffDocModal === 'outbound' ? (
               <OutboundScreen
+                chatAction={token && selectedOutboundId ? <ChatDocumentAction token={token} authHeaders={authHeaders}
+                  currentUserId={me.id ?? null} kind="outbound_shipment" documentId={selectedOutboundId} /> : null}
                 opsError={opsError}
                 opsBusy={opsBusy}
                 isFulfillmentAdmin={isFulfillmentAdmin}

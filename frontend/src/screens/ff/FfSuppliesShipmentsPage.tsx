@@ -59,7 +59,7 @@ import { FfMarketplaceUnloadBoxAddDialog } from './FfMarketplaceUnloadBoxAddDial
 import { FfUnloadPickPage } from './unload-pick/FfUnloadPickPage'
 import { BoxImportDialog } from '../../components/BoxImportDialog'
 import { BoxLabelPrintDialog } from '../../components/BoxLabelPrintDialog'
-import { ChatOpenButton } from '../../components/chat/ChatOpenButton'
+import { ChatDocumentAction } from '../../components/chat/ChatDocumentAction'
 import type { LabelSize } from '../../utils/labelSize'
 import { formatHumanDocumentNumber } from './documentDisplay'
 import { formatDateTimeLocal } from '../../utils/formatDateTimeLocal'
@@ -301,6 +301,15 @@ export function FfSuppliesShipmentsPage({
   currentUserId = null,
 }: Props) {
   const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    const id = searchParams.get('open_outbound')
+    if (!id) return
+    onOpenOutbound(id)
+    const next = new URLSearchParams(searchParams)
+    next.delete('open_outbound')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams, onOpenOutbound])
+
   const isMpShipmentsPage = pageVariant === 'mp-shipments'
   const [kind, setKind] = useState<QuickFilterKind>(isMpShipmentsPage ? 'marketplace_unload' : 'all')
   const [sellerFilter, setSellerFilter] = useState<string>('all')
@@ -2349,26 +2358,9 @@ export function FfSuppliesShipmentsPage({
         <DialogTitle>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
             <Box sx={{ flex: 1, minWidth: 0 }}>{docTitle}</Box>
-            {/* WMS-397/399 gap 1: compact chat entry point in the shipment
-                dialog. Only wired when the caller supplies chatAuthHeaders
-                (App.tsx passes them) AND the current doc has a seller_id. */}
-            {chatAuthHeaders && token && docModal === 'marketplace_unload' && unloadDetail?.seller_id ? (
-              <ChatOpenButton
-                token={token}
-                authHeaders={chatAuthHeaders}
-                currentUserId={currentUserId}
-                sellerId={unloadDetail.seller_id}
-                sellerName={unloadDetail.seller_name ?? undefined}
-                attachedDocument={{
-                  kind: 'marketplace_unload',
-                  id: unloadDetail.id,
-                  title: unloadDisplayNumber
-                    ? `Отгрузка ${unloadDisplayNumber}`
-                    : 'Отгрузка на маркетплейс',
-                  seller_id: unloadDetail.seller_id,
-                  seller_name: unloadDetail.seller_name ?? undefined,
-                }}
-              />
+            {chatAuthHeaders && token && docModal === 'marketplace_unload' && unloadDetail ? (
+              <ChatDocumentAction token={token} authHeaders={chatAuthHeaders}
+                currentUserId={currentUserId} kind="marketplace_unload" documentId={unloadDetail.id} />
             ) : null}
           </Stack>
         </DialogTitle>

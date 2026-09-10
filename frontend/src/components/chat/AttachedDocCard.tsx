@@ -8,7 +8,7 @@
 import { memo, useMemo } from 'react'
 import { Box, Paper, Typography } from '@mui/material'
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import type { AttachedDocument } from './chatApi'
 
 type Props = {
@@ -24,42 +24,25 @@ const KIND_LABEL: Record<string, string> = {
   outbound_shipment: 'Отгрузка',
 }
 
-function routeFor(kind: string, id: string, base: string): string | null {
-  // WMS-397/399 gap 2: query keys match the parameter each screen already
-  // reads to auto-open the target document, so a click on the chat card lands
-  // on the specific doc, not the list. See:
-  //   * FBS supplies — FfFbsOrdersScreen reads ?supply_id=<id>.
-  //   * Marketplace-unload — FfSuppliesShipmentsPage reads ?open_mp=<id>.
-  //   * Inbound reception — FfInboundQueuePage reads ?open=<id> after this
-  //     patch (see the useEffect added there).
-  switch (kind) {
-    case 'fbs_order':
-    case 'fbs_supply':
-      return `${base}/ff/fbs?supply_id=${id}`
-    case 'inbound_intake':
-      return `${base}/ff/reception?open=${id}`
-    case 'marketplace_unload':
-    case 'outbound_shipment':
-      return `${base}/ff/mp-shipments?open_mp=${id}`
-    default:
-      return null
-  }
-}
-
 export const AttachedDocCard = memo(function AttachedDocCard({
   document,
-  basePath = '/app',
+  basePath,
 }: Props) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const base = basePath ?? (location.pathname.startsWith('/app/ff') ? '/app/ff' : location.pathname.startsWith('/app/seller') ? '/app/seller' : '')
   const label = KIND_LABEL[document.kind] ?? 'Документ'
   const target = useMemo(
-    () => routeFor(document.kind, document.id, basePath),
-    [document.kind, document.id, basePath],
+    () => `${base}/chat/documents/${document.kind}/${document.id}?seller_id=${document.seller_id}`,
+    [document.kind, document.id, document.seller_id, base],
   )
   const clickable = target !== null
   return (
     <Paper
       variant="outlined"
+      role="link"
+      tabIndex={0}
+      onKeyDown={(event) => { if (event.key === 'Enter') navigate(target) }}
       onClick={() => {
         if (target) navigate(target)
       }}
