@@ -41,6 +41,7 @@ from app.models.fbs_supply import (
 )
 from app.models.fbs_trbx import FbsTrbx
 from app.models.inventory_balance import InventoryBalance
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.storage_location import StorageLocation
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.services import fbs_packing_box_service as packing_box_svc
@@ -97,6 +98,12 @@ async def get_supply_workspace(
     server_now = datetime.now(tz=UTC)
     orders = list(supply.orders)
     worklist_items = await build_worklist_items(session, tenant_id, orders, server_now=server_now)
+    await _inject_product_marketplace_bindings(
+        session,
+        tenant_id,
+        supply.seller_id,
+        worklist_items,
+    )
     tape_order_index_by_id = {
         order.id: index for index, order in enumerate(sorted(orders, key=picking_list_order_key))
     }
@@ -204,6 +211,56 @@ async def get_supply_workspace(
         "wb_sync_stale": wb_sync_stale,
         "server_now": server_now.isoformat(),
     }
+
+
+async def _inject_product_marketplace_bindings(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    worklist_items: list[dict[str, Any]],
+) -> None:
+    """Expose the existing marketplace barcode records for the FBS print dialog.
+
+    The workspace already owns the order/product projection.  Keeping the
+    marketplace identity beside that product lets the existing print dialog
+    select an Ozon barcode without inventing a second print flow.
+    """
+    product_ids = {
+        uuid.UUID(str(product_id))
+        for item in worklist_items
+        if isinstance(item.get("product"), dict)
+        if (product_id := item["product"].get("id"))
+    }
+    if not product_ids:
+        return
+    rows = list(
+        (
+            await session.scalars(
+                select(ProductMarketplaceLink).where(
+                    ProductMarketplaceLink.tenant_id == tenant_id,
+                    ProductMarketplaceLink.seller_id == seller_id,
+                    ProductMarketplaceLink.product_id.in_(product_ids),
+                    ProductMarketplaceLink.is_active.is_(True),
+                )
+            )
+        ).all()
+    )
+    bindings: dict[uuid.UUID, list[dict[str, Any]]] = {}
+    for row in rows:
+        marketplace = "wb" if row.marketplace in {"wb", "wildberries"} else row.marketplace
+        if marketplace not in {"wb", "ozon"}:
+            continue
+        bindings.setdefault(row.product_id, []).append(
+            {
+                "marketplace": marketplace,
+                "external_barcodes": list(row.external_barcodes or []),
+            }
+        )
+    for item in worklist_items:
+        product = item.get("product")
+        if not isinstance(product, dict) or not product.get("id"):
+            continue
+        product["marketplace_bindings"] = bindings.get(uuid.UUID(str(product["id"])), [])
 
 
 async def _picking_auto_passed_reason(

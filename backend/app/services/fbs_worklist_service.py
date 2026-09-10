@@ -945,13 +945,21 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
                 if position.product_id in ctx["products"]
                 else None,
                 "product_id": str(position.product_id) if position.product_id else None,
+                # Ozon supplies its own position name and offer id.  Prefer
+                # them here: an already linked WMS product may carry a WB
+                # title/article, which must not overwrite what Ozon sent.
                 "name": (
-                    ctx["products"][position.product_id].name
-                    if position.product_id in ctx["products"]
-                    else position.name or MISSING_PRODUCT
+                    position.name
+                    or (
+                        ctx["products"][position.product_id].name
+                        if position.product_id in ctx["products"]
+                        else MISSING_PRODUCT
+                    )
                 ),
                 "seller_article": (
-                    ctx["products"][position.product_id].wb_vendor_code
+                    position.offer_id
+                    if order.marketplace == "ozon" and position.offer_id
+                    else ctx["products"][position.product_id].wb_vendor_code
                     if position.product_id in ctx["products"]
                     and ctx["products"][position.product_id].wb_vendor_code
                     else position.offer_id

@@ -40,6 +40,7 @@ class SupplyValidationIssue:
 
 @dataclass(frozen=True)
 class SupplyPreflightSummary:
+    marketplace: str
     seller_id: uuid.UUID
     seller_name: str
     wb_warehouse_id: int
@@ -48,6 +49,7 @@ class SupplyPreflightSummary:
     wms_warehouse_name: str
     buyer_type: str
     cargo_type: str
+    delivery_route: str | None
     orders_count: int
     required_marking_count: int
     pvz_allowed_count: int
@@ -80,6 +82,19 @@ _BLOCKER_TO_ISSUE: dict[str, tuple[str, str]] = {
 
 def _buyer_type(order: FbsOrder) -> str:
     return "legal" if order.is_legal else "individual"
+
+
+def _delivery_route(order: FbsOrder) -> str | None:
+    if order.marketplace != "ozon":
+        return None
+    details = order.meta_details_json if isinstance(order.meta_details_json, dict) else {}
+    name = details.get("ozon_delivery_method_name")
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    method_id = details.get("ozon_delivery_method_id")
+    if isinstance(method_id, str) and method_id.strip():
+        return f"Метод доставки {method_id.strip()}"
+    return None
 
 
 def _order_requires_marking(order: FbsOrder) -> bool:
@@ -282,6 +297,7 @@ async def _build_summary(
     required_marking = sum(1 for o in orders if _order_requires_marking(o))
     nearest = min(o.deadline_at for o in orders)
     return SupplyPreflightSummary(
+        marketplace=first.marketplace,
         seller_id=first.seller_id,
         seller_name=seller.name if seller else "Селлер не найден",
         wb_warehouse_id=wb_wh_id,
@@ -290,6 +306,7 @@ async def _build_summary(
         wms_warehouse_name=warehouse.name if warehouse else "Склад не найден",
         buyer_type=_buyer_type(first),
         cargo_type=first.cargo_type or "unknown",
+        delivery_route=_delivery_route(first),
         orders_count=len(orders),
         required_marking_count=required_marking,
         pvz_allowed_count=len(orders),
@@ -308,11 +325,13 @@ def preflight_to_dict(
     if result.summary is not None:
         s = result.summary
         summary_out = {
+            "marketplace": s.marketplace,
             "seller": {"id": str(s.seller_id), "name": s.seller_name},
             "wb_warehouse": {"id": s.wb_warehouse_id, "name": s.wb_warehouse_name},
             "wms_warehouse": {"id": str(s.wms_warehouse_id), "name": s.wms_warehouse_name},
             "buyer_type": s.buyer_type,
             "cargo_type": s.cargo_type,
+            "delivery_route": s.delivery_route,
             "orders_count": s.orders_count,
             "required_marking_count": s.required_marking_count,
             "pvz_allowed_count": s.pvz_allowed_count,
