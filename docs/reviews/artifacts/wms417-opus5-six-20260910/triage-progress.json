@@ -1,21 +1,20 @@
 {
-  "checked_at_utc": "2026-09-10T06:18:19.005262+00:00",
+  "checked_at_utc": "2026-09-10T06:33:41.632684+00:00",
   "completed": [
-    "mobile_update",
-    "auth_audit",
-    "chat",
-    "warehouse"
-  ],
-  "running": [
     "stock_merge",
-    "cancel_identity"
+    "cancel_identity",
+    "chat",
+    "warehouse",
+    "auth_audit",
+    "mobile_update"
   ],
+  "running": [],
   "quota_last_event": {
     "week_used": 87,
     "week_remaining": 13,
     "overage": false
   },
-  "delivery": "Saved in shared coordinator handoff; no live prompt sent to avoid duplicate active CLI writer. Coordinator must acknowledge reading before closing WMS417.",
+  "delivery": "Coordinator explicitly acknowledged first four reports in resume-events; stock_merge and cancel_identity now saved in shared directory and appended to handoff, receipt of last two pending.",
   "checks": [
     {
       "finding": "chat default conversation order",
@@ -36,6 +35,36 @@
       "finding": "mobile FbsKizError handler",
       "state": "line references shifted; not yet adjudicated",
       "evidence": "do not accept packet line numbers blindly; current handler read separately"
+    },
+    {
+      "finding": "stock operator caps reset during percent switch",
+      "state": "confirmed current code in both stock and coordinator worktrees",
+      "evidence": "fbs_stock_rule_service.py:845-854 bulk quantity=0 and :874-878 per-pool zero remain; fix before release"
+    },
+    {
+      "finding": "Ozon requirements_seen forced true",
+      "state": "confirmed current Ozon source; operational consequence requires focused scenario",
+      "evidence": "ozon_fbs_sync_service.py:803 discards seen; :814 unconditional True"
+    },
+    {
+      "finding": "unload Product lock ordering",
+      "state": "current unsorted loops confirmed; no runtime replay by root",
+      "evidence": "marketplace_unload_service.py:745,797,859"
+    },
+    {
+      "finding": "merge concurrent FK insertion report item4",
+      "state": "not accepted as proved; proposed fix must not be copied blindly",
+      "evidence": "current merge Product rows FOR UPDATE at335; report ignores implicit FK key-share locks. Verify actual FK definitions and PostgreSQL replay before changing locking."
+    },
+    {
+      "finding": "cancel historical sweep fallback time",
+      "state": "high priority verification required by coordinator",
+      "evidence": "cancel_identity-review D1; read actual import transition and received_at, no production backfill"
+    },
+    {
+      "finding": "cancel order/supply lock ordering",
+      "state": "current ensure_cancel_return_document locks order first; full caller replay pending",
+      "evidence": "fbs_cancel_return_document_service.py:186-190"
     }
   ]
 }
