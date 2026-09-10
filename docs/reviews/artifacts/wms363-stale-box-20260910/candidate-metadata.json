@@ -1,0 +1,30 @@
+{
+  "mobile_commit": "beb2ba6dea046845e93c5c56c73963a7fb0ee117",
+  "patch_base": "b77e31a8cc658a23d9c20a318f4f869e304752cc",
+  "supersedes_mobile_commit": "c9d27e16e992a52ae80b9f7127aad16967f1915d",
+  "supersedes_main_android_candidate": "3210e7d12cccc0e3c894590ea3881fc911da04bd",
+  "apk": "WMS-TSD-0.1.9-cfe8b5adc1bb-debug.apk",
+  "sha256": "cfe8b5adc1bbd62e728184b9a18a1e5a14a837b3028de865e493c6203bd36870",
+  "size_bytes": 45624909,
+  "package": "ru.wms.tsd",
+  "version_code": 10,
+  "version_name": "0.1.9-ozon-tsd",
+  "min_sdk": 24,
+  "target_sdk": 35,
+  "certificate_sha256": "e343ab0cccc6284b271a72da42a67b14a0f0893d92b9ca461f1cac3d0be1aeb6",
+  "apksigner_verification": "pass",
+  "published": false,
+  "independent_acceptance": "pending",
+  "patches": {
+    "mobile-WMS363-review.patch": {
+      "base": "b77e31a8cc658a23d9c20a318f4f869e304752cc",
+      "sha256": "bcfeaafa84cfc51eb8361d7b471e691fee58b9bd0865955f17e21fbc7fc7c551",
+      "reverse_apply": "pass"
+    },
+    "mobile-WMS363-stale-box-delta.patch": {
+      "base": "c9d27e16e992a52ae80b9f7127aad16967f1915d",
+      "sha256": "0db53355504366bb84d0eba97843100d8f828038ebcbb200f4baa11efb4844a2",
+      "reverse_apply": "pass"
+    }
+  }
+}

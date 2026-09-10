@@ -1,0 +1,54 @@
+{
+  "mobile_commit": "beb2ba6dea046845e93c5c56c73963a7fb0ee117",
+  "suites": [
+    {
+      "name": "ru.wms.tsd.features.fbs.FbsApiContractTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "ru.wms.tsd.features.fbs.FbsDeliveryTest",
+      "tests": "14",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "ru.wms.tsd.features.fbs.FbsViewModelTest",
+      "tests": "48",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "ru.wms.tsd.features.update.UpdateTest",
+      "tests": "12",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  ],
+  "total_tests": 83,
+  "lint_errors": 0,
+  "lint_warnings": 41,
+  "gradle_max_workers": 2,
+  "active_processor_count": 2,
+  "assembleDebug": "pass",
+  "lintDebug": "pass",
+  "testDebugUnitTest": "pass",
+  "stale_recovery_matrix_combinations": 32,
+  "new_tests": 9,
+  "emulator_package_read_only": {
+    "versionCode": 9,
+    "versionName": "0.1.8-wms401-orders-first"
+  },
+  "emulator_install_or_ui_actions_this_fix": false,
+  "scoped_classes": [
+    "FbsViewModelTest",
+    "FbsApiContractTest",
+    "FbsDeliveryTest",
+    "UpdateTest"
+  ]
+}

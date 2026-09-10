@@ -1,0 +1,444 @@
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt
+index c070618..ccb8697 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt
+@@ -10,6 +10,7 @@ import retrofit2.http.GET
+ import retrofit2.http.POST
+ import retrofit2.http.Path
+ import retrofit2.http.Query
++import retrofit2.http.Streaming
+
+ interface FbsApi {
+     // WMS-363: marketplace выбирает оператор в UI (WB / Ozon). Значение по
+@@ -38,6 +39,7 @@ interface FbsApi {
+     suspend fun printTape(@Path("supplyId") supplyId: String, @Body body: PrintTapeBody): Response<FbsPrintTape>
+     @POST("operations/fbs-supplies/{supplyId}/print-assets")
+     suspend fun printAssets(@Path("supplyId") supplyId: String, @Body body: PrintBatchBody): Response<FbsPrintBatch>
++    @Streaming
+     @GET suspend fun asset(@Url path: String): Response<ResponseBody>
+
+     @DELETE("operations/fbs-supplies/{supplyId}/boxes/{boxId}/orders/{orderId}")
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsPrinting.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsPrinting.kt
+index d3b23f3..24ab944 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsPrinting.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsPrinting.kt
+@@ -77,9 +77,30 @@ fun labelsDocument(encoder: String, pages: List<String>): String = """<!doctype
+ @page{size:58mm 40mm;margin:0}body{margin:0;background:white;color:black}section{width:56mm;height:38mm;padding:1mm;page-break-after:always;overflow:hidden;text-align:center}section:last-child{page-break-after:auto}img,canvas{max-width:54mm;max-height:29mm;object-fit:contain}p{font:10px sans-serif;margin:1mm;overflow-wrap:anywhere}
+ </style><script>$encoder</script></head><body>${pages.joinToString("")}</body></html>"""
+
++internal const val MAX_LABEL_FILE_BYTES = 16 * 1024 * 1024
++private const val LABEL_TOO_LARGE = "Файл этикеток превышает 16 МиБ. Печать не начата."
++
++/** Never buffer beyond the accepted file size, including chunked/unknown length. */
++internal fun okhttp3.ResponseBody.readLabelBytes(): ByteArray = use { body ->
++    require(body.contentLength() <= MAX_LABEL_FILE_BYTES) { LABEL_TOO_LARGE }
++    val output = java.io.ByteArrayOutputStream()
++    val buffer = ByteArray(8192)
++    body.byteStream().use { stream ->
++        while (true) {
++            // At the boundary read one byte only, to distinguish exact size from
++            // overflow. No bytes beyond the limit are written into the buffer.
++            val count = stream.read(buffer, 0, minOf(buffer.size, MAX_LABEL_FILE_BYTES - output.size() + 1))
++            if (count < 0) break
++            require(count <= MAX_LABEL_FILE_BYTES - output.size()) { LABEL_TOO_LARGE }
++            output.write(buffer, 0, count)
++        }
++    }
++    output.toByteArray()
++}
++
+ /** Render every page of an Ozon PDF locally; never discard later posting labels. */
+ fun pdfLabelImages(bytes: ByteArray, cacheDirectory: java.io.File): List<String> {
+-    require(bytes.size <= 16 * 1024 * 1024) { "Файл этикеток слишком большой" }
++    require(bytes.size <= MAX_LABEL_FILE_BYTES) { LABEL_TOO_LARGE }
+     val file = java.io.File.createTempFile("fbs-label-", ".pdf", cacheDirectory)
+     try {
+         file.writeBytes(bytes)
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+index 029fa66..aa0e3b4 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+@@ -93,18 +93,24 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+     private class PickSourceCancelled : Exception()
+     private val mutable = MutableStateFlow(FbsState())
+     val state: StateFlow<FbsState> = mutable
+-    private val scans = Channel<Triple<String, String, String>>(Channel.UNLIMITED)
++    // Reference identity keeps repeated physical scans distinct while pending.
++    private class QueuedScan(val mode: String, val text: String, val supplyId: String, val boxId: String?)
++    private val scans = Channel<QueuedScan>(Channel.UNLIMITED)
++    // Includes the item already received by the consumer but still waiting on an error.
++    private val pendingScans = mutableSetOf<QueuedScan>()
+     private var openedSupplyId: String? = null
+     private var retryAction: (suspend () -> Unit)? = null
+     private var pickChoiceReply: CompletableDeferred<FbsScanResult?>? = null
+-    init { viewModelScope.launch { for ((mode, text, supplyId) in scans) {
++    init { viewModelScope.launch { for (scan in scans) {
+         val key = UUID.randomUUID().toString()
+         state.first { !it.busy && it.error == null }
++        if (!pendingScans.remove(scan)) continue // Explicitly cancelled by stale-box recovery.
++        val mode = scan.mode; val text = scan.text; val supplyId = scan.supplyId; val boxId = scan.boxId
+         if (supplyId != openedSupplyId || supplyId != state.value.workspace?.supply?.id) continue
+         val action: suspend () -> Unit = when (mode) {
+             "pick" -> pickAction(text, key)
+             "pack" -> kizAction(text, key)
+-            else -> boxScanAction(text)
++            else -> boxScanAction(text, supplyId, boxId)
+         }
+         perform(action)
+     } } }
+@@ -257,8 +263,18 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+         }
+     }
+     fun scan(mode: String, value: String) {
+-        val supplyId = state.value.workspace?.supply?.id ?: return
+-        if (value.isNotBlank() && supplyId == openedSupplyId) scans.trySend(Triple(mode, value.trimEnd('\r','\n'), supplyId))
++        val workspace = state.value.workspace ?: return
++        val supplyId = workspace.supply.id
++        if (value.isBlank() || supplyId != openedSupplyId) return
++        val text = value.trimEnd('\r','\n')
++        // Box selection is an operator intent, just like a manual tap. Apply it
++        // before queueing so the next product scan captures this box during refresh.
++        if (mode == "boxes") workspace.boxes.firstOrNull { text == it.barcode || text == it.wbTrbxId }?.let {
++            selectBox(it.id)
++        }
++        val scan = QueuedScan(mode, text, supplyId, state.value.selectedBoxId)
++        pendingScans.add(scan)
++        if (scans.trySend(scan).isFailure) pendingScans.remove(scan)
+     }
+     fun clearSource() { mutable.value = state.value.copy(source = null) }
+     fun choosePickSource(choice: FbsPickChoice) {
+@@ -376,20 +392,32 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+             mutable.value = state.value.copy(workspace = workspace, selectedBoxId = workspace.boxes.firstOrNull { it.id !in oldIds }?.id)
+         }
+     }
+-    private fun boxScanAction(value: String): suspend () -> Unit {
+-        val supplyId = state.value.workspace?.supply?.id
++    private fun boxScanAction(value: String, supplyId: String, scannedBoxId: String?): suspend () -> Unit {
+         // Resolve once: after a lost response, the same scan must never consume the
+         // next matching unit or position. Reread only to reconcile this exact target.
+         var target: Pair<String, AssignOrdersBody>? = null
++        var rejectedStaleBox = false
+         return action@{
+-            if (supplyId == null || openedSupplyId != supplyId) return@action
++            // Retry acknowledges this rejection; it must not replay old targets or
++            // cancel fresh scans queued after the operator saw the recovery message.
++            if (rejectedStaleBox) return@action
++            if (openedSupplyId != supplyId) return@action
+             refresh(supplyId)
++            if (openedSupplyId != supplyId) return@action
+             val workspace = state.value.workspace ?: return@action
+             if (target == null) {
+                 workspace.boxes.firstOrNull { value == it.barcode || value == it.wbTrbxId }?.let {
+-                    selectBox(it.id); return@action
++                    // Never overwrite a later manual selection after the network wait.
++                    if (it.id != scannedBoxId) {
++                        rejectedStaleBox = true
++                        val cancelled = pendingScans.filter { pending -> pending.mode == "boxes" && pending.supplyId == supplyId }
++                        pendingScans.removeAll(cancelled.toSet())
++                        mutable.value = state.value.copy(selectedBoxId = null)
++                        error("Список коробов обновлён. Скан короба не применён. Отменено ожидающих сканов вкладки «Короба» этой поставки: ${cancelled.size}. Закройте сообщение или нажмите «Повторить», затем заново отсканируйте короб и товары.")
++                    }
++                    return@action
+                 }
+-                val boxId = state.value.selectedBoxId ?: error("Откройте или отсканируйте короб")
++                val boxId = scannedBoxId ?: error("Откройте или отсканируйте короб")
+                 val body = if (workspace.supply.marketplace == "ozon") {
+                     val assigned = workspace.boxes.flatMap { it.assignedOrderProductIds }.toSet()
+                     val position = sortedOrders(workspace.orders).flatMap { order -> order.positions.filter {
+@@ -464,11 +492,15 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+         val path = asset.previewUrl?.removePrefix("/api/")?.removePrefix("/") ?: error("WB не вернул файл этикетки")
+         require(Regex("operations/fbs-print-assets/[a-fA-F0-9-]+/content").matches(path)) { "Неизвестный адрес файла этикетки" }
+         val body = required { api.fbs().asset(path) }
++        // @Streaming prevents Retrofit buffering; both reading and decoding belong
++        // on IO. Outer use also closes the body if cancellation prevents dispatch.
+         return body.use {
+-            val bytes = it.bytes()
+             val type = it.contentType()?.toString()?.substringBefore(';') ?: ""
+-            if (type == "application/pdf") withContext(Dispatchers.IO) { decodePdf(bytes) }
+-            else listOf(inlineImage(bytes, type))
++            withContext(Dispatchers.IO) {
++                val bytes = it.readLabelBytes()
++                if (type == "application/pdf") decodePdf(bytes)
++                else listOf(inlineImage(bytes, type))
++            }
+         }
+     }
+     fun printOrders(encoder: String, ids: List<String>, barcodeCopies: Int, kizCopies: Int, includeQr: Boolean) {
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsApiContractTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsApiContractTest.kt
+index a1d4051..d692d6e 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsApiContractTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsApiContractTest.kt
+@@ -5,6 +5,8 @@ import kotlinx.serialization.json.*
+ import okhttp3.mockwebserver.MockResponse
+ import okhttp3.mockwebserver.MockWebServer
+ import okhttp3.ResponseBody.Companion.toResponseBody
++import okhttp3.MediaType.Companion.toMediaType
++import okio.buffer
+ import org.junit.Assert.*
+ import org.junit.Test
+ import retrofit2.Response
+@@ -13,6 +15,38 @@ import ru.wms.tsd.core.api.generated.infrastructure.ApiClient
+ import ru.wms.tsd.core.api.readableError
+
+ class FbsApiContractTest {
++    @Test fun `Retrofit streams declared oversized label without first reading the body`() = runTest {
++        val body = GeneratedLabelBody(MAX_LABEL_FILE_BYTES.toLong() + 1024, MAX_LABEL_FILE_BYTES.toLong() + 1024)
++        val builder = okhttp3.OkHttpClient.Builder().addInterceptor { chain ->
++            okhttp3.Response.Builder().request(chain.request()).protocol(okhttp3.Protocol.HTTP_1_1)
++                .code(200).message("OK").body(body).build()
++        }
++        val api = ApiClient(baseUrl = "http://label.test/", okHttpClientBuilder = builder).createService(FbsApi::class.java)
++        val response = api.asset("operations/fbs-print-assets/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/content")
++        assertEquals(0L, body.bytesRead) // Without @Streaming Retrofit consumes everything here.
++        val error = runCatching { response.body()!!.readLabelBytes() }.exceptionOrNull()
++        assertTrue(error is IllegalArgumentException); assertTrue(error!!.message!!.contains("16 МиБ"))
++        assertEquals(0L, body.bytesRead); assertTrue(body.closed)
++    }
++    @Test fun `unknown length overrun stops at limit plus small source buffer and closes`() {
++        val body = GeneratedLabelBody(MAX_LABEL_FILE_BYTES.toLong() * 2, -1)
++        val error = runCatching { body.readLabelBytes() }.exceptionOrNull()
++        assertTrue(error is IllegalArgumentException)
++        assertTrue(body.bytesRead <= MAX_LABEL_FILE_BYTES.toLong() + 8192)
++        assertTrue(body.bytesRead < body.total); assertTrue(body.closed)
++    }
++    @Test fun `exact boundary and small unknown length labels are accepted and closed`() {
++        for (size in listOf(7L, MAX_LABEL_FILE_BYTES.toLong())) {
++            val body = GeneratedLabelBody(size, -1)
++            assertEquals(size.toInt(), body.readLabelBytes().size)
++            assertEquals(size, body.bytesRead); assertTrue(body.closed)
++        }
++    }
++    @Test fun `stream failure closes label response`() {
++        val body = GeneratedLabelBody(100, -1, fail = true)
++        assertTrue(runCatching { body.readLabelBytes() }.exceptionOrNull() is java.io.IOException)
++        assertTrue(body.closed)
++    }
+     @Test fun `Ozon requests carry marketplace sort position and label reuse on the wire`() = runTest {
+         val server = MockWebServer(); server.start()
+         try {
+@@ -105,3 +139,23 @@ class FbsApiContractTest {
+         } finally { server.shutdown() }
+     }
+ }
++
++/** Generated stream: tests never allocate the full oversized server response. */
++internal class GeneratedLabelBody(val total: Long, private val declared: Long, private val fail: Boolean = false) : okhttp3.ResponseBody() {
++    var bytesRead = 0L
++    var closed = false
++    private val input = object : okio.Source {
++        private val chunk = ByteArray(8192)
++        override fun read(sink: okio.Buffer, byteCount: Long): Long {
++            if (fail) throw java.io.IOException("broken stream")
++            if (bytesRead == total) return -1
++            val count = minOf(byteCount, total - bytesRead, chunk.size.toLong()).toInt()
++            sink.write(chunk, 0, count); bytesRead += count; return count.toLong()
++        }
++        override fun timeout() = okio.Timeout.NONE
++        override fun close() { closed = true }
++    }.buffer()
++    override fun source(): okio.BufferedSource = input
++    override fun contentLength() = declared
++    override fun contentType() = "application/pdf".toMediaType()
++}
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+index d7576e3..0b00202 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+@@ -344,6 +344,7 @@ class FbsViewModelTest {
+         try {
+             every { Base64.encodeToString(any<ByteArray>(), Base64.NO_WRAP) } answers { java.util.Base64.getEncoder().encodeToString(firstArg()) }
+             val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.printOrders("", listOf("1"), 0, 0, true)
++            vm.state.first { !it.busy }
+             assertNull(vm.state.value.error)
+             assertNotNull(vm.state.value.printDocument)
+             coVerify(exactly = 0) { service.printTape(any(), any()) }
+@@ -395,6 +396,189 @@ class FbsViewModelTest {
+         assertNotNull(vm.state.value.error)
+         coVerify(exactly = 0) { service.assignOrders(any(), any(), any()) }
+     }
++    private fun staleBoxRecovery(recovery: String, failFirstRefresh: Boolean) = runTest {
++        for (marketplace in listOf("wb", "ozon")) for (initialBox in listOf("A", null)) {
++            val a = FbsBox("A", 1, "BOX-A"); val b = FbsBox("B", 2, "BOX-B")
++            val item = order("1", "2026-09-08T09:00:00Z").copy(marketplace = marketplace,
++                positions = listOf(FbsPosition(id = "p1", productId = "product", name = "Item", quantity = 2, pickedQuantity = 0, barcode = "4600000000001")))
++            val initial = workspace(listOf(item)).let { it.copy(supply = it.supply.copy(marketplace = marketplace), boxes = listOf(a)) }
++            val fresh = initial.copy(boxes = listOf(a, b))
++            val assigned = fresh.copy(boxes = listOf(a, if (marketplace == "wb") b.copy(assignedOrderIds = listOf("1")) else b.copy(assignedOrderProductIds = listOf("p1"))))
++            val delayed = kotlinx.coroutines.CompletableDeferred<Response<FbsWorkspace>>()
++            var reads = 0
++            coEvery { service.workspace("supply") } coAnswers {
++                when (reads++) { 0 -> Response.success(initial); 1 -> delayed.await(); else -> Response.success(fresh) }
++            }
++            val recipients = mutableListOf<String>()
++            coEvery { service.assignOrders("supply", capture(recipients), any()) } returns Response.success(assigned)
++            val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.selectBox(initialBox)
++            vm.scan("boxes", "BOX-B"); vm.scan("boxes", "4600000000001")
++            assertTrue(vm.state.value.busy)
++            delayed.complete(if (failFirstRefresh) Response.error(503, "temporarily unavailable".toResponseBody()) else Response.success(fresh))
++            if (failFirstRefresh) {
++                assertNotNull(vm.state.value.error)
++                // The consumer has already dequeued the product and is waiting on error.
++                vm.retry()
++            }
++            val staleMessage = vm.state.value.error
++            assertNotNull(staleMessage)
++            if (recovery.startsWith("rescan")) {
++                vm.scan("boxes", "BOX-B")
++                vm.scan("boxes", "4600000000001")
++            }
++            if (recovery.endsWith("retry")) vm.retry() else vm.dismissError()
++            assertEquals("$marketplace/$initialBox/$recovery", if (recovery.startsWith("rescan")) listOf("B") else emptyList<String>(), recipients)
++            assertNull(vm.state.value.error)
++            assertTrue(staleMessage!!.contains("ожидающих сканов"))
++            assertTrue(staleMessage.contains("1"))
++            // Only fresh scans after the explicit recovery may assign the product.
++            if (!recovery.startsWith("rescan")) {
++                vm.scan("boxes", "BOX-B"); vm.scan("boxes", "4600000000001")
++            }
++            assertEquals(listOf("B"), recipients)
++            assertNull(vm.state.value.error)
++        }
++    }
++    @Test fun `stale box close invalidates dependent products`() = staleBoxRecovery("close", false)
++    @Test fun `stale box retry invalidates dependent products`() = staleBoxRecovery("retry", false)
++    @Test fun `stale box rescan then close invalidates dependent products`() = staleBoxRecovery("rescan-close", false)
++    @Test fun `stale box rescan then retry invalidates dependent products`() = staleBoxRecovery("rescan-retry", false)
++    @Test fun `stale box discovered on retry close invalidates dequeued product`() = staleBoxRecovery("close", true)
++    @Test fun `stale box discovered on retry retry invalidates dequeued product`() = staleBoxRecovery("retry", true)
++    @Test fun `stale box discovered on retry rescan close invalidates dequeued product`() = staleBoxRecovery("rescan-close", true)
++    @Test fun `stale box discovered on retry rescan retry invalidates dequeued product`() = staleBoxRecovery("rescan-retry", true)
++
++    @Test fun `stale box invalidation counts duplicates and preserves pick mode and next supply`() = runTest {
++        val a = FbsBox("A", 1, "BOX-A"); val b = FbsBox("B", 2, "BOX-B")
++        val initial = workspace(listOf(order("1", "2026-09-08T09:00:00Z"))).copy(boxes = listOf(a))
++        val fresh = initial.copy(boxes = listOf(a, b))
++        val delayed = kotlinx.coroutines.CompletableDeferred<Response<FbsWorkspace>>()
++        var reads = 0
++        coEvery { service.workspace("supply") } coAnswers {
++            when (reads++) { 0 -> Response.success(initial); 1 -> delayed.await(); else -> Response.success(fresh) }
++        }
++        coEvery { service.scan("supply", match { it.barcode == "CELL" }, any()) } returns Response.success(FbsScanResult("container", locationId = "cell"))
++        coEvery { service.assignOrders("supply", any(), any()) } returns Response.success(fresh)
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.selectBox("A")
++        vm.scan("boxes", "BOX-B")
++        repeat(2) { vm.scan("boxes", "4600000000001") }
++        vm.scan("pick", "CELL")
++        delayed.complete(Response.success(fresh))
++        val message = vm.state.value.error!!
++        vm.dismissError()
++        coVerify(exactly = 0) { service.assignOrders("supply", any(), any()) }
++        coVerify(exactly = 1) { service.scan("supply", match { it.barcode == "CELL" }, any()) }
++        assertTrue(message.contains("ожидающих сканов")); assertTrue(message.contains("2"))
++        assertNull(vm.state.value.error)
++        assertNull(vm.state.value.selectedBoxId)
++        val other = initial.copy(supply = initial.supply.copy(id = "other"))
++        coEvery { service.workspace("other") } returns Response.success(other)
++        coEvery { service.assignOrders("other", "A", any()) } returns Response.success(other)
++        vm.loadSupply("other"); vm.selectBox("A"); vm.scan("boxes", "4600000000001")
++        coVerify(exactly = 1) { service.assignOrders("other", "A", AssignOrdersBody(listOf("1"))) }
++        assertNull(vm.state.value.error)
++    }
++
++    private fun precedingBoxScan(marketplace: String, initialBox: String?) = runTest {
++        val a = FbsBox("A", 1, "BOX-A"); val b = FbsBox("B", 2, "BOX-B")
++        val item = order("1", "2026-09-08T09:00:00Z").copy(marketplace = marketplace,
++            positions = listOf(FbsPosition(id = "p1", productId = "product", name = "Item", quantity = 2, pickedQuantity = 0, barcode = "4600000000001")))
++        val initial = workspace(listOf(item)).let { it.copy(supply = it.supply.copy(marketplace = marketplace), boxes = listOf(a, b)) }
++        val assigned = initial.copy(boxes = listOf(a, if (marketplace == "wb") b.copy(assignedOrderIds = listOf("1")) else b.copy(assignedOrderProductIds = listOf("p1"))))
++        val delayed = kotlinx.coroutines.CompletableDeferred<Response<FbsWorkspace>>()
++        var reads = 0
++        var actual = initial
++        coEvery { service.workspace("supply") } coAnswers {
++            if (reads++ == 1) delayed.await() else Response.success(actual)
++        }
++        val recipients = mutableListOf<String>()
++        coEvery { service.assignOrders("supply", capture(recipients), any()) } answers {
++            actual = assigned
++            throw IOException("reply lost after assignment")
++        }
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.selectBox(initialBox)
++        vm.scan("boxes", "BOX-B")
++        assertTrue(vm.state.value.busy) // B's refresh is still pending.
++        vm.scan("boxes", "4600000000001")
++        // A later manual choice must not redirect this already queued product,
++        // and completion of B's refresh must not overwrite that manual choice.
++        vm.selectBox("A")
++        delayed.complete(Response.success(initial))
++        assertEquals(listOf("B"), recipients)
++        assertEquals("A", vm.state.value.selectedBoxId)
++        assertNotNull(vm.state.value.error)
++        vm.retry()
++        assertNull(vm.state.value.error)
++        assertEquals(listOf("B"), recipients) // Existing assignment reconciles, never repeats.
++        assertEquals(assigned, vm.state.value.workspace)
++    }
++    @Test fun `preceding box scan WB initial A`() = precedingBoxScan("wb", "A")
++    @Test fun `preceding box scan WB initial none`() = precedingBoxScan("wb", null)
++    @Test fun `preceding box scan Ozon initial A`() = precedingBoxScan("ozon", "A")
++    @Test fun `preceding box scan Ozon initial none`() = precedingBoxScan("ozon", null)
++
++    @Test fun `box captured at scan survives delayed refresh selection change and lost response`() = runTest {
++        for (marketplace in listOf("wb", "ozon")) {
++            val a = FbsBox("A", 1, "BOX-A"); val b = FbsBox("B", 2, "BOX-B")
++            val item = order("1", "2026-09-08T09:00:00Z").copy(marketplace = marketplace,
++                positions = listOf(FbsPosition(id = "p1", productId = "product", name = "Item", quantity = 2, pickedQuantity = 0, barcode = "4600000000001")))
++            val initial = workspace(listOf(item)).let { it.copy(supply = it.supply.copy(marketplace = marketplace), boxes = listOf(a, b)) }
++            val updated = initial.copy(boxes = listOf(if (marketplace == "wb") a.copy(assignedOrderIds = listOf("1")) else a.copy(assignedOrderProductIds = listOf("p1")), b))
++            val delayed = kotlinx.coroutines.CompletableDeferred<Response<FbsWorkspace>>()
++            var reads = 0
++            coEvery { service.workspace("supply") } coAnswers {
++                when (reads++) { 0 -> Response.success(initial); 1 -> delayed.await(); else -> Response.success(updated) }
++            }
++            val bodies = mutableListOf<AssignOrdersBody>()
++            coEvery { service.assignOrders("supply", "A", capture(bodies)) } throws IOException("lost after success")
++            val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.selectBox("A")
++            vm.scan("boxes", "4600000000001")
++            assertTrue(vm.state.value.busy)
++            vm.selectBox("B")
++            delayed.complete(Response.success(initial))
++            assertNotNull(vm.state.value.error)
++            vm.retry()
++            assertNull(vm.state.value.error); assertEquals(updated, vm.state.value.workspace)
++            assertEquals(1, bodies.size)
++            coVerify(exactly = 0) { service.assignOrders("supply", "B", any()) }
++        }
++    }
++    @Test fun `queued box scan keeps selection from enqueue not from processing`() = runTest {
++        val initial = workspace(listOf(order("1", "2026-09-08T09:00:00Z"))).copy(boxes = listOf(FbsBox("A", 1, "BOX-A"), FbsBox("B", 2, "BOX-B")))
++        val delayed = kotlinx.coroutines.CompletableDeferred<Response<FbsWorkspace>>()
++        coEvery { service.workspace("supply") } returns Response.success(initial)
++        coEvery { service.prepareBoxLabel("supply", "A") } coAnswers { delayed.await() }
++        coEvery { service.assignOrders("supply", "A", any()) } returns Response.success(initial)
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.selectBox("A"); vm.prepareBoxLabel("A")
++        vm.scan("boxes", "4600000000001"); vm.selectBox("B")
++        delayed.complete(Response.success(initial))
++        coVerify(exactly = 1) { service.assignOrders("supply", "A", AssignOrdersBody(listOf("1"))) }
++        coVerify(exactly = 0) { service.assignOrders("supply", "B", any()) }
++    }
++    @Test fun `oversized label becomes readable error without decoding or preview`() = runTest {
++        val asset = FbsPrintAsset("a", "order_sticker", "ready", "application/pdf", "/operations/fbs-print-assets/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/content")
++        coEvery { service.workspace("supply") } returns Response.success(workspace(listOf(order("1", "2026-09-08T09:00:00Z"))))
++        coEvery { service.printAssets("supply", any()) } returns Response.success(FbsPrintBatch(listOf(asset)))
++        val body = GeneratedLabelBody(MAX_LABEL_FILE_BYTES.toLong() + 1, -1)
++        coEvery { service.asset(any()) } returns Response.success(body)
++        var decoded = false
++        val vm = FbsViewModel(provider) { decoded = true; emptyList() }
++        vm.loadSupply("supply"); vm.printOrders("", listOf("1"), 0, 0, true)
++        vm.state.first { !it.busy }
++        assertTrue(vm.state.value.error!!.contains("16 МиБ")); assertNull(vm.state.value.printDocument)
++        assertFalse(decoded); assertTrue(body.closed)
++    }
++    @Test fun `multi PDF batch keeps more than32pages rather than silently truncating`() = runTest {
++        val asset = FbsPrintAsset("a", "order_sticker", "ready", "application/pdf", "/operations/fbs-print-assets/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/content")
++        coEvery { service.workspace("supply") } returns Response.success(workspace(listOf(order("1", "2026-09-08T09:00:00Z"), order("2", "2026-09-08T10:00:00Z"))))
++        coEvery { service.printAssets("supply", any()) } returns Response.success(FbsPrintBatch(listOf(asset)))
++        coEvery { service.asset(any()) } answers { Response.success("%PDF-test".toResponseBody("application/pdf".toMediaType())) }
++        val vm = FbsViewModel(provider) { (1..32).map { "data:image/png;base64,page$it" } }
++        vm.loadSupply("supply"); vm.printOrders("", listOf("1", "2"), 0, 0, true)
++        vm.state.first { !it.busy }
++        assertNull(vm.state.value.error)
++        assertEquals(64, Regex("<section>").findAll(vm.state.value.printDocument!!).count())
++    }
+     @Test fun `lost box assignment response rereads exact target without assigning next matching order`() = runTest {
+         for (marketplace in listOf("wb", "ozon")) {
+             val box = FbsBox("box", 1, "BOX")

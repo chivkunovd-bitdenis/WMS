@@ -1,0 +1,21 @@
+{
+  "production_mobile_commit": "c9d27e16e992a52ae80b9f7127aad16967f1915d",
+  "exit_code": 1,
+  "suite": {
+    "name": "ru.wms.tsd.features.fbs.FbsViewModelTest",
+    "tests": "8",
+    "failures": "8",
+    "errors": "0",
+    "skipped": "0"
+  },
+  "cases": [
+    "stale box discovered on retry retry invalidates dequeued product",
+    "stale box close invalidates dependent products",
+    "stale box discovered on retry close invalidates dequeued product",
+    "stale box retry invalidates dependent products",
+    "stale box rescan then close invalidates dependent products",
+    "stale box discovered on retry rescan retry invalidates dequeued product",
+    "stale box discovered on retry rescan close invalidates dequeued product",
+    "stale box rescan then retry invalidates dependent products"
+  ]
+}
