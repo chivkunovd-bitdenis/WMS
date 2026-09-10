@@ -1057,6 +1057,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
 
   const openSupplyQrPrint = useCallback(async (supply: FbsSupplyWorklistItem) => {
     const supplyId = supply.id
+    const isOzon = supply.marketplace === 'ozon'
+    const supplyAssetLabel = isOzon ? 'Этикетка поставки' : 'QR поставки'
+    const cargoAssetsLabel = isOzon ? 'Этикетки коробов' : 'QR грузомест'
     setPrintingSupplyId(supplyId)
     setError(null)
     setNotice(null)
@@ -1079,7 +1082,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
         const refreshed = await retryFbsSupplyQr(token, authHeaders, supplyId)
         supplyAsset = refreshed.supply.barcode_asset
       } catch (cause) {
-        failures.push(cause instanceof Error ? cause.message : 'QR поставки не получен.')
+        failures.push(cause instanceof Error ? cause.message : `${supplyAssetLabel} не получена.`)
       }
     }
     try {
@@ -1089,7 +1092,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
         .map((place) => place.qr_asset)
         .filter((asset): asset is FbsPrintAsset => Boolean(asset))
     } catch (cause) {
-      failures.push(cause instanceof Error ? cause.message : 'QR грузомест не получены.')
+      failures.push(cause instanceof Error ? cause.message : `${cargoAssetsLabel} не получены.`)
     }
 
     const assets = [...new Map(
@@ -1111,10 +1114,14 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
     if (ready > 0) {
       setSupplyQrPreviewOpen(true)
       if (failures.length > 0) {
-        setSupplyQrWarning(`Часть QR не получена: ${failures.join(' · ')}`)
+        setSupplyQrWarning(`Часть этикеток не получена: ${failures.join(' · ')}`)
       }
     } else {
-      setError(failures.join(' · ') || 'WB не вернул готовые QR для этой поставки.')
+      setError(failures.join(' · ') || (
+        isOzon
+          ? 'Ozon не вернул готовые этикетки для этой поставки.'
+          : 'WB не вернул готовые QR для этой поставки.'
+      ))
     }
     setPrintingSupplyId(null)
     await load()
@@ -1481,13 +1488,17 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                       {supply.name}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      WB №{supply.wb_supply_id}
+                      {supply.marketplace === 'ozon' ? 'Ozon' : `WB №${supply.wb_supply_id}`}
                     </Typography>
                   </TableCell>
                   <TableCell>{supply.seller.name}</TableCell>
                   <TableCell>
                     <Typography variant="body2" sx={{ fontWeight: 650 }}>
-                      {supply.wb_warehouse.name || `WB ${supply.wb_warehouse.id}`}
+                      {supply.wb_warehouse.name || (
+                        supply.marketplace === 'ozon'
+                          ? 'Склад Ozon'
+                          : `WB ${supply.wb_warehouse.id}`
+                      )}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       WMS: {supply.wms_warehouse.name}
@@ -1516,7 +1527,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                       onClick={() => void openSupplyQrPrint(supply)}
                       data-testid={`fbs-supply-qr-print-${supply.id}`}
                     >
-                      QR
+                      {supply.marketplace === 'ozon' ? 'Этикетки коробов' : 'QR'}
                     </Button>
                   </TableCell>
                 </TableRow>

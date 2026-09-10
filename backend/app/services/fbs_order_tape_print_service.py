@@ -275,8 +275,8 @@ async def print_fbs_order_tape(
                 )
                 continue
             if reprint:
-                for marking in ozon_markings:
-                    code = marking.marking_code
+                for ozon_marking in ozon_markings:
+                    code = ozon_marking.marking_code
                     assert code is not None
                     await mc_svc.record_event(
                         session,
@@ -294,19 +294,19 @@ async def print_fbs_order_tape(
                     requires_honest_sign=True,
                     qr_asset_id=qr_asset_id,
                     codes=[
-                        marking.marking_code.cis_code
-                        for marking in ozon_markings
-                        if marking.marking_code is not None
+                        ozon_marking.marking_code.cis_code
+                        for ozon_marking in ozon_markings
+                        if ozon_marking.marking_code is not None
                     ],
                     printed_codes=[
                         FbsOrderTapePrintedCode(
-                            id=marking.marking_code.id,
-                            cis_code=marking.marking_code.cis_code,
-                            has_label_artifact=bool(marking.marking_code.label_artifact_pdf),
-                            order_product_id=marking.order_product_id,
+                            id=ozon_marking.marking_code.id,
+                            cis_code=ozon_marking.marking_code.cis_code,
+                            has_label_artifact=bool(ozon_marking.marking_code.label_artifact_pdf),
+                            order_product_id=ozon_marking.order_product_id,
                         )
-                        for marking in ozon_markings
-                        if marking.marking_code is not None
+                        for ozon_marking in ozon_markings
+                        if ozon_marking.marking_code is not None
                     ],
                 )
             )
@@ -456,13 +456,15 @@ async def print_fbs_order_tape(
     await session.commit()
     failed_ids: set[uuid.UUID] = set()
     for order_id, marking_id in bindings_to_send.items():
-        order = await session.scalar(select(FbsOrder).where(
-            FbsOrder.tenant_id == tenant_id, FbsOrder.id == order_id,
-        ).options(
-                        selectinload(FbsOrder.markings).selectinload(
-                            FbsOrderMarking.marking_code
-                        ),
-        ).with_for_update().execution_options(populate_existing=True))
+        order = await session.scalar(
+            select(FbsOrder)
+            .where(FbsOrder.tenant_id == tenant_id, FbsOrder.id == order_id)
+            .options(
+                selectinload(FbsOrder.markings).selectinload(FbsOrderMarking.marking_code),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         if order is None:
             continue
         try:
@@ -732,7 +734,9 @@ def _active_ozon_sgtin_markings(order: FbsOrder) -> list[FbsOrderMarking]:
     return sorted(
         markings,
         key=lambda marking: (
-            position_index[marking.order_product_id],
+            position_index[marking.order_product_id]
+            if marking.order_product_id is not None
+            else -1,
             str(getattr(marking, "created_at", "")),
             str(marking.id),
         ),

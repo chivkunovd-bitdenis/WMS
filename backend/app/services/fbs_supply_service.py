@@ -1374,7 +1374,7 @@ async def list_supply_worklist(
         .options(
             selectinload(FbsSupply.seller),
             selectinload(FbsSupply.warehouse),
-            selectinload(FbsSupply.orders),
+            selectinload(FbsSupply.orders).selectinload(FbsOrder.product_positions),
         )
         .where(FbsSupply.tenant_id == tenant_id, FbsSupply.status.in_(statuses))
         .order_by(FbsSupply.updated_at.desc(), FbsSupply.id.desc())
@@ -1448,6 +1448,11 @@ async def list_supply_worklist(
         wb_id = (
             int(first_order.wb_warehouse_id) if first_order and first_order.wb_warehouse_id else 0
         )
+        units_count = (
+            sum(position.quantity for order in orders for position in order.product_positions)
+            if supply.marketplace == "ozon"
+            else len(orders)
+        )
         items.append(
             {
                 "id": str(supply.id),
@@ -1468,7 +1473,7 @@ async def list_supply_worklist(
                     "name": supply.warehouse.name if supply.warehouse else "Склад не найден",
                 },
                 "orders_count": len(orders),
-                "units_count": len(orders),
+                "units_count": units_count,
                 # A PVZ cargo place may already exist in WB before WMS has a
                 # local physical packing box. Show the greater count without
                 # double-counting linked representations of the same boxes.
