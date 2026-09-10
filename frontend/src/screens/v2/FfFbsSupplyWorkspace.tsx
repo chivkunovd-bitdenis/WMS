@@ -1155,8 +1155,10 @@ export function FfFbsSupplyWorkspace({
   const openBulkOrderMarkingPrint = (orders: Array<FbsWorkspace['orders'][number]>, reprint = false) => {
     if (!workspace || orders.length === 0) return
     const firstOrder = orders[0]
-    const firstLine = firstOrder?.product.id ? packLineByProduct.get(firstOrder.product.id) : undefined
-    if (!firstOrder || !firstOrder.product.id) return
+    const firstProductId = firstOrder?.product.id
+      ?? (isOzonSupply ? firstOrder?.positions.find((position) => position.product_id)?.product_id : null)
+    const firstLine = firstProductId ? packLineByProduct.get(firstProductId) : undefined
+    if (!firstOrder || !firstProductId) return
     const firstOzonPosition = isOzonSupply ? firstOrder.positions[0] : undefined
     const anyHonestSign = orders.some(requiresOrderHonestSign)
     const tapeOrders = orders.map((order) => ({
@@ -1170,7 +1172,7 @@ export function FfFbsSupplyWorkspace({
     openPrint(
       {
         token,
-        productId: firstOrder.product.id,
+        productId: firstProductId,
         sellerId: workspace.supply.seller.id,
         documentNumber: workspace.supply.name,
         qtyNeedPack: anyHonestSign ? tapeOrders.filter((order) => order.requiresHonestSign).length : tapeOrders.length,
@@ -1241,13 +1243,17 @@ export function FfFbsSupplyWorkspace({
 
   /** Печать ЧЗ и ШК заказа через стандартный конструктор системы. */
   const openOrderMarkingPrint = (order: FbsWorkspace['orders'][number], line?: PackagingTaskLine, reprint = false) => {
-    if (!workspace || !order.product.id) return
+    const productId = order.product.id
+      ?? (workspace?.supply.marketplace === 'ozon'
+        ? order.positions.find((position) => position.product_id)?.product_id
+        : null)
+    if (!workspace || !productId) return
     const ozonPosition = workspace.supply.marketplace === 'ozon' ? order.positions[0] : undefined
     openPrint(
       {
         token,
         lineId: line?.id,
-        productId: order.product.id,
+        productId,
         sellerId: workspace?.supply.seller.id,
         documentNumber: workspace?.supply.name ?? null,
         qtyNeedPack: requiresOrderHonestSign(order) ? 1 : 0,
@@ -2331,12 +2337,12 @@ export function FfFbsSupplyWorkspace({
                                 QR
                               </Button>
                             ) : null}
-                            <IconButton size="small" disabled={busy || !order.product.id} onClick={() => openOrderMarkingPrint(order, line)} aria-label="Печать ЧЗ и ШК" data-task-id="FBS-10">
+                            <IconButton size="small" disabled={busy || (!order.product.id && !(isOzonSupply && order.positions.some((position) => position.product_id)))} onClick={() => openOrderMarkingPrint(order, line)} aria-label="Печать ЧЗ и ШК" data-task-id="FBS-10">
                               <PrintOutlinedIcon fontSize="small" />
                             </IconButton>
                             <IconButton
                               size="small"
-                              disabled={busy || !order.product.id}
+                              disabled={busy || (!order.product.id && !(isOzonSupply && order.positions.some((position) => position.product_id)))}
                               onClick={(event: MouseEvent<HTMLElement>) => setReprintMenu({ orderId: order.id, anchorEl: event.currentTarget })}
                               aria-label="Перепечатать"
                               data-task-id="FBS-11"

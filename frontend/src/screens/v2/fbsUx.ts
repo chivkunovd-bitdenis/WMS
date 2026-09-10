@@ -226,7 +226,7 @@ export type FbsPickingListPrintRow = {
 
 export type FbsPickingListPrintInput = {
   supplyName: string
-  wbSupplyId: string
+  wbSupplyId: string | null
   sellerName: string
   wmsWarehouseName: string
   routeLabel: string
@@ -321,7 +321,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
   </head>
   <body>
     <h1>Лист подбора FBS</h1>
-    <div class="subtitle">${escapePrintHtml(input.supplyName)} · № WB ${escapePrintHtml(input.wbSupplyId)}</div>
+    <div class="subtitle">${escapePrintHtml(input.supplyName)}${input.wbSupplyId ? ` · № WB ${escapePrintHtml(input.wbSupplyId)}` : ''}</div>
     <div class="meta">
       <div><span>Селлер</span><strong>${escapePrintHtml(input.sellerName)}</strong></div>
       <div><span>Склад WMS</span><strong>${escapePrintHtml(input.wmsWarehouseName)}</strong></div>

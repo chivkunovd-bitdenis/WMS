@@ -912,6 +912,14 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   hasLabelArtifact: code.has_label_artifact,
                   productLabel: productLabelForPrintedFbsCode(order, code),
                 }))
+                for (const unit of units) {
+                  const barcodeError = resolveProductTapeBarcodeError(
+                    [],
+                    unit.productLabel?.barcode,
+                    printLayout,
+                  )
+                  if (barcodeError) throw new Error(barcodeError)
+                }
                 orderSections.push(
                   ...(await buildMarkingTapeSections(
                     units,
