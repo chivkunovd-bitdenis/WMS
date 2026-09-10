@@ -318,7 +318,7 @@ function productLabelsFromOrder(
     return [{ productLabel: productLabelFromOrder(order, marketplace), copies: 1 }]
   }
   return order.positions.map((position) => ({
-    positionId: position.id,
+    positionId: position.id ?? undefined,
     productLabel: productLabelFromPosition(order, position, marketplace),
     copies: Math.max(1, position.quantity),
   }))
@@ -1375,31 +1375,55 @@ export function FfFbsSupplyWorkspace({
       nearestDeadline: string
     }>()
     for (const order of fullTapeOrders) {
-      const key = order.product.id ?? `unmapped-${order.id}`
-      const current = grouped.get(key) ?? {
-        key,
-        name: order.product.name,
-        size: order.product.size,
-        imageUrl: order.product.image_url,
-        identifiers: [order.product.seller_article, order.product.wb_article ? `WB ${order.product.wb_article}` : null, order.product.barcode].filter((value): value is string => Boolean(value)),
-        locations: [],
-        required: 0,
-        picked: 0,
-        wbOrders: [],
-        stickerCodes: [],
-        marking: order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется',
-        nearestDeadline: order.deadline_at,
+      const rows = isOzonSupply
+        ? order.positions.map((position) => ({
+          key: position.product_id ?? position.id ?? `unmapped-${order.id}`,
+          name: position.name,
+          size: null,
+          imageUrl: position.image_url ?? null,
+          identifiers: [
+            position.seller_article,
+            position.sku ? `SKU ${position.sku}` : null,
+            productBarcodeOptionsForPosition(position, 'ozon')[0]?.barcode,
+          ].filter((value): value is string => Boolean(value)),
+          required: position.quantity,
+          picked: position.picked_quantity,
+        }))
+        : [{
+          key: order.product.id ?? `unmapped-${order.id}`,
+          name: order.product.name,
+          size: order.product.size,
+          imageUrl: order.product.image_url,
+          identifiers: [
+            order.product.seller_article,
+            order.product.wb_article ? `WB ${order.product.wb_article}` : null,
+            order.product.barcode,
+          ].filter((value): value is string => Boolean(value)),
+          required: 1,
+          picked: order.pick.status === 'picked' ? 1 : 0,
+        }]
+      for (const row of rows) {
+        const current = grouped.get(row.key) ?? {
+          ...row,
+          locations: [],
+          required: 0,
+          picked: 0,
+          wbOrders: [],
+          stickerCodes: [],
+          marking: order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется',
+          nearestDeadline: order.deadline_at,
+        }
+        current.required += row.required
+        current.picked += row.picked
+        current.wbOrders.push(order.wb_order_id)
+        current.stickerCodes.push(order.sticker.code)
+        const locations = order.inventory.locations
+          .filter((location) => location.available_unpacked > 0)
+          .map((location) => `${location.code}: ${location.available_unpacked}`)
+        current.locations = [...new Set([...current.locations, ...locations])]
+        if (new Date(order.deadline_at).getTime() < new Date(current.nearestDeadline).getTime()) current.nearestDeadline = order.deadline_at
+        grouped.set(row.key, current)
       }
-      current.required += 1
-      if (order.pick.status === 'picked') current.picked += 1
-      current.wbOrders.push(order.wb_order_id)
-      current.stickerCodes.push(order.sticker.code)
-      const locations = order.inventory.locations
-        .filter((location) => location.available_unpacked > 0)
-        .map((location) => `${location.code}: ${location.available_unpacked}`)
-      current.locations = [...new Set([...current.locations, ...locations])]
-      if (new Date(order.deadline_at).getTime() < new Date(current.nearestDeadline).getTime()) current.nearestDeadline = order.deadline_at
-      grouped.set(key, current)
     }
     return [...grouped.values()]
   }, [fullTapeOrders, workspace])
@@ -2132,12 +2156,9 @@ export function FfFbsSupplyWorkspace({
                       const markingShortage = needsHonestSign && markingAvailable < markingNeeded
                       const mutedColor = printed ? 'text.secondary' : 'text.primary'
                       const kizRowActive = kizScanActive?.order_id === order.id
-                      const ozonPosition = isOzonSupply ? order.positions[0] : undefined
+                      const ozonPositions = isOzonSupply ? order.positions : []
                       const ids = (isOzonSupply
                         ? [
-                          ozonPosition?.seller_article,
-                          ozonPosition?.sku ? `SKU ${ozonPosition.sku}` : null,
-                          productBarcodeOptionsForOrder(order, 'ozon')[0]?.barcode,
                           `отправление Ozon ${order.external_order_id ?? '—'}`,
                         ]
                         : [
@@ -2200,13 +2221,30 @@ export function FfFbsSupplyWorkspace({
                           />
                           <ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={40} previewSize={280} />
                           <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 700, color: mutedColor }}>
-                              {ozonPosition?.name ?? order.product.name}
-                            </Typography>
-                            <Typography variant="caption" sx={{ display: 'block', color: printed ? 'text.secondary' : 'text.secondary' }}>
-                              {ids}
-                              {markingShortOrderIds.has(order.id) ? <Box component="span" sx={{ color: 'error.main' }}> · ЧЗ не хватило</Box> : null}
-                            </Typography>
+                            {isOzonSupply ? (
+                              <Stack spacing={0.5}>
+                                {ozonPositions.map((position) => (
+                                  <Box key={position.id ?? position.product_id ?? position.name}>
+                                    <Typography variant="body2" sx={{ fontWeight: 700, color: mutedColor }}>
+                                      {position.name}
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                                      {[position.seller_article, position.sku ? `SKU ${position.sku}` : null, productBarcodeOptionsForPosition(position, 'ozon')[0]?.barcode, ids]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                    </Typography>
+                                  </Box>
+                                ))}
+                              </Stack>
+                            ) : <>
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: mutedColor }}>
+                                {order.product.name}
+                              </Typography>
+                              <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                                {ids}
+                              </Typography>
+                            </>}
+                            {markingShortOrderIds.has(order.id) ? <Typography variant="caption" sx={{ display: 'block', color: 'error.main' }}>ЧЗ не хватило</Typography> : null}
                             {markingView.label ? (
                               <Typography variant="caption" sx={{ display: 'block', color: markingColor }} data-testid="fbs-packing-marking-status">
                                 {markingView.tone === 'error' ? (
