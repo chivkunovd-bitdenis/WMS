@@ -230,3 +230,10 @@ Mobile PID12345 завершился; safe-result прочитан, отчёт50
 Новая волна read-only review: PID14692/thread01a08a2d-43fc-7060-82f1-f308ad0e6b31 wms056-audit-trail проверяетa40+cbe4cdf1(printOrder→Asset,старыйPG40P01/новыйPASS); PID14693/thread01a0885c-a939-7123-9856-8f57b5ddff0f wms397-chat-mvp проверяет655b566d recovery/delete/links. ОбаCLIastra6high. Writers10727/13066/12345 отсутствуют, не дублировать новые review. Координатор готовит отдельный Ozon release58373def, mergeс077,33scopedPASS. Передследующимresumeпроверятьps.
 
 CUA browser local FBS nested close: dismiss подтвердил сохранение ввода1, accept завис на Emulation.setFocusEmulationEnabled, результат закрытия НЕ доказан. ПослеgetTabtimeoutkernelreset; nativeChrome оказался не задачным контуром, его не трогать. Не выдавать API/code за UI; независимая работа продолжается. Внешнийroot владеет418;111112freezeнеизменён.
+
+
+### Волна 11:44 МСК
+
+Review14692 ACCEPTa40+cbe: coordc771af4f/94aeafe4/940f3734/8f500ec7 pushed. Координатор самостоятельно21PGtestsPASS13.93s вновойсинтетическойwms415_review325_20260910 (неfixtureUI). AuditwriterPID15731, прежнийthread01a08a4d-bce6-7180-9ebd-79ce79ecbc45, own inbound/MP servicesиapi/inbounddamaged +scopedtests/report; неstock/chat/catalog418. Review14693отклонилchat655по2P2 (selectedCacheиmissingfileпослеfailedcommit). ChatwriterPID15908 прежнийthread01a08850-7ad7-74d1-a817-cd06b28e2bb5 исправляет2P2иintegrationpatch; егоFfFbsOrdersScreendeep-linkdeltaэксклюзивен. Coord655ещёнеcherry-picked.
+
+ТретийPID15150/thread01a08a79-33d4-7cc1-a0e4-45cd09facf2b read-onlywms121-supply-identity выясняетминимальнуюstableWBcabinetidentityпоофициальнымdocsисуществующимполям,безключей/liveAPI/автодедупа/новыхсущностей. Старый14e637cc/d164/f5сохранённепринятнеприменён. OzonPR214 head4f43e6bc,CI34456316470:backlog/frontendPASS,backendидёт. Толькодвеservices,необщийcandidate. Все3CLIastra6high;передresumeps. Каноническийcheckpointобновлён. Неостанавливатьнезависимыесрезыиззаbrowser/122.
