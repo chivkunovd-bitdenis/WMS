@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-09-10T22:17:10.023084+00:00",
+  "updated_at_utc": "2026-09-10T22:23:05.365882+00:00",
   "phase": "PARALLEL_IMPLEMENTATION",
   "release_branch": "codex/wms-release-20260911",
   "base_sha": "dcac6251bb7defc9fa6c3e3b1a4dbc35555ae382",
@@ -57,11 +57,27 @@
         402,
         397,
         399
-      ]
+      ],
+      "running_cli": {
+        "storage": {
+          "pid": 78641,
+          "session": "68d76698-3050-4316-a111-8092a48401ca"
+        },
+        "print": {
+          "pid": 78637,
+          "session": "012630d7-baa5-4447-b2d9-5e10251c0212"
+        },
+        "chat": {
+          "pid": 78638,
+          "session": "e919290b-292a-48d0-890d-9bece04c9012"
+        }
+      }
     }
   },
   "external_inputs": {
-    "printer_hardware": "Asked owner OS/model/USB or network; awaiting text answer"
+    "printer_hardware": "Asked owner OS/model/USB or network; awaiting text answer",
+    "dadata": "Production key absent; stage live lookup passed; requested separate permission to transfer existing configuration",
+    "cz": "Live public check unavailable; production has no saved True API authorization; seller/live sample pending"
   },
   "prohibitions": [
     "No production chat",
@@ -70,5 +86,14 @@
     "No live operator document mutation for QA",
     "No new FBS navigation blockers",
     "No new frontend beyond explicit scope"
-  ]
+  ],
+  "apk": {
+    "versionCode": 11,
+    "asset_uploaded": true,
+    "download_sha256_verified": "8435c3abcd240afbaadb95e157512d52a56c105fd73440e6991933741237a81f",
+    "manifest_published": false,
+    "source_record_sha": "4b1a70c6a17a62a268cf92767933d02e36f1d949",
+    "url": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/WMS-TSD-0.1.10-8435c3abcd24-debug.apk"
+  },
+  "production_observed_sha": "9ee4e7fc31af3be21fd1fb282e06d02a03139dd3"
 }
