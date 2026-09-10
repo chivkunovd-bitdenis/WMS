@@ -318,6 +318,7 @@ function productLabelsFromOrder(
     return [{ productLabel: productLabelFromOrder(order, marketplace), copies: 1 }]
   }
   return order.positions.map((position) => ({
+    positionId: position.id,
     productLabel: productLabelFromPosition(order, position, marketplace),
     copies: Math.max(1, position.quantity),
   }))
@@ -1161,6 +1162,7 @@ export function FfFbsSupplyWorkspace({
     const tapeOrders = orders.map((order) => ({
       orderId: order.id,
       wbOrderId: order.wb_order_id,
+      marketplace: workspace.supply.marketplace,
       requiresHonestSign: requiresOrderHonestSign(order),
       productLabel: productLabelFromOrder(order, workspace.supply.marketplace),
       productLabels: productLabelsFromOrder(order, workspace.supply.marketplace),
@@ -1262,6 +1264,7 @@ export function FfFbsSupplyWorkspace({
           orders: [{
             orderId: order.id,
             wbOrderId: order.wb_order_id,
+            marketplace: workspace.supply.marketplace,
             requiresHonestSign: requiresOrderHonestSign(order),
             productLabel: productLabelFromOrder(order, workspace.supply.marketplace),
             productLabels: productLabelsFromOrder(order, workspace.supply.marketplace),
