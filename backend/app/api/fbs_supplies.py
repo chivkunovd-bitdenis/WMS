@@ -211,8 +211,10 @@ class FbsPickOptionLocationOut(BaseModel):
 
 class FbsPickOptionProductOut(BaseModel):
     product_id: str
-    sku_code: str
+    sku_code: str | None
     product_name: str
+    seller_article: str | None
+    barcode: str | None
     planned_qty: int
     picked_qty: int
     locations: list[FbsPickOptionLocationOut]
@@ -1257,6 +1259,8 @@ async def get_fbs_supply_pick_options(
             product_id=str(option.product_id),
             sku_code=option.sku_code,
             product_name=option.product_name,
+            seller_article=option.seller_article,
+            barcode=option.barcode,
             planned_qty=option.planned_qty,
             picked_qty=option.picked_qty,
             locations=[
