@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
+from app.models.document_event import DOCUMENT_TYPE_MARKING_POOL, EVENT_DATA_CHANGED
 from app.models.marking_code import (
     EVENT_APPLIED,
     EVENT_DEFECTIVE,
@@ -58,6 +59,7 @@ from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.services.catalog_service import get_product
+from app.services.document_event_service import record_document_mutation
 from app.services.document_number_service import (
     DOC_TYPE_MARKING_IMPORT,
     assign_document_number_if_missing,
@@ -869,7 +871,41 @@ async def set_pool_products(
     pool_id: uuid.UUID,
     product_ids: list[uuid.UUID],
 ) -> PoolProductsResult:
+    # Parent first: serialize replacements and prevent new FK links while reading
+    # the set. Existing links are locked before taking their before snapshot.
+    pool = await session.scalar(
+        select(MarkingPool)
+        .where(MarkingPool.tenant_id == tenant_id, MarkingPool.id == pool_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if pool is None:
+        raise MarkingCodeServiceError("pool_not_found")
+    links = list(
+        (
+            await session.scalars(
+                select(MarkingPoolProduct)
+                .where(
+                    MarkingPoolProduct.tenant_id == tenant_id, MarkingPoolProduct.pool_id == pool_id
+                )
+                .order_by(MarkingPoolProduct.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).all()
+    )
+    before: dict[str, object] = {"product_ids": sorted(str(link.product_id) for link in links)}
     await _apply_pool_products(session, tenant_id, pool_id, product_ids)
+    await session.flush()
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_MARKING_POOL,
+        document_id=pool_id,
+        event_type=EVENT_DATA_CHANGED,
+        before=before,
+        after={"product_ids": sorted({str(value) for value in product_ids})},
+    )
     await session.commit()
     return await _pool_products_result(session, tenant_id, pool_id)
 
@@ -2403,13 +2439,36 @@ async def set_pool_threshold(
     low_stock_threshold: int | None,
     forecast_days_threshold: int | None,
 ) -> MarkingPool:
-    pool = await _get_pool_or_error(session, tenant_id, pool_id)
+    pool = await session.scalar(
+        select(MarkingPool)
+        .where(MarkingPool.tenant_id == tenant_id, MarkingPool.id == pool_id)
+        .with_for_update(key_share=True)
+        .execution_options(populate_existing=True)
+    )
+    if pool is None:
+        raise MarkingCodeServiceError("pool_not_found")
+    before: dict[str, object] = {
+        "low_stock_threshold": pool.low_stock_threshold,
+        "forecast_days_threshold": pool.forecast_days_threshold,
+    }
     if low_stock_threshold is not None and low_stock_threshold < 0:
         raise MarkingCodeServiceError("invalid_threshold")
     if forecast_days_threshold is not None and forecast_days_threshold < 0:
         raise MarkingCodeServiceError("invalid_threshold")
     pool.low_stock_threshold = low_stock_threshold
     pool.forecast_days_threshold = forecast_days_threshold
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_MARKING_POOL,
+        document_id=pool_id,
+        event_type=EVENT_DATA_CHANGED,
+        before=before,
+        after={
+            "low_stock_threshold": pool.low_stock_threshold,
+            "forecast_days_threshold": pool.forecast_days_threshold,
+        },
+    )
     await session.commit()
     await session.refresh(pool)
     return pool
