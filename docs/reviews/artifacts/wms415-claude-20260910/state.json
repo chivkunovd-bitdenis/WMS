@@ -1,5 +1,5 @@
 {
-  "phase": "astra_takeover_active",
+  "phase": "astra_resumed_owner_authorized",
   "quota_session_id": "5ed12390-4d22-4b83-b183-114202609010",
   "quota_tool_pty": 75581,
   "last_weekly_used_percent": 85,
@@ -10,7 +10,7 @@
   "automation_id": "wms-claude",
   "quota_minutes": 10,
   "progress_minutes": 20,
-  "coordinator_pid": 75014,
+  "coordinator_pid": 85504,
   "quota_pid": 61235,
   "coordinator_checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord",
   "coordinator_branch": "codex/wms415-coord-20260910",
@@ -45,7 +45,7 @@
   "coordinator_provider": "codex",
   "coordinator_model": "gpt-6-astra",
   "coordinator_effort": "high",
-  "coordinator_events": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/events.jsonl",
+  "coordinator_events": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/resume-events.jsonl",
   "claude_coordinator_stopped": true,
   "claude_coordinator_session_id": "2a1f478a-9d10-48fe-b183-114202609010",
   "claude_session_used_percent": 100,
@@ -75,5 +75,9 @@
       "thread_id": "01a0884d-9d82-7f41-a45a-91123f9ea9d8"
     }
   },
-  "astra_wave1_directory": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/wave1"
+  "astra_wave1_directory": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/wave1",
+  "owner_authorized_resume": true,
+  "required_claude_model": "Opus 5",
+  "opus5_availability": "not shown in installed CLI model selector; verify exact availability without fallback",
+  "last_resume_utc": "2026-09-10T05:47:35.559884+00:00"
 }
