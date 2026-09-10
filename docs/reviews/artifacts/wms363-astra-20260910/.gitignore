@@ -1,0 +1,7 @@
+*.sqlite*
+*.apk
+fixture-data/
+__pycache__/
+*.log
+login.png
+before.png

@@ -1,0 +1,9 @@
+{
+  "versionCode": 10,
+  "versionName": "0.1.9-ozon-tsd",
+  "apkUrl": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/WMS-TSD-0.1.9-ea2da968b021-debug.apk",
+  "sha256": "ea2da968b021b434528d45662e599c31b33742f16d20b544d3e7559b73f38e6a",
+  "sizeBytes": 45622046,
+  "minSdk": 24,
+  "notes": "WMS-363/401: выбор WB/Ozon, позиции и этикетки Ozon, последовательность заказов по времени поступления."
+}

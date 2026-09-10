@@ -340,6 +340,7 @@ class FbsWorklistBlockerOut(BaseModel):
 
 class FbsWorklistPositionOut(BaseModel):
     id: str
+    barcode: str | None = None
     image_url: str | None = None
     product_id: str | None
     name: str
@@ -532,6 +533,7 @@ async def get_fbs_orders_worklist(
     search: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     cursor: Annotated[str | None, Query()] = None,
+    sort: Annotated[Literal["deadline", "oldest"], Query()] = "deadline",
 ) -> FbsWorklistPageOut:
     filter_seller = seller_id if seller_id is not None else effective_seller_id
     if filter_seller is not None:
@@ -549,6 +551,7 @@ async def get_fbs_orders_worklist(
             search=search,
             limit=limit,
             cursor=cursor,
+            sort=sort,
         )
     except ValueError as exc:
         code = str(exc)

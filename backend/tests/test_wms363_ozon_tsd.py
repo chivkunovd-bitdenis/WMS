@@ -1,18 +1,7 @@
-"""WMS-363: TSD может фильтровать заказы/поставки по маркетплейсу.
+"""WMS-363/401: marketplace filtering, Ozon positions and oldest pagination.
 
-До WMS-363 в TSD-путях (`fbs_orders`, `fbs_kiz`, `fbs_supplies`) значение
-`marketplace = "wb"` хардкодилось: клиент не мог явно попросить Ozon, а сервер
-без параметра возвращал смешанный список. Здесь мы проверяем поведение GET-эндпоинтов:
-
-* `GET /operations/fbs-orders` без параметра — возвращает и WB, и Ozon (обратная
-  совместимость с TSD 0.1.8, который поле не слал);
-* `GET /operations/fbs-orders?marketplace=ozon` — только Ozon;
-* `GET /operations/fbs-orders?marketplace=wb` — только WB;
-* `GET /operations/fbs-orders?marketplace=??` — 422 (Pydantic Query pattern);
-* `GET /operations/fbs-supplies/worklist?marketplace=ozon` — Ozon-only и в подгруппе.
-
-Никаких новых таблиц, счётчиков или колонок не добавлено (правило про
-антиоверинжиниринг): фильтрация построена на существующем поле FbsOrder.marketplace.
+Exercises public HTTP responses in isolated tenants. The mobile client uses
+/worklist; the legacy list retains its default of returning both marketplaces.
 """
 
 from __future__ import annotations
@@ -62,9 +51,7 @@ async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str],
 async def _create_seller_and_warehouse(
     async_client: AsyncClient, headers: dict[str, str], suffix: str
 ) -> tuple[uuid.UUID, uuid.UUID]:
-    seller = await async_client.post(
-        "/sellers", headers=headers, json={"name": f"Seller {suffix}"}
-    )
+    seller = await async_client.post("/sellers", headers=headers, json={"name": f"Seller {suffix}"})
     assert seller.status_code in (200, 201), seller.text
     warehouse = await async_client.post(
         "/warehouses",
@@ -189,9 +176,7 @@ async def test_get_fbs_orders_marketplace_ozon_filter(async_client: AsyncClient)
     """`?marketplace=ozon` возвращает только Ozon-заказы."""
     headers, _tenant, _seller, _wb_id, ozon_id = await _seed_wb_and_ozon(async_client)
 
-    resp = await async_client.get(
-        "/operations/fbs-orders?marketplace=ozon", headers=headers
-    )
+    resp = await async_client.get("/operations/fbs-orders?marketplace=ozon", headers=headers)
     assert resp.status_code == 200, resp.text
     rows = resp.json()
     assert [row["id"] for row in rows] == [str(ozon_id)]
@@ -205,9 +190,7 @@ async def test_get_fbs_orders_marketplace_wb_filter(async_client: AsyncClient) -
     """`?marketplace=wb` возвращает только WB-заказы (симметрия к Ozon)."""
     headers, _tenant, _seller, wb_id, _ozon_id = await _seed_wb_and_ozon(async_client)
 
-    resp = await async_client.get(
-        "/operations/fbs-orders?marketplace=wb", headers=headers
-    )
+    resp = await async_client.get("/operations/fbs-orders?marketplace=wb", headers=headers)
     assert resp.status_code == 200, resp.text
     rows = resp.json()
     assert [row["id"] for row in rows] == [str(wb_id)]
@@ -220,9 +203,7 @@ async def test_get_fbs_orders_marketplace_unknown_422(async_client: AsyncClient)
     """Незнакомый маркетплейс отсекается на входе (Query pattern), а не в рантайме."""
     headers, _tenant, _seller, _wb_id, _ozon_id = await _seed_wb_and_ozon(async_client)
 
-    resp = await async_client.get(
-        "/operations/fbs-orders?marketplace=amazon", headers=headers
-    )
+    resp = await async_client.get("/operations/fbs-orders?marketplace=amazon", headers=headers)
     assert resp.status_code == 422, resp.text
 
 
@@ -279,3 +260,82 @@ async def test_response_marketplace_field_uses_literal(async_client: AsyncClient
     assert resp.status_code == 200, resp.text
     for row in resp.json():
         _assert_response_marketplace_literal_enforced(row)
+
+
+@pytest.mark.asyncio
+async def test_mobile_worklist_oldest_paginates_before_deadline_and_scopes_tenant(
+    async_client: AsyncClient,
+) -> None:
+    from app.models.fbs_order import FbsOrderProduct
+    from app.models.product import Product
+
+    headers, tenant, seller, _, ozon_id = await _seed_wb_and_ozon(async_client)
+    # Another tenant's otherwise matching posting must not appear.
+    _, _, _, _, foreign_id = await _seed_wb_and_ozon(async_client)
+    async with SessionLocal() as session:
+        first = await session.get(FbsOrder, ozon_id)
+        assert first is not None and first.warehouse_id is not None
+        warehouse = first.warehouse_id
+        first.created_at_wb = datetime.now(UTC) - timedelta(days=2)
+        first.deadline_at = datetime.now(UTC) + timedelta(days=2)
+        product = Product(
+            tenant_id=tenant,
+            seller_id=seller,
+            name="Second position",
+            sku_code="363-POS",
+            wb_barcode="363-BARCODE",
+        )
+        session.add(product)
+        await session.flush()
+        position = FbsOrderProduct(
+            order_id=first.id,
+            product_id=product.id,
+            position_index=0,
+            quantity=3,
+            picked_quantity=1,
+            ozon_sku=363,
+        )
+        session.add(position)
+        await session.commit()
+        position_id = position.id
+    second = await _seed_order(
+        tenant_id=tenant,
+        seller_id=seller,
+        warehouse_id=warehouse,
+        marketplace="ozon",
+        wb_order_id=770003,
+    )
+    params = {"marketplace": "ozon", "sort": "oldest", "limit": 1}
+    url = "/operations/fbs-orders/worklist"
+    page = await async_client.get(url, headers=headers, params=params)
+    assert page.status_code == 200, page.text
+    item = page.json()["items"][0]
+    assert item["id"] == str(ozon_id)
+    assert item["marketplace"] == "ozon" and item["external_order_id"] == "OZ-770002"
+    assert item["positions"][0]["id"] == str(position_id)
+    assert item["positions"][0]["barcode"] == "363-BARCODE"
+    assert item["positions"][0]["quantity"] == 3
+    cursor = page.json()["next_cursor"]
+    tail = await async_client.get(url, headers=headers, params={**params, "cursor": cursor})
+    assert tail.status_code == 200, tail.text
+    assert [row["id"] for row in tail.json()["items"]] == [str(second)]
+    assert str(foreign_id) not in str(page.json()) + str(tail.json())
+    wrong_sort = await async_client.get(
+        url, headers=headers, params={**params, "sort": "deadline", "cursor": cursor}
+    )
+    assert wrong_sort.status_code == 400
+    default = await async_client.get(
+        url, headers=headers, params={"marketplace": "ozon", "limit": 1}
+    )
+    assert default.json()["items"][0]["id"] == str(second)
+
+
+@pytest.mark.asyncio
+async def test_mobile_worklist_rejects_non_object_cursor(async_client: AsyncClient) -> None:
+    import base64
+    headers, *_ = await _seed_wb_and_ozon(async_client)
+    response = await async_client.get(
+        "/operations/fbs-orders/worklist", headers=headers,
+        params={"sort": "oldest", "cursor": base64.urlsafe_b64encode(b"[]").decode()},
+    )
+    assert response.status_code == 400
