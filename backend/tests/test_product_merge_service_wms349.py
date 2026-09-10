@@ -9,7 +9,8 @@ deadlock, а сама блокировка сериализует конкуре
 Границы теста. Тест-БД — SQLite, у которого ``FOR UPDATE`` синтаксически
 игнорируется. Поэтому наличие блокировки и порядок инструкций проверяются на
 уровне SQLAlchemy: каждый выполненный ``Select`` перекомпилируется под диалект
-PostgreSQL и в его тексте ищется ``FOR UPDATE``. Дополнительный тест test_postgres_merge_replays_committed_movement_with_stale_balances
+PostgreSQL и в его тексте ищется ``FOR UPDATE``. Дополнительный тест
+``test_postgres_merge_replays_committed_movement_with_stale_balances``
 запускается только на PostgreSQL и проверяет настоящую конкурентную запись.
 """
 
@@ -18,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -118,6 +120,163 @@ async def _add_stock(
         await session.commit()
 
 
+async def _merge_fixture(
+    async_client: AsyncClient,
+) -> tuple[dict[str, str], uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID]:
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, suffix)
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Seller"})
+    assert seller.status_code == 201
+    seller_id = seller.json()["id"]
+    tenant_id = await _seller_tenant_id(seller_id)
+    location_id = await _create_warehouse_location(async_client, headers, suffix)
+    target = await _create_product(
+        async_client, headers, sku_code=f"wb-{suffix}", seller_id=seller_id, wb_vendor_code=suffix
+    )
+    source = await _create_product(
+        async_client, headers, sku_code=f"oz-{suffix}", seller_id=seller_id
+    )
+    target_id, source_id = uuid.UUID(target["id"]), uuid.UUID(source["id"])
+    await _add_stock(tenant_id, target_id, location_id, 8)
+    await _add_stock(tenant_id, source_id, location_id, 5)
+    return headers, tenant_id, uuid.UUID(seller_id), location_id, target_id, source_id
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(engine.dialect.name != "postgresql", reason="real PostgreSQL required")
+async def test_postgres_merge_refuses_busy_order_without_deadlocking_cancellation(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.models.fbs_order import FbsOrder, FbsOrderReservation
+    from app.models.product import Product
+    from app.models.storage_location import StorageLocation
+    from app.services import product_merge_service as service
+    from app.services.fbs_cancellation_service import _lock_order
+    from app.services.wb_marketplace_orders_service import _release_reservation
+
+    _, tenant, seller, location, target, source = await _merge_fixture(async_client)
+    async with SessionLocal() as seed:
+        loc = await seed.get(StorageLocation, location)
+        assert loc is not None
+        order = FbsOrder(
+            tenant_id=tenant,
+            seller_id=seller,
+            warehouse_id=loc.warehouse_id,
+            product_id=source,
+            wb_order_id=349111,
+            created_at_wb=datetime.now(UTC),
+            deadline_at=datetime.now(UTC),
+            mapping_status="mapped",
+            reserve_status="reserved",
+        )
+        seed.add(order)
+        await seed.flush()
+        order_id = order.id
+        seed.add(
+            FbsOrderReservation(
+                tenant_id=tenant,
+                fbs_order_id=order_id,
+                product_id=source,
+                warehouse_id=loc.warehouse_id,
+                quantity=1,
+            )
+        )
+        await seed.commit()
+
+    products_locked, release_merge = asyncio.Event(), asyncio.Event()
+    original = service._lock_references_and_check_conflicts
+
+    async def pause_after_products(*args: Any, **kwargs: Any) -> None:
+        products_locked.set()
+        await release_merge.wait()
+        await original(*args, **kwargs)
+
+    monkeypatch.setattr(service, "_lock_references_and_check_conflicts", pause_after_products)
+    async with SessionLocal() as canceller, SessionLocal() as merger, SessionLocal() as observer:
+        locked = await _lock_order(canceller, tenant, order_id)
+        assert locked is not None
+        canceller_pid = await canceller.scalar(text("select pg_backend_pid()"))
+        merge_task = asyncio.create_task(merge_products(merger, tenant, [source, target]))
+        release_task = None
+        try:
+            await asyncio.wait_for(products_locked.wait(), timeout=5)
+            release_task = asyncio.create_task(_release_reservation(canceller, locked))
+            async with asyncio.timeout(5):
+                while not await observer.scalar(
+                    text("select cardinality(pg_blocking_pids(:pid)) > 0"), {"pid": canceller_pid}
+                ):
+                    assert not release_task.done()
+                    await asyncio.sleep(0.01)
+            release_merge.set()
+            with pytest.raises(service.ProductMergeError, match="merge_busy"):
+                await asyncio.wait_for(merge_task, timeout=5)
+            await asyncio.wait_for(release_task, timeout=5)
+            locked.status = "cancelled"
+            await canceller.commit()
+        finally:
+            release_merge.set()
+            pending = [t for t in (merge_task, release_task) if t is not None and not t.done()]
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+    async with SessionLocal() as check:
+        assert await check.get(Product, source) is not None
+        assert await check.get(Product, target) is not None
+        assert (await check.get(FbsOrder, order_id)).reserve_status == "released"
+        assert not (await check.scalars(select(FbsOrderReservation))).all()
+        assert sorted((await check.scalars(select(InventoryBalance.quantity))).all()) == [5, 8]
+        merged = await merge_products(check, tenant, [source, target])
+        assert merged.id == target
+    async with SessionLocal() as check:
+        assert (await check.get(FbsOrder, order_id)).product_id == target
+        assert (await check.scalars(select(InventoryBalance.quantity))).all() == [13]
+
+
+@pytest.mark.asyncio
+async def test_merge_reports_stock_cap_collision_before_changing_any_balance(
+    async_client: AsyncClient,
+) -> None:
+    from app.models.fbs_binding_stock_pool import FbsBindingStockPool
+    from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+    from app.models.storage_location import StorageLocation
+
+    headers, tenant, seller, location, target, source = await _merge_fixture(async_client)
+    async with SessionLocal() as seed:
+        loc = await seed.get(StorageLocation, location)
+        assert loc is not None
+        binding = FbsWarehouseBinding(
+            tenant_id=tenant,
+            seller_id=seller,
+            wb_warehouse_id=349,
+            wms_warehouse_id=loc.warehouse_id,
+        )
+        seed.add(binding)
+        await seed.flush()
+        seed.add_all(
+            [
+                FbsBindingStockPool(
+                    tenant_id=tenant, binding_id=binding.id, product_id=product, quantity=qty
+                )
+                for product, qty in [(target, 7), (source, 3)]
+            ]
+        )
+        await seed.commit()
+    captured, handlers = _install_capture()
+    try:
+        response = await async_client.post(
+            "/products/merge", headers=headers, json={"product_ids": [str(source), str(target)]}
+        )
+    finally:
+        _uninstall_capture(handlers)
+    assert response.status_code == 409, response.text
+    assert "настройках остатка FBS одного склада" in response.json()["detail"]
+    assert not any(c.sql.lstrip().startswith(("update ", "delete ")) for c in captured)
+    async with SessionLocal() as check:
+        assert sorted((await check.scalars(select(InventoryBalance.quantity))).all()) == [5, 8]
+        assert sorted((await check.scalars(select(FbsBindingStockPool.quantity))).all()) == [3, 7]
+
+
 def _compile_pg(clauseelement: ClauseElement) -> str:
     """Компиляция SELECT под PostgreSQL-диалектом.
 
@@ -204,9 +363,7 @@ def _install_capture() -> tuple[list[_Captured], Any]:
         pg_text = ""
         if clauseelement is not None:
             pg_text = _compile_pg(clauseelement).lower()
-        captured.append(
-            _Captured(statement.lower(), pg_text, _parameters_to_uuids(parameters))
-        )
+        captured.append(_Captured(statement.lower(), pg_text, _parameters_to_uuids(parameters)))
 
     event.listen(engine.sync_engine, "before_execute", _before_execute)
     event.listen(engine.sync_engine, "before_cursor_execute", _before_cursor)
@@ -223,7 +380,8 @@ def _uninstall_capture(handlers: Any) -> None:
 @pytest.mark.skipif(engine.dialect.name != "postgresql", reason="real PostgreSQL required")
 @pytest.mark.parametrize("movement_side", ["source", "target"])
 async def test_postgres_merge_replays_committed_movement_with_stale_balances(
-    async_client: AsyncClient, movement_side: str,
+    async_client: AsyncClient,
+    movement_side: str,
 ) -> None:
     """Two real transactions: merge waits for a warehouse writer, then rereads."""
     suffix = str(time.time_ns())
@@ -234,11 +392,17 @@ async def test_postgres_merge_replays_committed_movement_with_stale_balances(
     tenant_id = await _seller_tenant_id(seller_id)
     location_id = await _create_warehouse_location(async_client, headers, suffix)
     target = await _create_product(
-        async_client, headers, sku_code=f"pg-wb-{suffix}", seller_id=seller_id,
+        async_client,
+        headers,
+        sku_code=f"pg-wb-{suffix}",
+        seller_id=seller_id,
         wb_vendor_code=f"pg-vendor-{suffix}",
     )
     source = await _create_product(
-        async_client, headers, sku_code=f"pg-oz-{suffix}", seller_id=seller_id,
+        async_client,
+        headers,
+        sku_code=f"pg-oz-{suffix}",
+        seller_id=seller_id,
     )
     target_id, source_id = uuid.UUID(target["id"]), uuid.UUID(source["id"])
     await _add_stock(tenant_id, target_id, location_id, 8)
@@ -251,9 +415,11 @@ async def test_postgres_merge_replays_committed_movement_with_stale_balances(
         assert sorted(row.quantity for row in stale) == [5, 8]
         merger_pid = await merger.scalar(text("select pg_backend_pid()"))
         await inventory_service.record_movement_and_adjust_balance(
-            writer, tenant_id=tenant_id,
+            writer,
+            tenant_id=tenant_id,
             product_id=source_id if movement_side == "source" else target_id,
-            storage_location_id=location_id, quantity_delta=3,
+            storage_location_id=location_id,
+            quantity_delta=3,
             movement_type="inbound_intake",
             actor_user_id=await resolve_test_actor_user_id(writer, tenant_id),
         )
@@ -261,7 +427,8 @@ async def test_postgres_merge_replays_committed_movement_with_stale_balances(
         try:
             async with asyncio.timeout(5):
                 while not await writer.scalar(
-                    text("select cardinality(pg_blocking_pids(:pid)) > 0"), {"pid": merger_pid},
+                    text("select cardinality(pg_blocking_pids(:pid)) > 0"),
+                    {"pid": merger_pid},
                 ):
                     assert not merge_task.done(), "merge failed to wait for the Product lock"
                     await asyncio.sleep(0.01)
@@ -309,14 +476,10 @@ async def test_merge_takes_product_locks_in_ascending_id_order_input_reversed(
     await _run_stable_lock_order_case(async_client, reverse_input=True)
 
 
-async def _run_stable_lock_order_case(
-    async_client: AsyncClient, *, reverse_input: bool
-) -> None:
+async def _run_stable_lock_order_case(async_client: AsyncClient, *, reverse_input: bool) -> None:
     suffix = str(time.time_ns())
     headers = await _register_admin(async_client, f"order-{suffix}")
-    seller_response = await async_client.post(
-        "/sellers", headers=headers, json={"name": "Seller"}
-    )
+    seller_response = await async_client.post("/sellers", headers=headers, json={"name": "Seller"})
     assert seller_response.status_code == 201, seller_response.text
     seller_id = seller_response.json()["id"]
     tenant_id = await _seller_tenant_id(seller_id)
@@ -342,9 +505,7 @@ async def _run_stable_lock_order_case(
     ozon_id = uuid.UUID(ozon_card["id"])
     ordered_ids = sorted([wb_id, ozon_id])
 
-    input_ids: list[uuid.UUID] = (
-        list(reversed(ordered_ids)) if reverse_input else list(ordered_ids)
-    )
+    input_ids: list[uuid.UUID] = list(reversed(ordered_ids)) if reverse_input else list(ordered_ids)
 
     captured, handler = _install_capture()
     try:
@@ -358,9 +519,7 @@ async def _run_stable_lock_order_case(
     assert merged.id in ordered_ids
 
     # Продуктовые SELECT'ы с FOR UPDATE, в том порядке, как они пошли на engine.
-    product_for_update = [
-        c for c in captured if c.kind == "product" and "for update" in c.pg_text
-    ]
+    product_for_update = [c for c in captured if c.kind == "product" and "for update" in c.pg_text]
     assert len(product_for_update) >= 2, (
         "merge должен блокировать обе карточки, а не читать их обычным SELECT; "
         f"захвачено FOR UPDATE product SELECT'ов: {len(product_for_update)}"
@@ -375,9 +534,7 @@ async def _run_stable_lock_order_case(
         # Из bind-параметров выбираем тот UUID, который относится к продукту.
         # Обычно там ещё есть tenant_id — отфильтровываем его.
         candidates = [u for u in stmt.bind_uuids if u != tenant_id]
-        assert candidates, (
-            f"не нашёл product-UUID в bind-параметрах SELECT: {stmt.bind_uuids}"
-        )
+        assert candidates, f"не нашёл product-UUID в bind-параметрах SELECT: {stmt.bind_uuids}"
         locked_id_params.append(candidates[0])
     assert locked_id_params == ordered_ids, (
         "merge берёт блокировки не в порядке возрастания id: "
@@ -386,14 +543,11 @@ async def _run_stable_lock_order_case(
 
     # И — главное — FOR UPDATE идёт до первого чтения баланса.
     first_lock_index = next(
-        i
-        for i, c in enumerate(captured)
-        if c.kind == "product" and "for update" in c.pg_text
+        i for i, c in enumerate(captured) if c.kind == "product" and "for update" in c.pg_text
     )
     balance_indexes = [i for i, c in enumerate(captured) if c.kind == "balance"]
     assert balance_indexes, (
-        "merge не сходил ни разу в inventory_balances — тест не покрывает исходный "
-        "сценарий"
+        "merge не сходил ни разу в inventory_balances — тест не покрывает исходный сценарий"
     )
     assert first_lock_index < balance_indexes[0], (
         "порядок разъехался: merge прочитал баланс раньше, чем взял Product-lock; "
@@ -407,15 +561,12 @@ async def test_merge_reads_balances_under_for_update_lock(
 ) -> None:
     """Балансовые SELECT'ы тоже идут под FOR UPDATE.
 
-    Product-lock уже сериализует конкурентную запись; дополнительный лок на
-    балансовые строки исключает то, что новая строка появится между чтением и
-    суммированием и не попадёт в свод.
+    Product-lock сериализует конкурентную запись, включая новые строки.
+    Уже существующие балансы также читаются под блокировкой строки.
     """
     suffix = str(time.time_ns())
     headers = await _register_admin(async_client, f"bal-{suffix}")
-    seller_response = await async_client.post(
-        "/sellers", headers=headers, json={"name": "Seller"}
-    )
+    seller_response = await async_client.post("/sellers", headers=headers, json={"name": "Seller"})
     assert seller_response.status_code == 201, seller_response.text
     seller_id = seller_response.json()["id"]
     tenant_id = await _seller_tenant_id(seller_id)
@@ -448,9 +599,7 @@ async def test_merge_reads_balances_under_for_update_lock(
     finally:
         _uninstall_capture(handler)
 
-    balance_for_update = [
-        c for c in captured if c.kind == "balance" and "for update" in c.pg_text
-    ]
+    balance_for_update = [c for c in captured if c.kind == "balance" and "for update" in c.pg_text]
     assert len(balance_for_update) >= 2, (
         "оба SELECT из inventory_balances должны идти под FOR UPDATE, "
         f"захвачено: {len(balance_for_update)}"
@@ -468,9 +617,7 @@ async def test_merge_still_sums_stock_end_to_end_after_lock_change(
     """
     suffix = str(time.time_ns())
     headers = await _register_admin(async_client, f"e2e-{suffix}")
-    seller_response = await async_client.post(
-        "/sellers", headers=headers, json={"name": "Seller"}
-    )
+    seller_response = await async_client.post("/sellers", headers=headers, json={"name": "Seller"})
     assert seller_response.status_code == 201, seller_response.text
     seller_id = seller_response.json()["id"]
     tenant_id = await _seller_tenant_id(seller_id)
@@ -503,12 +650,16 @@ async def test_merge_still_sums_stock_end_to_end_after_lock_change(
     # Проверка суммы через модель, чтобы не зависеть от роутинга сводки.
     async with SessionLocal() as session:
         rows = (
-            await session.execute(
-                select(InventoryBalance).where(
-                    InventoryBalance.product_id == uuid.UUID(wb_card["id"])
+            (
+                await session.execute(
+                    select(InventoryBalance).where(
+                        InventoryBalance.product_id == uuid.UUID(wb_card["id"])
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert sum(r.quantity for r in rows) == 13
 
 
@@ -524,9 +675,7 @@ async def test_merge_reports_missing_product_before_touching_balances(
     """
     suffix = str(time.time_ns())
     headers = await _register_admin(async_client, f"missing-{suffix}")
-    seller_response = await async_client.post(
-        "/sellers", headers=headers, json={"name": "Seller"}
-    )
+    seller_response = await async_client.post("/sellers", headers=headers, json={"name": "Seller"})
     assert seller_response.status_code == 201, seller_response.text
     seller_id = seller_response.json()["id"]
     tenant_id = await _seller_tenant_id(seller_id)

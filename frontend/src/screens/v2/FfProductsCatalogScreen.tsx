@@ -209,6 +209,9 @@ function humanFfCatalogError(message: string): string {
 
 function humanMergeError(code: string): string {
   const normalized = code.trim()
+  if (normalized === 'merge_busy') {
+    return 'Сейчас с товаром или связанным документом выполняется операция. Повторите объединение после её завершения.'
+  }
   if (normalized === 'merge_different_sellers') {
     return 'Карточки принадлежат разным продавцам. Объединять можно только товар одного продавца.'
   }
