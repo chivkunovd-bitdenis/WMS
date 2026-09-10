@@ -1,35 +1,77 @@
-# WMS-402 — transport adapter, not an integrated printer service
+# WMS-402 — локальный агент печати этикеток FBS
 
-This executable adapter accepts one **already claimed** BackgroundJob of type
-`fbs_network_print` on stdin. It checks the configured queue, copies, asset identity,
-SHA256, PDF/PNG format and submits the temporary file to CUPS using `lp` without a
-shell. The returned result is an OS queue receipt (`spooled`), not physical paper.
-Timeout or ambiguous receipt is terminal for automatic execution; never replay
-that job without checking the OS queue. No local journal, new table or key exists.
+Агент запускается на складском компьютере рядом с принтером и за один запуск
+делает ровно один проход: берёт из WMS одно задание печати своего склада,
+скачивает уже готовый файл этикетки, отдаёт его в очередь ОС и записывает в WMS
+квитанцию этой очереди. Наружу он ходит сам, поэтому входящий доступ в сеть
+склада не требуется и никакого слушателя агент не открывает.
 
-The warehouse PC operating system and printer model are still unknown. This
-adapter supports CUPS (Linux/macOS). Windows spooler/driver installation and
-physical 58×40 output are **not implemented or verified**.
+## Что происходит за один запуск
 
-Integration is deliberately blocked: the approved server has no agent/warehouse/
-printer binding, restricted agent authorization, atomic claim or acknowledgement
-routes. The proposed `/operations/fbs-print-jobs/{job_id}/content` route is NOT
-implemented; it must serve the existing FbsPrintAsset with
-`record_print_opened=False` after checking the claimed job's binding and checksum.
-The adapter does not call the existing operator content endpoint because that
-would record opening a label as a side effect of an agent fetch.
+1. `POST /operations/fbs-print-jobs/next?warehouse_id=…` — сервер атомарно
+   переводит одно ожидающее задание в состояние «выдано агенту». Если очередь
+   пуста, агент молча завершает работу.
+2. `GET /operations/fbs-print-jobs/{job_id}/content?warehouse_id=…` — файл
+   отдаётся только по выданному заданию. Агент сверяет тип, размер, сигнатуру
+   файла и SHA256 с тем, что было зафиксировано при постановке в очередь.
+3. `lp -d <очередь> -- <временный файл>` — без shell, без установки драйверов,
+   временный каталог удаляется в любом случае.
+4. `POST /operations/fbs-print-jobs/{job_id}/result` — в WMS уходит квитанция
+   очереди ОС.
 
-The owner decision requested in `docs/reviews/wms402-minimal-contract-20260909.md`
-(warehouse → named printer → authorized agent identity) remains necessary before
-implementing storage/authorization for this binding. A completed BackgroundJob
-must not be repurposed as a printer registry. A general staff token is not a final
-agent authorization solution. No real credentials were read or issued for this
-adapter, and no production settings were changed.
+## Чего агент не делает принципиально
 
-Required future environment: WMS_PRINT_QUEUE, WMS_PRINT_API_URL (HTTPS), and an
-existing appropriately restricted WMS_PRINT_TOKEN. No network or printer call
-was made in the current verification. Tests use a fake subprocess and check
-single execution, receipt semantics, validation and temporary file cleanup:
+**Квитанция очереди — это не бумага.** Успешный ответ означает «передано в
+очередь принтера», и именно так статус называется в WMS. Слово «напечатано»
+здесь появиться не может: агент физического выхода листа не наблюдает.
+
+**Неизвестный исход не превращается в повторную печать.** Если `lp` завис,
+вернул ошибку или невнятный ответ, агент не сообщает серверу ничего: задание
+остаётся выданным агенту, и человек сам смотрит очередь ОС. То же самое, если
+файл уже ушёл в очередь, а записать квитанцию не удалось. Локального журнала
+попыток и автоматической повторной отправки в агенте нет.
+
+**Отказ до очереди сообщается честно.** Если файл не прошёл проверку или не
+скачался, в очередь ничего не ушло — агент отправляет `handed_to_queue=false`, и
+задание становится «не передано в очередь принтера».
+
+## Настройка
+
+Переменные окружения на складском компьютере (в репозитории значений нет и быть
+не должно):
+
+- `WMS_PRINT_API_URL` — HTTPS-адрес API WMS без учётных данных в самом адресе;
+- `WMS_PRINT_TOKEN` — существующий доступ сотрудника с правом упаковки;
+- `WMS_PRINT_QUEUE` — **имя очереди ОС**, которое оператор завёл сам.
+
+Склад задаётся аргументом: `--warehouse-id <UUID>`.
+
+```
+WMS_PRINT_API_URL=https://… WMS_PRINT_TOKEN=… WMS_PRINT_QUEUE=Warehouse_58 \
+  python3 tools/print-agent/wms_print_agent.py --warehouse-id <UUID>
+```
+
+Периодичность запуска задаёт планировщик ОС: агент сам не опрашивает сервер в
+цикле, чтобы не выбирать интервал за оператора.
+
+## Что осталось неизвестным
+
+Модель принтера, его адрес, драйвер, протокол (ESC/POS или ZPL) и операционная
+система складского компьютера всё ещё не описаны, поэтому в WMS они не хранятся
+и агентом не угадываются. Известно ровно одно: **имя очереди ОС**, которое задал
+оператор. Отсюда два прямых следствия: реализован путь через CUPS (`lp`,
+Linux/macOS), а очередь Windows и физический выход этикетки 58×40 мм не сделаны
+и не проверены.
+
+Привязка «склад → конкретный принтер → агент» в WMS не хранится: решение о её
+хранении и об отдельном узком доступе для агента за владельцем — см.
+`docs/reviews/wms402-minimal-contract-20260909.md`. Сейчас маршрутизация идёт по
+складу, а очередь принтера остаётся локальной настройкой агента. Завершённое
+задание печати реестром принтеров не является и им становиться не должно.
+
+## Тесты
+
+Подмена `subprocess`, никаких сетевых и принтерных вызовов:
 
 ```
 python3 -m unittest discover -s tools/print-agent -v

@@ -28,6 +28,7 @@ JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC = "wildberries_supplies_sync"
 JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC = "wildberries_marketplace_orders_sync"
 JOB_TYPE_FBS_STOCK_SYNC = "fbs_stock_sync"
 JOB_TYPE_STORAGE_MEASUREMENT_REBUILD = "storage_measurement_rebuild"
+JOB_TYPE_FBS_LABEL_PRINT = "fbs_label_print"
 
 
 async def create_pending_job(

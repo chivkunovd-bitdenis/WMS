@@ -4290,6 +4290,262 @@
           }
         }
       }
+    },
+    "/operations/fbs-print-jobs": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Create Fbs Print Job",
+        "operationId": "create_fbs_print_job_operations_fbs_print_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsPrintJobCreateBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsPrintJobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/operations/fbs-print-jobs/next": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Claim Next Fbs Print Job",
+        "operationId": "claim_next_fbs_print_job_operations_fbs_print_jobs_next_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Warehouse Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsPrintJobNextOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-print-jobs/{job_id}/content": {
+      "get": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Get Fbs Print Job Content",
+        "operationId": "get_fbs_print_job_content_operations_fbs_print_jobs__job_id__content_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "warehouse_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Warehouse Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-print-jobs/{job_id}/result": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Report Fbs Print Job Result",
+        "operationId": "report_fbs_print_job_result_operations_fbs_print_jobs__job_id__result_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsPrintJobResultBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsPrintJobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-print-jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Get Fbs Print Job",
+        "operationId": "get_fbs_print_job_operations_fbs_print_jobs__job_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsPrintJobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8623,6 +8879,259 @@
         ],
         "title": "FbsPrintBatchRequest"
       },
+      "FbsPrintJobCreateBody": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Job Id"
+          },
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "warehouse_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Warehouse Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "asset_id",
+          "warehouse_id"
+        ],
+        "title": "FbsPrintJobCreateBody"
+      },
+      "FbsPrintJobNextOut": {
+        "properties": {
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FbsPrintJobOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "job"
+        ],
+        "title": "FbsPrintJobNextOut"
+      },
+      "FbsPrintJobOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "status_text": {
+            "type": "string",
+            "title": "Status Text"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          },
+          "asset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Id"
+          },
+          "asset_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Kind"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
+          },
+          "checksum": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checksum"
+          },
+          "width_mm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width Mm"
+          },
+          "height_mm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height Mm"
+          },
+          "content_url": {
+            "type": "string",
+            "title": "Content Url"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "queue_receipt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queue Receipt"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "status_text",
+          "warehouse_id",
+          "asset_id",
+          "asset_kind",
+          "content_type",
+          "checksum",
+          "width_mm",
+          "height_mm",
+          "content_url",
+          "created_at",
+          "started_at",
+          "finished_at",
+          "queue_receipt",
+          "error_message"
+        ],
+        "title": "FbsPrintJobOut"
+      },
+      "FbsPrintJobResultBody": {
+        "properties": {
+          "warehouse_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Warehouse Id"
+          },
+          "queue_receipt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queue Receipt"
+          },
+          "handed_to_queue": {
+            "type": "boolean",
+            "title": "Handed To Queue",
+            "default": true
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "warehouse_id"
+        ],
+        "title": "FbsPrintJobResultBody"
+      },
       "FbsPrintOrderErrorOut": {
         "properties": {
           "order_id": {
@@ -12603,6 +13112,19 @@
         ],
         "title": "InboundBoxBarcodeBody"
       },
+      "InboundBoxDamageIn": {
+        "properties": {
+          "is_damaged": {
+            "type": "boolean",
+            "title": "Is Damaged"
+          }
+        },
+        "type": "object",
+        "required": [
+          "is_damaged"
+        ],
+        "title": "InboundBoxDamageIn"
+      },
       "InboundBoxLineQuantityBody": {
         "properties": {
           "quantity": {
@@ -13087,6 +13609,11 @@
               }
             ],
             "title": "Pallet Code"
+          },
+          "is_damaged": {
+            "type": "boolean",
+            "title": "Is Damaged",
+            "default": false
           },
           "lines": {
             "items": {
@@ -14245,6 +14772,35 @@
             },
             "type": "array",
             "title": "Lines"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "update_comment": {
+            "type": "boolean",
+            "title": "Update Comment",
+            "default": false
+          },
+          "expected_comment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Comment"
           }
         },
         "type": "object",
@@ -14290,6 +14846,18 @@
               "cargo_place"
             ],
             "title": "Kind"
+          },
+          "cell_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cell Id"
           }
         },
         "type": "object",
@@ -14443,6 +15011,17 @@
             "type": "boolean",
             "title": "Address Storage"
           },
+          "empty_places": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Empty Places",
+            "default": []
+          },
           "lines": {
             "items": {
               "$ref": "#/components/schemas/InventoryCountLineOut"
@@ -14495,6 +15074,37 @@
           "cells"
         ],
         "title": "InventoryCountDetailOut"
+      },
+      "InventoryCountEmptyPlaceIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "cell",
+              "pallet",
+              "box",
+              "cargo_place"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "InventoryCountEmptyPlaceIn"
       },
       "InventoryCountFiltersIn": {
         "properties": {
@@ -14651,6 +15261,31 @@
         ],
         "title": "InventoryCountFoundOut",
         "description": "Документ после записи находки плюс честный текст для оператора."
+      },
+      "InventoryCountLineMoveIn": {
+        "properties": {
+          "container_kind": {
+            "type": "string",
+            "enum": [
+              "pallet",
+              "box",
+              "cargo_place"
+            ],
+            "title": "Container Kind"
+          },
+          "container_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Container Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "container_kind",
+          "container_id"
+        ],
+        "title": "InventoryCountLineMoveIn",
+        "description": "Переложить товар в тару — вторая доработка от 03.09.2026, WMS-153."
       },
       "InventoryCountLineOut": {
         "properties": {
