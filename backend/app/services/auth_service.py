@@ -14,6 +14,7 @@ from app.core.settings import settings
 from app.models.document_event import (
     DOCUMENT_TYPE_STAFF_USER,
     EVENT_STAFF_USER_CREATED,
+    SOURCE_USER,
 )
 from app.models.ff_staff_permissions import FfStaffPermissions
 from app.models.seller import Seller
@@ -28,7 +29,6 @@ from app.services.auth_link_tokens import (
 )
 from app.services.billing_tariff_matrix_service import ensure_disabled_tariff_matrix
 from app.services.document_event_service import (
-    current_document_event_actor,
     record_document_event_safely,
 )
 from app.services.mailer import send_email
@@ -205,14 +205,13 @@ async def create_staff_user(
         session.add(perms)
         # WMS-325: точка создания FF-сотрудника — сразу с набором прав (все False
         # по умолчанию). Пишем в тот же document_event с acting_user + after.
-        actor = current_document_event_actor()
         await record_document_event_safely(
             session,
             tenant_id=user.tenant_id,
             document_type=DOCUMENT_TYPE_STAFF_USER,
             document_id=user.id,
             event_type=EVENT_STAFF_USER_CREATED,
-            source=actor.source,
+            source=SOURCE_USER,
             actor_user_id=acting_user.id,
             payload_json={
                 "role": "fulfillment_staff",

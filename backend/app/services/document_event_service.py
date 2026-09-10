@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any, cast
 
-import jwt
 from sqlalchemy import Connection, event, func, insert, inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,7 +49,6 @@ from app.models.marketplace_unload import (
     MarketplaceUnloadLine,
     MarketplaceUnloadRequest,
 )
-from app.services.tokens import decode_access_token
 
 logger = logging.getLogger(__name__)
 
@@ -92,13 +90,22 @@ def system_document_events() -> Iterator[None]:
 
 
 def current_document_event_actor() -> DocumentEventActor:
-    """Return the JWT/context actor bound to the current request.
+    """Return the authenticated actor bound to the current request.
 
     Services that record explicit audit rows (WMS-056 tare removal, WMS-325
     staff permission mutations) call this to get the acting user without
     re-decoding the token themselves.
     """
     return _actor_context.get()
+
+
+def bind_authenticated_document_actor(user_id: uuid.UUID) -> None:
+    """Called only after get_current_user validates identity and tenant.
+
+    The middleware owns request lifetime and resets this context on exit.
+    Auditing must use the same identity as authorization, not parse JWT again.
+    """
+    _actor_context.set(DocumentEventActor(actor_user_id=user_id, source=SOURCE_USER))
 
 
 _original_background_task_call = BackgroundTask.__call__
@@ -110,7 +117,7 @@ async def _run_system_document_background_task(task: BackgroundTask) -> None:
 
 
 class DocumentEventActorMiddleware:
-    """Extract the already validated JWT identity for transaction-level auditing."""
+    """Scope the authenticated audit actor to one request."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -119,28 +126,11 @@ class DocumentEventActorMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        actor = _actor_from_scope(scope)
-        token = _actor_context.set(actor)
+        token = _actor_context.set(_SYSTEM_ACTOR)
         try:
             await self.app(scope, receive, send)
         finally:
             _actor_context.reset(token)
-
-
-def _actor_from_scope(scope: Scope) -> DocumentEventActor:
-    headers = {key.lower(): value for key, value in scope.get("headers", [])}
-    raw = headers.get(b"authorization", b"").decode("latin-1")
-    scheme, _, credential = raw.partition(" ")
-    if scheme.lower() != "bearer" or not credential:
-        return _SYSTEM_ACTOR
-    try:
-        payload = decode_access_token(credential)
-        subject = payload.get("sub")
-        if not isinstance(subject, str):
-            return _SYSTEM_ACTOR
-        return DocumentEventActor(actor_user_id=uuid.UUID(subject), source=SOURCE_USER)
-    except (jwt.PyJWTError, ValueError):
-        return _SYSTEM_ACTOR
 
 
 def _json_value(value: object) -> object:
@@ -297,7 +287,11 @@ async def list_document_events(
             DocumentEvent.document_id == document_id,
         )
         .options(selectinload(DocumentEvent.actor), selectinload(DocumentEvent.product))
-        .order_by(DocumentEvent.occurred_at.desc(), DocumentEvent.created_at.desc())
+        .order_by(
+            DocumentEvent.occurred_at.desc(),
+            DocumentEvent.created_at.desc(),
+            DocumentEvent.id.desc(),
+        )
         .limit(limit)
         .offset(offset)
     )

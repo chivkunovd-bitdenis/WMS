@@ -88,9 +88,7 @@ async def test_ff_staff_permissions_patch_writes_audit_with_before_after_and_act
 
     # Creation itself must produce a staff_user_created event with defaults (all False).
     create_events = await _fetch_events_for_target(tenant_id, target_id)
-    assert len(create_events) == 1, [
-        (e.event_type, e.payload_json) for e in create_events
-    ]
+    assert len(create_events) == 1, [(e.event_type, e.payload_json) for e in create_events]
     first = create_events[0]
     assert first.event_type == EVENT_STAFF_USER_CREATED
     assert first.actor_user_id == admin_id
@@ -119,9 +117,7 @@ async def test_ff_staff_permissions_patch_writes_audit_with_before_after_and_act
     assert patch.status_code == 200, patch.text
 
     events = await _fetch_events_for_target(tenant_id, target_id)
-    assert len(events) == 2, [
-        (e.event_type, e.payload_json) for e in events
-    ]
+    assert len(events) == 2, [(e.event_type, e.payload_json) for e in events]
     perm_event = events[1]
     assert perm_event.event_type == EVENT_PERMISSIONS_CHANGED
     assert perm_event.actor_user_id == admin_id
@@ -251,9 +247,7 @@ async def test_seller_staff_permission_mutations_write_audit_rows(
     target_id = uuid.UUID(created.json()["id"])
 
     events = await _fetch_events_for_target(tenant_id, target_id)
-    assert len(events) == 1, [
-        (e.event_type, e.payload_json) for e in events
-    ]
+    assert len(events) == 1, [(e.event_type, e.payload_json) for e in events]
     creation = events[0]
     assert creation.event_type == EVENT_STAFF_USER_CREATED
     assert creation.actor_user_id == owner_id
@@ -276,9 +270,7 @@ async def test_seller_staff_permission_mutations_write_audit_rows(
     assert patch.status_code == 200, patch.text
 
     events = await _fetch_events_for_target(tenant_id, target_id)
-    assert len(events) == 2, [
-        (e.event_type, e.payload_json) for e in events
-    ]
+    assert len(events) == 2, [(e.event_type, e.payload_json) for e in events]
     change = events[1]
     assert change.event_type == EVENT_PERMISSIONS_CHANGED
     assert change.actor_user_id == owner_id
@@ -297,19 +289,22 @@ async def test_staff_history_is_available_over_http_and_keeps_rate_changes(
     suffix = str(time.time_ns())
     headers, _tenant_id, admin_id = await _register_admin(async_client, suffix)
     created = await async_client.post(
-        "/auth/staff-accounts", headers=headers,
+        "/auth/staff-accounts",
+        headers=headers,
         json={"email": f"rate-{suffix}@example.com"},
     )
     assert created.status_code == 201, created.text
     staff_id = created.json()["id"]
     for _ in range(2):
         response = await async_client.patch(
-            f"/auth/staff-accounts/{staff_id}/packaging-rate", headers=headers,
+            f"/auth/staff-accounts/{staff_id}/packaging-rate",
+            headers=headers,
             json={"rate_rub": "12.34"},
         )
         assert response.status_code == 200, response.text
     response = await async_client.get(
-        "/operations/document-events", headers=headers,
+        "/operations/document-events",
+        headers=headers,
         params={"document_type": "staff_user", "document_id": staff_id},
     )
     assert response.status_code == 200, response.text
@@ -320,8 +315,58 @@ async def test_staff_history_is_available_over_http_and_keeps_rate_changes(
     assert rates[0]["payload"]["after"] == {"packaging_rate_kopecks": 1234}
     other, _, _ = await _register_admin(async_client, suffix + "other")
     forbidden = await async_client.get(
-        "/operations/document-events", headers=other,
+        "/operations/document-events",
+        headers=other,
         params={"document_type": "staff_user", "document_id": staff_id},
     )
     assert forbidden.status_code == 200, forbidden.text
     assert forbidden.json() == []
+
+
+@pytest.mark.asyncio
+async def test_direct_staff_service_records_verified_actor_without_http_context(
+    async_client: AsyncClient,
+) -> None:
+    from app.models.user import User
+    from app.services.auth_service import create_staff_user
+    from app.services.document_event_service import system_document_events
+    from app.services.staff_permissions_service import (
+        StaffPermissionsSnapshot,
+        update_staff_permissions,
+    )
+
+    _, tenant_id, actor_id = await _register_admin(async_client, str(time.time_ns()))
+    async with SessionLocal() as session:
+        actor = await session.get(User, actor_id)
+        assert actor is not None
+        with system_document_events():
+            staff = await create_staff_user(
+                session,
+                acting_user=actor,
+                email=f"direct-{time.time_ns()}@example.com",
+                password=None,
+            )
+            staff_id = staff.id
+            await update_staff_permissions(
+                session,
+                acting_user=actor,
+                staff_user_id=staff_id,
+                permissions=StaffPermissionsSnapshot(inventory=True),
+            )
+        events = list(
+            (
+                await session.scalars(
+                    select(DocumentEvent).where(
+                        DocumentEvent.tenant_id == tenant_id,
+                        DocumentEvent.document_id == staff_id,
+                    )
+                )
+            ).all()
+        )
+        assert {event.event_type for event in events} == {
+            EVENT_STAFF_USER_CREATED,
+            EVENT_PERMISSIONS_CHANGED,
+        }
+        assert all(
+            event.source == SOURCE_USER and event.actor_user_id == actor_id for event in events
+        )
