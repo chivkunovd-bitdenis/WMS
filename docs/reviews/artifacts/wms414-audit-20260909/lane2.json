@@ -1,0 +1,1653 @@
+[
+  {
+    "id": "WMS-058",
+    "title": "Подбор — одна операция и одна функция",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09",
+    "verdict": "implemented",
+    "code_state": "В эталоне подбор ФБС и подбор для отгрузки используют общий расчёт доступности источника: физический остаток минус уже назначенное и минус занятое другими операциями. Сканирование блокирует строку остатка, вызывает эту функцию и лишь затем создаёт движение. Для WB подбор остаётся фактом назначения и не создаёт преждевременное складское движение; для остальных площадок физическое перемещение выполняется тем же обработчиком.",
+    "remaining": "Код и серверный релиз подтверждены. Живой операторский сценарий в production этим аудитом не открывался; известная ручная приёмка датирована 09.09.2026.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/pick_option_location_service.py",
+        "line_start": 130,
+        "line_end": 190,
+        "finding": "Единая source_available/available_pick_source_quantity считает потолок источника из физического остатка, уже назначенного подбора, свободного остатка ячейки и при необходимости потолка отгрузки."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_picking_service.py",
+        "line_start": 1067,
+        "line_end": 1115,
+        "finding": "Обработчик скана блокирует остаток товара, вызывает общий расчёт доступности и выполняет физическое перемещение только для не-WB пути."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/api/marketplace_unload_requests.py",
+        "line_start": 1303,
+        "line_end": 1349,
+        "finding": "MP endpoint принимает выбранные storage_location_id/container_kind/container_id и передаёт их в pick service; ответ возвращает фактический источник."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marketplace_unload_collect_service.py",
+        "line_start": 287,
+        "line_end": 369,
+        "finding": "MP service блокирует документ и товар, вызывает тот же available_pick_source_quantity, выполняет единственное движение и уменьшает существующий резерв."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx",
+        "line_start": 416,
+        "line_end": 470,
+        "finding": "Актуальный коробочный UI фиксирует точный выбранный источник в замыкании scanBody; подтверждение сверх плана повторяет тот же запрос с тем же источником, а устаревшие callbacks от другой сессии игнорируются."
+      }
+    ],
+    "test_evidence": "В каноне зафиксированы целевые PostgreSQL-тесты гонок и приёмка 09.09; в этом read-only аудите тесты повторно не запускались.",
+    "release_evidence": "09.09.2026 19:20:52 UTC production API/worker/beat сверены root с SHA 0229831f; web совпал с зафиксированным baseline. Это не доказательство живого экрана или складских данных.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "НА ПРОДЕ · КОД ПОДТВЕРЖДЁН; ручная приёмка 09.09, live production UI сейчас не перепроверен"
+  },
+  {
+    "id": "WMS-059",
+    "title": "Массовая простановка остатка на ФБС из каталога",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "partial",
+    "code_state": "В основном каталоге v2 уже есть стандартная таблица товаров с фото, чекбокс строки, выбор всех видимых строк и массовая кнопка «Задать остаток». Кнопка открывает общий редактор правила и сохраняет его для всех выбранных product_ids. Однако актуальное требование говорит об отдельном однокнопочном действии «передать весь остаток»; код прямо фиксирует противоположное решение: кнопка открывает редактор процентов/штук и не отдаёт весь остаток одним действием.",
+    "remaining": "Добавить явно требуемое действие передачи всего доступного остатка для выбранных товаров либо получить решение владельца, что общий редактор правила заменяет это действие. Текущий код не позволяет закрыть исходный критерий одним только наличием массового диалога.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfProductsCatalogScreen.tsx",
+        "line_start": 1255,
+        "line_end": 1305,
+        "finding": "При выборе товаров показывается массовая кнопка «Задать остаток»; комментарий прямо говорит, что она открывает настройку доли и не передаёт весь остаток сразу."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfProductsCatalogScreen.tsx",
+        "line_start": 1334,
+        "line_end": 1399,
+        "finding": "Основной каталог содержит выбор всех видимых строк, чекбоксы строк и колонку фото, то есть большая стандартная таблица для массового выбора уже есть."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfProductsCatalogScreen.tsx",
+        "line_start": 2115,
+        "line_end": 2143,
+        "finding": "Массовое сохранение отправляет один PUT /products/fbs-rule со всеми выбранными product_ids и полным правилом публикации."
+      }
+    ],
+    "test_evidence": "UI-код прочитан; браузерный сценарий и целевые тесты WMS-059 в этом аудите не выполнялись.",
+    "release_evidence": "Код экрана входит в web baseline, сверенный root 09.09.2026; это не доказывает отображение и клики в production.",
+    "confidence": "high",
+    "needs_root_check": true,
+    "canonical_status": "ЧАСТИЧНО: массовый выбор и общий редактор на проде; отдельного «передать весь остаток» нет"
+  },
+  {
+    "id": "WMS-060",
+    "title": "Остатки ФБС: поштучное выделение и проценты без конфликта режимов",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "partial",
+    "code_state": "Сервис и основной каталог v2 поддерживают раздельные режимы процентов и штук, проверяют сумму против свободного остатка в той же транзакции и передают units_mode/units_by_warehouse. Но отдельный достижимый маршрут /app/ff/fbs-stock использует FfProductsFbsPage, который эти два поля не отправляет. API подставляет False и пустой словарь, после чего сервис записывает получившееся правило; сохранение на этом экране сбрасывает поштучный режим. Сохранение режима в v2 не означает правильность всего дальнейшего жизненного цикла числа: его изменение заказами отдельно подтверждено WMS-338/341.",
+    "remaining": "Исправить FfProductsFbsPage или убрать/перенаправить отдельный маршрут, затем вручную проверить оба доступных адреса. До этого статус «на проде» скрывает реальную регрессию одного публичного UI-пути. Согласовать с общим исправлением неизменяемого операторского числа WMS-338/341, не дублировать его другим счётчиком.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfProductsCatalogScreen.tsx",
+        "line_start": 2115,
+        "line_end": 2143,
+        "finding": "Основной каталог v2 отправляет units_mode и units_by_warehouse в bulk API."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/products-fbs/FfProductsFbsPage.tsx",
+        "line_start": 192,
+        "line_end": 217,
+        "finding": "Отдельный экран /ff/fbs-stock отправляет только publish, same_everywhere, percent и by_warehouse; поля режима штук отсутствуют и в одиночном, и в массовом запросе."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/api/products.py",
+        "line_start": 374,
+        "line_end": 390,
+        "finding": "Пропущенные units_mode и units_by_warehouse получают значения False и пустой словарь по умолчанию."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/App.tsx",
+        "line_start": 3289,
+        "line_end": 3304,
+        "finding": "Отдельный маршрут ff/fbs-stock реально зарегистрирован и рендерит FfProductsFbsPage для администратора."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_stock_rule_service.py",
+        "line_start": 708,
+        "line_end": 778,
+        "finding": "Сервис при режиме штук перечитывает свободный остаток в транзакции, проверяет каждый товар и суммарное выделение по общему физическому складу."
+      }
+    ],
+    "test_evidence": "backend/tests/test_fbs_stock_rule_service.py:1198-1285 покрывает round-trip процентов/штук для WB и Ozon и общий лимит; тесты в этом аудите не перезапускались. UI-регрессия отдельного маршрута этим тестом не покрывается.",
+    "release_evidence": "Серверный SHA 0229831f и web baseline подтверждены root на production 09.09.2026; живой UI не открывался.",
+    "confidence": "high",
+    "needs_root_check": true,
+    "canonical_status": "ЧАСТИЧНО · V2 СОХРАНЯЕТ РЕЖИМ, /ff/fbs-stock ЕГО СБРАСЫВАЕТ"
+  },
+  {
+    "id": "WMS-061",
+    "title": "Выключенное адресное хранение должно выключать ячейки везде",
+    "prior_status": "ЧАСТИЧНО",
+    "verdict": "implemented",
+    "code_state": "Предыдущее основание частичного статуса не подтверждается достижимым потоком. Завершение приёмки переводит документ в sorting и приходует принятый товар во внутреннюю зону сортировки. При выключенном адресном хранении receive_line/post_all_remaining оставляют товар там и не требуют ячейку. Старый documentDistribution блок отключён константой даже для адресного клиента; актуальная встроенная сортировка FfSortingObjectsPage показывается только при addressStorageEnabled=true. Отгрузка и подбор ФБС при выключенном флаге также сами выбирают допустимый источник без требования операторской ячейки.",
+    "remaining": "Кодовый критерий выполнен в проверенных актуальных потоках приёмки, размещения, отгрузки, подбора ФБС и инвентаризации. Нужна отдельная текущая ручная проверка этих операторских сценариев в браузере для клиента с address_storage_enabled=false; код экрана сам по себе её не заменяет.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfInboundRequestView.tsx",
+        "line_start": 541,
+        "line_end": 548,
+        "finding": "Старый documentDistribution полностью отключён константой; активное завершение приёмки определяется отдельным receivingActive."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfInboundRequestView.tsx",
+        "line_start": 2328,
+        "line_end": 2354,
+        "finding": "Достижимое действие завершает приёмку; старое действие распределения находится под ложной константой и addressStorageEnabled."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/ff/FfInboundRequestView.tsx",
+        "line_start": 2461,
+        "line_end": 2483,
+        "finding": "Актуальная встроенная сортировка FfSortingObjectsPage рендерится только при addressStorageEnabled; безадресный done-текст подтверждает приём на склад без раскладки по ячейкам."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/inbound_intake_service.py",
+        "line_start": 1184,
+        "line_end": 1269,
+        "finding": "complete_receiving переводит документ в sorting и приходует коробки, грузоместа и свободное количество во внутреннюю sorting-location без выбора операторской ячейки."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/inbound_intake_service.py",
+        "line_start": 1288,
+        "line_end": 1402,
+        "finding": "receive_line и post_all_remaining требуют назначение ячейки только при address_storage_enabled=true; при false сохраняют хороший товар в зоне сортировки."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/outbound_shipment_service.py",
+        "line_start": 339,
+        "line_end": 449,
+        "finding": "Поштучная и полная отгрузка при выключенном адресном хранении подставляют внутреннюю sorting-location вместо требования ячейки."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_picking_service.py",
+        "line_start": 614,
+        "line_end": 752,
+        "finding": "Подбор ФБС читает address_storage_enabled: скан ячейки выполняется только в адресном режиме, иначе источник товара выбирается не требуя ячейку."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/inventory_count_service.py",
+        "line_start": 216,
+        "line_end": 275,
+        "finding": "Безадресная инвентаризация ограничивает остатки внутренней sorting-location вместо выбора конкретных складских ячеек."
+      }
+    ],
+    "test_evidence": "Тесты не запускались по условиям аудита. Перепроверены достижимость UI и серверные пути до движений; прежний вывод о достижимом обязательном distribution-поле снят.",
+    "release_evidence": "Проверенный код входит в production SHA 0229831f, который root сверил 09.09.2026; живой безадресный экран в этой проверке не открывался.",
+    "confidence": "high",
+    "needs_root_check": true,
+    "canonical_status": "КОД НА ПРОДЕ: безадресная приёмка и отгрузка не требуют ячейку; нужен текущий ручной браузерный проход"
+  },
+  {
+    "id": "WMS-062",
+    "title": "Один склад по умолчанию при регистрации",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "partial",
+    "code_state": "Создание организации не создаёт склад: register_fulfillment сохраняет только Tenant, администратора и выключенную тарифную матрицу. После появления склада клиент выбирает первый доступный и формы приёмки/отгрузки используют выбранный или единственный склад, поэтому часть поведения «не спрашивать при одном складе» уже реализована. Сам основной критерий — автоматически завести один склад при регистрации — отсутствует.",
+    "remaining": "Переиспользовать существующий catalog_service.create_warehouse в транзакционном сценарии регистрации и создать «Основной» с code=main, как уже делалось штатной операцией в WMS-409; не дублировать модель или механизм склада. Затем проверить регистрацию, приёмку, отгрузку, сортировку и сканирование с одним и двумя складами.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/auth_service.py",
+        "line_start": 35,
+        "line_end": 63,
+        "finding": "Регистрация создаёт Tenant и User, но не создаёт Warehouse."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/App.tsx",
+        "line_start": 435,
+        "line_end": 453,
+        "finding": "После загрузки складов клиент выбирает первый склад, если прежний выбор отсутствует."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/App.tsx",
+        "line_start": 1402,
+        "line_end": 1420,
+        "finding": "Создание приёмки использует склад формы, текущий выбранный или единственный склад."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/App.tsx",
+        "line_start": 1933,
+        "line_end": 1957,
+        "finding": "Создание отгрузки использует ту же fallback-логику выбранного/единственного склада."
+      }
+    ],
+    "test_evidence": "По git log --all коммитов WMS-062 не найдено. Тесты и браузер в этом read-only аудите не запускались.",
+    "release_evidence": "Описанное состояние находится в production SHA 0229831f; основной критерий отсутствует в этом SHA.",
+    "confidence": "high",
+    "needs_root_check": true,
+    "canonical_status": "ЧАСТИЧНО: UI выбирает единственный склад, но при регистрации склад не создаётся"
+  },
+  {
+    "id": "WMS-063",
+    "title": "Не заводить отдельный склад WMS на каждый склад Wildberries",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "code_state": "Склад Wildberries представлен привязкой направления к физическому складу WMS. Ограничения модели разрешают нескольким WB-складам одного селлера ссылаться на один wms_warehouse_id; отдельная сущность Warehouse при создании привязки не создаётся. При смене физического склада сервис проверяет активные резервы, затем меняет ссылку.",
+    "remaining": "Код и production SHA подтверждены. Текущий живой список складов и отсутствие исторических дублей в данных этим аудитом не проверялись.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/models/fbs_warehouse_binding.py",
+        "line_start": 28,
+        "line_end": 75,
+        "finding": "FbsWarehouseBinding сопоставляет виртуальный склад площадки с физическим Warehouse; уникальности по seller_id+wms_warehouse_id намеренно нет, поэтому один физический склад обслуживает несколько направлений."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_warehouse_binding_service.py",
+        "line_start": 396,
+        "line_end": 452,
+        "finding": "Создание/обновление привязки валидирует существующий Warehouse и записывает его id; новый Warehouse здесь не создаётся."
+      }
+    ],
+    "test_evidence": "Код модели и сервиса прочитан; повторный прогон тестов не выполнялся.",
+    "release_evidence": "Production API/worker/beat подтверждены root на SHA 0229831f 09.09.2026; данные конкретного арендатора не читались.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "НА ПРОДЕ · КОД ПОДТВЕРЖДЁН; production-данные складов сейчас не проверены"
+  },
+  {
+    "id": "WMS-080",
+    "title": "Гонка двух печатей сжигает коды",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09",
+    "verdict": "implemented",
+    "code_state": "Печать сначала блокирует родительское задание и перечитывает строку FOR UPDATE, затем считает остаточную потребность. Доступные коды выбираются с FOR UPDATE SKIP LOCKED; состояния reserved и printed, привязка к товару/строке и событие печати записываются в одной транзакции.",
+    "remaining": "Серверный код и production SHA подтверждены; реальная параллельная печать двумя устройствами в этом аудите не повторялась.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marking_code_service.py",
+        "line_start": 1607,
+        "line_end": 1629,
+        "finding": "Печать сериализуется блокировкой упаковочных строк и повторным чтением строки FOR UPDATE."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marking_code_service.py",
+        "line_start": 1698,
+        "line_end": 1735,
+        "finding": "Остаточная потребность вычисляется после блокировки, а доступные коды выбираются с SKIP LOCKED."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marking_code_service.py",
+        "line_start": 1764,
+        "line_end": 1794,
+        "finding": "Резерв сразу завершается состоянием printed, привязкой и событием до commit; вечного промежуточного резерва в успешном пути нет."
+      }
+    ],
+    "test_evidence": "Канон фиксирует PostgreSQL race-тесты; повторный запуск по прямому поручению не делался.",
+    "release_evidence": "Production API/worker/beat 09.09.2026 сверены root с 0229831f; живые принтеры не проверялись.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "НА ПРОДЕ · КОД ГОНКИ ПОДТВЕРЖДЁН; физическая параллельная печать сейчас не перепроверена"
+  },
+  {
+    "id": "WMS-081",
+    "title": "Код навсегда застревает в состоянии «зарезервирован»",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09",
+    "verdict": "implemented",
+    "code_state": "Текущий успешный путь печати очищает reserved_by/reserved_at при переходе в printed. При привязке уже своего напечатанного или зарезервированного кода к заказу сервис переводит его в applied и пишет событие; applied-коды с printed_at остаются доступны для повторной печати. Агрегат production всё же нашёл две строки source=external_fbs/status=reserved без reserved_at и пользователя. Текущий конструктор external_fbs сразу создаёт applied, поэтому эти две строки не доказывают поломку нового перехода, но остаются неклассифицированным остатком данных.",
+    "remaining": "Read-only агрегат не позволяет назвать две external_fbs строки «вечными»: у них нет reserved_at. Нужно отдельно установить происхождение по несекретным событиям/связям и решить, требуется ли безопасная нормализация; новый кодовый переход печать→printed→applied реализован.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marking_code_service.py",
+        "line_start": 1764,
+        "line_end": 1794,
+        "finding": "После краткого reserved код в той же транзакции становится printed, а reservation-поля очищаются."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_kiz_service.py",
+        "line_start": 1286,
+        "line_end": 1317,
+        "finding": "Повтор своего кода после сверки WB переводит reserved/printed в applied и сохраняет событие."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_kiz_service.py",
+        "line_start": 996,
+        "line_end": 1016,
+        "finding": "Текущий путь создания external_fbs-кода сразу ставит status=applied и product_id; reserved этим конструктором не создаётся."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marking_code_service.py",
+        "line_start": 2973,
+        "line_end": 3006,
+        "finding": "Список напечатанных включает applied-коды с printed_at, поэтому смена состояния не теряет их для оператора."
+      },
+      {
+        "ref": "production-readonly-2026-09-09T20:11:55Z",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/marking-data.jsonl",
+        "line_start": 1,
+        "line_end": 1,
+        "finding": "Production-агрегат: две строки external_fbs имеют status=reserved, product_id заполнен, printed_at отсутствует."
+      }
+    ],
+    "test_evidence": "Тесты повторно не запускались. Кодовый переход прочитан; root выполнил только агрегирующий read-only запрос production 09.09.2026.",
+    "release_evidence": "Код находится в production SHA 0229831f. Read-only срез 09.09.2026 20:11:55 UTC нашёл две external_fbs/reserved строки без времени и пользователя; их возраст и происхождение не доказаны.",
+    "confidence": "high",
+    "needs_root_check": true,
+    "canonical_status": "КОД НА ПРОДЕ: новый переход исправлен; 2 external_fbs/reserved без даты требуют отдельной классификации данных"
+  },
+  {
+    "id": "WMS-082",
+    "title": "Таймаут Wildberries неотличим от отказа, код уходит во второй заказ",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09",
+    "verdict": "implemented",
+    "code_state": "Неопределённый результат PUT записывается как отдельная pending_confirmation операция с идемпотентным ключом. Повтор для того же заказа пропускается через проверку занятости и выполняет GET-сверку; пока исход неизвестен, новый PUT не выполняется и код не освобождается для другого заказа. Применение GET защищено блокировкой и сравнением набора текущих маркировок.",
+    "remaining": "Реальный timeout WB в этом аудите не создавался; подтверждён кодовый протокол восстановления.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_marking_service.py",
+        "line_start": 706,
+        "line_end": 761,
+        "finding": "Неопределённый результат сохраняется как pending_confirmation FbsWbOperation с устойчивым ключом."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_kiz_service.py",
+        "line_start": 806,
+        "line_end": 857,
+        "finding": "Свой код с pending operation допускается к GET-only reconciliation, но остаётся занятым для других заказов."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_kiz_service.py",
+        "line_start": 1286,
+        "line_end": 1302,
+        "finding": "Повтор сначала перечитывает WB; pending или failed возвращаются оператору без второго PUT."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_marking_service.py",
+        "line_start": 788,
+        "line_end": 817,
+        "finding": "После внешнего GET локальная строка блокируется и устаревший ответ игнорируется, если набор маркировок изменился."
+      }
+    ],
+    "test_evidence": "Канон фиксирует сценарии timeout/replay; в аудите тесты не запускались.",
+    "release_evidence": "Серверный протокол входит в production SHA 0229831f; живой ответ WB не проверялся.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "НА ПРОДЕ · КОД PENDING/GET-RECOVERY ПОДТВЕРЖДЁН; live WB timeout сейчас не перепроверен"
+  },
+  {
+    "id": "WMS-083",
+    "title": "Пул кодов хранится обрезанным при импорте из PDF",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09",
+    "verdict": "implemented",
+    "code_state": "Импорт PDF декодирует DataMatrix с изображения каждой страницы и использует байтовое значение символа, включая GS-разделитель. Текст PDF не используется для достраивания кода. В базу записывается точный cis из артефакта и сохраняется PDF-этикетка.",
+    "remaining": "Новый реальный PDF селлера в этом аудите не загружался; ручная проверка в каноне историческая.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marking_datamatrix_service.py",
+        "line_start": 19,
+        "line_end": 73,
+        "finding": "DataMatrix декодируется из пикселей в bytes и преобразуется без удаления GS-разделителя."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marking_label_artifact_service.py",
+        "line_start": 375,
+        "line_end": 429,
+        "finding": "На каждой странице сохраняется декодированный cis и вырезанный PDF-артефакт; текст страницы только помогает разметке, но не достраивает payload."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marking_code_service.py",
+        "line_start": 602,
+        "line_end": 626,
+        "finding": "PDF parser принимает cis из label artifact и сохраняет сам артефакт для строки импорта."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marking_code_service.py",
+        "line_start": 990,
+        "line_end": 1028,
+        "finding": "Импорт создаёт MarkingCode с точным cis_code и label_artifact_pdf."
+      }
+    ],
+    "test_evidence": "Канон сообщает целевые тесты и синтетический PDF; повторно не запускались.",
+    "release_evidence": "Код в production SHA 0229831f; новая загрузка production не выполнялась.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "НА ПРОДЕ · КОД ИМПОРТА ПОДТВЕРЖДЁН; новый реальный PDF сейчас не проверен"
+  },
+  {
+    "id": "WMS-084",
+    "title": "Перевесить код с заказа на заказ нельзя, отвязка убивает код",
+    "prior_status": "WB-ПЕРЕПРИВЯЗКА НА ПРОДЕ, БРАУЗЕР СТЕЙДЖ",
+    "verdict": "implemented",
+    "code_state": "Отвязка WB удаляет метаданные у площадки, но сохраняет сам MarkingCode в applied/introduced, очищает только связь с упаковочной строкой и помечает старую FbsOrderMarking удалённой. Новый commit может найти тот же код, создать новую связь и передать её WB. Это реализует перепривязку без возврата кода в свободный пул.",
+    "remaining": "Настоящий положительный вердикт WB для перепривязки не доказан; канон фиксирует лишь staging/emulator. Нужна отдельная живая приёмка, если требуется внешнее доказательство.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_kiz_service.py",
+        "line_start": 1080,
+        "line_end": 1153,
+        "finding": "Отвязка WB вызывает DELETE metadata, сохраняет код applied/introduced, очищает packaging_task_line_id и удаляет старую связь заказа."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_kiz_service.py",
+        "line_start": 1320,
+        "line_end": 1368,
+        "finding": "Новая привязка готовит тот же код, создаёт новую FbsOrderMarking и отправляет её в WB."
+      }
+    ],
+    "test_evidence": "Канон фиксирует целевые тесты и staging-проверку с эмулятором; повторно не запускались.",
+    "release_evidence": "Серверный код в production SHA 0229831f. Browser staging не равен live WB.",
+    "confidence": "high",
+    "needs_root_check": true,
+    "canonical_status": "КОД НА ПРОДЕ · ПЕРЕПРИВЯЗКА РЕАЛИЗОВАНА; live WB acceptance не подтверждён"
+  },
+  {
+    "id": "WMS-085",
+    "title": "Колонка «доступно ЧЗ», чекбоксы и печать выбранного на упаковке",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09",
+    "verdict": "implemented",
+    "code_state": "Рабочая область считает доступность и нехватку на товар, рендерит чекбоксы строк и фото, даёт выбрать все, печатать выбранные либо весь список и очищать ЧЗ выбранных WB-заказов. Печать передаёт точный список order_ids в серверную ленту.",
+    "remaining": "Живой production экран/принтер этим аудитом не открывался. Массовая очистка создаёт конфликт со снятым WMS-093 и требует отдельного решения по rate-limit.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 1021,
+        "line_end": 1089,
+        "finding": "Bulk print строит заказанную ленту по выбранным orders и передаёт их order_ids серверу."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 1850,
+        "line_end": 1886,
+        "finding": "Экран содержит «Выбрать всё», «Печать выбранного/всего», «Очистить ЧЗ» и кнопку пропуска маркировки."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 2000,
+        "line_end": 2067,
+        "finding": "Для каждой строки считаются markingAvailable/shortage, рисуется чекбокс и фото товара."
+      }
+    ],
+    "test_evidence": "Канон фиксирует целевые тесты и приёмку 09.09; в аудите не повторялись.",
+    "release_evidence": "Web baseline production сверил root 09.09.2026; живые клики и печать не подтверждены.",
+    "confidence": "high",
+    "needs_root_check": true,
+    "canonical_status": "НА ПРОДЕ · КОД ПОДТВЕРЖДЁН; live UI/печать сейчас не перепроверены; связь с WMS-093 требует решения"
+  },
+  {
+    "id": "WMS-086",
+    "title": "Строка красится зелёным по наличию кода, а не по вердикту WB",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09",
+    "verdict": "implemented",
+    "code_state": "Цвет строки берётся из fbsMarkingPresentation. Успешный tone выдаётся только для состояния accepted без причины; rejected/replacement_required и даже accepted с причиной дают ошибку. Наличие value_tail само по себе зелёный цвет не включает.",
+    "remaining": "Живой ответ WB и отображение строки в production сейчас не перепроверены.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/fbsUx.ts",
+        "line_start": 397,
+        "line_end": 425,
+        "finding": "Презентация маркировки считает успехом только подтверждённый accepted без причины."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 2014,
+        "line_end": 2052,
+        "finding": "Фон и левая граница строки зависят от tone вердикта, а не от простого наличия хвоста кода."
+      }
+    ],
+    "test_evidence": "Канон фиксирует UI-тесты/приёмку; повторно не запускались.",
+    "release_evidence": "Web baseline production подтверждён root, но браузер не открыт.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "НА ПРОДЕ · ЛОГИКА ЦВЕТА ПОДТВЕРЖДЕНА; live WB/UI сейчас не перепроверены"
+  },
+  {
+    "id": "WMS-087",
+    "title": "Вердикты Wildberries по маркировке не сохраняются",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09",
+    "verdict": "implemented",
+    "code_state": "После PUT сервис делает GET метаданных, блокирует заказ и маркировки, применяет каждую деталь WB к локальной строке, сохраняет неизвестные решения и полный remote snapshot в order.meta_details_json, затем пересчитывает delivery_allowed и время проверки. Бизнес-отказ PUT также сохраняет причины в marking.meta_details_json.",
+    "remaining": "Реальный новый вердикт WB в production этим аудитом не получался.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_marking_service.py",
+        "line_start": 764,
+        "line_end": 817,
+        "finding": "GET metadata перечитывает и блокирует актуальное локальное состояние, не применяя устаревший ответ поверх изменённой связи."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_marking_service.py",
+        "line_start": 818,
+        "line_end": 885,
+        "finding": "Каждый вердикт применяется к marking; полный ответ WB, delivery_allowed и checked_at сохраняются."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_marking_service.py",
+        "line_start": 961,
+        "line_end": 985,
+        "finding": "PUT business rejection сохраняет причины, успешный PUT обязательно завершается GET-сверкой."
+      }
+    ],
+    "test_evidence": "Канон фиксирует целевые проверки; повторно не запускались.",
+    "release_evidence": "Сервис в production SHA 0229831f; live WB response не проверялся.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "НА ПРОДЕ · СОХРАНЕНИЕ ВЕРДИКТОВ В КОДЕ ПОДТВЕРЖДЕНО; live WB сейчас не перепроверен"
+  },
+  {
+    "id": "WMS-088",
+    "title": "Wildberries не принимает код, отсканированный в WMS",
+    "prior_status": "СНЯТА 08.09 — УЖЕ СДЕЛАНО",
+    "verdict": "obsolete",
+    "code_state": "Историческая жалоба снята после исправления сравнения значения с GS-разделителями. Текущий путь сканирует полный код, передаёт marking.value в WB без текстового урезания, затем сравнивает remote value через нормализованное _same_marking_value и сохраняет реальный вердикт. Новый дефект STX/ETX кодом не доказан.",
+    "remaining": "Настоящий сканер и live WB в этом аудите не проверялись; при новой жалобе нужен конкретный сырой payload и ответ WB, а не переоткрытие старой гипотезы.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 617,
+        "line_end": 665,
+        "finding": "Скан передаёт raw в validate/commit и после сохранения показывает именно перечитанный вердикт площадки."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_marking_service.py",
+        "line_start": 844,
+        "line_end": 863,
+        "finding": "Remote value сравнивается специальной функцией _same_marking_value, а не простым сравнением строк с разными GS-представлениями."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_marking_service.py",
+        "line_start": 961,
+        "line_end": 985,
+        "finding": "В WB отправляется сохранённое marking.value; затем выполняется GET-сверка."
+      }
+    ],
+    "test_evidence": "Историческая сверка 08.09 зафиксирована в каноне; новый внешний тест не выполнялся.",
+    "release_evidence": "Исправленный путь входит в production SHA 0229831f; live WB не подтверждён.",
+    "confidence": "medium",
+    "needs_root_check": false,
+    "canonical_status": "СНЯТА · ИСПРАВЛЕННЫЙ КОД НА ПРОДЕ; реальный сканер/live WB сейчас не перепроверены"
+  },
+  {
+    "id": "WMS-089",
+    "title": "Сканирование ЧЗ на уже проклеенный товар",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "code_state": "На вкладке упаковки действует двухшаговый скан: сначала стикер находит конкретный заказ в поставке, затем полный ЧЗ проходит validate и commit с идемпотентным ключом. Сервис сохраняет физическое нанесение отдельно от вердикта площадки; повтор/замена требуют явного подтверждения. Отвязка доступна из той же рабочей области.",
+    "remaining": "Физический скан уже проклеенного товара в production сейчас не повторялся.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 584,
+        "line_end": 665,
+        "finding": "UI связывает скан стикера с заказом, затем валидирует и коммитит ЧЗ с идемпотентным ключом и показывает remote verdict."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_kiz_service.py",
+        "line_start": 1262,
+        "line_end": 1368,
+        "finding": "Commit блокирует/валидирует заказ, сохраняет applied-код и FbsOrderMarking, затем синхронизирует площадку."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_kiz_service.py",
+        "line_start": 1080,
+        "line_end": 1153,
+        "finding": "Явная отвязка удаляет remote metadata и локальную связь, сохраняя сам код и аудит."
+      }
+    ],
+    "test_evidence": "Канон указывает статус production; тесты и браузер в этом аудите не запускались.",
+    "release_evidence": "Код в production SHA/web baseline 0229831f; физический сканер не проверялся.",
+    "confidence": "high",
+    "needs_root_check": true,
+    "canonical_status": "НА ПРОДЕ · КОД СКАНА/ПРИВЯЗКИ ПОДТВЕРЖДЁН; физический scanner flow сейчас не перепроверен"
+  },
+  {
+    "id": "WMS-090",
+    "title": "«Печатать всё» печатает только ненапечатанное",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "code_state": "Bulk print получает весь список заказов. Для обычной печати предрасчёт считает только нехватку новых кодов, а по каждому заказу сервис переиспользует существующую маркировку или печатает недостающую; явный reprint повторно печатает уже привязанный код и пишет событие. Пропуск ЧЗ запрещает только выдачу нового кода.",
+    "remaining": "Физическая лента «всё» в production этим аудитом не печаталась.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 1850,
+        "line_end": 1868,
+        "finding": "При отсутствии выбора кнопка передаёт весь packingOrders в bulk print; при выборе — только выбранные."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_order_tape_print_service.py",
+        "line_start": 155,
+        "line_end": 213,
+        "finding": "Сервис загружает весь requested set и делает shortage-preflight новых кодов без отбрасывания уже напечатанных заказов."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_order_tape_print_service.py",
+        "line_start": 240,
+        "line_end": 304,
+        "finding": "Существующий код переиспользуется и при reprint получает событие; новый код не расходуется."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marking_code_service.py",
+        "line_start": 1698,
+        "line_end": 1712,
+        "finding": "Для новой выдачи считается только remaining_need после уже printed/external."
+      }
+    ],
+    "test_evidence": "Целевые тесты описаны в каноне; повторно не запускались.",
+    "release_evidence": "Код в production SHA/web baseline; принтер не проверялся.",
+    "confidence": "high",
+    "needs_root_check": true,
+    "canonical_status": "НА ПРОДЕ · КОД «ПЕЧАТЬ ВСЕГО» ПОДТВЕРЖДЁН; физическая печать сейчас не перепроверена"
+  },
+  {
+    "id": "WMS-091",
+    "title": "Жёсткая привязка каждого кода к товару и лента печати с расшифровкой",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09",
+    "verdict": "implemented",
+    "code_state": "Оба пути выдачи нового printed-кода присваивают product_id; упаковочная печать одновременно ставит packaging_task_line_id, сотрудника и время. Лента аудита связывает товар, селлера, сотрудника и документ, а CSV содержит требуемые колонки. Nullable product_id нужен для ещё не напечатанного общего пула. Production-агрегат подтверждает: единственная строка status=printed имеет и printed_at, и product_id; printed_without_product равно нулю. External_fbs/applied с product_id и без printed_at являются кодами, пришедшими извне, а не дефектом пути печати.",
+    "remaining": "Для текущего production-среза инвариант printed→product выполнен. База по-прежнему не имеет условного CHECK на status=printed, поэтому защита остаётся сервисной; живую ленту/CSV в браузере этим аудитом не открывали.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marking_code_service.py",
+        "line_start": 1764,
+        "line_end": 1788,
+        "finding": "Печать из задания ставит status printed, product_id, line, time, actor и событие вместе."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marking_code_service.py",
+        "line_start": 475,
+        "line_end": 490,
+        "finding": "CSV ленты содержит дату, событие, полный/маскированный код, пул, GTIN, товар, SKU, селлера, документ, сотрудника и источник."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marking_code_service.py",
+        "line_start": 2745,
+        "line_end": 2808,
+        "finding": "Ledger tenant-scoped и связывает события с кодом, товаром, селлером, сотрудником и импортом."
+      },
+      {
+        "ref": "production-readonly-2026-09-09T20:11:55Z",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/marking-data.jsonl",
+        "line_start": 3,
+        "line_end": 3,
+        "finding": "Production-агрегат: status=printed — одна строка, printed_without_product=0; у 130 external_fbs/applied есть product_id и нет printed_at, что соответствует внешнему источнику."
+      }
+    ],
+    "test_evidence": "Тесты повторно не запускались. Root выполнил агрегирующий read-only срез production 09.09.2026; он не обнаружил printed без product_id.",
+    "release_evidence": "Код в production SHA 0229831f; агрегат 09.09.2026 20:11:55 UTC подтверждает printed_product_invariant на текущих строках.",
+    "confidence": "high",
+    "needs_root_check": true,
+    "canonical_status": "НА ПРОДЕ: printed-коды привязаны к товару и production-агрегат не нашёл нарушения; UI ленты не перепроверен"
+  },
+  {
+    "id": "WMS-092",
+    "title": "Кнопка «пропустить ЧЗ» на всех этапах",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09",
+    "verdict": "implemented",
+    "code_state": "Рабочая область показывает действие «Сдать без Честного знака». Сервер идемпотентно фиксирует его до передачи и после этого не выдаёт новые коды, сохраняя повторную печать уже привязанных. При передаче отсутствие ЧЗ и отрицательный metadata verdict имеют severity warning, а не навигационный blocker; обязательные проверки целостности самой передачи остаются.",
+    "remaining": "Кнопка находится в общей рабочей области, поэтому кодово доступна независимо от выбранной рабочей вкладки; фактическая видимость на каждом этапе в браузере сейчас не перепроверена.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 1877,
+        "line_end": 1885,
+        "finding": "В упаковочной рабочей области есть действие «Сдать без Честного знака»."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_supply_service.py",
+        "line_start": 1746,
+        "line_end": 1765,
+        "finding": "Skip идемпотентен и разрешён до in_delivery/done."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_order_tape_print_service.py",
+        "line_start": 240,
+        "line_end": 304,
+        "finding": "После skip новые коды не выдаются, но уже привязанный код можно печатать повторно."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_shipment_service.py",
+        "line_start": 717,
+        "line_end": 781,
+        "finding": "Недостающая или не принятая маркировка публикуется как warning и прямо не блокирует передачу."
+      }
+    ],
+    "test_evidence": "Канон фиксирует приёмку 09.09; повторно не запускалась.",
+    "release_evidence": "Backend/web код в production baseline; live UI не открыт.",
+    "confidence": "medium",
+    "needs_root_check": true,
+    "canonical_status": "НА ПРОДЕ · SKIP И НЕБЛОКИРУЮЩАЯ ПЕРЕДАЧА В КОДЕ; видимость на всех этапах сейчас не перепроверена"
+  },
+  {
+    "id": "WMS-093",
+    "title": "Массовое снятие кодов упирается в лимит Wildberries",
+    "prior_status": "СНЯТА 08.09.2026",
+    "verdict": "decision",
+    "code_state": "Основание снятия устарело: оно говорило, что в действующем UI нет массового удаления. В текущем эталоне WMS-085 добавил живую кнопку «Очистить ЧЗ» для выбранных WB-заказов. Реализация последовательно вызывает отдельный DELETE для каждого заказа, не делает пауз/429-retry, останавливается на первом отказе и оставляет уже успешные снятия; повтор работает с оставшимся выбором.",
+    "remaining": "Владельцу нужно решить, достаточно ли безопасного stop-and-resume или требуется обработка rate limit. Без решения нельзя сохранять аргумент «массового пути нет» и одновременно иметь массовую кнопку.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 1092,
+        "line_end": 1123,
+        "finding": "Массовая очистка циклом вызывает DELETE без паузы/retry, останавливается на первом отказе и удаляет успешные строки из выбора."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 1869,
+        "line_end": 1873,
+        "finding": "При выборе WB-заказов рабочая область рендерит живую кнопку «Очистить ЧЗ»."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "docs/KANONICHESKIY_BACKLOG.md",
+        "line_start": 1210,
+        "line_end": 1223,
+        "finding": "Снятие 08.09 обосновано отсутствием пакетного вызова в тогда действующем UI; это фактическое основание больше не соответствует текущему коду."
+      }
+    ],
+    "test_evidence": "Rate-limit WB и 35 заказов не воспроизводились; вывод основан на новом достижимом UI-коде.",
+    "release_evidence": "Новый массовый путь входит в production web baseline 0229831f; внешний WB 429 не проверялся.",
+    "confidence": "high",
+    "needs_root_check": true,
+    "canonical_status": "РЕШЕНИЕ ВЛАДЕЛЬЦА: WMS-085 вернул массовое снятие; текущий stop-and-resume без retry нужно принять или доработать"
+  },
+  {
+    "id": "WMS-094",
+    "title": "Общий пул ЧЗ на два маркетплейса",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "code_state": "Пул связан с товаром, tenant и seller, но не с маркетплейсом. Выбор кода получает все pool_ids товара и выбирает available-код того же seller; тот же marking_code_service вызывается общей WB/Ozon рабочей областью. Поэтому два маркетплейса расходуют один физический пул, а код нельзя выдать дважды благодаря статусу и блокировке.",
+    "remaining": "Живое параллельное потребление WB/Ozon из одного production-пула не проверялось.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marking_code_service.py",
+        "line_start": 1171,
+        "line_end": 1205,
+        "finding": "Фильтр строится по пулам товара без измерения marketplace; допускает общий непривязанный код пула или уже привязанный к этому товару."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marking_code_service.py",
+        "line_start": 1713,
+        "line_end": 1733,
+        "finding": "Выдача выбирает available-коды того же seller и общего product pool под SKIP LOCKED."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 1068,
+        "line_end": 1081,
+        "finding": "Одна рабочая область вызывает общий printFbsOrderTape для поставки, независимо от provider WB/Ozon."
+      }
+    ],
+    "test_evidence": "Канон фиксирует проверки общего пула; повторно не запускались.",
+    "release_evidence": "Код в production SHA 0229831f; данные пулов не читались.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "НА ПРОДЕ · ОБЩИЙ ПУЛ В КОДЕ ПОДТВЕРЖДЁН; live WB/Ozon расход сейчас не перепроверен"
+  },
+  {
+    "id": "WMS-095",
+    "title": "Оператор видит машинные коды ошибок вместо русского текста",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09",
+    "verdict": "implemented",
+    "code_state": "FBS error mapper содержит явные русские действия для известных ошибок и кодов ЧЗ, отдельно переводит upstream HTTP 401/403/429/5xx и даёт безопасный русский fallback для неизвестных sgtin/snake_case кодов. Подробный человеческий текст сервера не затирается. Общий API mapper также переводит no_valid_codes и складские ошибки.",
+    "remaining": "Не каждый будущий произвольный машинный формат можно предсказать; текущие 29/семейства закрыты картой и fallback. Живой экран с каждым кодом не проверялся.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/fbsUx.ts",
+        "line_start": 116,
+        "line_end": 170,
+        "finding": "Карта и fallback переводят известные FBS/SGTIN коды, upstream HTTP и неизвестные snake_case ошибки в русский текст."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/fbsUx.ts",
+        "line_start": 173,
+        "line_end": 181,
+        "finding": "Синхронизация заказов проводит Error.message/code через тот же переводчик."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/utils/readApiErrorMessage.ts",
+        "line_start": 1,
+        "line_end": 48,
+        "finding": "Общий API mapper переводит складские/маркировочные ошибки, включая no_valid_codes, с понятным действием."
+      }
+    ],
+    "test_evidence": "Канон фиксирует 17 тестов и ручную локальную проверку 09.09; в аудите не повторялись.",
+    "release_evidence": "Web baseline в production подтверждён root; live browser не открыт.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "НА ПРОДЕ · ПЕРЕВОДЧИК КОДОВ ПОДТВЕРЖДЁН; live UI сейчас не перепроверен"
+  },
+  {
+    "id": "WMS-096",
+    "title": "Восстановление обрезанных кодов: скрипт не влит",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09",
+    "verdict": "implemented",
+    "code_state": "Административный CLI влит: требует tenant, по умолчанию dry-run, применение возможно только с --apply. Сервис рассматривает импортированные pool-коды, восстанавливает исключительно единственное доказанное продолжение prefix+GS из собственного PDF, блокирует и перечитывает строку и меняет только cis_code после проверок. Production-агрегат опровергает старую фразу «исходных файлов нет»: у 2808 available pool-кодов и одного printed pool-кода есть собственный PDF-артефакт. Распределение длины 31/32/33 и отсутствие завершающего GS само по себе не доказывает ни повреждение, ни восстановимость.",
+    "remaining": "Код recovery готов, но агрегат не отвечает, какие строки действительно имеют единственное продолжение prefix+GS. Для операционного решения нужен штатный tenant-scoped dry-run декодера; --apply на production без отдельного решения не выполнять.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/cli/restore_truncated_marking_cis.py",
+        "line_start": 1,
+        "line_end": 39,
+        "finding": "CLI требует tenant, default dry-run и отдельный флаг --apply."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marking_code_service.py",
+        "line_start": 3551,
+        "line_end": 3624,
+        "finding": "Кандидат восстанавливается только как единственное доказанное продолжение prefix+GS из собственного PDF и только для available pool-кода."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/marking_code_service.py",
+        "line_start": 3625,
+        "line_end": 3694,
+        "finding": "Перед apply строка блокируется и перечитывается; проверяются источник, область, serial, связи и конфликты; меняется только cis_code."
+      },
+      {
+        "ref": "production-readonly-2026-09-09T20:11:55Z",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/marking-data.jsonl",
+        "line_start": 4,
+        "line_end": 4,
+        "finding": "Production-агрегат: 2808 available pool-кодов и один printed имеют собственный PDF; длины available — 2799×31, 8×32, 1×33. Содержимое кодов не выводилось."
+      }
+    ],
+    "test_evidence": "Тесты повторно не запускались. Root выполнил только безопасный агрегирующий SQL; декодирование PDF и recovery dry-run в этом проходе не выполнялись.",
+    "release_evidence": "CLI/service входят в production SHA 0229831f. Read-only срез 09.09.2026 20:11:55 UTC подтвердил наличие PDF-артефактов, но не кандидатов восстановления.",
+    "confidence": "high",
+    "needs_root_check": true,
+    "canonical_status": "КОД НА ПРОДЕ: recovery CLI влит; PDF-артефакты есть, но фактические кандидаты определяются только штатным dry-run"
+  },
+  {
+    "id": "WMS-110",
+    "title": "Передача поставки с отменёнными заказами без блокировки оператора",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09.2026",
+    "verdict": "implemented",
+    "code_state": "Перед передачей UI получает preflight, показывает каждый отменённый заказ с артикулом и коробом и меняет действие на «Передать без этих заказов». Подтверждение отправляет версию preflight и стабильный ключ идемпотентности. Сервер повторно синхронизирует состав, исключает только логические связи отменённых заказов, снимает их резервы и лишь затем фиксирует операцию передачи. Физического прихода при исключении нет, что соответствует уточнённому контракту: возврат после фактической передачи оформляется отдельным документом.",
+    "remaining": "Кодовый поток завершён. Реальный текущий диалог и передача поставки с отменённым заказом в браузере/WB в рамках read-only аудита не выполнялись.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 949,
+        "line_end": 978,
+        "finding": "Кнопка передачи отправляет idempotency_key и confirmed_preflight_version и сохраняет ключ только при неопределённом результате."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 1375,
+        "line_end": 1379,
+        "finding": "Наличие отменённых заказов из preflight меняет подпись подтверждения на «Передать без этих заказов»."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 2659,
+        "line_end": 2745,
+        "finding": "Диалог перечисляет отменённые заказы, артикулы и короба и даёт вернуться либо продолжить передачу без них."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_shipment_service.py",
+        "line_start": 2443,
+        "line_end": 2487,
+        "finding": "Перед необратимым WB-вызовом сервер повторно валидирует preflight, исключает отменённые связи и сохраняет долговечный план операции."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_cancelled_after_pack_service.py",
+        "line_start": 190,
+        "line_end": 259,
+        "finding": "Сервис находит и отвязанные отмены, удаляет связи с коробом/поставкой и освобождает резерв, не создавая ложного физического возврата."
+      }
+    ],
+    "test_evidence": "Тесты не перезапускались. Прочитана полная цепочка диалог → DTO → серверная повторная проверка → исключение связей → checkpoint передачи.",
+    "release_evidence": "Реализация входит в production SHA 0229831f, сверенный root 09.09.2026. Реальный ответ WB и операторский браузерный сценарий не проверялись.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "КОД НА ПРОДЕ: отмены показаны по заказам и коробам, передача продолжает без них; живой сценарий не перепроверен"
+  },
+  {
+    "id": "WMS-111",
+    "title": "Автоматический документ возврата Wildberries после отмены переданного заказа",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "missing",
+    "code_state": "Текущий обработчик отмены намеренно не приходует товар: совместимая функция reverse_fbs_shipment_if_needed всегда возвращает false. Комментарий в production-коде прямо фиксирует, что после supplier complete нужен отдельный документ возврата, которого автоматический путь не создаёт. Локальная отмена меняет статус, сторнирует начисление, отсоединяет заказ и снимает резерв, но документа приёмки-возврата не заводит.",
+    "remaining": "Связать отмену после подтверждённой передачи с автоматическим созданием существующего документа приёмки типа «возврат», сохранив однократность и ссылку на исходный заказ/поставку. До этого операторский ручной возврат остаётся обязательным.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_cancellation_service.py",
+        "line_start": 75,
+        "line_end": 111,
+        "finding": "Код прямо говорит, что после supplier complete нужен отдельный документ возврата, и reverse_fbs_shipment_if_needed всегда возвращает False."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_cancellation_service.py",
+        "line_start": 178,
+        "line_end": 211,
+        "finding": "Локальная отмена меняет статус, выполняет биллинг/отвязку/снятие резерва, но не создаёт inbound-документ возврата."
+      }
+    ],
+    "test_evidence": "Тесты не запускались. git log --all по WMS-111 нашёл только документальное уточнение 5bd647a5, без реализации автоматического создания.",
+    "release_evidence": "Отсутствие автоматизации подтверждено в production SHA 0229831f; данные о реально незаведённых возвратах не запрашивались.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "НЕ СДЕЛАНО: после отмены переданного заказа документ возврата автоматически не создаётся"
+  },
+  {
+    "id": "WMS-112",
+    "title": "Реестр отмен с точным временем и границей до/после передачи",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "partial",
+    "code_state": "Реестр отменённых после следов сборки уже появился, но поле cancelled_at заполнено общим FbsOrder.updated_at, то есть временем последнего изменения строки, а фильтры и сортировка используют тот же updated_at. Признак supply_departed вычисляется по текущему состоянию найденной поставки, а не сравнением двух исторических моментов. Поэтому экран показывает «Обновлено» и не доказывает, произошла отмена до передачи или после неё.",
+    "remaining": "Фиксировать фактический момент события отмены и сравнивать его с фактическим моментом передачи. Реестр должен показывать эту границу и фильтровать по времени отмены, не по updated_at.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_cancelled_after_pack_service.py",
+        "line_start": 458,
+        "line_end": 530,
+        "finding": "Выборка реестра фильтрует и сортирует отмены по FbsOrder.updated_at."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_cancelled_after_pack_service.py",
+        "line_start": 540,
+        "line_end": 596,
+        "finding": "Ответ ставит cancelled_at=order.updated_at, а supply_departed выводит из текущего delivered_at/status поставки."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FbsCancelledAfterPackDialog.tsx",
+        "line_start": 101,
+        "line_end": 112,
+        "finding": "UI показывает текущий признак «Поставка передана» и подписывает время как «Обновлено», без исторического до/после."
+      }
+    ],
+    "test_evidence": "Тесты не запускались; проверены источник каждого поля ответа и его подпись в достижимом диалоге.",
+    "release_evidence": "Частичный реестр входит в production SHA 0229831f. Исторические данные и живое отображение не проверялись.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "ЧАСТИЧНО НА ПРОДЕ: реестр есть, но точного времени отмены и исторической границы до/после передачи нет"
+  },
+  {
+    "id": "WMS-113",
+    "title": "Источник поставки виден оператору уже в списке",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "partial",
+    "code_state": "В открытом рабочем пространстве есть предупреждение для поставки, созданной в кабинете маркетплейса. Однако DTO списка поставок не содержит source, сервис списка его не добавляет, а строка списка поэтому не может показать признак до открытия поставки. Исходный критерий «видеть до начала работы» выполнен только после входа внутрь.",
+    "remaining": "Добавить source в DTO и преобразование списка поставок и отрисовать компактный признак в существующей строке списка. Затем проверить два источника в живом браузере.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 1571,
+        "line_end": 1580,
+        "finding": "Открытая поставка показывает предупреждение, когда workspace.supply.source указывает на кабинет маркетплейса."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/api/fbs_supplies.py",
+        "line_start": 144,
+        "line_end": 162,
+        "finding": "Публичная модель элемента списка поставок не объявляет поле source."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_supply_service.py",
+        "line_start": 1444,
+        "line_end": 1495,
+        "finding": "Преобразование FbsSupply в worklist item возвращает поля поставки, но не source."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "line_start": 1395,
+        "line_end": 1463,
+        "finding": "Строка списка рисует доступные поля поставки и не имеет данных для признака источника."
+      }
+    ],
+    "test_evidence": "Тесты не запускались; прослежены раздельно путь списка и путь открытого workspace.",
+    "release_evidence": "Частичное предупреждение внутри поставки есть в production SHA 0229831f; список в браузере не проверялся.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "ЧАСТИЧНО: источник виден внутри поставки, но не до открытия в списке"
+  },
+  {
+    "id": "WMS-114",
+    "title": "Нужно ли учитывать разрешение Wildberries на сдачу в ПВЗ",
+    "prior_status": "РЕШЕНИЕ ВЛАДЕЛЬЦА",
+    "verdict": "decision",
+    "code_state": "Серверный preflight по-прежнему считает все заказы разрешёнными для ПВЗ: pvz_allowed_count равен числу заказов, blocked_count равен нулю, список заблокированных пуст. Внешний признак Wildberries в этом решении не читается.",
+    "remaining": "Нужно решение владельца: принимать текущую политику «разрешены все» либо назвать точный WB-признак и правило запрета. Без продуктового решения код менять нельзя.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_supply_validator_service.py",
+        "line_start": 272,
+        "line_end": 298,
+        "finding": "Результат preflight жёстко заполняет разрешённое количество всеми заказами и не создаёт ни одного PVZ-блокера."
+      }
+    ],
+    "test_evidence": "Тесты и WB-запросы не выполнялись; решение видно непосредственно в формировании серверного результата.",
+    "release_evidence": "Текущая политика находится в production SHA 0229831f.",
+    "confidence": "high",
+    "needs_root_check": true,
+    "canonical_status": "РЕШЕНИЕ ВЛАДЕЛЬЦА: production считает разрешёнными для ПВЗ все заказы"
+  },
+  {
+    "id": "WMS-115",
+    "title": "Собранные отменённые заказы: список, запреты и возврат товара",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09.2026",
+    "verdict": "partial",
+    "code_state": "На вкладке отменённых есть «К вскрытию» с поиском и деталями заказа, товара, селлера, короба и поставки. Серверные пути печати стикера/ленты и упаковки останавливают конкретный отменённый заказ с понятным сообщением. Но требование включает возврат товара после уже состоя передачи: текущая отмена сознательно не создаёт документ возврата и не приходует товар. Значит экран и предупреждения реализованы, физический возврат после передачи остаётся WMS-111.",
+    "remaining": "Закрыть WMS-111 автоматическим документом возврата после передачи. Отдельно текущим браузером проверить список и тексты запретов; число исторических случаев требует read-only данных.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "line_start": 1227,
+        "line_end": 1231,
+        "finding": "На отменённой WB-вкладке доступна кнопка «К вскрытию»."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FbsCancelledAfterPackDialog.tsx",
+        "line_start": 60,
+        "line_end": 128,
+        "finding": "Диалог показывает заказ/товар, селлера, короб, поставку и причину отмены."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_order_tape_print_service.py",
+        "line_start": 179,
+        "line_end": 224,
+        "finding": "Лента отделяет отменённые заказы и возвращает по ним order_cancelled вместо печати."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_packaging_integration_service.py",
+        "line_start": 548,
+        "line_end": 579,
+        "finding": "Упаковка как привязанного, так и ранее отвязанного отменённого заказа завершается явным order_cancelled."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_cancellation_service.py",
+        "line_start": 98,
+        "line_end": 111,
+        "finding": "Автоматический физический возврат отсутствует: совместимая функция всегда возвращает False и требует отдельного документа."
+      }
+    ],
+    "test_evidence": "Тесты не перезапускались. UI-код не заменяет ручную проверку; историческое количество из постановки не подтверждалось.",
+    "release_evidence": "Список и запреты входят в production SHA 0229831f, сверенный 09.09.2026; возвратный документ из этого потока отсутствует.",
+    "confidence": "high",
+    "needs_root_check": true,
+    "canonical_status": "ЧАСТИЧНО НА ПРОДЕ: список и запреты есть; автоматического возврата после передачи нет"
+  },
+  {
+    "id": "WMS-116",
+    "title": "Свободная навигация между этапами WB/Ozon FBS",
+    "prior_status": "СНЯТА 08.09.2026 — УЖЕ СДЕЛАНО",
+    "verdict": "obsolete",
+    "code_state": "Текущий общий helper открывает все четыре рабочие поверхности для WB и Ozon и при фоновом обновлении сохраняет выбранную оператором вкладку. Компонент вкладок использует этот helper; упаковка и прочий прогресс не участвуют в праве навигации. Исходная проблема уже устранена.",
+    "remaining": "Новых кодовых работ по задаче нет. Локальная ручная проверка Ozon датирована 08.09.2026; текущий production-браузер этим аудитом не перепроверялся.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/fbsUx.ts",
+        "line_start": 70,
+        "line_end": 99,
+        "finding": "Доступный индекс всегда последний; refresh сохраняет текущий выбранный этап, если оператор уже вышел из состава."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 1687,
+        "line_end": 1715,
+        "finding": "Рабочие вкладки используют рассчитанный общий индекс и не содержат отдельной блокировки WB/Ozon по прогрессу."
+      }
+    ],
+    "test_evidence": "В каноне зафиксирована ручная локальная проверка Ozon 08.09.2026; в текущем read-only проходе тесты и браузер не запускались.",
+    "release_evidence": "Код входит в production web baseline 0229831f; свежая ручная проверка production UI отсутствует.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "СНЯТА: код свободной навигации WB/Ozon на проде, текущий экран не перепроверен"
+  },
+  {
+    "id": "WMS-117",
+    "title": "Синхронизация статусов заказов и поставок с Wildberries",
+    "prior_status": "ЧАСТИЧНО",
+    "verdict": "partial",
+    "code_state": "Механизмы исправления есть: импорт обновляет статусы заказов, отмены/продажи/сортировка меняют локальное состояние и резервы; отдельный фоновый проход получает список поставок WB одним запросом и синхронизирует все незакрытые, переводя завершённые в done. Однако операторская кнопка «Обновить заказы» вызывает импорт и статусы заказов, но не общий проход статусов поставок; sync одной поставки вызывается перед печатью QR. Поэтому исправление зависит от фонового цикла, а исходный повторявшийся факт согласованности без production-данных не доказан. Root отдельно проверил последние 30 минут worker на 20:38 UTC: три завершённых цикла статусов в 20:13/23/33 UTC, каждый отчитался по 16 парам с errors=0. Это подтверждает исполнение общего цикла; не доказывает отсутствие ошибок отдельного tracking, который перехватывает исключения, и не является сравнением каждого документа с живым WB.",
+    "remaining": "При повторяющемся расхождении взять конкретные order_id/supply_id и сравнить текущий внешний статус с локальным. Фоновый цикл подтверждён. Если ручная кнопка должна немедленно обновлять также поставки, подключить к ней существующую общую сверку; сейчас она обновляет заказы. Полную согласованность всех данных без предметной сверки не объявлять.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "line_start": 769,
+        "line_end": 846,
+        "finding": "Ручное обновление последовательно импортирует заказы и синхронизирует статусы заказов, затем перечитывает список; общий sync поставок не вызывается."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/wb_marketplace_orders_service.py",
+        "line_start": 709,
+        "line_end": 779,
+        "finding": "Синхронизация WB-статуса переводит локальный заказ в cancelled/done/sorted/defect и обслуживает резерв/начисление."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_tracking_service.py",
+        "line_start": 230,
+        "line_end": 328,
+        "finding": "Синхронизация поставки читает детали и статусы заказов и закрывает её, когда WB done или все заказы терминальные."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_tracking_service.py",
+        "line_start": 374,
+        "line_end": 434,
+        "finding": "Фоновый общий проход выбирает все незакрытые WB-поставки продавца и сверяет их по карте поставок WB."
+      },
+      {
+        "ref": "production-readonly-2026-09-09",
+        "path": "docs/reviews/artifacts/wms414-audit-20260909/worker-cycles.json",
+        "line_start": 1,
+        "line_end": 70,
+        "finding": "Сохранены только времена и числовые итоги циклов orders/statuses; runtime цикл работает."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_autopoll_service.py",
+        "line_start": 461,
+        "line_end": 489,
+        "finding": "Цикл статусов вызывает tracking поставок, но tracking error ловится локально; общий errors0 не является доказательством каждой поставки."
+      }
+    ],
+    "test_evidence": "Read-only whitelist логов worker-cycles.json подтверждает исполнение. Внешний WB-запрос и ручная UI-проверка здесь не выполнялись.",
+    "release_evidence": "Production SHA0229831f подтверждён; worker завершает цикл статусов каждые10мин в свежем окне20:08–20:38UTC. Отдельный внешний статус каждого документа не читался.",
+    "confidence": "medium",
+    "needs_root_check": true,
+    "canonical_status": "ЧАСТИЧНО: серверная сверка есть, но фактическая согласованность и полнота ручного обновления не доказаны"
+  },
+  {
+    "id": "WMS-118",
+    "title": "Вкладки FBS должны показывать поставки, а не заказы",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "obsolete",
+    "code_state": "Фактический симптом постановки устранён: «В доставке» теперь загружает поставки, как и «В работе»/«Завершённые». Более широкий старый тезис «везде поставки» конфликтует с более поздним прямым эталоном AGENTS.md: основной FBS-экран сохраняет таблицу заказов из четырёх колонок, со статусом вне «Новых». Поэтому превращать «Новые» и остальные заказные вкладки в поставки по этой старой строке нельзя. Отдельный вопрос колонок: актуальный код содержит восемь столбцов, для них найдено прямое разрешение владельца01.09 и сохранённый разбор. Старая фраза о четырёх колонках не доказывает регрессию этого изменения.",
+    "remaining": "Кодовых работ по старому требованию нет. Сохранить текущую границу: активные/доставка/завершённые — поставки; заказные вкладки — эталонная таблица заказов. Текущий экран в браузере этим аудитом не открывался.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "line_start": 92,
+        "line_end": 112,
+        "finding": "«В работе», «В доставке» и «Завершённые» объявлены supply-группами; исходный симптом про заказы во «В доставке» больше не соответствует коду."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "line_start": 590,
+        "line_end": 635,
+        "finding": "Load для трёх supply-групп вызывает list поставок, а заказные группы сохраняют отдельный worklist заказов."
+      },
+      {
+        "ref": "c6fdfbdbfa7e3889ba130a6dcd4a73e068833399",
+        "path": "AGENTS.md",
+        "line_start": 150,
+        "line_end": 155,
+        "finding": "Более поздний прямой контракт фиксирует эталон основного FBS-экрана как таблицу заказов из четырёх колонок, плюс статус вне вкладки «Новые»."
+      }
+    ],
+    "test_evidence": "Тесты и браузер не запускались. Коллизия требований разрешена в пользу более позднего прямого AGENTS.md; новая переделка заказных вкладок не требуется.",
+    "release_evidence": "Исправление «В доставке» входит в production web baseline 0229831f; актуальный браузерный вид не перепроверялся.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "СНЯТА: «В доставке» уже показывает поставки; старое «везде поставки» отменено более поздним эталоном FBS-заказов"
+  },
+  {
+    "id": "WMS-119",
+    "title": "Фильтр по селлеру должен ограничивать весь список",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "implemented",
+    "code_state": "Выбор селлера записывает sellerId. Загрузка передаёт seller_id как для заказных, так и для поставочных вкладок. Оба серверных запроса добавляют точный фильтр по seller_id внутри tenant. По коду старый дефект исправлен на обоих представлениях списка.",
+    "remaining": "Текущую работу фильтра на двух продавцах нужно подтвердить в production-браузере; код не является UI-приёмкой.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "line_start": 590,
+        "line_end": 630,
+        "finding": "Обе ветки загрузки отправляют seller_id выбранного селлера."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "line_start": 1238,
+        "line_end": 1255,
+        "finding": "Селект селлера обновляет sellerId, который входит в зависимости загрузки."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_worklist_service.py",
+        "line_start": 251,
+        "line_end": 287,
+        "finding": "Запрос заказов всегда ограничен tenant и при seller_id добавляет FbsOrder.seller_id == seller_id."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_supply_service.py",
+        "line_start": 1350,
+        "line_end": 1386,
+        "finding": "Запрос поставок ограничен tenant/status и при seller_id добавляет FbsSupply.seller_id == seller_id."
+      }
+    ],
+    "test_evidence": "Тесты не перезапускались; цепочка фильтра проверена для заказов и поставок. Живой экран не открывался.",
+    "release_evidence": "Исправленный путь входит в production web/backend SHA 0229831f.",
+    "confidence": "high",
+    "needs_root_check": true,
+    "canonical_status": "КОД НА ПРОДЕ: seller_id применяется к заказам и поставкам; нужен свежий браузерный контроль"
+  },
+  {
+    "id": "WMS-120",
+    "title": "Имя склада Wildberries второй строкой в колонке маршрута",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "missing",
+    "code_state": "Backend worklist умеет отдать имя только из локальной привязки TenantWbMpWarehouse и иначе ставит «Склад WB неизвестен». UI дополнительно запрашивает имена складов выбранного селлера, но использует их только в выпадающем фильтре. Строка заказа в колонке маршрута рисует DeliveryRouteChip и признак юрлица; имя склада второй строкой отсутствует.",
+    "remaining": "Передать разрешённое имя склада в данные строки и вывести его второй строкой внутри существующей колонки «Маршрут сдачи», сохранив остальные текущие колонки. Четырёхколоночная оговорка старой постановки устарела: отдельные артикул/SKU/ШК/размер разрешены01.09, см. разбор wms-fbs-columns-check-20260909.md. Проверить строки с привязанным и непривязанным складом.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_worklist_service.py",
+        "line_start": 804,
+        "line_end": 866,
+        "finding": "Имя WB-склада берётся из локальной карты и при отсутствии заменяется MISSING_WB_WAREHOUSE."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "line_start": 691,
+        "line_end": 708,
+        "finding": "Дополнительные имена складов WB загружаются только для выбранного селлера и сохраняются для подписей фильтра."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "line_start": 372,
+        "line_end": 380,
+        "finding": "В ячейке маршрута выводится чип и тип покупателя, но не имя склада WB второй строкой."
+      }
+    ],
+    "test_evidence": "Тесты и браузер не запускались; просмотрены источник имени, вспомогательный запрос UI и фактический renderer строки.",
+    "release_evidence": "Пробел присутствует в production web/backend SHA 0229831f.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "НЕ СДЕЛАНО: имя склада WB не выводится второй строкой в маршруте"
+  },
+  {
+    "id": "WMS-121",
+    "title": "Сбрасывать выбранные заказы при смене селлера, склада или вкладки",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "missing",
+    "code_state": "Выбор хранится отдельными selected и selectedCache; загрузка добавляет текущие строки в кэш, но не очищает прежний набор. Обработчики вкладки, селлера, маркетплейса и склада меняют фильтры без setSelected(new Set()) и без очистки cache. Поэтому выбранные UUID прошлого экрана остаются в массовом действии.",
+    "remaining": "Единообразно очищать selected и selectedCache при смене контекста вкладки/селлера/склада/маркетплейса, затем вручную проверить каждое переключение с открытой нижней панелью.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "line_start": 542,
+        "line_end": 543,
+        "finding": "Выбранные UUID и кэш строк хранятся независимо от фильтров."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "line_start": 636,
+        "line_end": 640,
+        "finding": "Загрузка только дополняет selectedCache текущими строками и не удаляет старые."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "line_start": 1205,
+        "line_end": 1294,
+        "finding": "Обработчики вкладки, селлера, маркетплейса и склада меняют фильтры, но ни один не сбрасывает selected/cache."
+      }
+    ],
+    "test_evidence": "Тесты и браузер не запускались; проверены все названные обработчики и хранилище выбора.",
+    "release_evidence": "Дефект присутствует в production web baseline 0229831f.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "НЕ СДЕЛАНО: выбранные заказы переживают смену фильтров и вкладки"
+  },
+  {
+    "id": "WMS-122",
+    "title": "Не допускать дубли поставки Wildberries с одним номером",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "missing",
+    "code_state": "Единственное ограничение базы стоит на seller_id, marketplace, external_supply_id. WB-пути создания заполняют wb_supply_id, но external_supply_id оставляют null, поэтому это ограничение их не защищает; кроме того, seller_id позволил бы одинаковый кабинетный номер у разных локальных продавцов. Импорт сначала делает обычный поиск существующей записи, но без уникального ограничения два конкурентных insert могут пройти.",
+    "remaining": "Добавить уникальность для стабильной WB-идентичности поставки с учётом кабинета и миграционно разобрать существующие дубли. Затем проверить конкурентный импорт/ручное создание. Не использовать nullable external_supply_id как единственную защиту.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/models/fbs_supply.py",
+        "line_start": 36,
+        "line_end": 45,
+        "finding": "Ограничение уникальности охватывает nullable external_supply_id, а не wb_supply_id."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_supply_service.py",
+        "line_start": 780,
+        "line_end": 798,
+        "finding": "Основной путь создания записывает wb_supply_id, но не external_supply_id."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/wb_marketplace_orders_service.py",
+        "line_start": 1084,
+        "line_end": 1097,
+        "finding": "Импорт сначала ищет существующую поставку по WB ID прикладным запросом."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/wb_marketplace_orders_service.py",
+        "line_start": 1144,
+        "line_end": 1153,
+        "finding": "При отсутствии найденной записи импорт создаёт FbsSupply с wb_supply_id без external_supply_id; уникального барьера для гонки нет."
+      }
+    ],
+    "test_evidence": "Тесты не запускались; git log --all не нашёл отдельной реализации WMS-122. Проверены модель и оба пути создания.",
+    "release_evidence": "Пробел находится в production SHA 0229831f. Наличие реальных дублей требует отдельного read-only запроса.",
+    "confidence": "high",
+    "needs_root_check": true,
+    "canonical_status": "НЕ СДЕЛАНО: база не гарантирует уникальность WB-поставки по её реальному номеру"
+  },
+  {
+    "id": "WMS-123",
+    "title": "Режим коробов «Без распределения» после создания коробов",
+    "prior_status": "НА ПРОДЕ · ПРИЁМКА 09.09.2026",
+    "verdict": "implemented",
+    "code_state": "Живой checkbox отправляет точное enabled в отдельную ручку. API вызывает сервис и перечитывает workspace. Сервис блокирует строку поставки, запрещает переключение только когда к коробам уже привязаны заказы, и независимо сохраняет/снимает признак на поставке; наличие уже созданных пустых коробов не блокирует переключение.",
+    "remaining": "Кодовый критерий выполнен. Историческая ручная приёмка зафиксирована 09.09.2026, но текущий браузер этим read-only аудитом не перепроверялся.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 2207,
+        "line_end": 2222,
+        "finding": "Checkbox доступен при пустом распределении и отправляет новое boolean-значение."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/api/fbs_supplies.py",
+        "line_start": 1548,
+        "line_end": 1570,
+        "finding": "API передаёт body.enabled в сервис, коммитит и возвращает заново прочитанный workspace."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_packing_box_service.py",
+        "line_start": 273,
+        "line_end": 309,
+        "finding": "Сервис проверяет только фактические привязки заказов и сохраняет либо очищает признак независимо от пустых коробов."
+      }
+    ],
+    "test_evidence": "Тесты не перезапускались. Канон фиксирует ручную приёмку 09.09.2026; этот аудитор экран не открывал.",
+    "release_evidence": "Реализация входит в production SHA 0229831f, сверенный root 09.09.2026.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "НА ПРОДЕ: «Без распределения» переключается после создания пустых коробов; текущий экран не перепроверен"
+  },
+  {
+    "id": "WMS-124",
+    "title": "Полная история заказов и поставок FBS с ответами Wildberries",
+    "prior_status": "ЧАСТИЧНО",
+    "verdict": "partial",
+    "code_state": "История строится read-only из существующих подборов, упаковки, маркировок, печати, коробов и DocumentEvent. Для поставки есть достижимый диалог и API. При этом сервис истории не читает FbsWbOperation и не читает FbsShipmentReversalLedger, поэтому в ленте нет точной операции передачи, связанного физического движения и результата/ошибки WB. Каноническое утверждение «движение вообще не связано» устарело: ledger уже хранит shipment_movement_id на каждый fbs_order_id, но UI-история эту связь не использует. Периодических срезов статуса также нет в возвращаемой ленте.",
+    "remaining": "Добавить в существующую ленту уже сохранённые связи передачи/движения и результаты WB-операций с исполнителем и временем. Для восстановления статуса по часам определить, какие существующие DocumentEvent достаточны, и хранить недостающие переходы без дублирующего счётчика.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_order_history_service.py",
+        "line_start": 1,
+        "line_end": 12,
+        "finding": "Сервис объявлен как read-only агрегатор существующих записей и сам ничего не пишет."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_order_history_service.py",
+        "line_start": 90,
+        "line_end": 282,
+        "finding": "История заказа собирает подбор, упаковку, ЧЗ, печать и события документа, но не WB-операции и не shipment ledger."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/fbs_order_history_service.py",
+        "line_start": 341,
+        "line_end": 624,
+        "finding": "История поставки собирает заказы, короба и производственные факты, но не возвращает WB-ответ передачи или физическое движение."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/models/fbs_shipment_reversal_ledger.py",
+        "line_start": 32,
+        "line_end": 120,
+        "finding": "Ledger уже связывает fbs_order_id с shipment_movement_id и хранит исполнителя/время, поэтому связь в данных существует."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FbsSupplyHistoryDialog.tsx",
+        "line_start": 149,
+        "line_end": 209,
+        "finding": "Диалог загружает серверную историю поставки и показывает только полученные события."
+      }
+    ],
+    "test_evidence": "Тесты не запускались; просмотрены обе ветки сборки истории и модель физической связи.",
+    "release_evidence": "Частичная история и связующий ledger входят в production SHA 0229831f. Полнота реальных событий в данных не проверялась.",
+    "confidence": "high",
+    "needs_root_check": true,
+    "canonical_status": "ЧАСТИЧНО: история производства есть, связь движения хранится, но передача/WB-ответы и временные статусы в ленту не выведены"
+  },
+  {
+    "id": "WMS-125",
+    "title": "Моргание строк и списка FBS",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "unverified",
+    "code_state": "В текущем коде список при опросе не очищает существующие строки: load включает индикатор busy, но заменяет данные только после ответа. Workspace опрашивается в silent-режиме и сохраняет текущий объект до нового результата; операции показывают линейный прогресс. Эти механизмы уменьшают полное исчезновение контента, но «моргание перед позеленением» является визуальным эффектом от порядка render/paint и по чтению TypeScript подтвердить или снять его нельзя.",
+    "remaining": "Воспроизвести в текущем production-браузере два точных случая: скан строки до зелёного состояния и 30-секундный опрос списка. Если видимый flash остаётся, снять запись/кадры и исправлять конкретный переход состояния, не весь экран вслепую.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "line_start": 590,
+        "line_end": 660,
+        "finding": "load сохраняет старые arrays во время запроса и заменяет их только после успешного ответа."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "line_start": 672,
+        "line_end": 689,
+        "finding": "Периодический опрос каждые 30 секунд вызывает тот же load, не очищая список заранее."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 374,
+        "line_end": 450,
+        "finding": "Workspace поддерживает silent refresh и 30-секундный опрос без сброса текущего workspace."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "line_start": 474,
+        "line_end": 503,
+        "finding": "Мутации сохраняют текущие данные и управляют индикатором busy до нового ответа."
+      }
+    ],
+    "test_evidence": "По запрету аудита браузер не открывался и визуальный симптом не воспроизводился; git log --all не нашёл отдельного коммита WMS-125.",
+    "release_evidence": "Описанные anti-flicker механизмы входят в production web baseline 0229831f, но это не доказательство визуальной приёмки.",
+    "confidence": "medium",
+    "needs_root_check": true,
+    "canonical_status": "НЕ ПРОВЕРЕНО: код не очищает данные при refresh, но визуальное моргание требует живого браузерного воспроизведения"
+  },
+  {
+    "id": "WMS-126",
+    "title": "Один API-ключ Wildberries для всех функций кабинета селлера",
+    "prior_status": "НА ПРОДЕ",
+    "verdict": "implemented",
+    "code_state": "Экран селлера принимает одно поле API-ключа и отправляет один content_api_token. Сервер этим же значением проверяет Content API и Marketplace API, а после успешной проверки сохраняет его как content, supplies и marketplace token. Старые записи получают безопасный fallback content→marketplace только при отсутствии отдельного значения и без известного отрицательного результата проверки. Таким образом селлер вводит ключ один раз, а все интеграционные пути получают его из единой операции.",
+    "remaining": "Кодовый критерий выполнен. Реальную область прав конкретного ключа WB и фоновые импорты этим аудитом не проверяли; секреты не читались.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "frontend/src/screens/v2/SellerSettingsScreen.tsx",
+        "line_start": 393,
+        "line_end": 410,
+        "finding": "Экран отправляет одно поле content_api_token на self/content-token."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/api/wildberries_integration.py",
+        "line_start": 454,
+        "line_end": 521,
+        "finding": "API проверяет один token через Content и Marketplace и передаёт то же значение во все три серверных назначения при успешной проверке."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/wildberries_credentials_service.py",
+        "line_start": 115,
+        "line_end": 202,
+        "finding": "Сервис сохраняет единый ключ, не перетирает ранее рабочий marketplace key непроверенным и фиксирует результат scope-проверки."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/wildberries_credentials_service.py",
+        "line_start": 228,
+        "line_end": 246,
+        "finding": "Marketplace/FBS читает отдельное поле либо безопасно использует старый content token как fallback."
+      }
+    ],
+    "test_evidence": "Тесты и внешние запросы WB не запускались; секреты и значения токенов не открывались.",
+    "release_evidence": "Единый путь находится в production web/backend SHA 0229831f.",
+    "confidence": "high",
+    "needs_root_check": false,
+    "canonical_status": "КОД НА ПРОДЕ: селлер вводит один WB-ключ, сервер проверяет и использует его для Content/Marketplace/FBS"
+  },
+  {
+    "id": "WMS-127",
+    "title": "Запрет одного кабинета Wildberries у двух арендаторов",
+    "prior_status": "НЕ СДЕЛАНО",
+    "verdict": "missing",
+    "code_state": "Таблица учётных данных уникальна только по seller_id и хранит три зашифрованных значения без стабильного отпечатка или идентификатора WB-кабинета. Сервис сохранения проверяет лишь принадлежность выбранного seller к tenant и записывает шифротекст. Self API проверяет права ключа у WB, но перед сохранением не ищет такой кабинет у другого seller/tenant. Поскольку шифрование не даёт пригодной уникальной идентичности, база не может вернуть требуемый понятный отказ.",
+    "remaining": "Получать или вычислять не секретный стабильный идентификатор кабинета/отпечаток ключа, наложить уникальность на активную привязку и вернуть понятный конфликт до сохранения. Перед миграцией отдельно разобрать существующие дубли, не раскрывая ключи.",
+    "evidence": [
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/models/seller_wildberries_credentials.py",
+        "line_start": 13,
+        "line_end": 35,
+        "finding": "Модель имеет primary key только seller_id и зашифрованные токены; уникальной идентичности кабинета нет."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/services/wildberries_credentials_service.py",
+        "line_start": 125,
+        "line_end": 202,
+        "finding": "Сохранение ограничивается проверкой seller в tenant и записью токенов, без межарендаторного поиска дубликата."
+      },
+      {
+        "ref": "0229831f7442823f086f0147ffa85aed05b8ca66",
+        "path": "backend/app/api/wildberries_integration.py",
+        "line_start": 454,
+        "line_end": 521,
+        "finding": "Self API валидирует переданный ключ у WB и сразу вызывает patch_seller_tokens; проверки владельца кабинета среди других seller нет."
+      }
+    ],
+    "test_evidence": "Тесты не запускались; git log --all не нашёл реализации WMS-127. Никакие секреты не читались.",
+    "release_evidence": "Пробел присутствует в production SHA 0229831f. Фактические дубли в БД этим аудитом не запрашивались.",
+    "confidence": "high",
+    "needs_root_check": true,
+    "canonical_status": "НЕ СДЕЛАНО: один WB-кабинет можно сохранить у нескольких seller/tenant"
+  }
+]

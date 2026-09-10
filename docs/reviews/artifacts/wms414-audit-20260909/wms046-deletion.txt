@@ -1,0 +1,11 @@
+WMS-046 deletion proof generated 2026-09-09
+parent_sha ffc8069f45119d47a904fc342b539ca6320c0244
+deletion_sha ee0f305675752a1a1ef0a645238e78c24a3791b8
+D	backend/app/cli/reconcile_fbs_shipped_stock.py
+production_sha 0229831f7442823f086f0147ffa85aed05b8ca66
+production_path ABSENT
+parent_path
+blob
+ee0f305675752a1a1ef0a645238e78c24a3791b8
+ffc8069f45119d47a904fc342b539ca6320c0244
+chore: WMS-046 удалить reconcile_fbs_shipped_stock.py

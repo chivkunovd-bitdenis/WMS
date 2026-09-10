@@ -1,0 +1,72 @@
+{
+  "checked_at_utc": "2026-09-09T20:38:14.231022+00:00",
+  "window": "30m",
+  "exit_code": 0,
+  "cycles": [
+    {
+      "kind": "orders",
+      "at": "2026-09-09T20:10:47.360722560Z",
+      "counts": "fbs autopoll orders done: sellers=14 upserted=116 created=0 statuses=0 stocks_bindings=0 stock_errors=0 errors=2"
+    },
+    {
+      "kind": "statuses",
+      "at": "2026-09-09T20:13:08.643848547Z",
+      "counts": "fbs autopoll statuses done: sellers=16 statuses=2655 errors=0"
+    },
+    {
+      "kind": "orders",
+      "at": "2026-09-09T20:13:47.910505454Z",
+      "counts": "fbs autopoll orders done: sellers=14 upserted=116 created=0 statuses=0 stocks_bindings=0 stock_errors=0 errors=2"
+    },
+    {
+      "kind": "orders",
+      "at": "2026-09-09T20:16:47.115533107Z",
+      "counts": "fbs autopoll orders done: sellers=14 upserted=116 created=0 statuses=0 stocks_bindings=0 stock_errors=0 errors=2"
+    },
+    {
+      "kind": "orders",
+      "at": "2026-09-09T20:19:47.166114446Z",
+      "counts": "fbs autopoll orders done: sellers=14 upserted=116 created=0 statuses=0 stocks_bindings=0 stock_errors=0 errors=2"
+    },
+    {
+      "kind": "orders",
+      "at": "2026-09-09T20:22:47.026791285Z",
+      "counts": "fbs autopoll orders done: sellers=13 upserted=110 created=0 statuses=0 stocks_bindings=0 stock_errors=0 errors=2"
+    },
+    {
+      "kind": "statuses",
+      "at": "2026-09-09T20:23:10.934518901Z",
+      "counts": "fbs autopoll statuses done: sellers=16 statuses=2655 errors=0"
+    },
+    {
+      "kind": "orders",
+      "at": "2026-09-09T20:25:47.085119408Z",
+      "counts": "fbs autopoll orders done: sellers=14 upserted=116 created=0 statuses=0 stocks_bindings=0 stock_errors=0 errors=2"
+    },
+    {
+      "kind": "orders",
+      "at": "2026-09-09T20:28:46.779601154Z",
+      "counts": "fbs autopoll orders done: sellers=14 upserted=116 created=0 statuses=0 stocks_bindings=0 stock_errors=0 errors=2"
+    },
+    {
+      "kind": "orders",
+      "at": "2026-09-09T20:31:47.603858854Z",
+      "counts": "fbs autopoll orders done: sellers=13 upserted=117 created=1 statuses=0 stocks_bindings=0 stock_errors=0 errors=2"
+    },
+    {
+      "kind": "statuses",
+      "at": "2026-09-09T20:33:08.385661893Z",
+      "counts": "fbs autopoll statuses done: sellers=16 statuses=2656 errors=0"
+    },
+    {
+      "kind": "orders",
+      "at": "2026-09-09T20:34:46.579595383Z",
+      "counts": "fbs autopoll orders done: sellers=14 upserted=117 created=0 statuses=0 stocks_bindings=0 stock_errors=0 errors=2"
+    },
+    {
+      "kind": "orders",
+      "at": "2026-09-09T20:37:46.845731428Z",
+      "counts": "fbs autopoll orders done: sellers=14 upserted=119 created=2 statuses=0 stocks_bindings=0 stock_errors=0 errors=2"
+    }
+  ]
+}

@@ -125,16 +125,18 @@ def print_asset_content_url(asset_id: uuid.UUID) -> str:
     return f"/operations/fbs-print-assets/{asset_id}/content"
 
 
-def _encode_cursor(deadline_at: datetime, order_id: uuid.UUID) -> str:
-    payload = {"d": deadline_at.isoformat(), "i": str(order_id)}
+def _encode_cursor(deadline_at: datetime, order_id: uuid.UUID, sort: str = "deadline") -> str:
+    payload = {"d": deadline_at.isoformat(), "i": str(order_id), "s": sort}
     raw = json.dumps(payload, separators=(",", ":")).encode()
     return base64.urlsafe_b64encode(raw).decode()
 
 
-def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
+def _decode_cursor(cursor: str, sort: str = "deadline") -> tuple[datetime, uuid.UUID]:
     try:
         raw = base64.urlsafe_b64decode(cursor.encode())
         payload = json.loads(raw.decode())
+        if not isinstance(payload, dict) or payload.get("s", "deadline") != sort:
+            raise ValueError("invalid_cursor")
         deadline = datetime.fromisoformat(str(payload["d"]))
         order_id = uuid.UUID(str(payload["i"]))
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
@@ -154,7 +156,10 @@ async def fetch_worklist_page(
     search: str | None = None,
     limit: int = 100,
     cursor: str | None = None,
+    sort: str = "deadline",
 ) -> WorklistPage:
+    if sort not in {"deadline", "oldest"}:
+        raise ValueError("invalid_sort")
     server_now = datetime.now(tz=UTC)
     orders, total = await _fetch_orders_page(
         session,
@@ -166,6 +171,7 @@ async def fetch_worklist_page(
         search=search,
         limit=limit,
         cursor=cursor,
+        sort=sort,
         server_now=server_now,
     )
     items = await build_worklist_items(session, tenant_id, orders, server_now=server_now)
@@ -179,7 +185,9 @@ async def fetch_worklist_page(
     next_cursor: str | None = None
     if len(orders) == limit:
         last = orders[-1]
-        next_cursor = _encode_cursor(last.deadline_at, last.id)
+        next_cursor = _encode_cursor(
+            last.created_at_wb if sort == "oldest" else last.deadline_at, last.id, sort
+        )
     return WorklistPage(
         items=items,
         next_cursor=next_cursor,
@@ -260,6 +268,7 @@ async def _fetch_orders_page(
     limit: int,
     cursor: str | None,
     server_now: datetime,
+    sort: str = "deadline",
 ) -> tuple[list[FbsOrder], int | None]:
     served_wb_binding = exists(
         select(FbsWarehouseBinding.id).where(
@@ -315,18 +324,19 @@ async def _fetch_orders_page(
         if search and search.strip()
         else None
     )
+    sort_column = FbsOrder.created_at_wb if sort == "oldest" else FbsOrder.deadline_at
     if cursor:
-        cursor_deadline, cursor_id = _decode_cursor(cursor)
+        cursor_deadline, cursor_id = _decode_cursor(cursor, sort)
         stmt = stmt.where(
             or_(
-                FbsOrder.deadline_at > cursor_deadline,
+                sort_column > cursor_deadline,
                 and_(
-                    FbsOrder.deadline_at == cursor_deadline,
+                    sort_column == cursor_deadline,
                     FbsOrder.id > cursor_id,
                 ),
             )
         )
-    stmt = stmt.order_by(FbsOrder.deadline_at.asc(), FbsOrder.id.asc()).limit(limit)
+    stmt = stmt.order_by(sort_column.asc(), FbsOrder.id.asc()).limit(limit)
     res = await session.execute(stmt)
     return list(res.scalars().all()), total
 
@@ -901,6 +911,9 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
             {
                 "id": str(position.id),
                 "image_url": ctx["ozon_photos"].get(position.product_id),
+                "barcode": ctx["products"][position.product_id].wb_barcode
+                if position.product_id in ctx["products"]
+                else None,
                 "product_id": str(position.product_id) if position.product_id else None,
                 "name": (
                     ctx["products"][position.product_id].name

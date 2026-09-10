@@ -1,0 +1,19 @@
+{
+  "production_mobile_commit": "30bab83d94eada0ecc15f877be62fc8aa877ffa8",
+  "exit_code": 1,
+  "suites": [
+    {
+      "name": "ru.wms.tsd.features.fbs.FbsViewModelTest",
+      "tests": "4",
+      "failures": "4",
+      "errors": "0",
+      "skipped": "0"
+    }
+  ],
+  "cases": [
+    "preceding box scan Ozon initial none",
+    "preceding box scan WB initial none",
+    "preceding box scan Ozon initial A",
+    "preceding box scan WB initial A"
+  ]
+}

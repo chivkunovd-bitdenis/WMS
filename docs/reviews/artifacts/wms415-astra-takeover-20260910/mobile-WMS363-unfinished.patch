@@ -1,0 +1,82 @@
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt
+index 80b1f07..7bf60a3 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt
+@@ -12,6 +12,9 @@ import retrofit2.http.Path
+ import retrofit2.http.Query
+ 
+ interface FbsApi {
++    // WMS-363: marketplace выбирает оператор в UI (WB / Ozon). Значение по
++    // умолчанию оставлено "wb", чтобы старые сборки, которые всё ещё не шлют
++    // параметр, продолжали видеть WB-заказы.
+     @GET("operations/fbs-orders/worklist")
+     suspend fun orders(@Query("marketplace") marketplace: String = "wb", @Query("status_group") group: String? = null, @Query("limit") limit: Int = 100, @Query("cursor") cursor: String? = null): Response<FbsOrderPage>
+ 
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
+index 2fd5554..ee2b141 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
+@@ -51,6 +51,19 @@ internal fun displayTime(value: String): String = runCatching {
+     ScanScaffold(title = "FBS · Заказы", flash = state.flash, onExit = onBack, cameraScanner = false) {
+         Column(Modifier.fillMaxSize()) {
+             ErrorPanel(state, vm)
++            // WMS-363: минимальный переключатель маркетплейса. Один stateflow-поле,
++            // никаких табов и подэкранов — по-скучному вкладками не разъедемся.
++            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
++                for ((code, label) in listOf("wb" to "WB", "ozon" to "Ozon")) {
++                    val selected = state.marketplace == code
++                    FilterChip(
++                        selected = selected,
++                        onClick = { if (!state.busy) vm.setMarketplace(code) },
++                        label = { Text(label) },
++                        modifier = Modifier.weight(1f),
++                    )
++                }
++            }
+             if (state.selected.isNotEmpty()) Row(Modifier.padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                 Button(onClick = { createDialog = true }, enabled = !state.busy, modifier = Modifier.weight(1f)) { Text("Новая поставка (${state.selected.size})") }
+                 OutlinedButton(onClick = { chooseSupply = true }, enabled = !state.busy, modifier = Modifier.weight(1f)) { Text("В поставку") }
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+index df87356..599ee0a 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+@@ -73,6 +73,13 @@ data class FbsState(
+     val deliveryConfirmationOpen: Boolean = false,
+     val deliveryPreflight: FbsDeliveryPreflight? = null,
+     val pendingDelivery: DeliverBody? = null,
++    /**
++     * WMS-363: выбранный оператором маркетплейс. Одно значение состояния,
++     * ноль журналов и счётчиков: экран сегментов пишет сюда, вью-модель шлёт
++     * это же значение и в orders(), и в worklist() без изобретения промежуточных
++     * сущностей.
++     */
++    val marketplace: String = "wb",
+ )
+ 
+ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+@@ -124,10 +131,23 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+     fun retry() { retryAction?.let(::launch) }
+     fun dismissError() { retryAction = null; mutable.value = state.value.copy(error = null) }
+     fun loadOrders(append: Boolean = false) = launch {
+-        val page = required { api.fbs().orders(group = null, cursor = if (append) state.value.cursor else null) }
+-        val supplies = required { api.fbs().worklist(statusGroup = "active") }
++        // WMS-363: и заказы, и поставки фильтруем по выбранному оператором маркетплейсу.
++        // Одно и то же значение стейта уходит в оба запроса — вкладки не разъезжаются.
++        val marketplace = state.value.marketplace
++        val page = required { api.fbs().orders(marketplace = marketplace, group = null, cursor = if (append) state.value.cursor else null) }
++        val supplies = required { api.fbs().worklist(marketplace = marketplace, statusGroup = "active") }
+         mutable.value = state.value.copy(orders = ((if (append) state.value.orders else emptyList()) + page.items).distinctBy { it.id }, cursor = page.nextCursor, supplies = supplies.items)
+     }
++
++    /**
++     * WMS-363: смена маркетплейса — единственная точка правды. Сбрасываем список и
++     * cursor (данные другого магазина не показываем), затем перезагружаем.
++     */
++    fun setMarketplace(marketplace: String) {
++        if (marketplace !in setOf("wb", "ozon") || marketplace == state.value.marketplace) return
++        mutable.value = state.value.copy(marketplace = marketplace, orders = emptyList(), cursor = null, supplies = emptyList(), selected = emptySet())
++        loadOrders()
++    }
+     fun toggle(order: FbsOrder) {
+         if (order.status != "new" || order.supplyId != null) return
+         mutable.value = state.value.copy(selected = state.value.selected.let { if (order.id in it) it - order.id else it + order.id })

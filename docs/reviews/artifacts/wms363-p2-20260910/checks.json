@@ -1,0 +1,36 @@
+{
+  "suites": [
+    {
+      "name": "ru.wms.tsd.features.fbs.FbsApiContractTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "ru.wms.tsd.features.fbs.FbsDeliveryTest",
+      "tests": "14",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "ru.wms.tsd.features.fbs.FbsViewModelTest",
+      "tests": "35",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "ru.wms.tsd.features.update.UpdateTest",
+      "tests": "12",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  ],
+  "lint_errors": 0,
+  "lint_warnings": 41,
+  "gradle_max_workers": 2,
+  "assembleDebug": "pass"
+}

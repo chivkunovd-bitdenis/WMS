@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal, cast
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -41,7 +41,9 @@ class FbsKizLookupOut(BaseModel):
     needs_confirmation: bool
     can_bind: bool
     block_reason: str | None
-    marketplace: str = "wb"
+    # WMS-363: маркетплейс проставляет сервис из заказа. Literal фиксирует,
+    # что TSD ждёт либо "wb", либо "ozon" — третьего варианта нет.
+    marketplace: Literal["wb", "ozon"] = "wb"
     external_order_id: str | None = None
 
 
@@ -129,7 +131,9 @@ def _lookup_out(result: kiz_svc.FbsKizLookup) -> FbsKizLookupOut:
         needs_confirmation=result.needs_confirmation,
         can_bind=result.can_bind,
         block_reason=result.block_reason,
-        marketplace=result.marketplace,
+        # WMS-363: cast к Literal — сервис возвращает str, но по инварианту это
+        # только "wb"/"ozon" (см. _order_out в fbs_orders.py).
+        marketplace=cast(Literal["wb", "ozon"], result.marketplace),
         external_order_id=result.external_order_id,
     )
 

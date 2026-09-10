@@ -1,0 +1,11 @@
+
+; <<>> DiG 9.10.6 <<>> _dmarc.sellerfocus.pro TXT +noall +comments +answer +authority
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 57875
+;; flags: qr rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 1, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+;; AUTHORITY SECTION:
+sellerfocus.pro.	1793	IN	SOA	coraline.ns.cloudflare.com. dns.cloudflare.com. 2414192137 10000 2400 604800 1800

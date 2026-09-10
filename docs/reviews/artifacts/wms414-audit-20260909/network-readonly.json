@@ -1,0 +1,30 @@
+{
+  "checked_at_utc": "2026-09-09T20:30:38.005935+00:00",
+  "results": {
+    "dns_wms": {
+      "exit_code": 0,
+      "stdout": "194.87.96.144",
+      "stderr": ""
+    },
+    "dmarc": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "https": {
+      "exit_code": 0,
+      "stdout": "200 194.87.96.144 0",
+      "stderr": ""
+    },
+    "http_8088": {
+      "exit_code": 0,
+      "stdout": "200 194.87.96.144",
+      "stderr": ""
+    },
+    "http_15174": {
+      "exit_code": 0,
+      "stdout": "200 194.87.96.144",
+      "stderr": ""
+    }
+  }
+}
