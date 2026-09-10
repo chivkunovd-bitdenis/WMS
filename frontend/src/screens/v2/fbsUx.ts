@@ -23,36 +23,6 @@ export function fbsBoxOperationsDisabled(_marketplace: FbsMarketplace): boolean 
   return false
 }
 
-/**
- * WMS-121 · «Контекст выбора» — набор координат, в которых оператор набрал
- * заказы. Как только меняется любая из них (селлер, маркетплейс, склад WB
- * или вкладка статусов), UUID уже не относятся к экрану, который видит
- * оператор, и массовое действие ударит по чужим строкам либо получит от
- * сервера `order_incompatible`. Экран использует эти ключи в effect'е,
- * который вызывает `setSelected(new Set())` и `setSelectedCache(new Map())`.
- *
- * Поиск сюда специально не входит: это фильтр внутри одного контекста
- * (сохраняет выбранные UUID при уточнении запроса), а не смена контекста.
- */
-export type FbsSelectionContextKey = {
-  sellerId: string
-  marketplace: '__all__' | FbsMarketplace
-  wbWarehouseId: string
-  statusGroup: string
-}
-
-export function fbsSelectionContextChanged(
-  previous: FbsSelectionContextKey,
-  next: FbsSelectionContextKey,
-): boolean {
-  return (
-    previous.sellerId !== next.sellerId
-    || previous.marketplace !== next.marketplace
-    || previous.wbWarehouseId !== next.wbWarehouseId
-    || previous.statusGroup !== next.statusGroup
-  )
-}
-
 export function fbsBoxEditingDisabled(
   marketplace: FbsMarketplace,
   deliveryConfirmed: boolean,

@@ -1,37 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { fbsSameStickerScan, fbsSelectionContextChanged, fbsUnassignedPositionQuantity, supplyQrExpectedForStatus, fbsMarkingPresentation, fbsOrderMarkingAccepted } from './fbsUx'
-
-describe('WMS-121 · fbsSelectionContextChanged', () => {
-  const base = {
-    sellerId: 'seller-a',
-    marketplace: 'wb' as const,
-    wbWarehouseId: '__all__',
-    statusGroup: 'new',
-  }
-
-  it('reports no change when the same context is compared', () => {
-    expect(fbsSelectionContextChanged(base, { ...base })).toBe(false)
-  })
-
-  it('detects seller change — mass action must not carry Denmarcs UUIDs onto Manikaev', () => {
-    expect(fbsSelectionContextChanged(base, { ...base, sellerId: 'seller-b' })).toBe(true)
-  })
-
-  it('detects marketplace change — WB selection stays inside WB workspace only', () => {
-    expect(fbsSelectionContextChanged(base, { ...base, marketplace: 'ozon' })).toBe(true)
-    expect(fbsSelectionContextChanged(base, { ...base, marketplace: '__all__' })).toBe(true)
-  })
-
-  it('detects WB warehouse change — картинка «Все склады» ≠ конкретный склад WB', () => {
-    expect(fbsSelectionContextChanged(base, { ...base, wbWarehouseId: '507' })).toBe(true)
-  })
-
-  it('detects status tab change — «Новые» и «В работе» — разные наборы UUID', () => {
-    expect(fbsSelectionContextChanged(base, { ...base, statusGroup: 'active' })).toBe(true)
-    expect(fbsSelectionContextChanged(base, { ...base, statusGroup: 'cancelled' })).toBe(true)
-  })
-})
+import { fbsSameStickerScan, fbsUnassignedPositionQuantity, supplyQrExpectedForStatus, fbsMarkingPresentation, fbsOrderMarkingAccepted } from './fbsUx'
 
 describe('supplyQrExpectedForStatus', () => {
   it('does not count a future supply QR while cargo-place QR codes are printed', () => {
