@@ -1,6 +1,6 @@
 {
-  "updated_at_utc": "2026-09-10T23:44:15.261277+00:00",
-  "phase": "POST_OPUS_FIXES_FINAL_CHECKS",
+  "updated_at_utc": "2026-09-10T23:56:01.476304+00:00",
+  "phase": "FINAL_ASTRA_FINDING_FIXES",
   "release_branch": "codex/wms-release-20260911",
   "base_sha": "dcac6251bb7defc9fa6c3e3b1a4dbc35555ae382",
   "preserved_refs": [
@@ -132,7 +132,8 @@
     "static": "Seven Ozon/storage files ruff passed; Ozon mypy passed; storage variable fixed and mypy+ruff rerun passed.",
     "storage_ui": "Actual seller expansion6 liter-days900kopecks; categoryA4/600; Sep09+categoryA2/400. Periodrate150/current200 verified.",
     "ozon_ui": "Actual Ozon worklist identities/units, card reread without500, picking Ozon barcodes vs distinct WB fixtures, no navigation gates, final Ozon confirmation cancelled. Print multi-position button fix pending final click.",
-    "final_batch": "ruff/mypy five modified modules PASS; two targeted printing/storage regression tests PASS; final frontend typecheck/build PASS; OpenAPI regenerated"
+    "final_batch": "ruff/mypy five modified modules PASS; two targeted printing/storage regression tests PASS; final frontend typecheck/build PASS; OpenAPI regenerated",
+    "browser_lock": "CUA reported Mac locked and could not unlock; user asked to unlock; post-deploy visual reread pending"
   },
   "review": {
     "opus_source_sha": "f9bceb5ab2711c2fca1a40f57c6ebddc3e896a9e",
@@ -145,6 +146,9 @@
       "851d27b9",
       "6ca628f7"
     ],
-    "mobile_patch": "UNAPPLIED and UNPUBLISHED; no physical printer/agent setup"
+    "mobile_patch": "UNAPPLIED and UNPUBLISHED; no physical printer/agent setup",
+    "astra_source_sha": "859fe08dc3fc6a20a2a16c91331f12b251756a2a",
+    "astra_thread": "01a08db5-fdff-7bb1-b235-e25fcf1a5c67",
+    "astra_fixes": "6185e3b7: selected barcode per position; no shared size; labels for positions not covered by KIZ"
   }
 }

@@ -127,7 +127,7 @@ type FbsTapeContext = {
   confirmQrApplied: (asset: FbsTapeAsset) => Promise<void>
 }
 
-function withSelectedFbsTapeBarcode(
+export function withSelectedFbsTapeBarcode(
   order: FbsTapeOrderContext,
   tape: FbsTapeContext,
   selectedBarcode: ProductBarcodeOption | undefined,
@@ -150,7 +150,7 @@ function withSelectedFbsTapeBarcode(
   }
 }
 
-function remainingProductLabelsAfterPrintedCodes(
+export function remainingProductLabelsAfterPrintedCodes(
   order: FbsTapeOrderContext,
   printedCodes: FbsTapePrintOrder['printed_codes'],
 ) {
