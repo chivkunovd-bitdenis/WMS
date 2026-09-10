@@ -11,6 +11,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.document_event import (
+    DOCUMENT_TYPE_MARKETPLACE_UNLOAD,
+    EVENT_DATA_CHANGED,
+    EVENT_DOCUMENT_CREATED,
+)
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_reservation import InventoryReservation
 from app.models.marketplace_unload import (
@@ -36,6 +41,7 @@ from app.services.billing_ledger_service import (
     record_operational_reversal,
 )
 from app.services.catalog_service import get_warehouse
+from app.services.document_event_service import record_document_mutation
 from app.services.document_number_service import (
     DOC_TYPE_UNLOAD,
     assign_display_number_if_missing,
@@ -144,6 +150,45 @@ async def _sync_packaging_task_for_unload(
     await pkg_svc.ensure_task_for_unload(session, tenant_id, request_id)
 
 
+def _request_audit_fields(req: MarketplaceUnloadRequest) -> dict[str, object]:
+    return {
+        "request_id": req.id,
+        "warehouse_id": req.warehouse_id,
+        "seller_id": req.seller_id,
+        "status": req.status,
+        "marketplace": req.marketplace,
+        "wb_mp_warehouse_id": req.wb_mp_warehouse_id,
+    }
+
+
+def box_audit_fields(box: MarketplaceUnloadBox) -> dict[str, object]:
+    return {
+        "container_kind": "box",
+        "container_id": str(box.id),
+        "warehouse_box_id": str(box.warehouse_box_id) if box.warehouse_box_id else None,
+        "closed": box.closed_at is not None,
+    }
+
+
+async def record_box_mutation(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    box: MarketplaceUnloadBox,
+    *,
+    before: dict[str, object] | None,
+    after: dict[str, object] | None,
+) -> None:
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_MARKETPLACE_UNLOAD,
+        document_id=box.request_id,
+        event_type=EVENT_DATA_CHANGED,
+        before=before,
+        after=after,
+    )
+
+
 async def create_request(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -175,6 +220,16 @@ async def create_request(
     session.add(req)
     await assign_document_number_if_missing(session, tenant_id, DOC_TYPE_UNLOAD, req)
     await assign_display_number_if_missing(session, tenant_id, DOC_TYPE_UNLOAD, req)
+    await session.flush()
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_MARKETPLACE_UNLOAD,
+        document_id=req.id,
+        event_type=EVENT_DOCUMENT_CREATED,
+        before=None,
+        after=_request_audit_fields(req),
+    )
     await session.commit()
     await session.refresh(req)
     from app.services.notification_trigger_service import notify_ff_marketplace_unload_created
@@ -970,6 +1025,13 @@ async def delete_empty_boxes_for_ship(session: AsyncSession, req: MarketplaceUnl
     """DEC-002: empty boxes (no lines) are removed when shipment is posted."""
     for box in list(req.boxes):
         if not box.lines:
+            await record_box_mutation(
+                session,
+                req.tenant_id,
+                box,
+                before=box_audit_fields(box),
+                after=None,
+            )
             await session.delete(box)
 
 
@@ -1229,6 +1291,17 @@ async def delete_draft_request(
     if req.status != STATUS_DRAFT:
         raise MarketplaceUnloadError("not_draft")
     await _release_reservations(session, request_id)
+    before = _request_audit_fields(req)
+    before["containers"] = [box_audit_fields(box) for box in req.boxes]
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_MARKETPLACE_UNLOAD,
+        document_id=req.id,
+        event_type=EVENT_DATA_CHANGED,
+        before=before,
+        after=None,
+    )
     await session.delete(req)
     await session.commit()
 

@@ -78,6 +78,12 @@ async def create_open_box(
         session.add(box)
         try:
             await session.flush()
+            await intake_svc.record_container_mutation(
+                session,
+                box,
+                before=None,
+                after=intake_svc.container_audit_fields(box),
+            )
             await session.commit()
             return await _load_box(session, box.id)
         except IntegrityError:
@@ -116,6 +122,12 @@ async def create_boxes_for_request(
             except IntegrityError:
                 session.expunge(box)
                 continue
+            await intake_svc.record_container_mutation(
+                session,
+                box,
+                before=None,
+                after=intake_svc.container_audit_fields(box),
+            )
             created.append(box)
             break
         else:
@@ -174,7 +186,14 @@ async def mark_box_label_printed(
     box = await session.get(InboundIntakeBox, box_id)
     if box is None or box.request_id != request_id or box.tenant_id != tenant_id:
         raise InboundIntakeBoxError("box_not_found")
+    before = intake_svc.container_audit_fields(box)
     box.label_printed_at = datetime.now(UTC)
+    await intake_svc.record_container_mutation(
+        session,
+        box,
+        before=before,
+        after=intake_svc.container_audit_fields(box),
+    )
     await session.flush()
     stmt = (
         select(InboundIntakeBox)
@@ -233,7 +252,14 @@ async def _close_open_boxes(session: AsyncSession, request_id: uuid.UUID) -> Non
     open_box = await _open_box_for_request(session, request_id)
     if open_box is None:
         return
+    before = intake_svc.container_audit_fields(open_box)
     open_box.intake_closed_at = datetime.now(UTC)
+    await intake_svc.record_container_mutation(
+        session,
+        open_box,
+        before=before,
+        after=intake_svc.container_audit_fields(open_box),
+    )
     await session.flush()
 
 
@@ -393,8 +419,15 @@ async def open_box_by_barcode(
     box = next((b for b in boxes if b.internal_barcode.upper() == raw), None)
     if box is None:
         raise InboundIntakeBoxError("box_not_found")
+    before = intake_svc.container_audit_fields(box)
     if box.intake_opened_at is None:
         box.intake_opened_at = datetime.now(UTC)
+    await intake_svc.record_container_mutation(
+        session,
+        box,
+        before=before,
+        after=intake_svc.container_audit_fields(box),
+    )
     await session.flush()
     await session.commit()
     return await _load_box(session, box.id)
@@ -684,7 +717,14 @@ async def close_box_intake(
         raise InboundIntakeBoxError("box_closed")
     if box.intake_opened_at is None:
         raise InboundIntakeBoxError("no_open_box")
+    before = intake_svc.container_audit_fields(box)
     box.intake_closed_at = datetime.now(UTC)
+    await intake_svc.record_container_mutation(
+        session,
+        box,
+        before=before,
+        after=intake_svc.container_audit_fields(box),
+    )
     req_loaded = await intake_svc.get_request(session, tenant_id, request_id)
     if req_loaded is None:
         raise InboundIntakeBoxError("request_not_found")
@@ -710,6 +750,12 @@ async def delete_empty_box(
     total_qty = sum(int(ln.quantity) for ln in box.lines)
     if total_qty > 0:
         raise InboundIntakeBoxError("box_not_empty")
+    await intake_svc.record_container_mutation(
+        session,
+        box,
+        before=intake_svc.container_audit_fields(box),
+        after=None,
+    )
     await session.delete(box)
     await session.commit()
 
