@@ -10,12 +10,15 @@ from pathlib import Path
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
+from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inventory_balance import InventoryBalance
 from app.models.product import Product
+from app.models.stock_direction import StockDirection
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from tests.test_product_fbs_rule_bulk_read_api import (
@@ -88,22 +91,7 @@ async def _stock(session: AsyncSession, product_ids: list[str], seller_id: str) 
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "count",
-    [
-        1,
-        pytest.param(
-            2,
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason=(
-                    "WMS-060: frontend bulk body is flat; API requires nested rule; "
-                    "outside stock ownership"
-                ),
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("count", [1, 2])
 async def test_actual_frontend_save_preserves_units_through_http(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -188,3 +176,61 @@ async def test_manual_binding_http_uses_physical_stock_and_retains_caps_in_perce
     assert percent.status_code == 200, percent.text
     assert percent.json()["units_by_warehouse"] == {"501001": 5}
     assert percent.json()["published_now"] == 2
+
+    async with SessionLocal() as session:
+        product = await session.get(Product, uuid.UUID(pid))
+        assert product is not None
+        binding = await session.scalar(
+            select(FbsWarehouseBinding).where(
+                FbsWarehouseBinding.seller_id == uuid.UUID(seller_id),
+            )
+        )
+        assert binding is not None
+        other = FbsWarehouseBinding(
+            tenant_id=product.tenant_id,
+            seller_id=product.seller_id,
+            wms_warehouse_id=binding.wms_warehouse_id,
+            wb_warehouse_id=501002,
+        )
+        session.add(other)
+        await session.flush()
+        session.add(
+            FbsBindingStockPool(
+                tenant_id=product.tenant_id,
+                product_id=product.id,
+                binding_id=other.id,
+                quantity=3,
+            )
+        )
+        balance = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.product_id == product.id,
+            )
+        )
+        assert balance is not None
+        balance.quantity = balance.quantity_unpacked = 2
+        session.add(
+            StockDirection(
+                tenant_id=product.tenant_id,
+                product_id=product.id,
+                name="Synthetic reserve",
+                quantity=1,
+            )
+        )
+        await session.commit()
+    # Caps 5+3 survive depletion; real free is 2 minus an ordinary reserve of 1.
+    listed = await async_client.get(url.rsplit("/", 1)[0], headers=headers)
+    assert listed.status_code == 200, listed.text
+    row = next(row for row in listed.json() if row["product_id"] == pid)
+    assert row["allocated_this_binding"] == 5
+    assert row["allocated_elsewhere"] == 3
+    assert row["pool_limit"] == row["available_for_this_binding"] == 1
+    restored = await async_client.put(url, headers=headers, json={"quantity": 5})
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["pool_limit"] == restored.json()["available"] == 1
+    assert restored.json()["allocated_total"] == 8
+    rule = await async_client.get(f"/products/{pid}/fbs-rule", headers=headers)
+    assert rule.status_code == 200, rule.text
+    assert rule.json()["units_mode"] is True
+    assert rule.json()["units_by_warehouse"] == {"501001": 5, "501002": 3}
+    assert rule.json()["free_stock"] == 1

@@ -219,7 +219,7 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
         const res = await fetch(apiUrl('/products/fbs-rule'), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', ...headers(token) },
-          body: JSON.stringify({ product_ids: productIds, ...body }),
+          body: JSON.stringify({ product_ids: productIds, rule: body }),
         })
         if (!res.ok) throw new Error(await readApiErrorMessage(res))
       }

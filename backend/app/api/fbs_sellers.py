@@ -23,6 +23,7 @@ from app.models.seller_wildberries_imported_card import SellerWildberriesImporte
 from app.models.user import User
 from app.services import background_job_service as job_svc
 from app.services import fbs_seller_warehouse_service as wh_svc
+from app.services import fbs_stock_rule_service as rule_svc
 from app.services import fbs_warehouse_binding_service as binding_svc
 from app.services.background_job_service import JOB_TYPE_FBS_STOCK_SYNC
 from app.services.catalog_service import load_ozon_primary_image_urls
@@ -542,6 +543,9 @@ async def list_fbs_binding_stock_pool(
     if not products:
         return []
     product_ids = [p.id for p in products]
+    # Same physical free-stock source as the rule editor and PUT summary.
+    # Saved caps are informational; they never reserve physical inventory.
+    rule_views = await rule_svc.get_rule_views(session, user.tenant_id, product_ids)
 
     this_binding_stmt = select(
         FbsBindingStockPool.product_id, FbsBindingStockPool.quantity
@@ -577,7 +581,7 @@ async def list_fbs_binding_stock_pool(
 
     out: list[FbsStockPoolProductOut] = []
     for product in products:
-        limit = int(product.fbs_stock_limit) if product.fbs_stock_limit is not None else 0
+        free_stock = rule_views[product.id].free_stock
         allocated_this = this_binding_rows.get(product.id, 0)
         allocated_elsewhere = elsewhere_rows.get(product.id, 0)
         out.append(
@@ -597,10 +601,10 @@ async def list_fbs_binding_stock_pool(
                     )
                     or ozon_images.get(product.id)
                 ),
-                pool_limit=limit,
+                pool_limit=free_stock,
                 allocated_this_binding=allocated_this,
                 allocated_elsewhere=allocated_elsewhere,
-                available_for_this_binding=max(limit - allocated_elsewhere, 0),
+                available_for_this_binding=free_stock,
             )
         )
     return out

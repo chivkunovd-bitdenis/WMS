@@ -1,5 +1,9 @@
 # WMS-417 / WMS-338 / WMS-060 — stock follow-up
 
+> Продолжение по новому явному назначению координатора: три UI/API-замечания ниже
+> исправлены; strict xfail снят после реального HTTP PASS. Точные новые проверки
+> и остающиеся границы приёмки: [протокол UI/API](wms417-stock-ui-api-20260910.md).
+
 Рабочее дерево: `/Users/deniscivkunov/Projects/WMS/.worktrees/wms338-stock-min-formula`.
 Ветка: `feat/wms338-stock-min-formula`. Исходный чистый HEAD:
 `c14abc46c52202a17875eead6be0bf71fbfcc7bd`. Удаление ledger/is_fbs/consume и

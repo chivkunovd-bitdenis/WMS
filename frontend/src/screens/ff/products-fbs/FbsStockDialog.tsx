@@ -169,7 +169,7 @@ function FbsStockDialogBody({
   ].filter(Boolean).join(" и ")
   // Existing caps can exceed free stock after an order or stock movement.
   // For bulk edits the server compares every product with its own saved rule.
-  const increasesCap = !rule.unitsMode || Object.entries(draft.unitsByWarehouse).some(([key, value]) =>
+  const increasesCap = Object.entries(draft.unitsByWarehouse).some(([key, value]) =>
     value > (rule.unitsByWarehouse[key] ?? 0),
   )
   const overAllocated = draft.unitsMode
