@@ -12,7 +12,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select, text
 
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, engine
 from app.models.billing import (
     BillingInvoice,
     BillingInvoiceV2,
@@ -356,6 +356,10 @@ async def test_legacy_invoice_create_retry_cancel_and_amount_unchanged(
 
 
 @pytest.mark.parametrize("kind", ["settings", "profile", "tariff", "matrix", "invoice"])
+@pytest.mark.skipif(
+    engine.dialect.name != "postgresql",
+    reason="PostgreSQL WMS-325 rollback proof; SQLite legacy SAVEPOINT differs",
+)
 async def test_postgresql_audit_rejection_preserves_existing_business_operation(
     async_client: AsyncClient,
     kind: str,
@@ -436,6 +440,10 @@ async def test_postgresql_audit_rejection_preserves_existing_business_operation(
 
 
 @pytest.mark.parametrize("kind", ["profile", "tariff", "invoice_cancel", "settings"])
+@pytest.mark.skipif(
+    engine.dialect.name != "postgresql",
+    reason="PostgreSQL WMS-325 rollback proof; SQLite legacy SAVEPOINT differs",
+)
 async def test_outer_rollback_removes_mutation_and_history(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,

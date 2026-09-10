@@ -55,7 +55,7 @@ async def _seed_objects(tenant_id: uuid.UUID) -> dict[str, uuid.UUID]:
     warehouse_one = Warehouse(
         tenant_id=tenant_id,
         name="Основной склад",
-        code="main",
+        code="scan-main",
         barcode="WAREHOUSE-BARCODE",
     )
     warehouse_two = Warehouse(

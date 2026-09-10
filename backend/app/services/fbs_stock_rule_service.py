@@ -737,7 +737,13 @@ async def set_rule_for_products(
             # одно число на всех сойдётся у одного, а у соседнего окажется перебором.
             for product in products:
                 effective_rule = product_rules[product.id]
-                validation_rule = effective_rule
+                enabled_keys = {
+                    _binding_key(b) for b in served if effective_rule.publishes(b.marketplace)
+                }
+                validation_rule = replace(effective_rule, units_by_warehouse={
+                    key: value for key, value in effective_rule.units_by_warehouse.items()
+                    if key in enabled_keys
+                })
                 _, _, product_free = await _free_stock_for_bindings(
                     session, tenant_id, product.id, bindings
                 )
@@ -745,9 +751,25 @@ async def set_rule_for_products(
                 # Unchanged/decreased caps remain valid when stock falls. A new
                 # or increased cap must fit current free stock, under Product lock.
                 old_rule = old_rules[product.id]
+                old_enabled_keys = {
+                    _binding_key(b) for b in served if old_rule.publishes(b.marketplace)
+                }
                 _validate_units(effective_rule, None)
+                # Disabled settings are retained, but do not reserve capacity
+                # for the marketplace that is publishing. New disabled caps
+                # still must individually fit the physical stock at input.
+                for key, value in effective_rule.units_by_warehouse.items():
+                    if key not in enabled_keys and value > old_rule.units_by_warehouse.get(key, 0):
+                        local_bindings = [b for b in bindings if _binding_key(b) == key]
+                        _, _, local_free = await _free_stock_for_bindings(
+                            session, tenant_id, product.id, local_bindings
+                        )
+                        _validate_units(
+                            replace(effective_rule, units_by_warehouse={key: value}),
+                            min(product_free, local_free),
+                        )
                 if any(
-                    value > old_rule.units_by_warehouse.get(key, 0)
+                    key not in old_enabled_keys or value > old_rule.units_by_warehouse.get(key, 0)
                     for key, value in validation_rule.units_by_warehouse.items()
                 ):
                     _validate_units(validation_rule, product_free)
@@ -755,7 +777,8 @@ async def set_rule_for_products(
                     local_bindings = [b for b in bindings if b.wms_warehouse_id == warehouse_id]
                     local_keys = {_binding_key(b) for b in local_bindings}
                     increases = any(
-                        value > old_rule.units_by_warehouse.get(key, 0)
+                        key not in old_enabled_keys
+                        or value > old_rule.units_by_warehouse.get(key, 0)
                         for key, value in validation_rule.units_by_warehouse.items()
                         if key in local_keys
                     )

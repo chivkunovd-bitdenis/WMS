@@ -9,7 +9,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select, text
 
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, engine
 from app.models.document_event import DocumentEvent
 from app.models.inbound_intake import InboundIntakeBox, InboundIntakeRequest
 from app.models.inventory_movement import InventoryMovement
@@ -375,6 +375,10 @@ async def test_failed_business_commit_rolls_back_new_box_and_audit(
 
 
 @pytest.mark.parametrize("kind", ["inbound", "unload"])
+@pytest.mark.skipif(
+    engine.dialect.name != "postgresql",
+    reason="PostgreSQL WMS-325 rollback proof; SQLite legacy SAVEPOINT differs",
+)
 async def test_postgres_audit_insert_failure_does_not_abort_document_create(
     async_client: AsyncClient, kind: str
 ) -> None:

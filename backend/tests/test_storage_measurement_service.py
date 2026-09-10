@@ -365,7 +365,9 @@ async def test_rebuild_and_list_cover_fractional_missing_zero_idempotency_and_sc
         await session.commit()
         technical_id = technical.id
 
-    body = {"year": period_start.year, "month": period_start.month}
+    # WMS-062 adds a default warehouse; this calculation targets our seeded stock.
+    body: dict[str, str | int] = {"year": period_start.year, "month": period_start.month,
+            "warehouse_id": str(operational_id)}
     first_job = await async_client.post(
         "/operations/storage/measurements/rebuild",
         headers=headers,
@@ -389,7 +391,7 @@ async def test_rebuild_and_list_cover_fractional_missing_zero_idempotency_and_sc
     listed = await async_client.get(
         "/operations/storage/statements",
         headers=headers,
-        params={"year": period_start.year, "month": period_start.month},
+        params=body,
     )
     assert listed.status_code == 200, listed.text
     payload = listed.json()

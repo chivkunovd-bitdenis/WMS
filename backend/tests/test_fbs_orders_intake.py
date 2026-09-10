@@ -2457,6 +2457,15 @@ async def test_fbs_order_intake_does_not_touch_operator_number(
         assert row is not None
         tenant_id = row.tenant_id
         row.fbs_stock_limit = 5
+        sorting = await get_or_create_sorting_location(
+            session, tenant_id, uuid.UUID(wms_warehouse_id)
+        )
+        await inventory_service.record_movement_and_adjust_balance(
+            session, tenant_id=tenant_id, product_id=product_id,
+            storage_location_id=sorting.id, quantity_delta=5,
+            movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
+        )
         await session.commit()
 
     binding_resp = await async_client.get(
