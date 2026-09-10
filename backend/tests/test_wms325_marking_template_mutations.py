@@ -134,9 +134,17 @@ async def test_pool_http_actor_noop_rejection_and_admin_history(async_client: As
         assert len(rows) == 2
         assert all(row.actor_user_id == actor and row.source == "user" for row in rows)
         assert all(row.payload_json["actor_user_id_snapshot"] == str(actor) for row in rows)
-        product_event = next(row for row in rows if "product_ids" in row.payload_json["before"])
-        assert product_event.payload_json["before"] == {"product_ids": []}
-        assert product_event.payload_json["after"] == {"product_ids": [str(product)]}
+        product_event = next(
+            row for row in rows if "linked_product_ids" in row.payload_json["before"]
+        )
+        assert product_event.payload_json["before"] == {
+            "linked_product_ids": [],
+            "unlinked_product_ids": [str(product)],
+        }
+        assert product_event.payload_json["after"] == {
+            "linked_product_ids": [str(product)],
+            "unlinked_product_ids": [],
+        }
         # Explicit system execution must not inherit the last HTTP user.
         with audit.system_document_events():
             await marking.set_pool_threshold(
@@ -691,3 +699,63 @@ async def test_template_creation_api_uses_authenticated_actor_for_shared_scope(
         assert row.tenant_id == tenant and row.actor_user_id == actor
         assert row.payload_json["after"]["owner_user_id"] is None
         assert row.payload_json["actor_user_id_snapshot"] == str(actor)
+
+
+async def test_pool_replacement_races_additive_insert_without_parent_fk_cycle_or_false_actor(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, tenant, actor, product, pool, _ = await _seed(async_client)
+    ready, release = asyncio.Event(), asyncio.Event()
+    async with SessionLocal() as replacement, SessionLocal() as additive:
+        first_pid = await replacement.scalar(text("SELECT pg_backend_pid()"))
+        second_pid = await additive.scalar(text("SELECT pg_backend_pid()"))
+        assert first_pid != second_pid
+        scalar = replacement.scalar
+
+        async def hold_before_insert(statement: Any, *args: Any, **kwargs: Any) -> Any:
+            if getattr(statement, "is_insert", False):
+                ready.set()
+                await release.wait()
+            return await scalar(statement, *args, **kwargs)
+
+        monkeypatch.setattr(replacement, "scalar", hold_before_insert)
+
+        async def replace_links() -> None:
+            with audit.document_event_actor(actor):
+                await marking.set_pool_products(replacement, tenant, pool, [product])
+
+        task = asyncio.create_task(replace_links())
+        try:
+            await asyncio.wait_for(ready.wait(), 5)
+            # Actual existing additive writer must finish while replacement is
+            # paused: a parent FOR UPDATE here would block its FK check.
+            await asyncio.wait_for(marking.add_pool_products(additive, tenant, pool, [product]), 5)
+            release.set()
+            await asyncio.wait_for(task, 5)
+        finally:
+            release.set()
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+    async with SessionLocal() as check:
+        links = list(
+            (
+                await check.scalars(
+                    select(MarkingPoolProduct).where(MarkingPoolProduct.pool_id == pool)
+                )
+            ).all()
+        )
+        assert [link.product_id for link in links] == [product]
+        assert await _events(check, pool) == []  # additive won; replacement changed nothing
+        with audit.document_event_actor(actor):
+            await marking.set_pool_products(check, tenant, pool, [])
+        event_row = (await _events(check, pool))[0]
+        assert event_row.payload_json["before"] == {
+            "linked_product_ids": [str(product)],
+            "unlinked_product_ids": [],
+        }
+        assert event_row.payload_json["after"] == {
+            "linked_product_ids": [],
+            "unlinked_product_ids": [str(product)],
+        }
