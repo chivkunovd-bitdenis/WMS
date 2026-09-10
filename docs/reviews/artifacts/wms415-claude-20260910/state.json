@@ -1,16 +1,16 @@
 {
-  "phase": "continued415_after_verified_API_recovery",
+  "phase": "LOCAL_ONLY_OWNER_REVOKED_PRODUCTION_DEPLOYMENTS",
   "quota_session_id": "5ed12390-4d22-4b83-b183-114202609010",
   "quota_tool_pty": 75581,
   "last_weekly_used_percent": 87,
   "last_weekly_remaining_percent": 13,
   "recorded_at_utc": "2026-09-09T21:10:11.500624+00:00",
-  "last_full_progress_check_utc": "2026-09-10T11:17:26.649168+00:00",
+  "last_full_progress_check_utc": "2026-09-10T11:23:47.434365+00:00",
   "coordinator_session_id": "01a0884c-2c18-7d22-a2a8-8bef2f3d8fe3",
   "automation_id": "wms-claude",
   "quota_minutes": 10,
   "progress_minutes": 20,
-  "coordinator_pid": 38677,
+  "coordinator_pid": 39993,
   "quota_pid": 61235,
   "coordinator_checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord",
   "coordinator_branch": "codex/wms415-coord-20260910",
@@ -38,12 +38,12 @@
   ],
   "next_queue_commit": "aadac0b6039a70912bf12412aeca90028b675fc8",
   "last_heartbeat_utc": "2026-09-10T10:33:21.439051+00:00",
-  "intervention": "Prior coordinator and workers absent. Resumed same CLI thread38677; no deployment running at root check. User affected by closed8088 received verified HTTPS login link. Preserve operator access; finish proxy fix runtime verification before narrow release.",
+  "intervention": "Owner explicitly prohibited production deployment. Interrupted38677 and verified exit, resumed same thread39993 LOCAL ONLY. Ban propagated via prompt, canonical backlog, handoff and automation. No production restarts/deploys/migrations/config/live-data changes/APK publication/production branch merge until new explicit permission.",
   "last_full_progress_artifact": "progress-20260909T2215.json",
   "coordinator_provider": "codex",
   "coordinator_model": "gpt-6-astra",
   "coordinator_effort": "high",
-  "coordinator_events": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/continued415-after-status-events.jsonl",
+  "coordinator_events": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/local-only-owner-stop-events.jsonl",
   "claude_coordinator_stopped": true,
   "claude_coordinator_session_id": "2a1f478a-9d10-48fe-b183-114202609010",
   "claude_session_used_percent": 100,
@@ -112,5 +112,7 @@
     "rollback_verified": true,
     "owner": "coordinator38677",
     "status": "API recovered and root hashes verified; corrected proxy7e0d136e pending runtime review and release"
-  }
+  },
+  "production_deployment_authorized": false,
+  "owner_deploy_stop_commit": "7b0178a7"
 }
