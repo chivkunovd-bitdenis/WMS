@@ -11,6 +11,7 @@ from app.api.deps import (
     assert_seller_permission,
     get_current_user,
     get_effective_seller_id,
+    require_fbs_operator_access,
     require_fulfillment_admin,
 )
 from app.core.roles import FULFILLMENT_SELLER
@@ -21,6 +22,7 @@ from app.models.seller import Seller
 from app.models.user import User
 from app.services import background_job_service as job_svc
 from app.services.background_job_service import (
+    JOB_TYPE_FBS_LABEL_PRINT,
     JOB_TYPE_MOVEMENTS_DIGEST,
     JOB_TYPE_WILDBERRIES_CARDS_SYNC,
     JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC,
@@ -230,4 +232,6 @@ async def get_background_job(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="job_not_found",
         )
+    if job.job_type == JOB_TYPE_FBS_LABEL_PRINT:
+        await require_fbs_operator_access(user=user, session=session)
     return _job_out(job)
