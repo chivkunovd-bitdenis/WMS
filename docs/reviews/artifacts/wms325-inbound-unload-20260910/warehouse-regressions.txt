@@ -1,0 +1,23 @@
+...............................F................                         [100%]
+=================================== FAILURES ===================================
+______________________ test_loose_only_receiving_no_boxes ______________________
+tests/test_inbound_intake_service_be01.py:98: in test_loose_only_receiving_no_boxes
+    assert done.has_discrepancy is False
+E   assert True is False
+E    +  where True = <app.models.inbound_intake.InboundIntakeRequest object at [SYNTHETIC_ADDRESS]>.has_discrepancy
+=============================== warnings summary ===============================
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_inbound_intake_service_be01.py::test_loose_only_receiving_no_boxes
+1 failed, 47 passed, 5 warnings in 100.99s (0:01:40)
