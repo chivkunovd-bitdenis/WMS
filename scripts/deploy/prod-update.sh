@@ -65,7 +65,7 @@ if [[ -f docker-compose.wms-host-8088.yml ]]; then
   COMPOSE+=(-f docker-compose.wms-host-8088.yml)
   # Fail before build, writer shutdown or DDL if Docker recreated either bridge.
   echo "==> verify existing private proxy topology"
-  DB_CONTAINER="$("${COMPOSE[@]}" ps -q db)"
+  DB_CONTAINER="$("${COMPOSE[@]}" ps -a -q db)"
   python3 scripts/deploy/verify-wms-host-network.py "$DB_CONTAINER"
 fi
 

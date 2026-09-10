@@ -63,15 +63,27 @@ def verify(db_container: str, repo: Path) -> None:
             "WMS subnet/gateway changed; review proxy trust before deployment")
     for service in ("api", "web"):
         container = one_id(docker(
-            "ps", "-q", "--filter", f"label=com.docker.compose.project={project}",
+            "ps", "-a", "-q", "--filter", f"label=com.docker.compose.project={project}",
             "--filter", f"label=com.docker.compose.service={service}",
         ), f"WMS {service} container")
         attached = endpoints(container).get(network["Name"])
-        require(attached is not None and attached["NetworkID"] == network["Id"]
-                and attached["Gateway"] == WMS_GATEWAY
-                and attached["IPPrefixLen"] == 16
-                and ipaddress.ip_address(attached["IPAddress"]) in ipaddress.ip_network(WMS_SUBNET),
+        require(attached is not None and attached["NetworkID"] == network["Id"],
                 f"WMS {service} is outside the verified proxy network")
+        state = docker("inspect", container, "--format",
+                       "{{.State.Running}}|{{.HostConfig.NetworkMode}}").split("|")
+        require(len(state) == 2 and state[0] in ("true", "false"),
+                f"Cannot establish WMS {service} container state")
+        if state[0] == "false":
+            # A failed backup deliberately leaves API stopped. Verify its saved
+            # network attachment; Docker assigns an address when it starts again.
+            require(state[1] in (network["Name"], network["Id"]),
+                    f"Stopped WMS {service} has a different configured network")
+        else:
+            require(attached["Gateway"] == WMS_GATEWAY
+                    and attached["IPPrefixLen"] == 16
+                    and ipaddress.ip_address(attached["IPAddress"])
+                    in ipaddress.ip_network(WMS_SUBNET),
+                    f"Running WMS {service} is outside the verified proxy subnet")
     edge = one_id(docker("ps", "-q", "--filter", "publish=443"), "HTTPS edge container")
     edge_endpoints = [e for e in endpoints(edge).values() if e.get("Gateway") == EDGE_GATEWAY]
     require(len(edge_endpoints) == 1, "HTTPS edge no longer uses the listener gateway")

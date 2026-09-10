@@ -12,7 +12,8 @@ from pathlib import Path
 import pytest
 
 
-@pytest.mark.parametrize("backup_error", ["", "dump", "archive", "listing", "empty", "network"])
+@pytest.mark.parametrize("backup_error", ["", "dump", "archive", "listing", "empty", "network",
+                                        "retry"])
 def test_deploy_requires_verified_backup_before_migration(
     tmp_path: Path, backup_error: str,
 ) -> None:
@@ -36,9 +37,16 @@ args = sys.argv[1:]
 with open(os.environ["TEST_COMMANDS"], "a") as out:
     out.write(json.dumps([name, *args]) + "\\n")
 error = os.environ["TEST_BACKUP_ERROR"]
+stopped = Path(os.environ["TEST_STOPPED_API"])
 if name == "git" and args[:1] == ["rev-parse"]:
     print("a" * 40)
 elif name == "docker":
+    if "stop" in args and "api" in args:
+        stopped.touch()
+    if args[:1] == ["inspect"] and "State.Running" in args[-1]:
+        print(("false" if args[1] == "synthetic-api" and stopped.exists() else "true")
+              + "|wms-network")
+        sys.exit(0)
     if args[:3] == ["network", "ls", "-q"]:
         print("wms-network")
         sys.exit(0)
@@ -53,15 +61,20 @@ elif name == "docker":
         edge = args[1] == "synthetic-edge"
         network = "edge-network" if edge else "wms-network"
         number = 18 if edge else 21
-        print(json.dumps({network: {"NetworkID": network, "Gateway": f"172.{number}.0.1",
-                                  "IPAddress": f"172.{number}.0.6", "IPPrefixLen": 16}}))
+        off = args[1] == "synthetic-api" and stopped.exists()
+        print(json.dumps({network: {"NetworkID": network,
+                                  "Gateway": "" if off else f"172.{number}.0.1",
+                                  "IPAddress": "" if off else f"172.{number}.0.6",
+                                  "IPPrefixLen": 0 if off else 16}}))
         sys.exit(0)
-    if args[:2] == ["ps", "-q"]:
+    if args[:2] == ["ps", "-q"] or args[:3] == ["ps", "-a", "-q"]:
         if "publish=443" in args:
             print("synthetic-edge")
             sys.exit(0)
         if any(v.endswith("service=api") or v.endswith("service=web") for v in args):
-            print("synthetic-wms-service")
+            if args[-1].endswith("service=api"):
+                if not stopped.exists() or "-a" in args: print("synthetic-api")
+            else: print("synthetic-web")
             sys.exit(0)
     if any("pg_dump" in arg for arg in args):
         assert sys.stdin.read() == ""
@@ -70,7 +83,7 @@ elif name == "docker":
     if "pg_restore" in args:
         assert sys.stdin.read().strip() == "synthetic backup"
         sys.exit(1 if error == "archive" else 0)
-    if args[-3:] == ["ps", "-q", "db"]:
+    if args[-3:] == ["ps", "-q", "db"] or args[-4:] == ["ps", "-a", "-q", "db"]:
         print("synthetic-db")
     elif args[:1] == ["inspect"]:
         print("synthetic-project")
@@ -84,16 +97,26 @@ elif name == "docker":
         (binaries / name).symlink_to(stub)
     script = Path(__file__).resolve().parents[2] / "scripts/deploy/prod-update.sh"
     backup_dir = tmp_path / "private-backups"
-    result = subprocess.run(
-        ["bash", str(script)], capture_output=True, text=True,
-        env={
+    environment = {
             **os.environ, "PATH": f"{binaries}:{os.environ['PATH']}",
             "WMS_REPO_DIR": str(repo), "WMS_BACKUP_DIR": str(backup_dir),
             "WMS_DEPLOY_GUARD_ONLY": "0", "TEST_COMMANDS": str(commands),
-            "TEST_BACKUP_ERROR": backup_error,
-        },
+            "TEST_BACKUP_ERROR": "dump" if backup_error == "retry" else backup_error,
+            "TEST_STOPPED_API": str(tmp_path / "api-stopped"),
+    }
+    result = subprocess.run(
+        ["bash", str(script)], capture_output=True, text=True, env=environment,
         check=False,
     )
+    if backup_error == "retry":
+        assert result.returncode != 0
+        assert "backup failed" in result.stderr
+        assert (tmp_path / "api-stopped").exists()
+        commands.write_text("")
+        environment["TEST_BACKUP_ERROR"] = ""
+        result = subprocess.run(
+            ["bash", str(script)], capture_output=True, text=True, env=environment, check=False,
+        )
     calls = [json.loads(line) for line in commands.read_text().splitlines()]
     if backup_error == "network":
         assert result.returncode != 0
