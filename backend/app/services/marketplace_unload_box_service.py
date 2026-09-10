@@ -142,6 +142,14 @@ async def create_open_box(
     )
     session.add(box)
     mu_svc.enter_collecting_if_needed(req)
+    await session.flush()
+    await mu_svc.record_box_mutation(
+        session,
+        tenant_id,
+        box,
+        before=None,
+        after=mu_svc.box_audit_fields(box),
+    )
     await session.commit()
     stmt = (
         select(MarketplaceUnloadBox)
@@ -183,6 +191,13 @@ async def create_boxes_batch(
         )
         session.add(box)
         await session.flush()
+        await mu_svc.record_box_mutation(
+            session,
+            tenant_id,
+            box,
+            before=None,
+            after=mu_svc.box_audit_fields(box),
+        )
         created_ids.append(box.id)
 
     mu_svc.enter_collecting_if_needed(req)
@@ -619,6 +634,13 @@ async def attach_existing_box_by_barcode(
             raise MarketplaceUnloadBoxError("box_already_attached")
 
     mp_box.closed_at = datetime.now(tz=UTC)
+    await mu_svc.record_box_mutation(
+        session,
+        tenant_id,
+        mp_box,
+        before=None,
+        after=mu_svc.box_audit_fields(mp_box),
+    )
     mu_svc.enter_collecting_if_needed(req)
     await _finish_box_collection(session, tenant_id, req.id)
     await session.refresh(mp_box, attribute_names=["warehouse_box", "lines"])
@@ -636,7 +658,15 @@ async def close_box(
     await _request_for_picking(session, tenant_id, box.request_id)
     if box.closed_at is not None:
         raise MarketplaceUnloadBoxError("box_closed")
+    before = mu_svc.box_audit_fields(box)
     box.closed_at = datetime.now(tz=UTC)
+    await mu_svc.record_box_mutation(
+        session,
+        tenant_id,
+        box,
+        before=before,
+        after=mu_svc.box_audit_fields(box),
+    )
     await session.commit()
     await session.refresh(box, attribute_names=["warehouse_box"])
     return box
@@ -712,6 +742,13 @@ async def delete_box(
     total_qty = int((await session.execute(total_stmt)).scalar_one())
     if total_qty > 0:
         raise MarketplaceUnloadBoxError("box_not_empty")
+    await mu_svc.record_box_mutation(
+        session,
+        tenant_id,
+        box,
+        before=mu_svc.box_audit_fields(box),
+        after=None,
+    )
     await session.delete(box)
     await session.commit()
 
@@ -820,6 +857,13 @@ async def copy_box(
             raise MarketplaceUnloadBoxError("insufficient_available")
 
     new_box.closed_at = datetime.now(tz=UTC)
+    await mu_svc.record_box_mutation(
+        session,
+        tenant_id,
+        new_box,
+        before=None,
+        after=mu_svc.box_audit_fields(new_box),
+    )
     await _finish_box_collection(session, tenant_id, req.id)
 
     stmt = (

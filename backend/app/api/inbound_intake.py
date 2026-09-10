@@ -1469,7 +1469,14 @@ async def set_inbound_box_damaged(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="box_not_found",
         )
+    before = svc.container_audit_fields(bx)
     bx.is_damaged = bool(body.is_damaged)
+    await svc.record_container_mutation(
+        session,
+        bx,
+        before=before,
+        after=svc.container_audit_fields(bx),
+    )
     await session.commit()
     stmt = (
         select(InboundIntakeBox)
