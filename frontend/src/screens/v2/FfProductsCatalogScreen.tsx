@@ -297,6 +297,7 @@ export function FfProductsCatalogScreen({
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filterSellerId, setFilterSellerId] = useState('')
   const [filterMarketplace, setFilterMarketplace] = useState<'wildberries' | 'ozon' | ''>('')
+  const [filterStockPublication, setFilterStockPublication] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(100)
@@ -319,7 +320,7 @@ export function FfProductsCatalogScreen({
 
   useEffect(() => {
     setPage(0)
-  }, [debouncedSearch, filterCategory, filterMarketplace, filterSellerId, rowsPerPage])
+  }, [debouncedSearch, filterCategory, filterMarketplace, filterStockPublication, filterSellerId, rowsPerPage])
 
   // Выбор строк относится к тому, что видно на текущей странице сейчас —
   // при смене страницы или фильтра он теряет смысл и снимается.
@@ -329,7 +330,7 @@ export function FfProductsCatalogScreen({
     // экране и врёт: фильтр уже сузили до одного продавца, а сообщение всё ещё
     // перечисляет пятерых.
     setFbsDialogError(null)
-  }, [page, rowsPerPage, debouncedSearch, filterCategory, filterMarketplace, filterSellerId])
+  }, [page, rowsPerPage, debouncedSearch, filterCategory, filterMarketplace, filterStockPublication, filterSellerId])
 
   const load = useCallback(async () => {
     catalogAbortRef.current?.abort()
@@ -346,6 +347,7 @@ export function FfProductsCatalogScreen({
       if (debouncedSearch) params.set('search', debouncedSearch)
       if (filterCategory) params.set('category', filterCategory)
       if (filterMarketplace) params.set('marketplace', filterMarketplace)
+      if (filterStockPublication) params.set('stock_publication', filterStockPublication)
       const res = await fetch(apiUrl(`/products/ff-catalog-page?${params.toString()}`), {
         headers: { ...authHeaders(token) },
         signal: controller.signal,
@@ -386,6 +388,7 @@ export function FfProductsCatalogScreen({
     debouncedSearch,
     filterCategory,
     filterMarketplace,
+    filterStockPublication,
     filterSellerId,
     page,
     rowsPerPage,
@@ -1226,6 +1229,23 @@ export function FfProductsCatalogScreen({
                 <MenuItem value="">Все</MenuItem>
                 <MenuItem value="wildberries">Wildberries</MenuItem>
                 <MenuItem value="ozon">Ozon</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 240 }}>
+              <InputLabel id="ff-catalog-stock-publication-filter-label">Передача остатков</InputLabel>
+              <Select
+                labelId="ff-catalog-stock-publication-filter-label"
+                label="Передача остатков"
+                value={filterStockPublication}
+                onChange={(e) => setFilterStockPublication(e.target.value)}
+                data-testid="ff-catalog-stock-publication-filter"
+              >
+                <MenuItem value="">Все товары</MenuItem>
+                <MenuItem value="wb">Включена на WB</MenuItem>
+                <MenuItem value="ozon">Включена на Ozon</MenuItem>
+                <MenuItem value="both">Включена на WB и Ozon</MenuItem>
+                <MenuItem value="any">Включена хотя бы на одной</MenuItem>
+                <MenuItem value="none">Выключена на обеих</MenuItem>
               </Select>
             </FormControl>
             <FormControl size="small" sx={{ minWidth: 200 }}>
