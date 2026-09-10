@@ -28,3 +28,15 @@ Independent review719ed850 принялstock/nestedclose/BackForwardкод, но
 HTTPответами: B→A, стараяошибкаво времяB, повторноеоткрытиетого жеUUID.
 3PASS;этоisolatedcallbackexecution,небраузер. TscпослеseedUUIDPASS;
 последнийgenerationdeltaпроходитповторнуюпроверкутипов.
+
+
+Повторное независимое review e3aac1d3 принято по коду; reviewer отдельно
+исполнил исправленный bootstrap. Tsc после generation guard PASS.
+В живом локальном браузере дополнительно открыты собственные учебные FBS
+поставки, первая открылась через строку журнала с правильным supply_id.
+Переход на Короба доступен. В «Добавить товары в короб 1» введена1; Escape
+показал JS confirm, но CUA завис на Emulation.setFocusEmulationEnabled при
+dismiss. Отказ/сохранность числа этим кликом не подтверждены. Чужие Chrome
+вкладки и production документ не трогались. Новые synthetic IDs сохранены
+в coord-live-fixture-ids.json; созданы2поставки/4заказа/2пустыхкороба, без
+складских движений. Никакие клиентские данные для этого не менялись.
