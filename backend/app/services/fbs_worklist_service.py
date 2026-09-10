@@ -437,7 +437,17 @@ async def _load_worklist_context(
     warehouse_ids = {o.warehouse_id for o in orders if o.warehouse_id is not None}
     product_ids = {o.product_id for o in orders if o.product_id is not None}
     order_ids = [o.id for o in orders]
-    wb_wh_ids = {int(o.wb_warehouse_id) for o in orders if o.wb_warehouse_id is not None}
+    # WMS-419. Справочник `tenant_wb_mp_warehouses` — склады Wildberries, и его
+    # `wb_warehouse_id` это int4. У озоновского заказа в том же поле лежит номер
+    # склада Ozon (например 1020005029603630), который в int4 не помещается:
+    # Postgres отвечал `integer out of range`, и весь список падал в 500 на той
+    # вкладке, где виден хоть один заказ Ozon. Записи об озоновском складе в
+    # вайлдберрисовском справочнике нет и быть не может, поэтому не спрашиваем.
+    wb_wh_ids = {
+        int(o.wb_warehouse_id)
+        for o in orders
+        if o.wb_warehouse_id is not None and o.marketplace != "ozon"
+    }
     seller_nm_pairs: set[tuple[uuid.UUID, int]] = set()
     for o in orders:
         if o.seller_id and o.wb_nm_id is not None:
