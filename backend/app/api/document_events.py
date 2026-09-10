@@ -85,6 +85,8 @@ async def get_document_events(
         "billing_tariff",
         "billing_tariff_matrix",
         "billing_invoice",
+        "marking_pool",
+        "print_template",
     ],
     document_id: uuid.UUID,
     user: Annotated[User, Depends(require_fulfillment_admin)],
