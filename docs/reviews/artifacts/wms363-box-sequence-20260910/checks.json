@@ -1,0 +1,48 @@
+{
+  "mobile_commit": "c9d27e16e992a52ae80b9f7127aad16967f1915d",
+  "suites": [
+    {
+      "name": "ru.wms.tsd.features.fbs.FbsApiContractTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "ru.wms.tsd.features.fbs.FbsDeliveryTest",
+      "tests": "14",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "ru.wms.tsd.features.fbs.FbsViewModelTest",
+      "tests": "39",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "ru.wms.tsd.features.update.UpdateTest",
+      "tests": "12",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  ],
+  "total_tests": 74,
+  "lint_errors": 0,
+  "lint_warnings": 41,
+  "gradle_max_workers": 2,
+  "active_processor_count": 2,
+  "assembleDebug": "pass",
+  "lintDebug": "pass",
+  "testDebugUnitTest": "pass",
+  "patch_reverse_apply": "pass",
+  "scoped_classes": [
+    "FbsViewModelTest",
+    "FbsApiContractTest",
+    "FbsDeliveryTest",
+    "UpdateTest"
+  ]
+}
