@@ -7,3 +7,7 @@
 App delta против production ограничен auth.py, auth_service.py и новым login_rate_limit.py. Новых миграций, frontend application изменений, stock/cancel/packing/inventory/chat нет. Никакой спорный WMS-111/112 срез не переносится; они STOP, происхождение owner requirement не доказано. Эта ветка не является выпуском общей415/416 партии.
 
 Текущий статус: интеграция подготовлена; scoped checks выполняются. Commit/push, CI, exact deploy SHA и реальная проверка HTTPS/client IP/закрытия8088/15174 должны быть дописаны по факту. Секреты и клиентские складские данные не менялись.
+
+## Проверка координатора
+
+На96a8dc4c выполнены8 целевых файлов auth/proxy/deploy:51 passed,1 skipped за184.93s. Это локальный scoped pytest, не полный набор. Ruff всего backend PASS, mypy437 файлов PASS. При сравнении auth_service с coordinator вручную проверены отличия default warehouse/staff audit; к этому security release они не относятся. Production read-only SSH повторно подтвердил eaa6ae9a и чистое tracked дерево. Новый узкий независимый reviewer работает по frozen96a8dc4c; результат будет сохранён отдельно.
