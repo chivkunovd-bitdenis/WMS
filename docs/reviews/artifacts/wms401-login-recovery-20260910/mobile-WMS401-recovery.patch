@@ -1,0 +1,168 @@
+diff --git a/android/app/build.gradle.kts b/android/app/build.gradle.kts
+index 3d0dedb..bb69886 100644
+--- a/android/app/build.gradle.kts
++++ b/android/app/build.gradle.kts
+@@ -13,8 +13,8 @@ android {
+         applicationId = "ru.wms.tsd"
+         minSdk = 24
+         targetSdk = 35
+-        versionCode = 10
+-        versionName = "0.1.9-ozon-tsd"
++        versionCode = 11
++        versionName = "0.1.10-mobile-recovery"
+         buildConfigField("String", "APK_UPDATE_MANIFEST_URL", "\"https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/update.json\"")
+         buildConfigField(
+             "String",
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/auth/LoginScreen.kt b/android/app/src/main/java/ru/wms/tsd/features/auth/LoginScreen.kt
+index dda82a9..ed1b90a 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/auth/LoginScreen.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/auth/LoginScreen.kt
+@@ -1,5 +1,6 @@
+ package ru.wms.tsd.features.auth
+
++import androidx.activity.compose.BackHandler
+ import androidx.compose.animation.AnimatedContent
+ import androidx.compose.foundation.background
+ import androidx.compose.foundation.border
+@@ -84,12 +85,13 @@ fun LoginScreen(
+     authManager: AuthManager,
+     onLoginSuccess: () -> Unit,
+ ) {
+-    val coroutineScope = rememberCoroutineScope()
+     val savedStaff = remember { authStore.getSavedStaff() }
+     var showPinDialog by remember { mutableStateOf(false) }
+     var showPasswordLogin by remember { mutableStateOf(false) }
+     var selectedEmail by remember { mutableStateOf("") }
+
++    BackHandler(enabled = showPinDialog) { showPinDialog = false }
++
+     Surface(
+         modifier = Modifier.fillMaxSize(),
+         color = WmsColors.Background,
+@@ -120,6 +122,7 @@ fun LoginScreen(
+                 authStore = authStore,
+                 authManager = authManager,
+                 onLoginSuccess = onLoginSuccess,
++                onBackToStaff = if (savedStaff.isNotEmpty()) ({ showPasswordLogin = false }) else null,
+             )
+         }
+     }
+@@ -299,6 +302,7 @@ private fun EmailPasswordLoginScreen(
+     authStore: AuthStore,
+     authManager: AuthManager,
+     onLoginSuccess: () -> Unit,
++    onBackToStaff: (() -> Unit)?,
+ ) {
+     val coroutineScope = rememberCoroutineScope()
+     var email by remember { mutableStateOf("") }
+@@ -311,8 +315,13 @@ private fun EmailPasswordLoginScreen(
+     var connectionStatusMessage by remember { mutableStateOf("") }
+     var errorMessage by remember { mutableStateOf("") }
+     var showPinSetup by remember { mutableStateOf(false) }
+-    var pin1 by remember { mutableStateOf("") }
+-    var pin2 by remember { mutableStateOf("") }
++    // Settings are a part of this form, not a separate Activity. Consume Back
++    // while login completes so a late response cannot authenticate a closed form.
++    BackHandler(enabled = !showPinSetup && (showServerSettings || onBackToStaff != null)) {
++        if (!isLoading) {
++            if (showServerSettings) showServerSettings = false else onBackToStaff?.invoke()
++        }
++    }
+
+     fun submitLogin() {
+         if (email.isBlank() || password.isBlank()) {
+@@ -493,6 +502,12 @@ private fun EmailPasswordLoginScreen(
+                     )
+                 }
+
++                if (onBackToStaff != null) {
++                    TextButton(onClick = onBackToStaff, enabled = !isLoading) {
++                        Text("К выбору сотрудника")
++                    }
++                }
++
+                 Box(modifier = Modifier.weight(1f))
+
+                 Button(
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
+index 339f092..1476576 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
+@@ -215,7 +215,7 @@ internal fun displayTime(value: String): String = runCatching {
+                 OutlinedButton(onClick = { vm.printBoxes(encoder, workspace?.boxes.orEmpty().map { it.id }) }, enabled = !state.busy) { Text("Все этикетки") }
+             }
+             LazyColumn(Modifier.weight(1f).padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+-                if (mode != "boxes") items(workspace?.orders.orEmpty().sortedWith(compareBy<FbsOrder> { it.pick.status == "picked" }.thenBy { it.createdAt }), key = { it.id }) { order ->
++                if (mode != "boxes") items(sortedOperationOrders(workspace?.orders.orEmpty()), key = { it.id }) { order ->
+                     OrderCard(order) {
+                         if (mode == "pack") {
+                             Text((order.externalOrderId ?: order.wbOrderId.toString()).takeLast(4), fontSize = 36.sp, fontWeight = FontWeight.Black)
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+index aa0e3b4..ce11620 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+@@ -40,6 +40,10 @@ fun sortedOrders(orders: List<FbsOrder>): List<FbsOrder> = orders.sortedWith(
+     compareBy<FbsOrder> { runCatching { apiInstant(it.createdAt) }.getOrDefault(Instant.MAX) }.thenBy { it.wbOrderId }
+ )
+
++// Keep unfinished picking first; within each group compare actual timestamps.
++fun sortedOperationOrders(orders: List<FbsOrder>): List<FbsOrder> =
++    sortedOrders(orders).sortedBy { it.pick.status == "picked" }
++
+ fun isDeadlineNear(deadline: String, now: Instant = Instant.now()): Boolean =
+     runCatching { apiInstant(deadline).isBefore(now.plusSeconds(6 * 3600)) }.getOrDefault(false)
+
+diff --git a/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt b/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt
+index 1d746ee..a1d4fb7 100644
+--- a/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt
+@@ -111,6 +111,27 @@ class AuthManagerUrlPersistenceTest {
+         verify(exactly = 1) { authStore.setBaseUrl("https://good.example/api/") }
+     }
+
++    @Test
++    fun `explicit https login replaces old server while preserving staff pin`() = runTest {
++        val oldStaff = SavedStaff("fixture@example.test", "Fixture", "old-test-token", "2468")
++        var workingUrl = "http://fixture.example.test:8088/"
++        var saved = oldStaff
++        every { authStore.getBaseUrl() } answers { workingUrl }
++        every { authStore.getSavedStaff() } answers { listOf(saved) }
++        every { authStore.setBaseUrl(any()) } answers { workingUrl = firstArg(); Unit }
++        every { authStore.saveStaff(any()) } answers { saved = firstArg(); Unit }
++        coEvery { authApi.loginRouteAuthLoginPost(any()) } returns Response.success(
++            TokenResponse(accessToken = "new-test-token", tokenType = "bearer"),
++        )
++        assertEquals("http://fixture.example.test:8088/", authManager.getWorkingBaseUrl())
++        assertTrue(authManager.loginWithPassword("https://fixture.example.test/api", oldStaff.email, "test-password").isSuccess)
++        assertEquals("https://fixture.example.test/api/", authManager.getWorkingBaseUrl())
++        assertEquals(oldStaff.copy(token = "new-test-token"), saved)
++        authManager.logout()
++        assertTrue(authManager.loginWithPin(oldStaff.email, oldStaff.pin).isSuccess)
++        verify(exactly = 1) { authStore.setBaseUrl(any()) }
++    }
++
+     @Test
+     fun `storage failure leaves session null and returns safe typed failure`() = runTest {
+         coEvery { authApi.loginRouteAuthLoginPost(any()) } returns Response.success(
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+index 0b00202..b0f4739 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+@@ -176,6 +176,17 @@ class FbsViewModelTest {
+         val result = sortedOrders(listOf(a, bad, c, b))
+         assertEquals(listOf(b, c, a, bad), result)
+     }
++    @Test fun `operation orders keep unpicked first and compare instants within both groups`() {
++        for (marketplace in listOf("wb", "ozon")) {
++            val newer = order("10", "2026-09-08T08:00:00Z").copy(marketplace = marketplace)
++            val older = order("20", "2026-09-08T10:00:00+03:00").copy(marketplace = marketplace)
++            val pickedNewer = newer.copy(id = "picked-new", pick = FbsPickState("picked"))
++            val pickedOlder = older.copy(id = "picked-old", pick = FbsPickState("picked"))
++            val invalid = newer.copy(id = "invalid", createdAt = "invalid")
++            assertEquals(listOf(older, newer, invalid, pickedOlder, pickedNewer),
++                sortedOperationOrders(listOf(pickedNewer, newer, invalid, pickedOlder, older)))
++        }
++    }
+     @Test fun `sortedOrders on empty and single-element inputs`() {
+         assertTrue(sortedOrders(emptyList()).isEmpty())
+         val only = order("1", "2026-09-08T09:00:00Z")
