@@ -460,14 +460,10 @@ async def _available_product_availability_in_warehouse(
         exclude_request_id=exclude_request_id,
     )
     from app.services.fbs_stock_availability_service import (
-        fbs_allocated_available_by_product,
         fbs_reserved_qty_for_product,
     )
 
     reserved_fbs = await fbs_reserved_qty_for_product(session, tenant_id, warehouse_id, product_id)
-    allocated_fbs = (
-        await fbs_allocated_available_by_product(session, tenant_id, warehouse_id, [product_id])
-    ).get(product_id, 0)
     directions = await stock_direction_service.direction_totals_by_product(
         session, tenant_id, [product_id]
     )
@@ -480,8 +476,7 @@ async def _available_product_availability_in_warehouse(
             - direction_total.total
             - reserved_outbound
             - reserved_mp
-            - reserved_fbs
-            - allocated_fbs,
+            - reserved_fbs,
             uses_free_fbo_pool=True,
         )
     return MarketplaceUnloadAvailability(
@@ -491,7 +486,6 @@ async def _available_product_availability_in_warehouse(
             - reserved_outbound
             - reserved_mp
             - reserved_fbs
-            - allocated_fbs
         ),
         uses_free_fbo_pool=False,
     )
@@ -599,14 +593,10 @@ async def list_available_products(
         exclude_request_id=exclude_request_id,
     )
     from app.services.fbs_stock_availability_service import (
-        fbs_allocated_available_by_product,
         fbs_reserved_by_product,
     )
 
     fbs_reserved = await fbs_reserved_by_product(session, tenant_id, warehouse_id, product_ids)
-    allocated_fbs = await fbs_allocated_available_by_product(
-        session, tenant_id, warehouse_id, product_ids
-    )
     direction_totals = await stock_direction_service.direction_totals_by_product(
         session, tenant_id, product_ids
     )
@@ -626,8 +616,7 @@ async def list_available_products(
                 )
                 - fbs_reserved.get(product_id, 0)
                 - outbound_reserved.get(product_id, 0)
-                - mp_reserved.get(product_id, 0)
-                - allocated_fbs.get(product_id, 0),
+                - mp_reserved.get(product_id, 0),
             ),
         )
         for product_id, sku_code, product_name, quantity_total in stock_rows
@@ -753,7 +742,7 @@ async def replace_lines(
             raise MarketplaceUnloadError("product_seller_mismatch")
         products[product_id] = prod
 
-    for product_id, qty in normalized.items():
+    for product_id, qty in sorted(normalized.items(), key=lambda item: str(item[0])):
         prod = products[product_id]
         await _assert_available_for_unload_quantity(
             session,
@@ -769,7 +758,7 @@ async def replace_lines(
         await session.delete(ln)
     await session.flush()
 
-    for product_id, qty in normalized.items():
+    for product_id, qty in sorted(normalized.items(), key=lambda item: str(item[0])):
         session.add(
             MarketplaceUnloadLine(
                 request_id=req.id,
@@ -805,7 +794,7 @@ async def plan_request(
         mpw = await get_cached_mp_warehouse(session, tenant_id, int(req.wb_mp_warehouse_id))
         if mpw is None:
             raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
-    for ln in req.lines:
+    for ln in sorted(req.lines, key=lambda line: str(line.product_id)):
         await _assert_available_for_unload_quantity(
             session,
             tenant_id,
@@ -867,7 +856,7 @@ async def confirm_request(
     if effective_date is None:
         raise MarketplaceUnloadError("planned_shipment_date_required")
     if req.status == STATUS_DRAFT:
-        for ln in req.lines:
+        for ln in sorted(req.lines, key=lambda line: str(line.product_id)):
             await _assert_available_for_unload_quantity(
                 session,
                 tenant_id,

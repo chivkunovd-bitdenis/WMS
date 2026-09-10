@@ -285,6 +285,11 @@ class InboundIntakeBox(Base):
     intake_closed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # WMS-174: простой признак повреждения короба. Не жизненный цикл, не
+    # блокировка этапов, не отдельный статус — единственная роль в системе:
+    # быть видимой всем участникам заметкой на конкретной коробке, чтобы
+    # оператор при приёмке сразу отмечал бракованное поступление.
+    is_damaged: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     request: Mapped[InboundIntakeRequest] = relationship(
         "InboundIntakeRequest", back_populates="boxes"

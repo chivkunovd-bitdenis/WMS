@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import sqlalchemy as sa
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -89,6 +89,11 @@ class DistributionScanResult:
 def _loose_qty(line: InboundIntakeLine) -> int:
     """General (non-box) intake quantity; default 0 — never falls back to expected."""
     return line.actual_qty if line.actual_qty is not None else 0
+
+
+def boxes_discrepancy(planned: int | None, actual: int) -> bool:
+    """The physical box count is authoritative, including zero received boxes."""
+    return planned is not None and planned != actual
 
 
 async def effective_actual_qty(
@@ -374,6 +379,15 @@ async def list_requests(
         stmt = stmt.where(
             InboundIntakeRequest.seller_id == seller_product_owner_id,
         )
+    else:
+        # FF sees its own drafts and submitted seller documents, but not a
+        # seller's unfinished local plan (WMS-184).
+        stmt = stmt.where(
+            or_(
+                InboundIntakeRequest.status != STATUS_DRAFT,
+                InboundIntakeRequest.created_by_seller_id.is_(None),
+            )
+        )
     res = await session.execute(stmt)
     return list(res.scalars().unique().all())
 
@@ -516,9 +530,7 @@ async def add_line(
         req.seller_id = product.seller_id
     elif product.seller_id != req.seller_id:
         raise InboundIntakeError("mixed_seller_lines")
-    address_enabled = await tenant_settings_svc.is_address_storage_enabled(
-        session, tenant_id
-    )
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(session, tenant_id)
     loc_id: uuid.UUID | None = None
     if address_enabled and storage_location_id is not None:
         loc = await get_storage_location_in_warehouse(
@@ -796,7 +808,8 @@ async def _record_charge_if_done(
                     Decimal(line.posted_qty),
                     {"inbound_intake_line_id": str(line.id)},
                 )
-                for line in req.lines if line.posted_qty
+                for line in req.lines
+                if line.posted_qty
             ),
         )
     except BillingLedgerError:
@@ -828,7 +841,7 @@ async def primary_accept_request(
     if actual_box_count is not None:
         req.actual_box_count = actual_box_count
         if req.planned_box_count is not None:
-            req.boxes_discrepancy = actual_box_count != req.planned_box_count
+            req.boxes_discrepancy = boxes_discrepancy(req.planned_box_count, actual_box_count)
     req.status = STATUS_RECEIVING
     req.primary_accepted_at = datetime.now(UTC)
     await session.commit()
@@ -1201,7 +1214,10 @@ async def complete_receiving(
         line.actual_qty = effective
         if effective != line.expected_qty:
             line_discrepancy = True
-    req.has_discrepancy = bool(req.boxes_discrepancy) or line_discrepancy
+    live_box_discrepancy = boxes_discrepancy(req.planned_box_count, len(req.boxes))
+    req.boxes_discrepancy = live_box_discrepancy
+    req.actual_box_count = len(req.boxes)
+    req.has_discrepancy = live_box_discrepancy or line_discrepancy
     req.status = STATUS_SORTING
     req.verified_at = datetime.now(UTC)
     sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
@@ -1306,9 +1322,7 @@ async def receive_line(
     remaining = accepted - line.posted_qty
     if remaining <= 0:
         raise InboundIntakeError("nothing_to_receive")
-    address_enabled = await tenant_settings_svc.is_address_storage_enabled(
-        session, tenant_id
-    )
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(session, tenant_id)
     if address_enabled and line.storage_location_id is None:
         raise InboundIntakeError("storage_not_assigned")
     if quantity < 1 or quantity > remaining:
@@ -1352,9 +1366,7 @@ async def post_all_remaining(
         raise InboundIntakeError("already_posted")
     if req.status != STATUS_SORTING:
         raise InboundIntakeError("not_verified")
-    address_enabled = await tenant_settings_svc.is_address_storage_enabled(
-        session, tenant_id
-    )
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(session, tenant_id)
     to_receive: list[tuple[InboundIntakeLine, int]] = []
     for line in req.lines:
         accepted = _accepted_qty_for_line(line)
@@ -1426,10 +1438,7 @@ def _box_quantity_total_for_product(
     product_id: uuid.UUID,
 ) -> int:
     return sum(
-        int(bl.quantity)
-        for box in req.boxes
-        for bl in box.lines
-        if bl.product_id == product_id
+        int(bl.quantity) for box in req.boxes for bl in box.lines if bl.product_id == product_id
     )
 
 
@@ -1932,9 +1941,7 @@ async def replace_distribution_lines(
         keep_qty = min(int(row.quantity), max(0, int(box_line.posted_qty) - already_preserved))
         if keep_qty < 1:
             continue
-        preserved_box_rows.append(
-            (row.box_id, row.product_id, row.storage_location_id, keep_qty)
-        )
+        preserved_box_rows.append((row.box_id, row.product_id, row.storage_location_id, keep_qty))
         preserved_by_key[key] = already_preserved + keep_qty
 
     accepted_by_product: dict[uuid.UUID, int] = {}
@@ -2178,9 +2185,7 @@ async def reopen_receiving(
             for cargo_line in cargo_place.lines:
                 if cargo_line.product_id == line.product_id and cargo_line.quantity > 0:
                     container_qty += int(cargo_line.quantity)
-                    sources.append(
-                        ("cargo_place", cargo_place.id, int(cargo_line.quantity))
-                    )
+                    sources.append(("cargo_place", cargo_place.id, int(cargo_line.quantity)))
         loose_qty = qty - container_qty
         if loose_qty < 0:
             raise InboundIntakeError("actual_below_container_total")
