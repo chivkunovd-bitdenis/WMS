@@ -1,6 +1,6 @@
 {
-  "updated_at_utc": "2026-09-10T22:31:49.735409+00:00",
-  "phase": "PARALLEL_IMPLEMENTATION",
+  "updated_at_utc": "2026-09-10T23:00:27.498958+00:00",
+  "phase": "FINAL_INTEGRATION_AND_UI_CHECKS",
   "release_branch": "codex/wms-release-20260911",
   "base_sha": "dcac6251bb7defc9fa6c3e3b1a4dbc35555ae382",
   "preserved_refs": [
@@ -58,20 +58,7 @@
         397,
         399
       ],
-      "running_cli": {
-        "storage": {
-          "pid": 78641,
-          "session": "68d76698-3050-4316-a111-8092a48401ca"
-        },
-        "print": {
-          "pid": 78637,
-          "session": "012630d7-baa5-4447-b2d9-5e10251c0212"
-        },
-        "chat": {
-          "pid": 78638,
-          "session": "e919290b-292a-48d0-890d-9bece04c9012"
-        }
-      }
+      "latest_status": "Chat pushed separately; storage140220 integrated; printing HTML/PDF and mobile safe patch finishing in existing Opus5 xhigh session"
     }
   },
   "external_inputs": {
@@ -98,10 +85,10 @@
   },
   "production_observed_sha": "9ee4e7fc31af3be21fd1fb282e06d02a03139dd3",
   "claude_quota": {
-    "checked_at_utc": "2026-09-10T22:31:00Z",
-    "weekly_used_percent": 6,
-    "weekly_remaining_percent": 94,
-    "session_used_percent": 23,
+    "checked_at_utc": "2026-09-10T23:00:27.498958+00:00",
+    "weekly_used_percent": 8,
+    "weekly_remaining_percent": 92,
+    "session_used_percent": 50,
     "weekly_reset": "2026-09-17 10:00 Europe/Moscow",
     "extra_usage_enabled": false
   },
@@ -123,12 +110,27 @@
   "integrated_commits": {
     "ozon": [
       "d5ce887f",
-      "6376a119"
+      "6376a119",
+      "72f2e1f7",
+      "654505d8",
+      "d5bb336a",
+      "6e65feda"
     ],
     "dadata_config": "f1e49c22",
     "cz_receiving": [
       "70e07a72",
       "f2ef68ee"
+    ],
+    "storage": [
+      "66a6565a",
+      "cac452dc",
+      "2584d65c"
     ]
+  },
+  "checks": {
+    "targeted_backend": "Initial151passed5skipped3failed; corrected3 nodes rerun3passed. No full suite.",
+    "static": "Seven Ozon/storage files ruff passed; Ozon mypy passed; storage variable fixed and mypy+ruff rerun passed.",
+    "storage_ui": "Actual seller expansion6 liter-days900kopecks; categoryA4/600; Sep09+categoryA2/400. Periodrate150/current200 verified.",
+    "ozon_ui": "Overdue excludes Ozon; actual multi-position names/offers/SKU/Ozonbarcode; supplyworklist1/3correct; navigationtoBoxeswithoutprogressgate; Ozonfinaldialogcancelled. Found nullWBnumber GET500; corrected6e65feda pendingUIreload."
   }
 }

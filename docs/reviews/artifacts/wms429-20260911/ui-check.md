@@ -15,3 +15,11 @@ Opened FBS->Новые: the deliberately yesterday-deadline Ozon posting appeare
 ## Pending final UI pass
 
 After the final API reload, inspect Ozon position identities, packing/box labels and final confirmation; do not execute final delivery or marketplace calls. Inspect the final storage report and save final evidence here. No claim of physical TSD/printer acceptance.
+
+## Final integration UI pass (root)
+
+With Ozon barcode fixtures deliberately different from Product WB barcodes, actual worklist showed both Ozon names/offers/SKUs and the correct Ozon barcodes. Deadline tooltip now says Ozon. Active supply row shows Ozon, Ozon warehouse, 1 order / 3 units, and “Этикетки коробов”; WB row remains WB/QR. Navigation from incomplete picking to packing/boxes is accessible. Final delivery dialog explicitly says Ozon carriage will be created/confirmed; cancelled without submitting.
+
+Actual start-work returned200, but card reread returned500 because nullable wb_supply_id failed FbsSupplyOut validation. Fixed in6e65feda; UI reread after reload remains pending.
+
+Storage existing menu /app/ff/inventory now opens the simple report; no extra sidebar route. Fixture total6 liter-days/900kopecks. Seller expansion shows volume2/1, liter-days4/2, period rate150kopecks, current rate200, amount600/300. CategoryA reduces total to4/600; date09September plus categoryA yields2/400. These are actual UI interactions against isolated data, not production accounting verification.
