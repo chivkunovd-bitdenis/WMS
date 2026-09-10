@@ -1,10 +1,10 @@
 {
-  "phase": "CI_CORRECTIONS_PUSHED_STAGE_REFRESH_PENDING",
+  "phase": "STAGE_UPDATED_APK_FILE_DELIVERED",
   "quota_session_id": null,
   "quota_tool_pty": 87337,
   "last_weekly_used_percent": 2,
   "last_weekly_remaining_percent": 98,
-  "recorded_at_utc": "2026-09-10T13:23:43.298962+00:00",
+  "recorded_at_utc": "2026-09-10T13:51:00.952798+00:00",
   "last_full_progress_check_utc": "2026-09-10T13:23:43.298962+00:00",
   "coordinator_session_id": "01a0884c-2c18-7d22-a2a8-8bef2f3d8fe3",
   "automation_id": "wms-claude",
@@ -114,15 +114,15 @@
   "stage_backup_verified": true,
   "quota_check_reason": "No active Opus worker; resume 10-minute checks if Opus resumes",
   "latest_ci_run": 34482149376,
-  "latest_ci_state": "RUNNING; backlog PASS",
+  "latest_ci_state": "ALL PASS",
   "stage": {
-    "source_sha": "c3c41e532e06a9ba3259d99e114acbc66db92b95",
-    "api_deployment": "b0b16dae-7c0e-4581-aafe-5fcaef5ae3b5",
+    "source_sha": "85d802b1a463ea173695d1e0f33bfe73c0d05bca",
+    "api_deployment": "e7b9bab4-4970-4340-a990-bbe4c2d9d947",
     "web_deployment": "f6c6a8fe-3743-4af9-ba4b-1fdfb61701a4",
-    "status": "previous candidate deployed; latest CI stock correction not yet deployed",
-    "browser_status": "previous session expired; authenticated stage UI not accepted",
-    "api_runtime_proof": "stage-api-runtime.json",
-    "web_runtime_status": "182 assets found; hash-dependent names differ; full normalized comparison pending"
+    "status": "Corrected API SUCCESS; 435 tracked runtime files equal; health200",
+    "browser_status": "Stage login page inspected13:49UTC; authenticated workflow not accepted because no current login session",
+    "api_runtime_proof": "stage-api-85d802b1-runtime.json",
+    "web_runtime_status": "Existing web source unchanged between c3c41e53 and85d802b1; browser login page renders. Generated build names/preload order and seller URL default differ from local build; do not claim full byte equality."
   },
   "chat_candidate": {
     "pid": null,
@@ -150,7 +150,9 @@
     "status": "completed; verified original PID absent 2026-09-10T13:22Z",
     "commit": "4b1a70c6a17a62a268cf92767933d02e36f1d949",
     "apk_version_code": 11,
-    "publicly_published": false
+    "publicly_published": false,
+    "delivered_local_file": "docs/reviews/artifacts/wms401-login-recovery-20260910/WMS-TSD-0.1.10-8435c3abcd24-debug.apk",
+    "delivery_note": "Direct local file link sent to owner; hash verified13:47UTC; public update manifest not changed"
   },
-  "remaining_scope": "Wait new CI; if green refresh staging API to corrected SHA and verify runtime. Complete stage and separate chat UI acceptance. No production or public APK; no new backlog queue."
+  "remaining_scope": "Primary stage deployment and APK file delivery complete. Only separate chat remaining document-link UI checks; do not rebuild APK/redeploy stage/review primary again. Production/public update manifest await owner explicit decision. Stage authenticated operator acceptance not claimed."
 }
