@@ -174,6 +174,20 @@
               ],
               "title": "Cursor"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "deadline",
+                "oldest"
+              ],
+              "type": "string",
+              "default": "deadline",
+              "title": "Sort"
+            }
           }
         ],
         "responses": {
@@ -279,6 +293,23 @@
                 }
               ],
               "title": "Seller Id"
+            }
+          },
+          {
+            "name": "marketplace",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(wb|ozon)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Marketplace"
             }
           },
           {
@@ -6612,6 +6643,17 @@
           "message": {
             "type": "string",
             "title": "Message"
+          },
+          "meta_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta Status"
           }
         },
         "type": "object",
@@ -6687,6 +6729,26 @@
               }
             ],
             "title": "Block Reason"
+          },
+          "marketplace": {
+            "type": "string",
+            "enum": [
+              "wb",
+              "ozon"
+            ],
+            "title": "Marketplace",
+            "default": "wb"
+          },
+          "external_order_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Order Id"
           }
         },
         "type": "object",
@@ -6939,6 +7001,10 @@
           },
           "marketplace": {
             "type": "string",
+            "enum": [
+              "wb",
+              "ozon"
+            ],
             "title": "Marketplace",
             "default": "wb"
           },
@@ -7968,6 +8034,18 @@
               }
             ],
             "title": "Product Id"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
           },
           "storage_location_id": {
             "anyOf": [
@@ -9982,6 +10060,10 @@
           },
           "marketplace": {
             "type": "string",
+            "enum": [
+              "wb",
+              "ozon"
+            ],
             "title": "Marketplace",
             "default": "wb"
           },
@@ -10674,6 +10756,10 @@
           },
           "marketplace": {
             "type": "string",
+            "enum": [
+              "wb",
+              "ozon"
+            ],
             "title": "Marketplace",
             "default": "wb"
           },
@@ -10948,6 +11034,17 @@
           "id": {
             "type": "string",
             "title": "Id"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
           },
           "image_url": {
             "anyOf": [
@@ -11352,6 +11449,10 @@
           },
           "marketplace": {
             "type": "string",
+            "enum": [
+              "wb",
+              "ozon"
+            ],
             "title": "Marketplace",
             "default": "wb"
           },
@@ -11947,6 +12048,10 @@
           },
           "marketplace": {
             "type": "string",
+            "enum": [
+              "wb",
+              "ozon"
+            ],
             "title": "Marketplace",
             "default": "wb"
           },
@@ -15329,7 +15434,14 @@
             "title": "Unit Price Kopecks"
           },
           "total_amount_kopecks": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Total Amount Kopecks"
           },
           "sort_order": {
@@ -15416,8 +15528,26 @@
             "title": "Issued At"
           },
           "total_amount_kopecks": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Total Amount Kopecks"
+          },
+          "calculated_amount_kopecks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculated Amount Kopecks"
           },
           "ff_profile": {
             "additionalProperties": {
@@ -16286,6 +16416,39 @@
             "type": "string",
             "title": "Kind"
           },
+          "container_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Kind"
+          },
+          "container_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Id"
+          },
+          "container_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Code"
+          },
           "storage_location_id": {
             "anyOf": [
               {
@@ -16544,6 +16707,34 @@
             "maximum": 1000000000.0,
             "minimum": 1.0,
             "title": "Quantity"
+          },
+          "container_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pallet",
+                  "box",
+                  "cargo_place"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Kind"
+          },
+          "container_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Id"
           }
         },
         "type": "object",
@@ -17432,6 +17623,34 @@
             "type": "boolean",
             "title": "Allow Over Plan",
             "default": false
+          },
+          "container_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pallet",
+                  "box",
+                  "cargo_place"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Kind"
+          },
+          "container_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Id"
           }
         },
         "type": "object",
@@ -21399,8 +21618,26 @@
       "ProductFbsRuleBody": {
         "properties": {
           "publish": {
-            "type": "boolean",
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Publish"
+          },
+          "publish_ozon": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publish Ozon"
           },
           "same_everywhere": {
             "type": "boolean",
@@ -21435,7 +21672,6 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "publish",
           "same_everywhere",
           "percent"
         ],
@@ -21445,8 +21681,26 @@
       "ProductFbsRuleBulkItemOut": {
         "properties": {
           "publish": {
-            "type": "boolean",
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Publish"
+          },
+          "publish_ozon": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publish Ozon"
           },
           "same_everywhere": {
             "type": "boolean",
@@ -21508,7 +21762,6 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "publish",
           "same_everywhere",
           "percent",
           "free_stock",
@@ -21522,8 +21775,26 @@
       "ProductFbsRuleOut": {
         "properties": {
           "publish": {
-            "type": "boolean",
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Publish"
+          },
+          "publish_ozon": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publish Ozon"
           },
           "same_everywhere": {
             "type": "boolean",
@@ -21581,7 +21852,6 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "publish",
           "same_everywhere",
           "percent",
           "free_stock",
@@ -23040,6 +23310,27 @@
         ],
         "title": "ResendInviteBody"
       },
+      "ScanBody": {
+        "properties": {
+          "line_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Line Id"
+          },
+          "cis_code": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Cis Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "line_id",
+          "cis_code"
+        ],
+        "title": "ScanBody"
+      },
       "ScanPackIn": {
         "properties": {
           "barcode": {
@@ -23122,6 +23413,39 @@
         ],
         "title": "ScanResolveOut"
       },
+      "SelectedInvoiceSourceIn": {
+        "properties": {
+          "source_type": {
+            "type": "string",
+            "enum": [
+              "fbs_order",
+              "marketplace_unload"
+            ],
+            "title": "Source Type"
+          },
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Id"
+          },
+          "service_code": {
+            "type": "string",
+            "enum": [
+              "fbs_order",
+              "marketplace_outbound",
+              "packing"
+            ],
+            "title": "Service Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_type",
+          "source_id",
+          "service_code"
+        ],
+        "title": "SelectedInvoiceSourceIn"
+      },
       "SelectedOperationsInvoiceV2DraftIn": {
         "properties": {
           "creation_mode": {
@@ -23150,8 +23474,27 @@
               "format": "uuid"
             },
             "type": "array",
-            "maxItems": 100,
+            "maxItems": 10000,
             "title": "Selected Root Ids"
+          },
+          "selected_sources": {
+            "items": {
+              "$ref": "#/components/schemas/SelectedInvoiceSourceIn"
+            },
+            "type": "array",
+            "maxItems": 10000,
+            "title": "Selected Sources"
+          },
+          "final_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Amount"
           },
           "include_storage": {
             "type": "boolean",

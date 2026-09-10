@@ -1,0 +1,31 @@
+{
+  "before-print": {
+    "java_heap_pss_kib": 20252,
+    "native_heap_pss_kib": 13956,
+    "total_pss_kib": 133181,
+    "total_rss_kib": 245624,
+    "webviews": 0
+  },
+  "preview32": {
+    "java_heap_pss_kib": 38264,
+    "native_heap_pss_kib": 19536,
+    "total_pss_kib": 209794,
+    "total_rss_kib": 357140,
+    "webviews": 1
+  },
+  "preview32-final": {
+    "java_heap_pss_kib": 15800,
+    "native_heap_pss_kib": 19456,
+    "total_pss_kib": 182778,
+    "total_rss_kib": 335260,
+    "webviews": 1
+  },
+  "after-cancel": {
+    "java_heap_pss_kib": 15904,
+    "native_heap_pss_kib": 19480,
+    "total_pss_kib": 198970,
+    "total_rss_kib": 333916,
+    "webviews": 0
+  },
+  "scope": "Snapshots for ru.wms.tsd only on emulator Android15; excludes separate WebView renderer and OS print service; not a peak or Android7 capacity guarantee."
+}
