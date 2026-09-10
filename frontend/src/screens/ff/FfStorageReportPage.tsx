@@ -281,7 +281,7 @@ export function FfStorageReportPage({ token, sellers = [] }: { token: string; se
             // как «столько литров лежит на складе» — это другая цифра.
             key: 'liter_days',
             label: 'Литро-дни',
-            value: Math.round(Number(report.total_liter_days)),
+            value: Number(report.total_liter_days),
             unit: 'л·дн',
           },
           {
