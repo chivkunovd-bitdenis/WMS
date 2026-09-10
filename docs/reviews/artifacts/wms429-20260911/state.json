@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-09-10T22:24:17.775852+00:00",
+  "updated_at_utc": "2026-09-10T22:31:49.735409+00:00",
   "phase": "PARALLEL_IMPLEMENTATION",
   "release_branch": "codex/wms-release-20260911",
   "base_sha": "dcac6251bb7defc9fa6c3e3b1a4dbc35555ae382",
@@ -96,5 +96,39 @@
     "url": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/WMS-TSD-0.1.10-8435c3abcd24-debug.apk",
     "verified_at_utc": "2026-09-10T22:24:17.775852+00:00"
   },
-  "production_observed_sha": "9ee4e7fc31af3be21fd1fb282e06d02a03139dd3"
+  "production_observed_sha": "9ee4e7fc31af3be21fd1fb282e06d02a03139dd3",
+  "claude_quota": {
+    "checked_at_utc": "2026-09-10T22:31:00Z",
+    "weekly_used_percent": 6,
+    "weekly_remaining_percent": 94,
+    "session_used_percent": 23,
+    "weekly_reset": "2026-09-17 10:00 Europe/Moscow",
+    "extra_usage_enabled": false
+  },
+  "server_preflight": {
+    "observed_sha": "9ee4e7fc31af3be21fd1fb282e06d02a03139dd3",
+    "database_revision": "20260910_1500",
+    "network_topology": "verified existing topology unchanged",
+    "disk_free_before": "396 MB",
+    "disk_free_after": "1.8 GB",
+    "action": "Pruned only unused Docker build cache older than24h; reclaimed1.602GB; no images/volumes/backups removed",
+    "services": "API/web/worker/beat running, db/redishealthy"
+  },
+  "chat": {
+    "sha": "8cd7ca1f59a72228a21c3bf201ee72511366aa00",
+    "branch": "codex/wms-chat-20260911",
+    "pushed": true,
+    "deploy": false
+  },
+  "integrated_commits": {
+    "ozon": [
+      "d5ce887f",
+      "6376a119"
+    ],
+    "dadata_config": "f1e49c22",
+    "cz_receiving": [
+      "70e07a72",
+      "f2ef68ee"
+    ]
+  }
 }
