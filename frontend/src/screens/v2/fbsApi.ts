@@ -79,7 +79,7 @@ export type FbsSupply = {
   id: string
   seller_id: string
   warehouse_id: string
-  wb_supply_id: string
+  wb_supply_id: string | null
   name: string
   status: string // draft | assembling | in_delivery | done
   delivery_type: string // warehouse_sc | pvz
