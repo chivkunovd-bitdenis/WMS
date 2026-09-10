@@ -1,0 +1,59 @@
+{
+  "started_at_utc": "2026-09-10T05:58:05.217204+00:00",
+  "jobs": [
+    {
+      "lane": "stock_merge",
+      "pid": 87653,
+      "session_id": "385761ca-fb02-44b6-b7a5-fbadf2297335",
+      "model": "claude-opus-5",
+      "effort": "xhigh",
+      "events": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms417-opus5-six-20260910/stock_merge-events.jsonl",
+      "request": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms417-opus5-six-20260910/stock_merge-request.txt"
+    },
+    {
+      "lane": "cancel_identity",
+      "pid": 87654,
+      "session_id": "3ce9f1b4-5635-43e7-aeb2-8d5d74e81b5a",
+      "model": "claude-opus-5",
+      "effort": "xhigh",
+      "events": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms417-opus5-six-20260910/cancel_identity-events.jsonl",
+      "request": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms417-opus5-six-20260910/cancel_identity-request.txt"
+    },
+    {
+      "lane": "chat",
+      "pid": 87655,
+      "session_id": "81ce9c03-e959-4b34-b3bc-cf749ce392db",
+      "model": "claude-opus-5",
+      "effort": "xhigh",
+      "events": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms417-opus5-six-20260910/chat-events.jsonl",
+      "request": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms417-opus5-six-20260910/chat-request.txt"
+    },
+    {
+      "lane": "warehouse",
+      "pid": 87656,
+      "session_id": "b0046917-8705-49ce-a0ae-10207e309ac5",
+      "model": "claude-opus-5",
+      "effort": "xhigh",
+      "events": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms417-opus5-six-20260910/warehouse-events.jsonl",
+      "request": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms417-opus5-six-20260910/warehouse-request.txt"
+    },
+    {
+      "lane": "auth_audit",
+      "pid": 87657,
+      "session_id": "b3f46dbe-69af-494a-9b03-093d0aac916b",
+      "model": "claude-opus-5",
+      "effort": "xhigh",
+      "events": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms417-opus5-six-20260910/auth_audit-events.jsonl",
+      "request": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms417-opus5-six-20260910/auth_audit-request.txt"
+    },
+    {
+      "lane": "mobile_update",
+      "pid": 87658,
+      "session_id": "4632158d-e74e-4390-a19a-959547b6fe93",
+      "model": "claude-opus-5",
+      "effort": "xhigh",
+      "events": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms417-opus5-six-20260910/mobile_update-events.jsonl",
+      "request": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms417-opus5-six-20260910/mobile_update-request.txt"
+    }
+  ]
+}

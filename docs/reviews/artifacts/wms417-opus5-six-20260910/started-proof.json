@@ -1,0 +1,47 @@
+{
+  "checked_at": "2026-09-10T05:59:45.138932+00:00",
+  "sessions": [
+    {
+      "lane": "stock_merge",
+      "model": "claude-opus-5",
+      "session_id": "385761ca-fb02-44b6-b7a5-fbadf2297335",
+      "cli_version": "2.1.260",
+      "tools": []
+    },
+    {
+      "lane": "mobile_update",
+      "model": "claude-opus-5",
+      "session_id": "4632158d-e74e-4390-a19a-959547b6fe93",
+      "cli_version": "2.1.260",
+      "tools": []
+    },
+    {
+      "lane": "auth_audit",
+      "model": "claude-opus-5",
+      "session_id": "b3f46dbe-69af-494a-9b03-093d0aac916b",
+      "cli_version": "2.1.260",
+      "tools": []
+    },
+    {
+      "lane": "chat",
+      "model": "claude-opus-5",
+      "session_id": "81ce9c03-e959-4b34-b3bc-cf749ce392db",
+      "cli_version": "2.1.260",
+      "tools": []
+    },
+    {
+      "lane": "cancel_identity",
+      "model": "claude-opus-5",
+      "session_id": "3ce9f1b4-5635-43e7-aeb2-8d5d74e81b5a",
+      "cli_version": "2.1.260",
+      "tools": []
+    },
+    {
+      "lane": "warehouse",
+      "model": "claude-opus-5",
+      "session_id": "b0046917-8705-49ce-a0ae-10207e309ac5",
+      "cli_version": "2.1.260",
+      "tools": []
+    }
+  ]
+}
