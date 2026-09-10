@@ -11,3 +11,6 @@ App delta против production ограничен auth.py, auth_service.py и
 ## Проверка координатора
 
 На96a8dc4c выполнены8 целевых файлов auth/proxy/deploy:51 passed,1 skipped за184.93s. Это локальный scoped pytest, не полный набор. Ruff всего backend PASS, mypy437 файлов PASS. При сравнении auth_service с coordinator вручную проверены отличия default warehouse/staff audit; к этому security release они не относятся. Production read-only SSH повторно подтвердил eaa6ae9a и чистое tracked дерево. Новый узкий независимый reviewer работает по frozen96a8dc4c; результат будет сохранён отдельно.
+
+
+После срочного выпуска418 сохранён production120b106c через merge origin/etalon. Приложение фильтра совпадает с production; новых изменений frontend/DDL против120b нет. Auth/proxy/deploy blobs совпадают с ранее проверенным96a8dc4c, независимый narrow review ACCEPT сохранён отдельно. Предыдущий CI34462255065 полностьюPASS наf318a811; обновление PR должно проверить новую интеграцию с уже выпущенным418.
