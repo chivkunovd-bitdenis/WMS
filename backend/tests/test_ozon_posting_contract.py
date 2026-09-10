@@ -681,3 +681,58 @@ async def test_status_refresh_preserves_catalog_marking_requirement(
     assert order.required_meta_json == ["sgtin"]
     assert gate_svc.ozon_requirements_known(order)
     assert not gate_svc.compute_delivery_allowed(order, [])
+
+
+@pytest.mark.parametrize("source", ["ozon", "catalog"])
+async def test_mixed_posting_requires_codes_only_for_the_marked_sku(
+    db_session: AsyncSession, source: str,
+) -> None:
+    from app.models.fbs_order import FbsOrderMarking
+
+    ctx = await _seed(db_session)
+    ctx.product.requires_honest_sign = source == "catalog"
+    await db_session.commit()
+    row = posting_row(requirements=(
+        {"products_requiring_mandatory_mark": [5680762790]} if source == "ozon" else {}
+    ))
+    row["products"].append({
+        "sku": 200, "offer_id": "ordinary", "name": "Ordinary", "quantity": 1,
+    })
+    await _sync(db_session, ctx, [row])
+    order = await _order(db_session)
+    await db_session.refresh(order, attribute_names=["product_positions"])
+    marked = next(p for p in order.product_positions if p.ozon_sku == 5680762790)
+    assert not gate_svc.compute_delivery_allowed(order, [])
+    codes = [FbsOrderMarking(
+        id=uuid.uuid4(), order_id=order.id, order_product_id=marked.id,
+        kind="sgtin", value=f"synthetic-{index}", meta_status="accepted",
+        created_at=datetime.now(UTC),
+        meta_details_json={"exemplar_id": index + 1, "status": "ship_available"},
+    ) for index in range(marked.quantity)]
+    assert gate_svc.compute_delivery_allowed(order, codes)
+    assert not gate_svc.compute_delivery_allowed(order, codes[:1])
+    # Re-reading an empty products payload in status polling uses saved positions.
+    status_row = dict(row)
+    status_row.pop("products")
+    provider = OzonMarketplaceProvider(transport=FakeMarketplaceTransport(statuses=[status_row]))
+    await sync_svc.sync_ozon_order_statuses(
+        db_session, ctx.tenant.id, ctx.seller.id, provider, AsyncMock(),
+    )
+    assert gate_svc.compute_delivery_allowed(order, codes)
+    # A later partial response cannot turn unknown requirements into permission
+    # or lose catalog targeting on an already known posting.
+    partial = {key: value for key, value in row.items() if key != "requirements"}
+    await _sync(db_session, ctx, [partial])
+    assert gate_svc.compute_delivery_allowed(order, codes)
+
+
+async def test_requirement_for_sku_missing_from_saved_composition_is_not_ready(
+    db_session: AsyncSession,
+) -> None:
+    ctx = await _seed(db_session)
+    await _sync(db_session, ctx, [posting_row(requirements={
+        "products_requiring_mandatory_mark": [999],
+    })])
+    order = await _order(db_session)
+    await db_session.refresh(order, attribute_names=["product_positions"])
+    assert not gate_svc.compute_delivery_allowed(order, [])

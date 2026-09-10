@@ -32,6 +32,19 @@ def _created_at_key(marking: FbsOrderMarking) -> float:
     return marking.created_at.timestamp() if marking.created_at is not None else float("-inf")
 
 
+def _required_position(order: FbsOrder, position_id: Any, kind: str) -> bool:
+    details = order.meta_details_json if isinstance(order.meta_details_json, dict) else {}
+    requirements = details.get(OZON_REQUIREMENTS_KEY)
+    by_sku = requirements.get("by_sku") if isinstance(requirements, dict) else None
+    if not isinstance(by_sku, dict):
+        return True  # Legacy rows retain their conservative order-level contract.
+    skus = by_sku.get(kind)
+    if not isinstance(skus, list):
+        return True  # Partial catalog knowledge must not erase an earlier requirement.
+    position = next((p for p in order.product_positions if p.id == position_id), None)
+    return position is not None and str(position.ozon_sku) in skus
+
+
 def current_markings(
     order: FbsOrder,
     markings: list[FbsOrderMarking],
@@ -48,6 +61,7 @@ def current_markings(
         for marking in markings
         if marking.kind in kinds
         and marking.order_product_id in positions
+        and _required_position(order, marking.order_product_id, marking.kind)
         and _exemplar_id(marking) is not None
     ]
     grouped: dict[tuple[str, Any], list[FbsOrderMarking]] = defaultdict(list)
@@ -94,12 +108,21 @@ def compute_delivery_allowed(order: FbsOrder, markings: list[FbsOrderMarking]) -
     positions = {position.id: position.quantity for position in order.product_positions}
     if not positions or any(quantity <= 0 for quantity in positions.values()):
         return False
+    details = order.meta_details_json if isinstance(order.meta_details_json, dict) else {}
+    requirements = details.get(OZON_REQUIREMENTS_KEY)
+    by_sku = requirements.get("by_sku") if isinstance(requirements, dict) else None
+    if isinstance(by_sku, dict):
+        actual_skus = {str(position.ozon_sku) for position in order.product_positions}
+        if any(str(sku) not in actual_skus for skus in by_sku.values()
+               if isinstance(skus, list) for sku in skus):
+            return False
     selected = current_markings(order, markings)
     counts = Counter((marking.kind, marking.order_product_id) for marking in selected)
     if any(
         counts[(kind, position_id)] != quantity
         for kind in required
         for position_id, quantity in positions.items()
+        if _required_position(order, position_id, kind)
     ):
         return False
     exemplar_counts = Counter((marking.kind, _exemplar_id(marking)) for marking in selected)
