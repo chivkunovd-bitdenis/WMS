@@ -221,3 +221,12 @@ Audit325writer8120завершёнa40c124d1f3343234d620b80be291027809d383c,pushe
 Независимый reviewer11810 принял точныйAPKcfe8b5adc1bb; safeverdictсохранён3a4a54ea. Mainmobile d5d8f5a5→coordf9a0cad5. APKasset554577899serverdigest/sizeпроверены; затемmanifestasset554581217, публичныйобычныйURLвозвращаетversion10/cfe8. Safeprotocolwms363-v10-preview-publication-20260910.md. Дляmobileworker созданverifiedmarkerresumed/mobile-v10-publication-ready.json. PID12345 прежнийthread01a0884d-9d82-7f41-a45a-91123f9ea9d8 ведёттолькоactualnetwork9→10/PIN/server/unfinished;noadbv10,norawmobileevents. Не дублироватьегоэмуляторныеоперации.
 
 Read-onlyaudit/OzonreviewвозобновлёнPID12501, прежнийthread01a08a2d-43fc-7060-82f1-f308ad0e6b31, продолжаетpaused11213. Chat10727продолжаетownfiles/FfFbsOrdersScreendeeplinkonly. КоординаторскиеApp/FfSuppliesShipmentsPageчужимписателямнепереданы. Общийcandidateещёнеproduction; backend0771833bиpreviewAPKv10—отдельныевыпуски.111/112STOPсохранён.
+
+
+### Продолжение после реальной установки v10
+
+Mobile PID12345 завершился; safe-result прочитан, отчёт507414e1 интегрирован720507d8. Root проверил четыре снимка: системный Update, установленная0.1.9, исходныйOzonдокумент, тотже послеbackground. СовпавшийinstalledSHAcfe8 и originru.wms.tsd уже сохраненыc1f71a25. Это реальное обновление9→10, неadbinstall; PIN/server/учебныедокументы сохранены. ФизическийATOL/принтер и редкийбелыйэкран остаются отдельнойграницей.
+
+Новая волна read-only review: PID14692/thread01a08a2d-43fc-7060-82f1-f308ad0e6b31 wms056-audit-trail проверяетa40+cbe4cdf1(printOrder→Asset,старыйPG40P01/новыйPASS); PID14693/thread01a0885c-a939-7123-9856-8f57b5ddff0f wms397-chat-mvp проверяет655b566d recovery/delete/links. ОбаCLIastra6high. Writers10727/13066/12345 отсутствуют, не дублировать новые review. Координатор готовит отдельный Ozon release58373def, mergeс077,33scopedPASS. Передследующимresumeпроверятьps.
+
+CUA browser local FBS nested close: dismiss подтвердил сохранение ввода1, accept завис на Emulation.setFocusEmulationEnabled, результат закрытия НЕ доказан. ПослеgetTabtimeoutkernelreset; nativeChrome оказался не задачным контуром, его не трогать. Не выдавать API/code за UI; независимая работа продолжается. Внешнийroot владеет418;111112freezeнеизменён.
