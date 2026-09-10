@@ -1,0 +1,11 @@
+{
+  "deployment_id": "e7b9bab4-4970-4340-a990-bbe4c2d9d947",
+  "source_sha": "85d802b1a463ea173695d1e0f33bfe73c0d05bca",
+  "checked_at_utc": "2026-09-10T13:50:02.779284+00:00",
+  "runtime_files": {
+    "checked": 435,
+    "missing": [],
+    "mismatch": []
+  },
+  "health_http_status": 200
+}

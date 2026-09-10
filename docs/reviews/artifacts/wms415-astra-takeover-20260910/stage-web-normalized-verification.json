@@ -1,0 +1,409 @@
+{
+  "checked_at_utc": "2026-09-10T13:48:58.623799+00:00",
+  "source_sha": "85d802b1a463ea173695d1e0f33bfe73c0d05bca",
+  "unchanged_frontend_source_since": "c3c41e532e06a9ba3259d99e114acbc66db92b95",
+  "method": "Compare public compiled assets and HTML after only exact known generated filename substitutions",
+  "checked": 57,
+  "passed": 36,
+  "results": [
+    {
+      "local": "assets/BillingScenes-Cl_n8xtL.js",
+      "remote": "assets/BillingScenes-B4_fYMNl.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "964fafee9423bbd946e40e27e0c20c668cebd9520747b5cbffb4b0ee09ce0714",
+      "runtime_sha256": "e34c429ea6d148ec93d357fd4fcb2feaf887711297602241481573f84d808f39"
+    },
+    {
+      "local": "assets/CatalogScenes-CwZ4ZlNC.js",
+      "remote": "assets/CatalogScenes-YcwTJ7WA.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "a81f2a13b8f34a53ebd65435c903d7b4e4d571c4f7410e54f266506a0fba8c28",
+      "runtime_sha256": "eb854fea57fecd68d5f9432a1f75610487b7d535b0a8c82c97b30aa38665acb1"
+    },
+    {
+      "local": "assets/FbsScenes-B5ldxgG3.js",
+      "remote": "assets/FbsScenes-pjM--TbB.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "9fbc1f64b179d28a7ef3c4d52016cf1fc013ebc694c4f82278d75021a208bf70",
+      "runtime_sha256": "c947a9e78390128e205d8a046db1b3db0b20bd8099d72bc682e42b994add50d3"
+    },
+    {
+      "local": "assets/FfFbsOrdersScreen-CCyvXhlE.js",
+      "remote": "assets/FfFbsOrdersScreen-CD1sNYWd.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "bb01c5c458e4cba14e86e39dacbcc0d583fef0972536431efe62bdded4866c42",
+      "runtime_sha256": "afc0085462632171f6b70fbf00bf8087ba070ba440842ac6fab3d6a42f66099e"
+    },
+    {
+      "local": "assets/FfHonestSignPage-B4xlik1w.js",
+      "remote": "assets/FfHonestSignPage-NQBfcbRg.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "5544a619e9cdaed8bb170e6d9079b66d6ef5d088645816a0a71105c70156f8b7",
+      "runtime_sha256": "7f2fe3eb5253d0ee14affd1f6299cd617e67dd0f18b9dbd1f281e881a80d86ff"
+    },
+    {
+      "local": "assets/FfInboundRequestView-D2JYz0Pr.js",
+      "remote": "assets/FfInboundRequestView-CmUa797a.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "aebf788053360354cca6acfa3ca98001a4df9adc72cefa212543105cdd69711f",
+      "runtime_sha256": "e533d04fddf490634b2483acb1cafe3faae6530a72fdfea2c87545f7c75e15b8"
+    },
+    {
+      "local": "assets/FfInventoryListScreen-Ye7eqqSd.js",
+      "remote": "assets/FfInventoryListScreen-DtHXR41i.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "22421aef803876c7e09802823520c52204fd15a466f21b76b50630d1bacef3a5",
+      "runtime_sha256": "99f6988bc62868a618c4d41e0776634ddb5ffe2f958afd9d59847b53768d481e"
+    },
+    {
+      "local": "assets/FfKnowledgeBaseScreen-BuqnmJS3.js",
+      "remote": "assets/FfKnowledgeBaseScreen-DSPKM8d7.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "7c2c36b8bc04078379df87efdfc97a6e4d0687ff251ef629b3e864e950a8d0cc",
+      "runtime_sha256": "204326ce5da1583c0cbad87ec71d9b5e9024fae88890c609affc4cb8af1f08a9"
+    },
+    {
+      "local": "assets/FfPackagingPage-CWB4FZnI.js",
+      "remote": "assets/FfPackagingPage-CcAS2KUi.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "6b314439c54297aa98c6cc8a553ff920be91e6c97e6fcf0f72e1a94c77e7b591",
+      "runtime_sha256": "956bff55e1f1689c64f1a1800e4c4cac25b0a407d22445a94f517300bba55045"
+    },
+    {
+      "local": "assets/FfProductLineCells-UuTm2xHX.js",
+      "remote": "assets/FfProductLineCells-BfzLZOKW.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "62fb8db7872cd3ac877ff8df6fb55fa9fc4f6bcbb32f5168d004dd00f814d247",
+      "runtime_sha256": "2483b111df62be5dc54ec850a2aaf3c246e8065fd7f0f2ccbca3ec6325834e7d"
+    },
+    {
+      "local": "assets/FfProductsCatalogScreen-QSSS-OU0.js",
+      "remote": "assets/FfProductsCatalogScreen-_zlPsCMT.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "e568c8bfc5f65fc56325d9a3261a574cd4782413f208c281b50e9e0e2a7c3f5e",
+      "runtime_sha256": "80949c415df9ce7610f11d04b53ed40a7692c3ccd15b7f89edb8d0914c955885"
+    },
+    {
+      "local": "assets/HonestSignScenes-NMtwlV-y.js",
+      "remote": "assets/HonestSignScenes-BcNbqwpU.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "353ba9247badef93c06fd43c9357d29e5659cb802f3a8e0d3a637c69c737981f",
+      "runtime_sha256": "5d65b66463b18315aae6f5a08a1e5401f412aa19c0bce237fb1dead0bb6aa82b"
+    },
+    {
+      "local": "assets/HonestSignScreen-BpzeEIKP.js",
+      "remote": "assets/HonestSignScreen-Dudg183E.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "f75da43ffe48bb4e4e053e0f40a365a27beceae3de5a30d2293de9d6c36a0313",
+      "runtime_sha256": "865fe315af23db5b7fffc6c795d325dc6c448de77c5766fca12f005337ccf043"
+    },
+    {
+      "local": "assets/InventoryScenes-BAevYCuj.js",
+      "remote": "assets/InventoryScenes-CcAAjWBD.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "b2cc6f6c5878a88df83d42ee9a845d17201badeb4778b52491ff8ccb89829670",
+      "runtime_sha256": "f3948183f50400334ae5fa87818457e0c5ed77aca406f6a23f1b27d51fdb8e84"
+    },
+    {
+      "local": "assets/PriemkaDocScene-Bnlfjwex.js",
+      "remote": "assets/PriemkaDocScene-BoNEzjAS.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "5286bdd5e161e8ee3e2bb606528f97ac304255caafc505e2c3d7546a6b8d874d",
+      "runtime_sha256": "99399c16e7696cb605b188ba7b0e53f5a156811daf1fd05d2bb0dee451515a13"
+    },
+    {
+      "local": "assets/PriemkaQueueScene-D-bXm6a8.js",
+      "remote": "assets/PriemkaQueueScene-_SoLOy-0.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "ed92ab0e1f694918a5bd999aa12f8ce4806ba152b17178ca0f33eed61aa746c8",
+      "runtime_sha256": "e73f7c364f25ccbd66a112cb986f4231265e1fa9eb21a558d8a1eb01ffd41f5a"
+    },
+    {
+      "local": "assets/ProductBarcodeCell-Bzu8VeQO.js",
+      "remote": "assets/ProductBarcodeCell-BWHblxh_.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "9e1e4524804f9883e79282cab89e4175e25bddbb7160a72a0f274567207ccf52",
+      "runtime_sha256": "7661c51e9412afadad65af2ff9e1ab9bb30b26597ff5f413893d94465532f70d"
+    },
+    {
+      "local": "assets/ScenarioPlayer-Bc9QB6Yq.js",
+      "remote": "assets/ScenarioPlayer-ZBFRKJV3.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "0855a361c85aebceec5cf8ba2ac544625c9019987565f7adc5f0aaf4443331e8",
+      "runtime_sha256": "0855a361c85aebceec5cf8ba2ac544625c9019987565f7adc5f0aaf4443331e8"
+    },
+    {
+      "local": "assets/SceneShell-Hs0XLrA9.js",
+      "remote": "assets/SceneShell-CF_sfOSz.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "109fff90c2927e2fa54349d2f033960a480c970a78d3ffc766129c42ce6a35b9",
+      "runtime_sha256": "109fff90c2927e2fa54349d2f033960a480c970a78d3ffc766129c42ce6a35b9"
+    },
+    {
+      "local": "assets/UnloadScenes-CvQ09Jgh.js",
+      "remote": "assets/UnloadScenes-DSjMfO3v.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "f2313a6c6f8cff75e0880429b0d79d980e735c7683116f31f88a7f92c79a88b2",
+      "runtime_sha256": "9bea4b762b50cf87177af3b3533c0f3aad3bbd1283c2e329e22d53f976465142"
+    },
+    {
+      "local": "assets/WarehouseScenes-EKclm14J.js",
+      "remote": "assets/WarehouseScenes-CajAqPaS.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "7ae158e74c6635181d38038db80ad957adaf5fe4daf6875620e3989aa5dad634",
+      "runtime_sha256": "12694770d4ea6076085a70cd16eb4f523039292c2318bd82ed0e4a375c9d5f79"
+    },
+    {
+      "local": "assets/WbProductPickerDialog-m6nJFPX2.js",
+      "remote": "assets/WbProductPickerDialog-Bl2aDgcY.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "ff487f2859757f4e68116a543af08bb88f3bc1c3096732d0f009c436413ef804",
+      "runtime_sha256": "dcd0c1315d9ec2c471000eb4c0be09a13470e24a0e75706dc3cccfea0a332dd0"
+    },
+    {
+      "local": "assets/WmsDatePickersProvider-Gyb5VQ53.js",
+      "remote": "assets/WmsDatePickersProvider-DVYfCwaS.js",
+      "result": "content_diff",
+      "local_sha256": "a21c5a4d53a28f2cb763dbaba40f5dc4689e51881c9051d5b2e019eb9ba167de",
+      "runtime_sha256": "83d3b090dc737c0065d0aac3a1bca40df5bed2a5252d54c23b2ab1571597238e"
+    },
+    {
+      "local": "assets/bwip-js-DBEquVeT.js",
+      "remote": "assets/bwip-js-BqNSq0Bn.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "1fb72e17fb9ef4e881f8565f0a3c1f7382d9f5ea79ff13d9d8f6cd6c7f81b5c9",
+      "runtime_sha256": "1fb72e17fb9ef4e881f8565f0a3c1f7382d9f5ea79ff13d9d8f6cd6c7f81b5c9"
+    },
+    {
+      "local": "assets/data-BuCPzjci.js",
+      "remote": "assets/data-5HfV9W-H.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "9dfde5917ec0d86538832d04ddf3b7968d6e5213cbea4a53a618eece4788897e",
+      "runtime_sha256": "9dfde5917ec0d86538832d04ddf3b7968d6e5213cbea4a53a618eece4788897e"
+    },
+    {
+      "local": "assets/fbsOrders-KdSORDRm.js",
+      "remote": "assets/fbsOrders--AewwfiG.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "58edcd11caee8cf3226c5e580c7196fbd43add08c2dbf89ee4f2cdbda1098c9b",
+      "runtime_sha256": "e0544fe719338a399205b9793164735bad5bc41b3a5e8eeeed50c056916651af"
+    },
+    {
+      "local": "assets/ff-C0pjw9OO.js",
+      "remote": "assets/ff-C-PxAM-E.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "04378888b6a6332b29ee2b11981952f7536202d975b17c217bcc5790bd9b18e1",
+      "runtime_sha256": "a58b4ea785ab8d8c90760ed3d9f8843cc5b47ac9102dbf3c7b56171dc93bb63a"
+    },
+    {
+      "local": "assets/honestSign-D_VRPcX_.js",
+      "remote": "assets/honestSign-Pc9vrcJl.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "8f1cac0be4346c5b10dd75cbb24c95f2e7b7bcffca504e89015f728566ca0508",
+      "runtime_sha256": "4908b558316b649758d512848773bf0501c350c727c7c4075d6e7aa353950608"
+    },
+    {
+      "local": "assets/inventory-DMIddxpn.js",
+      "remote": "assets/inventory-DsM28kEf.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "24d315ad3379dad3806b33be45e91efd9d6716f8bcc01e31530e89c65d56f10c",
+      "runtime_sha256": "6ddda55190438ca917716cce7190e2547b3c8496833790556c458ce27088ee2f"
+    },
+    {
+      "local": "assets/kbScenes-uxfg_som.js",
+      "remote": "assets/kbScenes-DkKbvAV2.js",
+      "result": "content_diff",
+      "local_sha256": "7b0dc5ed802b8c064d4314ab633f28fc0a024c9d0f6ec708726d8ff07d320dfb",
+      "runtime_sha256": "507a254052a3933e8ca4a533c402ceffe3289cdf76e2c78c327b5d88c723e4a1"
+    },
+    {
+      "local": "assets/knowledge-DfjMg-gC.js",
+      "remote": "assets/knowledge-CTSbrMAC.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "65da90d5bd923c4b5909148e29f0afdd6dc8c923f82dfc79a10743f9dba82f86",
+      "runtime_sha256": "ffe42ebf6cdb15528c860bff4b240c7a766be4fc5a67de079fb54a9b2696ab0e"
+    },
+    {
+      "local": "assets/packaging-DUc1Pb7g.js",
+      "remote": "assets/packaging-evmzd3y0.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "b1f43f83ed1c6fb79e40bba703f4a7761837f1db4cb3c55f5c6bd96c68833dc5",
+      "runtime_sha256": "999a8c3cbbe6e15bd44f0346fead4e21ea58c532552cbb7cd188b026ca25b620"
+    },
+    {
+      "local": "assets/reception-B7x4qnrJ.js",
+      "remote": "assets/reception-XCocDCCZ.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "084b6b64d6e7b3be6f9bcfc9977864ba9330cbbf3280e5b7524bac616ee7d3d5",
+      "runtime_sha256": "7d6ce4caf9c886fe012d4ee4a17188f617d626b9df1c94c0ce4d5a86369852ba"
+    },
+    {
+      "local": "assets/seller-4CXTfpHQ.js",
+      "remote": "assets/seller-CJOvujgV.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "33bfaf60e343ab758cedc787c0afcf8868cde741bb45410dae79b6be581811a0",
+      "runtime_sha256": "1b9b6ae53e52565ec0e93201524feac0e9fab4e3fba0e992839364be5d970a64"
+    },
+    {
+      "local": "assets/stubFetch-CXc8Uksn.js",
+      "remote": "assets/stubFetch-BSe9QTaP.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "677fc721c0804921f0cfb547f5950e052853bea2f309b99f495bcd03793dff8b",
+      "runtime_sha256": "677fc721c0804921f0cfb547f5950e052853bea2f309b99f495bcd03793dff8b"
+    },
+    {
+      "local": "assets/useMarkingCodePrint-DMhcXzmQ.js",
+      "remote": "assets/useMarkingCodePrint-D5r8MLrs.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "9e23703cb9f264691cfe17412953c882ab02863c1d316481a6e26e248d6b2ba1",
+      "runtime_sha256": "7b26697e788bd18e552aa1858d6aee8e5159f7f753700abcc42d6e8756ec5dc4"
+    },
+    {
+      "local": "assets/useWbProductCatalog-gnRSEPwm.js",
+      "remote": "assets/useWbProductCatalog-DhIXTTEZ.js",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "78723ed97b68630d16cd9c2fd54936c95c0e62967961e0c0d1121c2766f3ad10",
+      "runtime_sha256": "d503a3c5822a68097447a4c637a6f8a27e2dcd8bd9b24f1c328ce8aecb4af067"
+    },
+    {
+      "local": "warehouse-map.html",
+      "remote": "warehouse-map.html",
+      "result": "content_diff",
+      "local_sha256": "ad0265514bc2ab4fc4b956eb8a443c2c967b56383cfa1a89e09aec6755c218a0",
+      "runtime_sha256": "bf40040a799773cda41b0bef9cd00a88db51abb8a2d8b587b3c5eaa7aba4ab1e"
+    },
+    {
+      "local": "index.html",
+      "remote": "index.html",
+      "result": "content_diff",
+      "local_sha256": "fcf4144aefbba3dfc6cb4857944fdaef3b704800ead409897c237b21b20f3f66",
+      "runtime_sha256": "c07fcae1e405c539a60f538f9726ad3f839b879a882c4d9cded23f90c7c8b0eb"
+    },
+    {
+      "local": "knowledge.html",
+      "remote": "knowledge.html",
+      "result": "content_diff",
+      "local_sha256": "4743ba779610c7c50ec2507bcb796766781d7bd6756c91d276ae81d8cb59efb2",
+      "runtime_sha256": "a45da9a0e57ecdfd8c7654b4cf2d9e3eb0b09e133e9e80e9bf3d78953a4581d4"
+    },
+    {
+      "local": "inventory.html",
+      "remote": "inventory.html",
+      "result": "content_diff",
+      "local_sha256": "c49528b7699dd619cfbe5420cafe45b181bdf1cbf82f31bd06119afc198d25f0",
+      "runtime_sha256": "964640981a8c6bd24a63801ab294496de48ba226a8fb9a569c49aadd5af54268"
+    },
+    {
+      "local": "products.html",
+      "remote": "products.html",
+      "result": "content_diff",
+      "local_sha256": "051876d8605a800bdc49c682c4b5d8888ebd141d15dc5f7964bbeee514abc520",
+      "runtime_sha256": "bf459b67d543ad59765661978ec3b628f864294299f79e1d79fd572e07eb62f3"
+    },
+    {
+      "local": "honest-sign.html",
+      "remote": "honest-sign.html",
+      "result": "content_diff",
+      "local_sha256": "11d79e02232846bc08e64475b3aff5ac53a2c4eeff2b915b6306f27d9fb3d004",
+      "runtime_sha256": "8555faa8e7dcc1909ac377d42f71feacb3e89dd3a0c6f9c22978e969a909a8d2"
+    },
+    {
+      "local": "raschety-razdely.html",
+      "remote": "raschety-razdely.html",
+      "result": "content_diff",
+      "local_sha256": "49b972d60f363265484661caeab3208a6765089c42beec4eb1d98f2820579eb1",
+      "runtime_sha256": "9ab58fcc595a11a4fcbb976e59f030e3f3603889d634943fec7b7401c64ad050"
+    },
+    {
+      "local": "reception.html",
+      "remote": "reception.html",
+      "result": "content_diff",
+      "local_sha256": "eb2c96b6576950ed7d57aa2745eb08a349ba7b27057dc8ba36025341ff0dae6d",
+      "runtime_sha256": "d39b060b15de6fe96a083d8ba55693a3b044cf89ea6d2602dc11c6e11224a6d2"
+    },
+    {
+      "local": "ui-kit.html",
+      "remote": "ui-kit.html",
+      "result": "content_diff",
+      "local_sha256": "a461091b87b67ca58392dffc9bb6178114d5e8b6d7888d7bd567e8c2cbc8fe27",
+      "runtime_sha256": "eb7b5b3d30c5af4434f929044144d2945f32bb0dfc0281800bb93edfe6a2b69f"
+    },
+    {
+      "local": "packaging.html",
+      "remote": "packaging.html",
+      "result": "content_diff",
+      "local_sha256": "ccf531d3df4003bb95004207f270997ea12a922341f4c237b4177fe92a453310",
+      "runtime_sha256": "da804598775138819389865a6129cf3c82400ef880937db22b3af25f5f5393b7"
+    },
+    {
+      "local": "unload-pick.html",
+      "remote": "unload-pick.html",
+      "result": "content_diff",
+      "local_sha256": "a5d58eb0f1bb8204fc44676f98dc73776cf5a0eac81601e0b716834c28c17b0a",
+      "runtime_sha256": "b531a7b167635af08e7fbd54da7895c1456a85375c1aa9216e33054c12b0334d"
+    },
+    {
+      "local": "raschety.html",
+      "remote": "raschety.html",
+      "result": "content_diff",
+      "local_sha256": "581da78ba366cbac0e8ead095a28716355c39be56c665c1fa701b8777c1a08cd",
+      "runtime_sha256": "046aaeb2aea069795bb351a5d154aab9c1e8d67bf433d0ae8c6ca260cd5b1aa3"
+    },
+    {
+      "local": "unload-pick-2.html",
+      "remote": "unload-pick-2.html",
+      "result": "content_diff",
+      "local_sha256": "699ab318ddc06b4f86a173db73566147c7839709b265b1eb34be7a695f1a73d7",
+      "runtime_sha256": "b03cc289a9449b517d4c69ac866315b3efc97e33d8c824583ad534279034b5c5"
+    },
+    {
+      "local": "kb-scenes.html",
+      "remote": "kb-scenes.html",
+      "result": "equal_after_known_asset_rename",
+      "local_sha256": "8a6d6a56e1e06b91727c801a6e8b3587c155cb3cd422019cd78a6c2ebcd0f38b",
+      "runtime_sha256": "6dd924621b0a03d7998d167d851baf5756aab27a851438f07a908c5b242e609d"
+    },
+    {
+      "local": "fbs-speed.html",
+      "remote": "fbs-speed.html",
+      "result": "content_diff",
+      "local_sha256": "3850d53730119dc28eedbea0c07bd3cad1fd360f4a5ea170ce3a14e36dcc0d5c",
+      "runtime_sha256": "8f91a92f68a9befade09f95841702312c7a9d591461a46038795cb1e72e10249"
+    },
+    {
+      "local": "move-lab.html",
+      "remote": "move-lab.html",
+      "result": "content_diff",
+      "local_sha256": "e1cb4d1fc800f5662196128930df24c158b6695af19cbde5a1d4e31f39c260ba",
+      "runtime_sha256": "5998460851d5b38f85f185e9afc4fe63badde168586dd35f065c3718032b4670"
+    },
+    {
+      "local": "sorting-objects.html",
+      "remote": "sorting-objects.html",
+      "result": "content_diff",
+      "local_sha256": "63a6e0385de3f47257329d4163aa8008ec2a0c3dc599bf788c21a2eaf992834f",
+      "runtime_sha256": "58ab756428dbbc00c3260c17bdd827236780396a0487b39b1a173a7f0d3689c8"
+    },
+    {
+      "local": "fbs-orders.html",
+      "remote": "fbs-orders.html",
+      "result": "content_diff",
+      "local_sha256": "9aed6f91c2ba9a71965ed6745697bc7c92f0881ee93a7119cc86bfb5019bc744",
+      "runtime_sha256": "76ecb56dd0fa7bde1b58c8fa014835d043a497d274d3a6865587af742f966cc6"
+    },
+    {
+      "local": "fbs-pick.html",
+      "remote": "fbs-pick.html",
+      "result": "content_diff",
+      "local_sha256": "ae6441baddabb883258ccf1716179a80ef0e5a058cdf5d79a8eccbaca232a684",
+      "runtime_sha256": "2cab45df297eb088493eb0808e753debb4b12a34fb31819ed189e587bff71dc4"
+    },
+    {
+      "local": "seller/index.html",
+      "remote": "seller/index.html",
+      "result": "content_diff",
+      "local_sha256": "6358e0f83b92a39e672c9b1c010df92fb393444ceedb736a97975f84b07f9a94",
+      "runtime_sha256": "e8352acf31608d623661a51e862766a811aa15d2403c048d88e28d7e0ae70346"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 {
-  "recorded_at_utc": "2026-09-10T13:23:43.298962+00:00",
-  "phase": "CI_CORRECTIONS_PUSHED_STAGE_REFRESH_PENDING",
+  "recorded_at_utc": "2026-09-10T13:51:00.952798+00:00",
+  "phase": "STAGE_UPDATED_APK_FILE_DELIVERED",
   "mobile": {
     "pid": null,
     "thread_id": "01a0884d-9d82-7f41-a45a-91123f9ea9d8",
@@ -13,7 +13,9 @@
     "status": "completed; verified original PID absent 2026-09-10T13:22Z",
     "commit": "4b1a70c6a17a62a268cf92767933d02e36f1d949",
     "apk_version_code": 11,
-    "publicly_published": false
+    "publicly_published": false,
+    "delivered_local_file": "docs/reviews/artifacts/wms401-login-recovery-20260910/WMS-TSD-0.1.10-8435c3abcd24-debug.apk",
+    "delivery_note": "Direct local file link sent to owner; hash verified13:47UTC; public update manifest not changed"
   },
   "chat": {
     "pid": null,
@@ -34,7 +36,7 @@
     "branch": "codex/wms-evening-release-20260910",
     "checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms-evening-release-20260910",
     "source_sha": "85d802b1a463ea173695d1e0f33bfe73c0d05bca",
-    "status": "CI corrections committed and pushed; CI34482149376 running; backlog PASS",
+    "status": "CI34482149376 all three jobs PASS; corrected API deployed and runtime hashes verified",
     "ci_run": 34482149376,
     "agent_status": "completed; no active writer",
     "code_fix_sha": "5e1faa5cc6948eca9fcaed0396cbe016e75b1b78"
@@ -58,12 +60,12 @@
     "status": "PASS; completed once; root inspected bounded subsequent CI service fix separately"
   },
   "stage": {
-    "source_sha": "c3c41e532e06a9ba3259d99e114acbc66db92b95",
-    "api_deployment": "b0b16dae-7c0e-4581-aafe-5fcaef5ae3b5",
+    "source_sha": "85d802b1a463ea173695d1e0f33bfe73c0d05bca",
+    "api_deployment": "e7b9bab4-4970-4340-a990-bbe4c2d9d947",
     "web_deployment": "f6c6a8fe-3743-4af9-ba4b-1fdfb61701a4",
-    "status": "previous candidate deployed; latest CI stock correction not yet deployed",
-    "browser_status": "previous session expired; authenticated stage UI not accepted",
-    "api_runtime_proof": "stage-api-runtime.json",
-    "web_runtime_status": "182 assets found; hash-dependent names differ; full normalized comparison pending"
+    "status": "Corrected API SUCCESS; 435 tracked runtime files equal; health200",
+    "browser_status": "Stage login page inspected13:49UTC; authenticated workflow not accepted because no current login session",
+    "api_runtime_proof": "stage-api-85d802b1-runtime.json",
+    "web_runtime_status": "Existing web source unchanged between c3c41e53 and85d802b1; browser login page renders. Generated build names/preload order and seller URL default differ from local build; do not claim full byte equality."
   }
 }
