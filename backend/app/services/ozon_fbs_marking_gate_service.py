@@ -32,6 +32,19 @@ def _created_at_key(marking: FbsOrderMarking) -> float:
     return marking.created_at.timestamp() if marking.created_at is not None else float("-inf")
 
 
+def _required_position(order: FbsOrder, position_id: Any, kind: str) -> bool:
+    details = order.meta_details_json if isinstance(order.meta_details_json, dict) else {}
+    requirements = details.get(OZON_REQUIREMENTS_KEY)
+    by_sku = requirements.get("by_sku") if isinstance(requirements, dict) else None
+    if not isinstance(by_sku, dict):
+        return True  # Legacy rows retain their conservative order-level contract.
+    skus = by_sku.get(kind)
+    if not isinstance(skus, list):
+        return True  # Partial catalog knowledge must not erase an earlier requirement.
+    position = next((p for p in order.product_positions if p.id == position_id), None)
+    return position is not None and str(position.ozon_sku) in skus
+
+
 def current_markings(
     order: FbsOrder,
     markings: list[FbsOrderMarking],
@@ -41,15 +54,14 @@ def current_markings(
     if not positions or any(quantity <= 0 for quantity in positions.values()):
         return []
     kinds = {
-        str(kind).strip().lower()
-        for kind in (order.required_meta_json or [])
-        if str(kind).strip()
+        str(kind).strip().lower() for kind in (order.required_meta_json or []) if str(kind).strip()
     } or {marking.kind for marking in markings}
     candidates = [
         marking
         for marking in markings
         if marking.kind in kinds
         and marking.order_product_id in positions
+        and _required_position(order, marking.order_product_id, marking.kind)
         and _exemplar_id(marking) is not None
     ]
     grouped: dict[tuple[str, Any], list[FbsOrderMarking]] = defaultdict(list)
@@ -71,9 +83,8 @@ def current_markings(
 def ozon_requirements_known(order: FbsOrder) -> bool:
     """Разобраны ли требования по маркировке этого отправления.
 
-    Признак ставит разбор отправления (`ozon_fbs_sync_service`) из двух
-    источников сразу: требований самого Ozon (`requirements`) и флага
-    маркируемости у товаров отправления в нашем каталоге.
+    Признак ставится только после ответа Ozon о requirements. Каталог
+    дополнительно требует SGTIN, но ничего не сообщает о других видах кодов.
 
     Отличать «требований нет» от «мы их не разбирали» обязательно: раньше оба
     случая выглядели как пустой `required_meta_json`, и гейт выпускал
@@ -84,10 +95,10 @@ def ozon_requirements_known(order: FbsOrder) -> bool:
 
 
 def compute_delivery_allowed(order: FbsOrder, markings: list[FbsOrderMarking]) -> bool:
+    if not ozon_requirements_known(order):
+        return False
     required = {
-        str(kind).strip().lower()
-        for kind in (order.required_meta_json or [])
-        if str(kind).strip()
+        str(kind).strip().lower() for kind in (order.required_meta_json or []) if str(kind).strip()
     }
     if not required:
         # Пустое требование — разрешение только у отправления, требования
@@ -97,12 +108,21 @@ def compute_delivery_allowed(order: FbsOrder, markings: list[FbsOrderMarking]) -
     positions = {position.id: position.quantity for position in order.product_positions}
     if not positions or any(quantity <= 0 for quantity in positions.values()):
         return False
+    details = order.meta_details_json if isinstance(order.meta_details_json, dict) else {}
+    requirements = details.get(OZON_REQUIREMENTS_KEY)
+    by_sku = requirements.get("by_sku") if isinstance(requirements, dict) else None
+    if isinstance(by_sku, dict):
+        actual_skus = {str(position.ozon_sku) for position in order.product_positions}
+        if any(str(sku) not in actual_skus for skus in by_sku.values()
+               if isinstance(skus, list) for sku in skus):
+            return False
     selected = current_markings(order, markings)
     counts = Counter((marking.kind, marking.order_product_id) for marking in selected)
     if any(
         counts[(kind, position_id)] != quantity
         for kind in required
         for position_id, quantity in positions.items()
+        if _required_position(order, position_id, kind)
     ):
         return False
     exemplar_counts = Counter((marking.kind, _exemplar_id(marking)) for marking in selected)
@@ -135,9 +155,7 @@ def apply_status(
         if marking.meta_status in {META_STATUS_REJECTED, META_STATUS_REPLACEMENT_REQUIRED}:
             continue
         own_details = (
-            dict(marking.meta_details_json)
-            if isinstance(marking.meta_details_json, dict)
-            else {}
+            dict(marking.meta_details_json) if isinstance(marking.meta_details_json, dict) else {}
         )
         marking.meta_details_json = {**own_details, **shared_details}
         marking.reason = reason
@@ -158,15 +176,15 @@ def apply_status(
 
 
 def delivery_message(order: FbsOrder, markings: list[FbsOrderMarking]) -> str:
-    if not order.required_meta_json:
-        if ozon_requirements_known(order):
-            return "Ozon: маркировка не требуется."
+    if not ozon_requirements_known(order):
         # Утверждать «не требуется» мы не вправе: требования по этому
         # отправлению ещё не разобраны, значит мы просто не знаем.
         return (
             "Требования по маркировке этого отправления Ozon ещё не получены — "
             "обновите заказы Ozon."
         )
+    if not order.required_meta_json:
+        return "Ozon: маркировка не требуется."
     if compute_delivery_allowed(order, markings):
         return "Ozon: маркировка подтверждена для всех товаров."
     return "Ozon не подтвердил маркировку для всех товаров отправления."

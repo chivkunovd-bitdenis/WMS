@@ -15,7 +15,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -510,39 +510,13 @@ async def _binding_for_row(
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
-async def _stock_is_published_for_row(
-    session: AsyncSession,
-    binding: FbsWarehouseBinding | None,
-    positions: list[FbsOrderProduct],
-    fallback_product_id: uuid.UUID | None,
-) -> bool:
-    """Наш ли это заказ: выставлен ли по его складу и товару остаток (WMS-352).
+def _warehouse_is_served_for_row(binding: FbsWarehouseBinding | None) -> bool:
+    """Import served, mapped warehouses regardless of publication (WMS-352/386).
 
-    Кабинет Ozon отдаёт все отправления продавца, включая те, что он собирает
-    сам на другом складе. Своими считаем ровно те, по которым остаток публикуем
-    мы: склад продавца отмечен обслуживаемым, а у товара включена публикация.
-    Правило и его место — те же, что у Wildberries в
-    ``fbs_order_import_scope_service.import_wb_order_rows``: отсев до записи в
-    локальную базу, без отдельного признака «чужой» у заказа.
+    The lookup already scopes active bindings to this tenant, seller and Ozon.
+    Product and binding publication switches control outgoing stocks only.
     """
-    if binding is None or not binding.served:
-        return False
-    product_ids = {position.product_id for position in positions if position.product_id is not None}
-    if fallback_product_id is not None:
-        product_ids.add(fallback_product_id)
-    if not product_ids:
-        return False
-    published = await session.scalar(
-        select(Product.id)
-        .where(
-            Product.id.in_(product_ids),
-            func.coalesce(
-                Product.fbs_ozon_stock_sync_enabled, Product.fbs_stock_sync_enabled,
-            ).is_(True),
-        )
-        .limit(1)
-    )
-    return published is not None
+    return binding is not None and binding.served
 
 
 async def _posting_products_for_row(
@@ -647,36 +621,43 @@ def _apply_delivery_method(order: FbsOrder, row: dict[str, Any]) -> None:
         order.meta_details_json = details
 
 
-async def _honest_sign_required_by_catalog(
+async def _requirements_by_sku(
     session: AsyncSession,
+    row: dict[str, Any],
     positions: list[FbsOrderProduct],
     fallback_product_id: uuid.UUID | None,
-) -> bool:
-    """Требует ли «Честный знак» хоть один товар этого отправления.
-
-    Второй источник требования, независимый от Ozon. Он нужен по двум причинам.
-    Во-первых, требование маркетплейса — не единственная правда: маркируемый
-    товар маркируется в любом случае. Во-вторых, серверная проверка готовности
-    к отгрузке смотрит только на «главный» товар заказа, а у Ozon отправление
-    многотоварное: маркируемая вторая позиция мимо неё проезжала.
-
-    Связи тянем явным запросом: `position.product` в асинхронном коде даёт
-    MissingGreenlet и роняет весь проход опроса.
-    """
-    product_ids = {position.product_id for position in positions if position.product_id is not None}
+) -> tuple[list[str], bool, dict[str, list[str]] | None]:
+    kinds, seen = _requirement_kinds(row)
+    requirements = row.get("requirements")
+    by_sku: dict[str, list[str]] = {}
+    if isinstance(requirements, dict):
+        for field, kind in _OZON_REQUIREMENT_KINDS:
+            values = requirements.get(field)
+            if isinstance(values, list):
+                by_sku.setdefault(kind, []).extend(str(value) for value in values)
+    product_ids = {p.product_id for p in positions if p.product_id is not None}
     if fallback_product_id is not None:
         product_ids.add(fallback_product_id)
-    if not product_ids:
-        return False
-    flag = await session.scalar(
-        select(Product.id)
-        .where(Product.id.in_(product_ids), Product.requires_honest_sign.is_(True))
-        .limit(1)
-    )
-    return flag is not None
+    marked_ids = set(await session.scalars(select(Product.id).where(
+        Product.id.in_(product_ids), Product.requires_honest_sign.is_(True),
+    ))) if product_ids else set()
+    if marked_ids:
+        if MARKING_KIND_SGTIN not in kinds:
+            kinds.append(MARKING_KIND_SGTIN)
+        for position in positions:
+            if position.product_id in marked_ids and position.ozon_sku is not None:
+                by_sku.setdefault(MARKING_KIND_SGTIN, []).append(str(position.ozon_sku))
+        # A legacy position without a SKU cannot be matched to Ozon requirements.
+        # Keep its existing conservative order-level treatment until import maps it.
+        if not positions or any(p.ozon_sku is None for p in positions):
+            return kinds, seen, None
+    return kinds, seen, {kind: list(dict.fromkeys(skus)) for kind, skus in by_sku.items()}
 
 
-def _apply_requirements(order: FbsOrder, kinds: list[str], seen: bool) -> None:
+def _apply_requirements(
+    order: FbsOrder, kinds: list[str], seen: bool,
+    by_sku: dict[str, list[str]] | None = None,
+) -> None:
     """Записать требования маркировки Ozon туда, где их ищет гейт выпуска.
 
     Раньше `required_meta_json` заполнял ровно один писатель — вайлдберрисовский
@@ -690,10 +671,24 @@ def _apply_requirements(order: FbsOrder, kinds: list[str], seen: bool) -> None:
     не имеет права трактовать незнание как разрешение.
     """
     if not seen:
+        # Catalog SGTIN is partial knowledge: preserve it without claiming that
+        # Ozon has answered about IMEI/UIN or clearing earlier requirements.
+        order.required_meta_json = list(dict.fromkeys([*(order.required_meta_json or []), *kinds]))
+        details = dict(order.meta_details_json or {})
+        known = details.get(OZON_REQUIREMENTS_KEY)
+        if isinstance(known, dict) and isinstance(known.get("by_sku"), dict) and by_sku:
+            merged = dict(known["by_sku"])
+            for kind, skus in by_sku.items():
+                if skus:
+                    merged[kind] = list(dict.fromkeys([*merged.get(kind, []), *skus]))
+            details[OZON_REQUIREMENTS_KEY] = {**known, "by_sku": merged}
+            order.meta_details_json = details
         return
     order.required_meta_json = list(kinds)
     details = dict(order.meta_details_json or {})
     details[OZON_REQUIREMENTS_KEY] = {"kinds": list(kinds)}
+    if by_sku is not None:
+        details[OZON_REQUIREMENTS_KEY]["by_sku"] = by_sku
     order.meta_details_json = details
 
 
@@ -776,8 +771,8 @@ async def sync_ozon_orders(
 ) -> dict[str, int]:
     """Import automatic scope, or explicitly selected postings from served warehouses.
 
-    An explicit selection authorizes intake without stock publication; it does
-    not enable publication or change the automatic polling scope (WMS-373).
+    Both paths require an active, served warehouse mapping. Explicit selection
+    limits posting numbers; neither path changes stock publication switches.
     """
     client_id, api_key = await _credentials(session, tenant_id, seller_id)
     if selected_posting_numbers is None:
@@ -826,23 +821,15 @@ async def sync_ozon_orders(
         raw_substatus = _text(row, "substatus")
         if raw_status is None:
             raw_status = raw_substatus
-        required_kinds, _ = _requirement_kinds(row)
         fallback_product_id = await _product_id_for_row(session, tenant_id, seller_id, row)
         positions = await _posting_products_for_row(session, tenant_id, seller_id, row)
         binding = await _binding_for_row(session, tenant_id, seller_id, row)
-        if selected_posting_numbers is not None:
-            if binding is None or not binding.served:
-                continue
-        elif not await _stock_is_published_for_row(
-            session, binding, positions, fallback_product_id
-        ):
+        if not _warehouse_is_served_for_row(binding):
             continue
-        if MARKING_KIND_SGTIN not in required_kinds and await _honest_sign_required_by_catalog(
-            session, positions, fallback_product_id
-        ):
-            required_kinds.append(MARKING_KIND_SGTIN)
-        # Строку отправления мы разобрали — значит про требования знаем.
-        requirements_seen = True
+        required_kinds, requirements_seen, requirements_by_sku = await _requirements_by_sku(
+            session, row, positions or (list(existing.product_positions) if existing else []),
+            fallback_product_id,
+        )
         has_positions_payload = isinstance(row.get("products"), list)
         product_id = _primary_product_id(positions, fallback_product_id)
         positions_mapped = _positions_are_mapped(positions, fallback_product_id)
@@ -896,7 +883,7 @@ async def sync_ozon_orders(
                 ]
                 existing.meta_details_json = details
             _apply_delivery_method(existing, row)
-            _apply_requirements(existing, required_kinds, requirements_seen)
+            _apply_requirements(existing, required_kinds, requirements_seen, requirements_by_sku)
             statuses_updated += int(
                 await _apply_status(session, existing, raw_status, raw_substatus)
             )
@@ -950,7 +937,7 @@ async def sync_ozon_orders(
                 ]
             }
         _apply_delivery_method(order, row)
-        _apply_requirements(order, required_kinds, requirements_seen)
+        _apply_requirements(order, required_kinds, requirements_seen, requirements_by_sku)
         await _apply_status(session, order, raw_status, raw_substatus)
         session.add(order)
         await session.flush()
@@ -994,6 +981,7 @@ async def sync_ozon_order_statuses(
         (
             await session.execute(
                 select(FbsOrder)
+                .options(selectinload(FbsOrder.product_positions))
                 .where(
                     FbsOrder.tenant_id == tenant_id,
                     FbsOrder.seller_id == seller_id,
@@ -1040,8 +1028,10 @@ async def sync_ozon_order_statuses(
         # Требование маркировки приходит в той же карточке отправления. Читаем
         # его и здесь: у заказа, заведённого до появления разбора требований,
         # оно иначе не появилось бы никогда.
-        required_kinds, requirements_seen = _requirement_kinds(row)
-        _apply_requirements(order, required_kinds, requirements_seen)
+        required_kinds, requirements_seen, requirements_by_sku = await _requirements_by_sku(
+            session, row, list(order.product_positions), order.product_id,
+        )
+        _apply_requirements(order, required_kinds, requirements_seen, requirements_by_sku)
         status_value = _text(row, "status")
         substatus_value = _text(row, "substatus")
         updated += int(
