@@ -5,7 +5,7 @@
   "last_weekly_used_percent": 87,
   "last_weekly_remaining_percent": 13,
   "recorded_at_utc": "2026-09-09T21:10:11.500624+00:00",
-  "last_full_progress_check_utc": "2026-09-09T22:15:24.583098+00:00",
+  "last_full_progress_check_utc": "2026-09-10T06:46:01.828811+00:00",
   "coordinator_session_id": "01a0884c-2c18-7d22-a2a8-8bef2f3d8fe3",
   "automation_id": "wms-claude",
   "quota_minutes": 10,
@@ -39,8 +39,8 @@
     "WMS-377"
   ],
   "next_queue_commit": "aadac0b6039a70912bf12412aeca90028b675fc8",
-  "last_heartbeat_utc": "2026-09-10T06:33:41.632684+00:00",
-  "intervention": "Ozon352/386 actual import filter still depends on publication; current-queue correction sent. Requested Astra CLI review of saved slices and honest in-app verification.",
+  "last_heartbeat_utc": "2026-09-10T06:46:01.828811+00:00",
+  "intervention": "WMS417 findings acknowledged and assigned; coordinator actively integrates chat/warehouse/auth, scoped review fixes continue; no duplicate writers.",
   "last_full_progress_artifact": "progress-20260909T2215.json",
   "coordinator_provider": "codex",
   "coordinator_model": "gpt-6-astra",
@@ -49,7 +49,7 @@
   "claude_coordinator_stopped": true,
   "claude_coordinator_session_id": "2a1f478a-9d10-48fe-b183-114202609010",
   "claude_session_used_percent": 100,
-  "quota_check_enabled": true,
+  "quota_check_enabled": false,
   "takeover_reason": "Claude session quota exhausted; weekly remaining15% is above7% threshold",
   "takeover_handoff": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/WMS_ASTRA_TAKEOVER_2026-09-10.md",
   "takeover_commit": "2b46f82f0f0926053558bd6c39b11d0a4c502ad0",
@@ -63,15 +63,15 @@
   "agent_count": 3,
   "current_agents": {
     "stock": {
-      "pid": 75180,
+      "pid": 94228,
       "thread_id": "01a0884d-9d51-73f1-a1cb-f657c2d56c0d"
     },
     "cancel": {
-      "pid": 75181,
+      "pid": 94229,
       "thread_id": "01a0884d-9d55-7d51-b42f-a4b106fc30ec"
     },
     "mobile": {
-      "pid": 75182,
+      "pid": 87082,
       "thread_id": "01a0884d-9d82-7f41-a45a-91123f9ea9d8"
     }
   },
@@ -91,5 +91,5 @@
   "opus5_reviews_complete": 6,
   "opus5_reviews_running": 0,
   "quota_observed_source": "completed Opus5 review rate_limit_event",
-  "opus5_reviews_delivery": "First four acknowledged by active Astra coordinator; final two delivered in shared handoff, acknowledgment pending"
+  "opus5_reviews_delivery": "All six explicitly acknowledged by Astra coordinator; stock and cancel fixes dispatched to original threads at06:38UTC; Ozon finding fixed in pushed3163595e"
 }
