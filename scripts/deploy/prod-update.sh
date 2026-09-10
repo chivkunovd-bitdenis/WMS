@@ -75,11 +75,53 @@ done
 echo "==> start infrastructure"
 "${COMPOSE[@]}" up -d --wait db redis
 
+# WMS-338 removes a retired table/column. Old writers must be stopped before
+# applying schema changes, and the pre-migration database must be recoverable.
+echo "==> stop application writers before schema migration"
+"${COMPOSE[@]}" stop api celery_worker celery_beat
+
+BACKUP_DIR="${WMS_BACKUP_DIR:-$(dirname "$REPO_DIR")/wms-backups}"
+install -d -m 700 "$BACKUP_DIR"
+BACKUP_FILE="${BACKUP_DIR}/pre-migration-$(date -u +%Y%m%dT%H%M%SZ)-${DEPLOY_SHA:0:12}.dump"
+umask 077
+echo "==> save private pre-migration PostgreSQL backup"
+if ! "${COMPOSE[@]}" exec -T db sh -c \
+  'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$BACKUP_FILE"; then
+  echo "ERROR: backup failed; application writers remain stopped. No migration was run." >&2
+  exit 1
+fi
+if [[ ! -s "$BACKUP_FILE" ]] || ! "${COMPOSE[@]}" exec -T db pg_restore --list \
+  < "$BACKUP_FILE" > /dev/null; then
+  echo "ERROR: backup archive is invalid; writers remain stopped. No migration was run." >&2
+  exit 1
+fi
+echo "    backup archive saved and validated (contents are private)."
+
 echo "==> run database migrations"
 "${COMPOSE[@]}" run --rm migrations
 
 echo "==> start application services"
 "${COMPOSE[@]}" up -d --no-deps api celery_worker celery_beat web
+
+# The old separate seller container is no longer defined in production compose.
+# Close only that project's obsolete HTTP listener after the combined web serves
+# its seller route; do not remove unrelated services or touch the outer Caddy.
+if [[ -f docker-compose.wms-host-8088.yml ]]; then
+  echo "==> verify seller route before closing legacy listener"
+  curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 3 \
+    --max-time 15 http://172.18.0.1:8088/seller/ > /dev/null
+  DB_CONTAINER="$("${COMPOSE[@]}" ps -q db)"
+  PROJECT_NAME="$(docker inspect "$DB_CONTAINER" \
+    --format '{{index .Config.Labels "com.docker.compose.project"}}')"
+  if [[ -z "$PROJECT_NAME" ]]; then
+    echo "ERROR: unable to establish compose project for legacy listener." >&2
+    exit 1
+  fi
+  while IFS= read -r container_id; do
+    [[ -n "$container_id" ]] && docker stop "$container_id"
+  done < <(docker ps -q --filter "label=com.docker.compose.project=$PROJECT_NAME" \
+    --filter 'label=com.docker.compose.service=web_seller')
+fi
 
 echo "==> status"
 "${COMPOSE[@]}" ps
