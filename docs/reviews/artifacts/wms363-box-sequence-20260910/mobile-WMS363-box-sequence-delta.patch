@@ -1,0 +1,83 @@
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+index 4deb615..3da7465 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+@@ -258,8 +258,16 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+         }
+     }
+     fun scan(mode: String, value: String) {
+-        val supplyId = state.value.workspace?.supply?.id ?: return
+-        if (value.isNotBlank() && supplyId == openedSupplyId) scans.trySend(QueuedScan(mode, value.trimEnd('\r','\n'), supplyId, state.value.selectedBoxId))
++        val workspace = state.value.workspace ?: return
++        val supplyId = workspace.supply.id
++        if (value.isBlank() || supplyId != openedSupplyId) return
++        val text = value.trimEnd('\r','\n')
++        // Box selection is an operator intent, just like a manual tap. Apply it
++        // before queueing so the next product scan captures this box during refresh.
++        if (mode == "boxes") workspace.boxes.firstOrNull { text == it.barcode || text == it.wbTrbxId }?.let {
++            selectBox(it.id)
++        }
++        scans.trySend(QueuedScan(mode, text, supplyId, state.value.selectedBoxId))
+     }
+     fun clearSource() { mutable.value = state.value.copy(source = null) }
+     fun choosePickSource(choice: FbsPickChoice) {
+@@ -387,7 +395,9 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+             val workspace = state.value.workspace ?: return@action
+             if (target == null) {
+                 workspace.boxes.firstOrNull { value == it.barcode || value == it.wbTrbxId }?.let {
+-                    selectBox(it.id); return@action
++                    // Never overwrite a later manual selection after the network wait.
++                    check(it.id == scannedBoxId) { "Список коробов обновлён. Отсканируйте короб ещё раз." }
++                    return@action
+                 }
+                 val boxId = scannedBoxId ?: error("Откройте или отсканируйте короб")
+                 val body = if (workspace.supply.marketplace == "ozon") {
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+index baffc08..5d9243a 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+@@ -396,6 +396,44 @@ class FbsViewModelTest {
+         assertNotNull(vm.state.value.error)
+         coVerify(exactly = 0) { service.assignOrders(any(), any(), any()) }
+     }
++    private fun precedingBoxScan(marketplace: String, initialBox: String?) = runTest {
++        val a = FbsBox("A", 1, "BOX-A"); val b = FbsBox("B", 2, "BOX-B")
++        val item = order("1", "2026-09-08T09:00:00Z").copy(marketplace = marketplace,
++            positions = listOf(FbsPosition(id = "p1", productId = "product", name = "Item", quantity = 2, pickedQuantity = 0, barcode = "4600000000001")))
++        val initial = workspace(listOf(item)).let { it.copy(supply = it.supply.copy(marketplace = marketplace), boxes = listOf(a, b)) }
++        val assigned = initial.copy(boxes = listOf(a, if (marketplace == "wb") b.copy(assignedOrderIds = listOf("1")) else b.copy(assignedOrderProductIds = listOf("p1"))))
++        val delayed = kotlinx.coroutines.CompletableDeferred<Response<FbsWorkspace>>()
++        var reads = 0
++        var actual = initial
++        coEvery { service.workspace("supply") } coAnswers {
++            if (reads++ == 1) delayed.await() else Response.success(actual)
++        }
++        val recipients = mutableListOf<String>()
++        coEvery { service.assignOrders("supply", capture(recipients), any()) } answers {
++            actual = assigned
++            throw IOException("reply lost after assignment")
++        }
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.selectBox(initialBox)
++        vm.scan("boxes", "BOX-B")
++        assertTrue(vm.state.value.busy) // B's refresh is still pending.
++        vm.scan("boxes", "4600000000001")
++        // A later manual choice must not redirect this already queued product,
++        // and completion of B's refresh must not overwrite that manual choice.
++        vm.selectBox("A")
++        delayed.complete(Response.success(initial))
++        assertEquals(listOf("B"), recipients)
++        assertEquals("A", vm.state.value.selectedBoxId)
++        assertNotNull(vm.state.value.error)
++        vm.retry()
++        assertNull(vm.state.value.error)
++        assertEquals(listOf("B"), recipients) // Existing assignment reconciles, never repeats.
++        assertEquals(assigned, vm.state.value.workspace)
++    }
++    @Test fun `preceding box scan WB initial A`() = precedingBoxScan("wb", "A")
++    @Test fun `preceding box scan WB initial none`() = precedingBoxScan("wb", null)
++    @Test fun `preceding box scan Ozon initial A`() = precedingBoxScan("ozon", "A")
++    @Test fun `preceding box scan Ozon initial none`() = precedingBoxScan("ozon", null)
++
+     @Test fun `box captured at scan survives delayed refresh selection change and lost response`() = runTest {
+         for (marketplace in listOf("wb", "ozon")) {
+             val a = FbsBox("A", 1, "BOX-A"); val b = FbsBox("B", 2, "BOX-B")

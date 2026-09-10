@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.billing import BillingLedgerEntry
 from app.models.fbs_order import (
@@ -100,7 +101,7 @@ async def _seed(db_session: AsyncSession, *, with_binding: bool = True) -> Simpl
         seller=seller,
         name="Очки",
         sku_code=f"sku-{uuid.uuid4().hex[:8]}",
-        # WMS-352: заказ Ozon импортируется только там, где мы публикуем остаток.
+        # Publication is independent of intake through a served warehouse.
         fbs_stock_sync_enabled=True,
     )
     db_session.add_all([tenant, seller, warehouse, product])
@@ -151,7 +152,9 @@ async def _sync(db_session: AsyncSession, ctx: SimpleNamespace, rows: list[dict[
 async def _order(db_session: AsyncSession) -> FbsOrder:
     return (
         await db_session.execute(
-            select(FbsOrder).where(FbsOrder.external_order_id == POSTING_NUMBER)
+            select(FbsOrder)
+            .options(selectinload(FbsOrder.product_positions))
+            .where(FbsOrder.external_order_id == POSTING_NUMBER)
         )
     ).scalar_one()
 
@@ -197,6 +200,66 @@ async def test_explicit_posting_intake_without_publication_keeps_warehouse_scope
         assert order.warehouse_id == ctx.warehouse.id
         assert order.product_positions[0].quantity == 3
         assert order.product_positions[0].product_id == ctx.product.id
+
+
+@pytest.mark.parametrize("publication", [(False, False), (False, None), (True, False)])
+async def test_automatic_intake_without_publication_preserves_settings_and_repeats(
+    db_session: AsyncSession, publication: tuple[bool, bool | None],
+) -> None:
+    ctx = await _seed(db_session)
+    ctx.product.fbs_stock_sync_enabled, ctx.product.fbs_ozon_stock_sync_enabled = publication
+    binding = (await db_session.scalars(select(FbsWarehouseBinding))).one()
+    binding.stock_sync_enabled = False
+    await db_session.commit()
+    transport = FakeMarketplaceTransport(orders=[posting_row()])
+    provider = OzonMarketplaceProvider(transport=transport)
+    for attempt in range(2):
+        result = await sync_svc.sync_ozon_orders(
+            db_session, ctx.tenant.id, ctx.seller.id, provider, AsyncMock(),
+        )
+        assert result["orders_created"] == int(attempt == 0)
+    orders = list((await db_session.scalars(select(FbsOrder))).all())
+    assert len(orders) == 1
+    assert orders[0].warehouse_id == ctx.warehouse.id
+    await db_session.refresh(ctx.product)
+    await db_session.refresh(binding)
+    assert (
+        ctx.product.fbs_stock_sync_enabled, ctx.product.fbs_ozon_stock_sync_enabled,
+    ) == publication
+    assert binding.stock_sync_enabled is False
+    assert binding.served is True
+    assert transport.published_stocks == []
+
+
+@pytest.mark.parametrize(
+    "excluded", ["unserved", "inactive", "missing", "seller", "tenant", "marketplace"],
+)
+async def test_automatic_intake_rejects_warehouses_outside_served_mapping(
+    db_session: AsyncSession, excluded: str,
+) -> None:
+    ctx = await _seed(db_session)
+    binding = (await db_session.scalars(select(FbsWarehouseBinding))).one()
+    if excluded == "unserved":
+        binding.served = False
+    elif excluded == "inactive":
+        binding.is_active = False
+    elif excluded == "missing":
+        await db_session.delete(binding)
+    elif excluded == "marketplace":
+        binding.marketplace = "wb"
+    elif excluded == "seller":
+        seller = Seller(tenant=ctx.tenant, name="Other seller")
+        db_session.add(seller)
+        await db_session.flush()
+        binding.seller_id = seller.id
+    else:
+        tenant = Tenant(name="Other tenant", slug=f"other-{uuid.uuid4().hex[:8]}")
+        db_session.add(tenant)
+        await db_session.flush()
+        binding.tenant_id = tenant.id
+    await db_session.commit()
+    await _sync(db_session, ctx, [posting_row()])
+    assert list((await db_session.scalars(select(FbsOrder))).all()) == []
 
 
 async def test_warehouse_is_read_from_delivery_method_not_from_the_top_level(
@@ -582,3 +645,100 @@ def test_repeat_sync_reordered_metadata_matches_the_product_not_the_index() -> N
     sync_svc._update_position_metadata([first, second], incoming)
     assert (first.name, first.position_index) == ("First updated", 0)
     assert (second.name, second.position_index) == ("Second updated", 1)
+
+
+@pytest.mark.parametrize("catalog_marked", [False, True])
+async def test_import_absent_requirements_does_not_claim_complete_knowledge(
+    db_session: AsyncSession, catalog_marked: bool,
+) -> None:
+    ctx = await _seed(db_session)
+    ctx.product.requires_honest_sign = catalog_marked
+    await db_session.commit()
+    await _sync(db_session, ctx, [posting_row()])
+    order = await _order(db_session)
+    assert order.required_meta_json == (["sgtin"] if catalog_marked else [])
+    assert not gate_svc.ozon_requirements_known(order)
+    assert not gate_svc.compute_delivery_allowed(order, [])
+    assert "ещё не получены" in gate_svc.delivery_message(order, [])
+    await _sync(db_session, ctx, [posting_row(requirements={})])
+    assert gate_svc.ozon_requirements_known(order)
+    assert order.required_meta_json == (["sgtin"] if catalog_marked else [])
+    await _sync(db_session, ctx, [posting_row()])
+    assert gate_svc.ozon_requirements_known(order)
+    assert order.required_meta_json == (["sgtin"] if catalog_marked else [])
+
+
+async def test_status_refresh_preserves_catalog_marking_requirement(
+    db_session: AsyncSession,
+) -> None:
+    ctx = await _seed(db_session)
+    ctx.product.requires_honest_sign = True
+    await db_session.commit()
+    await _sync(db_session, ctx, [posting_row(requirements={})])
+    row = posting_row(requirements={})
+    provider = OzonMarketplaceProvider(transport=FakeMarketplaceTransport(statuses=[row]))
+    await sync_svc.sync_ozon_order_statuses(
+        db_session, ctx.tenant.id, ctx.seller.id, provider, AsyncMock(),
+    )
+    # A fresh ORM read must not depend on the polling instance remaining alive.
+    await db_session.flush()
+    db_session.expunge_all()
+    order = await _order(db_session)
+    assert order.required_meta_json == ["sgtin"]
+    assert gate_svc.ozon_requirements_known(order)
+    assert not gate_svc.compute_delivery_allowed(order, [])
+
+
+@pytest.mark.parametrize("source", ["ozon", "catalog"])
+async def test_mixed_posting_requires_codes_only_for_the_marked_sku(
+    db_session: AsyncSession, source: str,
+) -> None:
+    from app.models.fbs_order import FbsOrderMarking
+
+    ctx = await _seed(db_session)
+    ctx.product.requires_honest_sign = source == "catalog"
+    await db_session.commit()
+    row = posting_row(requirements=(
+        {"products_requiring_mandatory_mark": [5680762790]} if source == "ozon" else {}
+    ))
+    row["products"].append({
+        "sku": 200, "offer_id": "ordinary", "name": "Ordinary", "quantity": 1,
+    })
+    await _sync(db_session, ctx, [row])
+    order = await _order(db_session)
+    await db_session.refresh(order, attribute_names=["product_positions"])
+    marked = next(p for p in order.product_positions if p.ozon_sku == 5680762790)
+    assert not gate_svc.compute_delivery_allowed(order, [])
+    codes = [FbsOrderMarking(
+        id=uuid.uuid4(), order_id=order.id, order_product_id=marked.id,
+        kind="sgtin", value=f"synthetic-{index}", meta_status="accepted",
+        created_at=datetime.now(UTC),
+        meta_details_json={"exemplar_id": index + 1, "status": "ship_available"},
+    ) for index in range(marked.quantity)]
+    assert gate_svc.compute_delivery_allowed(order, codes)
+    assert not gate_svc.compute_delivery_allowed(order, codes[:1])
+    # Re-reading an empty products payload in status polling uses saved positions.
+    status_row = dict(row)
+    status_row.pop("products")
+    provider = OzonMarketplaceProvider(transport=FakeMarketplaceTransport(statuses=[status_row]))
+    await sync_svc.sync_ozon_order_statuses(
+        db_session, ctx.tenant.id, ctx.seller.id, provider, AsyncMock(),
+    )
+    assert gate_svc.compute_delivery_allowed(order, codes)
+    # A later partial response cannot turn unknown requirements into permission
+    # or lose catalog targeting on an already known posting.
+    partial = {key: value for key, value in row.items() if key != "requirements"}
+    await _sync(db_session, ctx, [partial])
+    assert gate_svc.compute_delivery_allowed(order, codes)
+
+
+async def test_requirement_for_sku_missing_from_saved_composition_is_not_ready(
+    db_session: AsyncSession,
+) -> None:
+    ctx = await _seed(db_session)
+    await _sync(db_session, ctx, [posting_row(requirements={
+        "products_requiring_mandatory_mark": [999],
+    })])
+    order = await _order(db_session)
+    await db_session.refresh(order, attribute_names=["product_positions"])
+    assert not gate_svc.compute_delivery_allowed(order, [])

@@ -143,7 +143,9 @@ class FbsSupplyOut(BaseModel):
 
 class FbsSupplyWorklistItemOut(BaseModel):
     id: str
-    marketplace: str = "wb"
+    # WMS-363: маркетплейс проставляется из FbsSupply.marketplace. Literal
+    # фиксирует контракт TSD/веба: только "wb" или "ozon".
+    marketplace: Literal["wb", "ozon"] = "wb"
     # Номер поставки в WB появляется не сразу: до подтверждения маркетплейсом
     # его нет, и в базе колонка nullable. Модель требовала строку, поэтому одна
     # такая поставка роняла весь список пятисоткой — оператор терял вкладку
@@ -424,7 +426,9 @@ class FbsWorkspacePrintAssetOut(BaseModel):
 
 class FbsWorkspaceSupplyOut(BaseModel):
     id: str
-    marketplace: str = "wb"
+    # WMS-363: маркетплейс проставляет сервис workspace из FbsSupply.marketplace.
+    # Literal фиксирует контракт TSD/веба: только "wb" или "ozon".
+    marketplace: Literal["wb", "ozon"] = "wb"
     wb_supply_id: str | None
     # «wms» — поставку собрали мы, «wb» — её собрал продавец в своём кабинете.
     source: str = "wms"

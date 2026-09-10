@@ -896,6 +896,7 @@ async def _sync_ozon_posting_with_products(
             orders=[
                 {
                     "posting_number": "ozon-posting-products",
+                    "requirements": {},
                     "status": "awaiting_packaging",
                     "warehouse_id": "ozon-wh-1",
                     "created_at": datetime.now(UTC).isoformat(),
@@ -3168,21 +3169,15 @@ async def _seed_ozon_scope_case(
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "published, served, expected_orders",
-    [(True, True, 1), (False, True, 0), (True, False, 0)],
+    [(True, True, 1), (False, True, 1), (True, False, 0), (False, False, 0)],
 )
-async def test_ozon_poll_takes_only_orders_whose_stock_we_publish(
+async def test_ozon_poll_uses_served_warehouse_independently_of_publication(
     db_session: AsyncSession,
     published: bool,
     served: bool,
     expected_orders: int,
 ) -> None:
-    """WMS-352: видим только заказы, по чьим товарам и складам выставлен остаток.
-
-    Кабинет Ozon отдаёт все отправления продавца — в том числе те, что он
-    собирает сам на другом складе. Своим считается ровно то, по чему остаток
-    публикуем мы: обслуживаемый склад и товар с включённой публикацией. Правило
-    то же, что у Wildberries, и отсев идёт там же — до записи в базу.
-    """
+    """WMS-352/386: publication does not control incoming warehouse orders."""
     tenant, seller, _warehouse, provider = await _seed_ozon_scope_case(
         db_session, published=published, served=served
     )
