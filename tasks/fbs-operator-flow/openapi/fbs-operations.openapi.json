@@ -4337,6 +4337,53 @@
         ]
       }
     },
+    "/operations/fbs-print-jobs/document": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Create Fbs Print Job From Document",
+        "description": "Поставить в очередь готовый лист этикеток, который ТСД собрал сам.\n\nТоварный штрихкод и код ЧЗ рисует сам ТСД, у маркетплейса их не спрашивают.\nЗдесь сервер ничего не пересобирает: принимает файл, кладёт его в то же\nхранилище печатных активов и ставит в ту же очередь, что и QR заказа.",
+        "operationId": "create_fbs_print_job_from_document_operations_fbs_print_jobs_document_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsPrintJobDocumentBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsPrintJobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/operations/fbs-print-jobs/next": {
       "post": {
         "tags": [
@@ -8904,6 +8951,32 @@
           "warehouse_id"
         ],
         "title": "FbsPrintJobCreateBody"
+      },
+      "FbsPrintJobDocumentBody": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Job Id"
+          },
+          "supply_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Supply Id"
+          },
+          "document_base64": {
+            "type": "string",
+            "maxLength": 22369624,
+            "title": "Document Base64"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "supply_id",
+          "document_base64"
+        ],
+        "title": "FbsPrintJobDocumentBody"
       },
       "FbsPrintJobNextOut": {
         "properties": {

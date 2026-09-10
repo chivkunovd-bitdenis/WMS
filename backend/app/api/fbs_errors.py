@@ -91,6 +91,7 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "print_job_result_conflict": "Задание печати уже завершено с другим результатом.",
     "print_asset_changed": "Файл этикетки изменился после постановки в очередь.",
     "print_asset_warehouse_mismatch": "Этикетка относится к другому складу.",
+    "invalid_print_document": "Файл этикеток не принят: ожидается PDF допустимого размера.",
     "empty_content": "Пустой файл печатного актива.",
     "supply_has_cancelled_orders": "В поставке есть отменённые заказы.",
     "orders_not_ready": "Заказы не готовы к передаче.",

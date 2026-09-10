@@ -8,7 +8,11 @@
 Границы, которые нельзя размывать:
 
 * задание ссылается ровно на один **уже готовый** ``FbsPrintAsset``; повторной
-  подготовки этикетки и повторных обращений к маркетплейсу тут не происходит;
+  подготовки этикетки и повторных обращений к маркетплейсу тут не происходит.
+  Актив бывает двух происхождений и обрабатывается одинаково: либо этикетка,
+  которую маркетплейс отдал раньше (QR заказа, QR короба), либо готовый лист,
+  который ТСД собрал сам (товарный ШК и код ЧЗ). Во втором случае сервер
+  принимает файл как есть и после постановки в очередь не меняет его;
 * ``done`` означает только «очередь ОС приняла файл», а не «бумага вышла».
   Поэтому статус для оператора называется «Передано в очередь принтера»;
 * задание, выданное агенту (``running``), само в ``pending`` не возвращается.
@@ -30,6 +34,7 @@ from app.models.background_job import BackgroundJob
 from app.models.fbs_order import FBS_ORDER_STATUS_CANCELLED, FbsOrder
 from app.models.fbs_print_asset import (
     PRINT_ASSET_KIND_CARGO_PLACE_QR,
+    PRINT_ASSET_KIND_OPERATOR_DOCUMENT,
     PRINT_ASSET_KIND_ORDER_STICKER,
     PRINT_ASSET_KIND_SUPPLY_QR,
     PRINT_ASSET_STATUS_READY,
@@ -49,13 +54,20 @@ from app.services.fbs_cancelled_after_pack_service import cancelled_operation_me
 from app.services.fbs_print_asset_service import FbsPrintAssetError
 from app.services.fbs_print_asset_storage import (
     ORDER_STICKER_CONTENT_TYPE,
+    PDF_CONTENT_TYPE,
     FbsPrintAssetStorageError,
+    operator_document_relative_path,
     read_print_file,
+    save_print_file,
+    sha256_checksum,
 )
 
 # Сколько ожидающих заданий склада агент просматривает за один запрос. Ограничение
 # нужно только чтобы не тянуть из базы всю очередь разом.
 _CLAIM_SCAN_LIMIT = 100
+
+# Тот же потолок на файл этикеток, что и в ТСД: больше 16 МиБ печать не начинают.
+MAX_PRINT_DOCUMENT_BYTES = 16 * 1024 * 1024
 
 PRINT_JOB_STATUS_TEXT: dict[str, str] = {
     JOB_STATUS_PENDING: "Ожидает агента печати",
@@ -122,6 +134,7 @@ async def _load_ready_asset(
         PRINT_ASSET_KIND_ORDER_STICKER,
         PRINT_ASSET_KIND_CARGO_PLACE_QR,
         PRINT_ASSET_KIND_SUPPLY_QR,
+        PRINT_ASSET_KIND_OPERATOR_DOCUMENT,
     }:
         raise FbsPrintAssetError("invalid_kind", message="Неизвестный тип печатного актива.")
     if asset.status != PRINT_ASSET_STATUS_READY or not asset.storage_path:
@@ -252,6 +265,141 @@ def _existing_or_conflict(
             "print_job_conflict",
             message="Этот номер печати уже занят другим заданием.",
             context={"job_id": str(job.id)},
+        )
+    return job
+
+
+def _document_identity(payload: dict[str, Any] | None) -> tuple[str, str, str]:
+    data = payload or {}
+    return (
+        str(data.get("supply_id")),
+        str(data.get("checksum")),
+        str(data.get("requested_by_user_id")),
+    )
+
+
+def _existing_document_or_conflict(
+    job: BackgroundJob,
+    *,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    checksum: str,
+    user_id: uuid.UUID,
+) -> BackgroundJob:
+    same_intent = (
+        job.tenant_id == tenant_id
+        and job.job_type == JOB_TYPE_FBS_LABEL_PRINT
+        and _document_identity(job.payload_json) == (str(supply_id), checksum, str(user_id))
+    )
+    if not same_intent:
+        raise FbsPrintAssetError(
+            "print_job_conflict",
+            message="Этот номер печати уже занят другим заданием.",
+            context={"job_id": str(job.id)},
+        )
+    return job
+
+
+async def create_document_print_job(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    job_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    document: bytes,
+    user_id: uuid.UUID,
+) -> BackgroundJob:
+    """Поставить в очередь готовый лист этикеток, собранный самим ТСД.
+
+    Это тот же самый файл, который ТСД до этого печатал у себя: товарный ШК,
+    код ЧЗ и QR заказа уже нарисованы в нём. Сервер его не собирает и не
+    пересобирает, к маркетплейсу не ходит — он принимает лист как есть,
+    складывает его в то же хранилище печатных активов и ставит в ту же очередь.
+
+    Повторный запрос с тем же ``job_id`` и тем же файлом возвращает прежнее
+    задание: одно нажатие оператора — один лист.
+    """
+    checksum = sha256_checksum(document)
+    existing = await session.get(BackgroundJob, job_id)
+    if existing is not None:
+        return _existing_document_or_conflict(
+            existing,
+            tenant_id=tenant_id,
+            supply_id=supply_id,
+            checksum=checksum,
+            user_id=user_id,
+        )
+
+    if not document or len(document) > MAX_PRINT_DOCUMENT_BYTES:
+        raise FbsPrintAssetError(
+            "invalid_print_document",
+            message="Файл этикеток пуст или превышает допустимый размер.",
+        )
+    supply = await session.get(FbsSupply, supply_id)
+    if supply is None or supply.tenant_id != tenant_id:
+        raise FbsPrintAssetError("supply_not_found", message="Поставка не найдена.")
+    warehouse = await session.get(Warehouse, supply.warehouse_id)
+    if warehouse is None or warehouse.tenant_id != tenant_id:
+        raise FbsPrintAssetError("warehouse_not_found", message="Склад не найден.")
+
+    asset_id = uuid.uuid4()
+    try:
+        storage_path = save_print_file(
+            operator_document_relative_path(asset_id),
+            document,
+            content_type=PDF_CONTENT_TYPE,
+        )
+    except FbsPrintAssetStorageError as exc:
+        raise FbsPrintAssetError(
+            "invalid_print_document",
+            message="Файл этикеток не принят: ожидается PDF.",
+            context={"reason": exc.code},
+        ) from exc
+
+    session.add(
+        FbsPrintAsset(
+            id=asset_id,
+            tenant_id=tenant_id,
+            seller_id=supply.seller_id,
+            kind=PRINT_ASSET_KIND_OPERATOR_DOCUMENT,
+            status=PRINT_ASSET_STATUS_READY,
+            content_type=PDF_CONTENT_TYPE,
+            storage_path=storage_path,
+            checksum=checksum,
+            fbs_supply_id=supply.id,
+        )
+    )
+    job = BackgroundJob(
+        id=job_id,
+        tenant_id=tenant_id,
+        job_type=JOB_TYPE_FBS_LABEL_PRINT,
+        status=JOB_STATUS_PENDING,
+        payload_json={
+            "asset_id": str(asset_id),
+            "asset_kind": PRINT_ASSET_KIND_OPERATOR_DOCUMENT,
+            "supply_id": str(supply_id),
+            "warehouse_id": str(supply.warehouse_id),
+            "content_type": PDF_CONTENT_TYPE,
+            "checksum": checksum,
+            "width_mm": None,
+            "height_mm": None,
+            "requested_by_user_id": str(user_id),
+        },
+    )
+    session.add(job)
+    try:
+        await session.flush()
+    except IntegrityError:
+        await session.rollback()
+        raced = await session.get(BackgroundJob, job_id)
+        if raced is None:
+            raise
+        return _existing_document_or_conflict(
+            raced,
+            tenant_id=tenant_id,
+            supply_id=supply_id,
+            checksum=checksum,
+            user_id=user_id,
         )
     return job
 
