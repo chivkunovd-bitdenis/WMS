@@ -13,7 +13,6 @@ from app.db.session import SessionLocal
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import FbsOrder, FbsOrderMarking
 from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
-from app.models.fbs_stock_pool_debit import FbsStockPoolDebit
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
@@ -43,24 +42,9 @@ async def test_cleanup_refuses_order_linked_to_supply() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cleanup_refuses_order_with_stock_pool_debit() -> None:
+async def test_cleanup_allows_unlinked_order_without_shipments_or_marking() -> None:
     session = AsyncMock()
-    session.scalar.return_value = 1
-    order = SimpleNamespace(
-        id=uuid.uuid4(),
-        supply_id=None,
-    )
-
-    with pytest.raises(CleanupBlockedError, match="stock-pool debits"):
-        await ensure_orders_are_safe_to_delete(session, [order])
-
-    session.scalar.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_cleanup_allows_unlinked_order_without_stock_pool_debit() -> None:
-    session = AsyncMock()
-    session.scalar.side_effect = [0, 0, 0]
+    session.scalar.side_effect = [0, 0]
     order = SimpleNamespace(
         id=uuid.uuid4(),
         supply_id=None,
@@ -68,7 +52,7 @@ async def test_cleanup_allows_unlinked_order_without_stock_pool_debit() -> None:
 
     await ensure_orders_are_safe_to_delete(session, [order])
 
-    assert session.scalar.await_count == 3
+    assert session.scalar.await_count == 2
 
 
 async def _seed_cleanup_order() -> tuple[
@@ -132,7 +116,7 @@ async def _seed_cleanup_order() -> tuple[
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("unsafe_relation", ["debit", "reversal", "marking"])
+@pytest.mark.parametrize("unsafe_relation", ["reversal", "marking"])
 async def test_cleanup_db_guard_preserves_order_and_accounting_rows(
     async_client: AsyncClient,
     unsafe_relation: str,
@@ -143,14 +127,7 @@ async def test_cleanup_db_guard_preserves_order_and_accounting_rows(
     async with SessionLocal() as session:
         stored_order = await session.get(FbsOrder, order.id)
         assert stored_order is not None
-        if unsafe_relation == "debit":
-            relation = FbsStockPoolDebit(
-                tenant_id=stored_order.tenant_id,
-                pool_id=pool.id,
-                order_id=stored_order.id,
-                quantity_debited=3,
-            )
-        elif unsafe_relation == "reversal":
+        if unsafe_relation == "reversal":
             relation = FbsShipmentReversalLedger(
                 tenant_id=stored_order.tenant_id,
                 fbs_order_id=stored_order.id,
@@ -177,7 +154,6 @@ async def test_cleanup_db_guard_preserves_order_and_accounting_rows(
         assert stored_pool.quantity == 7
 
         relation_model = {
-            "debit": FbsStockPoolDebit,
             "reversal": FbsShipmentReversalLedger,
             "marking": FbsOrderMarking,
         }[unsafe_relation]

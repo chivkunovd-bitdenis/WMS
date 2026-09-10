@@ -1665,7 +1665,7 @@ async def apply_fbs_supply_write_off(
     # WMS-338/341: передача без резерва больше не расходует операторский потолок.
     # Физическое списание уменьшает баланс через record_movement_and_adjust_balance,
     # и следующая публикация уедет как min(cap, free) без второго счётчика.
-    product = await lock_stock_product(session, tenant_id, product_id)
+    await lock_stock_product(session, tenant_id, product_id)
     if fbs_order_id is not None:
         # Санити-чек: заказ существует и наш. Значение операторского потолка
         # мы уже не трогаем, но проверить принадлежность строку заказа надо
@@ -1674,21 +1674,6 @@ async def apply_fbs_supply_write_off(
         if sanity_order is None or sanity_order.tenant_id != tenant_id:
             raise ValueError("fbs order not found")
 
-    from app.services import stock_direction_service
-
-    if product is None or not product.fbs_units_mode:
-        try:
-            await stock_direction_service.consume_fbs_pool(
-                session,
-                tenant_id,
-                product_id,
-                quantity,
-            )
-        except stock_direction_service.StockDirectionError as exc:
-            # Пул кончился — это тоже расхождение, а не повод отказать в списании
-            # того, что уже уехало.
-            if exc.code != "insufficient_fbs_pool":
-                raise
     return await record_movement_and_adjust_balance(
         session,
         tenant_id=tenant_id,

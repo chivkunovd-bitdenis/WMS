@@ -20,7 +20,7 @@ from tests.test_stock_directions import _seed_stocked_product
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "units_mode,physical,direction_qty,reserve_qty,expected_free",
-    [(False, 1, 0, 1, 0), (False, 10, 2, 3, 5), (True, 10, 2, 3, 3)],
+    [(False, 1, 0, 1, 0), (False, 10, 2, 3, 5), (True, 10, 2, 3, 5)],
 )
 async def test_catalog_free_fbo_excludes_order_reserves_in_both_modes(
     async_client: AsyncClient,
@@ -47,7 +47,7 @@ async def test_catalog_free_fbo_excludes_order_reserves_in_both_modes(
         )
         session.add(binding)
         await session.flush()
-        # Saved unit allocations must stay inactive in percentage mode.
+        # Cap=2 is not physical allocation in either mode: free=10-2-3=5.
         session.add(FbsBindingStockPool(
             tenant_id=product.tenant_id, binding_id=binding.id,
             product_id=product_id, quantity=2,
@@ -55,7 +55,7 @@ async def test_catalog_free_fbo_excludes_order_reserves_in_both_modes(
         if direction_qty:
             session.add(StockDirection(
                 tenant_id=product.tenant_id, product_id=product_id,
-                name="Ordinary reserve", quantity=direction_qty, is_fbs=False,
+                name="Ordinary reserve", quantity=direction_qty,
             ))
         order = FbsOrder(
             tenant_id=product.tenant_id, seller_id=uuid.UUID(seller_id),
@@ -86,7 +86,7 @@ async def test_catalog_free_fbo_excludes_order_reserves_in_both_modes(
     assert row["reserved"] == reserve_qty
     assert row["quantity_free_fbo"] == expected_free
     assert row["available"] == expected_free
-    assert row["quantity_fbs"] == (2 + reserve_qty if units_mode else 0)
+    assert row["quantity_fbs"] == (reserve_qty if units_mode else 0)
     picker = await async_client.get(
         "/operations/marketplace-unload-requests/available-products",
         headers=headers, params={"warehouse_id": str(warehouse_id), "seller_id": seller_id},
