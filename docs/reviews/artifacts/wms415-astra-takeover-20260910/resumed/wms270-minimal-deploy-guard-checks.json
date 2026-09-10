@@ -1,0 +1,50 @@
+[
+  {
+    "check": "tracked_changes=",
+    "git_exit": 128,
+    "shell_exit": 128,
+    "passed": true
+  },
+  {
+    "check": "untracked_sources=",
+    "git_exit": 128,
+    "shell_exit": 128,
+    "passed": true
+  },
+  {
+    "check": "excluded_changes=",
+    "git_exit": 128,
+    "shell_exit": 128,
+    "passed": true
+  },
+  {
+    "http": "200",
+    "curl_exit": 0,
+    "shell_exit": 0,
+    "passed": true
+  },
+  {
+    "http": "301",
+    "curl_exit": 0,
+    "shell_exit": 1,
+    "passed": true
+  },
+  {
+    "http": "302",
+    "curl_exit": 0,
+    "shell_exit": 1,
+    "passed": true
+  },
+  {
+    "http": "500",
+    "curl_exit": 22,
+    "shell_exit": 22,
+    "passed": true
+  },
+  {
+    "http": "",
+    "curl_exit": 7,
+    "shell_exit": 7,
+    "passed": true
+  }
+]

@@ -37,7 +37,10 @@ r["public"]={}
 base="https://wms.sellerfocus.pro"
 def public_get(path):
  # Use system curl's configured trust store; keep certificate validation enabled.
- return subprocess.check_output(["curl","--fail","--silent","--show-error","--max-time","30",base+path])
+ result=subprocess.check_output(["curl","--fail","--silent","--show-error","--max-time","30","--write-out","\n%{http_code}",base+path])
+ data,code=result.rsplit(b"\n",1)
+ assert code==b"200",(path,code.decode())
+ return data
 for path in ["/","/seller/","/api/health","/api/openapi.json"]:
  data=public_get(path);r["public"][path]={"status":200,"sha256":hashlib.sha256(data).hexdigest()}
  if path=="/api/openapi.json":
