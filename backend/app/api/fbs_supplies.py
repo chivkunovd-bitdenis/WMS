@@ -123,7 +123,9 @@ class FbsSupplyOut(BaseModel):
     id: str
     seller_id: str
     warehouse_id: str
-    wb_supply_id: str
+    # Ozon creates its carriage only on the final delivery action, so this
+    # WB-specific field is absent while an Ozon supply is being assembled.
+    wb_supply_id: str | None
     name: str
     status: str
     delivery_type: str
