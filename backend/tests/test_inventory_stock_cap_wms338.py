@@ -285,8 +285,9 @@ async def test_inventory_shortage_does_not_change_operator_cap(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("units_mode", [True, False])
 async def test_transfer_without_reserve_does_not_change_operator_cap(
-    db_session: AsyncSession,
+    db_session: AsyncSession, units_mode: bool,
 ) -> None:
     """WMS-338: apply_fbs_supply_write_off без резерва не расходует потолок.
 
@@ -295,7 +296,7 @@ async def test_transfer_without_reserve_does_not_change_operator_cap(
     физическое списание уменьшит баланс через record_movement, а публикация
     сама возьмёт min(cap, free) на следующем тике.
     """
-    scen = await _seed(db_session, on_hand=10)
+    scen = await _seed(db_session, on_hand=10, units_mode=units_mode)
     order = _fbs_order(scen, wb_order_id=1000003)
     db_session.add(order)
     await db_session.flush()

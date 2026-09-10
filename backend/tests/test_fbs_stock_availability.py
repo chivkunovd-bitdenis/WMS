@@ -235,7 +235,6 @@ async def test_fbo_reserve_reduces_fbs_publish(async_client: AsyncClient) -> Non
             product_id,
             name="Reserve",
             quantity=6,
-            is_fbs=False,
         )
 
         before_mp = await fbs_available_qty_for_product(

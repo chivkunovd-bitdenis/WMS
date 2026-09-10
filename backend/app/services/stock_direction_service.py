@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import case, func, select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -146,7 +146,6 @@ async def list_stock_directions(
         # определён, и список прыгает при каждом открытии. Разрешаем по имени:
         # id здесь случайный UUID и в качестве ключа бессмыслен.
         .order_by(
-            StockDirection.is_fbs.desc(),
             StockDirection.created_at.asc(),
             StockDirection.name.asc(),
         )
@@ -161,7 +160,7 @@ async def create_stock_direction(
     *,
     name: str,
     quantity: int,
-    is_fbs: bool,
+    is_fbs: bool = False,
     comment: str | None = None,
     seller_scope: uuid.UUID | None = None,
 ) -> StockDirection:
@@ -180,7 +179,6 @@ async def create_stock_direction(
         name=clean_name,
         comment=clean_comment,
         quantity=int(quantity),
-        is_fbs=False,
     )
     session.add(direction)
     schedule_seller_stock_publish(session, tenant_id, product.seller_id)
@@ -223,7 +221,6 @@ async def update_stock_direction(
         direction.name = _clean_name(name)
     if set_comment:
         direction.comment = _clean_comment(comment)
-    direction.is_fbs = False
     direction.updated_at = datetime.now(UTC)
     schedule_seller_stock_publish(session, tenant_id, product.seller_id)
     await session.commit()
@@ -259,32 +256,23 @@ async def direction_totals_by_product(
 ) -> dict[uuid.UUID, StockDirectionTotals]:
     if not product_ids:
         return {}
-    fbs_qty = func.coalesce(
-        func.sum(case((StockDirection.is_fbs.is_(True), StockDirection.quantity), else_=0)),
-        0,
-    )
-    reserved_qty = func.coalesce(
-        func.sum(case((StockDirection.is_fbs.is_(False), StockDirection.quantity), else_=0)),
-        0,
-    )
-    count_qty = func.count(StockDirection.id)
     stmt = (
-        select(StockDirection.product_id, fbs_qty, reserved_qty, count_qty)
-        .where(
-            StockDirection.tenant_id == tenant_id,
-            StockDirection.product_id.in_(product_ids),
+        select(
+            StockDirection.product_id,
+            func.sum(StockDirection.quantity),
+            func.count(StockDirection.id),
         )
+        .where(StockDirection.tenant_id == tenant_id, StockDirection.product_id.in_(product_ids))
         .group_by(StockDirection.product_id)
     )
     rows = (await session.execute(stmt)).all()
     return {
         product_id: StockDirectionTotals(
-            fbs=int(fbs or 0),
-            reserved=int(reserved or 0),
-            total=int(fbs or 0) + int(reserved or 0),
+            reserved=int(quantity or 0),
+            total=int(quantity or 0),
             has_any=int(count or 0) > 0,
         )
-        for product_id, fbs, reserved, count in rows
+        for product_id, quantity, count in rows
     }
 
 
@@ -353,11 +341,15 @@ async def distributions_by_product(
     reserved = await fbs_reserved_totals_by_product(
         session, tenant_id, product_ids, warehouse_id=warehouse_id
     )
-    units_products = set(await session.scalars(select(Product.id).where(
-        Product.tenant_id == tenant_id,
-        Product.id.in_(product_ids),
-        Product.fbs_units_mode.is_(True),
-    )))
+    units_products = set(
+        await session.scalars(
+            select(Product.id).where(
+                Product.tenant_id == tenant_id,
+                Product.id.in_(product_ids),
+                Product.fbs_units_mode.is_(True),
+            )
+        )
+    )
     distributions: dict[uuid.UUID, StockDistribution] = {}
     for product_id in product_ids:
         total = int(stock_totals.get(product_id, 0))
@@ -372,73 +364,14 @@ async def distributions_by_product(
             quantity_reserved=directions.total,
             # Real order reservations hold stock in either publication mode.
             quantity_free_fbo=max(
-                0, total - directions.total - allocated.get(product_id, 0)
+                0,
+                total
+                - directions.total
+                - allocated.get(product_id, 0)
                 - reserved.get(product_id, 0),
             ),
         )
     return distributions
-
-
-async def consume_fbs_pool(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    product_id: uuid.UUID,
-    quantity: int,
-) -> None:
-    if quantity < 1:
-        raise StockDirectionError("invalid_quantity")
-    totals = await direction_totals_by_product(session, tenant_id, [product_id])
-    if not totals.get(product_id, StockDirectionTotals()).has_any:
-        return
-    remaining = quantity
-    stmt = (
-        select(StockDirection)
-        .where(
-            StockDirection.tenant_id == tenant_id,
-            StockDirection.product_id == product_id,
-            StockDirection.is_fbs.is_(True),
-        )
-        .order_by(StockDirection.created_at.asc())
-        .with_for_update()
-    )
-    directions = list((await session.execute(stmt)).scalars().all())
-    if sum(int(d.quantity) for d in directions) < quantity:
-        raise StockDirectionError("insufficient_fbs_pool")
-    for direction in directions:
-        if remaining <= 0:
-            break
-        deduct = min(int(direction.quantity), remaining)
-        direction.quantity = int(direction.quantity) - deduct
-        direction.updated_at = datetime.now(UTC)
-        remaining -= deduct
-
-
-async def restore_fbs_pool(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    product_id: uuid.UUID,
-    quantity: int,
-) -> None:
-    if quantity < 1:
-        raise StockDirectionError("invalid_quantity")
-    totals = await direction_totals_by_product(session, tenant_id, [product_id])
-    if not totals.get(product_id, StockDirectionTotals()).has_any:
-        return
-    stmt = (
-        select(StockDirection)
-        .where(
-            StockDirection.tenant_id == tenant_id,
-            StockDirection.product_id == product_id,
-            StockDirection.is_fbs.is_(True),
-        )
-        .order_by(StockDirection.created_at.asc())
-        .with_for_update()
-    )
-    direction = (await session.execute(stmt)).scalars().first()
-    if direction is None:
-        raise StockDirectionError("insufficient_fbs_pool")
-    direction.quantity = int(direction.quantity) + quantity
-    direction.updated_at = datetime.now(UTC)
 
 
 async def list_monthly_snapshots(
