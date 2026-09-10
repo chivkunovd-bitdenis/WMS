@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Box,
@@ -153,24 +152,6 @@ export function FfInboundQueuePage({
     // REC-11: refresh once when the route component enters the screen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace])
-
-  // WMS-397/399 gap 2: honour `?open=<id>` so a click on an attached-document
-  // card in chat opens the specific inbound doc instead of dumping the operator
-  // on the queue. We rely on the ID being present in the current queue rows
-  // (they cover both draft and receiving), and clear the parameter once opened
-  // so the URL stays clean on reload.
-  const [searchParams, setSearchParams] = useSearchParams()
-  const openedFromQueryRef = useRef<string | null>(null)
-  useEffect(() => {
-    const openId = searchParams.get('open')
-    if (!openId || openedFromQueryRef.current === openId) return
-    if (!rows.some((row) => row.id === openId)) return
-    openedFromQueryRef.current = openId
-    onOpen(openId)
-    const cleaned = new URLSearchParams(searchParams)
-    cleaned.delete('open')
-    setSearchParams(cleaned, { replace: true })
-  }, [rows, onOpen, searchParams, setSearchParams])
 
   useEffect(() => {
     if (draftOperationType != null && !draftSellerId && sellers.length === 1) {

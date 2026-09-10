@@ -62,6 +62,16 @@ export function ChatScreen({ token, authHeaders, currentUserId, sellers, isFulfi
     setMessages((rows) => [...rows.filter((r) => r.id !== msg.id), msg]
       .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)))
   }, [])
+  // Лента без управления прокруткой открывалась на самом старом из последних
+  // 200 сообщений, а только что отправленное уходило за нижний край. Держимся
+  // низа, пока оператор сам не ушёл читать историю вверх.
+  const feed = useRef<HTMLDivElement>(null)
+  const stickToBottom = useRef(true)
+  useEffect(() => { stickToBottom.current = true }, [selectedId])
+  useEffect(() => {
+    const node = feed.current
+    if (node && stickToBottom.current) node.scrollTop = node.scrollHeight
+  }, [messages, selectedId])
   const selected = conversations.find((r) => r.id === selectedId)
   const label = (c: ChatConversation) => c.title ?? sellers.find((s) => s.id === c.seller_id)?.name ?? 'Основной чат'
   const older = async () => {
@@ -91,7 +101,11 @@ export function ChatScreen({ token, authHeaders, currentUserId, sellers, isFulfi
           <Typography variant="h6">{label(selected)}</Typography>
           {isFulfillmentAdmin && selected.kind === 'extra' && <Button onClick={() => setMembersOpen(true)}>Участники</Button>}
         </Box>
-        <Box sx={{ flex: 1, overflowY: 'auto' }}>
+        <Box ref={feed} sx={{ flex: 1, overflowY: 'auto' }}
+          onScroll={(event) => {
+            const node = event.currentTarget
+            stickToBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80
+          }}>
           {messages.length > 0 && <Button disabled={olderBusy} onClick={() => void older()}>Предыдущие сообщения</Button>}
           <ChatFeed key={selected.id} token={token} authHeaders={authHeaders} currentUserId={currentUserId}
             messages={messages} onChanged={changed} />
