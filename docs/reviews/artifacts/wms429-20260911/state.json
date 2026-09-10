@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-09-10T22:23:05.365882+00:00",
+  "updated_at_utc": "2026-09-10T22:24:17.775852+00:00",
   "phase": "PARALLEL_IMPLEMENTATION",
   "release_branch": "codex/wms-release-20260911",
   "base_sha": "dcac6251bb7defc9fa6c3e3b1a4dbc35555ae382",
@@ -91,9 +91,10 @@
     "versionCode": 11,
     "asset_uploaded": true,
     "download_sha256_verified": "8435c3abcd240afbaadb95e157512d52a56c105fd73440e6991933741237a81f",
-    "manifest_published": false,
+    "manifest_published": true,
     "source_record_sha": "4b1a70c6a17a62a268cf92767933d02e36f1d949",
-    "url": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/WMS-TSD-0.1.10-8435c3abcd24-debug.apk"
+    "url": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/WMS-TSD-0.1.10-8435c3abcd24-debug.apk",
+    "verified_at_utc": "2026-09-10T22:24:17.775852+00:00"
   },
   "production_observed_sha": "9ee4e7fc31af3be21fd1fb282e06d02a03139dd3"
 }
