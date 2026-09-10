@@ -65,6 +65,7 @@ export function FbsSupplyCreateDialog({
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState<string | null>(null)
   const [idempotencyKey, setIdempotencyKey] = useState(createFbsIdempotencyKey)
+  const isOzonSupply = preflight?.summary?.marketplace === 'ozon'
 
   const requestClose = () => {
     if (confirmDiscardChanges(deliveryType !== 'warehouse_sc')) {
@@ -177,7 +178,7 @@ export function FbsSupplyCreateDialog({
             </Alert>
           ) : null}
 
-          <Box>
+          {!isOzonSupply ? <Box>
             <Typography variant="subtitle2" gutterBottom>
               Планируемый способ сдачи
             </Typography>
@@ -201,7 +202,7 @@ export function FbsSupplyCreateDialog({
                 маршрута для каждого заказа.
               </Typography>
             ) : null}
-          </Box>
+          </Box> : null}
 
           <Divider />
 
@@ -231,13 +232,19 @@ export function FbsSupplyCreateDialog({
               >
                 <SummaryItem label="Селлер" value={summary.seller.name} />
                 <SummaryItem
-                  label="Склад WB"
-                  value={summary.wb_warehouse.name ? String(summary.wb_warehouse.name) : `WB ${summary.wb_warehouse.id}`}
+                  label={isOzonSupply ? 'Склад Ozon' : 'Склад WB'}
+                  value={summary.wb_warehouse.name
+                    ? String(summary.wb_warehouse.name)
+                    : `${isOzonSupply ? 'Ozon' : 'WB'} ${summary.wb_warehouse.id}`}
                 />
                 <SummaryItem label="Склад WMS" value={summary.wms_warehouse.name} />
                 <SummaryItem label="Заказов" value={String(summary.orders_count)} />
-                <SummaryItem label="Грузовой тип" value={summary.cargo_type} />
-                <SummaryItem label="Контроль сборки" value="без подтверждённого WB SLA" />
+                {isOzonSupply ? (
+                  <SummaryItem label="Метод доставки Ozon" value={summary.delivery_route ?? 'Не указан в отправлении'} />
+                ) : <>
+                  <SummaryItem label="Грузовой тип" value={summary.cargo_type} />
+                  <SummaryItem label="Контроль сборки" value="без подтверждённого WB SLA" />
+                </>}
                 {summary.buyer_type === 'legal' ? <SummaryItem label="Покупатель" value="Юридическое лицо" /> : null}
                 {summary.required_marking_count > 0 ? <SummaryItem label="Нужна маркировка" value={String(summary.required_marking_count)} /> : null}
                 {deliveryType === 'pvz' && summary.pvz_blocked_count > 0 ? <SummaryItem label="Нельзя сдать через ПВЗ" value={String(summary.pvz_blocked_count)} /> : null}

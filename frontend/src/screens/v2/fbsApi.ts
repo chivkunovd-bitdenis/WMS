@@ -223,6 +223,10 @@ export type FbsWorklistOrder = {
     category: string | null
     color: string | null
     size: string | null
+    marketplace_bindings?: Array<{
+      marketplace: 'wb' | 'ozon'
+      external_barcodes?: string[]
+    }>
     packaging_instructions?: string | null
     has_packaging_instructions?: boolean
   }
@@ -282,11 +286,13 @@ export type FbsSupplyPreflightRequest = {
 export type FbsSupplyPreflight = {
   compatible: boolean
   summary: {
+    marketplace: 'wb' | 'ozon'
     seller: { id: string; name: string }
     wb_warehouse: { id: number; name: string | null }
     wms_warehouse: { id: string; name: string }
     buyer_type: 'individual' | 'legal'
     cargo_type: string
+    delivery_route: string | null
     orders_count: number
     required_marking_count: number
     pvz_allowed_count: number
