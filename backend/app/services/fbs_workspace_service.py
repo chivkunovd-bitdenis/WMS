@@ -225,12 +225,17 @@ async def _inject_product_marketplace_bindings(
     marketplace identity beside that product lets the existing print dialog
     select an Ozon barcode without inventing a second print flow.
     """
-    product_ids = {
-        uuid.UUID(str(product_id))
-        for item in worklist_items
-        if isinstance(item.get("product"), dict)
-        if (product_id := item["product"].get("id"))
-    }
+    product_ids: set[uuid.UUID] = set()
+    for item in worklist_items:
+        product = item.get("product")
+        if isinstance(product, dict) and (product_id := product.get("id")):
+            product_ids.add(uuid.UUID(str(product_id)))
+        # An Ozon posting may contain several WMS products.  The order-level
+        # product is only a compatibility projection, so it is not enough for
+        # selecting a barcode for every actual Ozon position.
+        for position in item.get("positions") or []:
+            if isinstance(position, dict) and (product_id := position.get("product_id")):
+                product_ids.add(uuid.UUID(str(product_id)))
     if not product_ids:
         return
     rows = list(
@@ -258,9 +263,14 @@ async def _inject_product_marketplace_bindings(
         )
     for item in worklist_items:
         product = item.get("product")
-        if not isinstance(product, dict) or not product.get("id"):
-            continue
-        product["marketplace_bindings"] = bindings.get(uuid.UUID(str(product["id"])), [])
+        if isinstance(product, dict) and product.get("id"):
+            product["marketplace_bindings"] = bindings.get(uuid.UUID(str(product["id"])), [])
+        for position in item.get("positions") or []:
+            if not isinstance(position, dict) or not position.get("product_id"):
+                continue
+            position["marketplace_bindings"] = bindings.get(
+                uuid.UUID(str(position["product_id"])), []
+            )
 
 
 async def _picking_auto_passed_reason(

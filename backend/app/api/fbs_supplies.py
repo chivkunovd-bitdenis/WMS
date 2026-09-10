@@ -870,6 +870,7 @@ def _raise_from_shipment_service(exc: shipment_svc.FbsShipmentError) -> None:
     detail = envelope_from_exc(exc)
     if exc.http_status is not None and (
         exc.context
+        or exc.code.startswith("ozon_")
         or exc.code
         in {
             "wb_timeout",

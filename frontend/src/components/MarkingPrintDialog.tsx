@@ -85,6 +85,9 @@ type FbsTapeOrderContext = {
   wbOrderId: number
   requiresHonestSign: boolean
   productLabel: ProductThermalLabelData
+  /** One Ozon posting can have several products.  Keep their own labels and
+   * quantities instead of repeating the compatibility product for every unit. */
+  productLabels?: Array<{ productLabel: ProductThermalLabelData; copies: number }>
 }
 
 type FbsTapePrintOrder = {
@@ -899,14 +902,16 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 )
               }
             } else if (fallbackLabelCopies > 0) {
-              orderSections.push(
-                ...buildProductLabelSections(
-                  order.productLabel,
-                  fallbackLabelCopies,
-                  size,
-                  labelOptionsFromLayout(printLayout),
-                ),
-              )
+              for (const item of order.productLabels ?? [{ productLabel: order.productLabel, copies: 1 }]) {
+                orderSections.push(
+                  ...buildProductLabelSections(
+                    item.productLabel,
+                    Math.max(1, item.copies) * fallbackLabelCopies,
+                    size,
+                    labelOptionsFromLayout(printLayout),
+                  ),
+                )
+              }
             }
             if (orderSections.length === 0) {
               throw new Error('Для заказа не собрано ни одной этикетки.')
