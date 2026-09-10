@@ -1,0 +1,836 @@
+diff --git a/android/app/build.gradle.kts b/android/app/build.gradle.kts
+index c72161e..3d0dedb 100644
+--- a/android/app/build.gradle.kts
++++ b/android/app/build.gradle.kts
+@@ -13,8 +13,8 @@ android {
+         applicationId = "ru.wms.tsd"
+         minSdk = 24
+         targetSdk = 35
+-        versionCode = 9
+-        versionName = "0.1.8-wms401-orders-first"
++        versionCode = 10
++        versionName = "0.1.9-ozon-tsd"
+         buildConfigField("String", "APK_UPDATE_MANIFEST_URL", "\"https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/update.json\"")
+         buildConfigField(
+             "String",
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt
+index 7bf60a3..c070618 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt
+@@ -16,7 +16,7 @@ interface FbsApi {
+     // умолчанию оставлено "wb", чтобы старые сборки, которые всё ещё не шлют
+     // параметр, продолжали видеть WB-заказы.
+     @GET("operations/fbs-orders/worklist")
+-    suspend fun orders(@Query("marketplace") marketplace: String = "wb", @Query("status_group") group: String? = null, @Query("limit") limit: Int = 100, @Query("cursor") cursor: String? = null): Response<FbsOrderPage>
++    suspend fun orders(@Query("marketplace") marketplace: String = "wb", @Query("status_group") group: String? = null, @Query("limit") limit: Int = 100, @Query("cursor") cursor: String? = null, @Query("sort") sort: String = "oldest"): Response<FbsOrderPage>
+ 
+     @POST("operations/fbs-supplies/from-orders")
+     suspend fun createSupply(@Body body: SupplyCreateBody): Response<FbsWorkspace>
+@@ -41,7 +41,7 @@ interface FbsApi {
+     @GET suspend fun asset(@Url path: String): Response<ResponseBody>
+ 
+     @DELETE("operations/fbs-supplies/{supplyId}/boxes/{boxId}/orders/{orderId}")
+-    suspend fun removeBoxOrder(@Path("supplyId") supplyId: String, @Path("boxId") boxId: String, @Path("orderId") orderId: String): Response<FbsWorkspace>
++    suspend fun removeBoxOrder(@Path("supplyId") supplyId: String, @Path("boxId") boxId: String, @Path("orderId") orderId: String, @Query("order_product_id") positionId: String? = null): Response<FbsWorkspace>
+ 
+     @GET("operations/fbs-supplies/worklist")
+     suspend fun worklist(
+@@ -94,6 +94,9 @@ interface FbsApi {
+         @Body body: AssignOrdersBody,
+     ): Response<FbsWorkspace>
+ 
++    @POST("operations/fbs-supplies/{supplyId}/boxes/{boxId}/retry-qr")
++    suspend fun prepareBoxLabel(@Path("supplyId") supplyId: String, @Path("boxId") boxId: String): Response<FbsWorkspace>
++
+     @POST("operations/fbs-supplies/{supplyId}/delivery-preflight")
+     suspend fun deliveryPreflight(@Path("supplyId") supplyId: String): Response<FbsDeliveryPreflight>
+ 
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsDelivery.kt b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsDelivery.kt
+index d537f5c..76cb1b6 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsDelivery.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsDelivery.kt
+@@ -13,16 +13,16 @@ fun <T> Response<T>.deliveryBody(): T {
+     }.getOrNull()
+     val code = (detail?.get("code") as? JsonPrimitive)?.contentOrNull
+     val suppliedMessage = (detail?.get("message") as? JsonPrimitive)?.contentOrNull
+-    val pending = code in setOf("wb_timeout", "wb_pending_confirmation", "operation_in_progress")
++    val pending = code in setOf("wb_timeout", "wb_pending_confirmation", "operation_in_progress", "ozon_handoff_outcome_unknown", "ozon_timeout")
+     val message = when {
+         code() == 401 -> "Сессия истекла. Войдите заново и проверьте результат передачи."
+-        pending -> "WB ещё не подтвердил передачу. Результат пока неизвестен. Повторите проверку через минуту."
++        pending -> "Маркетплейс ещё не подтвердил передачу. Результат пока неизвестен. Повторите проверку через минуту."
+         code == "stale_preflight" -> "Данные поставки изменились. Проверьте поставку и подтвердите передачу ещё раз."
+         !suppliedMessage.isNullOrBlank() -> suppliedMessage
+         else -> "Не удалось получить результат передачи (HTTP ${code()}). Повторите проверку."
+     }
+     // A proxy error or expired session says nothing about an earlier request's outcome.
+-    throw FbsDeliveryError(message, pending || code == null || code() in setOf(401, 403))
++    throw FbsDeliveryError(message, pending || code == null || code() >= 500 || code() in setOf(401, 403))
+ }
+ 
+ fun FbsWorkspace.deliveryConfirmed(): Boolean = supply.status in setOf("in_delivery", "done")
+diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
+index b683911..1442fba 100644
+--- a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
++++ b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
+@@ -80,6 +80,7 @@ data class FbsBlocker(
+ @Serializable
+ data class FbsOrder(
+     val id: String,
++    val marketplace: String = "wb",
+     @SerialName("external_order_id") val externalOrderId: String? = null,
+     @SerialName("wb_order_id") val wbOrderId: Long,
+     val status: String,
+@@ -113,6 +114,8 @@ data class FbsPosition(
+     val sku: String? = null,
+     val quantity: Int,
+     @SerialName("picked_quantity") val pickedQuantity: Int,
++    val id: String = "",
++    val barcode: String? = null,
+ )
+ 
+ @Serializable data class FbsSticker(val code: String? = null, val status: String)
+@@ -128,6 +131,8 @@ data class FbsBox(
+     @SerialName("assigned_order_ids") val assignedOrderIds: List<String> = emptyList(),
+     @SerialName("wb_trbx_id") val wbTrbxId: String? = null,
+     @SerialName("without_distribution") val withoutDistribution: Boolean = false,
++    @SerialName("assigned_order_product_ids") val assignedOrderProductIds: List<String> = emptyList(),
++    @SerialName("ozon_assembled") val ozonAssembled: Boolean = false,
+ )
+ 
+ @Serializable
+@@ -198,7 +203,10 @@ data class PackagingLine(
+     @SerialName("without_distribution") val withoutDistribution: Boolean = false,
+ )
+ 
+-@Serializable data class AssignOrdersBody(@SerialName("order_ids") val orderIds: List<String>)
++@Serializable data class AssignOrdersBody(
++    @SerialName("order_ids") val orderIds: List<String> = emptyList(),
++    @SerialName("order_product_ids") val orderProductIds: List<String> = emptyList(),
++)
+ 
+ @Serializable
+ data class FbsDeliveryPreflight(
+@@ -291,6 +299,8 @@ data class FbsDeliveryCheck(
+     @SerialName("can_bind") val canBind: Boolean,
+     @SerialName("needs_confirmation") val needsConfirmation: Boolean,
+     @SerialName("block_reason") val blockReason: String? = null,
++    val marketplace: String = "wb",
++    @SerialName("external_order_id") val externalOrderId: String? = null,
+ )
+ @Serializable data class KizValidateBody(@SerialName("order_id") val orderId: String, val value: String)
+ @Serializable data class KizValidation(val ok: Boolean, val hints: List<String> = emptyList())
+@@ -301,6 +311,7 @@ data class FbsDeliveryCheck(
+     val status: String,
+     val message: String? = null,
+     @SerialName("meta_status") val metaStatus: String? = null,
++    val code: String? = null,
+ )
+ @Serializable data class FbsPrintAsset(
+     val id: String,
+@@ -310,7 +321,7 @@ data class FbsDeliveryCheck(
+     @SerialName("preview_url") val previewUrl: String? = null,
+     @SerialName("download_url") val downloadUrl: String? = null,
+ )
+-@Serializable data class PrintBatchBody(val kind: String, @SerialName("order_ids") val orderIds: List<String>? = null)
++@Serializable data class PrintBatchBody(val kind: String, @SerialName("order_ids") val orderIds: List<String>? = null, @SerialName("retry_missing") val retryMissing: Boolean = false)
+ @Serializable data class FbsPrintBatch(val assets: List<FbsPrintAsset> = emptyList(), val missing: Int = 0, val failed: Int = 0)
+ @Serializable data class PrintTapeBody(
+     @SerialName("order_ids") val orderIds: List<String>,
+@@ -337,3 +348,7 @@ data class FbsDeliveryCheck(
+     val failed: Int = 0,
+     @SerialName("order_errors") val orderErrors: List<FbsPrintOrderError> = emptyList(),
+ )
++
++fun FbsOrder.displayNumber(): String = if (marketplace == "ozon") "Ozon ${externalOrderId ?: id}" else "WB $wbOrderId"
++fun KizLookup.displayNumber(): String = if (marketplace == "ozon") "Ozon ${externalOrderId ?: orderId}" else "WB $wbOrderId"
++fun FbsWorkspace.marketplaceLabel(): String = if (supply.marketplace == "ozon") "Ozon" else "WB"
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsPrinting.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsPrinting.kt
+index 8fafb2f..21c2d20 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsPrinting.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsPrinting.kt
+@@ -33,7 +33,7 @@ fun printLabels(context: Context, html: String) {
+                     view.destroy()
+                     return@evaluateJavascript
+                 }
+-            val delegate = view.createPrintDocumentAdapter("Этикетки WB FBS")
++            val delegate = view.createPrintDocumentAdapter("Этикетки FBS")
+             val adapter = object : PrintDocumentAdapter() {
+                 override fun onStart() = delegate.onStart()
+                 override fun onLayout(old: PrintAttributes?, new: PrintAttributes?, cancellation: CancellationSignal?, callback: LayoutResultCallback?, extras: Bundle?) = delegate.onLayout(old, new, cancellation, callback, extras)
+@@ -45,7 +45,7 @@ fun printLabels(context: Context, html: String) {
+                 }
+             }
+             val manager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
+-            manager.print("Этикетки WB FBS", adapter,
++            manager.print("Этикетки FBS", adapter,
+                 PrintAttributes.Builder().setMediaSize(PrintAttributes.MediaSize("WMS_58_40", "58 × 40 мм", 2283, 1575))
+                     .setMinMargins(PrintAttributes.Margins.NO_MARGINS).build())
+             }
+@@ -56,7 +56,7 @@ fun printLabels(context: Context, html: String) {
+ 
+ fun escapedLabel(value: String): String = value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+ fun inlineImage(bytes: ByteArray, contentType: String): String {
+-    require(contentType.substringBefore(';') in setOf("image/png", "image/jpeg", "image/webp")) { "Этикетка WB не является изображением" }
++    require(contentType.substringBefore(';') in setOf("image/png", "image/jpeg", "image/webp")) { "Этикетка не является изображением" }
+     return "data:${contentType.substringBefore(';')};base64,${Base64.encodeToString(bytes, Base64.NO_WRAP)}"
+ }
+ 
+@@ -69,3 +69,34 @@ fun labelPage(text: String, barcode: String? = null, dataMatrix: Boolean = false
+ fun labelsDocument(encoder: String, pages: List<String>): String = """<!doctype html><html><head><meta charset="utf-8"><style>
+ @page{size:58mm 40mm;margin:0}body{margin:0;background:white;color:black}section{width:56mm;height:38mm;padding:1mm;page-break-after:always;overflow:hidden;text-align:center}section:last-child{page-break-after:auto}img,canvas{max-width:54mm;max-height:29mm;object-fit:contain}p{font:10px sans-serif;margin:1mm;overflow-wrap:anywhere}
+ </style><script>$encoder</script></head><body>${pages.joinToString("")}</body></html>"""
++
++/** Render every page of an Ozon PDF locally; never discard later posting labels. */
++fun pdfLabelImages(bytes: ByteArray, cacheDirectory: java.io.File): List<String> {
++    require(bytes.size <= 16 * 1024 * 1024) { "Файл этикеток слишком большой" }
++    val file = java.io.File.createTempFile("fbs-label-", ".pdf", cacheDirectory)
++    try {
++        file.writeBytes(bytes)
++        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
++            android.graphics.pdf.PdfRenderer(descriptor).use { pdf ->
++                require(pdf.pageCount in 1..32) { "Некорректное число страниц этикеток" }
++                (0 until pdf.pageCount).map { index ->
++                    pdf.openPage(index).use { page ->
++                        val scale = 1000.0 / maxOf(page.width, page.height)
++                        val bitmap = android.graphics.Bitmap.createBitmap(
++                            (page.width * scale).toInt().coerceAtLeast(1),
++                            (page.height * scale).toInt().coerceAtLeast(1),
++                            android.graphics.Bitmap.Config.ARGB_8888,
++                        )
++                        try {
++                            bitmap.eraseColor(android.graphics.Color.WHITE)
++                            page.render(bitmap, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
++                            val output = java.io.ByteArrayOutputStream()
++                            check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output))
++                            inlineImage(output.toByteArray(), "image/png")
++                        } finally { bitmap.recycle() }
++                    }
++                }
++            }
++        }
++    } finally { file.delete() }
++}
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
+index ee2b141..339f092 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt
+@@ -19,7 +19,6 @@ import androidx.compose.ui.unit.sp
+ import androidx.lifecycle.compose.LifecycleResumeEffect
+ import androidx.lifecycle.viewmodel.compose.viewModel
+ import coil.compose.AsyncImage
+-import java.time.OffsetDateTime
+ import java.time.ZoneId
+ import java.time.format.DateTimeFormatter
+ import ru.wms.tsd.AppGraph
+@@ -27,10 +26,13 @@ import ru.wms.tsd.core.api.fbs.*
+ import ru.wms.tsd.ui.patterns.ScanScaffold
+ 
+ internal fun displayTime(value: String): String = runCatching {
+-    DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.systemDefault()).format(OffsetDateTime.parse(value).toInstant())
++    DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.systemDefault()).format(apiInstant(value))
+ }.getOrDefault(value)
+ 
+-@Composable private fun fbsViewModel(): FbsViewModel = viewModel(factory = FbsViewModel.Factory(AppGraph.apiProvider))
++@Composable private fun fbsViewModel(): FbsViewModel {
++    val context = LocalContext.current.applicationContext
++    return viewModel(factory = FbsViewModel.Factory(AppGraph.apiProvider) { pdfLabelImages(it, context.cacheDir) })
++}
+ @Composable private fun ErrorPanel(state: FbsState, vm: FbsViewModel) {
+     state.error?.let {
+         Column(Modifier.fillMaxWidth().background(Color(0xffffebee)).padding(12.dp)) {
+@@ -58,7 +60,8 @@ internal fun displayTime(value: String): String = runCatching {
+                     val selected = state.marketplace == code
+                     FilterChip(
+                         selected = selected,
+-                        onClick = { if (!state.busy) vm.setMarketplace(code) },
++                        onClick = { vm.setMarketplace(code) },
++                        enabled = !state.busy,
+                         label = { Text(label) },
+                         modifier = Modifier.weight(1f),
+                     )
+@@ -107,12 +110,15 @@ internal fun displayTime(value: String): String = runCatching {
+                 if (selectable) Checkbox(selected, { onClick() })
+                 AsyncImage(order.product.imageUrl, order.product.name, modifier = Modifier.size(66.dp))
+                 Column(Modifier.weight(1f).padding(start = 10.dp)) {
+-                    Text("WB ${order.wbOrderId}", fontWeight = FontWeight.Bold, fontSize = 22.sp)
++                    Text(order.displayNumber(), fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                     Text(order.product.name, fontSize = 17.sp)
+                     Text(order.product.sellerArticle ?: order.product.sku.orEmpty(), fontSize = 14.sp)
+                 }
+             }
+-            Text("ШК: ${order.product.barcode ?: "не указан"}")
++            if (order.marketplace == "ozon") for (position in order.positions) {
++                Text("${position.name} · ${position.quantity} шт · подобрано ${position.pickedQuantity}")
++                Text("ШК: ${position.barcode ?: position.sku ?: "не указан"}")
++            } else Text("ШК: ${order.product.barcode ?: "не указан"}")
+             Text("Поступил: ${displayTime(order.createdAt)}")
+             Text("Отгрузить до: ${displayTime(order.deadlineAt)}", fontWeight = FontWeight.Medium)
+             if (order.pick.status == "picked") Text("Подобран · ${order.pick.locationCode.orEmpty()}", color = Color(0xff176b31))
+@@ -133,14 +139,15 @@ internal fun displayTime(value: String): String = runCatching {
+                 for ((mode, label) in listOf("pick" to "Подбор", "pack" to "Упаковка и этикетки", "boxes" to "Короба")) {
+                     Button(onClick = { onStep(mode) }, modifier = Modifier.fillMaxWidth().height(72.dp)) { Text(label, fontSize = 20.sp) }
+                 }
+-                if (ws.supply.marketplace == "wb") {
++                run {
++                    val market = ws.marketplaceLabel()
+                     if (ws.deliveryConfirmed()) {
+-                        Text("Поставка передана в WB", color = Color(0xff176b31), fontWeight = FontWeight.Bold)
+-                        OutlinedButton(onClick = vm::syncDelivery, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text("Обновить статус WB") }
++                        Text("Поставка передана в $market", color = Color(0xff176b31), fontWeight = FontWeight.Bold)
++                        OutlinedButton(onClick = vm::syncDelivery, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text("Обновить статус $market") }
+                     } else {
+                         if (state.pendingDelivery != null) Text("Результат передачи пока неизвестен. Проверьте результат перед новой попыткой.")
+                         OutlinedButton(onClick = vm::openDeliveryConfirmation, enabled = !state.busy, modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp)) {
+-                            Text(if (state.pendingDelivery != null) "Проверить результат передачи" else "Передать поставку в WB", fontSize = 20.sp)
++                            Text(if (state.pendingDelivery != null) "Проверить результат передачи" else "Передать поставку в $market", fontSize = 20.sp)
+                         }
+                     }
+                 }
+@@ -149,7 +156,7 @@ internal fun displayTime(value: String): String = runCatching {
+     }
+     if (state.deliveryConfirmationOpen) AlertDialog(
+         onDismissRequest = vm::cancelDelivery,
+-        title = { Text("Передать поставку в WB?") },
++        title = { Text("Передать поставку в ${state.workspace?.marketplaceLabel()}?") },
+         text = {
+             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                 Text("После передачи поставку нельзя будет отменить или вернуть в работу.")
+@@ -158,7 +165,7 @@ internal fun displayTime(value: String): String = runCatching {
+                 state.deliveryPreflight?.let { preflight ->
+                     for (check in preflight.checks.filter { it.severity in setOf("blocker", "warning") }) {
+                         val order = state.workspace?.orders?.firstOrNull { it.id == check.orderId }
+-                        Text(check.message + (order?.let { " (WB ${it.wbOrderId})" } ?: ""), color = if (check.severity == "blocker") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
++                        Text(check.message + (order?.let { " (${it.displayNumber()})" } ?: ""), color = if (check.severity == "blocker") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+                     }
+                     if (preflight.cancelledOrders.isNotEmpty()) {
+                         Text("Отменённые заказы: выньте товары из коробов. Они будут исключены из поставки.", fontWeight = FontWeight.Bold)
+@@ -174,7 +181,7 @@ internal fun displayTime(value: String): String = runCatching {
+         },
+         dismissButton = { TextButton(onClick = vm::cancelDelivery, enabled = !state.busy) { Text("Не передавать") } },
+         confirmButton = { Button(onClick = vm::confirmDelivery, enabled = !state.busy && state.deliveryPreflight?.canDeliver != false) {
+-            Text(if (state.deliveryPreflight?.cancelledOrders?.isNotEmpty() == true) "Товары вынуты — передать" else "Передать в WB")
++            Text(if (state.deliveryPreflight?.cancelledOrders?.isNotEmpty() == true) "Товары вынуты — передать" else "Передать в ${state.workspace?.marketplaceLabel()}")
+         } },
+     )
+ }
+@@ -196,7 +203,7 @@ internal fun displayTime(value: String): String = runCatching {
+                 TextButton(onClick = vm::clearSource, enabled = !state.busy) { Text("Сменить") }
+             }
+             if (mode == "pack") {
+-                Text(state.kizOrder?.let { "Заказ WB ${it.wbOrderId}: сканируйте ЧЗ" } ?: "QR заказа → код ЧЗ", modifier = Modifier.padding(10.dp), fontWeight = FontWeight.Bold)
++                Text(state.kizOrder?.let { "${it.displayNumber()}: сканируйте ЧЗ" } ?: "QR заказа → код ЧЗ", modifier = Modifier.padding(10.dp), fontWeight = FontWeight.Bold)
+                 state.kizResult?.let { Text(it, modifier = Modifier.padding(horizontal = 10.dp)) }
+                 Row(Modifier.padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                     Button(onClick = { vm.printOrders(encoder, workspace?.orders.orEmpty().map { it.id }, 0, 0, true) }, enabled = !state.busy) { Text("Все QR") }
+@@ -205,26 +212,41 @@ internal fun displayTime(value: String): String = runCatching {
+             }
+             if (mode == "boxes") Row(Modifier.padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                 Button(onClick = vm::createBox, enabled = !state.busy) { Text("Новый короб") }
+-                OutlinedButton(onClick = { vm.printBoxes(encoder, workspace?.boxes.orEmpty().map { it.id }) }, enabled = !state.busy) { Text("Все QR WB") }
++                OutlinedButton(onClick = { vm.printBoxes(encoder, workspace?.boxes.orEmpty().map { it.id }) }, enabled = !state.busy) { Text("Все этикетки") }
+             }
+             LazyColumn(Modifier.weight(1f).padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                 if (mode != "boxes") items(workspace?.orders.orEmpty().sortedWith(compareBy<FbsOrder> { it.pick.status == "picked" }.thenBy { it.createdAt }), key = { it.id }) { order ->
+                     OrderCard(order) {
+                         if (mode == "pack") {
+-                            Text(order.wbOrderId.toString().takeLast(4), fontSize = 36.sp, fontWeight = FontWeight.Black)
++                            Text((order.externalOrderId ?: order.wbOrderId.toString()).takeLast(4), fontSize = 36.sp, fontWeight = FontWeight.Black)
+                             Button(onClick = { printing = listOf(order.id) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Печатать этикетки", fontSize = 20.sp) }
+-                            OutlinedButton(onClick = { vm.packOrder(order) }, enabled = !state.busy && order.pack.status != "packed", modifier = Modifier.fillMaxWidth()) { Text(if (order.pack.status == "packed") "Упакован" else "Отметить упакованным") }
++                            if (order.marketplace == "ozon" && order.pack.status != "packed") {
++                                for (position in order.positions) OutlinedButton(onClick = { vm.packOrder(order, position.productId) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text("Упаковать 1 шт · ${position.name}") }
++                            } else OutlinedButton(onClick = { vm.packOrder(order) }, enabled = !state.busy && order.pack.status != "packed", modifier = Modifier.fillMaxWidth()) { Text(if (order.pack.status == "packed") "Упакован" else "Отметить упакованным") }
+                         }
+                     }
+                 }
+                 if (mode == "boxes") items(workspace?.boxes.orEmpty(), key = { it.id }) { box ->
+                     Surface(color = if (state.selectedBoxId == box.id) Color(0xffe5f4e9) else MaterialTheme.colorScheme.surface, tonalElevation = 1.dp) {
+                         Column(Modifier.padding(12.dp)) {
+-                            Text("Короб №${box.boxNumber} · ${box.assignedOrderIds.size} шт", fontSize = 21.sp, fontWeight = FontWeight.Bold)
++                            val units = if (workspace?.supply?.marketplace == "ozon") workspace.orders.flatMap { it.positions }.filter { it.id in box.assignedOrderProductIds }.sumOf { it.quantity } else box.assignedOrderIds.size
++                            Text("Короб №${box.boxNumber} · $units шт", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                             Text(box.barcode)
+                             Row { Button(onClick = { vm.selectBox(if (state.selectedBoxId == box.id) null else box.id) }) { Text(if (state.selectedBoxId == box.id) "Закрыть короб" else "Открыть") }
+-                                TextButton(onClick = { vm.printBoxes(encoder, listOf(box.id)) }, enabled = !state.busy) { Text("QR WB") } }
+-                            if (state.selectedBoxId == box.id) {
++                                TextButton(onClick = { vm.printBoxes(encoder, listOf(box.id)) }, enabled = !state.busy) { Text("Этикетка") } }
++                            if (workspace?.supply?.marketplace == "ozon") {
++                                Text(if (box.ozonAssembled) "Сборка подтверждена Ozon" else "Сборка ещё не подтверждена Ozon")
++                                OutlinedButton(onClick = { vm.prepareBoxLabel(box.id) }, enabled = !state.busy) { Text("Подтвердить сборку и получить этикетку") }
++                            }
++                            if (state.selectedBoxId == box.id && workspace?.supply?.marketplace == "ozon") {
++                                Text("Позиция переносится целиком, с количеством заказа")
++                                for (order in workspace.orders) for (position in order.positions) {
++                                    val assignedHere = position.id in box.assignedOrderProductIds
++                                    TextButton(onClick = { vm.toggleBoxPosition(box, order, position) }, enabled = !state.busy) {
++                                        Text("${order.displayNumber()} · ${position.name} · ${position.quantity} шт · ${if (assignedHere) "Убрать" else "В короб"}")
++                                    }
++                                }
++                            } else if (state.selectedBoxId == box.id) {
+                                 Text("Сканируйте товары или QR заказов")
+                                 for ((productId, orders) in workspace?.orders.orEmpty().groupBy { it.product.id }) {
+                                     if (productId != null) TextButton(onClick = { editing = Triple(box, productId, orders.count { it.id in box.assignedOrderIds }) }) {
+@@ -238,7 +260,7 @@ internal fun displayTime(value: String): String = runCatching {
+             }
+         }
+     }
+-    if (state.pendingKiz != null && state.kizOrder?.needsConfirmation == true) AlertDialog(onDismissRequest = vm::cancelKiz, dismissButton = { TextButton(onClick = vm::cancelKiz, enabled = !state.busy) { Text("Отмена") } }, title = { Text("Подтвердите привязку ЧЗ") }, text = { Text("Код будет отправлен для заказа WB ${state.kizOrder?.wbOrderId}") }, confirmButton = { Button(onClick = vm::confirmKiz, enabled = !state.busy) { Text("Подтвердить") } })
++    if (state.pendingKiz != null && state.kizOrder?.needsConfirmation == true) AlertDialog(onDismissRequest = vm::cancelKiz, dismissButton = { TextButton(onClick = vm::cancelKiz, enabled = !state.busy) { Text("Отмена") } }, title = { Text("Подтвердите привязку ЧЗ") }, text = { Text("Код будет сохранён для ${state.kizOrder?.displayNumber()}") }, confirmButton = { Button(onClick = vm::confirmKiz, enabled = !state.busy) { Text("Подтвердить") } })
+     if (state.pickChoices.isNotEmpty()) AlertDialog(
+         onDismissRequest = vm::cancelPickSource,
+         title = { Text("Откуда подобрать товар") },
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+index 599ee0a..99ea917 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+@@ -5,7 +5,11 @@ import androidx.lifecycle.ViewModelProvider
+ import androidx.lifecycle.viewModelScope
+ import java.time.Instant
+ import java.time.OffsetDateTime
++import java.time.LocalDateTime
++import java.time.ZoneOffset
+ import java.util.UUID
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.withContext
+ import kotlinx.coroutines.CancellationException
+ import kotlinx.coroutines.CompletableDeferred
+ import kotlinx.coroutines.channels.Channel
+@@ -19,10 +23,13 @@ import ru.wms.tsd.core.api.fbs.*
+ import ru.wms.tsd.core.api.readableError
+ import ru.wms.tsd.ui.patterns.ScanFlash
+ 
++fun apiInstant(value: String): Instant = runCatching { OffsetDateTime.parse(value).toInstant() }
++    .getOrElse { LocalDateTime.parse(value).toInstant(ZoneOffset.UTC) }
++
+ fun oldestMatchingOrder(orders: List<FbsOrder>, barcode: String): FbsOrder? = orders
+     .filter { it.pick.status != "picked" && it.status !in setOf("cancelled", "done", "in_delivery") }
+-    .filter { barcode in listOfNotNull(it.product.barcode, it.product.sku, it.product.sellerArticle) }
+-    .minWithOrNull(compareBy<FbsOrder> { runCatching { OffsetDateTime.parse(it.createdAt).toInstant() }.getOrDefault(Instant.MAX) }.thenBy { it.wbOrderId })
++    .filter { order -> if (order.marketplace == "ozon") order.positions.any { it.pickedQuantity < it.quantity && barcode in listOfNotNull(it.barcode, it.sku, it.sellerArticle) } else barcode in listOfNotNull(order.product.barcode, order.product.sku, order.product.sellerArticle) }
++    .minWithOrNull(compareBy<FbsOrder> { runCatching { apiInstant(it.createdAt) }.getOrDefault(Instant.MAX) }.thenBy { it.wbOrderId })
+ 
+ /**
+  * Первый экран показывает заказы в порядке старейших сначала (WMS-401): точка отсчёта —
+@@ -30,11 +37,11 @@ fun oldestMatchingOrder(orders: List<FbsOrder>, barcode: String): FbsOrder? = or
+  * но его позиция не меняется относительно других нечитаемых дат (stable sort по wbOrderId).
+  */
+ fun sortedOrders(orders: List<FbsOrder>): List<FbsOrder> = orders.sortedWith(
+-    compareBy<FbsOrder> { runCatching { OffsetDateTime.parse(it.createdAt).toInstant() }.getOrDefault(Instant.MAX) }.thenBy { it.wbOrderId }
++    compareBy<FbsOrder> { runCatching { apiInstant(it.createdAt) }.getOrDefault(Instant.MAX) }.thenBy { it.wbOrderId }
+ )
+ 
+ fun isDeadlineNear(deadline: String, now: Instant = Instant.now()): Boolean =
+-    runCatching { OffsetDateTime.parse(deadline).toInstant().isBefore(now.plusSeconds(6 * 3600)) }.getOrDefault(false)
++    runCatching { apiInstant(deadline).isBefore(now.plusSeconds(6 * 3600)) }.getOrDefault(false)
+ 
+ fun isKizScan(value: String): Boolean = value.startsWith("]d2", true) || value.startsWith("(01)") ||
+     (value.startsWith("01") && value.length >= 20 && value.substring(2, 16).all(Char::isDigit) && value.substring(16, 18) == "21")
+@@ -82,7 +89,7 @@ data class FbsState(
+     val marketplace: String = "wb",
+ )
+ 
+-class FbsViewModel(private val api: ApiProvider) : ViewModel() {
++class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArray) -> List<String> = { error("PDF renderer unavailable") }) : ViewModel() {
+     private class PickSourceCancelled : Exception()
+     private val mutable = MutableStateFlow(FbsState())
+     val state: StateFlow<FbsState> = mutable
+@@ -144,8 +151,9 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+      * cursor (данные другого магазина не показываем), затем перезагружаем.
+      */
+     fun setMarketplace(marketplace: String) {
+-        if (marketplace !in setOf("wb", "ozon") || marketplace == state.value.marketplace) return
+-        mutable.value = state.value.copy(marketplace = marketplace, orders = emptyList(), cursor = null, supplies = emptyList(), selected = emptySet())
++        if (state.value.busy || marketplace !in setOf("wb", "ozon") || marketplace == state.value.marketplace) return
++        retryAction = null
++        mutable.value = state.value.copy(error = null, flash = ScanFlash.None, marketplace = marketplace, orders = emptyList(), cursor = null, supplies = emptyList(), selected = emptySet())
+         loadOrders()
+     }
+     fun toggle(order: FbsOrder) {
+@@ -192,7 +200,7 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+     }
+     fun openDeliveryConfirmation() {
+         val ws = state.value.workspace ?: return
+-        if (ws.deliveryConfirmed() || ws.supply.marketplace != "wb") return
++        if (ws.deliveryConfirmed()) return
+         val pending = state.value.pendingDelivery
+         if (pending != null) launch(deliveryAction(ws.supply.id, pending))
+         else launch { prepareDelivery(ws.supply.id) }
+@@ -205,7 +213,7 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+     fun confirmDelivery() {
+         val current = state.value
+         val ws = current.workspace ?: return
+-        if (current.busy || !current.deliveryConfirmationOpen || ws.deliveryConfirmed() || ws.supply.marketplace != "wb" || current.deliveryPreflight?.canDeliver == false) return
++        if (current.busy || !current.deliveryConfirmationOpen || ws.deliveryConfirmed() || current.deliveryPreflight?.canDeliver == false) return
+         val body = current.pendingDelivery ?: DeliverBody(UUID.randomUUID().toString(), current.deliveryPreflight?.version)
+         mutable.value = current.copy(deliveryConfirmationOpen = false)
+         launch(deliveryAction(ws.supply.id, body))
+@@ -234,7 +242,7 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+             if (openedSupplyId == supplyId) mutable.value = state.value.copy(workspace = result)
+             if (!result.deliveryConfirmed()) {
+                 if (openedSupplyId != supplyId) return@action
+-                throw FbsDeliveryError("WB ещё не подтвердил передачу. Повторите проверку результата.", true)
++                throw FbsDeliveryError("Маркетплейс ещё не подтвердил передачу. Повторите проверку результата.", true)
+             }
+             api.saveFbsDelivery(supplyId, null)
+             if (openedSupplyId == supplyId) mutable.value = state.value.copy(pendingDelivery = null, deliveryPreflight = null)
+@@ -270,8 +278,10 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+         val workspace = state.value.workspace ?: return { error("Откройте поставку перед сканированием") }
+         val order = oldestMatchingOrder(workspace.orders, value)
+         val source = state.value.source
+-        var body = FbsScanBody(value, order?.product?.id, source?.locationId, source?.containerKind, source?.containerId, order?.id)
+-        var sourceResolved = source != null || order?.product?.id == null
++        val position = order?.positions?.firstOrNull { it.pickedQuantity < it.quantity && value in listOfNotNull(it.barcode, it.sku, it.sellerArticle) }
++        val productId = position?.productId ?: order?.product?.id
++        var body = FbsScanBody(value, productId, source?.locationId, source?.containerKind, source?.containerId, order?.id)
++        var sourceResolved = source != null || productId == null
+         // Retain this scan's identity if the response is lost; retry never manufactures another scan.
+         val action: suspend () -> Unit = action@{
+             if (!sourceResolved) {
+@@ -293,13 +303,13 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+         }
+         return action
+     }
+-    fun packOrder(order: FbsOrder) {
++    fun packOrder(order: FbsOrder, productId: String? = order.product.id) {
+         val supply = state.value.workspace?.supply ?: return
+         val key = UUID.randomUUID().toString()
+         launch {
+             val taskId = supply.packagingTaskId ?: required { api.fbs().startWork(supply.id) }.supply.packagingTaskId ?: error("Не удалось открыть упаковку поставки")
+             val task = required { api.fbs().packagingTask(taskId) }
+-            val line = task.lines.firstOrNull { it.productId == order.product.id } ?: error("Для товара нет строки упаковки")
++            val line = task.lines.firstOrNull { it.productId == productId } ?: error("Для товара нет строки упаковки")
+             required { api.fbs().pack(task.id, line.id, PackProgressBody(1, order.id, key)) }
+             refresh(supply.id)
+         }
+@@ -311,7 +321,7 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+             require(found.canBind) { found.blockReason ?: "Для заказа нельзя записать этот код" }
+             mutable.value = state.value.copy(kizOrder = found, pendingKiz = null, kizResult = null)
+         }
+-        val order = state.value.kizOrder ?: return { error("Сначала отсканируйте QR заказа WB") }
++        val order = state.value.kizOrder ?: return { error("Сначала отсканируйте QR заказа") }
+         var validated = false
+         val commit = commitAction(order, value, false, key, supplyId)
+         return {
+@@ -335,18 +345,23 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+     private fun commitAction(order: KizLookup, value: String, confirmed: Boolean, key: String, supplyId: String): suspend () -> Unit {
+         val body = KizCommitBody(listOf(KizPair(order.orderId, value, confirmed)), key)
+         var answer: KizCommitResult? = null
+-        return {
++        return action@{
+             val result = answer ?: required { api.fbs().commitKiz(body) }.single().also { if (it.status == "ok") answer = it }
+-            require(result.status == "ok") { result.message ?: "WB не подтвердил запись кода" }
++            if (result.code == "needs_confirmation" && !confirmed) {
++                mutable.value = state.value.copy(kizOrder = order.copy(needsConfirmation = true), pendingKiz = value)
++                return@action
++            }
++            require(result.status == "ok") { result.message ?: "Маркетплейс не подтвердил запись кода" }
+             refresh(supplyId)
++            val market = if (order.marketplace == "ozon") "Ozon" else "WB"
+             val notice = when (result.metaStatus) {
+-                "accepted" -> "КИЗ сохранён. WB принял код."
+-                "allowed_without_check" -> "КИЗ сохранён. WB разрешил код без проверки."
+-                "pending" -> "КИЗ сохранён. WB ещё проверяет код."
+-                "assigned", "sending" -> "КИЗ сохранён. Передача в WB ещё не подтверждена."
+-                "rejected" -> "КИЗ сохранён. WB отклонил код."
+-                "replacement_required" -> "КИЗ сохранён. WB требует заменить код."
+-                else -> "КИЗ сохранён. Результат проверки WB неизвестен."
++                "accepted" -> "КИЗ сохранён. ${market} принял код."
++                "allowed_without_check" -> "КИЗ сохранён. ${market} разрешил код без проверки."
++                "pending" -> "КИЗ сохранён. ${market} ещё проверяет код."
++                "assigned", "sending" -> "КИЗ сохранён. Передача в ${market} ещё не подтверждена."
++                "rejected" -> "КИЗ сохранён. ${market} отклонил код."
++                "replacement_required" -> "КИЗ сохранён. ${market} требует заменить код."
++                else -> "КИЗ сохранён. Результат проверки ${market} неизвестен."
+             }
+             mutable.value = state.value.copy(kizOrder = null, pendingKiz = null, kizResult = notice)
+         }
+@@ -365,6 +380,15 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+         val workspace = state.value.workspace ?: return
+         workspace.boxes.firstOrNull { value == it.barcode || value == it.wbTrbxId }?.let { selectBox(it.id); return }
+         val boxId = state.value.selectedBoxId ?: error("Откройте или отсканируйте короб")
++        if (workspace.supply.marketplace == "ozon") {
++            val assignedPositions = workspace.boxes.flatMap { it.assignedOrderProductIds }.toSet()
++            val candidates = sortedOrders(workspace.orders).flatMap { order -> order.positions.filter { position ->
++                position.id !in assignedPositions && value in listOfNotNull(position.barcode, position.sku, position.sellerArticle, order.externalOrderId, order.sticker.code)
++            } }
++            val position = candidates.firstOrNull() ?: error("Нет свободной позиции с таким кодом. Выберите позицию в коробе.")
++            assignPosition(boxId, position.id)
++            return
++        }
+         val assigned = workspace.boxes.flatMap { it.assignedOrderIds }.toSet()
+         val unassigned = workspace.orders.filter { it.id !in assigned }
+         val order = unassigned.sortedBy { it.createdAt }.firstOrNull {
+@@ -377,6 +401,21 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+         val updated = required { api.fbs().assignOrders(workspace.supply.id, boxId, AssignOrdersBody(listOf(order.id))) }
+         mutable.value = state.value.copy(workspace = updated)
+     }
++    private suspend fun assignPosition(boxId: String, positionId: String) {
++        val supplyId = state.value.workspace?.supply?.id ?: return
++        val updated = required { api.fbs().assignOrders(supplyId, boxId, AssignOrdersBody(orderProductIds = listOf(positionId))) }
++        mutable.value = state.value.copy(workspace = updated)
++    }
++    fun toggleBoxPosition(box: FbsBox, order: FbsOrder, position: FbsPosition) = launch {
++        val supplyId = state.value.workspace?.supply?.id ?: return@launch
++        if (position.id in box.assignedOrderProductIds) {
++            mutable.value = state.value.copy(workspace = required { api.fbs().removeBoxOrder(supplyId, box.id, order.id, position.id) })
++        } else assignPosition(box.id, position.id)
++    }
++    fun prepareBoxLabel(boxId: String) = launch {
++        val supplyId = state.value.workspace?.supply?.id ?: return@launch
++        mutable.value = state.value.copy(workspace = required { api.fbs().prepareBoxLabel(supplyId, boxId) })
++    }
+     fun setBoxQuantity(box: FbsBox, productId: String, quantity: Int) = launch {
+         val supplyId = state.value.workspace?.supply?.id ?: return@launch
+         // A prior removal may have reached the server before its response was lost.
+@@ -395,12 +434,17 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+             if (add.isNotEmpty()) mutable.value = state.value.copy(workspace = required { api.fbs().assignOrders(workspace.supply.id, box.id, AssignOrdersBody(add.map { it.id })) })
+         }
+     }
+-    private suspend fun assetImage(asset: FbsPrintAsset): String {
++    private suspend fun assetImages(asset: FbsPrintAsset): List<String> {
+         require(asset.status == "ready") { "Этикетка WB ещё не готова" }
+         val path = asset.previewUrl?.removePrefix("/api/")?.removePrefix("/") ?: error("WB не вернул файл этикетки")
+         require(Regex("operations/fbs-print-assets/[a-fA-F0-9-]+/content").matches(path)) { "Неизвестный адрес файла этикетки" }
+         val body = required { api.fbs().asset(path) }
+-        return body.use { inlineImage(it.bytes(), it.contentType()?.toString() ?: "") }
++        return body.use {
++            val bytes = it.bytes()
++            val type = it.contentType()?.toString()?.substringBefore(';') ?: ""
++            if (type == "application/pdf") withContext(Dispatchers.IO) { decodePdf(bytes) }
++            else listOf(inlineImage(bytes, type))
++        }
+     }
+     fun printOrders(encoder: String, ids: List<String>, barcodeCopies: Int, kizCopies: Int, includeQr: Boolean) {
+         val workspace = state.value.workspace ?: return
+@@ -444,15 +488,20 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+                 val entry = tape?.orders?.firstOrNull { it.orderId == id }
+                 if (includeQr) {
+                     val asset = if (entry != null) entry.qrAsset ?: error("Не получен QR заказа WB ${order.wbOrderId}")
+-                    else qrAssets[id] ?: required { api.fbs().printAssets(workspace.supply.id, PrintBatchBody("order_sticker", listOf(id))) }.let { batch ->
++                    else qrAssets[id] ?: required { api.fbs().printAssets(workspace.supply.id, PrintBatchBody("order_sticker", listOf(id), retryMissing = true)) }.let { batch ->
+                         require(batch.missing == 0 && batch.failed == 0 && batch.assets.size == 1) { "WB не вернул QR заказа ${order.wbOrderId}" }
+                         batch.assets.single().also { qrAssets[id] = it }
+                     }
+-                    pages += labelPage("WB ${order.wbOrderId}", image = assetImage(asset))
++                    pages += assetImages(asset).map { labelPage(order.displayNumber(), image = it) }
+                 }
+                 if (barcodeCopies > 0) {
+-                    val barcode = order.product.barcode ?: error("У ${order.product.name} не указан товарный штрихкод")
+-                    repeat(barcodeCopies) { pages += labelPage(order.product.name + " · " + (order.product.sellerArticle ?: order.product.sku.orEmpty()), barcode) }
++                    if (order.marketplace == "ozon") for (position in order.positions) {
++                        val barcode = position.barcode ?: error("У ${position.name} не указан товарный штрихкод")
++                        repeat(barcodeCopies * position.quantity) { pages += labelPage(position.name + " · " + (position.sellerArticle ?: position.sku.orEmpty()), barcode) }
++                    } else {
++                        val barcode = order.product.barcode ?: error("У ${order.product.name} не указан товарный штрихкод")
++                        repeat(barcodeCopies) { pages += labelPage(order.product.name + " · " + (order.product.sellerArticle ?: order.product.sku.orEmpty()), barcode) }
++                    }
+                 }
+                 for (code in entry?.codes.orEmpty()) repeat(kizCopies) { pages += labelPage(order.product.name, code, dataMatrix = true) }
+             }
+@@ -462,16 +511,16 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+     }
+     fun printBoxes(encoder: String, boxIds: List<String>) = launch {
+         val workspace = state.value.workspace ?: return@launch
+-        val pages = workspace.boxes.filter { it.id in boxIds }.map { box ->
+-            val asset = box.qrAsset ?: error("WB ещё не вернул QR для короба №${box.boxNumber}")
+-            labelPage("Короб №${box.boxNumber}", image = assetImage(asset))
++        val pages = workspace.boxes.filter { it.id in boxIds }.flatMap { box ->
++            val asset = box.qrAsset ?: error("Маркетплейс ещё не вернул этикетку для короба №${box.boxNumber}")
++            assetImages(asset).map { labelPage("Короб №${box.boxNumber}", image = it) }
+         }
+         require(pages.isNotEmpty()) { "Нет коробов для печати" }
+         mutable.value = state.value.copy(printDocument = labelsDocument(encoder, pages))
+     }
+     fun clearPrint() { mutable.value = state.value.copy(printDocument = null) }
+ 
+-    class Factory(private val api: ApiProvider) : ViewModelProvider.Factory {
+-        @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>): T = FbsViewModel(api) as T
++    class Factory(private val api: ApiProvider, private val decodePdf: (ByteArray) -> List<String> = { error("PDF renderer unavailable") }) : ViewModelProvider.Factory {
++        @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>): T = FbsViewModel(api, decodePdf) as T
+     }
+ }
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsApiContractTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsApiContractTest.kt
+index a394c47..a1d4051 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsApiContractTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsApiContractTest.kt
+@@ -13,6 +13,26 @@ import ru.wms.tsd.core.api.generated.infrastructure.ApiClient
+ import ru.wms.tsd.core.api.readableError
+ 
+ class FbsApiContractTest {
++    @Test fun `Ozon requests carry marketplace sort position and label reuse on the wire`() = runTest {
++        val server = MockWebServer(); server.start()
++        try {
++            val api = ApiClient(baseUrl = server.url("/api/").toString()).createService(FbsApi::class.java)
++            server.enqueue(MockResponse().setBody("""{"items":[],"server_now":"now"}"""))
++            api.orders(marketplace = "ozon")
++            val orders = server.takeRequest()
++            assertEquals("ozon", orders.requestUrl!!.queryParameter("marketplace"))
++            assertEquals("oldest", orders.requestUrl!!.queryParameter("sort"))
++            server.enqueue(MockResponse().setResponseCode(409).setBody("{}"))
++            api.assignOrders("s", "b", AssignOrdersBody(orderProductIds = listOf("position")))
++            val assigned = Json.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
++            assertEquals("position", assigned["order_product_ids"]!!.jsonArray.single().jsonPrimitive.content)
++            assertTrue(assigned["order_ids"]?.jsonArray?.isEmpty() != false)
++            server.enqueue(MockResponse().setBody("""{"assets":[]}"""))
++            api.printAssets("s", PrintBatchBody("order_sticker", listOf("o"), retryMissing = true))
++            val printed = Json.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
++            assertTrue(printed["retry_missing"]!!.jsonPrimitive.boolean)
++        } finally { server.shutdown() }
++    }
+     @Test fun `delivery transport retains cancellation details and replays exact request body`() = runTest {
+         val server = MockWebServer(); server.start()
+         try {
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+index f07014b..53417ec 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+@@ -5,6 +5,7 @@ import io.mockk.*
+ import java.io.IOException
+ import java.time.Instant
+ import java.util.TimeZone
++import kotlinx.coroutines.flow.first
+ import kotlinx.coroutines.Dispatchers
+ import kotlinx.coroutines.ExperimentalCoroutinesApi
+ import kotlinx.coroutines.test.*
+@@ -42,6 +43,105 @@ class FbsViewModelTest {
+     }
+     @After fun teardown() { Dispatchers.resetMain() }
+ 
++    @Test fun `Ozon selection resets WB cursor selection and uses Ozon for both requests`() = runTest {
++        val wb = order("1", "2026-09-08T09:00:00Z").copy(status = "new")
++        coEvery { service.orders(marketplace = "wb", group = null, cursor = null) } returns Response.success(FbsOrderPage(listOf(wb), "wb-cursor", "now"))
++        coEvery { service.worklist(marketplace = "wb", statusGroup = "active") } returns Response.success(FbsWorklistResponse(serverNow = "now"))
++        coEvery { service.orders(marketplace = "ozon", group = null, cursor = null) } returns Response.success(FbsOrderPage(serverNow = "now"))
++        coEvery { service.worklist(marketplace = "ozon", statusGroup = "active") } returns Response.success(FbsWorklistResponse(serverNow = "now"))
++        val vm = FbsViewModel(provider)
++        vm.loadOrders(); advanceUntilIdle(); vm.toggle(wb)
++        assertEquals(setOf("1"), vm.state.value.selected)
++        vm.setMarketplace("ozon"); advanceUntilIdle()
++        assertEquals("ozon", vm.state.value.marketplace)
++        assertTrue(vm.state.value.selected.isEmpty())
++        assertTrue(vm.state.value.orders.isEmpty())
++        assertNull(vm.state.value.cursor)
++        coVerify(exactly = 1) { service.orders(marketplace = "ozon", group = null, cursor = null) }
++        coVerify(exactly = 1) { service.worklist(marketplace = "ozon", statusGroup = "active") }
++    }
++    @Test fun `Ozon secondary position scan sends its product and oldest posting`() = runTest {
++        val position = FbsPosition(productId = "second-product", name = "Second", sku = "222", quantity = 3, pickedQuantity = 1, id = "position", barcode = "222-bar")
++        val ozon = order("1", "2026-09-08T09:00:00Z").copy(marketplace = "ozon", externalOrderId = "123-456-1", positions = listOf(position))
++        val ws = workspace(listOf(ozon)).let { it.copy(supply = it.supply.copy(marketplace = "ozon")) }
++        coEvery { service.workspace("supply") } returns Response.success(ws)
++        coEvery { service.pickOptions("supply") } returns Response.success(listOf(FbsPickOptionProduct("second-product", listOf(FbsPickOptionLocation("cell", "CELL", 3)))))
++        coEvery { service.scan(any(), any(), any()) } returns Response.success(FbsScanResult("product"))
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); advanceUntilIdle()
++        vm.scan("pick", "222-bar"); advanceUntilIdle()
++        coVerify { service.scan("supply", match { it.orderId == "1" && it.productId == "second-product" && it.locationId == "cell" }, any()) }
++        assertEquals("Ozon 123-456-1", ozon.displayNumber())
++    }
++    @Test fun `Ozon box assignment uses whole position IDs not WB order IDs`() = runTest {
++        val position = FbsPosition(productId = "product", name = "Position", quantity = 3, pickedQuantity = 0, id = "position")
++        val ozon = order("1", "2026-09-08T09:00:00Z").copy(marketplace = "ozon", positions = listOf(position))
++        val box = FbsBox("box", 1, "BOX")
++        val ws = workspace(listOf(ozon)).let { it.copy(supply = it.supply.copy(marketplace = "ozon"), boxes = listOf(box)) }
++        coEvery { service.workspace("supply") } returns Response.success(ws)
++        coEvery { service.assignOrders(any(), any(), any()) } returns Response.success(ws)
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); advanceUntilIdle()
++        vm.toggleBoxPosition(box, ozon, position); advanceUntilIdle()
++        coVerify(exactly = 1) { service.assignOrders("supply", "box", AssignOrdersBody(orderProductIds = listOf("position"))) }
++    }
++    @Test fun `Ozon delivery retains same request after ambiguous transport failure`() = runTest {
++        val ws = workspace(emptyList()).let { it.copy(supply = it.supply.copy(marketplace = "ozon")) }
++        coEvery { service.workspace("supply") } returns Response.success(ws)
++        coEvery { service.deliveryPreflight("supply") } returns Response.success(FbsDeliveryPreflight(true, "ozon-version", "now"))
++        coEvery { service.deliver("supply", any()) } throws IOException("lost")
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); advanceUntilIdle()
++        vm.openDeliveryConfirmation(); advanceUntilIdle(); vm.confirmDelivery(); advanceUntilIdle()
++        val pending = vm.state.value.pendingDelivery
++        assertNotNull(pending)
++        vm.retry(); advanceUntilIdle()
++        coVerify(exactly = 2) { service.deliver("supply", pending!!) }
++        verify(exactly = 2) { provider.saveFbsDelivery("supply", pending) }
++    }
++    @Test fun `Ozon PDF keeps every returned page in print preview`() = runTest {
++        val ozon = order("1", "2026-09-08T09:00:00Z").copy(marketplace = "ozon", externalOrderId = "363-TEST-1")
++        val ws = workspace(listOf(ozon))
++        val asset = FbsPrintAsset("a", "order_sticker", "ready", "application/pdf", "/operations/fbs-print-assets/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/content")
++        coEvery { service.workspace("supply") } returns Response.success(ws)
++        coEvery { service.printAssets("supply", any()) } returns Response.success(FbsPrintBatch(listOf(asset)))
++        coEvery { service.asset(any()) } returns Response.success("%PDF-fixture".toResponseBody("application/pdf".toMediaType()))
++        val vm = FbsViewModel(provider) { listOf("data:image/png;base64,page1", "data:image/png;base64,page2") }
++        vm.loadSupply("supply"); advanceUntilIdle()
++        vm.printOrders("", listOf("1"), 0, 0, true)
++        // PDF conversion runs on IO; wait for the state rather than assuming dispatcher completion.
++        vm.state.first { !it.busy }
++        assertTrue(vm.state.value.printDocument!!.contains("page1"))
++        assertTrue(vm.state.value.printDocument!!.contains("page2"))
++        assertTrue(vm.state.value.printDocument!!.contains("Ozon 363-TEST-1"))
++    }
++    @Test fun `Ozon replacement requests explicit confirmation and displays marketplace result`() = runTest {
++        coEvery { service.workspace("supply") } returns Response.success(workspace(emptyList()))
++        coEvery { service.lookupKiz("supply", "POSTING") } returns Response.success(KizLookup("1", 1, true, false, marketplace = "ozon", externalOrderId = "363-POST"))
++        coEvery { service.validateKiz(any()) } returns Response.success(KizValidation(true))
++        coEvery { service.commitKiz(any()) } coAnswers {
++            val confirmed = firstArg<KizCommitBody>().pairs.single().confirmed
++            Response.success(listOf(if (confirmed) KizCommitResult("1", "ok", metaStatus = "accepted") else KizCommitResult("1", "error", code = "needs_confirmation")))
++        }
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); advanceUntilIdle()
++        vm.scan("pack", "POSTING"); advanceUntilIdle()
++        vm.scan("pack", "]d2replacement"); advanceUntilIdle()
++        assertTrue(vm.state.value.kizOrder!!.needsConfirmation)
++        assertNull(vm.state.value.error)
++        vm.confirmKiz(); advanceUntilIdle()
++        assertEquals("КИЗ сохранён. Ozon принял код.", vm.state.value.kizResult)
++    }
++    @Test fun `Ozon product labels cover every unit of every position`() = runTest {
++        val positions = listOf(
++            FbsPosition(name = "First", quantity = 2, pickedQuantity = 0, barcode = "111"),
++            FbsPosition(name = "Second", quantity = 3, pickedQuantity = 0, barcode = "222"),
++        )
++        val ozon = order("1", "2026-09-08T09:00:00Z").copy(marketplace = "ozon", positions = positions)
++        coEvery { service.workspace("supply") } returns Response.success(workspace(listOf(ozon)))
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); advanceUntilIdle()
++        vm.printOrders("", listOf("1"), 1, 0, false); advanceUntilIdle()
++        val html = vm.state.value.printDocument!!
++        assertEquals(5, Regex("<section>").findAll(html).count())
++        assertTrue(html.contains("First")); assertTrue(html.contains("Second"))
++        coVerify(exactly = 0) { service.printAssets(any(), any()) }
++    }
+     @Test fun `oldest matching SKU uses instants and skips picked orders`() {
+         val oldest = order("1", "2026-09-08T12:00:00+03:00")
+         val newer = order("2", "2026-09-08T10:00:00Z").copy(deadlineAt = "2026-09-08T10:01:00Z")
+@@ -60,7 +160,7 @@ class FbsViewModelTest {
+         val originalZone = TimeZone.getDefault()
+         try {
+             TimeZone.setDefault(TimeZone.getTimeZone("GMT+03:00"))
+-            listOf("2026-09-09T10:43:24+00:00", "2026-09-09T10:43:24Z", "2026-09-09T13:43:24+03:00", "2026-09-09T10:43:24.123456+00:00").forEach {
++            listOf("2026-09-09T10:43:24+00:00", "2026-09-09T10:43:24Z", "2026-09-09T13:43:24+03:00", "2026-09-09T10:43:24.123456+00:00", "2026-09-09T10:43:24.123456").forEach {
+                 assertEquals(it, "09.09.2026 13:43", displayTime(it))
+             }
+             assertEquals("invalid", displayTime("invalid"))
+@@ -88,6 +188,7 @@ class FbsViewModelTest {
+         assertFalse(isDeadlineNear("2026-09-09T19:00:00+03:00", now))
+         assertFalse(isDeadlineNear("2026-09-09T20:00:00+03:00", now))
+         assertFalse(isDeadlineNear("invalid", now))
++        assertTrue(isDeadlineNear("2026-09-09T15:59:59", now))
+     }
+     @Test fun `scan retry keeps same order source and request identity after lost response`() = runTest {
+         val initial = workspace(listOf(order("1", "2026-09-08T09:00:00Z"), order("2", "2026-09-08T10:00:00Z")))
+@@ -236,7 +337,7 @@ class FbsViewModelTest {
+         val initial = workspace(listOf(order("1", "2026-09-08T09:00:00Z")))
+         val asset = FbsPrintAsset("00000000-0000-0000-0000-000000000001", "order_sticker", "ready", previewUrl = "/api/operations/fbs-print-assets/00000000-0000-0000-0000-000000000001/content")
+         coEvery { service.workspace("supply") } returns Response.success(initial)
+-        coEvery { service.printAssets("supply", PrintBatchBody("order_sticker", listOf("1"))) } returns Response.success(FbsPrintBatch(listOf(asset)))
++        coEvery { service.printAssets("supply", PrintBatchBody("order_sticker", listOf("1"), retryMissing = true)) } returns Response.success(FbsPrintBatch(listOf(asset)))
+         val image = java.util.Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jL1sAAAAASUVORK5CYII=")
+         coEvery { service.asset(any()) } returns Response.success(image.toResponseBody("image/png".toMediaType()))
+         mockkStatic(Base64::class)
+@@ -246,7 +347,7 @@ class FbsViewModelTest {
+             assertNull(vm.state.value.error)
+             assertNotNull(vm.state.value.printDocument)
+             coVerify(exactly = 0) { service.printTape(any(), any()) }
+-            coVerify(exactly = 1) { service.printAssets("supply", PrintBatchBody("order_sticker", listOf("1"))) }
++            coVerify(exactly = 1) { service.printAssets("supply", PrintBatchBody("order_sticker", listOf("1"), retryMissing = true)) }
+         } finally { unmockkStatic(Base64::class) }
+     }
+     @Test fun `box technical QR resolves its exact order without marking gates`() = runTest {
