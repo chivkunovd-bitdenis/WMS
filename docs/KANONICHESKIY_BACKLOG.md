@@ -8695,6 +8695,9 @@ ed72c888 (проверено `git merge-base --is-ancestor`), то есть ко
 
 <a id="wms-363"></a>
 
+**Серверный выпуск 10.09.2026:** отдельный PR213 → etalon0771833b7389260042f03a47abc7821e3a47fcb4, CI34452470232 PASS; production API/worker/beat выпущены, пять файлов контейнера совпали с GitSHA, публичный health/OpenAPI200. APK e2685e пока НЕ принят: stale-box recovery P2; manifest9 не менялся. [Точный протокол и границы](reviews/wms363-mobile-backend-production-20260910.md).
+
+
 **Статус:** `APK v10 СОБРАН · ИСПРАВЛЯЮТСЯ 2 ЗАМЕЧАНИЯ РЕВЬЮ · ПУБЛИКАЦИЯ НЕ ПРИНЯТА` · актуализация10.09.2026.
 
 **Что подтверждено:** В локальном mobile-репозитории текущий навигационный граф содержит только inbound, sorting и обычный marketplace outbound. Home считает outbound через marketplace-unload API. Полный поиск Android main и mobile/openapi.json не нашёл строк Ozon и FBS-маршрута; вебовая сборка/этикетки Ozon на ТСД не доступны.

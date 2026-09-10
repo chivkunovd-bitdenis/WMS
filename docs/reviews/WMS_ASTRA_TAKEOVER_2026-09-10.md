@@ -207,3 +207,10 @@ Stocksource6d0ea954→705d2af6, pushed; review7088 принял namespaceиsaved
 Аудитор3254951 завершён: полныйпротоколwms325-mutation-inventory-20260910.md сохраняетконкретныеwriters/пробелы,неполноезакрытие. НовыйwriterPID8120 вабсолютномwms056-audit-trail: толькоexistingDocumentEvent/model/API +outbound/discrepancy/FBSboxes/print/packconfirm, scopedtests/report. Catalog/stock/chat/mobile/App/111112/418неего. Пользовательскийactor/systemrecalcразделять;неполныереквизиты/тарифы/прочиесрезы325следующейволной.
 
 WMS111/112STOPнеизменён; архив/dirty/коммиты сохранены,исполнитель94229не запускался. WMS418 только внешнийroot. Не дублировать mobile6760/audit8120; review7088/7339 завершены. Срочныйmobileнеждёт широкий325/chat/stock/122.
+
+
+### Мобильный API выпущен отдельно — 11:12 МСК
+
+PR213mergedetalon0771833b7389260042f03a47abc7821e3a47fcb4. CI3210head полностьюPASS; backendmergeidentical. Productioncheckout/3backendservices выпущены безDDL/web, verified5sourcehashes ипубличныеhealth/site/seller/OpenAPI200. Fullsafeprotocolwms363-mobile-backend-production-20260910.md. Не переносить сюда широкийcoordcandidate. APKe2685eотклонёнstale-listrecoveryreview;manifest9 остаётся. Mobileprep9134 остановленSIGINTпослефактическойversion9baseline, SAFEUIresultнеуспел; новыйPID10228фиксируетunknownboxdependentqueue иоставляетэмульv9длясетевогообновления. Mobileданныйthread прежний.
+
+Audit325writer8120завершёнa40c124d1f3343234d620b80be291027809d383c,pushedclean,21PGpassed; reportпрочитанкоординатором,неинтегрированещё. Read-onlyreviewPID11213/thread01a08a2d-43fc-7060-82f1-f308ad0e6b31 проверяетэтотсрезиOzon1bd/b2ee perSKU. ChatPID10727 прежнийthread01a08850-7ad7-74d1-a817-cd06b28e2bb5, wms397-chat-mvp: recoveryownunlinkedfilesиexistingworkingdeeplinks; эксклюзивноchatfiles+FfFbsOrdersScreen(толькоdeeplinkdelta),App/SellerAppкоординаторские. Noauto-delete/newpages. WMS111112STOP/418root-onlyнеизменны.

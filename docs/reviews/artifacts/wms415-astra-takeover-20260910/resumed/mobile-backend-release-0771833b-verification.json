@@ -1,0 +1,80 @@
+{
+  "deploy_sha": "0771833b7389260042f03a47abc7821e3a47fcb4",
+  "api_file_sha256": {
+    "app/api/fbs_kiz.py": "543cacbf1ce41d531dccb824c08e699bf7206ad072df52709115dd81f87bf49e",
+    "app/api/fbs_orders.py": "7c36fde05876feb5e03fa0cedd19782ce15b0a6459070427d530fce3240d8e23",
+    "app/api/fbs_supplies.py": "706b0ab6df2e416798b9c727f664fbebf78299f3cd141c3af572f3c70e85da60",
+    "app/services/fbs_worklist_service.py": "05fc38888fb42b2b93f1ce92d7196214785e2ded97bd4235fd5356fa1489647a",
+    "app/services/wb_marketplace_orders_service.py": "1d1901d5325c2de76c064764c6b0b8a224543be29c6d351f8c511ee14e28fdaf"
+  },
+  "files_match": true,
+  "/api/health": {
+    "status": "200",
+    "curl_exit": 0,
+    "bytes": 15
+  },
+  "/": {
+    "status": "200",
+    "curl_exit": 0,
+    "bytes": 8394
+  },
+  "/seller/": {
+    "status": "200",
+    "curl_exit": 0,
+    "bytes": 5018
+  },
+  "/api/openapi.json": {
+    "status": "200",
+    "curl_exit": 0,
+    "bytes": 568537
+  },
+  "legacy_parameters": [
+    {
+      "name": "marketplace",
+      "required": false,
+      "schema": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^(wb|ozon)$"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Marketplace"
+      }
+    }
+  ],
+  "worklist_parameters": [
+    {
+      "name": "marketplace",
+      "required": false,
+      "schema": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^(wb|ozon)$"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Marketplace"
+      }
+    },
+    {
+      "name": "sort",
+      "required": false,
+      "schema": {
+        "enum": [
+          "deadline",
+          "oldest"
+        ],
+        "type": "string",
+        "default": "deadline",
+        "title": "Sort"
+      }
+    }
+  ]
+}
