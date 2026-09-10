@@ -742,7 +742,7 @@ async def replace_lines(
             raise MarketplaceUnloadError("product_seller_mismatch")
         products[product_id] = prod
 
-    for product_id, qty in normalized.items():
+    for product_id, qty in sorted(normalized.items(), key=lambda item: str(item[0])):
         prod = products[product_id]
         await _assert_available_for_unload_quantity(
             session,
@@ -758,7 +758,7 @@ async def replace_lines(
         await session.delete(ln)
     await session.flush()
 
-    for product_id, qty in normalized.items():
+    for product_id, qty in sorted(normalized.items(), key=lambda item: str(item[0])):
         session.add(
             MarketplaceUnloadLine(
                 request_id=req.id,
@@ -794,7 +794,7 @@ async def plan_request(
         mpw = await get_cached_mp_warehouse(session, tenant_id, int(req.wb_mp_warehouse_id))
         if mpw is None:
             raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
-    for ln in req.lines:
+    for ln in sorted(req.lines, key=lambda line: str(line.product_id)):
         await _assert_available_for_unload_quantity(
             session,
             tenant_id,
@@ -856,7 +856,7 @@ async def confirm_request(
     if effective_date is None:
         raise MarketplaceUnloadError("planned_shipment_date_required")
     if req.status == STATUS_DRAFT:
-        for ln in req.lines:
+        for ln in sorted(req.lines, key=lambda line: str(line.product_id)):
             await _assert_available_for_unload_quantity(
                 session,
                 tenant_id,

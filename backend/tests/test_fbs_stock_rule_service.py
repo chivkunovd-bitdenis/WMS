@@ -1006,7 +1006,7 @@ async def _ozon_binding(
 async def test_share_rule_keeps_allocation_the_rule_does_not_reach(
     db_session: AsyncSession,
 ) -> None:
-    """WMS-342: перевод на долю обнуляет только то, чем правило распоряжается.
+    """WMS-342: перевод на долю сохраняет все операторские потолки.
 
     Раньше обнуление искало строки по одному товару и тенанту и выгребало ВСЁ,
     включая привязки площадки, которой это правило не касается. Оператор
@@ -1042,10 +1042,9 @@ async def test_share_rule_keeps_allocation_the_rule_does_not_reach(
             )
         ).all()
     }
-    # Склады Wildberries правило перечисляет — их выделение вернулось в общий
-    # остаток, как и было задумано при переходе на долю.
-    assert pools[seed.bindings[0].id] == 0
-    assert pools[seed.bindings[1].id] == 0
+    # Переключение режима не является командой стереть сохранённые числа.
+    assert pools[seed.bindings[0].id] == 100
+    assert pools[seed.bindings[1].id] == 60
     # А озоновское выделение правило не трогало и трогать не имело права.
     assert pools[ozon.id] == 40
 
