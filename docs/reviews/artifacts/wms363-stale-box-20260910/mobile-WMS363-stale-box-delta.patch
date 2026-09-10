@@ -1,0 +1,158 @@
+diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+index 3da7465..aa0e3b4 100644
+--- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
++++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
+@@ -93,14 +93,19 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+     private class PickSourceCancelled : Exception()
+     private val mutable = MutableStateFlow(FbsState())
+     val state: StateFlow<FbsState> = mutable
+-    private data class QueuedScan(val mode: String, val text: String, val supplyId: String, val boxId: String?)
++    // Reference identity keeps repeated physical scans distinct while pending.
++    private class QueuedScan(val mode: String, val text: String, val supplyId: String, val boxId: String?)
+     private val scans = Channel<QueuedScan>(Channel.UNLIMITED)
++    // Includes the item already received by the consumer but still waiting on an error.
++    private val pendingScans = mutableSetOf<QueuedScan>()
+     private var openedSupplyId: String? = null
+     private var retryAction: (suspend () -> Unit)? = null
+     private var pickChoiceReply: CompletableDeferred<FbsScanResult?>? = null
+-    init { viewModelScope.launch { for ((mode, text, supplyId, boxId) in scans) {
++    init { viewModelScope.launch { for (scan in scans) {
+         val key = UUID.randomUUID().toString()
+         state.first { !it.busy && it.error == null }
++        if (!pendingScans.remove(scan)) continue // Explicitly cancelled by stale-box recovery.
++        val mode = scan.mode; val text = scan.text; val supplyId = scan.supplyId; val boxId = scan.boxId
+         if (supplyId != openedSupplyId || supplyId != state.value.workspace?.supply?.id) continue
+         val action: suspend () -> Unit = when (mode) {
+             "pick" -> pickAction(text, key)
+@@ -267,7 +272,9 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+         if (mode == "boxes") workspace.boxes.firstOrNull { text == it.barcode || text == it.wbTrbxId }?.let {
+             selectBox(it.id)
+         }
+-        scans.trySend(QueuedScan(mode, text, supplyId, state.value.selectedBoxId))
++        val scan = QueuedScan(mode, text, supplyId, state.value.selectedBoxId)
++        pendingScans.add(scan)
++        if (scans.trySend(scan).isFailure) pendingScans.remove(scan)
+     }
+     fun clearSource() { mutable.value = state.value.copy(source = null) }
+     fun choosePickSource(choice: FbsPickChoice) {
+@@ -389,14 +396,25 @@ class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArr
+         // Resolve once: after a lost response, the same scan must never consume the
+         // next matching unit or position. Reread only to reconcile this exact target.
+         var target: Pair<String, AssignOrdersBody>? = null
++        var rejectedStaleBox = false
+         return action@{
++            // Retry acknowledges this rejection; it must not replay old targets or
++            // cancel fresh scans queued after the operator saw the recovery message.
++            if (rejectedStaleBox) return@action
+             if (openedSupplyId != supplyId) return@action
+             refresh(supplyId)
++            if (openedSupplyId != supplyId) return@action
+             val workspace = state.value.workspace ?: return@action
+             if (target == null) {
+                 workspace.boxes.firstOrNull { value == it.barcode || value == it.wbTrbxId }?.let {
+                     // Never overwrite a later manual selection after the network wait.
+-                    check(it.id == scannedBoxId) { "Список коробов обновлён. Отсканируйте короб ещё раз." }
++                    if (it.id != scannedBoxId) {
++                        rejectedStaleBox = true
++                        val cancelled = pendingScans.filter { pending -> pending.mode == "boxes" && pending.supplyId == supplyId }
++                        pendingScans.removeAll(cancelled.toSet())
++                        mutable.value = state.value.copy(selectedBoxId = null)
++                        error("Список коробов обновлён. Скан короба не применён. Отменено ожидающих сканов вкладки «Короба» этой поставки: ${cancelled.size}. Закройте сообщение или нажмите «Повторить», затем заново отсканируйте короб и товары.")
++                    }
+                     return@action
+                 }
+                 val boxId = scannedBoxId ?: error("Откройте или отсканируйте короб")
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+index 5d9243a..0b00202 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
+@@ -396,6 +396,89 @@ class FbsViewModelTest {
+         assertNotNull(vm.state.value.error)
+         coVerify(exactly = 0) { service.assignOrders(any(), any(), any()) }
+     }
++    private fun staleBoxRecovery(recovery: String, failFirstRefresh: Boolean) = runTest {
++        for (marketplace in listOf("wb", "ozon")) for (initialBox in listOf("A", null)) {
++            val a = FbsBox("A", 1, "BOX-A"); val b = FbsBox("B", 2, "BOX-B")
++            val item = order("1", "2026-09-08T09:00:00Z").copy(marketplace = marketplace,
++                positions = listOf(FbsPosition(id = "p1", productId = "product", name = "Item", quantity = 2, pickedQuantity = 0, barcode = "4600000000001")))
++            val initial = workspace(listOf(item)).let { it.copy(supply = it.supply.copy(marketplace = marketplace), boxes = listOf(a)) }
++            val fresh = initial.copy(boxes = listOf(a, b))
++            val assigned = fresh.copy(boxes = listOf(a, if (marketplace == "wb") b.copy(assignedOrderIds = listOf("1")) else b.copy(assignedOrderProductIds = listOf("p1"))))
++            val delayed = kotlinx.coroutines.CompletableDeferred<Response<FbsWorkspace>>()
++            var reads = 0
++            coEvery { service.workspace("supply") } coAnswers {
++                when (reads++) { 0 -> Response.success(initial); 1 -> delayed.await(); else -> Response.success(fresh) }
++            }
++            val recipients = mutableListOf<String>()
++            coEvery { service.assignOrders("supply", capture(recipients), any()) } returns Response.success(assigned)
++            val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.selectBox(initialBox)
++            vm.scan("boxes", "BOX-B"); vm.scan("boxes", "4600000000001")
++            assertTrue(vm.state.value.busy)
++            delayed.complete(if (failFirstRefresh) Response.error(503, "temporarily unavailable".toResponseBody()) else Response.success(fresh))
++            if (failFirstRefresh) {
++                assertNotNull(vm.state.value.error)
++                // The consumer has already dequeued the product and is waiting on error.
++                vm.retry()
++            }
++            val staleMessage = vm.state.value.error
++            assertNotNull(staleMessage)
++            if (recovery.startsWith("rescan")) {
++                vm.scan("boxes", "BOX-B")
++                vm.scan("boxes", "4600000000001")
++            }
++            if (recovery.endsWith("retry")) vm.retry() else vm.dismissError()
++            assertEquals("$marketplace/$initialBox/$recovery", if (recovery.startsWith("rescan")) listOf("B") else emptyList<String>(), recipients)
++            assertNull(vm.state.value.error)
++            assertTrue(staleMessage!!.contains("ожидающих сканов"))
++            assertTrue(staleMessage.contains("1"))
++            // Only fresh scans after the explicit recovery may assign the product.
++            if (!recovery.startsWith("rescan")) {
++                vm.scan("boxes", "BOX-B"); vm.scan("boxes", "4600000000001")
++            }
++            assertEquals(listOf("B"), recipients)
++            assertNull(vm.state.value.error)
++        }
++    }
++    @Test fun `stale box close invalidates dependent products`() = staleBoxRecovery("close", false)
++    @Test fun `stale box retry invalidates dependent products`() = staleBoxRecovery("retry", false)
++    @Test fun `stale box rescan then close invalidates dependent products`() = staleBoxRecovery("rescan-close", false)
++    @Test fun `stale box rescan then retry invalidates dependent products`() = staleBoxRecovery("rescan-retry", false)
++    @Test fun `stale box discovered on retry close invalidates dequeued product`() = staleBoxRecovery("close", true)
++    @Test fun `stale box discovered on retry retry invalidates dequeued product`() = staleBoxRecovery("retry", true)
++    @Test fun `stale box discovered on retry rescan close invalidates dequeued product`() = staleBoxRecovery("rescan-close", true)
++    @Test fun `stale box discovered on retry rescan retry invalidates dequeued product`() = staleBoxRecovery("rescan-retry", true)
++
++    @Test fun `stale box invalidation counts duplicates and preserves pick mode and next supply`() = runTest {
++        val a = FbsBox("A", 1, "BOX-A"); val b = FbsBox("B", 2, "BOX-B")
++        val initial = workspace(listOf(order("1", "2026-09-08T09:00:00Z"))).copy(boxes = listOf(a))
++        val fresh = initial.copy(boxes = listOf(a, b))
++        val delayed = kotlinx.coroutines.CompletableDeferred<Response<FbsWorkspace>>()
++        var reads = 0
++        coEvery { service.workspace("supply") } coAnswers {
++            when (reads++) { 0 -> Response.success(initial); 1 -> delayed.await(); else -> Response.success(fresh) }
++        }
++        coEvery { service.scan("supply", match { it.barcode == "CELL" }, any()) } returns Response.success(FbsScanResult("container", locationId = "cell"))
++        coEvery { service.assignOrders("supply", any(), any()) } returns Response.success(fresh)
++        val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.selectBox("A")
++        vm.scan("boxes", "BOX-B")
++        repeat(2) { vm.scan("boxes", "4600000000001") }
++        vm.scan("pick", "CELL")
++        delayed.complete(Response.success(fresh))
++        val message = vm.state.value.error!!
++        vm.dismissError()
++        coVerify(exactly = 0) { service.assignOrders("supply", any(), any()) }
++        coVerify(exactly = 1) { service.scan("supply", match { it.barcode == "CELL" }, any()) }
++        assertTrue(message.contains("ожидающих сканов")); assertTrue(message.contains("2"))
++        assertNull(vm.state.value.error)
++        assertNull(vm.state.value.selectedBoxId)
++        val other = initial.copy(supply = initial.supply.copy(id = "other"))
++        coEvery { service.workspace("other") } returns Response.success(other)
++        coEvery { service.assignOrders("other", "A", any()) } returns Response.success(other)
++        vm.loadSupply("other"); vm.selectBox("A"); vm.scan("boxes", "4600000000001")
++        coVerify(exactly = 1) { service.assignOrders("other", "A", AssignOrdersBody(listOf("1"))) }
++        assertNull(vm.state.value.error)
++    }
++
+     private fun precedingBoxScan(marketplace: String, initialBox: String?) = runTest {
+         val a = FbsBox("A", 1, "BOX-A"); val b = FbsBox("B", 2, "BOX-B")
+         val item = order("1", "2026-09-08T09:00:00Z").copy(marketplace = marketplace,
