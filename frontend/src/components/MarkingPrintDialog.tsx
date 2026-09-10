@@ -117,11 +117,57 @@ type FbsTapePrintResult = {
 
 type FbsTapeContext = {
   orders: FbsTapeOrderContext[]
+  /** The selected barcode belongs to this one Ozon position, never the whole posting. */
+  selectedBarcodeOrderId?: string
+  selectedBarcodePositionId?: string
   /** New codes missing per SKU; already bound codes are reused by FBS. */
   markingShortage?: number
   includeOrderQr: boolean
   print: (args: { layout: PrintLayout; allowPartial: boolean; reprint: boolean }) => Promise<FbsTapePrintResult>
   confirmQrApplied: (asset: FbsTapeAsset) => Promise<void>
+}
+
+function withSelectedFbsTapeBarcode(
+  order: FbsTapeOrderContext,
+  tape: FbsTapeContext,
+  selectedBarcode: ProductBarcodeOption | undefined,
+): FbsTapeOrderContext {
+  if (
+    order.marketplace !== 'ozon'
+    || selectedBarcode?.marketplace !== 'ozon'
+    || tape.selectedBarcodeOrderId !== order.orderId
+    || !tape.selectedBarcodePositionId
+  ) {
+    return order
+  }
+  return {
+    ...order,
+    productLabels: order.productLabels?.map((item) =>
+      item.positionId === tape.selectedBarcodePositionId
+        ? { ...item, productLabel: { ...item.productLabel, barcode: selectedBarcode.barcode } }
+        : item,
+    ),
+  }
+}
+
+function remainingProductLabelsAfterPrintedCodes(
+  order: FbsTapeOrderContext,
+  printedCodes: FbsTapePrintOrder['printed_codes'],
+) {
+  if (order.marketplace !== 'ozon' || !order.productLabels) return []
+  const printedByPosition = new Map<string, number>()
+  for (const code of printedCodes) {
+    if (!code.order_product_id) continue
+    printedByPosition.set(
+      code.order_product_id,
+      (printedByPosition.get(code.order_product_id) ?? 0) + 1,
+    )
+  }
+  return order.productLabels.flatMap((item) => {
+    const printed = item.positionId ? printedByPosition.get(item.positionId) ?? 0 : 0
+    const copies = Math.max(0, Math.max(1, item.copies) - printed)
+    return copies > 0 ? [{ ...item, copies }] : []
+  })
 }
 
 function productLabelForPrintedFbsCode(
@@ -693,7 +739,12 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
    * в printFbsTape). Сама печать этим не затронута.
    */
   const fbsPreviewOrders = includesOrderQr || isOzonFbsTape
-    ? fbsTapeOrders.map((order) => qrOnlyTape ? { ...order, requiresHonestSign: false } : order)
+    ? fbsTapeOrders.map((order) => {
+      const withSelectedBarcode = ctx?.fbsTape
+        ? withSelectedFbsTapeBarcode(order, ctx.fbsTape, selectedBarcode)
+        : order
+      return qrOnlyTape ? { ...withSelectedBarcode, requiresHonestSign: false } : withSelectedBarcode
+    })
     : undefined
   const fbsPreviewLabelCopies =
     qrOnlyTape ? 0 : fbsHonestSignOrders.length > 0
@@ -897,6 +948,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             if (!order) {
               throw new Error('Заказ отсутствует в исходном списке печати.')
             }
+            const printOrder = withSelectedFbsTapeBarcode(order, ctx.fbsTape, selectedBarcode)
             const orderSections: string[] = []
             let qrAssetToConfirm: FbsTapeAsset | null = null
             if (ctx.fbsTape?.includeOrderQr) {
@@ -920,7 +972,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   cis: code.cis_code,
                   codeId: code.id,
                   hasLabelArtifact: code.has_label_artifact,
-                  productLabel: productLabelForPrintedFbsCode(order, code),
+                  productLabel: productLabelForPrintedFbsCode(printOrder, code),
                 }))
                 if (order.marketplace === 'ozon') {
                   for (const unit of units) {
@@ -936,7 +988,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   ...(await buildMarkingTapeSections(
                     units,
                     printLayout,
-                    order.marketplace === 'ozon' ? null : order.productLabel,
+                    printOrder.marketplace === 'ozon' ? null : printOrder.productLabel,
                     {
                       authToken: ctx.token,
                       labelSize: size,
@@ -945,8 +997,12 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   )),
                 )
               }
-            } else if (fallbackLabelCopies > 0) {
-              for (const item of order.productLabels ?? [{ productLabel: order.productLabel, copies: 1 }]) {
+            }
+            const fallbackLabels = printedOrder.requires_honest_sign
+              ? remainingProductLabelsAfterPrintedCodes(printOrder, printedOrder.printed_codes)
+              : printOrder.productLabels ?? [{ productLabel: printOrder.productLabel, copies: 1 }]
+            if (fallbackLabelCopies > 0) {
+              for (const item of fallbackLabels) {
                 orderSections.push(
                   ...buildProductLabelSections(
                     item.productLabel,
