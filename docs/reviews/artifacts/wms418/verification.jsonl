@@ -1,0 +1,4 @@
+{"warehouse": 2046998, "checked": 28, "missing": [], "nonzero": {}}
+{"warehouse": 2088990, "checked": 28, "missing": [], "nonzero": {}}
+{"warehouse": 2157282, "checked": 28, "missing": [], "nonzero": {}}
+{"checked_at": "2026-09-10T06:53:16.086641+00:00", "summary": {"total": 158, "wb_on": 0, "ozon_on": 0}, "checked_items": 84, "pass": true}
