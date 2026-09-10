@@ -4,7 +4,7 @@ import { ChatDocumentScreen } from './screens/chat/ChatDocumentScreen'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { apiUrl } from './api'
-import { Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate, useSearchParams, useBlocker, useBeforeUnload } from 'react-router-dom'
 import { ProfileLoadingScreen } from './screens/ProfileLoadingScreen'
 import { PublicAuthScreen } from './screens/PublicAuthScreen'
 import { SubscriptionBlockedScreen } from './screens/SubscriptionBlockedScreen'
@@ -341,7 +341,42 @@ export default function App() {
   useEffect(() => {
     if (pathname.startsWith('/app/ff/chat')) setFfDocModal(null)
   }, [pathname])
-  const [ffDocDirty, setFfDocDirty] = useState(false)
+  const [ffDocDirty, setFfDocDirtyState] = useState(false)
+  const ffDocDirtyRef = useRef(false)
+  const fbsDirtyRef = useRef(false)
+  const setFfDocDirty = useCallback((dirty: boolean) => {
+    ffDocDirtyRef.current = dirty
+    setFfDocDirtyState(dirty)
+  }, [])
+  const setFbsDirty = useCallback((dirty: boolean) => {
+    fbsDirtyRef.current = dirty
+  }, [])
+  const navigationBlocker = useBlocker(useCallback(({ currentLocation, nextLocation }) =>
+    (ffDocDirtyRef.current || fbsDirtyRef.current) &&
+    (currentLocation.pathname !== nextLocation.pathname ||
+      currentLocation.search !== nextLocation.search), []))
+  const handledNavigation = useRef<string | null>(null)
+  useEffect(() => {
+    if (navigationBlocker.state !== 'blocked') {
+      handledNavigation.current = null
+      return
+    }
+    if (handledNavigation.current === navigationBlocker.location.key) return
+    handledNavigation.current = navigationBlocker.location.key
+    if (confirmDiscardChanges(true)) {
+      setFfDocDirty(false)
+      setFbsDirty(false)
+      navigationBlocker.proceed()
+    } else {
+      navigationBlocker.reset()
+    }
+  }, [navigationBlocker, setFfDocDirty, setFbsDirty])
+  useBeforeUnload(useCallback((event) => {
+    if (ffDocDirtyRef.current || fbsDirtyRef.current) {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+  }, []))
   const [ffInboundWorkspace, setFfInboundWorkspace] =
     useState<InboundRequestWorkspace>('full')
   const [marketplaceUnloadSummaries, setMarketplaceUnloadSummaries] = useState<
@@ -3096,6 +3131,7 @@ export default function App() {
                   token={token}
                   authHeaders={authHeaders}
                   sellers={sellers}
+                  onDirtyChange={setFbsDirty}
                   isAdmin={isFulfillmentAdmin} addressStorageEnabled={me.address_storage_enabled !== false}
                 />
               ) : (

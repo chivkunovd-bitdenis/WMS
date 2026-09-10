@@ -87,6 +87,7 @@ type Props = {
   token: string
   authHeaders: (token: string) => Record<string, string>
   sellers: SellerRow[]
+  onDirtyChange?: (dirty: boolean) => void
   isAdmin?: boolean; addressStorageEnabled?: boolean
 }
 
@@ -511,7 +512,7 @@ function downloadOrdersExcel(rows: FbsWorklistOrder[]): void {
   URL.revokeObjectURL(url)
 }
 
-export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false, addressStorageEnabled = true }: Props) {
+export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, isAdmin = false, addressStorageEnabled = true }: Props) {
   // Блок среднего времени сборки над таблицей. Период и продавец свои: сводка
   // отвечает на вопрос «как мы работаем», а фильтры таблицы — «где вот этот
   // заказ», и связывать их значит ломать то и другое.
@@ -1022,7 +1023,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     setWorkspaceSeed(seed ?? null)
     setWorkspaceOpen(true)
     setError(null)
-  }, [])
+    const params = new URLSearchParams(location.search)
+    if (params.get('supply_id') !== supplyId) {
+      params.set('supply_id', supplyId)
+      navigate({ pathname: location.pathname, search: params.toString() })
+    }
+  }, [location.pathname, location.search, navigate])
 
   const openSupplyQrPrint = useCallback(async (supply: FbsSupplyWorklistItem) => {
     const supplyId = supply.id
@@ -1130,10 +1136,19 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
 
   useEffect(() => {
     const supplyId = new URLSearchParams(location.search).get('supply_id')
-    if (!supplyId || openedSupplyFromQuery.current === supplyId) return
+    if (!supplyId) {
+      openedSupplyFromQuery.current = null
+      setWorkspaceOpen(false)
+      setWorkspaceId(null)
+      setWorkspaceSeed(null)
+      return
+    }
+    if (openedSupplyFromQuery.current === supplyId) return
     openedSupplyFromQuery.current = supplyId
     setStatusGroup('active')
-    openWorkspace(supplyId)
+    setWorkspaceId(supplyId)
+    setWorkspaceSeed((current) => current?.supply.id === supplyId ? current : null)
+    setWorkspaceOpen(true)
   }, [location.search])
 
   return (
@@ -1967,11 +1982,16 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         token={token}
         authHeaders={authHeaders}
         supplyId={workspaceId}
+        onDirtyChange={onDirtyChange}
         initialWorkspace={workspaceSeed}
         open={workspaceOpen} addressStorageEnabled={addressStorageEnabled}
         onClose={() => {
           setWorkspaceOpen(false)
           setWorkspaceSeed(null)
+          onDirtyChange?.(false)
+          const params = new URLSearchParams(location.search)
+          params.delete('supply_id')
+          navigate({ pathname: location.pathname, search: params.toString() }, { replace: true })
           void load()
         }}
       />

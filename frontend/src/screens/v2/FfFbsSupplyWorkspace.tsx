@@ -115,6 +115,7 @@ type Props = {
   initialWorkspace?: FbsWorkspace | null
   open: boolean; addressStorageEnabled?: boolean
   onClose: () => void
+  onDirtyChange?: (dirty: boolean) => void
   currentUserId?: string | null
 }
 
@@ -308,6 +309,7 @@ export function FfFbsSupplyWorkspace({
   initialWorkspace,
   open, addressStorageEnabled = true,
   onClose,
+  onDirtyChange,
   currentUserId = null,
 }: Props) {
   const [workspace, setWorkspace] = useState<FbsWorkspace | null>(initialWorkspace ?? null)
@@ -368,12 +370,33 @@ export function FfFbsSupplyWorkspace({
   const [skipHonestSignOpen, setSkipHonestSignOpen] = useState(false)
   const [skipHonestSignBusy, setSkipHonestSignBusy] = useState(false)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
+  const boxAssignmentDirty = Object.values(boxProductQty).some((value) => Boolean(value.trim())) ||
+    boxSelectedPositionIds.size > 0
+  const unsavedInput = open && (
+    plannedShipmentDateDraft !== (workspace?.supply.planned_shipment_date ?? '') ||
+    boxCount !== '1' || boxAssignmentDirty || addableSelected.size > 0 ||
+    Boolean(kizScanValue.trim() || kizScanActive || kizConfirmTarget)
+  )
+  useEffect(() => {
+    onDirtyChange?.(unsavedInput)
+    return () => onDirtyChange?.(false)
+  }, [unsavedInput, onDirtyChange])
   const requestClose = () => {
-    const dirty = plannedShipmentDateDraft !== (workspace?.supply.planned_shipment_date ?? '') ||
-      boxCount !== '1' || Object.values(boxProductQty).some((value) => Boolean(value.trim())) ||
-      boxSelectedPositionIds.size > 0 || addableSelected.size > 0 ||
-      Boolean(kizScanValue.trim() || kizScanActive || kizConfirmTarget)
-    if (confirmDiscardChanges(dirty)) onClose()
+    if (confirmDiscardChanges(unsavedInput)) {
+      onDirtyChange?.(false)
+      onClose()
+    }
+  }
+  const closeBoxAssignment = () => {
+    if (!confirmDiscardChanges(boxAssignmentDirty)) return
+    setBoxProductQty({})
+    setBoxSelectedPositionIds(new Set())
+    setBoxAssignTarget(null)
+  }
+  const closeAddOrders = () => {
+    if (!confirmDiscardChanges(addableSelected.size > 0)) return
+    setAddableSelected(new Set())
+    setAddOrdersOpen(false)
   }
 
   const isOzonSupply = workspace?.supply.marketplace === 'ozon'
@@ -2471,7 +2494,7 @@ export function FfFbsSupplyWorkspace({
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
       />
-      <Dialog open={addOrdersOpen} onClose={addOrdersBusy ? undefined : () => setAddOrdersOpen(false)} maxWidth="md" fullWidth>
+      <Dialog open={addOrdersOpen} onClose={addOrdersBusy ? undefined : closeAddOrders} maxWidth="md" fullWidth>
         <DialogTitle>Добавить заказы в поставку</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={1.5}>
@@ -2521,7 +2544,7 @@ export function FfFbsSupplyWorkspace({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAddOrdersOpen(false)} disabled={addOrdersBusy}>
+          <Button onClick={closeAddOrders} disabled={addOrdersBusy}>
             Отмена
           </Button>
           <Button
@@ -2775,7 +2798,7 @@ export function FfFbsSupplyWorkspace({
           </Button>
         </DialogActions>
       </Dialog>
-      <Dialog open={Boolean(boxAssignTarget)} onClose={busy ? undefined : () => setBoxAssignTarget(null)} maxWidth={isOzonSupply ? 'xl' : 'md'} fullWidth slotProps={isOzonSupply ? { paper: { sx: { minHeight: '75vh', maxHeight: '95vh' } } } : undefined}>
+      <Dialog open={Boolean(boxAssignTarget)} onClose={busy ? undefined : closeBoxAssignment} maxWidth={isOzonSupply ? 'xl' : 'md'} fullWidth slotProps={isOzonSupply ? { paper: { sx: { minHeight: '75vh', maxHeight: '95vh' } } } : undefined}>
         <DialogTitle>Добавить товары в короб {boxAssignName}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={1.5} sx={{ pt: 1 }}>

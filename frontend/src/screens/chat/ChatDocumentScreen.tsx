@@ -36,7 +36,7 @@ function DocumentScreen({ token, authHeaders, currentUserId }: Props) {
   const base = location.pathname.split('/chat')[0]
   const workDocumentTarget = base === '/app/ff' ? (
     kind === 'fbs_supply' ? `/app/ff/fbs?supply_id=${documentId}` :
-    kind === 'inbound_intake' ? `/app/ff/reception?open=${documentId}` :
+    kind === 'inbound_intake' ? `/app/ff/reception?open_inbound=${documentId}` :
     kind === 'outbound_shipment' ? `/app/ff/mp-shipments?open_outbound=${documentId}` :
     kind === 'marketplace_unload' ? `/app/ff/mp-shipments?open_mp=${documentId}` : null
   ) : kind === 'inbound_intake' ? `${base}/inbound/${documentId}` : null
