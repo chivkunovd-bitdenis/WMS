@@ -121,6 +121,7 @@ class FbsSupplyOrderOut(BaseModel):
 
 class FbsSupplyOut(BaseModel):
     id: str
+    marketplace: Literal["wb", "ozon"]
     seller_id: str
     warehouse_id: str
     # Ozon creates its carriage only on the final delivery action, so this
@@ -685,6 +686,7 @@ def _supply_out(supply: FbsSupply, *, include_orders: bool) -> FbsSupplyOut:
         orders_out = [_order_out(order) for order in supply.orders]
     return FbsSupplyOut(
         id=str(supply.id),
+        marketplace=supply.marketplace,
         seller_id=str(supply.seller_id),
         warehouse_id=str(supply.warehouse_id),
         wb_supply_id=supply.wb_supply_id,

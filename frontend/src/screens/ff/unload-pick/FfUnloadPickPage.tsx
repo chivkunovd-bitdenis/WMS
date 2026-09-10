@@ -44,6 +44,7 @@ type ApiLine = {
 
 type ApiDetail = {
   id: string
+  marketplace?: 'wb' | 'ozon'
   name?: string | null
   wb_supply_id?: string | null
   document_number: string | null
@@ -164,6 +165,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
+  const isOzonFbs = source === 'fbs' && detail?.marketplace === 'ozon'
   // Тара, отсканированная как место снятия (§Ж-03), но пока не встретившаяся
   // среди источников pick-options — например, короб только что подъехал и в
   // pick-options ещё не попал. `screenData.placeSource` знает только про тару,
@@ -178,7 +180,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
     error: catalogError,
   } = useMarketplaceProductCatalog(
     token,
-    source !== 'fbs' && Boolean(detail?.seller_id),
+    !isOzonFbs && Boolean(detail?.seller_id),
     detail?.seller_id,
   )
 
@@ -247,14 +249,14 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
         }))
 
     const products: PickProduct[] = composition.map((item) => {
-      const catalog = source === 'fbs' ? undefined : catalogById.get(item.productId)
+      const catalog = isOzonFbs ? undefined : catalogById.get(item.productId)
       return {
         id: item.productId,
         name: item.name,
         sku: item.sku ?? '',
-        sellerArticle: source === 'fbs' ? item.sellerArticle ?? '' : catalog?.wb_vendor_code ?? '',
-        barcode: source === 'fbs' ? item.barcode ?? '' : catalog?.wb_primary_barcode ?? catalog?.wb_barcodes[0] ?? '',
-        photo: source === 'fbs' ? '' : catalog?.wb_primary_image_url ?? '',
+        sellerArticle: isOzonFbs ? item.sellerArticle ?? '' : catalog?.wb_vendor_code ?? '',
+        barcode: isOzonFbs ? item.barcode ?? '' : catalog?.wb_primary_barcode ?? catalog?.wb_barcodes[0] ?? '',
+        photo: isOzonFbs ? '' : catalog?.wb_primary_image_url ?? '',
         size: catalog?.wb_size ?? null,
       }
     })
@@ -356,7 +358,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
       picked,
       placeSource,
     }
-  }, [catalogById, detail, pickOptions, source])
+  }, [catalogById, detail, isOzonFbs, pickOptions, source])
 
   const updateOption = useCallback(async () => {
     if (!requestId) return
