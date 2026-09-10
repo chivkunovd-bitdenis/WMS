@@ -24,7 +24,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,7 +38,6 @@ from app.core.roles import (
 from app.models.chat import (
     CHAT_KIND_EXTRA,
     CHAT_KIND_MAIN,
-    CHAT_KINDS,
     ChatAttachment,
     ChatConversation,
     ChatMessage,
@@ -273,6 +274,8 @@ async def add_participant(
     *,
     added_by: User,
 ) -> ChatParticipant:
+    if conv.kind != CHAT_KIND_EXTRA:
+        raise ChatError("main_participants_implicit")
     if added_by.role != FULFILLMENT_ADMIN:
         raise ChatError("forbidden", "only fulfillment admin manages members")
     if user_to_add.tenant_id != conv.tenant_id:
@@ -443,35 +446,6 @@ async def edit_message(
 # ---------------------------------------------------------------------------
 
 
-async def create_attachment(
-    session: AsyncSession,
-    conv: ChatConversation,
-    uploader: User,
-    *,
-    filename: str,
-    content_type: str,
-    size_bytes: int,
-    is_image: bool,
-    storage_key: str,
-) -> ChatAttachment:
-    if size_bytes <= 0:
-        raise ChatError("empty_file")
-    row = ChatAttachment(
-        tenant_id=conv.tenant_id,
-        uploader_user_id=uploader.id,
-        conversation_id=conv.id,
-        message_id=None,
-        filename=filename,
-        content_type=content_type,
-        size_bytes=size_bytes,
-        is_image=is_image,
-        storage_key=storage_key,
-    )
-    session.add(row)
-    await session.flush()
-    return row
-
-
 async def load_attachment(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -549,5 +523,89 @@ async def resolve_seller(
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
-def _known_chat_kinds() -> frozenset[str]:
-    return CHAT_KINDS
+async def ensure_visible_main_chats(
+    session: AsyncSession,
+    user: User,
+    *,
+    effective_seller_id: uuid.UUID | None,
+) -> None:
+    """One missing-seller query, bounded bulk inserts, no per-seller reads."""
+    missing = (
+        select(Seller.id)
+        .where(
+            Seller.tenant_id == user.tenant_id,
+            ~select(ChatConversation.id)
+            .where(
+                ChatConversation.tenant_id == user.tenant_id,
+                ChatConversation.seller_id == Seller.id,
+                ChatConversation.kind == CHAT_KIND_MAIN,
+            )
+            .exists(),
+        )
+        .order_by(Seller.id)
+    )
+    if user.role == FULFILLMENT_SELLER:
+        missing = missing.where(Seller.id == effective_seller_id)
+    seller_ids = list((await session.execute(missing)).scalars())
+    insert = sqlite_insert if session.get_bind().dialect.name == "sqlite" else pg_insert
+    for start in range(0, len(seller_ids), 100):
+        statement = (
+            insert(ChatConversation)
+            .values(
+                [
+                    {
+                        "id": uuid.uuid4(),
+                        "tenant_id": user.tenant_id,
+                        "seller_id": sid,
+                        "kind": CHAT_KIND_MAIN,
+                        "created_by_user_id": user.id,
+                    }
+                    for sid in seller_ids[start : start + 100]
+                ]
+            )
+            .on_conflict_do_nothing(
+                index_elements=[ChatConversation.tenant_id, ChatConversation.seller_id],
+                index_where=ChatConversation.kind == CHAT_KIND_MAIN,
+            )
+        )
+        await session.execute(statement)
+
+
+async def require_draft_upload_budget(
+    session: AsyncSession,
+    uploader: User,
+    size_bytes: int,
+) -> None:
+    """Bound unpublished bytes/rows across ALL chats from existing attachments.
+
+    The existing user row serializes simultaneous uploads on PostgreSQL. No
+    counter or expiry marker is stored, and nothing is automatically deleted.
+    Posting a message frees its uploads from this derived draft budget.
+    """
+    from app.services.chat_attachment_storage import (
+        MAX_MESSAGE_ATTACHMENTS,
+        MAX_MESSAGE_TOTAL_BYTES,
+    )
+
+    await session.execute(
+        select(User.id)
+        .where(
+            User.id == uploader.id,
+            User.tenant_id == uploader.tenant_id,
+        )
+        .with_for_update()
+    )
+    used_bytes, used_files = (
+        await session.execute(
+            select(
+                func.coalesce(func.sum(ChatAttachment.size_bytes), 0),
+                func.count(ChatAttachment.id),
+            ).where(
+                ChatAttachment.tenant_id == uploader.tenant_id,
+                ChatAttachment.uploader_user_id == uploader.id,
+                ChatAttachment.message_id.is_(None),
+            )
+        )
+    ).one()
+    if used_bytes + size_bytes > MAX_MESSAGE_TOTAL_BYTES or used_files >= MAX_MESSAGE_ATTACHMENTS:
+        raise ChatError("draft_upload_budget_exceeded")

@@ -34,6 +34,12 @@ function DocumentScreen({ token, authHeaders, currentUserId }: Props) {
     return () => controller.abort()
   }, [kind, documentId, sellerId, token, authHeaders])
   const base = location.pathname.split('/chat')[0]
+  const workDocumentTarget = base === '/app/ff' ? (
+    kind === 'fbs_supply' ? `/app/ff/fbs?supply_id=${documentId}` :
+    kind === 'inbound_intake' ? `/app/ff/reception?open=${documentId}` :
+    kind === 'outbound_shipment' ? `/app/ff/mp-shipments?open_outbound=${documentId}` :
+    kind === 'marketplace_unload' ? `/app/ff/mp-shipments?open_mp=${documentId}` : null
+  ) : kind === 'inbound_intake' ? `${base}/inbound/${documentId}` : null
   return <Paper variant="outlined" sx={{ m: 2, p: 2 }}>
     <Button onClick={() => navigate(`${base}/chat?seller_id=${sellerId}`)}>Вернуться в чат</Button>
     {error && <Alert severity="error">Документ не найден или у вас нет права его просматривать.</Alert>}
@@ -50,11 +56,9 @@ function DocumentScreen({ token, authHeaders, currentUserId }: Props) {
           <TableCell>{line.order_id ? <Button onClick={() => navigate(`${base}/chat/documents/fbs_order/${line.order_id}?seller_id=${sellerId}`)}>{line.product}</Button> : line.product}</TableCell>
           <TableCell>{line.quantity}</TableCell>
         </TableRow>)}</TableBody></Table>
-      {base === '/app/ff' && kind !== 'fbs_order' && <Button sx={{ mt: 2 }} onClick={() => navigate(
-        kind === 'fbs_supply' ? `/app/ff/fbs?supply_id=${documentId}` :
-        kind === 'inbound_intake' ? `/app/ff/reception?open=${documentId}` :
-        kind === 'outbound_shipment' ? `/app/ff/mp-shipments?open_outbound=${documentId}` :
-        `/app/ff/mp-shipments?open_mp=${documentId}`)}>Открыть рабочий документ</Button>}
+      {workDocumentTarget && <Button sx={{ mt: 2 }} onClick={() => navigate(workDocumentTarget)}>
+        Открыть рабочий документ
+      </Button>}
     </> : !error && <Typography>Загрузка документа…</Typography>}
   </Paper>
 }

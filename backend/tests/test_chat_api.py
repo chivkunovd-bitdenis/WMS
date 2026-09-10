@@ -1,4 +1,4 @@
-"""Chat API happy-path tests — WMS-397/WMS-399.
+"""Chat API persistence, permissions and concurrency tests — WMS-397/WMS-399.
 
 Cover the flows the coordinator asked for: ensure_main is idempotent,
 messages dedupe on retry, seller sees only their seller_id's chats,
@@ -499,8 +499,10 @@ async def test_concurrent_main_message_and_attachment_ownership(async_client: As
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("worker_role", ["fulfillment_staff", "fulfillment_admin"])
 async def test_extra_participants_tenant_revocation_and_cross_chat_retry(
     async_client: AsyncClient,
+    worker_role: str,
 ) -> None:
     from sqlalchemy import delete
 
@@ -516,7 +518,7 @@ async def test_extra_participants_tenant_revocation_and_cross_chat_retry(
         worker = User(
             tenant_id=owner.tenant_id,
             email=f"worker-{suffix}@example.com",
-            role="fulfillment_staff",
+            role=worker_role,
             password_hash=owner.password_hash,
         )
         session.add(worker)
@@ -547,6 +549,12 @@ async def test_extra_participants_tenant_revocation_and_cross_chat_retry(
             "items"
         ]
     ]
+    if worker_role == "fulfillment_admin":
+        assert (
+            await async_client.post(
+                url + "/participants", headers=staff, json={"user_id": worker_id}
+            )
+        ).status_code == 403
     additions = await asyncio.gather(
         *[
             async_client.post(url + "/participants", headers=admin, json={"user_id": worker_id})
@@ -782,7 +790,16 @@ async def test_all_document_types_and_mixed_seller_projection(async_client: Asyn
 
 
 @pytest.mark.asyncio
-async def test_attachments_validation_and_ownership(async_client: AsyncClient) -> None:
+@pytest.mark.parametrize(
+    ("filename", "payload", "content_type"),
+    [
+        ("drawing.svg", b"<svg></svg>", "image/svg+xml"),
+        ("page.html", b"<script>evil</script>", "text/html"),
+    ],
+)
+async def test_attachments_validation_and_ownership(
+    async_client: AsyncClient, filename: str, payload: bytes, content_type: str
+) -> None:
     suffix, admin, _ = await _register_admin(async_client)
     seller, sid, _ = await _create_seller(async_client, admin, suffix)
     main = await async_client.get(
@@ -795,14 +812,15 @@ async def test_attachments_validation_and_ownership(async_client: AsyncClient) -
         files={"file": ("lie.png", b"<script>evil</script>", "image/png")},
     )
     assert invalid_image.status_code == 422
-    svg = await async_client.post(
+    uploaded = await async_client.post(
         url + "/attachments",
         headers=admin,
-        files={"file": ("drawing.svg", b"<svg></svg>", "image/svg+xml")},
+        files={"file": (filename, payload, content_type)},
+        # An obsolete/malicious extra field cannot promote HTML/SVG to an image.
         data={"is_image": "true"},
     )
-    assert svg.status_code == 201 and svg.json()["is_image"] is False
-    aid = svg.json()["id"]
+    assert uploaded.status_code == 201 and uploaded.json()["is_image"] is False
+    aid = uploaded.json()["id"]
     duplicate_ids = await async_client.post(
         url + "/messages",
         headers=admin,
@@ -825,6 +843,291 @@ async def test_attachments_validation_and_ownership(async_client: AsyncClient) -
     assert download.status_code == 200
     assert download.headers["content-disposition"].startswith("attachment;")
     assert download.headers["x-content-type-options"] == "nosniff"
+    assert download.headers["content-security-policy"] == "sandbox; default-src 'none'"
+    assert download.headers["cache-control"] == "private, no-store"
+    assert download.content == payload
     assert (
         await async_client.get(f"/operations/chat/attachments/{aid}/content")
     ).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_poll_batches_current_document_cards_and_authors(async_client: AsyncClient) -> None:
+    from sqlalchemy import event, select
+
+    from app.db.session import SessionLocal, engine
+    from app.models.chat import ChatMessage
+    from app.models.fbs_order import FbsOrder
+    from app.models.user import User
+
+    suffix, admin, uid = await _register_admin(async_client)
+    _, sid, _ = await _create_seller(async_client, admin, suffix)
+    main = (
+        await async_client.get(
+            f"/operations/chat/conversations/main?seller_id={sid}", headers=admin
+        )
+    ).json()
+    url = f"/operations/chat/conversations/{main['id']}/messages"
+    async with SessionLocal() as session:
+        user = await session.get(User, uuid.UUID(uid))
+        for n in range(200):
+            order = FbsOrder(
+                tenant_id=user.tenant_id,
+                seller_id=uuid.UUID(sid),
+                wb_order_id=8000 + n,
+                created_at_wb=datetime.now(UTC),
+                deadline_at=datetime.now(UTC),
+                mapping_status="unmapped",
+                reserve_status="not_reserved",
+            )
+            author = User(
+                tenant_id=user.tenant_id,
+                email=f"batch-{n}@example.com",
+                role="fulfillment_staff",
+                password_hash="unusable-fixture-password",
+            )
+            session.add_all([order, author])
+            await session.flush()
+            session.add(
+                ChatMessage(
+                    tenant_id=user.tenant_id,
+                    conversation_id=uuid.UUID(main["id"]),
+                    author_user_id=author.id,
+                    client_message_id=str(n),
+                    text=str(n),
+                    attached_document={
+                        "kind": "fbs_order",
+                        "id": str(order.id),
+                        "seller_id": sid,
+                        "title": "old snapshot",
+                    },
+                    created_at=datetime.now(UTC),
+                )
+            )
+        await session.commit()
+    statements: list[str] = []
+
+    def capture(_conn, _cursor, statement, _params, _context, _many):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", capture)
+    try:
+        one = await async_client.get(url + "?limit=1", headers=admin)
+        assert one.status_code == 200, one.text
+        one_count = len(statements)
+        statements.clear()
+        all_rows = await async_client.get(url, headers=admin)
+        assert all_rows.status_code == 200, all_rows.text
+        assert len(all_rows.json()["items"]) == 200
+        assert len(statements) <= one_count + 1, statements
+        assert len(statements) < 15
+        assert all(
+            m["attached_document"]["title"].startswith("WB №")
+            and m["author_label"].startswith("batch-")
+            for m in all_rows.json()["items"]
+        )
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", capture)
+    # The batch is request-local: deleting a document hides its card on the next poll.
+    async with SessionLocal() as session:
+        order = (
+            await session.execute(select(FbsOrder).where(FbsOrder.wb_order_id == 8000))
+        ).scalar_one()
+        await session.delete(order)
+        await session.commit()
+    reread = (await async_client.get(url, headers=admin)).json()["items"]
+    assert sum(m["attached_document"] is None for m in reread) == 1
+
+
+@pytest.mark.asyncio
+async def test_draft_budget_counts_existing_uploads_across_chats(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sqlalchemy import select
+
+    from app.db.session import SessionLocal
+    from app.models.chat import ChatAttachment
+    from app.services import chat_attachment_storage as storage
+
+    monkeypatch.setattr(storage, "MAX_MESSAGE_TOTAL_BYTES", 8)
+    monkeypatch.setattr(storage, "MAX_MESSAGE_ATTACHMENTS", 2)
+    suffix, admin, _ = await _register_admin(async_client)
+    _, sid, _ = await _create_seller(async_client, admin, suffix)
+    main = (
+        await async_client.get(
+            f"/operations/chat/conversations/main?seller_id={sid}", headers=admin
+        )
+    ).json()
+    extra = (
+        await async_client.post(
+            "/operations/chat/conversations/extra",
+            headers=admin,
+            json={"seller_id": sid, "title": "budget"},
+        )
+    ).json()
+    base = "/operations/chat/conversations/"
+    first = await async_client.post(
+        base + main["id"] + "/attachments",
+        headers=admin,
+        files={"file": ("a.txt", b"1234", "text/plain")},
+    )
+    second = await async_client.post(
+        base + extra["id"] + "/attachments",
+        headers=admin,
+        files={"file": ("b.txt", b"1234", "text/plain")},
+    )
+    assert first.status_code == second.status_code == 201
+    rejected = await async_client.post(
+        base + main["id"] + "/attachments",
+        headers=admin,
+        files={"file": ("c.txt", b"1", "text/plain")},
+    )
+    assert (
+        rejected.status_code == 413 and rejected.json()["detail"] == "draft_upload_budget_exceeded"
+    )
+    posted = await async_client.post(
+        base + main["id"] + "/messages",
+        headers=admin,
+        json={"client_message_id": "release-budget", "attachment_ids": [first.json()["id"]]},
+    )
+    assert posted.status_code == 201, posted.text
+    third = await async_client.post(
+        base + main["id"] + "/attachments",
+        headers=admin,
+        files={"file": ("c.txt", b"12", "text/plain")},
+    )
+    assert third.status_code == 201, third.text
+    # Count limit also rejects small files even though the byte budget has room.
+    rejected_count = await async_client.post(
+        base + main["id"] + "/attachments",
+        headers=admin,
+        files={"file": ("d.txt", b"1", "text/plain")},
+    )
+    assert rejected_count.status_code == 413
+    async with SessionLocal() as session:
+        rows = list((await session.execute(select(ChatAttachment))).scalars())
+        assert len(rows) == 3  # no automatic deletion
+        assert sum(r.message_id is None for r in rows) == 2
+
+
+@pytest.mark.asyncio
+async def test_concurrent_uploads_cannot_overrun_user_draft_budget(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.db.session import engine
+    from app.services import chat_attachment_storage as storage
+
+    if engine.dialect.name != "postgresql":
+        pytest.skip("Row-lock contention requires PostgreSQL")
+    monkeypatch.setattr(storage, "MAX_MESSAGE_TOTAL_BYTES", 4)
+    suffix, admin, _ = await _register_admin(async_client)
+    _, sid, _ = await _create_seller(async_client, admin, suffix)
+    main = (
+        await async_client.get(
+            f"/operations/chat/conversations/main?seller_id={sid}", headers=admin
+        )
+    ).json()
+    extra = (
+        await async_client.post(
+            "/operations/chat/conversations/extra",
+            headers=admin,
+            json={"seller_id": sid, "title": "concurrent budget"},
+        )
+    ).json()
+    responses = await asyncio.gather(
+        *[
+            async_client.post(
+                f"/operations/chat/conversations/{c['id']}/attachments",
+                headers=admin,
+                files={"file": ("data.txt", b"123", "text/plain")},
+            )
+            for c in [main, extra]
+        ]
+    )
+    assert sorted(r.status_code for r in responses) == [201, 413], [r.text for r in responses]
+
+
+@pytest.mark.asyncio
+async def test_content_type_rejected_before_storage_and_admin_scope(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unittest.mock import Mock
+
+    from app.api import chat_routes
+    from app.db.session import SessionLocal
+    from app.models.user import User
+
+    suffix, admin, uid = await _register_admin(async_client)
+    _, sid, _ = await _create_seller(async_client, admin, suffix)
+    _, sid2, _ = await _create_seller(async_client, admin, suffix + "second")
+    # FF home seller is not an authorization boundary (deps explicitly returns it).
+    async with SessionLocal() as session:
+        user = await session.get(User, uuid.UUID(uid))
+        user.seller_id = uuid.UUID(sid)
+        await session.commit()
+    main = await async_client.get(
+        f"/operations/chat/conversations/main?seller_id={sid2}", headers=admin
+    )
+    assert main.status_code == 200, main.text
+    put = Mock()
+    monkeypatch.setattr(chat_routes, "put_bytes", put)
+    bad = await async_client.post(
+        f"/operations/chat/conversations/{main.json()['id']}/attachments",
+        headers=admin,
+        files={"file": ("bad.txt", b"abc", "x" * 300)},
+    )
+    assert bad.status_code == 422 and bad.json()["detail"] == "invalid_content_type"
+    put.assert_not_called()
+    # The obsolete client hint is not part of the multipart API contract anymore.
+    spec = (await async_client.get("/openapi.json")).json()
+    schema = spec["paths"]["/operations/chat/conversations/{conversation_id}/attachments"]["post"][
+        "requestBody"
+    ]["content"]["multipart/form-data"]["schema"]
+    component = schema["$ref"].split("/")[-1]
+    assert "is_image" not in spec["components"]["schemas"][component]["properties"]
+    no_op_member = await async_client.post(
+        f"/operations/chat/conversations/{main.json()['id']}/participants",
+        headers=admin,
+        json={"user_id": uid},
+    )
+    assert (
+        no_op_member.status_code == 422
+        and no_op_member.json()["detail"] == "main_participants_implicit"
+    )
+
+
+@pytest.mark.asyncio
+async def test_bulk_main_creation_is_idempotent_and_bounded(async_client: AsyncClient) -> None:
+    from sqlalchemy import event
+
+    from app.db.session import SessionLocal, engine
+    from app.models.seller import Seller
+    from app.models.user import User
+
+    _, admin, uid = await _register_admin(async_client)
+    async with SessionLocal() as session:
+        user = await session.get(User, uuid.UUID(uid))
+        session.add_all([Seller(tenant_id=user.tenant_id, name=f"Bulk {n}") for n in range(150)])
+        await session.commit()
+    statements: list[str] = []
+
+    def capture(_conn, _cursor, statement, _params, _context, _many):
+        statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", capture)
+    try:
+        first = await async_client.get("/operations/chat/conversations", headers=admin)
+        assert first.status_code == 200, first.text
+        assert len(first.json()["items"]) == 150
+        assert len(statements) < 15
+        statements.clear()
+        second = await async_client.get("/operations/chat/conversations", headers=admin)
+        assert {c["id"] for c in second.json()["items"]} == {c["id"] for c in first.json()["items"]}
+        assert not any(s.lstrip().upper().startswith("INSERT") for s in statements)
+        assert len(statements) < 15
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", capture)

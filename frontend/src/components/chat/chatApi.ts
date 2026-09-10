@@ -177,13 +177,9 @@ export async function uploadAttachment(
   conversationId: string,
   file: File | Blob,
   filename: string,
-  isImage?: boolean,
 ): Promise<ChatAttachment> {
   const form = new FormData()
   form.append('file', file, filename)
-  if (isImage !== undefined) {
-    form.append('is_image', String(isImage))
-  }
   const response = await fetch(
     apiUrl(`/operations/chat/conversations/${conversationId}/attachments`),
     {
