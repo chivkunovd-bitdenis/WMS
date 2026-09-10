@@ -129,11 +129,12 @@ type FbsTapeContext = {
 
 export function withSelectedFbsTapeBarcode(
   order: FbsTapeOrderContext,
-  tape: FbsTapeContext,
+  tape: FbsTapeContext | undefined,
   selectedBarcode: ProductBarcodeOption | undefined,
 ): FbsTapeOrderContext {
   if (
-    order.marketplace !== 'ozon'
+    !tape
+    || order.marketplace !== 'ozon'
     || selectedBarcode?.marketplace !== 'ozon'
     || tape.selectedBarcodeOrderId !== order.orderId
     || !tape.selectedBarcodePositionId
