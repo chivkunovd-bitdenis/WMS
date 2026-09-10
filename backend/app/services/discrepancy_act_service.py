@@ -61,6 +61,8 @@ async def get_act(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     act_id: uuid.UUID,
+    *,
+    lock: bool = False,
 ) -> DiscrepancyAct | None:
     stmt = (
         select(DiscrepancyAct)
@@ -72,6 +74,8 @@ async def get_act(
             selectinload(DiscrepancyAct.lines).selectinload(DiscrepancyActLine.product),
         )
     )
+    if lock:
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
     res = await session.execute(stmt)
     return res.scalar_one_or_none()
 
@@ -100,7 +104,7 @@ async def add_line(
     quantity: int,
     inbound_intake_line_id: uuid.UUID | None = None,
 ) -> DiscrepancyActLine:
-    act = await get_act(session, tenant_id, act_id)
+    act = await get_act(session, tenant_id, act_id, lock=True)
     if act is None:
         raise DiscrepancyActError("not_found")
     if act.status != STATUS_DRAFT:
@@ -139,7 +143,7 @@ async def submit_act(
     tenant_id: uuid.UUID,
     act_id: uuid.UUID,
 ) -> DiscrepancyAct:
-    act = await get_act(session, tenant_id, act_id)
+    act = await get_act(session, tenant_id, act_id, lock=True)
     if act is None:
         raise DiscrepancyActError("not_found")
     if act.status != STATUS_DRAFT:
@@ -160,18 +164,7 @@ async def approve_act(
     *,
     actor_user_id: uuid.UUID | None,
 ) -> DiscrepancyAct:
-    # WMS-156: до чтения статуса берём блокировку строки акта, иначе два
-    # одновременных approve увидят confirmed и оба запишут движения — товар
-    # спишется дважды. Только после блокировки читаем связанные данные.
-    locked = await session.execute(
-        select(DiscrepancyAct)
-        .where(DiscrepancyAct.id == act_id)
-        .where(DiscrepancyAct.tenant_id == tenant_id)
-        .with_for_update()
-    )
-    if locked.scalar_one_or_none() is None:
-        raise DiscrepancyActError("not_found")
-    act = await get_act(session, tenant_id, act_id)
+    act = await get_act(session, tenant_id, act_id, lock=True)
     if act is None:
         raise DiscrepancyActError("not_found")
     if act.status != STATUS_CONFIRMED:
@@ -186,6 +179,17 @@ async def approve_act(
         tenant_id,
         act.inbound_intake_request.warehouse_id,
     )
+    for product_id in sorted({line.product_id for line in act.lines}, key=str):
+        await inv_svc.lock_stock_product(session, tenant_id, product_id)
+    # Balances may have been loaded before waiting for a concurrent stock writer.
+    from app.models.inventory_balance import InventoryBalance
+
+    (await session.scalars(
+        select(InventoryBalance)
+        .where(InventoryBalance.tenant_id == tenant_id,
+               InventoryBalance.product_id.in_([line.product_id for line in act.lines]))
+        .execution_options(populate_existing=True)
+    )).all()
     for line in act.lines:
         if line.quantity == 0:
             raise DiscrepancyActError("invalid_quantity")
@@ -217,7 +221,7 @@ async def reject_act(
     tenant_id: uuid.UUID,
     act_id: uuid.UUID,
 ) -> DiscrepancyAct:
-    act = await get_act(session, tenant_id, act_id)
+    act = await get_act(session, tenant_id, act_id, lock=True)
     if act is None:
         raise DiscrepancyActError("not_found")
     if act.status != STATUS_CONFIRMED:
@@ -235,7 +239,7 @@ async def delete_line(
     act_id: uuid.UUID,
     line_id: uuid.UUID,
 ) -> None:
-    act = await get_act(session, tenant_id, act_id)
+    act = await get_act(session, tenant_id, act_id, lock=True)
     if act is None:
         raise DiscrepancyActError("not_found")
     if act.status != STATUS_DRAFT:

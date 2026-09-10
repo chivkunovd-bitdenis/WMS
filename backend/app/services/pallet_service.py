@@ -455,6 +455,7 @@ async def disband_pallet(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     pallet_id: uuid.UUID,
+    *, commit: bool = True,
 ) -> Pallet:
     pallet = await _load_pallet(session, tenant_id, pallet_id, for_update=True)
     if pallet.disbanded_at is not None:
@@ -523,6 +524,9 @@ async def disband_pallet(
         warehouse_box.storage_location_id = None
     pallet.storage_location_id = None
     pallet.disbanded_at = datetime.now(UTC)
-    await session.commit()
-    await session.refresh(pallet)
+    if commit:
+        await session.commit()
+        await session.refresh(pallet)
+    else:
+        await session.flush()
     return pallet

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { markUncountedEmptyIn } from './InventoryRows'
+import { changedActualIds, markUncountedEmptyIn, mergeInFlightActuals, setActual } from './InventoryRows'
 import type { InventoryCount } from './InventoryTypes'
 
 // WMS-154: «Здесь пусто» — не удаление сущностей и не отдельный жизненный
@@ -115,5 +115,25 @@ describe('markUncountedEmptyIn', () => {
     const applied = markUncountedEmptyIn(source, { kind: 'cell', cellId: 'unknown-cell' })
     expect(applied.touched).toEqual([])
     expect(applied.count).toBe(source)
+  })
+})
+
+describe('WMS-155 concurrent edits', () => {
+  it('preserves in-flight comment and quantities while accepting other server changes', () => {
+    const sent = baseCount()
+    const current = { ...setActual(sent, 'p-1', 7), comment: 'Entered while saving' }
+    const server = { ...setActual(sent, 'p-2', 6), comment: 'Server comment' }
+    const merged = mergeInFlightActuals(server, sent, current)
+    expect(merged.comment).toBe('Entered while saving')
+    expect(changedActualIds(merged, server)).toEqual(new Set(['p-1']))
+  })
+  it('does not reopen a previous document when its response arrives late', () => {
+    const old = baseCount()
+    const current = { ...baseCount(), id: 'another-document' }
+    expect(mergeInFlightActuals(old, old, current)).toBe(current)
+  })
+  it('does not send untouched quantities from the map dialog', () => {
+    const original = baseCount()
+    expect(changedActualIds({ ...original, comment: 'Only a comment' }, original).size).toBe(0)
   })
 })

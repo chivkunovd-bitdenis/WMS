@@ -95,6 +95,7 @@ export type ApiDetail = {
   posted_at: string | null
   posted_by: string | null
   comment: string
+  empty_places?: Array<{ kind: "cell" | ContainerNode["kind"]; id: string }>
   address_storage: boolean
   cells: ApiCell[]
   scannable_cells?: Array<{ id: string; label: string; barcode: string | null }>
@@ -156,14 +157,15 @@ function toProduct(node: ApiProduct): ProductNode {
   }
 }
 
-function toNode(node: ApiNode): InventoryNode {
+function toNode(node: ApiNode, emptyPlaces: ApiDetail["empty_places"] = []): InventoryNode {
   if (node.kind === 'product') return toProduct(node)
   const container: ContainerNode = {
     kind: node.kind,
     id: node.id,
     code: node.code,
     barcode: node.barcode,
-    children: node.children.map(toNode),
+    confirmedEmpty: emptyPlaces?.some((item) => item.kind === node.kind && item.id === node.id),
+    children: node.children.map((child) => toNode(child, emptyPlaces)),
   }
   return container
 }
@@ -186,6 +188,7 @@ export function toCount(detail: ApiDetail): InventoryCount {
     postedAt: detail.posted_at === null ? null : humanMoment(detail.posted_at),
     postedBy: detail.posted_by,
     comment: detail.comment,
+    emptyPlaces: detail.empty_places ?? [],
     addressStorage: detail.address_storage,
     scannableCells: (detail.scannable_cells ?? []).map((cell) => ({
       id: cell.id,
@@ -200,10 +203,11 @@ export function toCount(detail: ApiDetail): InventoryCount {
       cellId: item.cell_id,
     })),
     cells: detail.cells.map((cell) => ({
+      confirmedEmpty: detail.empty_places?.some((place) => place.kind === 'cell' && place.id === cell.id),
       id: cell.id,
       label: cell.label,
       barcode: cell.barcode,
-      children: cell.children.map(toNode),
+      children: cell.children.map((node) => toNode(node, detail.empty_places)),
     })),
   }
 }
@@ -239,7 +243,7 @@ export function toListItem(row: ApiSummary): CountListItem {
 export function actualPayload(
   count: InventoryCount,
   touched?: ReadonlySet<string>,
-  options?: { comment?: string | null; updateComment?: boolean },
+  options?: { comment?: string | null; updateComment?: boolean; expectedComment?: string | null },
 ) {
   const lines: Array<{ line_id: string; actual_quantity: number | null }> = []
   function collect(nodes: InventoryNode[]) {
@@ -260,12 +264,14 @@ export function actualPayload(
     lines: typeof lines
     comment?: string | null
     update_comment?: boolean
+    expected_comment?: string | null
   } = { lines }
   // WMS-155: комментарий уходит вместе с фактическими значениями. Флаг
   // `update_comment` отделяет «не менять» от «стереть», сентинел на сервере.
   if (options?.updateComment) {
     payload.update_comment = true
     payload.comment = options.comment ?? null
+    if (options.expectedComment !== undefined) payload.expected_comment = options.expectedComment
   }
   return payload
 }
@@ -304,6 +310,10 @@ export async function createObjectCount(
  * тару на складе, но не запоминает её за документом, и прунинг пустой тары
  * (см. backend `_prune_empty_containers`) тут же выбрасывал её из дерева:
  * оператор только что завёл короб и не видел, куда класть товар.
+ *
+ * `cellId` — ячейка, на которой стоит выделение (задача 1 доработки от
+ * 03.09.2026, WMS-153): без неё тара всегда уезжала в зону сортировки, а не
+ * туда, где физически стоит оператор.
  */
 export async function createCountContainer(
   token: string,
@@ -321,6 +331,49 @@ export async function createCountContainer(
     headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
     body: JSON.stringify(payload),
   })
+  if (!res.ok) throw new Error(await readApiErrorMessage(res))
+  return toCount((await res.json()) as ApiDetail)
+}
+
+/**
+ * Переложить товар в тару — вторая доработка от 03.09.2026, WMS-153.
+ *
+ * Тот же перенос остатка, что и на карте склада: см. backend
+ * `service.move_line_to_container`. `lineId` — строка документа (её адрес
+ * известен серверу, экран передаёт только цель).
+ */
+export async function moveCountLine(
+  token: string,
+  countId: string,
+  lineId: string,
+  target: { containerKind: 'pallet' | 'box' | 'cargo_place'; containerId: string },
+): Promise<InventoryCount> {
+  const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/lines/${lineId}/move`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
+    body: JSON.stringify({
+      container_kind: target.containerKind,
+      container_id: target.containerId,
+    }),
+  })
+  if (!res.ok) throw new Error(await readApiErrorMessage(res))
+  return toCount((await res.json()) as ApiDetail)
+}
+
+/**
+ * Удалить пустую тару прямо из документа — третья доработка от 03.09.2026,
+ * WMS-153. Сервер сам проверяет, что тара по-настоящему пуста, и отказывает
+ * понятным кодом ошибки, если в ней что-то лежит.
+ */
+export async function deleteCountContainer(
+  token: string,
+  countId: string,
+  target: { kind: 'pallet' | 'box' | 'cargo_place'; id: string },
+): Promise<InventoryCount> {
+  const res = await fetch(
+    apiUrl(`${INVENTORY_BASE}/${countId}/containers/${target.kind}/${target.id}`),
+    { method: 'DELETE', headers: { ...inventoryAuthHeaders(token) } },
+  )
   if (!res.ok) throw new Error(await readApiErrorMessage(res))
   return toCount((await res.json()) as ApiDetail)
 }
@@ -424,7 +477,7 @@ export async function saveCountActuals(
   touched?: ReadonlySet<string>,
   // WMS-155: если оператор менял комментарий вручную — послать его вместе с
   // фактическими количествами. Опущено — сервер не трогает комментарий.
-  options?: { comment?: string | null; updateComment?: boolean },
+  options?: { comment?: string | null; updateComment?: boolean; expectedComment?: string | null },
 ): Promise<InventoryCount> {
   const res = await fetch(apiUrl(`${INVENTORY_BASE}/${count.id}/lines`), {
     method: 'PUT',
@@ -445,7 +498,7 @@ export async function postCount(
   token: string,
   count: InventoryCount,
   touched?: ReadonlySet<string>,
-  options?: { comment?: string | null; updateComment?: boolean },
+  options?: { comment?: string | null; updateComment?: boolean; expectedComment?: string | null },
 ): Promise<PostResult> {
   const saved = await fetch(apiUrl(`${INVENTORY_BASE}/${count.id}/lines`), {
     method: 'PUT',
@@ -475,4 +528,15 @@ export function postResultNote(result: PostResult): string {
     return `${row.product_name}: ${source} — ${row.quantity} шт.`
   })
   return `${summary} Недостача затронула выделение ФБС. ${details.join(' ')}`
+}
+
+export async function markCountPlaceEmpty(
+  token: string, countId: string, target: { kind: 'cell' | ContainerNode['kind']; id: string },
+): Promise<InventoryCount> {
+  const res = await fetch(apiUrl(`${INVENTORY_BASE}/${countId}/empty-place`), {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...inventoryAuthHeaders(token) },
+    body: JSON.stringify({ ...target, id: target.kind === 'cell' && !/^[0-9a-f-]{36}$/i.test(target.id) ? null : target.id }),
+  })
+  if (!res.ok) throw new Error(await readApiErrorMessage(res))
+  return toCount(await res.json() as ApiDetail)
 }

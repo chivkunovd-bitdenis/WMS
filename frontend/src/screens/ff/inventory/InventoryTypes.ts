@@ -39,6 +39,7 @@ export type ProductNode = {
 }
 
 export type ContainerNode = {
+  confirmedEmpty?: boolean
   kind: ContainerKind
   id: string
   code: string
@@ -49,6 +50,7 @@ export type ContainerNode = {
 export type InventoryNode = ContainerNode | ProductNode
 
 export type CellNode = {
+  confirmedEmpty?: boolean
   id: string
   /** «А 1.1». Виртуальная зона «Без ячеек» приходит с этим же типом. */
   label: string
@@ -102,6 +104,7 @@ export type InventoryCount = {
   postedAt: string | null
   postedBy: string | null
   comment: string
+  emptyPlaces?: Array<{ kind: 'cell' | ContainerKind; id: string }>
   /**
    * Адресное хранение включено у арендатора.
    *

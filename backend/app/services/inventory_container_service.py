@@ -141,7 +141,7 @@ async def validate_container(
 ) -> None:
     if container_kind == "pallet":
         found_id = await session.scalar(
-            select(Pallet.id).where(
+            select(Pallet.id).with_for_update(read=True, of=Pallet).where(
                 Pallet.id == container_id,
                 Pallet.tenant_id == tenant_id,
                 Pallet.warehouse_id == warehouse_id,
@@ -150,7 +150,7 @@ async def validate_container(
         )
     elif container_kind == "cargo_place":
         found_id = await session.scalar(
-            select(WarehouseBox.id).where(
+            select(WarehouseBox.id).with_for_update(read=True, of=WarehouseBox).where(
                 WarehouseBox.id == container_id,
                 WarehouseBox.tenant_id == tenant_id,
                 WarehouseBox.warehouse_id == warehouse_id,
@@ -184,7 +184,7 @@ async def validate_container(
             )
     else:
         found_id = await session.scalar(
-            select(WarehouseBox.id).where(
+            select(WarehouseBox.id).with_for_update(read=True, of=WarehouseBox).where(
                 WarehouseBox.id == container_id,
                 WarehouseBox.tenant_id == tenant_id,
                 WarehouseBox.warehouse_id == warehouse_id,

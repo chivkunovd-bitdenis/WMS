@@ -58,7 +58,7 @@ async def list_warehouses(session: AsyncSession, tenant_id: uuid.UUID) -> list[W
 
 
 async def create_warehouse(
-    session: AsyncSession, tenant_id: uuid.UUID, *, name: str, code: str
+    session: AsyncSession, tenant_id: uuid.UUID, *, name: str, code: str, commit: bool = True
 ) -> Warehouse:
     wh = Warehouse(
         tenant_id=tenant_id,
@@ -68,14 +68,16 @@ async def create_warehouse(
     )
     session.add(wh)
     try:
-        await session.commit()
+        await session.flush()
+        await sorting_loc_svc.get_or_create_sorting_location(session, tenant_id, wh.id)
+        if commit:
+            await session.commit()
+            await session.refresh(wh)
     except IntegrityError as exc:
+        if not commit:
+            raise
         await session.rollback()
         raise CatalogError("warehouse_code_taken") from exc
-    await session.refresh(wh)
-    await sorting_loc_svc.get_or_create_sorting_location(session, tenant_id, wh.id)
-    await session.commit()
-    await session.refresh(wh)
     return wh
 
 

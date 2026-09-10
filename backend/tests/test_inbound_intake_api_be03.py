@@ -314,8 +314,10 @@ async def test_complete_receiving_mixed_box_then_loose_api(
 
 
 @pytest.mark.asyncio
-async def test_complete_receiving_no_discrepancy(async_client: AsyncClient) -> None:
-    """TC-NEW-IN-BE-03: complete-receiving clean when fact matches plan."""
+async def test_complete_receiving_matched_goods_still_reports_missing_box(
+    async_client: AsyncClient,
+) -> None:
+    """TC-NEW-IN-BE-03: Matching goods do not cancel a missing planned box."""
     suffix = str(int(time.time() * 1000))
     ah = await _admin_headers(async_client, suffix)
     rid, _pid, sku = await _submitted_request(async_client, ah, suffix, expected_qty=2)
@@ -331,7 +333,8 @@ async def test_complete_receiving_no_discrepancy(async_client: AsyncClient) -> N
     done = await async_client.post(f"{base}/complete-receiving", headers=ah)
     assert done.status_code == 200, done.text
     body = done.json()
-    assert body["has_discrepancy"] is False
+    assert body["has_discrepancy"] is True
+    assert body["boxes_discrepancy"] is True
     assert body["status"] == "sorting"
 
 
@@ -537,10 +540,9 @@ async def test_inbound_box_damaged_flag_rejects_unknown_box(async_client: AsyncC
 
 
 # WMS-174: приёмка «россыпью» (ни одного короба не создано) не должна
-# считаться расхождением по коробам, даже если план был задан. Это законный
-# сценарий и старое поведение — оставляем.
+# считаться совпадением, если был задан ненулевой план коробов.
 @pytest.mark.asyncio
-async def test_complete_receiving_loose_no_box_count_discrepancy(
+async def test_complete_receiving_zero_boxes_compares_with_plan(
     async_client: AsyncClient,
 ) -> None:
     suffix = str(int(time.time() * 1000))
@@ -558,5 +560,7 @@ async def test_complete_receiving_loose_no_box_count_discrepancy(
     done = await async_client.post(f"{base}/complete-receiving", headers=ah)
     assert done.status_code == 200, done.text
     body = done.json()
-    assert body["boxes_discrepancy"] is False
-    assert body["has_discrepancy"] is False
+    assert body["actual_box_count"] == 0
+    assert body["planned_box_count"] == 1
+    assert body["boxes_discrepancy"] is True
+    assert body["has_discrepancy"] is True

@@ -525,7 +525,7 @@ async def test_inventory_count_by_pallet_includes_nested_container_balances(
 
 
 @pytest.mark.asyncio
-async def test_inventory_count_by_empty_container_returns_clear_conflict(
+async def test_inventory_count_by_empty_container_is_visible_before_confirmation(
     async_client: AsyncClient,
 ) -> None:
     setup = await _tenant(async_client, "EmptyContainer")
@@ -540,8 +540,9 @@ async def test_inventory_count_by_empty_container_returns_clear_conflict(
         },
     )
 
-    assert response.status_code == 409, response.text
-    assert response.json()["detail"] == "container_has_no_stock"
+    assert response.status_code == 201, response.text
+    assert response.json()["empty_places"] == []
+    assert str(empty_box_id) in _container_ids_in_tree(response.json())
 
 
 @pytest.mark.asyncio
@@ -1050,7 +1051,7 @@ async def test_inventory_count_found_is_idempotent_per_scan(
 
 
 @pytest.mark.asyncio
-async def test_inventory_count_drops_empty_containers_but_keeps_them_scannable(
+async def test_inventory_count_drops_empty_places_but_keeps_them_scannable(
     async_client: AsyncClient,
 ) -> None:
     # Пустая по документу тара не должна занимать строку в дереве, но обязана
@@ -1104,7 +1105,7 @@ async def test_inventory_count_create_container_keeps_it_visible_but_not_other_e
     # определению, оператор только что её завёл. Ручка
     # POST /operations/inventory-counts/{id}/containers должна и создать
     # тару, и удержать её в дереве, но не отключать прунинг для чужой пустой
-    # тары склада (см. test_inventory_count_drops_empty_containers_...).
+    # тары склада (см. test_inventory_count_drops_empty_places_...).
     setup = await _tenant(async_client, "NewBox")
     product = await _product(async_client, setup, name="Товар в коробе")
     pallet_id, box_id, _cargo_place_id, empty_box_id = await _containers(setup)
@@ -1794,3 +1795,611 @@ async def test_inventory_count_lines_put_clears_comment_with_empty_string(
     assert cleared.status_code == 200
     # Пустая строка на выдаче — договор API уже был «строка, никогда null».
     assert cleared.json()["comment"] == ""
+
+
+def _container_ids_in_tree(body: dict[str, object]) -> set[str]:
+    def walk(nodes: list[dict[str, object]]) -> set[str]:
+        found: set[str] = set()
+        for node in nodes:
+            if node["kind"] == "product":
+                continue
+            found.add(str(node["id"]))
+            found |= walk(node["children"])  # type: ignore[arg-type]
+        return found
+
+    out: set[str] = set()
+    for cell in body["cells"]:  # type: ignore[union-attr]
+        out |= walk(cell["children"])  # type: ignore[arg-type,index]
+    return out
+
+
+async def _create_container(
+    async_client: AsyncClient,
+    setup: TenantSetup,
+    count_id: str,
+    kind: str,
+    *,
+    cell_id: uuid.UUID | None = None,
+) -> uuid.UUID:
+    payload: dict[str, object] = {"kind": kind}
+    if cell_id is not None:
+        payload["cell_id"] = str(cell_id)
+    response = await async_client.post(
+        f"/operations/inventory-counts/{count_id}/containers",
+        headers=setup.headers,
+        json=payload,
+    )
+    assert response.status_code == 200, response.text
+    created = _container_ids_in_tree(response.json())
+    assert len(created) == 1, created
+    return uuid.UUID(next(iter(created)))
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_move_line_transfers_balance_and_line_address(
+    async_client: AsyncClient,
+) -> None:
+    # Задача 2 (WMS-153): «Переложить товар в тару» переносит и физический
+    # остаток (тот же механизм, что и на карте склада), и адрес строки
+    # документа — иначе после переноса строка показывала бы недостачу там,
+    # откуда товар уже забрали, хотя оператор его просто переложил.
+    setup = await _tenant(async_client, "MoveLine")
+    product = await _product(async_client, setup, name="Товар для переноса")
+    await _balance(setup, product, 4)
+    count = await _create_all(async_client, setup)
+    # Короб заводим в той же ячейке, что и остаток товара, — реалистичный
+    # случай (задача 1): оператор стоит у полки, короб появляется тут же.
+    box_id = await _create_container(
+        async_client, setup, count["id"], "box", cell_id=setup.location_id
+    )
+    line = next(item for item in count["lines"] if item["product_id"] == str(product))
+    assert line["container_kind"] is None
+    assert line["storage_location_id"] == str(setup.location_id)
+
+    response = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/lines/{line['id']}/move",
+        headers=setup.headers,
+        json={"container_kind": "box", "container_id": str(box_id)},
+    )
+    assert response.status_code == 200, response.text
+    moved = next(
+        item for item in response.json()["lines"] if item["product_id"] == str(product)
+    )
+    assert moved["id"] == line["id"]
+    assert moved["container_kind"] == "box"
+    assert moved["container_id"] == str(box_id)
+    assert moved["storage_location_id"] == str(setup.location_id)
+
+    async with SessionLocal() as session:
+        loose = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.product_id == product,
+                InventoryBalance.storage_location_id == setup.location_id,
+                InventoryBalance.container_id.is_(None),
+            )
+        )
+        assert loose is None or loose.quantity == 0
+        in_box = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.product_id == product,
+                InventoryBalance.container_kind == "box",
+                InventoryBalance.container_id == box_id,
+            )
+        )
+        assert in_box is not None
+        assert in_box.quantity == 4
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_move_line_rejects_when_already_there(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "MoveAlreadyThere")
+    product = await _product(async_client, setup, name="Товар уже в таре")
+    _pallet_id, box_id, _cargo_place_id, _empty_box_id = await _containers(setup)
+    await _balance(
+        setup, product, 2, location_id=setup.location_id, container_kind="box", container_id=box_id
+    )
+    count = await _create_all(async_client, setup)
+    line = next(item for item in count["lines"] if item["product_id"] == str(product))
+
+    response = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/lines/{line['id']}/move",
+        headers=setup.headers,
+        json={"container_kind": "box", "container_id": str(box_id)},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "already_there"
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_move_line_rejects_product_already_at_destination(
+    async_client: AsyncClient,
+) -> None:
+    # Один и тот же товар уже посчитан отдельной строкой в целевой таре —
+    # сервер отказывает понятным сообщением вместо тихого слияния двух
+    # независимо введённых фактов.
+    setup = await _tenant(async_client, "MoveConflict")
+    product = await _product(async_client, setup, name="Товар с конфликтом")
+    box_id = await _create_container(
+        async_client, setup, (await _create_all(async_client, setup))["id"], "box"
+    )
+    # Остаток по товару в двух местах сразу: россыпью в ячейке и в коробе.
+    await _balance(setup, product, 3, location_id=setup.location_id)
+    await _balance(
+        setup, product, 1, location_id=setup.location_id, container_kind="box", container_id=box_id
+    )
+    count = await _create_all(async_client, setup)
+    loose_line = next(
+        item
+        for item in count["lines"]
+        if item["product_id"] == str(product) and item["container_kind"] is None
+    )
+
+    response = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/lines/{loose_line['id']}/move",
+        headers=setup.headers,
+        json={"container_kind": "box", "container_id": str(box_id)},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "product_already_at_destination"
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_move_line_rejects_empty_source(
+    async_client: AsyncClient,
+) -> None:
+    # Строка добавлена руками (задача 3 постановки от 03.09.2026), реального
+    # остатка за ней нет — переносить нечего, и сервер обязан сказать это
+    # прямо, а не молча создать перенос из воздуха.
+    setup = await _tenant(async_client, "MoveEmptySource")
+    product = await _product(async_client, setup, name="Товар без остатка")
+    count = await _create_all(async_client, setup)
+    box_id = await _create_container(async_client, setup, count["id"], "box")
+    added = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/manual-line",
+        headers=setup.headers,
+        json={"product_id": str(product), "quantity": 2},
+    )
+    assert added.status_code == 200, added.text
+    line = next(
+        item
+        for item in added.json()["count"]["lines"]
+        if item["product_id"] == str(product)
+    )
+
+    response = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/lines/{line['id']}/move",
+        headers=setup.headers,
+        json={"container_kind": "box", "container_id": str(box_id)},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "move_source_empty"
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_move_line_rejects_posted_document(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "MovePostedNo")
+    product = await _product(async_client, setup, name="Товар для проводки")
+    await _balance(setup, product, 2)
+    count = await _create_all(async_client, setup)
+    box_id = await _create_container(async_client, setup, count["id"], "box")
+    line = next(item for item in count["lines"] if item["product_id"] == str(product))
+    saved = await async_client.put(
+        f"/operations/inventory-counts/{count['id']}/lines",
+        headers=setup.headers,
+        json={"lines": [{"line_id": line["id"], "actual_quantity": 2}]},
+    )
+    assert saved.status_code == 200, saved.text
+    posted = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/post", headers=setup.headers
+    )
+    assert posted.status_code == 200, posted.text
+
+    response = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/lines/{line['id']}/move",
+        headers=setup.headers,
+        json={"container_kind": "box", "container_id": str(box_id)},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "not_editable"
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_delete_container_removes_empty_box(
+    async_client: AsyncClient,
+) -> None:
+    # Задача 3 (WMS-153): пустую тару, заведённую этой же кнопкой «Создать
+    # короб», можно удалить прямо из документа.
+    setup = await _tenant(async_client, "DeleteEmptyBox")
+    count = await _create_all(async_client, setup)
+    box_id = await _create_container(async_client, setup, count["id"], "box")
+
+    response = await async_client.delete(
+        f"/operations/inventory-counts/{count['id']}/containers/box/{box_id}",
+        headers=setup.headers,
+    )
+    assert response.status_code == 200, response.text
+    assert str(box_id) not in _container_ids_in_tree(response.json())
+    assert str(box_id) not in {
+        item["id"] for item in response.json()["scannable_containers"]
+    }
+
+    async with SessionLocal() as session:
+        assert await session.get(WarehouseBox, box_id) is None
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_delete_container_removes_empty_pallet(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "DeleteEmptyPallet")
+    count = await _create_all(async_client, setup)
+    pallet_id = await _create_container(async_client, setup, count["id"], "pallet")
+
+    response = await async_client.delete(
+        f"/operations/inventory-counts/{count['id']}/containers/pallet/{pallet_id}",
+        headers=setup.headers,
+    )
+    assert response.status_code == 200, response.text
+
+    async with SessionLocal() as session:
+        pallet = await session.get(Pallet, pallet_id)
+        assert pallet is not None
+        assert pallet.disbanded_at is not None
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_delete_container_rejects_non_empty(
+    async_client: AsyncClient,
+) -> None:
+    # Ручки удаления не было вовсе, и главное требование постановки —
+    # удалять можно только по-настоящему пустую тару, иначе отказ понятным
+    # сообщением. Проверяем по живому остатку, а не по строкам этого
+    # документа: документ может быть сужен по селлеру/категории, и «пусто в
+    # документе» — не то же самое, что «пусто физически».
+    setup = await _tenant(async_client, "DeleteNonEmpty")
+    seller_id = await _seller(async_client, setup, "Другой селлер")
+    other_product = await _product(
+        async_client, setup, name="Чужой товар", seller_id=seller_id
+    )
+    count_for_all = await _create_all(async_client, setup)
+    box_id = await _create_container(async_client, setup, count_for_all["id"], "box")
+    # Остаток кладём ПОСЛЕ наполнения документа и от другого селлера — у
+    # документа этого селлера в строках нет, но физически короб не пуст.
+    await _balance(
+        setup,
+        other_product,
+        5,
+        location_id=setup.location_id,
+        container_kind="box",
+        container_id=box_id,
+    )
+
+    response = await async_client.delete(
+        f"/operations/inventory-counts/{count_for_all['id']}/containers/box/{box_id}",
+        headers=setup.headers,
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "container_not_empty"
+
+    async with SessionLocal() as session:
+        assert await session.get(WarehouseBox, box_id) is not None
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_delete_container_rejects_pallet_with_children(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "DeletePalletWithKids")
+    pallet_id, _box_id, _cargo_place_id, _empty_box_id = await _containers(setup)
+    count = await _create_all(async_client, setup)
+
+    response = await async_client.delete(
+        f"/operations/inventory-counts/{count['id']}/containers/pallet/{pallet_id}",
+        headers=setup.headers,
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "container_not_empty"
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_delete_container_rejects_inbound_linked(
+    async_client: AsyncClient,
+) -> None:
+    # Тара приёмки — другой процесс со своими инвариантами; экран пересчёта
+    # её не трогает, даже если по остатку она сейчас пуста.
+    setup = await _tenant(async_client, "DeleteInboundLinked")
+    async with SessionLocal() as session:
+        request = InboundIntakeRequest(
+            tenant_id=setup.tenant_id,
+            warehouse_id=setup.warehouse_id,
+            status="receiving",
+        )
+        session.add(request)
+        await session.flush()
+        box = WarehouseBox(
+            tenant_id=setup.tenant_id,
+            warehouse_id=setup.warehouse_id,
+            internal_barcode=f"INB-{uuid.uuid4().hex}",
+            storage_location_id=setup.location_id,
+            inbound_request_id=request.id,
+        )
+        session.add(box)
+        await session.commit()
+        box_id = box.id
+    count = await _create_all(async_client, setup)
+
+    response = await async_client.delete(
+        f"/operations/inventory-counts/{count['id']}/containers/box/{box_id}",
+        headers=setup.headers,
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "container_linked_to_inbound"
+
+
+@pytest.mark.asyncio
+async def test_inventory_count_delete_container_rejects_posted_document(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "DeletePostedNo")
+    product = await _product(async_client, setup, name="Товар для проводки")
+    await _balance(setup, product, 2)
+    count = await _create_all(async_client, setup)
+    box_id = await _create_container(async_client, setup, count["id"], "box")
+    line = next(item for item in count["lines"] if item["product_id"] == str(product))
+    saved = await async_client.put(
+        f"/operations/inventory-counts/{count['id']}/lines",
+        headers=setup.headers,
+        json={"lines": [{"line_id": line["id"], "actual_quantity": 2}]},
+    )
+    assert saved.status_code == 200, saved.text
+    posted = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/post", headers=setup.headers
+    )
+    assert posted.status_code == 200, posted.text
+
+    response = await async_client.delete(
+        f"/operations/inventory-counts/{count['id']}/containers/box/{box_id}",
+        headers=setup.headers,
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "not_editable"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["box", "cargo_place", "pallet"])
+async def test_empty_container_without_goods_is_confirmed_reloaded_and_removed_on_post(
+    async_client: AsyncClient, kind: str,
+) -> None:
+    setup = await _tenant(async_client, "EmptyNoRows")
+    count = await _create_all(async_client, setup)
+    cid = await _create_container(async_client, setup, count["id"], kind, cell_id=setup.location_id)
+    marked = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/empty-place", headers=setup.headers,
+        json={"kind": kind, "id": str(cid)},
+    )
+    assert marked.status_code == 200, marked.text
+    reopened = await async_client.get(
+        f"/operations/inventory-counts/{count['id']}", headers=setup.headers,
+    )
+    assert reopened.json()["empty_places"] == [{"kind": kind, "id": str(cid)}]
+    async with SessionLocal() as session:
+        assert await session.get(Pallet if kind == "pallet" else WarehouseBox, cid) is not None
+    posted = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/post", headers=setup.headers,
+    )
+    assert posted.status_code == 200, posted.text
+    async with SessionLocal() as session:
+        if kind == "pallet":
+            pallet = await session.get(Pallet, cid)
+            assert pallet is not None and pallet.disbanded_at is not None
+        else:
+            assert await session.get(WarehouseBox, cid) is None
+        assert await session.scalar(select(func.count(InventoryMovement.id))) == 0
+
+
+@pytest.mark.asyncio
+async def test_confirm_empty_zeros_previously_counted_goods_and_removes_container(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "EmptyRecount")
+    product = await _product(async_client, setup, name="Counted product")
+    count = await _create_all(async_client, setup)
+    cid = await _create_container(
+        async_client, setup, count["id"], "box", cell_id=setup.location_id,
+    )
+    await _balance(setup, product, 3, container_kind="box", container_id=cid)
+    count = await _create_all(async_client, setup)
+    saved = await async_client.put(
+        f"/operations/inventory-counts/{count['id']}/lines", headers=setup.headers,
+        json={"lines": [{"line_id": count["lines"][0]["id"], "actual_quantity": 2}]},
+    )
+    assert saved.status_code == 200
+    marked = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/empty-place", headers=setup.headers,
+        json={"kind": "cell", "id": str(setup.location_id)},
+    )
+    assert marked.status_code == 200, marked.text
+    assert marked.json()["lines"][0]["actual_quantity"] == 0
+    posted = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/post", headers=setup.headers,
+    )
+    assert posted.status_code == 200, posted.text
+    async with SessionLocal() as session:
+        assert await session.get(WarehouseBox, cid) is None
+        assert await session.scalar(select(InventoryBalance.quantity).where(
+            InventoryBalance.product_id == product,
+        )) == 0
+        assert await session.scalar(select(InventoryMovement.quantity_delta).where(
+            InventoryMovement.product_id == product,
+        )) == -3
+
+
+@pytest.mark.asyncio
+async def test_stale_comment_update_preserves_other_operators_edit(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "CommentConflict")
+    count = await _create_all(async_client, setup)
+    path = f"/operations/inventory-counts/{count['id']}/lines"
+    first = await async_client.put(path, headers=setup.headers, json={
+        "lines": [], "update_comment": True, "expected_comment": "", "comment": "Other operator",
+    })
+    assert first.status_code == 200, first.text
+    second = await async_client.put(path, headers=setup.headers, json={
+        "lines": [], "update_comment": True, "expected_comment": "", "comment": "Stale overwrite",
+    })
+    assert second.status_code == 409 and second.json()["detail"] == "comment_changed"
+    reread = await async_client.get(
+        f"/operations/inventory-counts/{count['id']}", headers=setup.headers,
+    )
+    assert reread.json()["comment"] == "Other operator"
+
+
+@pytest.mark.asyncio
+async def test_recount_after_empty_confirmation_keeps_container(async_client: AsyncClient) -> None:
+    setup = await _tenant(async_client, "RecountAfterEmpty")
+    product = await _product(async_client, setup, name="Recounted goods")
+    count = await _create_all(async_client, setup)
+    cid = await _create_container(
+        async_client, setup, count["id"], "box", cell_id=setup.location_id,
+    )
+    base = f"/operations/inventory-counts/{count['id']}"
+    marked = await async_client.post(f"{base}/empty-place", headers=setup.headers,
+                                     json={"kind": "box", "id": str(cid)})
+    assert marked.status_code == 200, marked.text
+    found = await async_client.post(f"{base}/manual-line", headers=setup.headers, json={
+        "product_id": str(product), "quantity": 2,
+        "container_kind": "box", "container_id": str(cid),
+    })
+    assert found.status_code == 200, found.text
+    assert found.json()["count"]["empty_places"] == []
+    posted = await async_client.post(f"{base}/post", headers=setup.headers)
+    assert posted.status_code == 200, posted.text
+    async with SessionLocal() as session:
+        assert await session.get(WarehouseBox, cid) is not None
+        assert await session.scalar(select(InventoryBalance.quantity).where(
+            InventoryBalance.product_id == product,
+        )) == 2
+
+
+@pytest.mark.asyncio
+async def test_new_stock_in_confirmed_empty_container_blocks_removal_atomically(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "EmptyChanged")
+    product = await _product(async_client, setup, name="Later incoming goods")
+    count = await _create_all(async_client, setup)
+    cid = await _create_container(
+        async_client, setup, count["id"], "box", cell_id=setup.location_id,
+    )
+    base = f"/operations/inventory-counts/{count['id']}"
+    marked = await async_client.post(f"{base}/empty-place", headers=setup.headers,
+                                     json={"kind": "box", "id": str(cid)})
+    assert marked.status_code == 200, marked.text
+    await _balance(setup, product, 3, container_kind="box", container_id=cid)
+    posted = await async_client.post(f"{base}/post", headers=setup.headers)
+    assert posted.status_code == 409 and posted.json()["detail"] == "container_not_empty"
+    async with SessionLocal() as session:
+        assert await session.get(WarehouseBox, cid) is not None
+        assert await session.scalar(select(InventoryBalance.quantity).where(
+            InventoryBalance.product_id == product,
+        )) == 3
+        assert await session.scalar(select(func.count(InventoryMovement.id))) == 0
+
+
+@pytest.mark.asyncio
+async def test_save_rereads_stale_count_status(async_client: AsyncClient) -> None:
+    setup = await _tenant(async_client, "StaleCount")
+    product = await _product(async_client, setup, name="Count then post")
+    await _balance(setup, product, 2)
+    count = await _create_all(async_client, setup)
+    count_id = uuid.UUID(count["id"])
+    line_id = uuid.UUID(count["lines"][0]["id"])
+    async with SessionLocal() as stale_session:
+        stale = await inventory_count_service.get_count(stale_session, setup.tenant_id, count_id)
+        assert stale is not None and stale.status == "draft"
+        saved = await async_client.put(f"/operations/inventory-counts/{count_id}/lines",
+                                      headers=setup.headers,
+                                      json={"lines": [{"line_id": str(line_id),
+                                                       "actual_quantity": 2}]})
+        assert saved.status_code == 200, saved.text
+        posted = await async_client.post(f"/operations/inventory-counts/{count_id}/post",
+                                        headers=setup.headers)
+        assert posted.status_code == 200, posted.text
+        with pytest.raises(inventory_count_service.InventoryCountError, match="not_editable"):
+            await inventory_count_service.save_actuals(stale_session, setup.tenant_id, count_id,
+                                                      [(line_id, 1)], comment="Too late")
+
+
+@pytest.mark.asyncio
+async def test_truly_empty_cell_confirmation_survives_reload_and_posts_without_movements(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "EmptyCell")
+    count = await _create_all(async_client, setup)
+    base = f"/operations/inventory-counts/{count['id']}"
+    marked = await async_client.post(f"{base}/empty-place", headers=setup.headers,
+                                     json={"kind": "cell", "id": str(setup.location_id)})
+    assert marked.status_code == 200, marked.text
+    read = await async_client.get(base, headers=setup.headers)
+    assert read.json()["empty_places"] == [{"kind": "cell", "id": str(setup.location_id)}]
+    assert any(cell["id"] == str(setup.location_id) for cell in read.json()["cells"])
+    posted = await async_client.post(f"{base}/post", headers=setup.headers)
+    assert posted.status_code == 200, posted.text
+    async with SessionLocal() as session:
+        assert await session.scalar(select(func.count(InventoryMovement.id))) == 0
+
+
+@pytest.mark.asyncio
+async def test_move_rejects_destination_stock_missing_from_count(async_client: AsyncClient) -> None:
+    setup = await _tenant(async_client, "HiddenDestination")
+    product = await _product(async_client, setup, name="Same product at two places")
+    await _balance(setup, product, 4)
+    count = await _create_all(async_client, setup)
+    cid = await _create_container(async_client, setup, count["id"], "box",
+                                  cell_id=setup.location_id)
+    await _balance(setup, product, 10, container_kind="box", container_id=cid)
+    moved = await async_client.post(
+        f"/operations/inventory-counts/{count['id']}/lines/{count['lines'][0]['id']}/move",
+        headers=setup.headers, json={"container_kind": "box", "container_id": str(cid)},
+    )
+    assert moved.status_code == 409 and moved.json()["detail"] == "product_already_at_destination"
+    async with SessionLocal() as session:
+        quantities = list((await session.scalars(select(InventoryBalance.quantity).where(
+            InventoryBalance.product_id == product,
+        ))).all())
+        assert sorted(quantities) == [4, 10]
+        assert await session.scalar(select(func.count(InventoryMovement.id))) == 0
+
+
+@pytest.mark.asyncio
+async def test_empty_cell_does_not_schedule_inbound_container_deletion(
+    async_client: AsyncClient,
+) -> None:
+    setup = await _tenant(async_client, "InboundContainerCell")
+    async with SessionLocal() as session:
+        inbound = InboundIntakeRequest(tenant_id=setup.tenant_id,
+                                      warehouse_id=setup.warehouse_id, status="sorting")
+        session.add(inbound)
+        await session.flush()
+        box = WarehouseBox(tenant_id=setup.tenant_id, warehouse_id=setup.warehouse_id,
+                           internal_barcode=f"LINKED-{uuid.uuid4().hex}",
+                           storage_location_id=setup.location_id, inbound_request_id=inbound.id)
+        session.add(box)
+        await session.commit()
+        cid = box.id
+    count = await _create_all(async_client, setup)
+    base = f"/operations/inventory-counts/{count['id']}"
+    marked = await async_client.post(f"{base}/empty-place", headers=setup.headers,
+                                     json={"kind": "cell", "id": str(setup.location_id)})
+    assert marked.status_code == 200, marked.text
+    assert marked.json()["empty_places"] == [{"kind": "cell", "id": str(setup.location_id)}]
+    posted = await async_client.post(f"{base}/post", headers=setup.headers)
+    assert posted.status_code == 200, posted.text
+    async with SessionLocal() as session:
+        assert await session.get(WarehouseBox, cid) is not None
+        assert await session.scalar(select(func.count(InventoryMovement.id))) == 0

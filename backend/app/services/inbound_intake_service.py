@@ -91,6 +91,11 @@ def _loose_qty(line: InboundIntakeLine) -> int:
     return line.actual_qty if line.actual_qty is not None else 0
 
 
+def boxes_discrepancy(planned: int | None, actual: int) -> bool:
+    """The physical box count is authoritative, including zero received boxes."""
+    return planned is not None and planned != actual
+
+
 async def effective_actual_qty(
     session: AsyncSession,
     request_id: uuid.UUID,
@@ -828,7 +833,7 @@ async def primary_accept_request(
     if actual_box_count is not None:
         req.actual_box_count = actual_box_count
         if req.planned_box_count is not None:
-            req.boxes_discrepancy = actual_box_count != req.planned_box_count
+            req.boxes_discrepancy = boxes_discrepancy(req.planned_box_count, actual_box_count)
     req.status = STATUS_RECEIVING
     req.primary_accepted_at = datetime.now(UTC)
     await session.commit()
@@ -1201,19 +1206,7 @@ async def complete_receiving(
         line.actual_qty = effective
         if effective != line.expected_qty:
             line_discrepancy = True
-    # WMS-174: считаем box-discrepancy тут же по факту, не полагаясь на
-    # сохранённый флаг. Раньше begin_receiving передавал actual_box_count=None,
-    # и флаг никогда не обновлялся, даже когда план и факт коробов расходились.
-    #
-    # Пустой list boxes — приёмка «россыпью»: короба не создавались вовсе,
-    # это законный сценарий, там расхождения нет. Если хоть один короб есть,
-    # значит оператор действительно набивал по коробам, и число обязано
-    # совпасть с плановым.
-    live_box_discrepancy = (
-        req.planned_box_count is not None
-        and len(req.boxes) > 0
-        and req.planned_box_count != len(req.boxes)
-    )
+    live_box_discrepancy = boxes_discrepancy(req.planned_box_count, len(req.boxes))
     req.boxes_discrepancy = live_box_discrepancy
     req.actual_box_count = len(req.boxes)
     req.has_discrepancy = live_box_discrepancy or line_discrepancy

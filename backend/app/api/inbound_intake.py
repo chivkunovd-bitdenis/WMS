@@ -517,17 +517,7 @@ def _request_out(
         else None,
         planned_box_count=r.planned_box_count,
         actual_box_count=len(boxes_out),
-        # WMS-174: считаем расхождение динамически, из планового и фактического
-        # числа коробов. Раньше поле бралось только из сохранённого флага, а
-        # флаг обновлялся не всегда (begin_receiving передавал None), поэтому
-        # финальный экран показывал ноль расхождения при реальном расхождении.
-        #
-        # Пустой список коробов = приёмка «россыпью», расхождения нет.
-        boxes_discrepancy=(
-            r.planned_box_count is not None
-            and len(boxes_out) > 0
-            and r.planned_box_count != len(boxes_out)
-        ),
+        boxes_discrepancy=svc.boxes_discrepancy(r.planned_box_count, len(boxes_out)),
         has_discrepancy=bool(r.has_discrepancy),
         seller_id=str(r.seller_id) if r.seller_id is not None else None,
         seller_name=r.seller.name if r.seller is not None else None,
@@ -713,12 +703,7 @@ async def list_inbound_requests(
             else None,
             planned_box_count=r.planned_box_count,
             actual_box_count=len(r.boxes),
-            # WMS-174: та же динамическая формула, что и в detail-выдаче.
-            boxes_discrepancy=(
-                r.planned_box_count is not None
-                and len(r.boxes) > 0
-                and r.planned_box_count != len(r.boxes)
-            ),
+            boxes_discrepancy=svc.boxes_discrepancy(r.planned_box_count, len(r.boxes)),
             has_discrepancy=bool(r.has_discrepancy),
             seller_id=str(r.seller_id) if r.seller_id is not None else None,
             seller_name=r.seller.name if r.seller is not None else None,

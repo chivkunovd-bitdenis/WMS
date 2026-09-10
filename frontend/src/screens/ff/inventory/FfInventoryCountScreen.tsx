@@ -100,6 +100,19 @@ export function selectionPlacement(row: InvRow | null): ManualAddPlacement {
   return { cellId: null, containerKind: row.kind, containerId: row.id }
 }
 
+/**
+ * Тара, на которой стоит выделение, — для двух новых действий (задачи 2 и 3
+ * доработки от 03.09.2026, WMS-153): «Переложить сюда» и «Удалить тару».
+ * Обе умеют работать только с тарой, а не с ячейкой — переносить умеем
+ * только в тару, а удалять умеем только тару.
+ */
+export function selectedContainer(
+  row: InvRow | null,
+): { kind: 'pallet' | 'box' | 'cargo_place'; id: string } | null {
+  if (!row || row.kind === 'product' || row.kind === 'cell') return null
+  return { kind: row.kind, id: row.id }
+}
+
 type Props = {
   count: InventoryCount
   loading: boolean
@@ -132,15 +145,25 @@ type Props = {
    */
   pendingFound?: number
   /**
-   * WMS-153: тара должна ложиться в выбранную оператором ячейку сразу при
-   * создании, а не «на склад без адреса». Второй аргумент — id ячейки, если
-   * она выбрана; null означает прежнее поведение «на складе, разложите
-   * потом руками с карты».
+   * Создать тару. Второй аргумент — ячейка, на которой стоит выделение
+   * (задача 1 доработки от 03.09.2026, WMS-153); null — тара уезжает в зону
+   * сортировки, как и раньше.
    */
-  onCreateContainer?: (
-    kind: 'pallet' | 'box' | 'cargo_place',
-    cellId: string | null,
+  onCreateContainer?: (kind: 'pallet' | 'box' | 'cargo_place', cellId: string | null) => void
+  /**
+   * Переложить товар в тару (задача 2 доработки от 03.09.2026, WMS-153).
+   * Первый аргумент — строка документа (её текущий адрес знает сервер),
+   * второй — тара назначения, на которой стоит выделение.
+   */
+  onMoveLine?: (
+    lineId: string,
+    target: { containerKind: 'pallet' | 'box' | 'cargo_place'; containerId: string },
   ) => void
+  /**
+   * Удалить пустую тару прямо из документа (задача 3 доработки от
+   * 03.09.2026, WMS-153). Сервер сам отказывает, если в таре что-то лежит.
+   */
+  onDeleteContainer?: (target: { kind: 'pallet' | 'box' | 'cargo_place'; id: string }) => void
   /** Записать находку: товар лежит там, где по учёту его нет. */
   onFound?: (place: {
     barcodes: string[]
@@ -174,9 +197,8 @@ type Props = {
    *
    * До этого пустое место и непосчитанное выглядели одинаково; оператору
    * приходилось руками ставить 0 у каждой строки, чтобы отделить одно от
-   * другого. Один клик — все ещё не тронутые строки внутри выбранного места
-   * получают actual = 0; уже введённые значения не трогаем (человек мог
-   * посчитать несколько строк и потом ошибиться кнопкой).
+   * другого. После явного подтверждения ВСЕ строки выбранного места, включая
+   * содержимое тары, получают actual = 0. Предупреждение показано до запроса.
    */
   onMarkEmpty?: (target: { kind: 'cell' | 'container'; id: string }) => void
   onBack: () => void
@@ -194,6 +216,8 @@ export function FfInventoryCountScreen({
   onCancelDocument,
   pendingFound = 0,
   onCreateContainer,
+  onMoveLine,
+  onDeleteContainer,
   onFound,
   productCatalog = null,
   catalogLoading = false,
@@ -325,6 +349,31 @@ export function FfInventoryCountScreen({
     })
   }
 
+  // Тара, выделенная местом работы, — цель для «Переложить сюда» (задача 2)
+  // и субъект для «Удалить тару» (задача 3). Обе доработки от 03.09.2026,
+  // WMS-153.
+  const moveTarget = selectedContainer(selectedRow)
+
+  function handleMoveLine(row: InvRow) {
+    if (!moveTarget) return
+    onMoveLine?.(row.id, { containerKind: moveTarget.kind, containerId: moveTarget.id })
+  }
+
+  const deleteContainerDisabledReason = readOnly
+    ? 'Документ уже проведён'
+    : loading
+      ? 'Выполняется'
+      : !moveTarget
+        ? 'Выделите тару'
+        : onDeleteContainer
+          ? undefined
+          : 'Удаление тары недоступно'
+
+  function handleDeleteContainer() {
+    if (!moveTarget) return
+    onDeleteContainer?.(moveTarget)
+  }
+
   const metrics: ReportMetricItem[] = [
     // Излишек и недостача разведены намеренно. Одно число «итого −119» прячет,
     // что где-то нашли лишнее, а где-то недосчитались: для склада это два разных
@@ -335,9 +384,11 @@ export function FfInventoryCountScreen({
     { key: 'shortage', label: 'Недостача', value: t.shortage, unit: 'шт' },
   ]
 
-  const nothingCounted = t.counted === 0
+  const nothingCounted = t.counted === 0 && !count.emptyPlaces?.length
   const postReason = readOnly
     ? 'Документ уже проведён — правки закрыты'
+    : loading
+      ? 'Дождитесь сохранения'
     : pendingFound > 0
       ? `Ещё не сохранено находок: ${pendingFound}. Дождитесь отправки`
       : nothingCounted
@@ -416,6 +467,7 @@ export function FfInventoryCountScreen({
           <SecondaryAction
             onClick={() => {
               if (!selectedRow || !onMarkEmpty) return
+              if (!window.confirm('Подтвердить, что всё выбранное место пусто? Все введённые количества здесь, включая содержимое тары, станут нулём. Остаток изменится только при проведении.')) return
               if (selectedRow.kind === 'cell') {
                 onMarkEmpty({ kind: 'cell', id: selectedRow.id })
               } else if (selectedRow.kind !== 'product') {
@@ -435,10 +487,19 @@ export function FfInventoryCountScreen({
           >
             Здесь пусто
           </SecondaryAction>
+          <DangerAction
+            onClick={handleDeleteContainer}
+            disabledReason={deleteContainerDisabledReason}
+            data-testid="inv-delete-container"
+          >
+            Удалить тару
+          </DangerAction>
         </ActionGroup>
         {selectedRow ? (
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            {`Место работы: ${selectedRow.title}. Добавленный товар ляжет сюда.`}
+            {moveTarget
+              ? `Место работы: ${selectedRow.title}. Добавленный товар ляжет сюда, «Переложить сюда» у товара — тоже.`
+              : `Место работы: ${selectedRow.title}. Добавленный товар ляжет сюда.`}
           </Typography>
         ) : null}
       </Box>
@@ -450,7 +511,7 @@ export function FfInventoryCountScreen({
         <CommentField
           value={count.comment}
           onCommit={(comment) => onChange({ ...count, comment }, undefined, true)}
-          disabled={readOnly}
+          disabled={readOnly || loading}
           helperText={
             readOnly
               ? 'Проведённый документ не правится'
@@ -560,7 +621,7 @@ export function FfInventoryCountScreen({
       <InventoryTree
         rows={rows}
         loading={loading}
-        readOnly={readOnly}
+        readOnly={readOnly || loading}
         highlightedKey={scanFocus?.key}
         selectedKey={selectedKey}
         onSelect={readOnly ? undefined : handleSelectRow}
@@ -571,6 +632,9 @@ export function FfInventoryCountScreen({
         onToggle={toggle}
         onActual={handleActual}
         onPrintContents={handlePrintContents}
+        moveTargetKey={moveTarget ? selectedKey : null}
+        moveTargetTitle={moveTarget ? selectedRow?.title ?? null : null}
+        onMoveLine={readOnly || !onMoveLine ? undefined : handleMoveLine}
       />
 
       {/* Панель действий прилеплена к нижнему краю: пересчёт длинный, и кнопка
@@ -603,7 +667,7 @@ export function FfInventoryCountScreen({
         ) : null}
         <SecondaryAction
           onClick={onSave}
-          disabledReason={readOnly ? 'Документ уже проведён' : undefined}
+          disabledReason={readOnly ? 'Документ уже проведён' : loading ? 'Дождитесь сохранения' : undefined}
           data-testid="inv-save"
         >
           Сохранить

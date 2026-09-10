@@ -1137,6 +1137,7 @@ async def move_object(
     to_kind: DestinationKind,
     to_id: uuid.UUID | None,
     quantity: int | None,
+    commit: bool = True,
 ) -> dict[str, Any]:
     await _assert_warehouse(session, tenant_id, warehouse_id)
     # Количество имеет смысл только для товара: тара всегда переезжает целиком
@@ -1274,7 +1275,10 @@ async def move_object(
         to_label=to_label,
     )
     session.add(event)
-    await session.commit()
+    if commit:
+        await session.commit()
+    else:
+        await session.flush()
     return {"id": str(event.id), "moved_qty": moved_quantity}
 
 
@@ -1342,7 +1346,8 @@ async def create_sorting_object(
             await session.commit()
             await session.refresh(container)
     except warehouse_box_service.WarehouseBoxError as exc:
-        await session.rollback()
+        if commit:
+            await session.rollback()
         raise WarehouseMapError(exc.code) from exc
     return {
         "id": str(container.id),
