@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 from sqlalchemy import Select, and_, delete, func, or_, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -1612,7 +1612,77 @@ async def current_quantities(
     return values
 
 
+async def _lock_post_removal_stock(
+    session: AsyncSession, count: InventoryCount, lines: list[InventoryCountLine],
+) -> None:
+    """Claim removal resources before movements, never wait across stock lock orders.
+
+    Stock writers use Product -> Container -> Balance; map/pallet paths can already
+    hold Container or Balance. Product locks are held by the caller. NOWAIT on all
+    remaining claims breaks either inverse edge, with a full rollback by post_count.
+    """
+    removals = {(item["kind"], uuid.UUID(item["id"])) for item in count.empty_places
+                if item["kind"] != "cell"}
+    if not removals:
+        return
+    container_predicate = or_(*[
+        and_(InventoryBalance.container_kind == kind, InventoryBalance.container_id == cid)
+        for kind, cid in removals
+    ])
+    # Include hidden goods and zero rows: deletion must check all stock, and pallet
+    # disbanding can readdress zero balances to an existing loose sorting balance.
+    container_products = select(InventoryBalance.product_id).where(
+        InventoryBalance.tenant_id == count.tenant_id, container_predicate,
+    )
+    balances = (await session.scalars(select(InventoryBalance).where(
+        InventoryBalance.tenant_id == count.tenant_id,
+        or_(InventoryBalance.product_id.in_([line.product_id for line in lines]),
+            InventoryBalance.product_id.in_(container_products)),
+    ).order_by(InventoryBalance.id).with_for_update(nowait=True)
+        .execution_options(populate_existing=True))).all()
+    stock_rows: list[InventoryCountLine | InventoryBalance] = [*lines, *balances]
+    refs = removals | {(row.container_kind, row.container_id) for row in stock_rows
+                       if row.container_kind is not None and row.container_id is not None}
+    for kind, cid in sorted(refs, key=lambda ref: (ref[0], str(ref[1]))):
+        # Lock by physical identity; normal scope/type/inbound checks still run
+        # below. Missing rows remain the responsibility of stale-confirmation logic.
+        queries = [select(Pallet.id).where(Pallet.id == cid)] if kind == "pallet" else [
+            select(WarehouseBox.id).where(WarehouseBox.id == cid),
+            select(InboundIntakeBox.id).where(InboundIntakeBox.id == cid)
+            if kind == "box" else
+            select(InboundIntakeCargoPlace.id).where(InboundIntakeCargoPlace.id == cid),
+        ]
+        for query in queries:
+            await session.scalar(query.with_for_update(nowait=True))
+    if any(kind == "pallet" for kind, _ in removals):
+        # Existing pallet disband locks locations through its joined balance query.
+        # Claim these (and its loose sorting destination) without a late wait too.
+        await session.execute(select(StorageLocation.id).where(
+            or_(StorageLocation.id.in_([row.storage_location_id for row in balances]),
+                and_(StorageLocation.tenant_id == count.tenant_id,
+                     StorageLocation.warehouse_id == count.warehouse_id,
+                     StorageLocation.code == SORTING_LOCATION_CODE)),
+        ).order_by(StorageLocation.id).with_for_update(nowait=True))
+
+
 async def post_count(
+    session: AsyncSession, tenant_id: uuid.UUID, count_id: uuid.UUID, user_id: uuid.UUID,
+) -> PostResult:
+    try:
+        return await _post_count(session, tenant_id, count_id, user_id)
+    except DBAPIError as exc:
+        await session.rollback()
+        if getattr(exc.orig, "sqlstate", None) == "55P03":
+            raise InventoryCountError("balance_changed_during_post") from exc
+        raise
+    except InventoryCountError:
+        # A normal container_not_empty refusal must not leave earlier movements
+        # committable by a service caller. post_count owns this transaction.
+        await session.rollback()
+        raise
+
+
+async def _post_count(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     count_id: uuid.UUID,
@@ -1643,6 +1713,7 @@ async def post_count(
 
     for product_id in sorted({line.product_id for line in entered_lines}, key=str):
         await inventory_service.lock_stock_product(session, tenant_id, product_id)
+    await _lock_post_removal_stock(session, count, entered_lines)
 
     stock_deductions: list[inventory_service.StockDeduction] = []
     changed_balances: list[ChangedBalance] = []
