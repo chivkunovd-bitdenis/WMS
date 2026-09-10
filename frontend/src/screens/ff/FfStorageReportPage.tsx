@@ -19,7 +19,7 @@ import { sellerQuickRange } from './FfBillingScreen'
 type Seller = { id: string; name: string }
 
 type ReportProduct = {
-  product_id: string
+  product_id: string | null
   sku: string | null
   product_name: string
   seller_article: string | null
@@ -312,7 +312,7 @@ export function FfStorageReportPage({ token, sellers = [] }: { token: string; se
             <DataTable
               columns={productColumns}
               rows={row.products}
-              getRowKey={(product) => product.product_id}
+              getRowKey={(product) => product.product_id ?? `missing-product-${row.seller_id}`}
               fixedLayout
               testId={`storage-report-products-${row.seller_id}`}
               empty={{ title: 'По товарам этого селлера начислений в периоде нет' }}

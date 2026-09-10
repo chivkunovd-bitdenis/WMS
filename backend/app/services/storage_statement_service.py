@@ -473,7 +473,7 @@ class StorageReportProduct:
     бесплатно» — другое утверждение.
     """
 
-    product_id: uuid.UUID
+    product_id: uuid.UUID | None
     sku: str | None
     product_name: str
     seller_article: str | None
@@ -603,12 +603,13 @@ async def build_storage_report(
     if not seller_ids or not warehouse_ids:
         return StorageReport(liter_days=Decimal(0), amount_kopecks=None, sellers=[])
 
+    # Карточка могла быть удалена после начисления. Для фильтра по категории
+    # всё равно нужны все оставшиеся карточки: иначе товар другой категории
+    # выглядел бы как не найденный и попал бы в архивную строку.
     product_query = select(Product).where(
         Product.tenant_id == tenant_id,
         Product.seller_id.in_(seller_ids),
     )
-    if category is not None:
-        product_query = product_query.where(func.trim(Product.category) == category)
     products = list((await session.scalars(product_query)).all())
     owners: dict[tuple[uuid.UUID | None, uuid.UUID | None, uuid.UUID], Product] = {}
     for product in products:
@@ -624,9 +625,20 @@ async def build_storage_report(
     # Один товар мог лежать на нескольких складах: в отчёте это одна строка, как
     # и на экране «Расчёты», где склад не является разрезом хранения.
     per_seller: dict[uuid.UUID, dict[uuid.UUID, tuple[Decimal, int | None]]] = {}
+    missing_products: dict[uuid.UUID, tuple[Decimal, int | None]] = {}
     for charge in charges:
         charge_product = owners.get((charge[0], charge[1], charge[2]))
         if charge_product is None:
+            # Нельзя назвать неизвестный товар категорией, выбранной оператором.
+            # Без фильтра сохраняем его начисления одной вычисляемой строкой.
+            if category is None:
+                liter_days, amount = missing_products.get(charge[0], (Decimal(0), None))
+                liter_days += Decimal(str(charge[3] or 0))
+                if charge[5]:
+                    amount = (amount or 0) + int(charge[4] or 0)
+                missing_products[charge[0]] = (liter_days, amount)
+            continue
+        if category is not None and (charge_product.category or "").strip() != category:
             continue
         bucket = per_seller.setdefault(charge[0], {})
         liter_days, amount = bucket.get(charge_product.id, (Decimal(0), None))
@@ -634,7 +646,8 @@ async def build_storage_report(
         if charge[5]:
             amount = (amount or 0) + int(charge[4] or 0)
         bucket[charge_product.id] = (liter_days, amount)
-    if not per_seller:
+    report_seller_ids = set(per_seller) | set(missing_products)
+    if not report_seller_ids:
         return StorageReport(liter_days=Decimal(0), amount_kopecks=None, sellers=[])
 
     sellers = list(
@@ -642,7 +655,7 @@ async def build_storage_report(
             await session.scalars(
                 select(Seller).where(
                     Seller.tenant_id == tenant_id,
-                    Seller.id.in_(per_seller),
+                    Seller.id.in_(report_seller_ids),
                 )
             )
         ).all()
@@ -662,7 +675,7 @@ async def build_storage_report(
         rows: list[StorageReportProduct] = []
         seller_liter_days = Decimal(0)
         seller_amount: int | None = None
-        for product_id, (liter_days, amount) in per_seller[seller.id].items():
+        for product_id, (liter_days, amount) in per_seller.get(seller.id, {}).items():
             product = products_by_id[product_id]
             rows.append(
                 StorageReportProduct(
@@ -680,7 +693,26 @@ async def build_storage_report(
             seller_liter_days += liter_days
             if amount is not None:
                 seller_amount = (seller_amount or 0) + amount
-        rows.sort(key=lambda row: (-row.liter_days, row.product_name, str(row.product_id)))
+        missing_product = missing_products.get(seller.id)
+        if missing_product is not None:
+            liter_days, amount = missing_product
+            rows.append(
+                StorageReportProduct(
+                    product_id=None,
+                    sku=None,
+                    product_name="Товар не найден в каталоге",
+                    seller_article=None,
+                    category=None,
+                    volume_liters=None,
+                    liter_days=liter_days,
+                    amount_kopecks=amount,
+                    current_rate_kopecks=current_rates.get(seller.id),
+                )
+            )
+            seller_liter_days += liter_days
+            if amount is not None:
+                seller_amount = (seller_amount or 0) + amount
+        rows.sort(key=lambda row: (-row.liter_days, row.product_name, str(row.product_id or "")))
         report_sellers.append(
             StorageReportSeller(
                 seller_id=seller.id,
