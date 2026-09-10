@@ -5,7 +5,8 @@
 очереди ОС. Ни маркетплейс, ни складские остатки, ни статусы поставки отсюда не
 меняются, повторная подготовка этикетки не запускается.
 
-Оператор на ТСД: ``POST ""`` и ``GET /{job_id}``.
+Оператор на ТСД: ``POST ""`` (этикетка, которую маркетплейс отдал раньше),
+``POST /document`` (готовый лист, который ТСД собрал сам) и ``GET /{job_id}``.
 Локальный агент на складском компьютере: ``POST /next``,
 ``GET /{job_id}/content``, ``POST /{job_id}/result``.
 
@@ -15,6 +16,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import uuid
 from typing import Annotated
 
@@ -29,7 +32,9 @@ from app.models.background_job import BackgroundJob
 from app.models.user import User
 from app.services.fbs_print_asset_service import FbsPrintAssetError
 from app.services.fbs_print_job_service import (
+    MAX_PRINT_DOCUMENT_BYTES,
     claim_next_print_job,
+    create_document_print_job,
     create_print_job,
     finish_print_job,
     get_print_job,
@@ -39,7 +44,9 @@ from app.services.fbs_print_job_service import (
 
 router = APIRouter(prefix="/operations/fbs-print-jobs", tags=["operations"])
 
-_NOT_FOUND_CODES = frozenset({"asset_not_found", "print_job_not_found", "warehouse_not_found"})
+_NOT_FOUND_CODES = frozenset(
+    {"asset_not_found", "print_job_not_found", "supply_not_found", "warehouse_not_found"}
+)
 _CONFLICT_CODES = frozenset(
     {
         "asset_not_ready",
@@ -59,9 +66,19 @@ def _raise_print_job_http(exc: FbsPrintAssetError) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
     if exc.code in _CONFLICT_CODES:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
-    if exc.code == "invalid_kind":
+    if exc.code in {"invalid_kind", "invalid_print_document"}:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
+
+
+def _decode_document(value: str) -> bytes:
+    try:
+        return base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise FbsPrintAssetError(
+            "invalid_print_document",
+            message="Файл этикеток не раскодировался из base64.",
+        ) from exc
 
 
 class FbsPrintJobCreateBody(BaseModel):
@@ -70,6 +87,16 @@ class FbsPrintJobCreateBody(BaseModel):
     job_id: uuid.UUID
     asset_id: uuid.UUID
     warehouse_id: uuid.UUID
+
+
+class FbsPrintJobDocumentBody(BaseModel):
+    # Тот же смысл, что и у job_id выше: одно явное нажатие — один номер печати.
+    job_id: uuid.UUID
+    # Склад сервер берёт у поставки: ТСД его UUID не знает и присылать не должен.
+    supply_id: uuid.UUID
+    # Готовый лист этикеток (PDF) в base64 — ровно тот, который ТСД печатал у себя.
+    # Потолок в символах отсекает заведомо большой файл до раскодирования.
+    document_base64: str = Field(max_length=(MAX_PRINT_DOCUMENT_BYTES + 2) // 3 * 4)
 
 
 class FbsPrintJobResultBody(BaseModel):
@@ -148,6 +175,33 @@ async def create_fbs_print_job(
             job_id=body.job_id,
             asset_id=body.asset_id,
             warehouse_id=body.warehouse_id,
+            user_id=user.id,
+        )
+    except FbsPrintAssetError as exc:
+        _raise_print_job_http(exc)
+    await session.commit()
+    return _job_out(job)
+
+
+@router.post("/document", response_model=FbsPrintJobOut, status_code=status.HTTP_202_ACCEPTED)
+async def create_fbs_print_job_from_document(
+    body: FbsPrintJobDocumentBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsPrintJobOut:
+    """Поставить в очередь готовый лист этикеток, который ТСД собрал сам.
+
+    Товарный штрихкод и код ЧЗ рисует сам ТСД, у маркетплейса их не спрашивают.
+    Здесь сервер ничего не пересобирает: принимает файл, кладёт его в то же
+    хранилище печатных активов и ставит в ту же очередь, что и QR заказа.
+    """
+    try:
+        job = await create_document_print_job(
+            session,
+            user.tenant_id,
+            job_id=body.job_id,
+            supply_id=body.supply_id,
+            document=_decode_document(body.document_base64),
             user_id=user.id,
         )
     except FbsPrintAssetError as exc:
