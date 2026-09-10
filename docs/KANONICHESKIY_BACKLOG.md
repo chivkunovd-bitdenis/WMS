@@ -12374,40 +12374,4 @@ WMS-080 также интегрирована; снятия WMS-088/WMS-093/WMS-
 
 Владелец исполнения — root в отдельном worktree `.worktrees/wms418-catalog-publication-filter`, ветка `codex/wms418-catalog-publication-filter`. Файлы: каталог `FfProductsCatalogScreen.tsx`, список `/products` и его сервис/целевые тесты. Координатор Astra продолжает415/416; не дублировать реализацию418. Готовый commit будет передан для интеграции.
 
-
-### WMS-415/416 · исключение спорных111/112, 10.09.2026 10:15 МСК
-
-WMS111/112 остаются STOP. После независимого анализа исполняемый срез исключён обратными точечными патчами, работа сохранена в исходном worktree, истории и pushed archive40a3216b. Прежняя отмена/резервы и разрешённые Ozon/stock/merge/chat сохранены.36целевых тестов PASS,3PGskip,ruff/tscPASS. [Протокол отделения](reviews/wms111-112-release-separation-20260910.md). Выпуск остальных задач требует закрыть их findings и проверить итоговый SHA/CI/deploy/browser отдельно.
-
-
-### WMS-415/416 · checkpoint10.09.2026 10:32 МСК
-
-Актуальные SHA/владение/проверки сохранены в [takeover](reviews/WMS_ASTRA_TAKEOVER_2026-09-10.md). Повторное independent review признало исключение111/1125ec3df40 корректным; статусSTOP сохраняется. Warehouse stale-empty fix977bd21a принят по коду;3heads исправлены0301. Stock namespace/preview и2AndroidP2 исправляют прежниеисполнители;177/179 Back/Forward иnestedclose — координатор. Ozon per-SKUmarkingb2ee5ce2 ещё ждётreview. Chat6764b483 сохранён, но его полныйworking-documentпереход иdraftrecovery не закрыты. WMS325полнаякартаmutationsчитаетсяотдельно;122устойчиваяидентичностькабинета/безопасныйразбордублей,402привязкаагентаиаппаратнаяпечатьещёнеполучены. НовыйAPK/CI/deploy/browserнеобъявленыпройденными. Productionread-onlyповторно0229831f,8088/15174открыты; подготовкабезопасногоdeployещёdirty.
-
-
-### WMS-415/416 · checkpoint10.09.2026 10:53 МСК
-
-Отдельный mobile PR213 feat/wms363-ozon-tsd на125a50eb, baseetalon: CI34451081425 полностьюPASS (backend8m12s, frontend/backlogPASS). Отproduction0229831f меняются только5appfiles, без новых миграций или широкого415/416кандидата. Независимый review6292 отклонил APK6e3d9b68: enqueue фиксирует старый короб при последовательности «сканB → товар» во времяrefresh. StreamingPDF P2 принят; размеры/подпись APK проверены reviewer. Safe report wms363-p2-independent-release-review-20260910.md. Mobile PID6760, прежнийthread01a0884d-9d82-7f41-a45a-91123f9ea9d8, исправляет только этот дефект и новыйAPK; никакихrawmobileevents/PROGRESS. Публикацииmanifest/APK не было. Publicv9 скачан:45281897bytes,sha256ccb8d7ea57863133f1b2c0dc549ffb10c74d17620203ff0ba3f43f88726457a6, cert e343ab0cccc6284b271a72da42a67b14a0f0893d92b9ca461f1cac3d0be1aeb6. После новогоreview — exactbackenddeploy и реальная кнопка9→10, неadbкакдоказательство. SSH вновьподтвердил0229831f, старые контейнерыработают;productionпока не менялся.
-
-Stocksource6d0ea954→705d2af6, pushed; review7088 принял namespaceиsavedpreview по коду и собственному исполнениюsingle/bulk. UI177/179 сохранён719ed850: существующийrouter/shell, Back/Forwardconfirm, FBSsupply_id, nestedcloseconfirm, чатopen_inbound. Tsc/buildPASS; фактическийCUA локальнойприёмки: отказBackсохранил123/URL, принятиевернуложурнал,Forward/ReloadвосстановилитотжеUUID; сохранённый124перечитанпослеповторногооткрытия. Review7088 нашёлlateAresponseoverwriteB; coordinatordirtyисправляетgenerationguardдляworkspace/stage/error/busy. NestedFBS/MP/liveproductionещёнеприняты. Safe report wms417-stock-navigation-independent-followup-20260910.md.
-
-Общийdeployсохранён27228de8; review7339/thread01a08a49-1fd4-74b2-8d8c-560fde7703ef нашёлstdin/bash-s и потерюexitstatusвprocesssubstitution. Coordinatordirtyисправил checkedgitshowassignment,bash-cбезstdin,pg_dumpбезstdin,checkedlegacycontainerlist+emptylist.7scopedtestsPASS,Ruff/bash-nPASS; нужно повторноreview. Это НЕчасть срочногоmobilebranch. Safe report wms338-377-independent-deploy-review-20260910.md.
-
-Аудитор3254951 завершён: полныйпротоколwms325-mutation-inventory-20260910.md сохраняетконкретныеwriters/пробелы,неполноезакрытие. НовыйwriterPID8120 вабсолютномwms056-audit-trail: толькоexistingDocumentEvent/model/API +outbound/discrepancy/FBSboxes/print/packconfirm, scopedtests/report. Catalog/stock/chat/mobile/App/111112/418неего. Пользовательскийactor/systemrecalcразделять;неполныереквизиты/тарифы/прочиесрезы325следующейволной.
-
-WMS111/112STOPнеизменён; архив/dirty/коммиты сохранены,исполнитель94229не запускался. WMS418 только внешнийroot. Не дублировать mobile6760/audit8120; review7088/7339 завершены. Срочныйmobileнеждёт широкий325/chat/stock/122.
-
-
-### WMS-415/416 · checkpoint 10.09.2026 после сетевого обновления v10
-
-Mobile12345 завершён: source507414e1→coord720507d8, report-only commit и evidence pushed; root перечитал/осмотрел доказательства. Реальное обновление через приложение принято в эмуляторном объёме, физическая граница сохранена. Chat10727 завершён655b566d с draft recovery/delete и существующими document links; независимый review PID14693, thread01a0885c-a939-7123-9856-8f57b5ddff0f, read-only wms397-chat-mvp. Audit13066 исправил PrintAsset/Order lock cbe4cdf1, reportb0700fcc: старый код воспроизвёл40P01 на двух PostgreSQL connections, новый PASS; повторный независимый review PID14692/thread01a08a2d-43fc-7060-82f1-f308ad0e6b31 вwms056-audit-trail. Оба gpt-6-astra high; DONE не приёмка.
-
-Ozon отдельный release branch feat/wms352-ozon-publication merged production-compatible etalon0771833b, HEAD58373def pushed. Финальная дельта: две backend services, два tests, один report; нет frontend/DDL/111112. 33 целевых tests PASS после merge; code неизменён относительно принятого1bd677f3. PR/CI/production этого Ozon-среза ещё следующий шаг. Общий кандидат пока не выпускался; UI/чат/325 и оставшиеся задачи продолжаются. WMS111/112 STOP, архив/dirty сохранены; WMS418 только external root.
-
-
-### WMS-415/416 · checkpoint 10.09.2026 12:04 МСК
-
-TopologyP2исправлен10aeccb3,pushed,15testsPASSиactualread-onlyserverpreflightPASS; reviewPID19079. Chat2P2исправленыsource6438dfbc,pushedclean, reviewPID19080;655/643ещёнеинтегрированы,latestpatchобязателен. Auditприёмки/тары/MPпродолжаетPID16257(15731короткоSIGINTдляownershipответа,dirtyсохранён). Всеastra6high,бездубликатовwriters. OzonPR214f4ff4219: устранены2ошибкиtestcontractизпервогоCI,5scopedPASS, runtime2servicesбезизменений; второйCI34458094624идёт. Ниобщийcandidate,ниOzonfixещёнеproduction. РеальныйproductionAPI077/mobilev10publication+actualappupdateпринятыотдельно.122историческаяидентичностьнеподменяетсяавтодедупом;111112STOP;418root-only.
-
-**Интеграция координатора 10.09.2026:** по явной передаче root в takeover перенесён только кодовый95ab5fc4, без merge его старой базы и без изменения worktree418. В текущем coordinator оба PostgreSQL HTTP-теста PASS (26.97s), scoped Ruff PASS, frontend tsc/build PASS. Существующие stock-правки и оболочка сохранены. Ручная проверка root описана в wms418-manual-catalog-20260910.md; coordinator её не выдаёт за собственные клики. Узкое независимое review интеграционного SHA ещё впереди; production этим фильтром не обновлён.
-
+**Срочный отдельный выпуск 10.09.2026:** владелец прямо потребовал первым выпустить этот фильтр. Изолированная release-ветка от проверенного production eaa6ae9a содержит только3 app-файла и2 HTTP-теста. Auth270/ports377 и общий415/416 кандидат не входят; WMS111/112 STOP. Ручная приёмка root95ab5fc4 сохранена, проверки адаптации и независимое review выполняются; CI/deploy пока не подтверждены.
