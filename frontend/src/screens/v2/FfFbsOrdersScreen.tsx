@@ -48,7 +48,7 @@ import {
   FbsMetricPanel,
   type MetricPreset,
 } from '../ff/products-fbs/FbsMetricPanel'
-import type { MoscowDateRangeValue } from '../../ui-kit'
+import { MarketplaceChip, type MoscowDateRangeValue } from '../../ui-kit'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import {
   buildFbsSyncTargets,
@@ -346,9 +346,12 @@ const NewOrderRow = memo(function NewOrderRow({
                 {order.product.id ? order.product.name : 'Товар не сопоставлен'}
               </Typography>
             )}
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
-              {orderNumberLabel(order)}
-            </Typography>
+            <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.25 }}>
+              <Typography variant="caption" color="text.secondary">
+                {orderNumberLabel(order)}
+              </Typography>
+              <MarketplaceChip marketplace={order.marketplace} testId={`fbs-order-${order.id}-marketplace`} />
+            </Stack>
             {blocked ? (
               <Stack sx={{ mt: 0.75 }} spacing={0.25}>
                 {order.selection_blockers.map((blocker) => (
@@ -1672,9 +1675,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                             )) : <Typography variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
                               {order.product.id ? order.product.name : 'Товар не сопоставлен'}
                             </Typography>}
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                              Заказ {orderNumberLabel(order)}
-                            </Typography>
+                            <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.25 }}>
+                              <Typography variant="caption" color="text.secondary">
+                                Заказ {orderNumberLabel(order)}
+                              </Typography>
+                              <MarketplaceChip marketplace={order.marketplace} testId={`fbs-order-${order.id}-marketplace`} />
+                            </Stack>
                           </Box>
                         </Stack>
                       </TableCell>
