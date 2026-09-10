@@ -1,0 +1,33 @@
+{
+  "source_base": "beb2ba6dea046845e93c5c56c73963a7fb0ee117",
+  "source_commit": "af9693126d19d16918abd5cc7b7fbe99dfebc142",
+  "files": [
+    "android/app/build.gradle.kts",
+    "android/app/src/main/java/ru/wms/tsd/features/auth/LoginScreen.kt",
+    "android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt",
+    "android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt",
+    "android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt",
+    "android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt"
+  ],
+  "file_sha256": {
+    "android/app/build.gradle.kts": "626dbc37014d73f36a91fcd44d75f80107d481ebeb83c4625e86009d327194bd",
+    "android/app/src/main/java/ru/wms/tsd/features/auth/LoginScreen.kt": "ab2824abcd6ed72d68834037b226824e7c524860de7e43d2e752c7efd69af95b",
+    "android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt": "5d168d8f040c6a30d5a71ff5ff9264c834ce9c95122c6049af0b93fd7de1add6",
+    "android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt": "23d95e090e85b059aa62eac7499f319ab4a258d89f53275d78a29e19ec7ef942",
+    "android/app/src/test/java/ru/wms/tsd/core/auth/AuthManagerTest.kt": "b14a18e4ec4e5d60472e4b84757de19b8bb8e3972a9f09a2bb88c9ba35002fd4",
+    "android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt": "b9fa7a399dc3cf3aad328a8708718a89996de5c9e733f3e369150f0fea69a76d"
+  },
+  "apk": "WMS-TSD-0.1.10-8435c3abcd24-debug.apk",
+  "apk_sha256": "8435c3abcd240afbaadb95e157512d52a56c105fd73440e6991933741237a81f",
+  "apk_size": 45298277,
+  "package": "ru.wms.tsd",
+  "versionCode": 11,
+  "versionName": "0.1.10-mobile-recovery",
+  "minSdk": 24,
+  "targetSdk": 35,
+  "debug": true,
+  "certificate_sha256": "e343ab0cccc6284b271a72da42a67b14a0f0893d92b9ca461f1cac3d0be1aeb6",
+  "v2_signature_verified": true,
+  "public_release": false,
+  "patch_reverse_check": "PASS"
+}

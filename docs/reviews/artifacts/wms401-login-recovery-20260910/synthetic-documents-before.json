@@ -1,0 +1,16 @@
+[
+  {
+    "uuid_hex": "21e363e0e6c649b68e8092af50b3a982",
+    "name": "WMS363-ozon-unfinished",
+    "marketplace": "ozon",
+    "status": "assembling",
+    "orders": 2
+  },
+  {
+    "uuid_hex": "95b8355cfb2f4911a0bd8fce0021250e",
+    "name": "WMS363-wb-unfinished",
+    "marketplace": "wb",
+    "status": "draft",
+    "orders": 2
+  }
+]

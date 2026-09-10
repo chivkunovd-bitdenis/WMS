@@ -1,0 +1,106 @@
+{
+  "01-v10-back-exits-app.png": {
+    "sha256": "f5e7cf4d721ab26c4bd83531f3f02d17b23a4f60c95dec742711ea3b81cd2b0f",
+    "bytes": 1344686
+  },
+  "02-v10-reopen-stuck-form.png": {
+    "sha256": "942ecfeade881bd538d5357e28bb5b46ca870aec184b6b547e9ca7693ee2e3eb",
+    "bytes": 65546
+  },
+  "03-v10-process-reopen.png": {
+    "sha256": "1a0f689d0548a6657d1fc23cc23ae046ec2a1d9a7ca0194d84bf7d128b3c3997",
+    "bytes": 24975
+  },
+  "04-v11-saved-staff.png": {
+    "sha256": "44d707e0540d1c4f5721d79d9991b176268e3710e72f87a3b0ec88fcf70800a2",
+    "bytes": 77340
+  },
+  "05-v11-settings-back-button.png": {
+    "sha256": "5cc1065a851996353d41f1a48621fdc7c0f927215f2f3ebf135f3d02bf1d96a6",
+    "bytes": 72836
+  },
+  "06-v11-back-collapses-settings.png": {
+    "sha256": "2dfbdb7fa6fc03a3507541f0e87eb9875b0e4fd6e605cf8c493abc0b74c39d3b",
+    "bytes": 48869
+  },
+  "07-v11-back-to-staff.png": {
+    "sha256": "237b846343527c6b9fe935fe09f4a5784963c52c74ff88b1b30ae43c8381c7de",
+    "bytes": 77186
+  },
+  "09-v11-https-local-error.png": {
+    "sha256": "afe8ba362690029ec97b9fa330a269a34f0605e441e2b30abdcc94dbf77198a7",
+    "bytes": 106048
+  },
+  "10-v11-working-server-preserved.png": {
+    "sha256": "4e1a34e6edb03e41fbab156a25629de6ffa10a8db0fe1e47cf37644a83215b0e",
+    "bytes": 103364
+  },
+  "11-v11-wb-order-first-deadline.png": {
+    "sha256": "cc7eaf7d52505c94fe31cd22c92ac96c75a345d1a15d373d62eb3e64daeedf0e",
+    "bytes": 151462
+  },
+  "12-v11-original-wb-document.png": {
+    "sha256": "ff529fa4c69fd21a76431e39ac5a04efae590c9265cd0453764bebf72710ec03",
+    "bytes": 94216
+  },
+  "13-v11-ozon-order-first-deadline.png": {
+    "sha256": "231e6cbd56e63fca9d1a6dc2bbc3483063be336e59a61ce78b62bc87f0791674",
+    "bytes": 177070
+  },
+  "14-v11-ozon-pick-before-background.png": {
+    "sha256": "612b45bc6f7cbe8d4a14d57480e7d256659f47f2c147693f7c215211956d25e3",
+    "bytes": 154410
+  },
+  "15-v11-after-five-minute-background.png": {
+    "sha256": "612b45bc6f7cbe8d4a14d57480e7d256659f47f2c147693f7c215211956d25e3",
+    "bytes": 154410
+  },
+  "16-v11-process-recreated-staff.png": {
+    "sha256": "8068429a6ade25eff28febd2ea50e554a6ff7344559a2352891100bef90a624b",
+    "bytes": 77263
+  },
+  "17-v11-process-pin-restores-ozon-pick.png": {
+    "sha256": "612b45bc6f7cbe8d4a14d57480e7d256659f47f2c147693f7c215211956d25e3",
+    "bytes": 154410
+  },
+  "18-v11-original-ozon-after-process.png": {
+    "sha256": "412ba12f6ec6648a92ebc3cfdf80a323f21b4edaf48b8c6d90a41810d337664f",
+    "bytes": 95754
+  },
+  "background.json": {
+    "sha256": "64d490b2795af538d1c53a41ca2a9250325b6931dc9715c2291d2b03fd228a7f",
+    "bytes": 380
+  },
+  "build-summary.json": {
+    "sha256": "f4a35957ec7557f494d3257250127a8afd5f136f2f4ec5538df26ea20e72456f",
+    "bytes": 305
+  },
+  "candidate.json": {
+    "sha256": "6b1cc9c14e15557ecb190ada9e91e17966b07ab087e970bf0f25589b4b53227c",
+    "bytes": 1867
+  },
+  "installed-package.json": {
+    "sha256": "b7909720c538a043f61049e1cdc497ad0b7f98801ff063fde4240eaefab8f4e1",
+    "bytes": 276
+  },
+  "mobile-WMS401-recovery.patch": {
+    "sha256": "ae0a454b3e22b3a047255b2890bd7538f567ab25e5b732c6c4e01feced15d5b3",
+    "bytes": 9266
+  },
+  "process-recreation.json": {
+    "sha256": "bb507acce3c2b33c24ed1338690856a69640c3b596e49c10dff474b710680737",
+    "bytes": 527
+  },
+  "synthetic-documents-after.json": {
+    "sha256": "cca1fa2533b3c7855f8bd27bcef297ca0d2bbbfca05028bbe593c22e7e310fcc",
+    "bytes": 334
+  },
+  "synthetic-documents-before.json": {
+    "sha256": "cca1fa2533b3c7855f8bd27bcef297ca0d2bbbfca05028bbe593c22e7e310fcc",
+    "bytes": 334
+  },
+  "targeted-tests.json": {
+    "sha256": "c0c857a4389b472bacef6661f983760aeb5b12b9f6b1053d829d5db062e665c8",
+    "bytes": 562
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "pid_before_kill": "24063",
+  "backgrounded_utc": "2026-09-10T12:18:11.568738+00:00",
+  "absent_after_kill": true,
+  "killed_utc": "2026-09-10T12:18:30.375655+00:00",
+  "pid_after_relaunch": "25534",
+  "recreated_utc": "2026-09-10T12:18:59.000882+00:00",
+  "relaunch_screen": "Saved staff picker; no blank screen",
+  "same_pin_login": "PASS; no values recorded",
+  "restored_after_pin": "Same original Ozon picking route restored automatically, both orders visible",
+  "completed_utc": "2026-09-10T12:20:21.890790+00:00"
+}
