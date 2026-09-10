@@ -625,15 +625,15 @@ async def build_storage_report(
     # и на экране «Расчёты», где склад не является разрезом хранения.
     per_seller: dict[uuid.UUID, dict[uuid.UUID, tuple[Decimal, int | None]]] = {}
     for charge in charges:
-        product = owners.get((charge[0], charge[1], charge[2]))
-        if product is None:
+        charge_product = owners.get((charge[0], charge[1], charge[2]))
+        if charge_product is None:
             continue
         bucket = per_seller.setdefault(charge[0], {})
-        liter_days, amount = bucket.get(product.id, (Decimal(0), None))
+        liter_days, amount = bucket.get(charge_product.id, (Decimal(0), None))
         liter_days += Decimal(str(charge[3] or 0))
         if charge[5]:
             amount = (amount or 0) + int(charge[4] or 0)
-        bucket[product.id] = (liter_days, amount)
+        bucket[charge_product.id] = (liter_days, amount)
     if not per_seller:
         return StorageReport(liter_days=Decimal(0), amount_kopecks=None, sellers=[])
 
