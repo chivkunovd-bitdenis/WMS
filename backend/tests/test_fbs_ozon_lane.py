@@ -896,6 +896,7 @@ async def _sync_ozon_posting_with_products(
             orders=[
                 {
                     "posting_number": "ozon-posting-products",
+                    "requirements": {},
                     "status": "awaiting_packaging",
                     "warehouse_id": "ozon-wh-1",
                     "created_at": datetime.now(UTC).isoformat(),
