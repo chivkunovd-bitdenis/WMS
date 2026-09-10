@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
@@ -686,7 +686,7 @@ def _supply_out(supply: FbsSupply, *, include_orders: bool) -> FbsSupplyOut:
         orders_out = [_order_out(order) for order in supply.orders]
     return FbsSupplyOut(
         id=str(supply.id),
-        marketplace=supply.marketplace,
+        marketplace=cast(Literal["wb", "ozon"], supply.marketplace),
         seller_id=str(supply.seller_id),
         warehouse_id=str(supply.warehouse_id),
         wb_supply_id=supply.wb_supply_id,
