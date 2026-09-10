@@ -97,6 +97,16 @@ def _is_supplier_status_new(supplier_status: str | None) -> bool:
     return supplier_status is None or supplier_status.strip().lower() == FBS_ORDER_STATUS_NEW
 
 
+def _deadline_in_work_clause(server_now: datetime) -> ColumnElement[bool]:
+    """Заказ ещё в работе: срок не вышел — а у Ozon срок из работы и не выводит."""
+    return or_(FbsOrder.marketplace == "ozon", FbsOrder.deadline_at >= server_now)
+
+
+def _deadline_expired_clause(server_now: datetime) -> ColumnElement[bool]:
+    """Просрочен и потому нерабочий. Заказы Ozon сюда не попадают (WMS-422)."""
+    return and_(FbsOrder.marketplace != "ozon", FbsOrder.deadline_at < server_now)
+
+
 def _supplier_new_clause() -> ColumnElement[bool]:
     return or_(
         FbsOrder.supplier_status.is_(None),
@@ -297,11 +307,15 @@ async def _fetch_orders_page(
         if status_group == "new":
             stmt = stmt.where(_supplier_new_clause())
             # BL-3: "Новые" показывают только заказы, которые WB ещё реально примет.
-            stmt = stmt.where(FbsOrder.deadline_at >= server_now)
+            # WMS-422: у Ozon просрочка заказ из работы не выводит — кабинет
+            # продолжает отдавать отправление как неотгруженное. Работать с ним
+            # можно только здесь: чекбоксы и кнопки поставки живут на вкладке
+            # «Новые», на остальных вкладках строка нерабочая.
+            stmt = stmt.where(_deadline_in_work_clause(server_now))
         elif status_group == "expired":
             stmt = stmt.where(_supplier_new_clause())
             # BL-3: "Просрочены" — зеркало "new", но с истёкшим дедлайном.
-            stmt = stmt.where(FbsOrder.deadline_at < server_now)
+            stmt = stmt.where(_deadline_expired_clause(server_now))
     if wb_warehouse_id is not None:
         stmt = stmt.where(FbsOrder.wb_warehouse_id == wb_warehouse_id)
     if search and search.strip():
@@ -385,10 +399,10 @@ async def _fetch_warehouse_options(
         stmt = stmt.where(FbsOrder.status.in_(allowed))
         if status_group == "new":
             stmt = stmt.where(_supplier_new_clause())
-            stmt = stmt.where(FbsOrder.deadline_at >= server_now)
+            stmt = stmt.where(_deadline_in_work_clause(server_now))
         elif status_group == "expired":
             stmt = stmt.where(_supplier_new_clause())
-            stmt = stmt.where(FbsOrder.deadline_at < server_now)
+            stmt = stmt.where(_deadline_expired_clause(server_now))
     stmt = stmt.order_by(TenantWbMpWarehouse.name.asc(), FbsOrder.wb_warehouse_id.asc())
     res = await session.execute(stmt)
     options: dict[str, dict[str, Any]] = {}
@@ -437,7 +451,17 @@ async def _load_worklist_context(
     warehouse_ids = {o.warehouse_id for o in orders if o.warehouse_id is not None}
     product_ids = {o.product_id for o in orders if o.product_id is not None}
     order_ids = [o.id for o in orders]
-    wb_wh_ids = {int(o.wb_warehouse_id) for o in orders if o.wb_warehouse_id is not None}
+    # WMS-419. Справочник `tenant_wb_mp_warehouses` — склады Wildberries, и его
+    # `wb_warehouse_id` это int4. У озоновского заказа в том же поле лежит номер
+    # склада Ozon (например 1020005029603630), который в int4 не помещается:
+    # Postgres отвечал `integer out of range`, и весь список падал в 500 на той
+    # вкладке, где виден хоть один заказ Ozon. Записи об озоновском складе в
+    # вайлдберрисовском справочнике нет и быть не может, поэтому не спрашиваем.
+    wb_wh_ids = {
+        int(o.wb_warehouse_id)
+        for o in orders
+        if o.wb_warehouse_id is not None and o.marketplace != "ozon"
+    }
     seller_nm_pairs: set[tuple[uuid.UUID, int]] = set()
     for o in orders:
         if o.seller_id and o.wb_nm_id is not None:
@@ -806,7 +830,13 @@ def compute_selection_blockers(
                 "message": "Склад WB не привязан к WMS — привяжите его на вкладке «Остатки WB».",
             }
         )
-    if _as_utc(order.deadline_at) < _as_utc(server_now):
+    # WMS-420. Просрочка запирает выбор только у Wildberries: там сборку после
+    # срока уже не примут. Ozon отправление не аннулирует — живой ответ по
+    # 0110009646-0483-1 через полтора часа после срока по-прежнему отдаёт
+    # `awaiting_packaging` в списке неотгруженных, и запрета на ship в его
+    # спецификации нет. Сам факт просрочки оператор видит по вкладке
+    # «Просрочены»; отнимать у него возможность сдать заказ мы не вправе.
+    if order.marketplace != "ozon" and _as_utc(order.deadline_at) < _as_utc(server_now):
         blockers.append({"code": "deadline_passed", "message": "Срок сборки истёк."})
     return blockers
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, Uuid, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -20,7 +20,9 @@ class TenantWbMpWarehouse(Base):
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
     )
-    wb_warehouse_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    # WMS-423. bigint: сюда приходят и номера складов Ozon из поля заказа
+    # (1020005029603630), которые в int4 не помещаются и роняли запрос.
+    wb_warehouse_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     name: Mapped[str] = mapped_column(String(512), nullable=False)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
     work_time: Mapped[str | None] = mapped_column(String(128), nullable=True)

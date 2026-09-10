@@ -10,7 +10,7 @@ from __future__ import annotations
 from enum import Enum, StrEnum
 from typing import Any, cast
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 _OPTIONAL_FIELD_DEFAULT = cast(Any, None)
 
@@ -19,6 +19,27 @@ class OzonFbsModel(BaseModel):
     """Base model preserving OpenAPI's default additional-properties behaviour."""
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_explicit_nulls(cls, data: Any) -> Any:
+        """WMS-426. Незаполненное поле Ozon шлёт как `null`, а не опускает.
+
+        Схемы сгенерированы так, что у каждого необязательного поля стоит
+        умолчание `None`, но сам тип `null` не допускает: пропущенный ключ
+        проходит, а явный `null` — нет. Живой ответ `/v3/posting/fbs/get`
+        10.09.2026 пришёл с `addressee`, `analytics_data`, `barcodes`,
+        `courier`, `customer` и `container` равными `null`, и сборка короба
+        падала на «Ozon вернул ответ неизвестного формата».
+
+        `null` у Ozon значит «не заполнено» — то же самое, что отсутствие
+        ключа. Убираем такие ключи до валидации, и умолчание отрабатывает как
+        задумано. Обязательное поле, присланное как `null`, по-прежнему даёт
+        ошибку — только теперь честную, про отсутствующее поле.
+        """
+        if isinstance(data, dict):
+            return {key: value for key, value in data.items() if value is not None}
+        return data
 
 
 class OzonPostingV4PostingFbsUnfulfilledListRequest(OzonFbsModel):
