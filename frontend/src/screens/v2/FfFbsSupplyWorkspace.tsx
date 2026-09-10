@@ -440,6 +440,7 @@ export function FfFbsSupplyWorkspace({
 
   useEffect(() => {
     if (!open || !supplyId) return
+    setBusy(false)
     setError(null)
     setNotice(null)
     setWorkspace(initialWorkspace ?? null)
