@@ -512,21 +512,6 @@ async def _move_new_order_to_external_processing(
     await _release_reservation(session, order)
 
 
-# Internal response annotation: datetime objects cannot arrive in WB JSON.
-# Capture before pagination/DB locks; never persist this key as marketplace data.
-_OBSERVED_AT_KEY = "_wms_cancel_observed_at"
-
-
-def _observe_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    at = datetime.now(UTC)
-    return [{**row, _OBSERVED_AT_KEY: at} for row in rows]
-
-
-def _row_observed_at(row: dict[str, Any] | None) -> datetime:
-    value = row.get(_OBSERVED_AT_KEY) if row else None
-    return value if isinstance(value, datetime) else datetime.now(UTC)
-
-
 async def _apply_wb_row_to_existing(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -536,7 +521,6 @@ async def _apply_wb_row_to_existing(
     *,
     preserve_unmapped_warehouse: bool = False,
 ) -> None:
-    observed_at = _row_observed_at(row)
     wb_barcode = _first_barcode(row)
     wb_nm_id = row.get("nmId")
     wb_nm_id_int = int(wb_nm_id) if wb_nm_id is not None else None
@@ -579,8 +563,6 @@ async def _apply_wb_row_to_existing(
             wb_status,
             supplier_status=supplier_status,
             actor_user_id=None,
-            row=row,
-            received_at=observed_at,
         )
     apply_wb_meta_requirements_to_order(existing, row)
     if preserve_unmapped_warehouse:
@@ -602,12 +584,6 @@ async def _apply_wb_row_to_existing(
         if product is not None:
             existing.product_id = product.id
             existing.mapping_status = MAPPING_STATUS_MAPPED
-    if existing.status == FBS_ORDER_STATUS_CANCELLED:
-        from app.services.fbs_cancel_return_document_service import (
-            maybe_create_cancel_return_document,
-        )
-
-        await maybe_create_cancel_return_document(session, existing, row=row)
     try:
         async with session.begin_nested():
             await _try_reserve_order(session, existing)
@@ -631,7 +607,6 @@ async def upsert_order_from_wb_row(
     (a WB-cabinet desync, not an error to raise on). Callers that don't
     care can omit it; the 2-tuple return is unchanged so no call site breaks.
     """
-    row = {**row, _OBSERVED_AT_KEY: _row_observed_at(row)}
     wb_order_id_raw = row.get("id")
     if wb_order_id_raw is None:
         raise WbMarketplaceOrdersError("missing_wb_order_id")
@@ -728,11 +703,6 @@ async def upsert_order_from_wb_row(
             preserve_unmapped_warehouse=preserve_unmapped_warehouse,
         )
         return raced, False
-    if order.status == FBS_ORDER_STATUS_CANCELLED:
-        await _apply_wb_status_to_order(
-            session, order, wb_status, supplier_status=supplier_status,
-            actor_user_id=None, row=row, received_at=_row_observed_at(row),
-        )
     return order, True
 
 
@@ -743,11 +713,7 @@ async def _apply_wb_status_to_order(
     *,
     supplier_status: str | None = None,
     actor_user_id: uuid.UUID | None,
-    row: dict[str, Any] | None = None,
-    received_at: datetime | None = None,
 ) -> None:
-    """Apply status and retain the first WMS observation before side effects."""
-    observed_at = received_at or _row_observed_at(row)
     normalized_wb = (
         wb_status.strip().lower() if isinstance(wb_status, str) and wb_status.strip() else None
     )
@@ -775,13 +741,6 @@ async def _apply_wb_status_to_order(
         )
 
         order.status = FBS_ORDER_STATUS_CANCELLED
-        from app.services.fbs_cancel_return_document_service import (
-            maybe_create_cancel_return_document,
-        )
-
-        await maybe_create_cancel_return_document(
-            session, order, row=row, received_at=observed_at,
-        )
         await reverse_fbs_shipment_if_needed(
             session,
             order,
@@ -878,11 +837,11 @@ async def _fetch_status_rows_resilient(
     for batch in split_marketplace_order_id_batches(wb_ids):
         try:
             status_rows.extend(
-                _observe_rows(await fetch_marketplace_orders_status(
+                await fetch_marketplace_orders_status(
                     http_client,
                     api_token=api_token,
                     order_ids=batch,
-                ))
+                )
             )
             continue
         except WildberriesClientError as exc:
@@ -904,11 +863,11 @@ async def _fetch_status_rows_resilient(
         for wb_order_id in batch:
             try:
                 status_rows.extend(
-                    _observe_rows(await fetch_marketplace_orders_status(
+                    await fetch_marketplace_orders_status(
                         http_client,
                         api_token=api_token,
                         order_ids=[wb_order_id],
-                    ))
+                    )
                 )
             except WildberriesClientError as exc:
                 ref = wb_error_ref()
@@ -1029,12 +988,9 @@ async def sync_order_statuses(
             continue
         await _apply_wb_status_to_order(
             session, order, wb_status, supplier_status=supplier_status,
-            actor_user_id=actor_user_id, row=status_row,
+            actor_user_id=actor_user_id,
         )
         updated += 1
-    from app.services.fbs_cancel_return_document_service import retry_pending_cancel_returns
-
-    await retry_pending_cancel_returns(session, tenant_id, seller_id)
     return updated
 
 
@@ -1471,9 +1427,7 @@ async def sync_seller_orders(
     api_token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
 
     try:
-        new_rows = _observe_rows(
-            await fetch_marketplace_orders_new(http_client, api_token=api_token)
-        )
+        new_rows = await fetch_marketplace_orders_new(http_client, api_token=api_token)
     except WildberriesClientError as exc:
         ref = wb_error_ref()
         log_wb_client_error(
@@ -1532,7 +1486,6 @@ async def sync_seller_orders(
                     break
                 raise error from exc
 
-            page_rows = _observe_rows(page_rows)
             if not page_rows:
                 break
             await import_wb_order_rows(session, tenant_id, seller_id, page_rows, import_stats)
@@ -1573,11 +1526,6 @@ async def sync_seller_orders(
                 supply_link_result = _empty_supply_link_result(
                     supply_link_error="local_exception",
                 )
-
-    from app.services.fbs_cancel_return_document_service import retry_pending_cancel_returns
-
-    await retry_pending_cancel_returns(session, tenant_id, seller_id)
-    await session.commit()
 
     result: dict[str, Any] = {
         "seller_id": str(seller_id),

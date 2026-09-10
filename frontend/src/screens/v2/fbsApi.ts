@@ -1641,10 +1641,6 @@ export type FbsCancelledAfterPackOrder = {
   supply: { id: string | null; wb_supply_id: string | null; name: string | null }
   cargo_places: Array<{ box_id: string; box_number: number; box_barcode: string; wb_trbx_id: string | null }>
   cancelled_at: string
-  cancelled_at_source: string
-  cancelled_after_transfer: boolean | null
-  transfer_at: string | null
-  return_document_id: string | null
   cancellation_reason: string
   supply_departed: boolean | null
 }
@@ -1652,17 +1648,12 @@ export type FbsCancelledAfterPackOrder = {
 export async function fetchFbsCancelledAfterPack(
   token: string,
   authHeaders: (t: string) => Record<string, string>,
-  params: {
-    sellerId?: string; search: string; limit: number; offset: number
-    cancelledFrom?: string; cancelledTo?: string
-  },
+  params: { sellerId?: string; search: string; limit: number; offset: number },
 ): Promise<{ items: FbsCancelledAfterPackOrder[]; total: number }> {
   const qs = new URLSearchParams({
     search: params.search, limit: String(params.limit), offset: String(params.offset),
   })
   if (params.sellerId) qs.set('seller_id', params.sellerId)
-  if (params.cancelledFrom) qs.set('cancelled_from', params.cancelledFrom)
-  if (params.cancelledTo) qs.set('cancelled_to', params.cancelledTo)
   return jsonOrThrow(await fetch(apiUrl(`/fbs/cancelled-after-pack?${qs}`), {
     headers: authHeaders(token),
   }))

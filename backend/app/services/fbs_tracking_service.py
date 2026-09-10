@@ -288,7 +288,6 @@ async def _sync_supply_orders_from_wb(
             suffix = f"_{exc.status_code}" if exc.status_code else ""
             raise FbsTrackingError(f"wb_{exc.code}{suffix}") from exc
 
-        observed_at = datetime.now(UTC)
         by_id = {
             int(row["id"]): row for row in status_rows if row.get("id") is not None
         }
@@ -308,8 +307,6 @@ async def _sync_supply_orders_from_wb(
                 wb_status,
                 supplier_status=supplier_status,
                 actor_user_id=actor_user_id,
-                row=row,
-                received_at=observed_at,
             )
             order.last_wb_sync_at = datetime.now(tz=UTC)
             processed += 1

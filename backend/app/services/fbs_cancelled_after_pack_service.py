@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, String, and_, cast, delete, exists, func, or_, select
+from sqlalchemy import String, and_, cast, delete, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -29,13 +29,6 @@ from app.models.fbs_supply import (
 from app.models.fbs_trbx import FbsTrbx
 from app.models.product import Product
 from app.models.warehouse_box import WarehouseBox
-from app.services.fbs_cancel_return_document_service import (
-    CANCEL_RETURN_META_KEY,
-    CANCEL_TIME_SOURCE_RECEIVED_AT,
-    cancel_return_marker,
-    cancellation_handover_dates,
-    cancelled_after_transfer,
-)
 from app.services.wb_marketplace_orders_service import CANCEL_LIKE_WB_STATUSES
 
 
@@ -73,45 +66,6 @@ def cancellation_reason(order: FbsOrder) -> str:
 
 def cancelled_operation_message(order: FbsOrder, action: str) -> str:
     return f"{cancellation_reason(order)}, {action}."
-
-
-def _parse_marker_datetime(raw: Any) -> datetime | None:
-    if not isinstance(raw, str) or not raw.strip():
-        return None
-    text = raw.strip().replace("Z", "+00:00")
-    try:
-        parsed = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
-
-
-def resolved_cancelled_at(order: FbsOrder) -> tuple[datetime, str]:
-    """Момент отмены заказа с источником.
-
-    WMS-112: если есть маркер, поставленный обработчиком отмены, берём момент
-    оттуда — это либо WB-момент, либо первое наблюдение WMS. Иначе — общий
-    updated_at (это старое поведение реестра; так же явно помечаем, что момент
-    не является событием отмены, а всего лишь моментом последнего изменения
-    строки).
-    """
-    marker = cancel_return_marker(order)
-    if marker is not None:
-        parsed = _parse_marker_datetime(marker.get("cancelled_at"))
-        if parsed is not None:
-            source_raw = marker.get("cancelled_at_source")
-            source = (
-                str(source_raw).strip().lower()
-                if isinstance(source_raw, str) and source_raw.strip()
-                else CANCEL_TIME_SOURCE_RECEIVED_AT
-            )
-            return parsed, source
-    # Legacy row without a marker (созданы до WMS-111): вернуть updated_at и
-    # честно пометить, что источника события отмены у нас нет.
-    updated_at = order.updated_at
-    if updated_at.tzinfo is None:
-        updated_at = updated_at.replace(tzinfo=UTC)
-    return updated_at, "updated_at"
 
 
 def _assembly_trace_condition() -> Any:
@@ -159,8 +113,6 @@ async def order_belonged_to_supply(
     if order.tenant_id != supply.tenant_id or order.seller_id != supply.seller_id:
         return False
     if order.supply_id == supply.id:
-        return True
-    if (cancel_return_marker(order) or {}).get("source_supply_id") == str(supply.id):
         return True
     if order.wb_supply_id and order.wb_supply_id == supply.wb_supply_id:
         return True
@@ -213,8 +165,6 @@ def _supply_filter_condition(supply: FbsSupply) -> Any:
     )
     conditions = [
         FbsOrder.supply_id == supply.id,
-        FbsOrder.meta_details_json[CANCEL_RETURN_META_KEY]["source_supply_id"].as_string()
-        == str(supply.id),
         pick_in_supply,
         box_in_supply,
     ]
@@ -414,21 +364,12 @@ async def _load_supplemental_rows(
             }
         )
 
-    original_supply: dict[uuid.UUID, uuid.UUID] = {}
-    for order in orders:
-        try:
-            original_supply[order.id] = uuid.UUID(str(
-                (cancel_return_marker(order) or {}).get("source_supply_id")
-            ))
-        except ValueError:
-            continue
     supply_ids = {
         supply_id
         for order in orders
         for supply_id in (
             box_supply.get(order.id),
             order.supply_id,
-            original_supply.get(order.id),
             pick_supply.get(order.id),
         )
         if supply_id is not None
@@ -459,7 +400,6 @@ async def _load_supplemental_rows(
             (
                 box_supply.get(order.id) in by_id,
                 order.supply_id in by_id,
-                original_supply.get(order.id) in by_id,
                 pick_supply.get(order.id) in by_id,
                 pack_task.get(order.id) in by_task,
             )
@@ -494,7 +434,6 @@ async def _load_supplemental_rows(
         candidate_ids = (
             box_supply.get(order.id),
             order.supply_id,
-            original_supply.get(order.id),
             pick_supply.get(order.id),
         )
         current_supply: FbsSupply | None = next(
@@ -531,18 +470,6 @@ async def fetch_cancelled_after_pack_page(
     if cancelled_from is not None and cancelled_to is not None and cancelled_from > cancelled_to:
         raise ValueError("invalid_period")
 
-    marker_time = FbsOrder.meta_details_json[CANCEL_RETURN_META_KEY]["cancelled_at"].as_string()
-    from_bound: Any
-    to_bound: Any
-    if session.get_bind().dialect.name == "sqlite":
-        cancelled_time = func.julianday(func.coalesce(marker_time, FbsOrder.updated_at))
-        from_bound = func.julianday(cancelled_from) if cancelled_from else None
-        to_bound = func.julianday(cancelled_to) if cancelled_to else None
-    else:
-        cancelled_time = func.coalesce(
-            cast(marker_time, DateTime(timezone=True)), FbsOrder.updated_at,
-        )
-        from_bound, to_bound = cancelled_from, cancelled_to
     conditions = [
         FbsOrder.tenant_id == tenant_id,
         FbsOrder.status == FBS_ORDER_STATUS_CANCELLED,
@@ -577,9 +504,9 @@ async def fetch_cancelled_after_pack_page(
     if seller_id is not None:
         conditions.append(FbsOrder.seller_id == seller_id)
     if cancelled_from is not None:
-        conditions.append(cancelled_time >= from_bound)
+        conditions.append(FbsOrder.updated_at >= cancelled_from)
     if cancelled_to is not None:
-        conditions.append(cancelled_time <= to_bound)
+        conditions.append(FbsOrder.updated_at <= cancelled_to)
     if supply_id is not None:
         supply = await session.scalar(
             select(FbsSupply).where(
@@ -600,7 +527,7 @@ async def fetch_cancelled_after_pack_page(
                 select(FbsOrder)
                 .where(*conditions)
                 .options(selectinload(FbsOrder.seller), selectinload(FbsOrder.product))
-                .order_by(cancelled_time.desc(), FbsOrder.id.desc())
+                .order_by(FbsOrder.updated_at.desc(), FbsOrder.id.desc())
                 .limit(limit)
                 .offset(offset)
             )
@@ -609,12 +536,6 @@ async def fetch_cancelled_after_pack_page(
     printed_at, _pick_supply, trace_at, _pack_task, cargo, supplies = await _load_supplemental_rows(
         session, tenant_id, orders
     )
-    # WMS-112: историческая граница «до передачи / после передачи» —
-    # это сравнение момента отмены с моментом фактической передачи, а не
-    # моментальный признак «поставка сейчас передана». Момент передачи
-    # берём из того же источника, которому доверяет биллинг: подтверждённая
-    # операция передачи или delivered_at на поставке.
-    handover_by_order = await cancellation_handover_dates(session, tenant_id, orders)
 
     items: list[dict[str, Any]] = []
     for order in orders:
@@ -627,18 +548,6 @@ async def fetch_cancelled_after_pack_page(
             order.product.name if order.product is not None else (order.wb_article or "Товар")
         )
         product_article = order.product.sku_code if order.product is not None else order.wb_article
-        cancelled_at, cancelled_at_source = resolved_cancelled_at(order)
-        handover_at = handover_by_order.get(order.id)
-        supply_departed_current = (
-            supply.delivered_at is not None
-            or supply.status in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}
-            if supply is not None
-            else None
-        )
-        historical_before_transfer = (
-            cancelled_after_transfer(cancelled_at, handover_at)
-            if cancelled_at_source != "updated_at" else None
-        )
         items.append(
             {
                 "order_id": str(order.id),
@@ -670,24 +579,16 @@ async def fetch_cancelled_after_pack_page(
                 "assembled_at": assembled_at,
                 "picked_at": order.picked_at,
                 "packed_at": order.packed_at,
-                "cancelled_at": cancelled_at,
-                "cancelled_at_source": cancelled_at_source,
+                "cancelled_at": order.updated_at,
                 "cancellation_code": cancellation_code(order),
                 "cancellation_reason": cancellation_reason(order),
                 "sticker_printed": sticker_printed_at is not None
                 or order.sticker_status in {STICKER_STATUS_PRINT_OPENED, STICKER_STATUS_APPLIED},
                 "sticker_printed_at": sticker_printed_at,
-                "supply_departed": supply_departed_current,
-                # Историческая граница до/после передачи в момент отмены. None,
-                # когда момент передачи неизвестен: тогда UI обязан честно
-                # промолчать, а не подставлять «после передачи» по умолчанию.
-                "transfer_at": handover_at,
-                "cancelled_after_transfer": historical_before_transfer,
-                # Ссылка на существующий документ возврата, если он уже создан
-                # автоматикой WMS-111. UI может напрямую вести оператора туда.
-                "return_document_id": (
-                    marker.get("inbound_request_id")
-                    if (marker := cancel_return_marker(order)) is not None
+                "supply_departed": (
+                    supply.delivered_at is not None
+                    or supply.status in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}
+                    if supply is not None
                     else None
                 ),
             }

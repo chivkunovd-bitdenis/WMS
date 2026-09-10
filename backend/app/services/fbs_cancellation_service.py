@@ -189,12 +189,8 @@ async def _finish_local_cancellation(
     вписан в вайлдберрисовскую ветку, и озоновской отмене пришлось бы его
     повторить — то есть завести второе место, где легко забыть про резерв.
     """
-    observed_at = datetime.now(UTC)
     order.status = FBS_ORDER_STATUS_CANCELLED
     order.wb_status = "cancelled"
-    from app.services.fbs_cancel_return_document_service import maybe_create_cancel_return_document
-
-    await maybe_create_cancel_return_document(session, order, received_at=observed_at)
     await reverse_fbs_shipment_if_needed(
         session,
         order,
@@ -339,13 +335,6 @@ async def cancel_order(
         raise FbsCancellationError("order_not_found")
 
     if order.status == FBS_ORDER_STATUS_CANCELLED:
-        from app.services.fbs_cancel_return_document_service import (
-            cancel_return_marker,
-            maybe_create_cancel_return_document,
-        )
-
-        if cancel_return_marker(order):
-            await maybe_create_cancel_return_document(session, order)
         return order
 
     if order.status in NON_CANCELLABLE_STATUSES:
