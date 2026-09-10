@@ -1,0 +1,10 @@
+{
+  "migration_versions": [
+    "20260908_0257"
+  ],
+  "wb_same_tenant_number_duplicates": {
+    "groups": 0,
+    "rows": "0",
+    "cross_seller_groups": 0
+  }
+}
