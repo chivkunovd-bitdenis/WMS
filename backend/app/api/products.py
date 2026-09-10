@@ -912,8 +912,8 @@ async def post_products_merge(
     except ProductMergeError as exc:
         if exc.code == "product_not_found":
             raise HTTPException(status_code=404, detail=exc.code) from None
-        if exc.code == "merge_conflict":
-            raise HTTPException(status_code=409, detail=exc.code) from None
+        if exc.code in {"merge_conflict", "merge_busy"}:
+            raise HTTPException(status_code=409, detail=exc.message) from None
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.code
         ) from None
