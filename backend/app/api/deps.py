@@ -126,6 +126,9 @@ async def get_current_user(
             detail="tenant_mismatch",
         )
     await _assert_subscription_active(request, session, user)
+    from app.services.document_event_service import bind_authenticated_document_actor
+
+    bind_authenticated_document_actor(user.id)
     return user
 
 

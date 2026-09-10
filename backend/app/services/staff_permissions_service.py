@@ -11,11 +11,11 @@ from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_STAFF
 from app.models.document_event import (
     DOCUMENT_TYPE_STAFF_USER,
     EVENT_PERMISSIONS_CHANGED,
+    SOURCE_USER,
 )
 from app.models.ff_staff_permissions import FfStaffPermissions
 from app.models.user import User
 from app.services.document_event_service import (
-    current_document_event_actor,
     record_document_event_safely,
 )
 
@@ -166,14 +166,13 @@ async def update_staff_permissions(
     # — тот, кто нажал кнопку, target — тот, кому меняют права. Пишем ДО commit,
     # чтобы событие и права уехали в одну транзакцию. Новую таблицу не заводим.
     if before != after:
-        actor = current_document_event_actor()
         await record_document_event_safely(
             session,
             tenant_id=user.tenant_id,
             document_type=DOCUMENT_TYPE_STAFF_USER,
             document_id=user.id,
             event_type=EVENT_PERMISSIONS_CHANGED,
-            source=actor.source,
+            source=SOURCE_USER,
             actor_user_id=acting_user.id,
             payload_json={
                 "role": "fulfillment_staff",

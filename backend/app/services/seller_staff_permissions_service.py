@@ -14,11 +14,11 @@ from app.models.document_event import (
     DOCUMENT_TYPE_STAFF_USER,
     EVENT_PERMISSIONS_CHANGED,
     EVENT_STAFF_USER_CREATED,
+    SOURCE_USER,
 )
 from app.models.seller_staff_permissions import SellerStaffPermissions
 from app.models.user import User
 from app.services.document_event_service import (
-    current_document_event_actor,
     record_document_event_safely,
 )
 from app.services.passwords import hash_password
@@ -164,7 +164,6 @@ async def create_seller_staff_user(
     # WMS-325: создание сотрудника продавца — сразу с правами; фиксируем
     # событие вместе с начальным набором прав, чтобы точка "у пользователя
     # появился доступ" была на общем аудит-контуре.
-    actor = current_document_event_actor()
     after = permissions.as_dict()
     await record_document_event_safely(
         session,
@@ -172,7 +171,7 @@ async def create_seller_staff_user(
         document_type=DOCUMENT_TYPE_STAFF_USER,
         document_id=user.id,
         event_type=EVENT_STAFF_USER_CREATED,
-        source=actor.source,
+        source=SOURCE_USER,
         actor_user_id=acting_user.id,
         payload_json={
             "role": "fulfillment_seller",
@@ -233,14 +232,13 @@ async def update_seller_staff_permissions(
     after = permissions.as_dict()
     # WMS-325: append-only факт смены прав seller-сотрудника.
     if before != after:
-        actor = current_document_event_actor()
         await record_document_event_safely(
             session,
             tenant_id=user.tenant_id,
             document_type=DOCUMENT_TYPE_STAFF_USER,
             document_id=user.id,
             event_type=EVENT_PERMISSIONS_CHANGED,
-            source=actor.source,
+            source=SOURCE_USER,
             actor_user_id=acting_user.id,
             payload_json={
                 "role": "fulfillment_seller",

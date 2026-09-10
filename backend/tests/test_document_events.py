@@ -1113,3 +1113,41 @@ def test_postgresql_trigger_is_system_authored_and_failure_isolated(
         with engine.begin() as connection:
             connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
         engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_authorization_headers_cannot_change_audit_actor(
+    async_client: AsyncClient,
+) -> None:
+    first, first_claims = await _register_admin(async_client)
+    second, _ = await _register_admin(async_client)
+    data = await _seed_document_data(async_client, first)
+    request_id, _ = await _create_inbound_draft(async_client, first, data)
+    planned = await async_client.patch(
+        f"/operations/inbound-intake-requests/{request_id}",
+        headers=first,
+        json={"planned_box_count": 1},
+    )
+    assert planned.status_code == 200, planned.text
+    response = await async_client.post(
+        f"/operations/inbound-intake-requests/{request_id}/submit",
+        headers=[
+            ("Authorization", first["Authorization"]),
+            ("Authorization", second["Authorization"]),
+        ],
+    )
+    assert response.status_code == 200, response.text
+    async with SessionLocal() as session:
+        rows = list(
+            (
+                await session.scalars(
+                    select(DocumentEvent).where(
+                        DocumentEvent.document_id == uuid.UUID(request_id),
+                        DocumentEvent.event_type == EVENT_STATUS_CHANGED,
+                    )
+                )
+            ).all()
+        )
+    assert rows
+    assert all(row.actor_user_id == uuid.UUID(str(first_claims["sub"])) for row in rows)
+    assert all(row.source == SOURCE_USER for row in rows)
