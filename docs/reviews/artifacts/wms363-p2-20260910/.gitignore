@@ -1,0 +1,4 @@
+*.apk
+*.log
+fixture-original.bin
+memory-*.txt
