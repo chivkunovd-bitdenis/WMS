@@ -1,0 +1,10 @@
+{
+  "versionCode": 10,
+  "sha256": "cfe8b5adc1bbd62e728184b9a18a1e5a14a837b3028de865e493c6203bd36870",
+  "apkUrl": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/WMS-TSD-0.1.9-cfe8b5adc1bb-debug.apk",
+  "manifest_url": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/update.json",
+  "manifest_asset_id": 554581217,
+  "manifest_digest": "sha256:34edfe7a67aa17b58bb9f9620d9f53073b88a248b89108271c9da794ccf01a41",
+  "verified": true,
+  "backend_sha": "0771833b7389260042f03a47abc7821e3a47fcb4"
+}

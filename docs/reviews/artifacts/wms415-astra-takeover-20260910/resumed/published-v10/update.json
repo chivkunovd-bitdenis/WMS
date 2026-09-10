@@ -1,0 +1,9 @@
+{
+  "versionCode": 10,
+  "versionName": "0.1.9-ozon-tsd",
+  "apkUrl": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/WMS-TSD-0.1.9-cfe8b5adc1bb-debug.apk",
+  "sha256": "cfe8b5adc1bbd62e728184b9a18a1e5a14a837b3028de865e493c6203bd36870",
+  "sizeBytes": 45624909,
+  "minSdk": 24,
+  "notes": "WMS-363: безопасное восстановление после скана нового короба, сохранение порядка сканов и ограниченная потоковая загрузка этикеток."
+}
