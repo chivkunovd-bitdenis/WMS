@@ -230,6 +230,7 @@ def _raise_chat_error(exc: chat_service.ChatError) -> NoReturn:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=code)
     if code in {
         "attachment_not_owned",
+        "attachment_content_missing",
         "document_seller_mismatch",
         "bad_document_kind",
         "cross_tenant",
@@ -237,6 +238,8 @@ def _raise_chat_error(exc: chat_service.ChatError) -> NoReturn:
         "client_message_id_too_long",
     }:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=code)
+    if code == "attachment_storage_unavailable":
+        raise HTTPException(503, detail=code)
     if code == "main_participants_implicit":
         raise HTTPException(422, detail=code)
     if code in {"document_not_found", "attachment_not_found"}:
@@ -694,12 +697,12 @@ async def discard_draft(
     conv = await _require_readable_conversation(conversation_id, user, session, effective_seller_id)
     try:
         await chat_service.discard_draft_attachment(session, conv, user, attachment_id)
+        await session.commit()
     except chat_service.ChatError as exc:
         _raise_chat_error(exc)
     except Exception as exc:
         await session.rollback()
         raise HTTPException(503, detail="draft_discard_failed") from exc
-    await session.commit()
     return Response(status_code=204)
 
 

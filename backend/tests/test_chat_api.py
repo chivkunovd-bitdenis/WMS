@@ -1380,3 +1380,159 @@ async def test_exact_order_worklist_preserves_identity_status_and_acl(
             f"/operations/chat/document-options/fbs_order/{orders[-1][0]}", headers=admin
         )
     ).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_discard_commit_failure_cannot_send_missing_object(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real SQL rollback + local object deletion, not a mocked attachment/session."""
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.db.session import SessionLocal
+    from app.models.chat import ChatAttachment, ChatMessage
+    from app.services import chat_attachment_storage as storage
+
+    suffix, admin, _ = await _register_admin(async_client)
+    _, sid, _ = await _create_seller(async_client, admin, suffix)
+    main = (
+        await async_client.get(
+            f"/operations/chat/conversations/main?seller_id={sid}", headers=admin
+        )
+    ).json()
+    url = f"/operations/chat/conversations/{main['id']}"
+    uploaded = (
+        await async_client.post(
+            url + "/attachments",
+            headers=admin,
+            files={"file": ("commit-failure.txt", b"disposable isolated bytes", "text/plain")},
+        )
+    ).json()
+    async with SessionLocal() as session:
+        row = await session.get(ChatAttachment, uuid.UUID(uploaded["id"]))
+        assert row is not None
+        key = row.storage_key
+    assert storage.get_bytes(key) == b"disposable isolated bytes"
+
+    async def fail_commit(session: AsyncSession) -> None:
+        # Called after the actual SQL DELETE/flush and physical object removal.
+        with pytest.raises(FileNotFoundError):
+            storage.get_bytes(key)
+        await session.rollback()
+        raise OSError("isolated commit failure")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(AsyncSession, "commit", fail_commit)
+        response = await async_client.delete(
+            url + "/draft-attachments/" + uploaded["id"], headers=admin
+        )
+        assert response.status_code == 503
+        assert response.json()["detail"] == "draft_discard_failed"
+    drafts = (await async_client.get(url + "/draft-attachments", headers=admin)).json()
+    assert [row["id"] for row in drafts] == [uploaded["id"]]
+    payload = {"client_message_id": "missing-object-recovery", "attachment_ids": [uploaded["id"]]}
+    refused = await async_client.post(url + "/messages", headers=admin, json=payload)
+    assert refused.status_code == 422, refused.text
+    assert refused.json()["detail"] == "attachment_content_missing"
+    async with SessionLocal() as session:
+        draft = await session.get(ChatAttachment, uuid.UUID(uploaded["id"]))
+        assert draft is not None and draft.message_id is None
+        assert (
+            await session.execute(
+                select(ChatMessage).where(ChatMessage.conversation_id == uuid.UUID(main["id"]))
+            )
+        ).scalars().all() == []
+    # Missing-object discard is idempotent at storage level and frees the SQL budget.
+    assert (
+        await async_client.delete(url + "/draft-attachments/" + uploaded["id"], headers=admin)
+    ).status_code == 204
+    replacement = (
+        await async_client.post(
+            url + "/attachments",
+            headers=admin,
+            files={"file": ("reuploaded.txt", b"replacement", "text/plain")},
+        )
+    ).json()
+    payload["attachment_ids"] = [replacement["id"]]
+    sent = await async_client.post(url + "/messages", headers=admin, json=payload)
+    assert sent.status_code == 201, sent.text
+    repeated = await async_client.post(url + "/messages", headers=admin, json=payload)
+    assert repeated.status_code == 201 and repeated.json()["id"] == sent.json()["id"]
+
+
+@pytest.mark.asyncio
+async def test_attachment_head_failure_is_retryable_without_partial_message(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from unittest.mock import Mock
+
+    from sqlalchemy import select
+
+    from app.db.session import SessionLocal
+    from app.models.chat import ChatAttachment, ChatMessage
+    from app.services import chat_attachment_storage as storage
+
+    suffix, admin, _ = await _register_admin(async_client)
+    _, sid, _ = await _create_seller(async_client, admin, suffix)
+    main = (
+        await async_client.get(
+            f"/operations/chat/conversations/main?seller_id={sid}", headers=admin
+        )
+    ).json()
+    url = f"/operations/chat/conversations/{main['id']}"
+    ids = []
+    for name in ["first", "second"]:
+        response = await async_client.post(
+            url + "/attachments", headers=admin, files={"file": (name, name.encode(), "text/plain")}
+        )
+        assert response.status_code == 201
+        ids.append(response.json()["id"])
+    payload = {"client_message_id": "transient-head-retry", "attachment_ids": ids, "text": "kept"}
+    backend = storage.get_backend()
+    with monkeypatch.context() as patch:
+        # First object validates; the second fails transiently. Neither may link.
+        patch.setattr(
+            storage,
+            "get_backend",
+            lambda: Mock(
+                object_exists=Mock(side_effect=[True, OSError("isolated storage timeout")])
+            ),
+        )
+        refused = await async_client.post(url + "/messages", headers=admin, json=payload)
+        assert (
+            refused.status_code == 503
+            and refused.json()["detail"] == "attachment_storage_unavailable"
+        )
+    async with SessionLocal() as session:
+        rows = (
+            (
+                await session.execute(
+                    select(ChatAttachment).where(
+                        ChatAttachment.id.in_([uuid.UUID(value) for value in ids])
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(rows) == 2 and all(row.message_id is None for row in rows)
+        assert all(backend.object_exists(row.storage_key) for row in rows)
+        assert (
+            await session.execute(
+                select(ChatMessage).where(ChatMessage.conversation_id == uuid.UUID(main["id"]))
+            )
+        ).scalars().all() == []
+    with monkeypatch.context() as patch:
+        patch.setattr(storage, "get_backend", Mock(side_effect=OSError("isolated adapter failure")))
+        refused = await async_client.post(url + "/messages", headers=admin, json=payload)
+        assert refused.status_code == 503
+        assert refused.json()["detail"] == "attachment_storage_unavailable"
+    sent = await async_client.post(url + "/messages", headers=admin, json=payload)
+    assert sent.status_code == 201
+    head = Mock(side_effect=AssertionError("idempotent message must not revalidate storage"))
+    with monkeypatch.context() as patch:
+        patch.setattr(storage, "get_backend", lambda: Mock(object_exists=head))
+        retry = await async_client.post(url + "/messages", headers=admin, json=payload)
+        assert retry.status_code == 201 and retry.json()["id"] == sent.json()["id"]
+        head.assert_not_called()

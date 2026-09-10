@@ -41,7 +41,7 @@
    // Плавающая панель выбора (fbs-selection-bar) прибита к низу вьюпорта и накрывает
    // собой последние строки таблицы — оператор кликал по чекбоксу второго заказа и
    // попадал в панель (см. tests-e2e/ff-fbs-orders.spec.ts:277). Меряем реальную высоту
-@@ -603,6 +621,24 @@
+@@ -603,6 +621,25 @@
      setBusy(true)
      setError(null)
      try {
@@ -58,6 +58,7 @@
 +        setStatusGroup(result.status_group); setSellerId(result.order.seller.id)
 +        setMarketplace(result.order.marketplace); setWbWarehouseId('__all__')
 +        setOrders([result.order]); setActiveSupplies([]); setExternalActiveOrders([])
++        setSelectedCache(new Map([[result.order.id, result.order]]))
 +        setWarehouseOptions([]); setSearchTotal(1); setServerNow(result.server_now)
 +        setLastLoadedAt(new Date().toISOString())
 +        return
@@ -66,7 +67,7 @@
        if (isFbsSupplyGroup(statusGroup)) {
          // Задача 4 пула (HANDOFF-POLISH.md, решение П3): «В работе», «В доставке» и
          // «Завершённые» показывают поставки, не отдельные заказы; ordersPage тут нужен
-@@ -658,6 +694,10 @@
+@@ -658,6 +695,10 @@
        setLastLoadedAt(new Date().toISOString())
      } catch (cause) {
        if (sequence !== loadSequence.current) return
@@ -77,7 +78,7 @@
        setError(cause instanceof Error ? cause.message : 'Не удалось загрузить заказы FBS.')
      } finally {
        if (sequence === loadSequence.current) {
-@@ -665,7 +705,7 @@
+@@ -665,7 +706,7 @@
          loadingRef.current = false
        }
      }
@@ -86,7 +87,19 @@
 
    useEffect(() => {
      void load()
-@@ -904,7 +944,7 @@
+@@ -682,8 +723,9 @@
+   // одного контекста, а не смена контекста.
+   useEffect(() => {
+     setSelected(new Set())
+-    setSelectedCache(new Map())
+-  }, [sellerId, marketplace, wbWarehouseId, statusGroup])
++    // Exact-order load just populated the row; its server filters must not erase it.
++    if (!linkedOrderId) setSelectedCache(new Map())
++  }, [sellerId, marketplace, wbWarehouseId, statusGroup, linkedOrderId])
+
+   useEffect(() => {
+     const timer = window.setTimeout(() => setActiveSearch(search.trim()), 250)
+@@ -904,7 +946,7 @@
      [orders],
    )
    const exportRows = selected.size > 0 ? selectedOrders : orders
@@ -95,7 +108,7 @@
    const searchNotice = search.trim()
      ? busy || search.trim() !== activeSearch ? 'Ищем…' : error ? 'Поиск не выполнен' :
        `Найдено ${searchTotal ?? 0}${(searchTotal ?? 0) > visibleCount ? ` · показано ${visibleCount}` : ''}`
-@@ -1161,8 +1201,12 @@
+@@ -1161,8 +1203,12 @@
          maxWidth: 'calc(100vw - 308px)',
          boxSizing: 'border-box',
          overflowX: 'hidden',
@@ -108,7 +121,7 @@
        <Stack
          direction={{ xs: 'column', sm: 'row' }}
          sx={{ justifyContent: 'space-between', gap: 2, mb: 1.5 }}
-@@ -1240,7 +1284,7 @@
+@@ -1240,7 +1286,7 @@
          <Tabs
            value={statusGroup}
            onChange={(_, value) => {
@@ -117,7 +130,7 @@
              setWbWarehouseId('__all__')
            }}
            variant="scrollable"
-@@ -1277,7 +1321,7 @@
+@@ -1277,7 +1323,7 @@
                label="Селлер"
                value={sellerId}
                onChange={(event) => {
@@ -126,7 +139,7 @@
                  setWbWarehouseId('__all__')
                }}
              >
-@@ -1296,7 +1340,7 @@
+@@ -1296,7 +1342,7 @@
                label="Маркетплейс"
                value={marketplace}
                onChange={(event) => {
@@ -135,7 +148,7 @@
                  setWbWarehouseId('__all__')
                }}
                data-testid="fbs-worklist-marketplace"
-@@ -1314,7 +1358,7 @@
+@@ -1314,7 +1360,7 @@
                  label="Склад селлера / WB"
                  value={wbWarehouseId}
                  onChange={(event) => {
@@ -144,7 +157,7 @@
                  }}
                  data-testid="fbs-worklist-warehouse"
                >
-@@ -1336,7 +1380,7 @@
+@@ -1336,7 +1382,7 @@
              label="Поиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер"
              value={search}
              onChange={(event) => {
@@ -153,7 +166,7 @@
              }}
              onKeyDown={(event) => {
                if (event.key === 'Enter') setActiveSearch(search.trim())
-@@ -1427,7 +1471,7 @@
+@@ -1427,7 +1473,7 @@
          </Alert>
        ) : null}
 

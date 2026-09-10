@@ -633,6 +633,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         setStatusGroup(result.status_group); setSellerId(result.order.seller.id)
         setMarketplace(result.order.marketplace); setWbWarehouseId('__all__')
         setOrders([result.order]); setActiveSupplies([]); setExternalActiveOrders([])
+        setSelectedCache(new Map([[result.order.id, result.order]]))
         setWarehouseOptions([]); setSearchTotal(1); setServerNow(result.server_now)
         setLastLoadedAt(new Date().toISOString())
         return

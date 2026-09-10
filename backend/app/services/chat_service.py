@@ -501,6 +501,17 @@ async def _attach_uploads_to_message(
 
     if sum(row.size_bytes for row in rows) > MAX_MESSAGE_TOTAL_BYTES:
         raise ChatError("message_files_too_large")
+    from app.services.chat_attachment_storage import get_backend
+
+    # Still under the attachment row locks: discard cannot remove a validated
+    # object before this transaction links it. Check all files before any link.
+    try:
+        backend = get_backend()
+        available = all(backend.object_exists(row.storage_key) for row in rows)
+    except Exception as exc:
+        raise ChatError("attachment_storage_unavailable") from exc
+    if not available:
+        raise ChatError("attachment_content_missing")
     for row in rows:
         row.message_id = msg.id
     await session.flush()

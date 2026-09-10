@@ -77,7 +77,11 @@ export function ChatComposer({ token, authHeaders, conversationId, attachedDocum
       // uncertain network/server response must replay the exact original request.
       if (exc instanceof ChatApiError && exc.status >= 400 && exc.status < 500) pending.current = null
       setRetry(pending.current !== null)
-      setError(exc instanceof ChatApiError && exc.message.includes('draft_upload_budget_exceeded') ?
+      setError(exc instanceof ChatApiError && exc.message.includes('attachment_content_missing') ?
+        'Файл вложения отсутствует. Уберите его из сообщения, удалите неотправленное вложение и загрузите файл заново. Текст сохранён.' :
+        exc instanceof ChatApiError && exc.message.includes('attachment_storage_unavailable') ?
+        'Хранилище файлов временно недоступно. Повторите отправку позже: текст и вложения сохранены.' :
+        exc instanceof ChatApiError && exc.message.includes('draft_upload_budget_exceeded') ?
         'Достигнут лимит незавершённых загрузок: 10 файлов или 100 МБ во всех чатах. Прикрепите или удалите свои неотправленные вложения в соответствующих чатах. Новые файлы и текст сохранены в редакторе.' : pending.current ? 'Ответ сервера не получен. Повторите отправку: текст и файлы сохранены, повтор не создаст копию.' :
         'Не удалось отправить сообщение. Текст и файлы сохранены. Проверьте доступ, размер файлов и повторите.')
     } finally { busy.current = false; setSending(false); setDraftRefresh((n) => n + 1) }
