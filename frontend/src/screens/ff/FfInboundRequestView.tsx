@@ -61,7 +61,7 @@ import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintB
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { WbProductPickerDialog } from '../../components/WbProductPickerDialog'
 import { WmsDateField } from '../../components/WmsDateField'
-import { ChatOpenButton } from '../../components/chat/ChatOpenButton'
+import { ChatDocumentAction } from '../../components/chat/ChatDocumentAction'
 import { OzonReturnActions, OzonReturnGroupRow, OzonReturnOrphanGroupRows, ReturnDefectiveQtyCell } from '../../components/OzonReturnDocumentUi'
 import { ozonReturnGroupAt, ozonReturnUnrepresentedGroups } from '../../components/ozonReturnPickerHelpers'
 import {
@@ -2485,24 +2485,8 @@ export function FfInboundRequestView({
                 Сохранить
               </Button>
 
-              {chatAuthHeaders && detail.seller_id ? (
-                <ChatOpenButton
-                  token={token}
-                  authHeaders={chatAuthHeaders}
-                  currentUserId={currentUserId}
-                  sellerId={detail.seller_id}
-                  sellerName={detail.seller_name ?? undefined}
-                  attachedDocument={{
-                    kind: 'inbound_intake',
-                    id: detail.id,
-                    title: displayDocumentNumber
-                      ? `Приёмка ${displayDocumentNumber}`
-                      : 'Приёмка',
-                    seller_id: detail.seller_id,
-                    seller_name: detail.seller_name ?? undefined,
-                  }}
-                />
-              ) : null}
+              {chatAuthHeaders && <ChatDocumentAction token={token} authHeaders={chatAuthHeaders}
+                currentUserId={currentUserId} kind="inbound_intake" documentId={detail.id} />}
 
               <Button variant="outlined" disabled={busy} onClick={handleClose} data-testid="ff-inbound-close">
                 Закрыть

@@ -10,8 +10,7 @@ Business rules implemented here:
   Fulfillment admins and staff always read the main chat of any seller in
   their tenant. Sellers read their own main chat and any extra chat they
   are an explicit participant of. Extra chats require explicit
-  ``ChatParticipant`` rows for both sides (with a fulfillment admin
-  implicit-owner exception).
+  ``ChatParticipant`` rows for both sides, including the creator.
 * Messages are stored with an author-scoped unique ``client_message_id``;
   a retry sends the same value and returns the existing row instead of
   duplicating.
@@ -109,27 +108,15 @@ async def ensure_main_chat(
         title=None,
         created_by_user_id=created_by.id if created_by is not None else None,
     )
-    session.add(conv)
     try:
-        await session.flush()
+        async with session.begin_nested():
+            session.add(conv)
+            await session.flush()
     except IntegrityError:
-        await session.rollback()
         existing = await _load_main_chat(session, tenant_id, seller_id)
         if existing is None:
             raise
         return existing
-    # If a seller-side user exists, add them as participant so /me lists this
-    # chat cleanly. FF portal members read it implicitly via role.
-    if created_by is not None and created_by.role == FULFILLMENT_SELLER:
-        session.add(
-            ChatParticipant(
-                tenant_id=tenant_id,
-                conversation_id=conv.id,
-                user_id=created_by.id,
-                added_by_user_id=created_by.id,
-            )
-        )
-        await session.flush()
     return conv
 
 
@@ -170,7 +157,7 @@ async def create_extra_chat(
     session.add(conv)
     await session.flush()
     seen: set[uuid.UUID] = set()
-    for user_id in participant_user_ids:
+    for user_id in [created_by.id, *participant_user_ids]:
         if user_id in seen:
             continue
         seen.add(user_id)
@@ -206,15 +193,22 @@ async def list_conversations_for_user(
 ) -> list[ChatConversation]:
     """List conversations the user can read.
 
-    * FF admins/staff: every conversation in the tenant.
+    * FF admins/staff: main chats and extra chats they participate in.
     * Sellers: main chat of their effective seller plus every extra chat they
       are a participant of.
     """
-    stmt = select(ChatConversation).where(
-        ChatConversation.tenant_id == user.tenant_id
+    stmt = select(ChatConversation).where(ChatConversation.tenant_id == user.tenant_id)
+    participant_ids_stmt = select(ChatParticipant.conversation_id).where(
+        ChatParticipant.tenant_id == user.tenant_id,
+        ChatParticipant.user_id == user.id,
     )
     if user.role in FF_PORTAL_ROLES:
-        stmt = stmt.order_by(ChatConversation.kind, ChatConversation.updated_at.desc())
+        stmt = stmt.where(
+            or_(
+                ChatConversation.kind == CHAT_KIND_MAIN,
+                ChatConversation.id.in_(participant_ids_stmt),
+            )
+        ).order_by(ChatConversation.kind.desc(), ChatConversation.updated_at.desc())
         return list((await session.execute(stmt)).scalars())
     if user.role == FULFILLMENT_SELLER:
         seller_id = effective_seller_id
@@ -232,7 +226,7 @@ async def list_conversations_for_user(
                     ChatConversation.id.in_(participant_ids_stmt),
                 ),
             )
-        ).order_by(ChatConversation.kind, ChatConversation.updated_at.desc())
+        ).order_by(ChatConversation.kind.desc(), ChatConversation.updated_at.desc())
         return list((await session.execute(stmt)).scalars())
     return []
 
@@ -246,13 +240,9 @@ async def can_read_conversation(
 ) -> bool:
     if user.tenant_id != conv.tenant_id:
         return False
-    if user.role in FF_PORTAL_ROLES:
-        # FF portal reads every conversation in the tenant per WMS-397 rules
-        # (no per-channel invitation gate for FF).
-        return True
-    if user.role != FULFILLMENT_SELLER:
+    if user.role not in FF_PORTAL_ROLES and user.role != FULFILLMENT_SELLER:
         return False
-    if conv.seller_id != effective_seller_id:
+    if user.role == FULFILLMENT_SELLER and conv.seller_id != effective_seller_id:
         return False
     if conv.kind == CHAT_KIND_MAIN:
         return True
@@ -302,8 +292,19 @@ async def add_participant(
         user_id=user_to_add.id,
         added_by_user_id=added_by.id,
     )
-    session.add(row)
-    await session.flush()
+    try:
+        async with session.begin_nested():
+            session.add(row)
+            await session.flush()
+    except IntegrityError:
+        row = (
+            await session.execute(
+                select(ChatParticipant).where(
+                    ChatParticipant.conversation_id == conv.id,
+                    ChatParticipant.user_id == user_to_add.id,
+                )
+            )
+        ).scalar_one()
     return row
 
 
@@ -317,6 +318,7 @@ async def list_messages(
     conv: ChatConversation,
     *,
     limit: int = 200,
+    before: uuid.UUID | None = None,
 ) -> list[ChatMessage]:
     stmt = (
         select(ChatMessage)
@@ -324,10 +326,31 @@ async def list_messages(
             ChatMessage.conversation_id == conv.id,
             ChatMessage.tenant_id == conv.tenant_id,
         )
-        .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc())
+        .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
         .limit(limit)
     )
-    return list((await session.execute(stmt)).scalars())
+    if before is not None:
+        cursor = (
+            await session.execute(
+                select(ChatMessage).where(
+                    ChatMessage.id == before,
+                    ChatMessage.conversation_id == conv.id,
+                    ChatMessage.tenant_id == conv.tenant_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if cursor is None:
+            return []
+        stmt = stmt.where(
+            or_(
+                ChatMessage.created_at < cursor.created_at,
+                and_(
+                    ChatMessage.created_at == cursor.created_at,
+                    ChatMessage.id < cursor.id,
+                ),
+            )
+        )
+    return list(reversed(list((await session.execute(stmt)).scalars())))
 
 
 async def post_message(
@@ -362,6 +385,8 @@ async def post_message(
     )
     existing = (await session.execute(existing_stmt)).scalar_one_or_none()
     if existing is not None:
+        if existing.conversation_id != conv.id or existing.tenant_id != conv.tenant_id:
+            raise ChatError("client_message_id_conflict")
         return existing
 
     msg = ChatMessage(
@@ -370,23 +395,22 @@ async def post_message(
         author_user_id=author.id,
         client_message_id=clean_client_id,
         text=clean_text,
-        attached_document=(
-            attached_document.to_json() if attached_document is not None else None
-        ),
+        created_at=datetime.now(UTC),
+        attached_document=(attached_document.to_json() if attached_document is not None else None),
     )
-    session.add(msg)
     try:
-        await session.flush()
+        async with session.begin_nested():
+            session.add(msg)
+            await session.flush()
+            if attach_list:
+                await _attach_uploads_to_message(session, conv, author, msg, attach_list)
     except IntegrityError:
-        # Race: another concurrent request stored the same (author, client_id).
-        await session.rollback()
         row = (await session.execute(existing_stmt)).scalar_one_or_none()
         if row is None:
             raise
+        if row.conversation_id != conv.id or row.tenant_id != conv.tenant_id:
+            raise ChatError("client_message_id_conflict") from None
         return row
-
-    if attach_list:
-        await _attach_uploads_to_message(session, conv, author, msg, attach_list)
 
     # Refresh conversation updated_at.
     conv.updated_at = datetime.now(UTC)
@@ -483,16 +507,26 @@ async def _attach_uploads_to_message(
     msg: ChatMessage,
     attachment_ids: list[uuid.UUID],
 ) -> None:
-    stmt = select(ChatAttachment).where(
-        ChatAttachment.id.in_(attachment_ids),
-        ChatAttachment.tenant_id == conv.tenant_id,
-        ChatAttachment.uploader_user_id == uploader.id,
-        ChatAttachment.conversation_id == conv.id,
-        ChatAttachment.message_id.is_(None),
+    stmt = (
+        select(ChatAttachment)
+        .where(
+            ChatAttachment.id.in_(attachment_ids),
+            ChatAttachment.tenant_id == conv.tenant_id,
+            ChatAttachment.uploader_user_id == uploader.id,
+            ChatAttachment.conversation_id == conv.id,
+            ChatAttachment.message_id.is_(None),
+        )
+        .order_by(ChatAttachment.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     rows = list((await session.execute(stmt)).scalars())
     if len(rows) != len(attachment_ids):
         raise ChatError("attachment_not_owned")
+    from app.services.chat_attachment_storage import MAX_MESSAGE_TOTAL_BYTES
+
+    if sum(row.size_bytes for row in rows) > MAX_MESSAGE_TOTAL_BYTES:
+        raise ChatError("message_files_too_large")
     for row in rows:
         row.message_id = msg.id
     await session.flush()

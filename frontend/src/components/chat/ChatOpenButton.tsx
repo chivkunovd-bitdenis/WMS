@@ -32,7 +32,7 @@ export function ChatOpenButton({
   size = 'small',
   variant = 'outlined',
 }: Props) {
-  const [open, setOpen] = useState(false)
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   return (
     <>
       <Tooltip title="Открыть чат с продавцом и прикрепить документ">
@@ -40,22 +40,23 @@ export function ChatOpenButton({
           size={size}
           variant={variant}
           startIcon={<ChatBubbleOutlineOutlinedIcon fontSize="small" />}
-          onClick={() => setOpen(true)}
+          onClick={(event) => { event.stopPropagation(); setAnchorEl(event.currentTarget) }}
           data-testid="chat-open-button"
         >
           {label}
         </Button>
       </Tooltip>
-      <ChatDialog
-        open={open}
-        onClose={() => setOpen(false)}
+      {anchorEl && <ChatDialog
+        open={Boolean(anchorEl)}
+        anchorEl={anchorEl}
+        onClose={() => setAnchorEl(null)}
         token={token}
         authHeaders={authHeaders}
         currentUserId={currentUserId}
         sellerId={sellerId}
         sellerName={sellerName}
         attachedDocument={attachedDocument}
-      />
+      />}
     </>
   )
 }

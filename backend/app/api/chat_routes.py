@@ -24,8 +24,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, NoReturn
+from urllib.parse import quote
 
+import fitz
 from fastapi import (
     APIRouter,
     Depends,
@@ -47,6 +49,7 @@ from app.api.deps import (
     require_ff_or_seller,
     require_fulfillment_admin,
 )
+from app.core.roles import FF_PORTAL_ROLES, FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.chat import (
     CHAT_KIND_EXTRA,
@@ -56,6 +59,7 @@ from app.models.chat import (
     ChatMessage,
     ChatParticipant,
 )
+from app.models.seller import Seller
 from app.models.user import User
 from app.services import chat_service
 from app.services.chat_attachment_storage import (
@@ -66,6 +70,7 @@ from app.services.chat_attachment_storage import (
     is_image_content_type,
     put_bytes,
 )
+from app.services.chat_document_service import read_document
 
 router = APIRouter(prefix="/operations/chat", tags=["operations", "chat"])
 
@@ -127,13 +132,13 @@ class AttachedDocumentIn(BaseModel):
 
 class MessageIn(BaseModel):
     client_message_id: str = Field(..., min_length=1, max_length=64)
-    text: str = ""
+    text: str = Field(default="", max_length=20000)
     attachment_ids: list[uuid.UUID] = Field(default_factory=list)
     attached_document: AttachedDocumentIn | None = None
 
 
 class MessageEditIn(BaseModel):
-    text: str = Field(..., min_length=1)
+    text: str = Field(..., min_length=1, max_length=20000)
 
 
 class AttachmentOut(BaseModel):
@@ -151,6 +156,7 @@ class MessageOut(BaseModel):
     author_user_id: str
     client_message_id: str
     text: str
+    author_label: str = "Участник"
     attached_document: dict[str, Any] | None
     attachments: list[AttachmentOut]
     edited_at: str | None
@@ -199,9 +205,7 @@ def _attachment_out(row: ChatAttachment) -> AttachmentOut:
     )
 
 
-def _message_out(
-    msg: ChatMessage, attachments: list[ChatAttachment] | None = None
-) -> MessageOut:
+def _message_out(msg: ChatMessage, attachments: list[ChatAttachment] | None = None) -> MessageOut:
     return MessageOut(
         id=str(msg.id),
         conversation_id=str(msg.conversation_id),
@@ -216,7 +220,7 @@ def _message_out(
     )
 
 
-def _raise_chat_error(exc: chat_service.ChatError) -> None:
+def _raise_chat_error(exc: chat_service.ChatError) -> NoReturn:
     code = exc.code
     if code == "forbidden":
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail=code)
@@ -231,9 +235,41 @@ def _raise_chat_error(exc: chat_service.ChatError) -> None:
         "client_message_id_too_long",
     }:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=code)
-    if code == "deleted":
+    if code == "document_not_found":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=code)
+    if code == "message_files_too_large":
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=code)
+    if code in {"deleted", "client_message_id_conflict"}:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=code)
     raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=code)
+
+
+async def _visible_message_out(
+    session: AsyncSession,
+    user: User,
+    effective_seller_id: uuid.UUID | None,
+    msg: ChatMessage,
+    attachments: list[ChatAttachment],
+) -> MessageOut:
+    result = _message_out(msg, attachments)
+    author = await session.get(User, msg.author_user_id)
+    if author is not None and author.tenant_id == user.tenant_id:
+        result.author_label = author.email
+    if msg.attached_document:
+        try:
+            doc = msg.attached_document
+            current = await read_document(
+                session,
+                user,
+                kind=doc["kind"],
+                document_id=uuid.UUID(doc["id"]),
+                seller_id=uuid.UUID(doc["seller_id"]),
+                effective_seller_id=effective_seller_id,
+            )
+            result.attached_document = current["document"]
+        except (chat_service.ChatError, KeyError, ValueError):
+            result.attached_document = None
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -247,6 +283,14 @@ async def list_conversations(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> ConversationListOut:
+    seller_query = select(Seller).where(Seller.tenant_id == user.tenant_id)
+    if user.role == FULFILLMENT_SELLER:
+        seller_query = seller_query.where(Seller.id == effective_seller_id)
+    for seller in (await session.execute(seller_query.order_by(Seller.id))).scalars():
+        await chat_service.ensure_main_chat(
+            session, tenant_id=user.tenant_id, seller_id=seller.id, created_by=user
+        )
+    await session.commit()
     convs = await chat_service.list_conversations_for_user(
         session, user, effective_seller_id=effective_seller_id
     )
@@ -263,15 +307,11 @@ async def get_main_chat(
     """Return the seller's main chat, creating it on first call."""
     resolved_seller_id = seller_id or effective_seller_id
     if resolved_seller_id is None:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, detail="seller_id_required"
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="seller_id_required")
     # A seller may only ask for their own seller_id.
     if effective_seller_id is not None and resolved_seller_id != effective_seller_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="forbidden")
-    seller = await chat_service.resolve_seller(
-        session, user.tenant_id, resolved_seller_id
-    )
+    seller = await chat_service.resolve_seller(session, user.tenant_id, resolved_seller_id)
     if seller is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="seller_not_found")
     conv = await chat_service.ensure_main_chat(
@@ -295,9 +335,7 @@ async def create_extra_chat(
     admin: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ConversationOut:
-    seller = await chat_service.resolve_seller(
-        session, admin.tenant_id, payload.seller_id
-    )
+    seller = await chat_service.resolve_seller(session, admin.tenant_id, payload.seller_id)
     if seller is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="seller_not_found")
     # Validate participants live in the same tenant.
@@ -307,10 +345,10 @@ async def create_extra_chat(
             User.tenant_id == admin.tenant_id,
         )
         users = list((await session.execute(stmt)).scalars())
-        if len(users) != len(set(payload.participant_user_ids)):
-            raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_CONTENT, detail="bad_participants"
-            )
+        if len(users) != len(set(payload.participant_user_ids)) or any(
+            not _eligible_participant(u, payload.seller_id) for u in users
+        ):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="bad_participants")
     try:
         conv = await chat_service.create_extra_chat(
             session,
@@ -333,9 +371,7 @@ async def _require_readable_conversation(
     session: AsyncSession,
     effective_seller_id: uuid.UUID | None,
 ) -> ChatConversation:
-    conv = await chat_service.load_conversation(
-        session, user.tenant_id, conversation_id
-    )
+    conv = await chat_service.load_conversation(session, user.tenant_id, conversation_id)
     if conv is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="conversation_not_found")
     if not await chat_service.can_read_conversation(
@@ -352,9 +388,7 @@ async def get_conversation(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> ConversationOut:
-    conv = await _require_readable_conversation(
-        conversation_id, user, session, effective_seller_id
-    )
+    conv = await _require_readable_conversation(conversation_id, user, session, effective_seller_id)
     return _conversation_out(conv)
 
 
@@ -368,9 +402,7 @@ async def list_participants(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> ParticipantListOut:
-    conv = await _require_readable_conversation(
-        conversation_id, user, session, effective_seller_id
-    )
+    conv = await _require_readable_conversation(conversation_id, user, session, effective_seller_id)
     items = await chat_service.load_participants(session, conv)
     return ParticipantListOut(items=[_participant_out(p) for p in items])
 
@@ -386,21 +418,19 @@ async def add_participant(
     admin: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ParticipantOut:
-    conv = await chat_service.load_conversation(
-        session, admin.tenant_id, conversation_id
-    )
+    conv = await chat_service.load_conversation(session, admin.tenant_id, conversation_id)
     if conv is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="conversation_not_found")
-    stmt = select(User).where(
-        User.id == payload.user_id, User.tenant_id == admin.tenant_id
-    )
+    stmt = select(User).where(User.id == payload.user_id, User.tenant_id == admin.tenant_id)
     user_to_add = (await session.execute(stmt)).scalar_one_or_none()
     if user_to_add is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="user_not_found")
+    if not _eligible_participant(user_to_add, conv.seller_id):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="bad_participants")
+    if not await chat_service.can_read_conversation(session, admin, conv, effective_seller_id=None):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="forbidden")
     try:
-        row = await chat_service.add_participant(
-            session, conv, user_to_add, added_by=admin
-        )
+        row = await chat_service.add_participant(session, conv, user_to_add, added_by=admin)
     except chat_service.ChatError as exc:
         _raise_chat_error(exc)
     await session.commit()
@@ -417,22 +447,24 @@ async def list_messages(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
     limit: int = Query(default=200, ge=1, le=500),
+    before: uuid.UUID | None = None,
 ) -> MessageListOut:
-    conv = await _require_readable_conversation(
-        conversation_id, user, session, effective_seller_id
-    )
-    msgs = await chat_service.list_messages(session, conv, limit=limit)
+    conv = await _require_readable_conversation(conversation_id, user, session, effective_seller_id)
+    msgs = await chat_service.list_messages(session, conv, limit=limit, before=before)
     attachments_by_msg: dict[uuid.UUID, list[ChatAttachment]] = {}
     if msgs:
-        rows = await chat_service.list_attachments_for_messages(
-            session, conv, [m.id for m in msgs]
-        )
+        rows = await chat_service.list_attachments_for_messages(session, conv, [m.id for m in msgs])
         for att in rows:
             if att.message_id is None:
                 continue
             attachments_by_msg.setdefault(att.message_id, []).append(att)
     return MessageListOut(
-        items=[_message_out(m, attachments_by_msg.get(m.id, [])) for m in msgs]
+        items=[
+            await _visible_message_out(
+                session, user, effective_seller_id, m, attachments_by_msg.get(m.id, [])
+            )
+            for m in msgs
+        ]
     )
 
 
@@ -448,13 +480,9 @@ async def post_message(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> MessageOut:
-    conv = await _require_readable_conversation(
-        conversation_id, user, session, effective_seller_id
-    )
+    conv = await _require_readable_conversation(conversation_id, user, session, effective_seller_id)
     if len(payload.attachment_ids) > MAX_MESSAGE_ATTACHMENTS:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT, detail="too_many_attachments"
-        )
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="too_many_attachments")
     attached_doc: chat_service.AttachedDocument | None = None
     if payload.attached_document is not None:
         # For a document, verify seller matches the conversation seller.
@@ -462,12 +490,23 @@ async def post_message(
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_CONTENT, detail="document_seller_mismatch"
             )
+        try:
+            actual = await read_document(
+                session,
+                user,
+                kind=payload.attached_document.kind,
+                document_id=payload.attached_document.id,
+                seller_id=conv.seller_id,
+                effective_seller_id=effective_seller_id,
+            )
+        except chat_service.ChatError as exc:
+            _raise_chat_error(exc)
         attached_doc = chat_service.AttachedDocument(
-            kind=payload.attached_document.kind,
-            id=payload.attached_document.id,
-            title=payload.attached_document.title,
-            seller_id=payload.attached_document.seller_id,
-            seller_name=payload.attached_document.seller_name,
+            kind=actual["document"]["kind"],
+            id=uuid.UUID(actual["document"]["id"]),
+            title=actual["document"]["title"],
+            seller_id=conv.seller_id,
+            seller_name=actual["document"].get("seller_name"),
         )
     try:
         msg = await chat_service.post_message(
@@ -483,10 +522,8 @@ async def post_message(
         _raise_chat_error(exc)
     await session.commit()
     await session.refresh(msg)
-    attachments = await chat_service.list_attachments_for_messages(
-        session, conv, [msg.id]
-    )
-    return _message_out(msg, attachments)
+    attachments = await chat_service.list_attachments_for_messages(session, conv, [msg.id])
+    return await _visible_message_out(session, user, effective_seller_id, msg, attachments)
 
 
 @router.patch("/messages/{message_id}", response_model=MessageOut)
@@ -503,9 +540,7 @@ async def edit_message(
     msg = (await session.execute(stmt)).scalar_one_or_none()
     if msg is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="message_not_found")
-    conv = await chat_service.load_conversation(
-        session, user.tenant_id, msg.conversation_id
-    )
+    conv = await chat_service.load_conversation(session, user.tenant_id, msg.conversation_id)
     if conv is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="conversation_not_found")
     if not await chat_service.can_read_conversation(
@@ -518,10 +553,8 @@ async def edit_message(
         _raise_chat_error(exc)
     await session.commit()
     await session.refresh(msg)
-    attachments = await chat_service.list_attachments_for_messages(
-        session, conv, [msg.id]
-    )
-    return _message_out(msg, attachments)
+    attachments = await chat_service.list_attachments_for_messages(session, conv, [msg.id])
+    return await _visible_message_out(session, user, effective_seller_id, msg, attachments)
 
 
 @router.post(
@@ -537,20 +570,37 @@ async def upload_attachment(
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
     is_image: Annotated[bool | None, Form()] = None,
 ) -> AttachmentOut:
-    conv = await _require_readable_conversation(
-        conversation_id, user, session, effective_seller_id
-    )
-    raw = await file.read()
+    conv = await _require_readable_conversation(conversation_id, user, session, effective_seller_id)
+    raw = await file.read(MAX_ATTACHMENT_BYTES + 1)
     if not raw:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="empty_file")
     if len(raw) > MAX_ATTACHMENT_BYTES:
-        raise HTTPException(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="file_too_large"
-        )
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="file_too_large")
     content_type = (file.content_type or "application/octet-stream").strip()
-    filename = (file.filename or "file").strip() or "file"
+    filename = (file.filename or "file").replace("\r", "").replace("\n", "").strip()[:255] or "file"
     detected_image = is_image_content_type(content_type)
-    resolved_image = detected_image if is_image is None else bool(is_image)
+    resolved_image = detected_image
+    if detected_image:
+        if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+            content_type = "image/png"
+        elif raw.startswith(b"\xff\xd8\xff"):
+            content_type = "image/jpeg"
+        elif raw.startswith((b"GIF87a", b"GIF89a")):
+            content_type = "image/gif"
+        elif raw.startswith(b"RIFF") and raw[8:12] == b"WEBP":
+            content_type = "image/webp"
+        elif raw.startswith(b"BM"):
+            content_type = "image/bmp"
+        else:
+            raise HTTPException(422, detail="invalid_image")
+        try:
+            with fitz.open(stream=raw) as image:
+                if image.metadata.get("format") != "Image" or image.page_count < 1:
+                    raise ValueError("invalid_image")
+                if image[0].rect.width * image[0].rect.height > 40_000_000:
+                    raise ValueError("image_too_large")
+        except (RuntimeError, ValueError):
+            raise HTTPException(422, detail="invalid_image") from None
     attachment_id = uuid.uuid4()
     storage_key = build_storage_key(user.tenant_id, attachment_id, filename)
     try:
@@ -589,14 +639,14 @@ async def download_attachment(
     row = await chat_service.load_attachment(session, user.tenant_id, attachment_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="attachment_not_found")
-    conv = await chat_service.load_conversation(
-        session, user.tenant_id, row.conversation_id
-    )
+    conv = await chat_service.load_conversation(session, user.tenant_id, row.conversation_id)
     if conv is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="conversation_not_found")
-    # Uploader can always fetch their own upload (needed for drafts before
-    # the message is created); everyone else needs read access to the chat.
-    if row.uploader_user_id != user.id and not await chat_service.can_read_conversation(
+    # Draft uploads belong to their uploader. Every download also requires
+    # current chat access, including downloads by a removed uploader.
+    if (
+        row.message_id is None and row.uploader_user_id != user.id
+    ) or not await chat_service.can_read_conversation(
         session, user, conv, effective_seller_id=effective_seller_id
     ):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="forbidden")
@@ -604,8 +654,12 @@ async def download_attachment(
         content = get_bytes(row.storage_key)
     except FileNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="content_not_found") from None
+    disposition = "inline" if row.is_image else "attachment"
     headers = {
-        "Content-Disposition": f'inline; filename="{row.filename}"',
+        "Content-Disposition": f"{disposition}; filename*=UTF-8''{quote(row.filename, safe='')}",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "sandbox; default-src 'none'",
+        "Cache-Control": "private, no-store",
     }
     return Response(
         content=content,
@@ -625,3 +679,78 @@ __all__ = [
 
 # Silence unused-import warnings for imports that stay in the annotations.
 _ = (CHAT_KIND_MAIN, CHAT_KIND_EXTRA, get_current_user, datetime)
+
+
+def _eligible_participant(user: User, seller_id: uuid.UUID) -> bool:
+    return user.role in FF_PORTAL_ROLES or (
+        user.role == FULFILLMENT_SELLER and user.seller_id == seller_id
+    )
+
+
+@router.get("/participant-options")
+async def participant_options(
+    seller_id: uuid.UUID,
+    admin: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[dict[str, str]]:
+    if await chat_service.resolve_seller(session, admin.tenant_id, seller_id) is None:
+        raise HTTPException(404, detail="seller_not_found")
+    users = (await session.execute(select(User).where(User.tenant_id == admin.tenant_id))).scalars()
+    return [
+        {"id": str(u.id), "email": u.email, "role": u.role}
+        for u in users
+        if _eligible_participant(u, seller_id)
+    ]
+
+
+@router.get("/documents/{kind}/{document_id}")
+async def get_document(
+    kind: str,
+    document_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    user: Annotated[User, Depends(require_ff_or_seller)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> dict[str, Any]:
+    try:
+        return await read_document(
+            session,
+            user,
+            kind=kind,
+            document_id=document_id,
+            seller_id=seller_id,
+            effective_seller_id=effective_seller_id,
+        )
+    except chat_service.ChatError as exc:
+        _raise_chat_error(exc)
+        raise AssertionError("unreachable") from exc
+
+
+@router.get("/document-options/{kind}/{document_id}")
+async def document_options(
+    kind: str,
+    document_id: uuid.UUID,
+    user: Annotated[User, Depends(require_ff_or_seller)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> list[dict[str, Any]]:
+    stmt = select(Seller).where(Seller.tenant_id == user.tenant_id)
+    if user.role == FULFILLMENT_SELLER:
+        stmt = stmt.where(Seller.id == effective_seller_id)
+    result = []
+    for seller in (await session.execute(stmt)).scalars():
+        try:
+            detail = await read_document(
+                session,
+                user,
+                kind=kind,
+                document_id=document_id,
+                seller_id=seller.id,
+                effective_seller_id=effective_seller_id,
+            )
+        except chat_service.ChatError as exc:
+            if exc.code == "document_not_found":
+                continue
+            _raise_chat_error(exc)
+        result.append(detail["document"])
+    return result

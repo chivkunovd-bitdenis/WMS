@@ -1,10 +1,4 @@
-// Extra-chat creation dialog for FF admins — WMS-397 gap 3.
-//
-// Owner spec: FF admin can spin up an extra chat for a seller and add
-// additional FF employees as participants. We reuse the existing REST
-// endpoint (`POST /operations/chat/conversations/extra`) and the FF staff
-// account listing (`GET /auth/staff-accounts`) as the participant picker
-// source — no new backend surface required.
+// Additional conversations use the existing seller and FF accounts.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
@@ -71,29 +65,23 @@ export function ExtraChatCreateDialog({
     setError(null)
   }, [initialSellerId, open])
 
-  const loadStaff = useCallback(async () => {
-    setStaffLoading(true)
-    setStaffError(null)
-    try {
-      const res = await fetch(apiUrl('/auth/staff-accounts'), {
-        headers: { ...authHeaders(token) },
-      })
-      if (!res.ok) {
-        throw new Error(`staff_${res.status}`)
-      }
-      const rows = (await res.json()) as Array<{ id: string; email: string; role: string }>
-      setStaffOptions(rows.map((row) => ({ id: row.id, email: row.email, role: row.role })))
-    } catch (exc) {
-      setStaffError((exc as Error).message)
-    } finally {
-      setStaffLoading(false)
-    }
-  }, [authHeaders, token])
-
   useEffect(() => {
     if (!open) return
-    void loadStaff()
-  }, [loadStaff, open])
+    const controller = new AbortController()
+    setParticipants([]); setStaffOptions([]); setStaffError(null)
+    if (!sellerId) { setStaffLoading(false); return }
+    setStaffLoading(true)
+    void fetch(apiUrl(`/operations/chat/participant-options?seller_id=${sellerId}`), {
+      headers: authHeaders(token), signal: controller.signal,
+    }).then(async (response) => {
+      if (!response.ok) throw Error()
+      const rows = await response.json() as StaffOption[]
+      if (!controller.signal.aborted) setStaffOptions(rows)
+    }).catch(() => {
+      if (!controller.signal.aborted) setStaffError('Не удалось загрузить участников. Выберите продавца повторно.')
+    }).finally(() => { if (!controller.signal.aborted) setStaffLoading(false) })
+    return () => controller.abort()
+  }, [authHeaders, open, sellerId, token])
 
   const canSubmit = useMemo(
     () => Boolean(sellerId) && title.trim().length > 0 && !busy,
@@ -112,8 +100,8 @@ export function ExtraChatCreateDialog({
       })
       onCreated(conv)
       onClose()
-    } catch (exc) {
-      setError((exc as Error).message)
+    } catch {
+      setError('Не удалось создать чат. Проверьте соединение и выбранных участников.')
     } finally {
       setBusy(false)
     }
@@ -166,7 +154,7 @@ export function ExtraChatCreateDialog({
           />
           {staffError ? (
             <Alert severity="warning" onClose={() => setStaffError(null)}>
-              Не удалось загрузить список сотрудников: {staffError}
+              {staffError}
             </Alert>
           ) : null}
           <Autocomplete
@@ -192,15 +180,13 @@ export function ExtraChatCreateDialog({
                 {...params}
                 label="Дополнительные участники"
                 size="small"
-                placeholder="Найдите сотрудника по email"
+                placeholder="Найдите участника по email"
                 data-testid="extra-chat-participants-input"
               />
             )}
           />
           <Typography variant="caption" color="text.secondary">
-            FF-админы и так видят все чаты продавца. Явное добавление нужно,
-            чтобы пригласить конкретного сотрудника со стороны фулфилмента —
-            например, сменного лида по крупной поставке.
+            Дополнительный чат видят создатель и выбранные участники. Основной чат продавца остаётся доступным.
           </Typography>
         </Stack>
       </DialogContent>
