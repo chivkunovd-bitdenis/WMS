@@ -852,7 +852,9 @@ def compute_selection_blockers(
     product_missing = order.product_id is None
     if order.marketplace == "ozon":
         positions = order.product_positions
-        product_missing = not positions or any(position.product_id is None for position in positions)
+        product_missing = not positions or any(
+            position.product_id is None for position in positions
+        )
     if order.mapping_status == MAPPING_STATUS_MISSING or product_missing:
         blockers.append(
             {"code": "product_not_mapped", "message": "Товар не сопоставлен с карточкой."}

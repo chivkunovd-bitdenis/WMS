@@ -1983,7 +1983,9 @@ async def print_fbs_supply_order_tape(
                         cis_code=code.cis_code,
                         has_label_artifact=code.has_label_artifact,
                         order_product_id=(
-                            str(code.order_product_id) if code.order_product_id is not None else None
+                            str(code.order_product_id)
+                            if code.order_product_id is not None
+                            else None
                         ),
                     )
                     for code in order.printed_codes

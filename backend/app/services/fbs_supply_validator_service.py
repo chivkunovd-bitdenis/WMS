@@ -119,6 +119,7 @@ async def load_orders_for_validation(
         )
         .options(
             selectinload(FbsOrder.product),
+            selectinload(FbsOrder.product_positions),
             selectinload(FbsOrder.seller),
             selectinload(FbsOrder.warehouse),
         )
