@@ -666,10 +666,15 @@ async def cancel_invoice(
     session: AsyncSession, *, tenant_id: uuid.UUID, invoice_id: uuid.UUID
 ) -> BillingInvoice:
     invoice = await session.scalar(
-        select(BillingInvoice).where(
+        select(BillingInvoice)
+        .where(
             BillingInvoice.id == invoice_id,
             BillingInvoice.tenant_id == tenant_id,
         )
+        # Serialize the transition through commit/rollback, then replace any
+        # issued snapshot already present in this session's identity map.
+        .with_for_update(key_share=True)
+        .execution_options(populate_existing=True)
     )
     if invoice is None:
         raise ValueError("Счёт не найден")

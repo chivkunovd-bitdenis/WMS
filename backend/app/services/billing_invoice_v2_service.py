@@ -743,13 +743,22 @@ async def create_invoice_v2(
 
 
 async def get_invoice_v2(
-    session: AsyncSession, *, tenant_id: uuid.UUID, invoice_id: uuid.UUID
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    invoice_id: uuid.UUID,
+    for_update: bool = False,
 ) -> BillingInvoiceV2:
-    invoice = await session.scalar(
-        select(BillingInvoiceV2).where(
-            BillingInvoiceV2.tenant_id == tenant_id, BillingInvoiceV2.id == invoice_id
-        )
+    statement = select(BillingInvoiceV2).where(
+        BillingInvoiceV2.tenant_id == tenant_id, BillingInvoiceV2.id == invoice_id
     )
+    if for_update:
+        # Cancellation must reread the committed status after waiting, including
+        # when this session has already cached an issued invoice.
+        statement = statement.with_for_update(key_share=True).execution_options(
+            populate_existing=True
+        )
+    invoice = await session.scalar(statement)
     if invoice is None:
         raise BillingInvoiceV2Error("invoice_not_found")
     await session.refresh(invoice, attribute_names=["lines_v2"])
@@ -759,7 +768,9 @@ async def get_invoice_v2(
 async def cancel_invoice_v2(
     session: AsyncSession, *, tenant_id: uuid.UUID, invoice_id: uuid.UUID
 ) -> BillingInvoiceV2:
-    invoice = await get_invoice_v2(session, tenant_id=tenant_id, invoice_id=invoice_id)
+    invoice = await get_invoice_v2(
+        session, tenant_id=tenant_id, invoice_id=invoice_id, for_update=True
+    )
     before = invoice_audit_fields(invoice)
     if invoice.status == "issued":
         invoice.status = "cancelled"
