@@ -405,13 +405,21 @@ export function FfFbsSupplyWorkspace({
   const boxOperationsDisabled = fbsBoxOperationsDisabled(
     workspace?.supply.marketplace ?? 'wb',
   )
+  const workspaceOpenGeneration = useRef(0)
+  useEffect(() => {
+    workspaceOpenGeneration.current += 1
+    return () => { workspaceOpenGeneration.current += 1 }
+  }, [open, supplyId])
 
   const load = useCallback(
     async (silent = false) => {
-      if (!supplyId) return
+      if (!open || !supplyId) return
+      const generation = workspaceOpenGeneration.current
+      const isCurrent = () => workspaceOpenGeneration.current === generation
       if (!silent) setBusy(true)
       try {
         const next = await fetchFbsWorkspace(token, authHeaders, supplyId)
+        if (!isCurrent()) return
         setWorkspace(next)
         if (!silent) {
           setStage((current) => fbsStageAfterWorkspaceRefresh(
@@ -422,12 +430,12 @@ export function FfFbsSupplyWorkspace({
         }
         return next
       } catch (cause) {
-        if (!silent) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось загрузить поставку.')
+        if (isCurrent() && !silent) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось загрузить поставку.')
       } finally {
-        if (!silent) setBusy(false)
+        if (isCurrent() && !silent) setBusy(false)
       }
     },
-    [supplyId, token, authHeaders],
+    [open, supplyId, token, authHeaders],
   )
 
   useEffect(() => {
