@@ -1,0 +1,23 @@
+{
+  "checkout_sha": "1922a2242ad626a9618cb2b7300e6cf500d25b4d",
+  "api_image": "sha256:5b0f5e9d44786522ec343c805c43903256abe44ee692c0f06bca7a0521d61517",
+  "files": {
+    "backend/app/api/auth.py": "0b9c58aee04c152be154df33eb82a197cda28d81067fc34b2c259045f8159a42",
+    "backend/app/services/auth_service.py": "5212e05576f4c3b014f0cbe410a3bf8e6a93c74bbf6128af3672e4944a096681",
+    "backend/app/api/products.py": "2211c3dea261011553fc23ed013726fcc3b25d751b5ff1399c11d4bb432700a4",
+    "backend/app/services/seller_wb_catalog_service.py": "f1a55da663a70420bc2701297803e470492f697afc6fb06936f55322c0c569ef"
+  },
+  "new_limiter_absent": true,
+  "api_source_sha": "120b106cc3f47dd28fa499e094c7cde83e8a6b40",
+  "https": {
+    "/": 200,
+    "/seller/": 200,
+    "/api/health": 200
+  },
+  "stock_publication_present": true,
+  "ports": {
+    "8088": "TimeoutError",
+    "15174": "TimeoutError"
+  },
+  "verified": true
+}
