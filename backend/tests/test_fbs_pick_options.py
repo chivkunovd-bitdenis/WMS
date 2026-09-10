@@ -212,6 +212,8 @@ async def test_fbs_pick_options_returns_two_locations_with_inventory_numbers(
         "planned_qty",
         "picked_qty",
         "locations",
+        "barcode",
+        "seller_article",
     }
     assert product["product_id"] == str(product_id)
     assert product["sku_code"] == sku
