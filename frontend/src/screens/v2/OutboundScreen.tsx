@@ -1,4 +1,4 @@
-import type { FormEventHandler } from 'react'
+import type { FormEventHandler, ReactNode } from 'react'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { Input } from '../../ui/Input'
@@ -48,6 +48,7 @@ type OutboundMovementRow = {
 }
 
 type Props = {
+  chatAction?: ReactNode
   opsError: string | null
   opsBusy: boolean
   isFulfillmentAdmin: boolean
@@ -209,6 +210,7 @@ export function OutboundScreen(props: Props) {
                   Статус: {outboundDetail.status}
                 </p>
 
+                {props.chatAction}
                 {outboundDetail.lines.length > 0 ? (
                   <Button
                     type="button"

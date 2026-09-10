@@ -62,6 +62,7 @@ import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintB
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { WbProductPickerDialog } from '../../components/WbProductPickerDialog'
 import { WmsDateField } from '../../components/WmsDateField'
+import { ChatDocumentAction } from '../../components/chat/ChatDocumentAction'
 import { OzonReturnActions, OzonReturnGroupRow, OzonReturnOrphanGroupRows, ReturnDefectiveQtyCell } from '../../components/OzonReturnDocumentUi'
 import { ozonReturnGroupAt, ozonReturnUnrepresentedGroups } from '../../components/ozonReturnPickerHelpers'
 import {
@@ -453,6 +454,12 @@ type Props = {
   onClose: () => void
   onDirtyChange?: (dirty: boolean) => void
   addressStorageEnabled?: boolean
+  // WMS-397/399 gap 1: chat entry point in the inbound doc toolbar. We accept
+  // the same function-shaped `authHeaders` used by ChatDialog so the doc view
+  // stays agnostic of the header format used elsewhere in this component
+  // (which is a plain object for local fetches).
+  chatAuthHeaders?: (token: string) => Record<string, string>
+  currentUserId?: string | null
 }
 
 export function FfInboundRequestView({
@@ -463,6 +470,8 @@ export function FfInboundRequestView({
   onClose,
   onDirtyChange,
   addressStorageEnabled = true,
+  chatAuthHeaders,
+  currentUserId = null,
 }: Props) {
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
 
@@ -2486,6 +2495,9 @@ export function FfInboundRequestView({
               >
                 Сохранить
               </Button>
+
+              {chatAuthHeaders && <ChatDocumentAction token={token} authHeaders={chatAuthHeaders}
+                currentUserId={currentUserId} kind="inbound_intake" documentId={detail.id} />}
 
               <Button variant="outlined" disabled={busy} onClick={handleClose} data-testid="ff-inbound-close">
                 Закрыть

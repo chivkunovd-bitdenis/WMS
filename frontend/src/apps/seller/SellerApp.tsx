@@ -1,3 +1,5 @@
+import { ChatScreen } from '../../screens/chat/ChatScreen'
+import { ChatDocumentScreen } from '../../screens/chat/ChatDocumentScreen'
 import { useCallback, useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Alert, Box, Button, Typography } from '@mui/material'
@@ -537,6 +539,10 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
               )
             }
           />
+          <Route path="/chat" element={token ? <ChatScreen key={catalogScopeKey} token={token} authHeaders={authHeaders}
+            currentUserId={me.id ?? null} sellers={[]} /> : null} />
+          <Route path="/chat/documents/:kind/:documentId" element={token ? <ChatDocumentScreen key={catalogScopeKey}
+            token={token} authHeaders={authHeaders} currentUserId={me.id ?? null} /> : null} />
           <Route
             path="/notifications"
             element={
