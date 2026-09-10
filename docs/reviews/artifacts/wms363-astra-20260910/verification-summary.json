@@ -1,0 +1,8 @@
+{
+  "backend": {"main_targeted": "46 passed, 2 skipped", "packaging_position_assembly": "20 passed", "final_wms363": "8 passed", "ruff": "pass", "mypy": "pass: 436 files", "pytest_workers": 2},
+  "android": {"tests": 62, "failures": 0, "lint_errors": 0, "lint_warnings": 41, "assembleDebug": "pass", "workers": 2},
+  "print_adapter": {"tests": 3, "ruff": "pass", "network_or_physical_printer": false},
+  "published": false,
+  "deployed": false,
+  "acceptance": "pending independent review and required live checks"
+}

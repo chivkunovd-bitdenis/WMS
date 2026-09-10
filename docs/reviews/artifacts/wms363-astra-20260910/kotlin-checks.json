@@ -1,13 +1,6 @@
 {
   "suites": [
     {
-      "name": "ru.wms.tsd.features.update.UpdateTest",
-      "tests": "12",
-      "failures": "0",
-      "errors": "0",
-      "skipped": "0"
-    },
-    {
       "name": "ru.wms.tsd.features.fbs.FbsApiContractTest",
       "tests": "5",
       "failures": "0",
@@ -15,15 +8,22 @@
       "skipped": "0"
     },
     {
-      "name": "ru.wms.tsd.features.fbs.FbsViewModelTest",
-      "tests": "29",
+      "name": "ru.wms.tsd.features.fbs.FbsDeliveryTest",
+      "tests": "14",
       "failures": "0",
       "errors": "0",
       "skipped": "0"
     },
     {
-      "name": "ru.wms.tsd.features.fbs.FbsDeliveryTest",
-      "tests": "13",
+      "name": "ru.wms.tsd.features.fbs.FbsViewModelTest",
+      "tests": "31",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "ru.wms.tsd.features.update.UpdateTest",
+      "tests": "12",
       "failures": "0",
       "errors": "0",
       "skipped": "0"
