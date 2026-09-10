@@ -49,6 +49,7 @@ from app.models.marketplace_unload import (
     MarketplaceUnloadLine,
     MarketplaceUnloadRequest,
 )
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -264,6 +265,66 @@ async def record_document_event_safely(session: AsyncSession, **values: Any) -> 
             values.get("document_type"),
             values.get("document_id"),
             values.get("event_type"),
+        )
+        return False
+
+
+async def record_document_mutation(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    document_type: str,
+    document_id: uuid.UUID,
+    event_type: str,
+    before: dict[str, object] | None,
+    after: dict[str, object] | None,
+    product_id: uuid.UUID | None = None,
+    qty: int | None = None,
+) -> bool:
+    """Observe an explicit field projection in the warehouse transaction.
+
+    Callers supply only named audit fields, never model/request dumps. Identity
+    comes exclusively from the authenticated request context; system work must
+    use system_document_events(). No second billing fact or commit is created.
+    """
+    if before == after:
+        return False
+    actor = current_document_event_actor()
+    payload: dict[str, object] = {
+        "before": {key: _json_value(value) for key, value in before.items()}
+        if before is not None else None,
+        "after": {key: _json_value(value) for key, value in after.items()}
+        if after is not None else None,
+    }
+    try:
+        connection = await session.connection()
+        async with connection.begin_nested():
+            if actor.actor_user_id is not None:
+                name = await connection.scalar(
+                    select(User.email).where(
+                        User.id == actor.actor_user_id, User.tenant_id == tenant_id
+                    )
+                )
+                if name is None:
+                    # Never invent an actor or use an identity from another tenant.
+                    return False
+                payload["actor_name_snapshot"] = name
+                payload["actor_user_id_snapshot"] = str(actor.actor_user_id)
+            return await record_document_event_safely(
+                session,
+                tenant_id=tenant_id,
+                document_type=document_type,
+                document_id=document_id,
+                event_type=event_type,
+                actor_user_id=actor.actor_user_id,
+                source=actor.source,
+                product_id=product_id,
+                qty=qty,
+                payload_json=payload,
+            )
+    except Exception:
+        logger.exception(
+            "document mutation audit failed: type=%s event=%s", document_type, event_type
         )
         return False
 

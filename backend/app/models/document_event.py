@@ -24,6 +24,9 @@ DOCUMENT_TYPE_FBS_ORDER = "fbs_order"
 # Учётная запись сотрудника — тот же аудит, чтобы фиксировать изменение прав
 # (WMS-325). Новую параллельную таблицу журнала заводить нельзя.
 DOCUMENT_TYPE_STAFF_USER = "staff_user"
+DOCUMENT_TYPE_OUTBOUND_SHIPMENT = "outbound_shipment"
+DOCUMENT_TYPE_DISCREPANCY_ACT = "discrepancy_act"
+DOCUMENT_TYPE_PACKAGING_TASK = "packaging_task"
 DOCUMENT_TYPES = frozenset(
     {
         DOCUMENT_TYPE_INBOUND_INTAKE,
@@ -31,6 +34,9 @@ DOCUMENT_TYPES = frozenset(
         DOCUMENT_TYPE_MARKETPLACE_UNLOAD,
         DOCUMENT_TYPE_FBS_ORDER,
         DOCUMENT_TYPE_STAFF_USER,
+        DOCUMENT_TYPE_OUTBOUND_SHIPMENT,
+        DOCUMENT_TYPE_DISCREPANCY_ACT,
+        DOCUMENT_TYPE_PACKAGING_TASK,
     }
 )
 
@@ -50,6 +56,14 @@ EVENT_TARE_LINE_QTY_CHANGED = "tare_line_qty_changed"
 EVENT_PERMISSIONS_CHANGED = "permissions_changed"
 EVENT_STAFF_USER_CREATED = "staff_user_created"
 EVENT_STAFF_RATE_CHANGED = "staff_rate_changed"
+EVENT_DOCUMENT_CREATED = "document_created"
+EVENT_DATA_CHANGED = "data_changed"
+EVENT_BOX_DELETED = "box_deleted"
+EVENT_BOX_ITEM_REMOVED = "box_item_removed"
+EVENT_BOX_DISTRIBUTION_CHANGED = "box_distribution_changed"
+EVENT_PRINT_OPENED = "print_opened"
+EVENT_PACKED_CONFIRMED = "packed_confirmed"
+EVENT_PACKED_RECALCULATED = "packed_recalculated"
 DOCUMENT_EVENT_TYPES = frozenset(
     {
         EVENT_STATUS_CHANGED,
@@ -63,6 +77,14 @@ DOCUMENT_EVENT_TYPES = frozenset(
         EVENT_PERMISSIONS_CHANGED,
         EVENT_STAFF_USER_CREATED,
         EVENT_STAFF_RATE_CHANGED,
+        EVENT_DOCUMENT_CREATED,
+        EVENT_DATA_CHANGED,
+        EVENT_BOX_DELETED,
+        EVENT_BOX_ITEM_REMOVED,
+        EVENT_BOX_DISTRIBUTION_CHANGED,
+        EVENT_PRINT_OPENED,
+        EVENT_PACKED_CONFIRMED,
+        EVENT_PACKED_RECALCULATED,
     }
 )
 
