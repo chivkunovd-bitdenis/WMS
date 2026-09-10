@@ -1,0 +1,20 @@
+{
+  "deployment_id": "b0b16dae-7c0e-4581-aafe-5fcaef5ae3b5",
+  "source_sha": "c3c41e532e06a9ba3259d99e114acbc66db92b95",
+  "code_equivalent_to": "03592c5be27ee40a8bbea9135c612dc0471e2be7",
+  "checked_at_utc": "2026-09-10T12:30:54.798022+00:00",
+  "exit_code": 0,
+  "runtime_files": {
+    "checked_files": 436,
+    "missing": [],
+    "mismatch": []
+  },
+  "health_http_status": 200,
+  "health_client": "curl system trust; prior Python urllib trust failed",
+  "schema": {
+    "revision": [
+      "20260910_0302"
+    ],
+    "legacy_is_fbs_column_count": 0
+  }
+}

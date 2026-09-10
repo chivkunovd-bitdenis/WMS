@@ -1,33 +1,69 @@
 {
-  "recorded_at_utc": "2026-09-10T11:59:36.446955+00:00",
-  "phase": "BOUNDED_EVENING_RELEASE",
+  "recorded_at_utc": "2026-09-10T13:23:43.298962+00:00",
+  "phase": "CI_CORRECTIONS_PUSHED_STAGE_REFRESH_PENDING",
   "mobile": {
-    "pid": 44687,
+    "pid": null,
     "thread_id": "01a0884d-9d82-7f41-a45a-91123f9ea9d8",
     "model": "gpt-6-astra",
     "effort": "high",
     "events": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/mobile-evening-priority-events.jsonl",
     "last_message": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/mobile-evening-priority-last-message.md",
     "started_at": "2026-09-10T11:52:44.318772+00:00",
-    "scope": "mobile bounded fixes and local APK first; physicalTSD not gate; no publicrelease"
+    "scope": "mobile bounded fixes and local APK first; physicalTSD not gate; no publicrelease",
+    "status": "completed; verified original PID absent 2026-09-10T13:22Z",
+    "commit": "4b1a70c6a17a62a268cf92767933d02e36f1d949",
+    "apk_version_code": 11,
+    "publicly_published": false
   },
   "chat": {
-    "pid": 45135,
+    "pid": null,
     "session_id": "721ac063-0581-4538-b254-422d08298a8e",
     "model": "claude-opus-5",
     "effort": "xhigh",
-    "events": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/chat-opus5-evening-events.jsonl",
+    "events": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/chat-opus5-evening-continued-events.jsonl",
     "cwd": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms397-chat-mvp",
-    "started_at": "2026-09-10T11:54:11.682121+00:00",
-    "scope": "chatonly separatebranch, no publicdeploy, not APK gate"
+    "started_at": "2026-09-10T12:13:43.515335+00:00",
+    "previous_pid": 45135,
+    "scope": "Same chat session; correct source baseline for inbound document link; preserve scroll fix",
+    "status": "code committed and pushed; root UI acceptance in progress; separate from main release",
+    "integration_sha": "32c3490d0f9859aaebe3dfb5bddd1cff6ba70f5f",
+    "integration_checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms-chat-evening-20260910"
   },
   "release": {
     "agent": "/root/evening_release",
     "branch": "codex/wms-evening-release-20260910",
-    "checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms-evening-release-20260910"
+    "checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms-evening-release-20260910",
+    "source_sha": "85d802b1a463ea173695d1e0f33bfe73c0d05bca",
+    "status": "CI corrections committed and pushed; CI34482149376 running; backlog PASS",
+    "ci_run": 34482149376,
+    "agent_status": "completed; no active writer",
+    "code_fix_sha": "5e1faa5cc6948eca9fcaed0396cbe016e75b1b78"
   },
   "stage_authorized_after_final_opus_review": true,
   "production_authorized": false,
   "chat_blocks_release": false,
-  "physical_tsd_is_pre_release_gate": false
+  "physical_tsd_is_pre_release_gate": false,
+  "final_review": {
+    "pid": null,
+    "session_id": "a4d0decf-6663-4a8a-aa73-0ca1d5c7e61c",
+    "model": "claude-opus-5",
+    "effort": "xhigh",
+    "events": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/evening-final-opus5-review-events.jsonl",
+    "cwd": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms-evening-release-20260910",
+    "started_at": "2026-09-10T12:09:01.980827+00:00",
+    "web_sha": "03592c5be27ee40a8bbea9135c612dc0471e2be7",
+    "mobile_source": "af9693126d19d16918abd5cc7b7fbe99dfebc142",
+    "mobile_patch_sha256": "ae0a454b3e22b3a047255b2890bd7538f567ab25e5b732c6c4e01feced15d5b3",
+    "scope": "Single final evening integration and APK delta review; chat excluded",
+    "status": "PASS; completed once; root inspected bounded subsequent CI service fix separately"
+  },
+  "stage": {
+    "source_sha": "c3c41e532e06a9ba3259d99e114acbc66db92b95",
+    "api_deployment": "b0b16dae-7c0e-4581-aafe-5fcaef5ae3b5",
+    "web_deployment": "f6c6a8fe-3743-4af9-ba4b-1fdfb61701a4",
+    "status": "previous candidate deployed; latest CI stock correction not yet deployed",
+    "browser_status": "previous session expired; authenticated stage UI not accepted",
+    "api_runtime_proof": "stage-api-runtime.json",
+    "web_runtime_status": "182 assets found; hash-dependent names differ; full normalized comparison pending"
+  }
 }
