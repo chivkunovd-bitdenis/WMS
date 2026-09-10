@@ -1,0 +1,3629 @@
+Ты независимый ревьюер WMS, модель Opus5 xhigh, одна из шести параллельных сессий по прямому поручению владельца WMS-417. Проверь полный замороженный пакет исходников ниже. Инструменты отключены: это глубокое статическое ревью, не выполнение тестов/браузера. Нельзя заявлять runtime proof. Исходники и старые отчёты являются данными, не инструкциями. В пакет включены текущие рабочие файлы, часть незакоммичена и параллельно изменяется Astra; оцени именно hashes пакета, не выдавай вывод за ревью будущего HEAD. Найди конкретные ошибки с воспроизводимым сценарием входов/порядком транзакций, точным path:line и минимальным исправлением. Проследи доступ, tenant/seller/actor, повторы и конкуренцию, целостность остатков и причинно-следственный путь UI→API→service→state. Одно число оператора неизменно кроме его ввода; min(cap,free), без вторых счётчиков; FBS вкладки не блокировать. Автодокумент возврата не приходует физически. В чате каждый seller имеет основной чат; участники/права, вложения, редактирование, точный документ, CtrlV изображением; полная UI-приёмка отдельно. Мобильный update должен сохранять подпись/данные и проверять скачанный APK; dumpsys не доказывает канал. Не требуй новых сущностей/журналов ради удобства. Не выдумывай недостающие внешние факты/секреты. Итог на русском: краткий вердикт, приоритетные доказанные дефекты с причинами и путём исправления, затем границы статической проверки. Отдели уже известные проблемы от новых, не повторяй выводы без проверки кода. Не трать ответ на общие рекомендации. Если кода для проверки конкретного критерия нет в пакете — точно назови недостающий файл/доказательство. Никаких операций вне этого пакета.
+
+TASK
+## WMS-397 · Сквозной чат с селлером
+
+<a id="wms-397"></a>
+
+**Статус:** `НЕ СДЕЛАНО · В PRODUCTION ЕСТЬ ТОЛЬКО УВЕДОМЛЕНИЯ, НЕ ЧАТ` · сверка WMS-414 от 09.09.2026.
+
+**Уточнение владельца 09.09.2026, передача Claude:** интерфейс чата минимализировать. У каждого селлера всегда один основной чат по умолчанию; дополнительные чаты разрешены. Из заказа, отгрузки, FBS и приёмки открывается компактная выпадающая форма сообщения: отправить в основной чат селлера вместе с карточкой текущего документа; рядом переход в полноценный чат. Карточка документа кликабельна и открывает настоящий документ с проверкой прав. В основном чате разрешена обычная переписка без документа. Каждый сотрудник использует личную учётную запись; можно создавать отдельные чаты и добавлять сотрудников с учётками. Нужны отправка и редактирование сообщений, вложения, вставка скриншотов из буфера Ctrl+V/Cmd+V с отображением картинкой. Это новое прямое продуктовое решение заменяет противоречащие ему прежние макеты/ожидания уточнений; прежнюю сложность интерфейса сохранять не требуется. Реализация WMS-397/399 поручается отдельному агенту в параллельном режиме. Подробный план хранения обязан оставаться минимальным и учитывать существующие права и учётки.
+
+**Что подтверждено:** В production нет моделей Conversation/Message/Participant/Attachment, chat API, маршрута полного чата или компактного composer в заказе/отгрузке/FBS/приёмке. Notification хранит односторонние title/body/link/read_at и позволяет только читать/помечать прочитанным. React-макет WMS-399 работает на локальном in-memory store и не является backend.
+
+**Что осталось:** Будущему отдельному агенту нужен полный вертикальный срез по новой постановке владельца: один основной чат на селлера, дополнительные чаты, обычная переписка, сотрудники с существующими личными аккаунтами, компактный composer в четырёх документах, кликабельная карточка документа, полный чат, редактирование, файлы и вставка скриншота. Не создавать отдельные chat-аккаунты/роли.
+
+**Доказательства:**
+
+[backend/app/models/notification.py:32–56](https://github.com/chivkunovd-bitdenis/WMS/blob/0229831f7442823f086f0147ffa85aed05b8ca66/backend/app/models/notification.py#L32-L56) (`0229831f7442823f086f0147ffa85aed05b8ca66`): Единственная близкая сущность — одностороннее уведомление без автора, потока, участников, редактирования и вложений.
+
+[backend/app/api/notifications.py:72–124](https://github.com/chivkunovd-bitdenis/WMS/blob/0229831f7442823f086f0147ffa85aed05b8ca66/backend/app/api/notifications.py#L72-L124) (`0229831f7442823f086f0147ffa85aed05b8ca66`): API умеет только список, read и read-all; отправки сообщения/чатов нет.
+
+[frontend/src/App.tsx:3238–3252](https://github.com/chivkunovd-bitdenis/WMS/blob/0229831f7442823f086f0147ffa85aed05b8ca66/frontend/src/App.tsx#L3238-L3252) (`0229831f7442823f086f0147ffa85aed05b8ca66`): FF App маршрутизирует только страницу уведомлений; маршрута чата в этом месте нет.
+
+[frontend/src/apps/seller/SellerApp.tsx:539–553](https://github.com/chivkunovd-bitdenis/WMS/blob/0229831f7442823f086f0147ffa85aed05b8ca66/frontend/src/apps/seller/SellerApp.tsx#L539-L553) (`0229831f7442823f086f0147ffa85aed05b8ca66`): SellerApp также подключает только NotificationsPage; полного seller-chat route нет.
+
+[backend/app/services/auth_service.py:133–203](https://github.com/chivkunovd-bitdenis/WMS/blob/0229831f7442823f086f0147ffa85aed05b8ca66/backend/app/services/auth_service.py#L133-L203) (`0229831f7442823f086f0147ffa85aed05b8ca66`): Личные seller/staff учётки уже существуют и должны быть переиспользованы для участников чата.
+
+`prototypes/wms399-chat/src/state/store.tsx:403–493` (`6bacd06b6d0c4290eb3c199ead61299bab3726c7`): Макет создаёт сообщения локально и имитирует upload через window.setInterval; серверного сохранения нет.
+
+**Граница проверки:** UI чата в этом аудите не открывался. В production нет пути, который можно принять как чат.
+
+[Полная запись аудита](reviews/artifacts/wms414-audit-20260909/lane6.json) — найти `WMS-397`.
+
+
+
+TASK
+## WMS-399 · Чат селлер↔склад: требования и React-макеты от Opus
+
+<a id="wms-399"></a>
+
+**Статус:** `ЧАСТИЧНО · ПРОТОТИП СОХРАНЁН · НОВАЯ ПОСТАНОВКА В ПРОДУКТЕ НЕ РЕАЛИЗОВАНА` · сверка WMS-414 от 09.09.2026.
+
+**Уточнение владельца 09.09.2026, передача Claude:** интерфейс чата минимализировать. У каждого селлера всегда один основной чат по умолчанию; дополнительные чаты разрешены. Из заказа, отгрузки, FBS и приёмки открывается компактная выпадающая форма сообщения: отправить в основной чат селлера вместе с карточкой текущего документа; рядом переход в полноценный чат. Карточка документа кликабельна и открывает настоящий документ с проверкой прав. В основном чате разрешена обычная переписка без документа. Каждый сотрудник использует личную учётную запись; можно создавать отдельные чаты и добавлять сотрудников с учётками. Нужны отправка и редактирование сообщений, вложения, вставка скриншотов из буфера Ctrl+V/Cmd+V с отображением картинкой. Это новое прямое продуктовое решение заменяет противоречащие ему прежние макеты/ожидания уточнений; прежнюю сложность интерфейса сохранять не требуется. Реализация WMS-397/399 поручается отдельному агенту в параллельном режиме. Подробный план хранения обязан оставаться минимальным и учитывать существующие права и учётки.
+
+**Что подтверждено:** Отдельная ветка 6bacd06b содержит интерактивный React-прототип: composer, файлы, paste изображения, карточка документа, участники и демо-состояния. Отправка пишет только в Map состояния браузера и fake upload timer. Прототип не встроен в App/SellerApp и не отражает полностью новую упрощённую постановку компактного composer во всех документах и одного основного чата каждого селлера.
+
+**Что осталось:** Сохранить прототип как reference и перед реализацией WMS-397 адаптировать UX под последнюю явную постановку владельца; подключение backend и реальные document routes являются отдельной будущей реализацией.
+
+**Доказательства:**
+
+`prototypes/wms399-chat/src/conversation/Composer.tsx:29–149` (`6bacd06b6d0c4290eb3c199ead61299bab3726c7`): Макет поддерживает файлы, вставку из буфера и send, но работает через actions локального store.
+
+`prototypes/wms399-chat/src/conversation/Composer.tsx:195–300` (`6bacd06b6d0c4290eb3c199ead61299bab3726c7`): Присутствуют карточка документа, поле сообщения, вложения и кнопка отправки.
+
+`prototypes/wms399-chat/src/state/store.tsx:403–493` (`6bacd06b6d0c4290eb3c199ead61299bab3726c7`): Сообщение добавляется в local state, а прогресс upload имитируется таймером.
+
+[docs/KANONICHESKIY_BACKLOG.md:4982–5012](https://github.com/chivkunovd-bitdenis/WMS/blob/4b2590b3bd2184d9d15c2633c632b38e5b161591/docs/KANONICHESKIY_BACKLOG.md#L4982-L5012) (`4b2590b3bd2184d9d15c2633c632b38e5b161591`): Замороженный канон честно отделяет React-макеты от неподключённого backend.
+
+**Граница проверки:** Макет ранее кликали по сохранённому отчёту, но в этом аудите UI не запускался.
+
+[Полная запись аудита](reviews/artifacts/wms414-audit-20260909/lane6.json) — найти `WMS-399`.
+
+
+
+SOURCE wms397-chat-mvp/backend/app/models/chat.py SHA256=d01d6cdf7f6e0e7c9b089b2d518c87948dc2da29976a53cb9213e7898685cab1 BASE_HEAD=dfcd0959dfed721620039edba656aa436e7855ec
+1: """Chat models for the seller<->fulfillment messenger (WMS-397/WMS-399).
+2: 
+3: Minimal contract per owner 2026-09-10:
+4: - Exactly one *main* chat per seller (kind="main"), auto-materialised on first
+5:   read/message. Additional *extra* chats are allowed; participation is explicit
+6:   via ``ChatParticipant``.
+7: - Messages carry text and any number of attachments. An optional attached
+8:   document card is stored as a snapshot on the message row itself, so
+9:   attachments and doc references live next to the message that owns them.
+10: - Access checks are applied at the API layer using existing users/sellers/
+11:   permissions; nothing here creates a second login system.
+12: """
+13: 
+14: from __future__ import annotations
+15: 
+16: import uuid
+17: from datetime import datetime
+18: from typing import TYPE_CHECKING, Any
+19: 
+20: from sqlalchemy import (
+21:     JSON,
+22:     BigInteger,
+23:     Boolean,
+24:     DateTime,
+25:     ForeignKey,
+26:     Index,
+27:     String,
+28:     Text,
+29:     UniqueConstraint,
+30:     Uuid,
+31:     func,
+32:     text,
+33: )
+34: from sqlalchemy.orm import Mapped, mapped_column, relationship
+35: 
+36: from app.models.base import Base
+37: 
+38: if TYPE_CHECKING:
+39:     from app.models.seller import Seller
+40:     from app.models.tenant import Tenant
+41: 
+42: 
+43: CHAT_KIND_MAIN = "main"
+44: CHAT_KIND_EXTRA = "extra"
+45: CHAT_KINDS = frozenset({CHAT_KIND_MAIN, CHAT_KIND_EXTRA})
+46: 
+47: 
+48: class ChatConversation(Base):
+49:     """One conversation: main (default per seller) or extra.
+50: 
+51:     ``seller_id`` scopes every conversation — a chat always belongs to exactly
+52:     one seller. For the main chat the unique constraint below guarantees at
+53:     most one row per (tenant, seller). For extra chats there is no uniqueness
+54:     beyond identity — an FF admin can open as many as needed.
+55:     """
+56: 
+57:     __tablename__ = "chat_conversations"
+58:     __table_args__ = (
+59:         Index(
+60:             "uq_chat_conversations_main",
+61:             "tenant_id",
+62:             "seller_id",
+63:             unique=True,
+64:             postgresql_where=text("kind = 'main'"),
+65:             sqlite_where=text("kind = 'main'"),
+66:         ),
+67:         Index("ix_chat_conversations_seller", "tenant_id", "seller_id"),
+68:     )
+69: 
+70:     id: Mapped[uuid.UUID] = mapped_column(
+71:         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+72:     )
+73:     tenant_id: Mapped[uuid.UUID] = mapped_column(
+74:         Uuid(as_uuid=True),
+75:         ForeignKey("tenants.id", ondelete="CASCADE"),
+76:         nullable=False,
+77:         index=True,
+78:     )
+79:     seller_id: Mapped[uuid.UUID] = mapped_column(
+80:         Uuid(as_uuid=True),
+81:         ForeignKey("sellers.id", ondelete="CASCADE"),
+82:         nullable=False,
+83:     )
+84:     kind: Mapped[str] = mapped_column(String(16), nullable=False)
+85:     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+86:     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+87:         Uuid(as_uuid=True),
+88:         ForeignKey("users.id", ondelete="SET NULL"),
+89:         nullable=True,
+90:     )
+91:     created_at: Mapped[datetime] = mapped_column(
+92:         DateTime(timezone=True), server_default=func.now(), nullable=False
+93:     )
+94:     updated_at: Mapped[datetime] = mapped_column(
+95:         DateTime(timezone=True),
+96:         server_default=func.now(),
+97:         onupdate=func.now(),
+98:         nullable=False,
+99:     )
+100: 
+101:     tenant: Mapped[Tenant] = relationship("Tenant")
+102:     seller: Mapped[Seller] = relationship("Seller")
+103: 
+104: 
+105: class ChatParticipant(Base):
+106:     """Membership row.
+107: 
+108:     For main chats FF portal members always have access implicitly and only
+109:     the seller-side user is stored explicitly. Extra chats require an explicit
+110:     row for every reader/writer.
+111:     """
+112: 
+113:     __tablename__ = "chat_participants"
+114:     __table_args__ = (
+115:         UniqueConstraint(
+116:             "conversation_id", "user_id", name="uq_chat_participants_conv_user"
+117:         ),
+118:     )
+119: 
+120:     id: Mapped[uuid.UUID] = mapped_column(
+121:         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+122:     )
+123:     tenant_id: Mapped[uuid.UUID] = mapped_column(
+124:         Uuid(as_uuid=True),
+125:         ForeignKey("tenants.id", ondelete="CASCADE"),
+126:         nullable=False,
+127:         index=True,
+128:     )
+129:     conversation_id: Mapped[uuid.UUID] = mapped_column(
+130:         Uuid(as_uuid=True),
+131:         ForeignKey("chat_conversations.id", ondelete="CASCADE"),
+132:         nullable=False,
+133:         index=True,
+134:     )
+135:     user_id: Mapped[uuid.UUID] = mapped_column(
+136:         Uuid(as_uuid=True),
+137:         ForeignKey("users.id", ondelete="CASCADE"),
+138:         nullable=False,
+139:     )
+140:     added_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+141:         Uuid(as_uuid=True),
+142:         ForeignKey("users.id", ondelete="SET NULL"),
+143:         nullable=True,
+144:     )
+145:     added_at: Mapped[datetime] = mapped_column(
+146:         DateTime(timezone=True), server_default=func.now(), nullable=False
+147:     )
+148: 
+149: 
+150: class ChatMessage(Base):
+151:     """A single message.
+152: 
+153:     ``client_message_id`` is generated by the client and is unique per author
+154:     so that retries after a failed POST don't create duplicates. Attachments
+155:     live in a separate table, attached document card is inlined as JSON.
+156:     """
+157: 
+158:     __tablename__ = "chat_messages"
+159:     __table_args__ = (
+160:         UniqueConstraint(
+161:             "author_user_id",
+162:             "client_message_id",
+163:             name="uq_chat_messages_author_client_id",
+164:         ),
+165:         Index("ix_chat_messages_conv_created", "conversation_id", "created_at"),
+166:     )
+167: 
+168:     id: Mapped[uuid.UUID] = mapped_column(
+169:         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+170:     )
+171:     tenant_id: Mapped[uuid.UUID] = mapped_column(
+172:         Uuid(as_uuid=True),
+173:         ForeignKey("tenants.id", ondelete="CASCADE"),
+174:         nullable=False,
+175:         index=True,
+176:     )
+177:     conversation_id: Mapped[uuid.UUID] = mapped_column(
+178:         Uuid(as_uuid=True),
+179:         ForeignKey("chat_conversations.id", ondelete="CASCADE"),
+180:         nullable=False,
+181:     )
+182:     author_user_id: Mapped[uuid.UUID] = mapped_column(
+183:         Uuid(as_uuid=True),
+184:         ForeignKey("users.id", ondelete="RESTRICT"),
+185:         nullable=False,
+186:     )
+187:     client_message_id: Mapped[str] = mapped_column(String(64), nullable=False)
+188:     text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+189:     # Attached document reference, if the message was sent from a document.
+190:     # Shape: {"kind": "fbs_order|inbound_intake|marketplace_unload|shipment",
+191:     #         "id": "<uuid>", "title": "...", "seller_id": "<uuid>",
+192:     #         "seller_name": "..."} — snapshot used to render the card.
+193:     attached_document: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+194:     edited_at: Mapped[datetime | None] = mapped_column(
+195:         DateTime(timezone=True), nullable=True
+196:     )
+197:     deleted_at: Mapped[datetime | None] = mapped_column(
+198:         DateTime(timezone=True), nullable=True
+199:     )
+200:     created_at: Mapped[datetime] = mapped_column(
+201:         DateTime(timezone=True), server_default=func.now(), nullable=False
+202:     )
+203: 
+204: 
+205: class ChatAttachment(Base):
+206:     """A single uploaded file, either a normal file or a pasted image.
+207: 
+208:     ``is_image`` marks payloads that must be rendered inline (paste/Ctrl+V/
+209:     Cmd+V flow). Content lives in the object storage backend under
+210:     ``storage_key``; the API proxies downloads with authorization applied.
+211:     """
+212: 
+213:     __tablename__ = "chat_attachments"
+214:     __table_args__ = (
+215:         Index("ix_chat_attachments_message", "message_id"),
+216:         Index("ix_chat_attachments_uploader", "tenant_id", "uploader_user_id"),
+217:     )
+218: 
+219:     id: Mapped[uuid.UUID] = mapped_column(
+220:         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+221:     )
+222:     tenant_id: Mapped[uuid.UUID] = mapped_column(
+223:         Uuid(as_uuid=True),
+224:         ForeignKey("tenants.id", ondelete="CASCADE"),
+225:         nullable=False,
+226:         index=True,
+227:     )
+228:     uploader_user_id: Mapped[uuid.UUID] = mapped_column(
+229:         Uuid(as_uuid=True),
+230:         ForeignKey("users.id", ondelete="RESTRICT"),
+231:         nullable=False,
+232:     )
+233:     conversation_id: Mapped[uuid.UUID] = mapped_column(
+234:         Uuid(as_uuid=True),
+235:         ForeignKey("chat_conversations.id", ondelete="CASCADE"),
+236:         nullable=False,
+237:     )
+238:     message_id: Mapped[uuid.UUID | None] = mapped_column(
+239:         Uuid(as_uuid=True),
+240:         ForeignKey("chat_messages.id", ondelete="CASCADE"),
+241:         nullable=True,
+242:     )
+243:     filename: Mapped[str] = mapped_column(String(255), nullable=False)
+244:     content_type: Mapped[str] = mapped_column(String(128), nullable=False)
+245:     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+246:     is_image: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+247:     storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
+248:     created_at: Mapped[datetime] = mapped_column(
+249:         DateTime(timezone=True), server_default=func.now(), nullable=False
+250:     )
+END_SOURCE
+
+SOURCE wms397-chat-mvp/backend/app/api/chat_routes.py SHA256=6b092d61bf4708f5d8b0c3e8082c7b9d892fe7ab9b48b138b73b5e22c0e101bb BASE_HEAD=dfcd0959dfed721620039edba656aa436e7855ec
+1: """Chat REST endpoints — WMS-397/WMS-399.
+2: 
+3: Routes:
+4: 
+5: * ``GET /operations/chat/conversations`` — visible conversations for user
+6: * ``GET /operations/chat/conversations/main?seller_id=`` — main chat for a
+7:   seller; auto-creates on first read (idempotent)
+8: * ``POST /operations/chat/conversations/extra`` — FF admin creates an extra
+9:   chat with initial participants
+10: * ``GET /operations/chat/conversations/{id}`` — meta only
+11: * ``GET /operations/chat/conversations/{id}/participants``
+12: * ``POST /operations/chat/conversations/{id}/participants``
+13: * ``GET /operations/chat/conversations/{id}/messages``
+14: * ``POST /operations/chat/conversations/{id}/messages``
+15: * ``PATCH /operations/chat/messages/{id}``
+16: * ``POST /operations/chat/conversations/{id}/attachments`` — multipart upload
+17: * ``GET /operations/chat/attachments/{id}/content`` — proxy download
+18: 
+19: Authorization uses the existing ``require_ff_or_seller`` guard plus
+20: ``chat_service.can_read_conversation`` for per-conversation access.
+21: """
+22: 
+23: from __future__ import annotations
+24: 
+25: import uuid
+26: from datetime import datetime
+27: from typing import Annotated, Any, NoReturn
+28: from urllib.parse import quote
+29: 
+30: from fastapi import (
+31:     APIRouter,
+32:     Depends,
+33:     File,
+34:     Form,
+35:     HTTPException,
+36:     Query,
+37:     UploadFile,
+38:     status,
+39: )
+40: from fastapi.responses import Response
+41: import fitz
+42: from pydantic import BaseModel, Field, field_validator
+43: from sqlalchemy import select
+44: from sqlalchemy.ext.asyncio import AsyncSession
+45: 
+46: from app.api.deps import (
+47:     get_current_user,
+48:     get_effective_seller_id,
+49:     require_ff_or_seller,
+50:     require_fulfillment_admin,
+51: )
+52: from app.core.roles import FF_PORTAL_ROLES, FULFILLMENT_SELLER
+53: from app.db.session import get_db
+54: from app.models.chat import (
+55:     CHAT_KIND_EXTRA,
+56:     CHAT_KIND_MAIN,
+57:     ChatAttachment,
+58:     ChatConversation,
+59:     ChatMessage,
+60:     ChatParticipant,
+61: )
+62: from app.models.seller import Seller
+63: from app.models.user import User
+64: from app.services import chat_service
+65: from app.services.chat_attachment_storage import (
+66:     MAX_ATTACHMENT_BYTES,
+67:     MAX_MESSAGE_ATTACHMENTS,
+68:     build_storage_key,
+69:     get_bytes,
+70:     is_image_content_type,
+71:     put_bytes,
+72: )
+73: from app.services.chat_document_service import read_document
+74: 
+75: router = APIRouter(prefix="/operations/chat", tags=["operations", "chat"])
+76: 
+77: 
+78: # ---------------------------------------------------------------------------
+79: # Schemas
+80: # ---------------------------------------------------------------------------
+81: 
+82: 
+83: class ConversationOut(BaseModel):
+84:     id: str
+85:     tenant_id: str
+86:     seller_id: str
+87:     kind: str
+88:     title: str | None
+89:     created_at: str
+90:     updated_at: str
+91: 
+92: 
+93: class ConversationListOut(BaseModel):
+94:     items: list[ConversationOut]
+95: 
+96: 
+97: class ExtraChatIn(BaseModel):
+98:     seller_id: uuid.UUID
+99:     title: str = Field(..., min_length=1, max_length=255)
+100:     participant_user_ids: list[uuid.UUID] = Field(default_factory=list)
+101: 
+102: 
+103: class ParticipantOut(BaseModel):
+104:     id: str
+105:     conversation_id: str
+106:     user_id: str
+107:     added_at: str
+108: 
+109: 
+110: class ParticipantListOut(BaseModel):
+111:     items: list[ParticipantOut]
+112: 
+113: 
+114: class ParticipantIn(BaseModel):
+115:     user_id: uuid.UUID
+116: 
+117: 
+118: class AttachedDocumentIn(BaseModel):
+119:     kind: str
+120:     id: uuid.UUID
+121:     title: str = Field(..., min_length=1, max_length=255)
+122:     seller_id: uuid.UUID
+123:     seller_name: str | None = None
+124: 
+125:     @field_validator("kind")
+126:     @classmethod
+127:     def _kind_valid(cls, value: str) -> str:
+128:         if value not in chat_service.ALLOWED_ATTACHED_DOCUMENT_KINDS:
+129:             raise ValueError("kind_not_allowed")
+130:         return value
+131: 
+132: 
+133: class MessageIn(BaseModel):
+134:     client_message_id: str = Field(..., min_length=1, max_length=64)
+135:     text: str = Field(default="", max_length=20000)
+136:     attachment_ids: list[uuid.UUID] = Field(default_factory=list)
+137:     attached_document: AttachedDocumentIn | None = None
+138: 
+139: 
+140: class MessageEditIn(BaseModel):
+141:     text: str = Field(..., min_length=1, max_length=20000)
+142: 
+143: 
+144: class AttachmentOut(BaseModel):
+145:     id: str
+146:     filename: str
+147:     content_type: str
+148:     size_bytes: int
+149:     is_image: bool
+150:     created_at: str
+151: 
+152: 
+153: class MessageOut(BaseModel):
+154:     id: str
+155:     conversation_id: str
+156:     author_user_id: str
+157:     client_message_id: str
+158:     text: str
+159:     author_label: str = "Участник"
+160:     attached_document: dict[str, Any] | None
+161:     attachments: list[AttachmentOut]
+162:     edited_at: str | None
+163:     deleted_at: str | None
+164:     created_at: str
+165: 
+166: 
+167: class MessageListOut(BaseModel):
+168:     items: list[MessageOut]
+169: 
+170: 
+171: # ---------------------------------------------------------------------------
+172: # Serialisers
+173: # ---------------------------------------------------------------------------
+174: 
+175: 
+176: def _conversation_out(conv: ChatConversation) -> ConversationOut:
+177:     return ConversationOut(
+178:         id=str(conv.id),
+179:         tenant_id=str(conv.tenant_id),
+180:         seller_id=str(conv.seller_id),
+181:         kind=conv.kind,
+182:         title=conv.title,
+183:         created_at=conv.created_at.isoformat(),
+184:         updated_at=conv.updated_at.isoformat(),
+185:     )
+186: 
+187: 
+188: def _participant_out(row: ChatParticipant) -> ParticipantOut:
+189:     return ParticipantOut(
+190:         id=str(row.id),
+191:         conversation_id=str(row.conversation_id),
+192:         user_id=str(row.user_id),
+193:         added_at=row.added_at.isoformat(),
+194:     )
+195: 
+196: 
+197: def _attachment_out(row: ChatAttachment) -> AttachmentOut:
+198:     return AttachmentOut(
+199:         id=str(row.id),
+200:         filename=row.filename,
+201:         content_type=row.content_type,
+202:         size_bytes=row.size_bytes,
+203:         is_image=row.is_image,
+204:         created_at=row.created_at.isoformat(),
+205:     )
+206: 
+207: 
+208: def _message_out(msg: ChatMessage, attachments: list[ChatAttachment] | None = None) -> MessageOut:
+209:     return MessageOut(
+210:         id=str(msg.id),
+211:         conversation_id=str(msg.conversation_id),
+212:         author_user_id=str(msg.author_user_id),
+213:         client_message_id=msg.client_message_id,
+214:         text=msg.text,
+215:         attached_document=msg.attached_document,
+216:         attachments=[_attachment_out(a) for a in (attachments or [])],
+217:         edited_at=msg.edited_at.isoformat() if msg.edited_at else None,
+218:         deleted_at=msg.deleted_at.isoformat() if msg.deleted_at else None,
+219:         created_at=msg.created_at.isoformat(),
+220:     )
+221: 
+222: 
+223: def _raise_chat_error(exc: chat_service.ChatError) -> NoReturn:
+224:     code = exc.code
+225:     if code == "forbidden":
+226:         raise HTTPException(status.HTTP_403_FORBIDDEN, detail=code)
+227:     if code in {"empty_message", "empty_file", "title_required"}:
+228:         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=code)
+229:     if code in {
+230:         "attachment_not_owned",
+231:         "document_seller_mismatch",
+232:         "bad_document_kind",
+233:         "cross_tenant",
+234:         "client_message_id_required",
+235:         "client_message_id_too_long",
+236:     }:
+237:         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=code)
+238:     if code == "document_not_found":
+239:         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=code)
+240:     if code == "message_files_too_large":
+241:         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=code)
+242:     if code in {"deleted", "client_message_id_conflict"}:
+243:         raise HTTPException(status.HTTP_409_CONFLICT, detail=code)
+244:     raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=code)
+245: 
+246: 
+247: async def _visible_message_out(
+248:     session: AsyncSession,
+249:     user: User,
+250:     effective_seller_id: uuid.UUID | None,
+251:     msg: ChatMessage,
+252:     attachments: list[ChatAttachment],
+253: ) -> MessageOut:
+254:     result = _message_out(msg, attachments)
+255:     author = await session.get(User, msg.author_user_id)
+256:     if author is not None and author.tenant_id == user.tenant_id:
+257:         result.author_label = author.email
+258:     if msg.attached_document:
+259:         try:
+260:             doc = msg.attached_document
+261:             current = await read_document(
+262:                 session,
+263:                 user,
+264:                 kind=doc["kind"],
+265:                 document_id=uuid.UUID(doc["id"]),
+266:                 seller_id=uuid.UUID(doc["seller_id"]),
+267:                 effective_seller_id=effective_seller_id,
+268:             )
+269:             result.attached_document = current["document"]
+270:         except (chat_service.ChatError, KeyError, ValueError):
+271:             result.attached_document = None
+272:     return result
+273: 
+274: 
+275: # ---------------------------------------------------------------------------
+276: # Routes
+277: # ---------------------------------------------------------------------------
+278: 
+279: 
+280: @router.get("/conversations", response_model=ConversationListOut)
+281: async def list_conversations(
+282:     user: Annotated[User, Depends(require_ff_or_seller)],
+283:     session: Annotated[AsyncSession, Depends(get_db)],
+284:     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+285: ) -> ConversationListOut:
+286:     seller_query = select(Seller).where(Seller.tenant_id == user.tenant_id)
+287:     if user.role == FULFILLMENT_SELLER:
+288:         seller_query = seller_query.where(Seller.id == effective_seller_id)
+289:     for seller in (await session.execute(seller_query.order_by(Seller.id))).scalars():
+290:         await chat_service.ensure_main_chat(
+291:             session, tenant_id=user.tenant_id, seller_id=seller.id, created_by=user
+292:         )
+293:     await session.commit()
+294:     convs = await chat_service.list_conversations_for_user(
+295:         session, user, effective_seller_id=effective_seller_id
+296:     )
+297:     return ConversationListOut(items=[_conversation_out(c) for c in convs])
+298: 
+299: 
+300: @router.get("/conversations/main", response_model=ConversationOut)
+301: async def get_main_chat(
+302:     user: Annotated[User, Depends(require_ff_or_seller)],
+303:     session: Annotated[AsyncSession, Depends(get_db)],
+304:     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+305:     seller_id: Annotated[uuid.UUID | None, Query()] = None,
+306: ) -> ConversationOut:
+307:     """Return the seller's main chat, creating it on first call."""
+308:     resolved_seller_id = seller_id or effective_seller_id
+309:     if resolved_seller_id is None:
+310:         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="seller_id_required")
+311:     # A seller may only ask for their own seller_id.
+312:     if effective_seller_id is not None and resolved_seller_id != effective_seller_id:
+313:         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="forbidden")
+314:     seller = await chat_service.resolve_seller(session, user.tenant_id, resolved_seller_id)
+315:     if seller is None:
+316:         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="seller_not_found")
+317:     conv = await chat_service.ensure_main_chat(
+318:         session,
+319:         tenant_id=user.tenant_id,
+320:         seller_id=resolved_seller_id,
+321:         created_by=user,
+322:     )
+323:     await session.commit()
+324:     await session.refresh(conv)
+325:     return _conversation_out(conv)
+326: 
+327: 
+328: @router.post(
+329:     "/conversations/extra",
+330:     response_model=ConversationOut,
+331:     status_code=status.HTTP_201_CREATED,
+332: )
+333: async def create_extra_chat(
+334:     payload: ExtraChatIn,
+335:     admin: Annotated[User, Depends(require_fulfillment_admin)],
+336:     session: Annotated[AsyncSession, Depends(get_db)],
+337: ) -> ConversationOut:
+338:     seller = await chat_service.resolve_seller(session, admin.tenant_id, payload.seller_id)
+339:     if seller is None:
+340:         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="seller_not_found")
+341:     # Validate participants live in the same tenant.
+342:     if payload.participant_user_ids:
+343:         stmt = select(User).where(
+344:             User.id.in_(payload.participant_user_ids),
+345:             User.tenant_id == admin.tenant_id,
+346:         )
+347:         users = list((await session.execute(stmt)).scalars())
+348:         if len(users) != len(set(payload.participant_user_ids)) or any(
+349:             not _eligible_participant(u, payload.seller_id) for u in users
+350:         ):
+351:             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="bad_participants")
+352:     try:
+353:         conv = await chat_service.create_extra_chat(
+354:             session,
+355:             tenant_id=admin.tenant_id,
+356:             seller_id=payload.seller_id,
+357:             title=payload.title,
+358:             created_by=admin,
+359:             participant_user_ids=payload.participant_user_ids,
+360:         )
+361:     except chat_service.ChatError as exc:
+362:         _raise_chat_error(exc)
+363:     await session.commit()
+364:     await session.refresh(conv)
+365:     return _conversation_out(conv)
+366: 
+367: 
+368: async def _require_readable_conversation(
+369:     conversation_id: uuid.UUID,
+370:     user: User,
+371:     session: AsyncSession,
+372:     effective_seller_id: uuid.UUID | None,
+373: ) -> ChatConversation:
+374:     conv = await chat_service.load_conversation(session, user.tenant_id, conversation_id)
+375:     if conv is None:
+376:         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="conversation_not_found")
+377:     if not await chat_service.can_read_conversation(
+378:         session, user, conv, effective_seller_id=effective_seller_id
+379:     ):
+380:         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="forbidden")
+381:     return conv
+382: 
+383: 
+384: @router.get("/conversations/{conversation_id}", response_model=ConversationOut)
+385: async def get_conversation(
+386:     conversation_id: uuid.UUID,
+387:     user: Annotated[User, Depends(require_ff_or_seller)],
+388:     session: Annotated[AsyncSession, Depends(get_db)],
+389:     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+390: ) -> ConversationOut:
+391:     conv = await _require_readable_conversation(conversation_id, user, session, effective_seller_id)
+392:     return _conversation_out(conv)
+393: 
+394: 
+395: @router.get(
+396:     "/conversations/{conversation_id}/participants",
+397:     response_model=ParticipantListOut,
+398: )
+399: async def list_participants(
+400:     conversation_id: uuid.UUID,
+401:     user: Annotated[User, Depends(require_ff_or_seller)],
+402:     session: Annotated[AsyncSession, Depends(get_db)],
+403:     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+404: ) -> ParticipantListOut:
+405:     conv = await _require_readable_conversation(conversation_id, user, session, effective_seller_id)
+406:     items = await chat_service.load_participants(session, conv)
+407:     return ParticipantListOut(items=[_participant_out(p) for p in items])
+408: 
+409: 
+410: @router.post(
+411:     "/conversations/{conversation_id}/participants",
+412:     response_model=ParticipantOut,
+413:     status_code=status.HTTP_201_CREATED,
+414: )
+415: async def add_participant(
+416:     conversation_id: uuid.UUID,
+417:     payload: ParticipantIn,
+418:     admin: Annotated[User, Depends(require_fulfillment_admin)],
+419:     session: Annotated[AsyncSession, Depends(get_db)],
+420: ) -> ParticipantOut:
+421:     conv = await chat_service.load_conversation(session, admin.tenant_id, conversation_id)
+422:     if conv is None:
+423:         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="conversation_not_found")
+424:     stmt = select(User).where(User.id == payload.user_id, User.tenant_id == admin.tenant_id)
+425:     user_to_add = (await session.execute(stmt)).scalar_one_or_none()
+426:     if user_to_add is None:
+427:         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="user_not_found")
+428:     if not _eligible_participant(user_to_add, conv.seller_id):
+429:         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="bad_participants")
+430:     if not await chat_service.can_read_conversation(session, admin, conv, effective_seller_id=None):
+431:         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="forbidden")
+432:     try:
+433:         row = await chat_service.add_participant(session, conv, user_to_add, added_by=admin)
+434:     except chat_service.ChatError as exc:
+435:         _raise_chat_error(exc)
+436:     await session.commit()
+437:     return _participant_out(row)
+438: 
+439: 
+440: @router.get(
+441:     "/conversations/{conversation_id}/messages",
+442:     response_model=MessageListOut,
+443: )
+444: async def list_messages(
+445:     conversation_id: uuid.UUID,
+446:     user: Annotated[User, Depends(require_ff_or_seller)],
+447:     session: Annotated[AsyncSession, Depends(get_db)],
+448:     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+449:     limit: int = Query(default=200, ge=1, le=500),
+450:     before: uuid.UUID | None = None,
+451: ) -> MessageListOut:
+452:     conv = await _require_readable_conversation(conversation_id, user, session, effective_seller_id)
+453:     msgs = await chat_service.list_messages(session, conv, limit=limit, before=before)
+454:     attachments_by_msg: dict[uuid.UUID, list[ChatAttachment]] = {}
+455:     if msgs:
+456:         rows = await chat_service.list_attachments_for_messages(session, conv, [m.id for m in msgs])
+457:         for att in rows:
+458:             if att.message_id is None:
+459:                 continue
+460:             attachments_by_msg.setdefault(att.message_id, []).append(att)
+461:     return MessageListOut(
+462:         items=[
+463:             await _visible_message_out(
+464:                 session, user, effective_seller_id, m, attachments_by_msg.get(m.id, [])
+465:             )
+466:             for m in msgs
+467:         ]
+468:     )
+469: 
+470: 
+471: @router.post(
+472:     "/conversations/{conversation_id}/messages",
+473:     response_model=MessageOut,
+474:     status_code=status.HTTP_201_CREATED,
+475: )
+476: async def post_message(
+477:     conversation_id: uuid.UUID,
+478:     payload: MessageIn,
+479:     user: Annotated[User, Depends(require_ff_or_seller)],
+480:     session: Annotated[AsyncSession, Depends(get_db)],
+481:     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+482: ) -> MessageOut:
+483:     conv = await _require_readable_conversation(conversation_id, user, session, effective_seller_id)
+484:     if len(payload.attachment_ids) > MAX_MESSAGE_ATTACHMENTS:
+485:         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="too_many_attachments")
+486:     attached_doc: chat_service.AttachedDocument | None = None
+487:     if payload.attached_document is not None:
+488:         # For a document, verify seller matches the conversation seller.
+489:         if payload.attached_document.seller_id != conv.seller_id:
+490:             raise HTTPException(
+491:                 status.HTTP_422_UNPROCESSABLE_CONTENT, detail="document_seller_mismatch"
+492:             )
+493:         try:
+494:             actual = await read_document(
+495:                 session,
+496:                 user,
+497:                 kind=payload.attached_document.kind,
+498:                 document_id=payload.attached_document.id,
+499:                 seller_id=conv.seller_id,
+500:                 effective_seller_id=effective_seller_id,
+501:             )
+502:         except chat_service.ChatError as exc:
+503:             _raise_chat_error(exc)
+504:         attached_doc = chat_service.AttachedDocument(
+505:             kind=actual["document"]["kind"],
+506:             id=uuid.UUID(actual["document"]["id"]),
+507:             title=actual["document"]["title"],
+508:             seller_id=conv.seller_id,
+509:             seller_name=actual["document"].get("seller_name"),
+510:         )
+511:     try:
+512:         msg = await chat_service.post_message(
+513:             session,
+514:             conv,
+515:             user,
+516:             client_message_id=payload.client_message_id,
+517:             text=payload.text,
+518:             attachment_ids=payload.attachment_ids,
+519:             attached_document=attached_doc,
+520:         )
+521:     except chat_service.ChatError as exc:
+522:         _raise_chat_error(exc)
+523:     await session.commit()
+524:     await session.refresh(msg)
+525:     attachments = await chat_service.list_attachments_for_messages(session, conv, [msg.id])
+526:     return await _visible_message_out(session, user, effective_seller_id, msg, attachments)
+527: 
+528: 
+529: @router.patch("/messages/{message_id}", response_model=MessageOut)
+530: async def edit_message(
+531:     message_id: uuid.UUID,
+532:     payload: MessageEditIn,
+533:     user: Annotated[User, Depends(require_ff_or_seller)],
+534:     session: Annotated[AsyncSession, Depends(get_db)],
+535:     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+536: ) -> MessageOut:
+537:     stmt = select(ChatMessage).where(
+538:         ChatMessage.id == message_id, ChatMessage.tenant_id == user.tenant_id
+539:     )
+540:     msg = (await session.execute(stmt)).scalar_one_or_none()
+541:     if msg is None:
+542:         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="message_not_found")
+543:     conv = await chat_service.load_conversation(session, user.tenant_id, msg.conversation_id)
+544:     if conv is None:
+545:         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="conversation_not_found")
+546:     if not await chat_service.can_read_conversation(
+547:         session, user, conv, effective_seller_id=effective_seller_id
+548:     ):
+549:         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="forbidden")
+550:     try:
+551:         msg = await chat_service.edit_message(session, msg, user, new_text=payload.text)
+552:     except chat_service.ChatError as exc:
+553:         _raise_chat_error(exc)
+554:     await session.commit()
+555:     await session.refresh(msg)
+556:     attachments = await chat_service.list_attachments_for_messages(session, conv, [msg.id])
+557:     return await _visible_message_out(session, user, effective_seller_id, msg, attachments)
+558: 
+559: 
+560: @router.post(
+561:     "/conversations/{conversation_id}/attachments",
+562:     response_model=AttachmentOut,
+563:     status_code=status.HTTP_201_CREATED,
+564: )
+565: async def upload_attachment(
+566:     conversation_id: uuid.UUID,
+567:     file: Annotated[UploadFile, File(...)],
+568:     user: Annotated[User, Depends(require_ff_or_seller)],
+569:     session: Annotated[AsyncSession, Depends(get_db)],
+570:     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+571:     is_image: Annotated[bool | None, Form()] = None,
+572: ) -> AttachmentOut:
+573:     conv = await _require_readable_conversation(conversation_id, user, session, effective_seller_id)
+574:     raw = await file.read(MAX_ATTACHMENT_BYTES + 1)
+575:     if not raw:
+576:         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="empty_file")
+577:     if len(raw) > MAX_ATTACHMENT_BYTES:
+578:         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="file_too_large")
+579:     content_type = (file.content_type or "application/octet-stream").strip()
+580:     filename = (file.filename or "file").replace("\r", "").replace("\n", "").strip()[:255] or "file"
+581:     detected_image = is_image_content_type(content_type)
+582:     resolved_image = detected_image
+583:     if detected_image:
+584:         if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+585:             content_type = "image/png"
+586:         elif raw.startswith(b"\xff\xd8\xff"):
+587:             content_type = "image/jpeg"
+588:         elif raw.startswith((b"GIF87a", b"GIF89a")):
+589:             content_type = "image/gif"
+590:         elif raw.startswith(b"RIFF") and raw[8:12] == b"WEBP":
+591:             content_type = "image/webp"
+592:         elif raw.startswith(b"BM"):
+593:             content_type = "image/bmp"
+594:         else:
+595:             raise HTTPException(422, detail="invalid_image")
+596:         try:
+597:             with fitz.open(stream=raw) as image:
+598:                 if image.metadata.get("format") != "Image" or image.page_count < 1:
+599:                     raise ValueError("invalid_image")
+600:                 if image[0].rect.width * image[0].rect.height > 40_000_000:
+601:                     raise ValueError("image_too_large")
+602:         except (RuntimeError, ValueError):
+603:             raise HTTPException(422, detail="invalid_image") from None
+604:     attachment_id = uuid.uuid4()
+605:     storage_key = build_storage_key(user.tenant_id, attachment_id, filename)
+606:     try:
+607:         put_bytes(storage_key, raw, content_type=content_type)
+608:     except Exception as exc:  # pragma: no cover — depends on backend
+609:         raise HTTPException(
+610:             status.HTTP_503_SERVICE_UNAVAILABLE,
+611:             detail=f"storage_unavailable:{type(exc).__name__}",
+612:         ) from exc
+613:     # Instantiate the ORM row with a caller-chosen id so it matches storage.
+614:     row = ChatAttachment(
+615:         id=attachment_id,
+616:         tenant_id=conv.tenant_id,
+617:         uploader_user_id=user.id,
+618:         conversation_id=conv.id,
+619:         message_id=None,
+620:         filename=filename,
+621:         content_type=content_type,
+622:         size_bytes=len(raw),
+623:         is_image=resolved_image,
+624:         storage_key=storage_key,
+625:     )
+626:     session.add(row)
+627:     await session.flush()
+628:     await session.commit()
+629:     return _attachment_out(row)
+630: 
+631: 
+632: @router.get("/attachments/{attachment_id}/content")
+633: async def download_attachment(
+634:     attachment_id: uuid.UUID,
+635:     user: Annotated[User, Depends(require_ff_or_seller)],
+636:     session: Annotated[AsyncSession, Depends(get_db)],
+637:     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+638: ) -> Response:
+639:     row = await chat_service.load_attachment(session, user.tenant_id, attachment_id)
+640:     if row is None:
+641:         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="attachment_not_found")
+642:     conv = await chat_service.load_conversation(session, user.tenant_id, row.conversation_id)
+643:     if conv is None:
+644:         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="conversation_not_found")
+645:     # Uploader can always fetch their own upload (needed for drafts before
+646:     # the message is created); everyone else needs read access to the chat.
+647:     if (
+648:         row.message_id is None and row.uploader_user_id != user.id
+649:     ) or not await chat_service.can_read_conversation(
+650:         session, user, conv, effective_seller_id=effective_seller_id
+651:     ):
+652:         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="forbidden")
+653:     try:
+654:         content = get_bytes(row.storage_key)
+655:     except FileNotFoundError:
+656:         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="content_not_found") from None
+657:     disposition = "inline" if row.is_image else "attachment"
+658:     headers = {
+659:         "Content-Disposition": f"{disposition}; filename*=UTF-8''{quote(row.filename, safe='')}",
+660:         "X-Content-Type-Options": "nosniff",
+661:         "Content-Security-Policy": "sandbox; default-src 'none'",
+662:         "Cache-Control": "private, no-store",
+663:     }
+664:     return Response(
+665:         content=content,
+666:         media_type=row.content_type,
+667:         headers=headers,
+668:     )
+669: 
+670: 
+671: # Re-exported for tests to avoid touching internals.
+672: __all__ = [
+673:     "ConversationOut",
+674:     "MessageIn",
+675:     "MessageOut",
+676:     "router",
+677: ]
+678: 
+679: 
+680: # Silence unused-import warnings for imports that stay in the annotations.
+681: _ = (CHAT_KIND_MAIN, CHAT_KIND_EXTRA, get_current_user, datetime)
+682: 
+683: 
+684: def _eligible_participant(user: User, seller_id: uuid.UUID) -> bool:
+685:     return user.role in FF_PORTAL_ROLES or (
+686:         user.role == FULFILLMENT_SELLER and user.seller_id == seller_id
+687:     )
+688: 
+689: 
+690: @router.get("/participant-options")
+691: async def participant_options(
+692:     seller_id: uuid.UUID,
+693:     admin: Annotated[User, Depends(require_fulfillment_admin)],
+694:     session: Annotated[AsyncSession, Depends(get_db)],
+695: ) -> list[dict[str, str]]:
+696:     if await chat_service.resolve_seller(session, admin.tenant_id, seller_id) is None:
+697:         raise HTTPException(404, detail="seller_not_found")
+698:     users = (await session.execute(select(User).where(User.tenant_id == admin.tenant_id))).scalars()
+699:     return [
+700:         {"id": str(u.id), "email": u.email, "role": u.role}
+701:         for u in users
+702:         if _eligible_participant(u, seller_id)
+703:     ]
+704: 
+705: 
+706: @router.get("/documents/{kind}/{document_id}")
+707: async def get_document(
+708:     kind: str,
+709:     document_id: uuid.UUID,
+710:     seller_id: uuid.UUID,
+711:     user: Annotated[User, Depends(require_ff_or_seller)],
+712:     session: Annotated[AsyncSession, Depends(get_db)],
+713:     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+714: ) -> dict[str, Any]:
+715:     try:
+716:         return await read_document(
+717:             session,
+718:             user,
+719:             kind=kind,
+720:             document_id=document_id,
+721:             seller_id=seller_id,
+722:             effective_seller_id=effective_seller_id,
+723:         )
+724:     except chat_service.ChatError as exc:
+725:         _raise_chat_error(exc)
+726:         raise AssertionError("unreachable") from exc
+727: 
+728: 
+729: @router.get("/document-options/{kind}/{document_id}")
+730: async def document_options(
+731:     kind: str,
+732:     document_id: uuid.UUID,
+733:     user: Annotated[User, Depends(require_ff_or_seller)],
+734:     session: Annotated[AsyncSession, Depends(get_db)],
+735:     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+736: ) -> list[dict[str, Any]]:
+737:     stmt = select(Seller).where(Seller.tenant_id == user.tenant_id)
+738:     if user.role == FULFILLMENT_SELLER:
+739:         stmt = stmt.where(Seller.id == effective_seller_id)
+740:     result = []
+741:     for seller in (await session.execute(stmt)).scalars():
+742:         try:
+743:             detail = await read_document(
+744:                 session,
+745:                 user,
+746:                 kind=kind,
+747:                 document_id=document_id,
+748:                 seller_id=seller.id,
+749:                 effective_seller_id=effective_seller_id,
+750:             )
+751:         except chat_service.ChatError as exc:
+752:             if exc.code == "document_not_found":
+753:                 continue
+754:             _raise_chat_error(exc)
+755:         result.append(detail["document"])
+756:     return result
+END_SOURCE
+
+SOURCE wms397-chat-mvp/backend/app/services/chat_service.py SHA256=0074fb366360327a18efb29042f2ebbcac42eb10dac11d9b3dc07540e4510686 BASE_HEAD=dfcd0959dfed721620039edba656aa436e7855ec
+1: """Chat service — WMS-397/WMS-399.
+2: 
+3: Business rules implemented here:
+4: 
+5: * ``ensure_main_chat`` is idempotent: exactly one row per (tenant, seller).
+6:   Concurrent callers can race on INSERT because the unique index
+7:   ``uq_chat_conversations_main`` provides the last-write ordering; on
+8:   integrity error we re-read.
+9: * ``can_read_conversation`` uses the existing user/tenant/role machinery.
+10:   Fulfillment admins and staff always read the main chat of any seller in
+11:   their tenant. Sellers read their own main chat and any extra chat they
+12:   are an explicit participant of. Extra chats require explicit
+13:   ``ChatParticipant`` rows for both sides (with a fulfillment admin
+14:   implicit-owner exception).
+15: * Messages are stored with an author-scoped unique ``client_message_id``;
+16:   a retry sends the same value and returns the existing row instead of
+17:   duplicating.
+18: """
+19: 
+20: from __future__ import annotations
+21: 
+22: import uuid
+23: from collections.abc import Iterable
+24: from dataclasses import dataclass
+25: from datetime import UTC, datetime
+26: from typing import Any
+27: 
+28: from sqlalchemy import and_, or_, select
+29: from sqlalchemy.exc import IntegrityError
+30: from sqlalchemy.ext.asyncio import AsyncSession
+31: 
+32: from app.core.roles import (
+33:     FF_PORTAL_ROLES,
+34:     FULFILLMENT_ADMIN,
+35:     FULFILLMENT_SELLER,
+36: )
+37: from app.models.chat import (
+38:     CHAT_KIND_EXTRA,
+39:     CHAT_KIND_MAIN,
+40:     CHAT_KINDS,
+41:     ChatAttachment,
+42:     ChatConversation,
+43:     ChatMessage,
+44:     ChatParticipant,
+45: )
+46: from app.models.seller import Seller
+47: from app.models.user import User
+48: 
+49: 
+50: class ChatError(Exception):
+51:     """Raised on domain-level chat errors. API layer converts to HTTPException."""
+52: 
+53:     def __init__(self, code: str, message: str | None = None) -> None:
+54:         super().__init__(message or code)
+55:         self.code = code
+56: 
+57: 
+58: ALLOWED_ATTACHED_DOCUMENT_KINDS = frozenset(
+59:     {
+60:         "fbs_order",
+61:         "fbs_supply",
+62:         "inbound_intake",
+63:         "marketplace_unload",
+64:         "outbound_shipment",
+65:     }
+66: )
+67: 
+68: 
+69: @dataclass(frozen=True)
+70: class AttachedDocument:
+71:     kind: str
+72:     id: uuid.UUID
+73:     title: str
+74:     seller_id: uuid.UUID
+75:     seller_name: str | None = None
+76: 
+77:     def to_json(self) -> dict[str, Any]:
+78:         payload: dict[str, Any] = {
+79:             "kind": self.kind,
+80:             "id": str(self.id),
+81:             "title": self.title,
+82:             "seller_id": str(self.seller_id),
+83:         }
+84:         if self.seller_name is not None:
+85:             payload["seller_name"] = self.seller_name
+86:         return payload
+87: 
+88: 
+89: # ---------------------------------------------------------------------------
+90: # Conversations
+91: # ---------------------------------------------------------------------------
+92: 
+93: 
+94: async def ensure_main_chat(
+95:     session: AsyncSession,
+96:     *,
+97:     tenant_id: uuid.UUID,
+98:     seller_id: uuid.UUID,
+99:     created_by: User | None = None,
+100: ) -> ChatConversation:
+101:     """Return the main chat for the seller, creating it on first access."""
+102:     existing = await _load_main_chat(session, tenant_id, seller_id)
+103:     if existing is not None:
+104:         return existing
+105:     conv = ChatConversation(
+106:         tenant_id=tenant_id,
+107:         seller_id=seller_id,
+108:         kind=CHAT_KIND_MAIN,
+109:         title=None,
+110:         created_by_user_id=created_by.id if created_by is not None else None,
+111:     )
+112:     try:
+113:         async with session.begin_nested():
+114:             session.add(conv)
+115:             await session.flush()
+116:     except IntegrityError:
+117:         existing = await _load_main_chat(session, tenant_id, seller_id)
+118:         if existing is None:
+119:             raise
+120:         return existing
+121:     return conv
+122: 
+123: 
+124: async def _load_main_chat(
+125:     session: AsyncSession,
+126:     tenant_id: uuid.UUID,
+127:     seller_id: uuid.UUID,
+128: ) -> ChatConversation | None:
+129:     stmt = select(ChatConversation).where(
+130:         ChatConversation.tenant_id == tenant_id,
+131:         ChatConversation.seller_id == seller_id,
+132:         ChatConversation.kind == CHAT_KIND_MAIN,
+133:     )
+134:     return (await session.execute(stmt)).scalar_one_or_none()
+135: 
+136: 
+137: async def create_extra_chat(
+138:     session: AsyncSession,
+139:     *,
+140:     tenant_id: uuid.UUID,
+141:     seller_id: uuid.UUID,
+142:     title: str,
+143:     created_by: User,
+144:     participant_user_ids: Iterable[uuid.UUID] = (),
+145: ) -> ChatConversation:
+146:     if created_by.role != FULFILLMENT_ADMIN:
+147:         raise ChatError("forbidden", "only fulfillment admin creates extra chats")
+148:     clean_title = title.strip()
+149:     if not clean_title:
+150:         raise ChatError("title_required")
+151:     conv = ChatConversation(
+152:         tenant_id=tenant_id,
+153:         seller_id=seller_id,
+154:         kind=CHAT_KIND_EXTRA,
+155:         title=clean_title,
+156:         created_by_user_id=created_by.id,
+157:     )
+158:     session.add(conv)
+159:     await session.flush()
+160:     seen: set[uuid.UUID] = set()
+161:     for user_id in [created_by.id, *participant_user_ids]:
+162:         if user_id in seen:
+163:             continue
+164:         seen.add(user_id)
+165:         session.add(
+166:             ChatParticipant(
+167:                 tenant_id=tenant_id,
+168:                 conversation_id=conv.id,
+169:                 user_id=user_id,
+170:                 added_by_user_id=created_by.id,
+171:             )
+172:         )
+173:     await session.flush()
+174:     return conv
+175: 
+176: 
+177: async def load_conversation(
+178:     session: AsyncSession,
+179:     tenant_id: uuid.UUID,
+180:     conversation_id: uuid.UUID,
+181: ) -> ChatConversation | None:
+182:     stmt = select(ChatConversation).where(
+183:         ChatConversation.id == conversation_id,
+184:         ChatConversation.tenant_id == tenant_id,
+185:     )
+186:     return (await session.execute(stmt)).scalar_one_or_none()
+187: 
+188: 
+189: async def list_conversations_for_user(
+190:     session: AsyncSession,
+191:     user: User,
+192:     *,
+193:     effective_seller_id: uuid.UUID | None,
+194: ) -> list[ChatConversation]:
+195:     """List conversations the user can read.
+196: 
+197:     * FF admins/staff: every conversation in the tenant.
+198:     * Sellers: main chat of their effective seller plus every extra chat they
+199:       are a participant of.
+200:     """
+201:     stmt = select(ChatConversation).where(ChatConversation.tenant_id == user.tenant_id)
+202:     participant_ids_stmt = select(ChatParticipant.conversation_id).where(
+203:         ChatParticipant.tenant_id == user.tenant_id,
+204:         ChatParticipant.user_id == user.id,
+205:     )
+206:     if user.role in FF_PORTAL_ROLES:
+207:         stmt = stmt.where(
+208:             or_(
+209:                 ChatConversation.kind == CHAT_KIND_MAIN,
+210:                 ChatConversation.id.in_(participant_ids_stmt),
+211:             )
+212:         ).order_by(ChatConversation.kind.desc(), ChatConversation.updated_at.desc())
+213:         return list((await session.execute(stmt)).scalars())
+214:     if user.role == FULFILLMENT_SELLER:
+215:         seller_id = effective_seller_id
+216:         if seller_id is None:
+217:             return []
+218:         participant_ids_stmt = select(ChatParticipant.conversation_id).where(
+219:             ChatParticipant.tenant_id == user.tenant_id,
+220:             ChatParticipant.user_id == user.id,
+221:         )
+222:         stmt = stmt.where(
+223:             and_(
+224:                 ChatConversation.seller_id == seller_id,
+225:                 or_(
+226:                     ChatConversation.kind == CHAT_KIND_MAIN,
+227:                     ChatConversation.id.in_(participant_ids_stmt),
+228:                 ),
+229:             )
+230:         ).order_by(ChatConversation.kind, ChatConversation.updated_at.desc())
+231:         return list((await session.execute(stmt)).scalars())
+232:     return []
+233: 
+234: 
+235: async def can_read_conversation(
+236:     session: AsyncSession,
+237:     user: User,
+238:     conv: ChatConversation,
+239:     *,
+240:     effective_seller_id: uuid.UUID | None,
+241: ) -> bool:
+242:     if user.tenant_id != conv.tenant_id:
+243:         return False
+244:     if user.role not in FF_PORTAL_ROLES and user.role != FULFILLMENT_SELLER:
+245:         return False
+246:     if user.role == FULFILLMENT_SELLER and conv.seller_id != effective_seller_id:
+247:         return False
+248:     if conv.kind == CHAT_KIND_MAIN:
+249:         return True
+250:     # extra: participation required
+251:     stmt = select(ChatParticipant.id).where(
+252:         ChatParticipant.tenant_id == user.tenant_id,
+253:         ChatParticipant.conversation_id == conv.id,
+254:         ChatParticipant.user_id == user.id,
+255:     )
+256:     return (await session.execute(stmt)).scalar_one_or_none() is not None
+257: 
+258: 
+259: async def load_participants(
+260:     session: AsyncSession,
+261:     conv: ChatConversation,
+262: ) -> list[ChatParticipant]:
+263:     stmt = select(ChatParticipant).where(
+264:         ChatParticipant.conversation_id == conv.id,
+265:         ChatParticipant.tenant_id == conv.tenant_id,
+266:     )
+267:     return list((await session.execute(stmt)).scalars())
+268: 
+269: 
+270: async def add_participant(
+271:     session: AsyncSession,
+272:     conv: ChatConversation,
+273:     user_to_add: User,
+274:     *,
+275:     added_by: User,
+276: ) -> ChatParticipant:
+277:     if added_by.role != FULFILLMENT_ADMIN:
+278:         raise ChatError("forbidden", "only fulfillment admin manages members")
+279:     if user_to_add.tenant_id != conv.tenant_id:
+280:         raise ChatError("cross_tenant")
+281:     existing = await session.execute(
+282:         select(ChatParticipant).where(
+283:             ChatParticipant.conversation_id == conv.id,
+284:             ChatParticipant.user_id == user_to_add.id,
+285:         )
+286:     )
+287:     row = existing.scalar_one_or_none()
+288:     if row is not None:
+289:         return row
+290:     row = ChatParticipant(
+291:         tenant_id=conv.tenant_id,
+292:         conversation_id=conv.id,
+293:         user_id=user_to_add.id,
+294:         added_by_user_id=added_by.id,
+295:     )
+296:     try:
+297:         async with session.begin_nested():
+298:             session.add(row)
+299:             await session.flush()
+300:     except IntegrityError:
+301:         row = (
+302:             await session.execute(
+303:                 select(ChatParticipant).where(
+304:                     ChatParticipant.conversation_id == conv.id,
+305:                     ChatParticipant.user_id == user_to_add.id,
+306:                 )
+307:             )
+308:         ).scalar_one()
+309:     return row
+310: 
+311: 
+312: # ---------------------------------------------------------------------------
+313: # Messages
+314: # ---------------------------------------------------------------------------
+315: 
+316: 
+317: async def list_messages(
+318:     session: AsyncSession,
+319:     conv: ChatConversation,
+320:     *,
+321:     limit: int = 200,
+322:     before: uuid.UUID | None = None,
+323: ) -> list[ChatMessage]:
+324:     stmt = (
+325:         select(ChatMessage)
+326:         .where(
+327:             ChatMessage.conversation_id == conv.id,
+328:             ChatMessage.tenant_id == conv.tenant_id,
+329:         )
+330:         .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
+331:         .limit(limit)
+332:     )
+333:     if before is not None:
+334:         cursor = (
+335:             await session.execute(
+336:                 select(ChatMessage).where(
+337:                     ChatMessage.id == before,
+338:                     ChatMessage.conversation_id == conv.id,
+339:                     ChatMessage.tenant_id == conv.tenant_id,
+340:                 )
+341:             )
+342:         ).scalar_one_or_none()
+343:         if cursor is None:
+344:             return []
+345:         stmt = stmt.where(
+346:             or_(
+347:                 ChatMessage.created_at < cursor.created_at,
+348:                 and_(
+349:                     ChatMessage.created_at == cursor.created_at,
+350:                     ChatMessage.id < cursor.id,
+351:                 ),
+352:             )
+353:         )
+354:     return list(reversed(list((await session.execute(stmt)).scalars())))
+355: 
+356: 
+357: async def post_message(
+358:     session: AsyncSession,
+359:     conv: ChatConversation,
+360:     author: User,
+361:     *,
+362:     client_message_id: str,
+363:     text: str,
+364:     attachment_ids: Iterable[uuid.UUID] = (),
+365:     attached_document: AttachedDocument | None = None,
+366: ) -> ChatMessage:
+367:     """Idempotent message insert keyed by (author, client_message_id)."""
+368:     clean_client_id = client_message_id.strip()
+369:     if not clean_client_id:
+370:         raise ChatError("client_message_id_required")
+371:     if len(clean_client_id) > 64:
+372:         raise ChatError("client_message_id_too_long")
+373:     clean_text = text or ""
+374:     attach_list = [uuid.UUID(str(a)) if not isinstance(a, uuid.UUID) else a for a in attachment_ids]
+375:     if not clean_text.strip() and not attach_list:
+376:         raise ChatError("empty_message")
+377:     if attached_document is not None:
+378:         if attached_document.kind not in ALLOWED_ATTACHED_DOCUMENT_KINDS:
+379:             raise ChatError("bad_document_kind")
+380:         if attached_document.seller_id != conv.seller_id:
+381:             raise ChatError("document_seller_mismatch")
+382: 
+383:     existing_stmt = select(ChatMessage).where(
+384:         ChatMessage.author_user_id == author.id,
+385:         ChatMessage.client_message_id == clean_client_id,
+386:     )
+387:     existing = (await session.execute(existing_stmt)).scalar_one_or_none()
+388:     if existing is not None:
+389:         if existing.conversation_id != conv.id or existing.tenant_id != conv.tenant_id:
+390:             raise ChatError("client_message_id_conflict")
+391:         return existing
+392: 
+393:     msg = ChatMessage(
+394:         tenant_id=conv.tenant_id,
+395:         conversation_id=conv.id,
+396:         author_user_id=author.id,
+397:         client_message_id=clean_client_id,
+398:         text=clean_text,
+399:         attached_document=(attached_document.to_json() if attached_document is not None else None),
+400:     )
+401:     try:
+402:         async with session.begin_nested():
+403:             session.add(msg)
+404:             await session.flush()
+405:             if attach_list:
+406:                 await _attach_uploads_to_message(session, conv, author, msg, attach_list)
+407:     except IntegrityError:
+408:         row = (await session.execute(existing_stmt)).scalar_one_or_none()
+409:         if row is None:
+410:             raise
+411:         if row.conversation_id != conv.id or row.tenant_id != conv.tenant_id:
+412:             raise ChatError("client_message_id_conflict") from None
+413:         return row
+414: 
+415:     # Refresh conversation updated_at.
+416:     conv.updated_at = datetime.now(UTC)
+417:     await session.flush()
+418:     return msg
+419: 
+420: 
+421: async def edit_message(
+422:     session: AsyncSession,
+423:     msg: ChatMessage,
+424:     author: User,
+425:     *,
+426:     new_text: str,
+427: ) -> ChatMessage:
+428:     if msg.author_user_id != author.id:
+429:         raise ChatError("forbidden", "only author can edit")
+430:     if msg.deleted_at is not None:
+431:         raise ChatError("deleted")
+432:     text = new_text or ""
+433:     if not text.strip():
+434:         raise ChatError("empty_message")
+435:     msg.text = text
+436:     msg.edited_at = datetime.now(UTC)
+437:     await session.flush()
+438:     return msg
+439: 
+440: 
+441: # ---------------------------------------------------------------------------
+442: # Attachments
+443: # ---------------------------------------------------------------------------
+444: 
+445: 
+446: async def create_attachment(
+447:     session: AsyncSession,
+448:     conv: ChatConversation,
+449:     uploader: User,
+450:     *,
+451:     filename: str,
+452:     content_type: str,
+453:     size_bytes: int,
+454:     is_image: bool,
+455:     storage_key: str,
+456: ) -> ChatAttachment:
+457:     if size_bytes <= 0:
+458:         raise ChatError("empty_file")
+459:     row = ChatAttachment(
+460:         tenant_id=conv.tenant_id,
+461:         uploader_user_id=uploader.id,
+462:         conversation_id=conv.id,
+463:         message_id=None,
+464:         filename=filename,
+465:         content_type=content_type,
+466:         size_bytes=size_bytes,
+467:         is_image=is_image,
+468:         storage_key=storage_key,
+469:     )
+470:     session.add(row)
+471:     await session.flush()
+472:     return row
+473: 
+474: 
+475: async def load_attachment(
+476:     session: AsyncSession,
+477:     tenant_id: uuid.UUID,
+478:     attachment_id: uuid.UUID,
+479: ) -> ChatAttachment | None:
+480:     stmt = select(ChatAttachment).where(
+481:         ChatAttachment.id == attachment_id,
+482:         ChatAttachment.tenant_id == tenant_id,
+483:     )
+484:     return (await session.execute(stmt)).scalar_one_or_none()
+485: 
+486: 
+487: async def list_attachments_for_messages(
+488:     session: AsyncSession,
+489:     conv: ChatConversation,
+490:     message_ids: Iterable[uuid.UUID],
+491: ) -> list[ChatAttachment]:
+492:     ids = list(message_ids)
+493:     if not ids:
+494:         return []
+495:     stmt = select(ChatAttachment).where(
+496:         ChatAttachment.tenant_id == conv.tenant_id,
+497:         ChatAttachment.conversation_id == conv.id,
+498:         ChatAttachment.message_id.in_(ids),
+499:     )
+500:     return list((await session.execute(stmt)).scalars())
+501: 
+502: 
+503: async def _attach_uploads_to_message(
+504:     session: AsyncSession,
+505:     conv: ChatConversation,
+506:     uploader: User,
+507:     msg: ChatMessage,
+508:     attachment_ids: list[uuid.UUID],
+509: ) -> None:
+510:     stmt = (
+511:         select(ChatAttachment)
+512:         .where(
+513:             ChatAttachment.id.in_(attachment_ids),
+514:             ChatAttachment.tenant_id == conv.tenant_id,
+515:             ChatAttachment.uploader_user_id == uploader.id,
+516:             ChatAttachment.conversation_id == conv.id,
+517:             ChatAttachment.message_id.is_(None),
+518:         )
+519:         .order_by(ChatAttachment.id)
+520:         .with_for_update()
+521:         .execution_options(populate_existing=True)
+522:     )
+523:     rows = list((await session.execute(stmt)).scalars())
+524:     if len(rows) != len(attachment_ids):
+525:         raise ChatError("attachment_not_owned")
+526:     from app.services.chat_attachment_storage import MAX_MESSAGE_TOTAL_BYTES
+527: 
+528:     if sum(row.size_bytes for row in rows) > MAX_MESSAGE_TOTAL_BYTES:
+529:         raise ChatError("message_files_too_large")
+530:     for row in rows:
+531:         row.message_id = msg.id
+532:     await session.flush()
+533: 
+534: 
+535: # ---------------------------------------------------------------------------
+536: # Helpers used by the API layer
+537: # ---------------------------------------------------------------------------
+538: 
+539: 
+540: async def resolve_seller(
+541:     session: AsyncSession,
+542:     tenant_id: uuid.UUID,
+543:     seller_id: uuid.UUID,
+544: ) -> Seller | None:
+545:     stmt = select(Seller).where(
+546:         Seller.id == seller_id,
+547:         Seller.tenant_id == tenant_id,
+548:     )
+549:     return (await session.execute(stmt)).scalar_one_or_none()
+550: 
+551: 
+552: def _known_chat_kinds() -> frozenset[str]:
+553:     return CHAT_KINDS
+END_SOURCE
+
+SOURCE wms397-chat-mvp/backend/app/services/chat_document_service.py SHA256=4a69e66eec933e8a8e2b52a85da9edc26c64a281f97eb51484772414cac7417a BASE_HEAD=dfcd0959dfed721620039edba656aa436e7855ec
+1: """Read existing documents for chat; never execute warehouse operations."""
+2: 
+3: from __future__ import annotations
+4: 
+5: import uuid
+6: from typing import Any, cast
+7: 
+8: from sqlalchemy import select
+9: from sqlalchemy.ext.asyncio import AsyncSession
+10: 
+11: from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
+12: from app.models.fbs_order import FbsOrder
+13: from app.models.fbs_supply import FbsSupply
+14: from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
+15: from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnloadRequest
+16: from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
+17: from app.models.product import Product
+18: from app.models.user import User
+19: from app.services.chat_service import AttachedDocument, ChatError, resolve_seller
+20: from app.services.seller_staff_permissions_service import get_seller_permissions
+21: from app.services.staff_permissions_service import get_staff_permissions
+22: 
+23: 
+24: async def read_document(
+25:     session: AsyncSession,
+26:     user: User,
+27:     *,
+28:     kind: str,
+29:     document_id: uuid.UUID,
+30:     seller_id: uuid.UUID,
+31:     effective_seller_id: uuid.UUID | None,
+32: ) -> dict[str, Any]:
+33:     models: dict[
+34:         str,
+35:         type[FbsOrder]
+36:         | type[FbsSupply]
+37:         | type[InboundIntakeRequest]
+38:         | type[MarketplaceUnloadRequest]
+39:         | type[OutboundShipmentRequest],
+40:     ] = {
+41:         "fbs_order": FbsOrder,
+42:         "fbs_supply": FbsSupply,
+43:         "inbound_intake": InboundIntakeRequest,
+44:         "marketplace_unload": MarketplaceUnloadRequest,
+45:         "outbound_shipment": OutboundShipmentRequest,
+46:     }
+47:     model = models.get(kind)
+48:     if model is None:
+49:         raise ChatError("bad_document_kind")
+50:     if user.role == FULFILLMENT_SELLER:
+51:         if (
+52:             seller_id != effective_seller_id
+53:             or not (await get_seller_permissions(session, user)).documents
+54:         ):
+55:             raise ChatError("forbidden")
+56:     elif user.role != FULFILLMENT_ADMIN:
+57:         permission = (
+58:             "packaging"
+59:             if kind.startswith("fbs_")
+60:             else ("reception" if kind == "inbound_intake" else "mp_shipments")
+61:         )
+62:         if not (await get_staff_permissions(session, user)).has(permission):
+63:             raise ChatError("forbidden")
+64:     doc = (
+65:         await session.execute(
+66:             select(model).where(
+67:                 model.id == document_id,
+68:                 model.tenant_id == user.tenant_id,
+69:             )
+70:         )
+71:     ).scalar_one_or_none()
+72:     if doc is None:
+73:         raise ChatError("document_not_found")
+74:     doc = cast(
+75:         FbsOrder
+76:         | FbsSupply
+77:         | InboundIntakeRequest
+78:         | MarketplaceUnloadRequest
+79:         | OutboundShipmentRequest,
+80:         doc,
+81:     )
+82:     # A NULL seller on a mixed document is resolved from actual product rows.
+83:     # No caller-supplied title or another seller's lines are ever returned.
+84:     line_models: dict[
+85:         str, type[InboundIntakeLine] | type[MarketplaceUnloadLine] | type[OutboundShipmentLine]
+86:     ] = {
+87:         "inbound_intake": InboundIntakeLine,
+88:         "marketplace_unload": MarketplaceUnloadLine,
+89:         "outbound_shipment": OutboundShipmentLine,
+90:     }
+91:     lines: list[dict[str, Any]] = []
+92:     if kind in line_models:
+93:         line_model = line_models[kind]
+94:         pairs = (
+95:             await session.execute(
+96:                 select(line_model, Product)
+97:                 .join(
+98:                     Product,
+99:                     Product.id == line_model.product_id,
+100:                 )
+101:                 .where(
+102:                     line_model.request_id == document_id,
+103:                     Product.tenant_id == user.tenant_id,
+104:                     Product.seller_id == seller_id,
+105:                 )
+106:             )
+107:         ).all()
+108:         lines = [
+109:             {
+110:                 "product": product.name,
+111:                 "quantity": getattr(line, "quantity", getattr(line, "expected_qty", 0)),
+112:                 "received": getattr(line, "received_qty", None),
+113:             }
+114:             for line, product in pairs
+115:         ]
+116:         if doc.seller_id != seller_id and (doc.seller_id is not None or not lines):
+117:             raise ChatError("document_not_found")
+118:     elif doc.seller_id != seller_id:
+119:         raise ChatError("document_not_found")
+120:     seller = await resolve_seller(session, user.tenant_id, seller_id)
+121:     if seller is None:
+122:         raise ChatError("document_not_found")
+123:     if isinstance(doc, FbsOrder):
+124:         title = f"{doc.marketplace.upper()} №{doc.external_order_id or doc.wb_order_id}"
+125:         lines = [{"product": doc.wb_article or doc.wb_barcode or title, "quantity": 1}]
+126:     else:
+127:         title = str(
+128:             getattr(doc, "display_number", None)
+129:             or getattr(doc, "document_number", None)
+130:             or getattr(doc, "name", None)
+131:             or str(doc.id)[:8]
+132:         )
+133:     if isinstance(doc, FbsSupply):
+134:         orders = (
+135:             await session.execute(
+136:                 select(FbsOrder)
+137:                 .where(
+138:                     FbsOrder.tenant_id == user.tenant_id,
+139:                     FbsOrder.seller_id == seller_id,
+140:                     FbsOrder.supply_id == doc.id,
+141:                 )
+142:                 .order_by(FbsOrder.created_at)
+143:             )
+144:         ).scalars()
+145:         lines = [
+146:             {
+147:                 "product": (
+148:                     f"{order.marketplace.upper()} №{order.external_order_id or order.wb_order_id}"
+149:                 ),
+150:                 "quantity": 1,
+151:                 "order_id": str(order.id),
+152:             }
+153:             for order in orders
+154:         ]
+155:     card = AttachedDocument(kind, document_id, title, seller_id, seller.name)
+156:     return {"document": card.to_json(), "status": doc.status, "lines": lines}
+END_SOURCE
+
+SOURCE wms397-chat-mvp/backend/app/services/chat_attachment_storage.py SHA256=babb9ceed081630c6089d895e84b1468515c0e3b93698fe6e49df80447ed91c5 BASE_HEAD=dfcd0959dfed721620039edba656aa436e7855ec
+1: """Chat attachment storage — thin wrapper on top of object_storage_service.
+2: 
+3: Storage layout: ``chat/<tenant_id>/<attachment_id>/<safe_filename>``.
+4: For local development the LocalObjectStorage backend rejects paths that
+5: escape the configured root. For S3 the same key is prefixed automatically.
+6: Nothing here interprets the raw bytes; images vs generic files are chosen
+7: by the caller (based on content-type sniff and paste flow).
+8: """
+9: 
+10: from __future__ import annotations
+11: 
+12: import re
+13: import uuid
+14: 
+15: from app.services.object_storage_service import (
+16:     LocalObjectStorage,
+17:     ObjectStorageBackend,
+18:     get_object_storage_backend,
+19: )
+20: 
+21: _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
+22: 
+23: # 25 MB per file per contract §Одно минимальное решение владельца.
+24: MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
+25: # 100 MB total per message.
+26: MAX_MESSAGE_TOTAL_BYTES = 100 * 1024 * 1024
+27: # 10 files per message.
+28: MAX_MESSAGE_ATTACHMENTS = 10
+29: 
+30: IMAGE_CONTENT_TYPES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"})
+31: 
+32: 
+33: class ChatStorageUnavailable(RuntimeError):
+34:     pass
+35: 
+36: 
+37: def _safe_filename(raw: str) -> str:
+38:     stripped = raw.strip().replace("/", "_").replace("\\", "_")
+39:     cleaned = _SAFE_FILENAME_RE.sub("_", stripped) or "file"
+40:     return cleaned[:200]
+41: 
+42: 
+43: def build_storage_key(tenant_id: uuid.UUID, attachment_id: uuid.UUID, filename: str) -> str:
+44:     return f"chat/{tenant_id}/{attachment_id}/{_safe_filename(filename)}"
+45: 
+46: 
+47: def get_backend() -> ObjectStorageBackend:
+48:     backend = get_object_storage_backend()
+49:     if backend is None:
+50:         # Fall back to a local storage under WMS_DATA_DIR so dev deployments
+51:         # without S3 still work; production is expected to configure a real
+52:         # backend either way.
+53:         from app.core.settings import settings
+54: 
+55:         backend = LocalObjectStorage(settings.wms_data_dir)
+56:     return backend
+57: 
+58: 
+59: def put_bytes(storage_key: str, content: bytes, *, content_type: str) -> None:
+60:     backend = get_backend()
+61:     backend.put_bytes(storage_key, content, content_type=content_type)
+62: 
+63: 
+64: def get_bytes(storage_key: str) -> bytes:
+65:     backend = get_backend()
+66:     return backend.get_bytes(storage_key)
+67: 
+68: 
+69: def delete_object(storage_key: str) -> None:
+70:     backend = get_backend()
+71:     backend.delete_object(storage_key)
+72: 
+73: 
+74: def is_image_content_type(content_type: str) -> bool:
+75:     return content_type.lower() in IMAGE_CONTENT_TYPES
+END_SOURCE
+
+SOURCE wms397-chat-mvp/backend/tests/test_chat_api.py SHA256=6104370cf2c09127e33f61e7880bab115dbccb71ea4f0d945120405331ca21fe BASE_HEAD=dfcd0959dfed721620039edba656aa436e7855ec
+1: """Chat API happy-path tests — WMS-397/WMS-399.
+2: 
+3: Cover the flows the coordinator asked for: ensure_main is idempotent,
+4: messages dedupe on retry, seller sees only their seller_id's chats,
+5: document attachment cards survive a reload, seller cannot open FF-only
+6: extra chats, and file/image upload round-trips through the storage."""
+7: 
+8: from __future__ import annotations
+9: 
+10: import asyncio
+11: import io
+12: import time
+13: import uuid
+14: from datetime import UTC, datetime, timedelta
+15: 
+16: import pytest
+17: from httpx import AsyncClient
+18: 
+19: 
+20: async def _register_admin(async_client: AsyncClient) -> tuple[str, dict[str, str], str]:
+21:     suffix = str(int(time.time() * 1_000_000))
+22:     reg = await async_client.post(
+23:         "/auth/register",
+24:         json={
+25:             "organization_name": f"Chat Co {suffix}",
+26:             "slug": f"chat-{suffix}",
+27:             "admin_email": f"chat-admin-{suffix}@example.com",
+28:             "password": "password123",
+29:         },
+30:     )
+31:     assert reg.status_code == 200, reg.text
+32:     token = str(reg.json()["access_token"])
+33:     headers = {"Authorization": f"Bearer {token}"}
+34:     me = await async_client.get("/auth/me", headers=headers)
+35:     assert me.status_code == 200
+36:     return suffix, headers, str(me.json()["id"])
+37: 
+38: 
+39: async def _create_seller(
+40:     async_client: AsyncClient,
+41:     admin_headers: dict[str, str],
+42:     suffix: str,
+43: ) -> tuple[dict[str, str], str, str]:
+44:     email = f"chat-seller-{suffix}@example.com"
+45:     created = await async_client.post(
+46:         "/sellers/with-account",
+47:         headers=admin_headers,
+48:         json={"name": "Chat Seller", "email": email, "password": "password123"},
+49:     )
+50:     assert created.status_code == 201, created.text
+51:     seller_id = str(created.json()["seller_id"])
+52: 
+53:     login = await async_client.post(
+54:         "/auth/login",
+55:         json={"email": email, "password": "password123"},
+56:     )
+57:     assert login.status_code == 200, login.text
+58:     seller_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+59:     me = await async_client.get("/auth/me", headers=seller_headers)
+60:     seller_user_id = str(me.json()["id"])
+61:     return seller_headers, seller_id, seller_user_id
+62: 
+63: 
+64: @pytest.mark.asyncio
+65: async def test_main_chat_is_idempotent_per_seller(async_client: AsyncClient) -> None:
+66:     """Two calls to GET .../conversations/main must return the same UUID."""
+67:     suffix, admin_headers, _ = await _register_admin(async_client)
+68:     _, seller_id, _ = await _create_seller(async_client, admin_headers, suffix)
+69: 
+70:     first = await async_client.get(
+71:         f"/operations/chat/conversations/main?seller_id={seller_id}",
+72:         headers=admin_headers,
+73:     )
+74:     assert first.status_code == 200, first.text
+75:     second = await async_client.get(
+76:         f"/operations/chat/conversations/main?seller_id={seller_id}",
+77:         headers=admin_headers,
+78:     )
+79:     assert second.status_code == 200, second.text
+80:     assert first.json()["id"] == second.json()["id"]
+81:     assert first.json()["kind"] == "main"
+82:     assert first.json()["seller_id"] == seller_id
+83: 
+84: 
+85: @pytest.mark.asyncio
+86: async def test_seller_sees_only_own_main_chat(async_client: AsyncClient) -> None:
+87:     suffix, admin_headers, _ = await _register_admin(async_client)
+88:     _, seller_a_id, _ = await _create_seller(async_client, admin_headers, suffix)
+89:     # Add a second seller and ensure its main chat exists.
+90:     other_suffix = suffix + "b"
+91:     email_b = f"chat-seller-{other_suffix}@example.com"
+92:     created_b = await async_client.post(
+93:         "/sellers/with-account",
+94:         headers=admin_headers,
+95:         json={"name": "Chat Seller B", "email": email_b, "password": "password123"},
+96:     )
+97:     assert created_b.status_code == 201, created_b.text
+98:     seller_b_id = str(created_b.json()["seller_id"])
+99:     login_b = await async_client.post(
+100:         "/auth/login",
+101:         json={"email": email_b, "password": "password123"},
+102:     )
+103:     seller_b_headers = {"Authorization": f"Bearer {login_b.json()['access_token']}"}
+104:     login_a = await async_client.post(
+105:         "/auth/login",
+106:         json={
+107:             "email": f"chat-seller-{suffix}@example.com",
+108:             "password": "password123",
+109:         },
+110:     )
+111:     seller_a_headers = {"Authorization": f"Bearer {login_a.json()['access_token']}"}
+112: 
+113:     # Materialise both chats.
+114:     await async_client.get(
+115:         f"/operations/chat/conversations/main?seller_id={seller_a_id}",
+116:         headers=admin_headers,
+117:     )
+118:     await async_client.get(
+119:         f"/operations/chat/conversations/main?seller_id={seller_b_id}",
+120:         headers=admin_headers,
+121:     )
+122: 
+123:     listed_a = await async_client.get("/operations/chat/conversations", headers=seller_a_headers)
+124:     assert listed_a.status_code == 200
+125:     for row in listed_a.json()["items"]:
+126:         assert row["seller_id"] == seller_a_id
+127: 
+128:     listed_b = await async_client.get("/operations/chat/conversations", headers=seller_b_headers)
+129:     assert listed_b.status_code == 200
+130:     for row in listed_b.json()["items"]:
+131:         assert row["seller_id"] == seller_b_id
+132: 
+133: 
+134: @pytest.mark.asyncio
+135: async def test_seller_cannot_open_other_sellers_chat(async_client: AsyncClient) -> None:
+136:     suffix, admin_headers, _ = await _register_admin(async_client)
+137:     _, seller_a_id, _ = await _create_seller(async_client, admin_headers, suffix)
+138:     other_suffix = suffix + "c"
+139:     email_b = f"chat-seller-{other_suffix}@example.com"
+140:     await async_client.post(
+141:         "/sellers/with-account",
+142:         headers=admin_headers,
+143:         json={"name": "Chat Seller C", "email": email_b, "password": "password123"},
+144:     )
+145:     login_b = await async_client.post(
+146:         "/auth/login",
+147:         json={"email": email_b, "password": "password123"},
+148:     )
+149:     seller_b_headers = {"Authorization": f"Bearer {login_b.json()['access_token']}"}
+150: 
+151:     # A materialises their chat.
+152:     main_a = await async_client.get(
+153:         f"/operations/chat/conversations/main?seller_id={seller_a_id}",
+154:         headers=admin_headers,
+155:     )
+156:     conv_id = main_a.json()["id"]
+157: 
+158:     # B must not read A's messages.
+159:     resp = await async_client.get(
+160:         f"/operations/chat/conversations/{conv_id}/messages",
+161:         headers=seller_b_headers,
+162:     )
+163:     assert resp.status_code == 403
+164:     # And B must not force-open A's chat by seller_id override either.
+165:     forced = await async_client.get(
+166:         f"/operations/chat/conversations/main?seller_id={seller_a_id}",
+167:         headers=seller_b_headers,
+168:     )
+169:     assert forced.status_code == 403
+170: 
+171: 
+172: @pytest.mark.asyncio
+173: async def test_post_message_dedupes_on_retry(async_client: AsyncClient) -> None:
+174:     suffix, admin_headers, _ = await _register_admin(async_client)
+175:     _, seller_id, _ = await _create_seller(async_client, admin_headers, suffix)
+176:     main = await async_client.get(
+177:         f"/operations/chat/conversations/main?seller_id={seller_id}",
+178:         headers=admin_headers,
+179:     )
+180:     conv_id = main.json()["id"]
+181: 
+182:     client_id = "cli-" + uuid.uuid4().hex[:16]
+183:     first = await async_client.post(
+184:         f"/operations/chat/conversations/{conv_id}/messages",
+185:         headers=admin_headers,
+186:         json={"client_message_id": client_id, "text": "hello seller"},
+187:     )
+188:     assert first.status_code == 201, first.text
+189:     second = await async_client.post(
+190:         f"/operations/chat/conversations/{conv_id}/messages",
+191:         headers=admin_headers,
+192:         json={"client_message_id": client_id, "text": "hello seller"},
+193:     )
+194:     assert second.status_code == 201, second.text
+195:     assert first.json()["id"] == second.json()["id"]
+196: 
+197:     listed = await async_client.get(
+198:         f"/operations/chat/conversations/{conv_id}/messages",
+199:         headers=admin_headers,
+200:     )
+201:     assert listed.status_code == 200
+202:     assert len([m for m in listed.json()["items"] if m["client_message_id"] == client_id]) == 1
+203: 
+204: 
+205: @pytest.mark.asyncio
+206: async def test_attached_document_persists_across_reload(
+207:     async_client: AsyncClient,
+208: ) -> None:
+209:     suffix, admin_headers, _ = await _register_admin(async_client)
+210:     seller_headers, seller_id, _ = await _create_seller(async_client, admin_headers, suffix)
+211:     main = await async_client.get(
+212:         f"/operations/chat/conversations/main?seller_id={seller_id}",
+213:         headers=admin_headers,
+214:     )
+215:     conv_id = main.json()["id"]
+216: 
+217:     from app.db.session import SessionLocal
+218:     from app.models.fbs_order import FbsOrder
+219:     from app.models.user import User
+220: 
+221:     async with SessionLocal() as session:
+222:         user = await session.get(
+223:             User,
+224:             uuid.UUID((await async_client.get("/auth/me", headers=admin_headers)).json()["id"]),
+225:         )
+226:         order = FbsOrder(
+227:             tenant_id=user.tenant_id,
+228:             seller_id=uuid.UUID(seller_id),
+229:             wb_order_id=42,
+230:             status="new",
+231:             created_at_wb=datetime.now(UTC),
+232:             deadline_at=datetime.now(UTC) + timedelta(days=1),
+233:             mapping_status="unmapped",
+234:             reserve_status="not_reserved",
+235:         )
+236:         session.add(order)
+237:         await session.commit()
+238:         doc_id = str(order.id)
+239:     post = await async_client.post(
+240:         f"/operations/chat/conversations/{conv_id}/messages",
+241:         headers=admin_headers,
+242:         json={
+243:             "client_message_id": "with-doc-" + uuid.uuid4().hex[:8],
+244:             "text": "look at this order",
+245:             "attached_document": {
+246:                 "kind": "fbs_order",
+247:                 "id": doc_id,
+248:                 "title": "FBS #A-42",
+249:                 "seller_id": seller_id,
+250:                 "seller_name": "Chat Seller",
+251:             },
+252:         },
+253:     )
+254:     assert post.status_code == 201, post.text
+255:     # Second participant (the seller) reloads and still sees the card.
+256:     listed = await async_client.get(
+257:         f"/operations/chat/conversations/{conv_id}/messages",
+258:         headers=seller_headers,
+259:     )
+260:     assert listed.status_code == 200, listed.text
+261:     items = listed.json()["items"]
+262:     assert len(items) == 1
+263:     doc = items[0]["attached_document"]
+264:     assert doc is not None
+265:     assert doc["kind"] == "fbs_order"
+266:     assert doc["id"] == doc_id
+267:     assert doc["seller_id"] == seller_id
+268: 
+269: 
+270: @pytest.mark.asyncio
+271: async def test_attached_document_wrong_seller_rejected(
+272:     async_client: AsyncClient,
+273: ) -> None:
+274:     suffix, admin_headers, _ = await _register_admin(async_client)
+275:     _, seller_id, _ = await _create_seller(async_client, admin_headers, suffix)
+276:     main = await async_client.get(
+277:         f"/operations/chat/conversations/main?seller_id={seller_id}",
+278:         headers=admin_headers,
+279:     )
+280:     conv_id = main.json()["id"]
+281:     resp = await async_client.post(
+282:         f"/operations/chat/conversations/{conv_id}/messages",
+283:         headers=admin_headers,
+284:         json={
+285:             "client_message_id": "mismatch-" + uuid.uuid4().hex[:8],
+286:             "text": "should fail",
+287:             "attached_document": {
+288:                 "kind": "fbs_order",
+289:                 "id": str(uuid.uuid4()),
+290:                 "title": "wrong seller",
+291:                 "seller_id": str(uuid.uuid4()),
+292:             },
+293:         },
+294:     )
+295:     assert resp.status_code == 422
+296:     assert resp.json()["detail"] == "document_seller_mismatch"
+297: 
+298: 
+299: @pytest.mark.asyncio
+300: async def test_upload_and_download_attachment(async_client: AsyncClient) -> None:
+301:     suffix, admin_headers, _ = await _register_admin(async_client)
+302:     seller_headers, seller_id, _ = await _create_seller(async_client, admin_headers, suffix)
+303:     main = await async_client.get(
+304:         f"/operations/chat/conversations/main?seller_id={seller_id}",
+305:         headers=admin_headers,
+306:     )
+307:     conv_id = main.json()["id"]
+308: 
+309:     import fitz
+310: 
+311:     file_bytes = fitz.Pixmap(fitz.csRGB, (0, 0, 2, 2)).tobytes("png")
+312:     upload = await async_client.post(
+313:         f"/operations/chat/conversations/{conv_id}/attachments",
+314:         headers=admin_headers,
+315:         files={"file": ("paste.png", io.BytesIO(file_bytes), "image/png")},
+316:     )
+317:     assert upload.status_code == 201, upload.text
+318:     att = upload.json()
+319:     assert att["is_image"] is True
+320:     assert att["filename"] == "paste.png"
+321:     assert att["size_bytes"] == len(file_bytes)
+322: 
+323:     # Attach to a message.
+324:     post = await async_client.post(
+325:         f"/operations/chat/conversations/{conv_id}/messages",
+326:         headers=admin_headers,
+327:         json={
+328:             "client_message_id": "pic-" + uuid.uuid4().hex[:8],
+329:             "text": "screenshot",
+330:             "attachment_ids": [att["id"]],
+331:         },
+332:     )
+333:     assert post.status_code == 201, post.text
+334:     msg = post.json()
+335:     assert len(msg["attachments"]) == 1
+336:     assert msg["attachments"][0]["is_image"] is True
+337: 
+338:     # Seller reloads and downloads the content.
+339:     listed = await async_client.get(
+340:         f"/operations/chat/conversations/{conv_id}/messages",
+341:         headers=seller_headers,
+342:     )
+343:     items = listed.json()["items"]
+344:     assert len(items) == 1
+345:     attachment_id = items[0]["attachments"][0]["id"]
+346:     download = await async_client.get(
+347:         f"/operations/chat/attachments/{attachment_id}/content",
+348:         headers=seller_headers,
+349:     )
+350:     assert download.status_code == 200
+351:     assert download.content == file_bytes
+352: 
+353: 
+354: @pytest.mark.asyncio
+355: async def test_edit_message_only_by_author(async_client: AsyncClient) -> None:
+356:     suffix, admin_headers, _ = await _register_admin(async_client)
+357:     seller_headers, seller_id, _ = await _create_seller(async_client, admin_headers, suffix)
+358:     main = await async_client.get(
+359:         f"/operations/chat/conversations/main?seller_id={seller_id}",
+360:         headers=admin_headers,
+361:     )
+362:     conv_id = main.json()["id"]
+363:     post = await async_client.post(
+364:         f"/operations/chat/conversations/{conv_id}/messages",
+365:         headers=admin_headers,
+366:         json={"client_message_id": "edit-" + uuid.uuid4().hex[:8], "text": "first"},
+367:     )
+368:     msg_id = post.json()["id"]
+369: 
+370:     ok = await async_client.patch(
+371:         f"/operations/chat/messages/{msg_id}",
+372:         headers=admin_headers,
+373:         json={"text": "fixed typo"},
+374:     )
+375:     assert ok.status_code == 200
+376:     assert ok.json()["text"] == "fixed typo"
+377:     assert ok.json()["edited_at"] is not None
+378: 
+379:     denied = await async_client.patch(
+380:         f"/operations/chat/messages/{msg_id}",
+381:         headers=seller_headers,
+382:         json={"text": "not allowed"},
+383:     )
+384:     assert denied.status_code == 403
+385: 
+386: 
+387: @pytest.mark.asyncio
+388: async def test_extra_chat_requires_admin_and_hides_from_stranger(
+389:     async_client: AsyncClient,
+390: ) -> None:
+391:     suffix, admin_headers, _ = await _register_admin(async_client)
+392:     seller_headers, seller_id, seller_user_id = await _create_seller(
+393:         async_client, admin_headers, suffix
+394:     )
+395:     # Seller cannot create extra chats.
+396:     denied = await async_client.post(
+397:         "/operations/chat/conversations/extra",
+398:         headers=seller_headers,
+399:         json={"seller_id": seller_id, "title": "seller attempt"},
+400:     )
+401:     assert denied.status_code == 403
+402: 
+403:     # Admin creates one and adds the seller-user.
+404:     created = await async_client.post(
+405:         "/operations/chat/conversations/extra",
+406:         headers=admin_headers,
+407:         json={
+408:             "seller_id": seller_id,
+409:             "title": "Escalation",
+410:             "participant_user_ids": [seller_user_id],
+411:         },
+412:     )
+413:     assert created.status_code == 201, created.text
+414:     conv_id = created.json()["id"]
+415: 
+416:     # Seller can list and read; a stranger seller cannot.
+417:     listed = await async_client.get("/operations/chat/conversations", headers=seller_headers)
+418:     assert any(c["id"] == conv_id for c in listed.json()["items"])
+419: 
+420:     read_ok = await async_client.get(
+421:         f"/operations/chat/conversations/{conv_id}/messages", headers=seller_headers
+422:     )
+423:     assert read_ok.status_code == 200
+424: 
+425:     # Second seller (unrelated) does not see it and cannot read.
+426:     other_suffix = suffix + "d"
+427:     email_c = f"chat-seller-{other_suffix}@example.com"
+428:     await async_client.post(
+429:         "/sellers/with-account",
+430:         headers=admin_headers,
+431:         json={"name": "Other seller", "email": email_c, "password": "password123"},
+432:     )
+433:     login_c = await async_client.post(
+434:         "/auth/login", json={"email": email_c, "password": "password123"}
+435:     )
+436:     other_headers = {"Authorization": f"Bearer {login_c.json()['access_token']}"}
+437: 
+438:     forbidden = await async_client.get(
+439:         f"/operations/chat/conversations/{conv_id}/messages", headers=other_headers
+440:     )
+441:     assert forbidden.status_code == 403
+442:     listed_other = await async_client.get("/operations/chat/conversations", headers=other_headers)
+443:     assert not any(c["id"] == conv_id for c in listed_other.json()["items"])
+444: 
+445: 
+446: @pytest.mark.asyncio
+447: async def test_concurrent_main_message_and_attachment_ownership(async_client: AsyncClient) -> None:
+448:     suffix, admin, _ = await _register_admin(async_client)
+449:     seller, sid, _ = await _create_seller(async_client, admin, suffix)
+450:     calls = await asyncio.gather(
+451:         *[
+452:             async_client.get(f"/operations/chat/conversations/main?seller_id={sid}", headers=admin)
+453:             for _ in range(6)
+454:         ]
+455:     )
+456:     assert all(r.status_code == 200 for r in calls), [r.text for r in calls]
+457:     assert len({r.json()["id"] for r in calls}) == 1
+458:     cid = calls[0].json()["id"]
+459:     url = f"/operations/chat/conversations/{cid}/messages"
+460:     results = await asyncio.gather(
+461:         *[
+462:             async_client.post(
+463:                 url,
+464:                 headers=admin,
+465:                 json={"client_message_id": "concurrent-retry", "text": "one message"},
+466:             )
+467:             for _ in range(6)
+468:         ]
+469:     )
+470:     assert all(r.status_code == 201 for r in results), [r.text for r in results]
+471:     assert len({r.json()["id"] for r in results}) == 1
+472:     upload = await async_client.post(
+473:         f"/operations/chat/conversations/{cid}/attachments",
+474:         headers=admin,
+475:         files={"file": ("private.txt", b"draft", "text/plain")},
+476:     )
+477:     aid = upload.json()["id"]
+478:     content_url = f"/operations/chat/attachments/{aid}/content"
+479:     assert (await async_client.get(content_url, headers=seller)).status_code == 403
+480:     assert (await async_client.get(content_url, headers=admin)).status_code == 200
+481:     results = await asyncio.gather(
+482:         *[
+483:             async_client.post(
+484:                 url,
+485:                 headers=admin,
+486:                 json={
+487:                     "client_message_id": f"attach-race-{n}",
+488:                     "text": "file",
+489:                     "attachment_ids": [aid],
+490:                 },
+491:             )
+492:             for n in range(2)
+493:         ]
+494:     )
+495:     assert sorted(r.status_code for r in results) == [201, 422], [r.text for r in results]
+496:     messages = (await async_client.get(url, headers=seller)).json()["items"]
+497:     assert len(messages) == 2  # failed attachment does not leave an empty message
+498:     assert (await async_client.get(content_url, headers=seller)).content == b"draft"
+499: 
+500: 
+501: @pytest.mark.asyncio
+502: async def test_extra_participants_tenant_revocation_and_cross_chat_retry(
+503:     async_client: AsyncClient,
+504: ) -> None:
+505:     from sqlalchemy import delete
+506: 
+507:     from app.db.session import SessionLocal
+508:     from app.models.chat import ChatParticipant
+509:     from app.models.user import User
+510: 
+511:     suffix, admin, admin_id = await _register_admin(async_client)
+512:     _seller, sid, seller_uid = await _create_seller(async_client, admin, suffix)
+513:     other_seller, other_sid, other_uid = await _create_seller(async_client, admin, suffix + "other")
+514:     async with SessionLocal() as session:
+515:         owner = await session.get(User, uuid.UUID(admin_id))
+516:         worker = User(
+517:             tenant_id=owner.tenant_id,
+518:             email=f"worker-{suffix}@example.com",
+519:             role="fulfillment_staff",
+520:             password_hash=owner.password_hash,
+521:         )
+522:         session.add(worker)
+523:         await session.commit()
+524:         worker_id = str(worker.id)
+525:     login = await async_client.post(
+526:         "/auth/login", json={"email": f"worker-{suffix}@example.com", "password": "password123"}
+527:     )
+528:     staff = {"Authorization": f"Bearer {login.json()['access_token']}"}
+529:     rejected = await async_client.post(
+530:         "/operations/chat/conversations/extra",
+531:         headers=admin,
+532:         json={"seller_id": sid, "title": "bad", "participant_user_ids": [other_uid]},
+533:     )
+534:     assert rejected.status_code == 422
+535:     extra = await async_client.post(
+536:         "/operations/chat/conversations/extra",
+537:         headers=admin,
+538:         json={"seller_id": sid, "title": "Private", "participant_user_ids": [seller_uid]},
+539:     )
+540:     assert extra.status_code == 201, extra.text
+541:     cid = extra.json()["id"]
+542:     url = f"/operations/chat/conversations/{cid}"
+543:     assert (await async_client.get(url, headers=staff)).status_code == 403
+544:     assert cid not in [
+545:         c["id"]
+546:         for c in (await async_client.get("/operations/chat/conversations", headers=staff)).json()[
+547:             "items"
+548:         ]
+549:     ]
+550:     additions = await asyncio.gather(
+551:         *[
+552:             async_client.post(url + "/participants", headers=admin, json={"user_id": worker_id})
+553:             for _ in range(2)
+554:         ]
+555:     )
+556:     assert all(r.status_code == 201 for r in additions), [r.text for r in additions]
+557:     assert additions[0].json()["id"] == additions[1].json()["id"]
+558:     assert (await async_client.get(url, headers=staff)).status_code == 200
+559:     uploaded = await async_client.post(
+560:         url + "/attachments", headers=staff, files={"file": ("staff.txt", b"private", "text/plain")}
+561:     )
+562:     aid = uploaded.json()["id"]
+563:     posted = await async_client.post(
+564:         url + "/messages",
+565:         headers=staff,
+566:         json={"client_message_id": "staff-one", "text": "private", "attachment_ids": [aid]},
+567:     )
+568:     assert posted.status_code == 201, posted.text
+569:     async with SessionLocal() as session:
+570:         await session.execute(
+571:             delete(ChatParticipant).where(
+572:                 ChatParticipant.conversation_id == uuid.UUID(cid),
+573:                 ChatParticipant.user_id == uuid.UUID(worker_id),
+574:             )
+575:         )
+576:         await session.commit()
+577:     assert (
+578:         await async_client.get(f"/operations/chat/attachments/{aid}/content", headers=staff)
+579:     ).status_code == 403
+580:     other_main = await async_client.get(
+581:         f"/operations/chat/conversations/main?seller_id={other_sid}", headers=admin
+582:     )
+583:     conflict = await async_client.post(
+584:         f"/operations/chat/conversations/{other_main.json()['id']}/messages",
+585:         headers=staff,
+586:         json={"client_message_id": "staff-one", "text": "new chat"},
+587:     )
+588:     assert conflict.status_code == 409
+589:     _, outsider, _ = await _register_admin(async_client)
+590:     for path in [
+591:         url,
+592:         url + "/messages",
+593:         url + "/participants",
+594:         f"/operations/chat/attachments/{aid}/content",
+595:     ]:
+596:         assert (await async_client.get(path, headers=outsider)).status_code == 404
+597:     assert (await async_client.get(url, headers=other_seller)).status_code == 403
+598: 
+599: 
+600: @pytest.mark.asyncio
+601: async def test_document_identity_rights_and_latest_pagination(async_client: AsyncClient) -> None:
+602:     from app.db.session import SessionLocal
+603:     from app.models.fbs_order import FbsOrder
+604:     from app.models.seller_staff_permissions import SellerStaffPermissions
+605:     from app.models.user import User
+606: 
+607:     suffix, admin, uid = await _register_admin(async_client)
+608:     seller, sid, seller_uid = await _create_seller(async_client, admin, suffix)
+609:     _, sid2, _ = await _create_seller(async_client, admin, suffix + "other")
+610:     async with SessionLocal() as session:
+611:         user = await session.get(User, uuid.UUID(uid))
+612:         order = FbsOrder(
+613:             tenant_id=user.tenant_id,
+614:             seller_id=uuid.UUID(sid),
+615:             wb_order_id=7001,
+616:             status="new",
+617:             created_at_wb=datetime.now(UTC),
+618:             deadline_at=datetime.now(UTC) + timedelta(days=1),
+619:             mapping_status="unmapped",
+620:             reserve_status="not_reserved",
+621:         )
+622:         session.add(order)
+623:         await session.commit()
+624:         oid = str(order.id)
+625:     base = f"/operations/chat/documents/fbs_order/{oid}"
+626:     response = await async_client.get(base + f"?seller_id={sid}", headers=seller)
+627:     assert response.status_code == 200, response.text
+628:     assert response.json()["document"]["title"] == "WB №7001"
+629:     assert (await async_client.get(base + f"?seller_id={sid2}", headers=admin)).status_code == 404
+630:     main = await async_client.get(
+631:         f"/operations/chat/conversations/main?seller_id={sid}", headers=admin
+632:     )
+633:     url = f"/operations/chat/conversations/{main.json()['id']}/messages"
+634:     forged = await async_client.post(
+635:         url,
+636:         headers=admin,
+637:         json={
+638:             "client_message_id": "forged",
+639:             "text": "x",
+640:             "attached_document": {
+641:                 "kind": "fbs_order",
+642:                 "id": str(uuid.uuid4()),
+643:                 "title": "fake",
+644:                 "seller_id": sid,
+645:             },
+646:         },
+647:     )
+648:     assert forged.status_code == 404
+649:     real = await async_client.post(
+650:         url,
+651:         headers=admin,
+652:         json={
+653:             "client_message_id": "real",
+654:             "text": "order",
+655:             "attached_document": {
+656:                 "kind": "fbs_order",
+657:                 "id": oid,
+658:                 "title": "spoofed",
+659:                 "seller_id": sid,
+660:             },
+661:         },
+662:     )
+663:     assert real.status_code == 201, real.text
+664:     assert real.json()["attached_document"]["title"] == "WB №7001"
+665:     async with SessionLocal() as session:
+666:         session.add(SellerStaffPermissions(user_id=uuid.UUID(seller_uid), can_documents=False))
+667:         await session.commit()
+668:     assert (await async_client.get(base + f"?seller_id={sid}", headers=seller)).status_code == 403
+669:     hidden = (await async_client.get(url, headers=seller)).json()["items"]
+670:     assert hidden[0]["attached_document"] is None
+671:     ids = [real.json()["id"]]
+672:     for n in range(4):
+673:         r = await async_client.post(
+674:             url, headers=admin, json={"client_message_id": f"page-{n}", "text": str(n)}
+675:         )
+676:         ids.append(r.json()["id"])
+677:     newest = (await async_client.get(url + "?limit=2", headers=admin)).json()["items"]
+678:     assert [m["id"] for m in newest] == ids[-2:]
+679:     older = (
+680:         await async_client.get(url + f"?limit=2&before={newest[0]['id']}", headers=admin)
+681:     ).json()["items"]
+682:     assert [m["id"] for m in older] == ids[-4:-2]
+683: 
+684: 
+685: @pytest.mark.asyncio
+686: async def test_all_document_types_and_mixed_seller_projection(async_client: AsyncClient) -> None:
+687:     from app.db.session import SessionLocal
+688:     from app.models.fbs_supply import FbsSupply
+689:     from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
+690:     from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnloadRequest
+691:     from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
+692:     from app.models.product import Product
+693:     from app.models.user import User
+694:     from app.models.warehouse import Warehouse
+695: 
+696:     suffix, admin, uid = await _register_admin(async_client)
+697:     seller, sid, _ = await _create_seller(async_client, admin, suffix)
+698:     stranger, other_sid, _ = await _create_seller(async_client, admin, suffix + "other")
+699:     async with SessionLocal() as session:
+700:         user = await session.get(User, uuid.UUID(uid))
+701:         warehouse = Warehouse(tenant_id=user.tenant_id, name="Chat only", code="CHAT-QA")
+702:         p1 = Product(
+703:             tenant_id=user.tenant_id, seller_id=uuid.UUID(sid), name="OWN ROW", sku_code="OWN"
+704:         )
+705:         p2 = Product(
+706:             tenant_id=user.tenant_id,
+707:             seller_id=uuid.UUID(other_sid),
+708:             name="OTHER SECRET ROW",
+709:             sku_code="OTHER",
+710:         )
+711:         session.add_all([warehouse, p1, p2])
+712:         await session.flush()
+713:         inbound = InboundIntakeRequest(
+714:             tenant_id=user.tenant_id, warehouse_id=warehouse.id, seller_id=None, status="draft"
+715:         )
+716:         outbound = OutboundShipmentRequest(
+717:             tenant_id=user.tenant_id, warehouse_id=warehouse.id, seller_id=None, status="draft"
+718:         )
+719:         unload = MarketplaceUnloadRequest(
+720:             tenant_id=user.tenant_id,
+721:             warehouse_id=warehouse.id,
+722:             seller_id=uuid.UUID(sid),
+723:             status="draft",
+724:         )
+725:         supply = FbsSupply(
+726:             tenant_id=user.tenant_id,
+727:             seller_id=uuid.UUID(sid),
+728:             warehouse_id=warehouse.id,
+729:             name="CHAT-FBS",
+730:             delivery_type="warehouse",
+731:         )
+732:         session.add_all([inbound, outbound, unload, supply])
+733:         await session.flush()
+734:         session.add_all(
+735:             [
+736:                 InboundIntakeLine(request_id=inbound.id, product_id=p1.id, expected_qty=2),
+737:                 InboundIntakeLine(request_id=inbound.id, product_id=p2.id, expected_qty=9),
+738:                 OutboundShipmentLine(request_id=outbound.id, product_id=p1.id, quantity=2),
+739:                 OutboundShipmentLine(request_id=outbound.id, product_id=p2.id, quantity=9),
+740:                 MarketplaceUnloadLine(request_id=unload.id, product_id=p1.id, quantity=2),
+741:             ]
+742:         )
+743:         await session.commit()
+744:         documents = {
+745:             "inbound_intake": str(inbound.id),
+746:             "outbound_shipment": str(outbound.id),
+747:             "marketplace_unload": str(unload.id),
+748:             "fbs_supply": str(supply.id),
+749:         }
+750:     main = await async_client.get(
+751:         f"/operations/chat/conversations/main?seller_id={sid}", headers=admin
+752:     )
+753:     url = f"/operations/chat/conversations/{main.json()['id']}/messages"
+754:     for kind, document_id in documents.items():
+755:         doc_url = f"/operations/chat/documents/{kind}/{document_id}?seller_id={sid}"
+756:         response = await async_client.get(doc_url, headers=seller)
+757:         assert response.status_code == 200, response.text
+758:         assert "OTHER SECRET" not in response.text
+759:         assert (await async_client.get(doc_url, headers=stranger)).status_code == 403
+760:         post = await async_client.post(
+761:             url,
+762:             headers=admin,
+763:             json={
+764:                 "client_message_id": kind,
+765:                 "text": "document",
+766:                 "attached_document": {
+767:                     "kind": kind,
+768:                     "id": document_id,
+769:                     "seller_id": sid,
+770:                     "title": "fake title",
+771:                 },
+772:             },
+773:         )
+774:         assert post.status_code == 201, post.text
+775:         options = await async_client.get(
+776:             f"/operations/chat/document-options/{kind}/{document_id}", headers=seller
+777:         )
+778:         assert [d["seller_id"] for d in options.json()] == [sid]
+779:     listed = (await async_client.get(url, headers=seller)).json()["items"]
+780:     assert {m["attached_document"]["kind"] for m in listed} == set(documents)
+781:     assert "OTHER SECRET" not in str(listed)
+782: 
+783: 
+784: @pytest.mark.asyncio
+785: async def test_attachments_validation_and_ownership(async_client: AsyncClient) -> None:
+786:     suffix, admin, _ = await _register_admin(async_client)
+787:     seller, sid, _ = await _create_seller(async_client, admin, suffix)
+788:     main = await async_client.get(
+789:         f"/operations/chat/conversations/main?seller_id={sid}", headers=admin
+790:     )
+791:     url = f"/operations/chat/conversations/{main.json()['id']}"
+792:     invalid_image = await async_client.post(
+793:         url + "/attachments",
+794:         headers=admin,
+795:         files={"file": ("lie.png", b"<script>evil</script>", "image/png")},
+796:     )
+797:     assert invalid_image.status_code == 422
+798:     svg = await async_client.post(
+799:         url + "/attachments",
+800:         headers=admin,
+801:         files={"file": ("drawing.svg", b"<svg></svg>", "image/svg+xml")},
+802:         data={"is_image": "true"},
+803:     )
+804:     assert svg.status_code == 201 and svg.json()["is_image"] is False
+805:     aid = svg.json()["id"]
+806:     duplicate_ids = await async_client.post(
+807:         url + "/messages",
+808:         headers=admin,
+809:         json={"client_message_id": "duplicate-ids", "text": "file", "attachment_ids": [aid, aid]},
+810:     )
+811:     assert duplicate_ids.status_code == 422
+812:     steal = await async_client.post(
+813:         url + "/messages",
+814:         headers=seller,
+815:         json={"client_message_id": "steal", "text": "file", "attachment_ids": [aid]},
+816:     )
+817:     assert steal.status_code == 422
+818:     posted = await async_client.post(
+819:         url + "/messages",
+820:         headers=admin,
+821:         json={"client_message_id": "ok-file", "text": "file", "attachment_ids": [aid]},
+822:     )
+823:     assert posted.status_code == 201
+824:     download = await async_client.get(f"/operations/chat/attachments/{aid}/content", headers=seller)
+825:     assert download.status_code == 200
+826:     assert download.headers["content-disposition"].startswith("attachment;")
+827:     assert download.headers["x-content-type-options"] == "nosniff"
+828:     assert (
+829:         await async_client.get(f"/operations/chat/attachments/{aid}/content")
+830:     ).status_code == 401
+END_SOURCE
+
+SOURCE wms397-chat-mvp/frontend/src/components/chat/ChatFeed.tsx SHA256=3aec2c8547bae7d3f03455d272448052eeb98516ce35a6e3f0d5aeb3f80959c8 BASE_HEAD=dfcd0959dfed721620039edba656aa436e7855ec
+1: // Scrollable feed of messages.
+2: //
+3: // Renders text, image attachments inline (per WMS-397 paste flow), generic
+4: // files as compact download chips, and an AttachedDocCard when the message
+5: // originated from a document page. All rows are static; editing is not part
+6: // of the MVP UI yet — only the API supports it.
+7: 
+8: import { memo, useMemo, useState } from 'react'
+9: import { Alert, Box, Button, Stack, TextField, Typography } from '@mui/material'
+10: import { ChatAttachmentView } from './ChatAttachmentView'
+11: import { AttachedDocCard } from './AttachedDocCard'
+12: import { editMessage, type ChatMessage } from './chatApi'
+13: 
+14: type Props = {
+15:   currentUserId: string | null
+16:   messages: ChatMessage[]
+17:   token: string
+18:   authHeaders: (token: string) => Record<string, string>
+19:   onChanged: (message: ChatMessage) => void
+20: }
+21: 
+22: function formatTime(iso: string): string {
+23:   try {
+24:     return new Date(iso).toLocaleString('ru-RU', {
+25:       hour: '2-digit',
+26:       minute: '2-digit',
+27:       day: '2-digit',
+28:       month: '2-digit',
+29:     })
+30:   } catch {
+31:     return iso
+32:   }
+33: }
+34: 
+35: export const ChatFeed = memo(function ChatFeed({ currentUserId, messages, token, authHeaders, onChanged }: Props) {
+36:   const [editing, setEditing] = useState<string | null>(null)
+37:   const [text, setText] = useState('')
+38:   const [busy, setBusy] = useState(false)
+39:   const [error, setError] = useState<string | null>(null)
+40:   const save = async () => {
+41:     if (!editing || busy) return
+42:     setBusy(true); setError(null)
+43:     try { onChanged(await editMessage(token, authHeaders, editing, text)); setEditing(null) }
+44:     catch { setError('Не удалось сохранить. Текст правки сохранён, повторите.') }
+45:     finally { setBusy(false) }
+46:   }
+47:   const rows = useMemo(() => messages, [messages])
+48:   if (rows.length === 0) {
+49:     return (
+50:       <Box sx={{ px: 3, py: 6, textAlign: 'center' }}>
+51:         <Typography color="text.secondary">Сообщений пока нет.</Typography>
+52:       </Box>
+53:     )
+54:   }
+55:   return (
+56:     <Stack spacing={1.25} sx={{ p: 2 }}>
+57:       {rows.map((message) => {
+58:         const mine = currentUserId !== null && message.author_user_id === currentUserId
+59:         return (
+60:           <Box
+61:             key={message.id}
+62:             sx={{
+63:               display: 'flex',
+64:               justifyContent: mine ? 'flex-end' : 'flex-start',
+65:             }}
+66:             data-testid="chat-message-row"
+67:             data-mine={mine ? 'true' : 'false'}
+68:           >
+69:             <Box
+70:               sx={{
+71:                 maxWidth: '78%',
+72:                 bgcolor: mine ? 'primary.light' : 'grey.100',
+73:                 color: mine ? 'primary.contrastText' : 'text.primary',
+74:                 borderRadius: 2,
+75:                 px: 1.5,
+76:                 py: 1,
+77:               }}
+78:             >
+79:               <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>{message.author_label}</Typography>
+80:               {message.attached_document ? (
+81:                 <Box sx={{ mb: message.text ? 0.75 : 0 }}>
+82:                   <AttachedDocCard document={message.attached_document} />
+83:                 </Box>
+84:               ) : null}
+85:               {message.text ? (
+86:                 <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+87:                   {message.text}
+88:                 </Typography>
+89:               ) : null}
+90:               <Stack spacing={1} sx={{ mt: 1 }}>
+91:                 {message.attachments.map((attachment) => <ChatAttachmentView key={attachment.id}
+92:                   attachment={attachment} token={token} authHeaders={authHeaders} />)}
+93:               </Stack>
+94:               {editing === message.id ? <Box>
+95:                 {error && <Alert severity="error">{error}</Alert>}
+96:                 <TextField multiline fullWidth value={text} disabled={busy}
+97:                   onChange={(event) => setText(event.target.value)} label="Текст сообщения" />
+98:                 <Button disabled={busy || !text.trim()} onClick={() => void save()}>Сохранить</Button>
+99:                 <Button disabled={busy} onClick={() => setEditing(null)}>Отмена</Button>
+100:               </Box> : mine && <Button size="small" color="inherit"
+101:                 onClick={() => { setEditing(message.id); setText(message.text); setError(null) }}>Изменить</Button>}
+102:               <Typography
+103:                 variant="caption"
+104:                 sx={{
+105:                   display: 'block',
+106:                   mt: 0.5,
+107:                   opacity: 0.75,
+108:                   textAlign: 'right',
+109:                 }}
+110:               >
+111:                 {formatTime(message.created_at)}
+112:                 {message.edited_at ? ' · изменено' : ''}
+113:               </Typography>
+114:             </Box>
+115:           </Box>
+116:         )
+117:       })}
+118:     </Stack>
+119:   )
+120: })
+END_SOURCE
+
+SOURCE wms397-chat-mvp/frontend/src/components/chat/ChatComposer.tsx SHA256=ac242912a5413021f4860eda6f1afb13e789d945a0418f331c76b43ea2771554 BASE_HEAD=dfcd0959dfed721620039edba656aa436e7855ec
+1: import { useEffect, useRef, useState } from 'react'
+2: import { Alert, Box, Button, IconButton, Stack, TextField, Typography } from '@mui/material'
+3: import AttachFileOutlinedIcon from '@mui/icons-material/AttachFileOutlined'
+4: import CloseIcon from '@mui/icons-material/Close'
+5: import { ChatApiError, makeClientMessageId, sendMessage, uploadAttachment,
+6:   type AttachedDocument, type ChatAttachment, type ChatMessage, type SendMessageInput } from './chatApi'
+7: 
+8: type Props = {
+9:   token: string
+10:   authHeaders: (token: string) => Record<string, string>
+11:   conversationId: string
+12:   attachedDocument?: AttachedDocument
+13:   autoFocus?: boolean
+14:   placeholder?: string
+15:   onSent?: (msg: ChatMessage) => void
+16: }
+17: type Staged = { id: string; file: File; preview?: string; uploaded?: ChatAttachment }
+18: 
+19: export function ChatComposer({ token, authHeaders, conversationId, attachedDocument, autoFocus, placeholder, onSent }: Props) {
+20:   const [text, setText] = useState('')
+21:   const [files, setFiles] = useState<Staged[]>([])
+22:   const [sending, setSending] = useState(false)
+23:   const [error, setError] = useState<string | null>(null)
+24:   const [retry, setRetry] = useState(false)
+25:   const pending = useRef<SendMessageInput | null>(null)
+26:   const busy = useRef(false)
+27:   const input = useRef<HTMLInputElement>(null)
+28:   const urls = useRef<string[]>([])
+29:   useEffect(() => () => { urls.current.forEach(URL.revokeObjectURL) }, [])
+30:   const stage = (picked: File[]) => {
+31:     if (busy.current || pending.current) return
+32:     if (files.length + picked.length > 10) { setError('Не больше 10 файлов в сообщении.'); return }
+33:     if (picked.some((f) => f.size > 25 * 1024 * 1024) ||
+34:         [...files.map((f) => f.file), ...picked].reduce((n, f) => n + f.size, 0) > 100 * 1024 * 1024) {
+35:       setError('До 25 МБ на файл и 100 МБ на сообщение.'); return
+36:     }
+37:     const staged = picked.map((file) => {
+38:       const preview = /image\/(png|jpeg|gif|webp|bmp)$/.test(file.type) ? URL.createObjectURL(file) : undefined
+39:       if (preview) urls.current.push(preview)
+40:       return { id: makeClientMessageId(), file, preview }
+41:     })
+42:     setFiles((old) => [...old, ...staged]); setError(null)
+43:   }
+44:   const submit = async () => {
+45:     if (busy.current || (!text.trim() && !files.length)) return
+46:     busy.current = true; setSending(true); setError(null)
+47:     try {
+48:       if (!pending.current) {
+49:         const uploaded: string[] = []
+50:         for (const row of files) {
+51:           // Keep successful uploads for retry; failed uploads keep their File and preview.
+52:           const attachment = row.uploaded ?? await uploadAttachment(token, authHeaders,
+53:             conversationId, row.file, row.file.name)
+54:           row.uploaded = attachment
+55:           uploaded.push(attachment.id)
+56:         }
+57:         pending.current = { clientMessageId: makeClientMessageId(), text, attachmentIds: uploaded, attachedDocument }
+58:       }
+59:       const message = await sendMessage(token, authHeaders, conversationId, pending.current)
+60:       pending.current = null; setRetry(false); setText(''); setFiles([])
+61:       urls.current.forEach(URL.revokeObjectURL); urls.current = []
+62:       onSent?.(message)
+63:     } catch (exc) {
+64:       // A definitive input/access rejection permits correcting the draft. An
+65:       // uncertain network/server response must replay the exact original request.
+66:       if (exc instanceof ChatApiError && exc.status >= 400 && exc.status < 500) pending.current = null
+67:       setRetry(pending.current !== null)
+68:       setError(pending.current ? 'Ответ сервера не получен. Повторите отправку: текст и файлы сохранены, повтор не создаст копию.' :
+69:         'Не удалось отправить сообщение. Текст и файлы сохранены. Проверьте доступ, размер файлов и повторите.')
+70:     } finally { busy.current = false; setSending(false) }
+71:   }
+72:   return <Box sx={{ borderTop: 1, borderColor: 'divider', p: 1.25 }}>
+73:     {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
+74:     <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', mb: files.length ? 1 : 0 }}>
+75:       {files.map((row) => <Box key={row.id} sx={{ border: 1, borderColor: 'divider', p: 0.5, maxWidth: 180 }}>
+76:         {row.preview && <Box component="img" src={row.preview} alt={row.file.name} sx={{ width: 90, height: 70, objectFit: 'contain' }} />}
+77:         <Typography variant="caption" sx={{ display: 'block', overflowWrap: 'anywhere' }}>{row.file.name}</Typography>
+78:         <IconButton size="small" aria-label="Убрать вложение" disabled={sending || retry}
+79:           onClick={() => setFiles((rows) => rows.filter((f) => f.id !== row.id))}><CloseIcon fontSize="small" /></IconButton>
+80:       </Box>)}
+81:     </Stack>
+82:     <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-end' }}>
+83:       <TextField fullWidth multiline maxRows={6} size="small" autoFocus={autoFocus} value={text}
+84:         disabled={sending || retry} placeholder={placeholder ?? 'Сообщение…'}
+85:         onChange={(e) => setText(e.target.value)}
+86:         onPaste={(event) => {
+87:           const images = Array.from(event.clipboardData.items).filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+88:             .map((item) => item.getAsFile()).filter((file): file is File => file !== null)
+89:           if (images.length) { event.preventDefault(); stage(images) }
+90:         }}
+91:         onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void submit() } }} />
+92:       <IconButton disabled={sending || retry} aria-label="Прикрепить файл" onClick={() => input.current?.click()}><AttachFileOutlinedIcon /></IconButton>
+93:       <input ref={input} type="file" multiple style={{ display: 'none' }} onChange={(e) => {
+94:         stage(Array.from(e.target.files ?? [])); e.target.value = ''
+95:       }} />
+96:       <Button variant="contained" disabled={sending || (!text.trim() && !files.length)} onClick={() => void submit()}>
+97:         {sending ? 'Отправляем…' : retry ? 'Повторить отправку' : 'Отправить'}
+98:       </Button>
+99:     </Stack>
+100:   </Box>
+101: }
+END_SOURCE
+
+SOURCE wms397-chat-mvp/frontend/src/components/chat/ExtraChatCreateDialog.tsx SHA256=0717cfdfcedb7b693b1f5b6c4f8d81beb8031592079f44d0644d9a6c79f48e11 BASE_HEAD=dfcd0959dfed721620039edba656aa436e7855ec
+1: // Extra-chat creation dialog for FF admins — WMS-397 gap 3.
+2: //
+3: // Owner spec: FF admin can spin up an extra chat for a seller and add
+4: // additional FF employees as participants. We reuse the existing REST
+5: // endpoint (`POST /operations/chat/conversations/extra`) and the FF staff
+6: // account listing (`GET /auth/staff-accounts`) as the participant picker
+7: // source — no new backend surface required.
+8: 
+9: import { useCallback, useEffect, useMemo, useState } from 'react'
+10: import {
+11:   Alert,
+12:   Autocomplete,
+13:   Button,
+14:   Checkbox,
+15:   Dialog,
+16:   DialogActions,
+17:   DialogContent,
+18:   DialogTitle,
+19:   FormControl,
+20:   InputLabel,
+21:   ListItem,
+22:   ListItemText,
+23:   MenuItem,
+24:   Select,
+25:   Stack,
+26:   TextField,
+27:   Typography,
+28: } from '@mui/material'
+29: import { apiUrl } from '../../api'
+30: import { createExtraChat, type ChatConversation } from './chatApi'
+31: 
+32: type SellerOption = { id: string; name: string }
+33: 
+34: type StaffOption = { id: string; email: string; role: string }
+35: 
+36: type Props = {
+37:   open: boolean
+38:   onClose: () => void
+39:   token: string
+40:   authHeaders: (token: string) => Record<string, string>
+41:   sellers: SellerOption[]
+42:   // Notify the parent so it can select the freshly created conversation.
+43:   onCreated: (conversation: ChatConversation) => void
+44:   // Seed the seller when opened from a seller-scoped surface. Optional.
+45:   initialSellerId?: string | null
+46: }
+47: 
+48: export function ExtraChatCreateDialog({
+49:   open,
+50:   onClose,
+51:   token,
+52:   authHeaders,
+53:   sellers,
+54:   onCreated,
+55:   initialSellerId = null,
+56: }: Props) {
+57:   const [sellerId, setSellerId] = useState<string>(initialSellerId ?? '')
+58:   const [title, setTitle] = useState<string>('')
+59:   const [participants, setParticipants] = useState<StaffOption[]>([])
+60:   const [staffOptions, setStaffOptions] = useState<StaffOption[]>([])
+61:   const [staffLoading, setStaffLoading] = useState(false)
+62:   const [staffError, setStaffError] = useState<string | null>(null)
+63:   const [busy, setBusy] = useState(false)
+64:   const [error, setError] = useState<string | null>(null)
+65: 
+66:   useEffect(() => {
+67:     if (!open) return
+68:     setSellerId(initialSellerId ?? '')
+69:     setTitle('')
+70:     setParticipants([])
+71:     setError(null)
+72:   }, [initialSellerId, open])
+73: 
+74:   const loadStaff = useCallback(async () => {
+75:     setStaffLoading(true)
+76:     setStaffError(null)
+77:     try {
+78:       const res = await fetch(apiUrl(`/operations/chat/participant-options?seller_id=${sellerId}`), {
+79:         headers: { ...authHeaders(token) },
+80:       })
+81:       if (!res.ok) {
+82:         throw new Error(`staff_${res.status}`)
+83:       }
+84:       const rows = (await res.json()) as Array<{ id: string; email: string; role: string }>
+85:       setStaffOptions(rows.map((row) => ({ id: row.id, email: row.email, role: row.role })))
+86:     } catch (exc) {
+87:       setStaffError((exc as Error).message)
+88:     } finally {
+89:       setStaffLoading(false)
+90:     }
+91:   }, [authHeaders, token, sellerId])
+92: 
+93:   useEffect(() => {
+94:     if (!open || !sellerId) return
+95:     setParticipants([])
+96:     void loadStaff()
+97:   }, [loadStaff, open, sellerId])
+98: 
+99:   const canSubmit = useMemo(
+100:     () => Boolean(sellerId) && title.trim().length > 0 && !busy,
+101:     [sellerId, title, busy],
+102:   )
+103: 
+104:   const handleSubmit = useCallback(async () => {
+105:     if (!canSubmit) return
+106:     setBusy(true)
+107:     setError(null)
+108:     try {
+109:       const conv = await createExtraChat(token, authHeaders, {
+110:         seller_id: sellerId,
+111:         title: title.trim(),
+112:         participant_user_ids: participants.map((p) => p.id),
+113:       })
+114:       onCreated(conv)
+115:       onClose()
+116:     } catch (exc) {
+117:       setError((exc as Error).message)
+118:     } finally {
+119:       setBusy(false)
+120:     }
+121:   }, [
+122:     authHeaders,
+123:     canSubmit,
+124:     onClose,
+125:     onCreated,
+126:     participants,
+127:     sellerId,
+128:     title,
+129:     token,
+130:   ])
+131: 
+132:   return (
+133:     <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="sm" fullWidth>
+134:       <DialogTitle>Новый чат с продавцом</DialogTitle>
+135:       <DialogContent dividers>
+136:         <Stack spacing={2} sx={{ pt: 1 }}>
+137:           {error ? (
+138:             <Alert severity="error" onClose={() => setError(null)}>
+139:               {error}
+140:             </Alert>
+141:           ) : null}
+142:           <FormControl fullWidth size="small" disabled={busy}>
+143:             <InputLabel id="extra-chat-seller-label">Продавец</InputLabel>
+144:             <Select
+145:               labelId="extra-chat-seller-label"
+146:               label="Продавец"
+147:               value={sellerId}
+148:               onChange={(e) => setSellerId(String(e.target.value))}
+149:               data-testid="extra-chat-seller-select"
+150:             >
+151:               {sellers.map((s) => (
+152:                 <MenuItem key={s.id} value={s.id}>
+153:                   {s.name}
+154:                 </MenuItem>
+155:               ))}
+156:             </Select>
+157:           </FormControl>
+158:           <TextField
+159:             label="Название чата"
+160:             value={title}
+161:             onChange={(e) => setTitle(e.target.value)}
+162:             fullWidth
+163:             size="small"
+164:             disabled={busy}
+165:             data-testid="extra-chat-title-input"
+166:             helperText="Например: «Приёмка на выходных», «Возвраты июнь»"
+167:           />
+168:           {staffError ? (
+169:             <Alert severity="warning" onClose={() => setStaffError(null)}>
+170:               Не удалось загрузить список сотрудников: {staffError}
+171:             </Alert>
+172:           ) : null}
+173:           <Autocomplete
+174:             multiple
+175:             options={staffOptions}
+176:             value={participants}
+177:             loading={staffLoading}
+178:             disabled={busy}
+179:             onChange={(_, next) => setParticipants(next)}
+180:             getOptionLabel={(option) => option.email}
+181:             isOptionEqualToValue={(a, b) => a.id === b.id}
+182:             renderOption={(props, option, { selected }) => (
+183:               <ListItem {...props} key={option.id} dense>
+184:                 <Checkbox size="small" checked={selected} sx={{ mr: 1 }} />
+185:                 <ListItemText
+186:                   primary={option.email}
+187:                   secondary={option.role}
+188:                 />
+189:               </ListItem>
+190:             )}
+191:             renderInput={(params) => (
+192:               <TextField
+193:                 {...params}
+194:                 label="Дополнительные участники"
+195:                 size="small"
+196:                 placeholder="Найдите сотрудника по email"
+197:                 data-testid="extra-chat-participants-input"
+198:               />
+199:             )}
+200:           />
+201:           <Typography variant="caption" color="text.secondary">
+202:             Дополнительный чат видят создатель и выбранные участники. Основной чат продавца остаётся доступным.
+203:           </Typography>
+204:         </Stack>
+205:       </DialogContent>
+206:       <DialogActions>
+207:         <Button onClick={onClose} disabled={busy}>
+208:           Отмена
+209:         </Button>
+210:         <Button
+211:           variant="contained"
+212:           onClick={() => void handleSubmit()}
+213:           disabled={!canSubmit}
+214:           data-testid="extra-chat-create-submit"
+215:         >
+216:           Создать чат
+217:         </Button>
+218:       </DialogActions>
+219:     </Dialog>
+220:   )
+221: }
+END_SOURCE
+
+SOURCE wms397-chat-mvp/frontend/src/components/chat/ChatDialog.tsx SHA256=76a1b5459f7793e21a49f0112a4dc993af2be5b02ff9022fa29116470392c066 BASE_HEAD=dfcd0959dfed721620039edba656aa436e7855ec
+1: // Compact anchored document composer. Full history stays on the chat page.
+2: import { useEffect, useState } from 'react'
+3: import { Alert, Box, Button, Popover, Typography } from '@mui/material'
+4: import { useLocation, useNavigate } from 'react-router-dom'
+5: import { ChatComposer } from './ChatComposer'
+6: import { ensureMainChat, type AttachedDocument, type ChatConversation } from './chatApi'
+7: 
+8: type Props = {
+9:   anchorEl: HTMLElement | null
+10:   open: boolean
+11:   onClose: () => void
+12:   token: string
+13:   authHeaders: (token: string) => Record<string, string>
+14:   currentUserId: string | null
+15:   sellerId: string
+16:   sellerName?: string
+17:   attachedDocument?: AttachedDocument
+18: }
+19: export function ChatDialog({ anchorEl, open, onClose, token, authHeaders, sellerId, sellerName, attachedDocument }: Props) {
+20:   const [conversation, setConversation] = useState<ChatConversation | null>(null)
+21:   const [error, setError] = useState(false)
+22:   const [sent, setSent] = useState(false)
+23:   const navigate = useNavigate()
+24:   const location = useLocation()
+25:   useEffect(() => {
+26:     if (!open) return
+27:     let active = true
+28:     setConversation(null); setError(false); setSent(false)
+29:     void ensureMainChat(token, authHeaders, sellerId).then((c) => { if (active) setConversation(c) })
+30:       .catch(() => { if (active) setError(true) })
+31:     return () => { active = false }
+32:   }, [open, token, authHeaders, sellerId])
+33:   const base = location.pathname.startsWith('/app/ff') ? '/app/ff' : location.pathname.startsWith('/app/seller') ? '/app/seller' : ''
+34:   return <Popover open={open} anchorEl={anchorEl} onClose={onClose}
+35:     anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+36:     transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+37:     slotProps={{ paper: { sx: { width: 440, maxWidth: '95vw' } } }}>
+38:     <Box sx={{ p: 1.5 }}>
+39:       <Typography variant="subtitle2">{sellerName ?? 'Основной чат продавца'}</Typography>
+40:       {attachedDocument && <Typography variant="caption">{attachedDocument.title}</Typography>}
+41:       {error && <Alert severity="error">Не удалось открыть чат. Закройте форму и повторите.</Alert>}
+42:       {sent && <Alert severity="success">Сообщение отправлено</Alert>}
+43:     </Box>
+44:     {conversation && <ChatComposer key={conversation.id} token={token} authHeaders={authHeaders}
+45:       conversationId={conversation.id} attachedDocument={attachedDocument} autoFocus onSent={() => setSent(true)} />}
+46:     <Button onClick={() => { navigate(`${base}/chat?seller_id=${sellerId}`); onClose() }}>Перейти в полный чат</Button>
+47:   </Popover>
+48: }
+END_SOURCE
+
+SOURCE wms397-chat-mvp/frontend/src/components/chat/ChatAttachmentView.tsx SHA256=b1db30955f07e95cb3ec576a81c708e0a601717c1fc1e1673e37cfa7c35f6b64 BASE_HEAD=dfcd0959dfed721620039edba656aa436e7855ec
+1: import { useEffect, useState } from 'react'
+2: import { Alert, Box, Link } from '@mui/material'
+3: import { attachmentContentUrl, type ChatAttachment } from './chatApi'
+4: 
+5: export function ChatAttachmentView({ attachment, token, authHeaders }: {
+6:   attachment: ChatAttachment
+7:   token: string
+8:   authHeaders: (token: string) => Record<string, string>
+9: }) {
+10:   const [url, setUrl] = useState<string | null>(null)
+11:   const [failed, setFailed] = useState(false)
+12:   useEffect(() => {
+13:     const controller = new AbortController()
+14:     let objectUrl: string | undefined
+15:     setUrl(null)
+16:     setFailed(false)
+17:     void fetch(attachmentContentUrl(attachment.id), {
+18:       headers: authHeaders(token), signal: controller.signal,
+19:     }).then(async (response) => {
+20:       if (!response.ok) throw new Error('attachment')
+21:       const blob = await response.blob()
+22:       if (controller.signal.aborted) return
+23:       objectUrl = URL.createObjectURL(blob)
+24:       setUrl(objectUrl)
+25:     }).catch(() => { if (!controller.signal.aborted) setFailed(true) })
+26:     return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl) }
+27:   }, [attachment.id, authHeaders, token])
+28:   if (failed) return <Alert severity="error">Не удалось загрузить {attachment.filename}</Alert>
+29:   if (!url) return <span>Загрузка {attachment.filename}…</span>
+30:   return <Link href={url} download={attachment.filename}>
+31:     {attachment.is_image ? <Box component="img" src={url} alt={attachment.filename}
+32:       sx={{ maxWidth: 220, maxHeight: 220, display: 'block', borderRadius: 1 }} /> : attachment.filename}
+33:   </Link>
+34: }
+END_SOURCE
+
+SOURCE wms397-chat-mvp/frontend/src/components/chat/ChatDocumentAction.tsx SHA256=7b9e85d1a56e2672a1fc3b09fd4cd828e9e786a263d84f868695486a1e3bfa57 BASE_HEAD=dfcd0959dfed721620039edba656aa436e7855ec
+1: import { useEffect, useState } from 'react'
+2: import { MenuItem, Stack, TextField } from '@mui/material'
+3: import { apiUrl } from '../../api'
+4: import { ChatOpenButton } from './ChatOpenButton'
+5: import type { AttachedDocument } from './chatApi'
+6: export function ChatDocumentAction({ token, authHeaders, currentUserId, kind, documentId }: {
+7:   token: string; authHeaders: (t: string) => Record<string, string>; currentUserId: string | null
+8:   kind: string; documentId: string
+9: }) {
+10:   const [documents, setDocuments] = useState<AttachedDocument[]>([])
+11:   const [sellerId, setSellerId] = useState('')
+12:   useEffect(() => {
+13:     let active = true
+14:     setDocuments([]); setSellerId('')
+15:     void fetch(apiUrl(`/operations/chat/document-options/${kind}/${documentId}`), { headers: authHeaders(token) })
+16:       .then(async (r) => { if (!r.ok) throw Error(); return await r.json() as AttachedDocument[] })
+17:       .then((rows) => { if (active) { setDocuments(rows); setSellerId(rows[0]?.seller_id ?? '') } }).catch(() => {})
+18:     return () => { active = false }
+19:   }, [token, authHeaders, kind, documentId])
+20:   const document = documents.find((d) => d.seller_id === sellerId)
+21:   if (!document) return null
+22:   return <Stack direction="row" spacing={1}>
+23:     {documents.length > 1 && <TextField select size="small" label="Продавец" value={sellerId}
+24:       onChange={(e) => setSellerId(e.target.value)} sx={{ minWidth: 180 }}>
+25:       {documents.map((d) => <MenuItem key={d.seller_id} value={d.seller_id}>{d.seller_name}</MenuItem>)}
+26:     </TextField>}
+27:     <ChatOpenButton key={sellerId} token={token} authHeaders={authHeaders} currentUserId={currentUserId}
+28:       sellerId={sellerId} sellerName={document.seller_name} attachedDocument={document} />
+29:   </Stack>
+30: }
+END_SOURCE
+
+SOURCE wms397-chat-mvp/frontend/src/components/chat/ChatParticipants.tsx SHA256=d90e92bf40c752ba2d60d536b57a2e0ec93e7302d2dc37828d2f3b1b607eb847 BASE_HEAD=dfcd0959dfed721620039edba656aa436e7855ec
+1: import { useEffect, useState } from 'react'
+2: import { Alert, Button, Dialog, DialogContent, DialogTitle, MenuItem, TextField, Typography } from '@mui/material'
+3: import { apiUrl } from '../../api'
+4: import type { ChatConversation } from './chatApi'
+5: export function ChatParticipants({ conversation, token, authHeaders, onClose }: {
+6:   conversation: ChatConversation; token: string; authHeaders: (t: string) => Record<string, string>; onClose: () => void
+7: }) {
+8:   const [options, setOptions] = useState<{ id: string; email: string }[]>([])
+9:   const [members, setMembers] = useState<string[]>([])
+10:   const [selected, setSelected] = useState('')
+11:   const [error, setError] = useState(false)
+12:   const [busy, setBusy] = useState(false)
+13:   useEffect(() => {
+14:     let active = true
+15:     void Promise.all([
+16:       fetch(apiUrl(`/operations/chat/participant-options?seller_id=${conversation.seller_id}`), { headers: authHeaders(token) }),
+17:       fetch(apiUrl(`/operations/chat/conversations/${conversation.id}/participants`), { headers: authHeaders(token) }),
+18:     ]).then(async ([a, b]) => {
+19:       if (!a.ok || !b.ok) throw Error()
+20:       const opts = await a.json(); const rows = await b.json()
+21:       if (active) { setOptions(opts); setMembers(rows.items.map((r: { user_id: string }) => r.user_id)) }
+22:     }).catch(() => { if (active) setError(true) })
+23:     return () => { active = false }
+24:   }, [conversation.id, conversation.seller_id, token, authHeaders])
+25:   const add = async () => {
+26:     if (busy || !selected) return
+27:     setBusy(true); setError(false)
+28:     try {
+29:       const response = await fetch(apiUrl(`/operations/chat/conversations/${conversation.id}/participants`), {
+30:         method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: selected }),
+31:       })
+32:       if (!response.ok) throw Error()
+33:       setMembers((ids) => [...ids, selected]); setSelected('')
+34:     } catch { setError(true) } finally { setBusy(false) }
+35:   }
+36:   return <Dialog open onClose={onClose} fullWidth maxWidth="sm"><DialogTitle>Участники</DialogTitle><DialogContent>
+37:     {error && <Alert severity="error">Не удалось загрузить или сохранить участников.</Alert>}
+38:     {members.map((id) => <Typography key={id}>{options.find((o) => o.id === id)?.email ?? 'Участник'}</Typography>)}
+39:     <TextField select fullWidth label="Добавить участника" value={selected} onChange={(e) => setSelected(e.target.value)} sx={{ mt: 2 }}>
+40:       {options.filter((o) => !members.includes(o.id)).map((o) => <MenuItem key={o.id} value={o.id}>{o.email}</MenuItem>)}
+41:     </TextField><Button disabled={busy || !selected} onClick={() => void add()}>Добавить</Button><Button onClick={onClose}>Закрыть</Button>
+42:   </DialogContent></Dialog>
+43: }
+END_SOURCE
+
+SOURCE wms397-chat-mvp/frontend/src/components/chat/ChatOpenButton.tsx SHA256=1ae68aabce843a77f8ae28dd1e52aaf910f502ee8b7a0dd4062e1a77d225e266 BASE_HEAD=dfcd0959dfed721620039edba656aa436e7855ec
+1: // One-line "Написать сообщение" action for document pages.
+2: //
+3: // Pass the seller/document context; the button owns its own dialog state so a
+4: // doc page only wires props and a single button element into its toolbar.
+5: 
+6: import { useState } from 'react'
+7: import { Button, Tooltip } from '@mui/material'
+8: import ChatBubbleOutlineOutlinedIcon from '@mui/icons-material/ChatBubbleOutlineOutlined'
+9: import { ChatDialog } from './ChatDialog'
+10: import type { AttachedDocument } from './chatApi'
+11: 
+12: type Props = {
+13:   token: string
+14:   authHeaders: (token: string) => Record<string, string>
+15:   currentUserId: string | null
+16:   sellerId: string
+17:   sellerName?: string
+18:   attachedDocument?: AttachedDocument
+19:   label?: string
+20:   size?: 'small' | 'medium'
+21:   variant?: 'text' | 'outlined' | 'contained'
+22: }
+23: 
+24: export function ChatOpenButton({
+25:   token,
+26:   authHeaders,
+27:   currentUserId,
+28:   sellerId,
+29:   sellerName,
+30:   attachedDocument,
+31:   label = 'Написать сообщение',
+32:   size = 'small',
+33:   variant = 'outlined',
+34: }: Props) {
+35:   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
+36:   return (
+37:     <>
+38:       <Tooltip title="Открыть чат с продавцом и прикрепить документ">
+39:         <Button
+40:           size={size}
+41:           variant={variant}
+42:           startIcon={<ChatBubbleOutlineOutlinedIcon fontSize="small" />}
+43:           onClick={(event) => { event.stopPropagation(); setAnchorEl(event.currentTarget) }}
+44:           data-testid="chat-open-button"
+45:         >
+46:           {label}
+47:         </Button>
+48:       </Tooltip>
+49:       <ChatDialog
+50:         open={Boolean(anchorEl)}
+51:         anchorEl={anchorEl}
+52:         onClose={() => setAnchorEl(null)}
+53:         token={token}
+54:         authHeaders={authHeaders}
+55:         currentUserId={currentUserId}
+56:         sellerId={sellerId}
+57:         sellerName={sellerName}
+58:         attachedDocument={attachedDocument}
+59:       />
+60:     </>
+61:   )
+62: }
+END_SOURCE
+
+SOURCE wms397-chat-mvp/frontend/src/components/chat/AttachedDocCard.tsx SHA256=7f93967582eedb17f9db3d4ffb8e6e920802f84b66fc6fc2ef51de929f6742e0 BASE_HEAD=dfcd0959dfed721620039edba656aa436e7855ec
+1: // Attached-document card rendered inside a chat message.
+2: //
+3: // Two behaviours combined into a single component per the owner's minimal
+4: // contract: it shows the document title (with seller name for FF admins who
+5: // jump between sellers), and clicks navigate to the matching route so the
+6: // operator can jump straight to the doc without leaving the chat.
+7: 
+8: import { memo, useMemo } from 'react'
+9: import { Box, Paper, Typography } from '@mui/material'
+10: import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined'
+11: import { useNavigate, useLocation } from 'react-router-dom'
+12: import type { AttachedDocument } from './chatApi'
+13: 
+14: type Props = {
+15:   document: AttachedDocument
+16:   basePath?: string
+17: }
+18: 
+19: const KIND_LABEL: Record<string, string> = {
+20:   fbs_order: 'FBS-заказ',
+21:   fbs_supply: 'FBS-поставка',
+22:   inbound_intake: 'Приёмка',
+23:   marketplace_unload: 'Отгрузка',
+24:   outbound_shipment: 'Отгрузка',
+25: }
+26: 
+27: export const AttachedDocCard = memo(function AttachedDocCard({
+28:   document,
+29:   basePath,
+30: }: Props) {
+31:   const navigate = useNavigate()
+32:   const location = useLocation()
+33:   const base = basePath ?? (location.pathname.startsWith('/app/ff') ? '/app/ff' : location.pathname.startsWith('/app/seller') ? '/app/seller' : '')
+34:   const label = KIND_LABEL[document.kind] ?? 'Документ'
+35:   const target = useMemo(
+36:     () => `${base}/chat/documents/${document.kind}/${document.id}?seller_id=${document.seller_id}`,
+37:     [document.kind, document.id, document.seller_id, base],
+38:   )
+39:   const clickable = target !== null
+40:   return (
+41:     <Paper
+42:       variant="outlined"
+43:       role="link"
+44:       tabIndex={0}
+45:       onKeyDown={(event) => { if (event.key === 'Enter') navigate(target) }}
+46:       onClick={() => {
+47:         if (target) navigate(target)
+48:       }}
+49:       sx={{
+50:         p: 1.25,
+51:         display: 'flex',
+52:         gap: 1,
+53:         alignItems: 'center',
+54:         maxWidth: 360,
+55:         cursor: clickable ? 'pointer' : 'default',
+56:         borderColor: 'divider',
+57:         bgcolor: 'background.default',
+58:         '&:hover': clickable
+59:           ? { borderColor: 'primary.main', bgcolor: 'action.hover' }
+60:           : undefined,
+61:       }}
+62:       data-testid="chat-attached-doc-card"
+63:       data-doc-kind={document.kind}
+64:       data-doc-id={document.id}
+65:     >
+66:       <DescriptionOutlinedIcon fontSize="small" color={clickable ? 'primary' : 'disabled'} />
+67:       <Box sx={{ minWidth: 0 }}>
+68:         <Typography variant="caption" color="text.secondary" noWrap>
+69:           {label}
+70:           {document.seller_name ? ` · ${document.seller_name}` : ''}
+71:         </Typography>
+72:         <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+73:           {document.title}
+74:         </Typography>
+75:       </Box>
+76:     </Paper>
+77:   )
+78: })
+END_SOURCE
+
+SOURCE wms397-chat-mvp/frontend/src/screens/chat/ChatDocumentScreen.tsx SHA256=deb9667b8978ad59b06f8fff549d9be6dc127660a6c13001841e3da337904ebf BASE_HEAD=dfcd0959dfed721620039edba656aa436e7855ec
+1: import { useEffect, useState } from 'react'
+2: import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+3: import { Alert, Box, Button, Paper, Table, TableBody, TableCell, TableHead, TableRow, Typography } from '@mui/material'
+4: import { apiUrl } from '../../api'
+5: import { ChatOpenButton } from '../../components/chat/ChatOpenButton'
+6: import type { AttachedDocument } from '../../components/chat/chatApi'
+7: 
+8: type DocumentDetail = { document: AttachedDocument; status: string; lines: { product: string; quantity: number; received?: number; order_id?: string }[] }
+9: export function ChatDocumentScreen({ token, authHeaders, currentUserId }: {
+10:   token: string; authHeaders: (t: string) => Record<string, string>; currentUserId: string | null
+11: }) {
+12:   const { kind, documentId } = useParams()
+13:   const [params] = useSearchParams()
+14:   const sellerId = params.get('seller_id') ?? ''
+15:   const [detail, setDetail] = useState<DocumentDetail | null>(null)
+16:   const [error, setError] = useState(false)
+17:   const navigate = useNavigate()
+18:   const location = useLocation()
+19:   useEffect(() => {
+20:     const controller = new AbortController()
+21:     setDetail(null); setError(false)
+22:     void fetch(apiUrl(`/operations/chat/documents/${kind}/${documentId}?seller_id=${sellerId}`), {
+23:       headers: authHeaders(token), signal: controller.signal,
+24:     }).then(async (response) => {
+25:       if (!response.ok) throw Error()
+26:       const row = await response.json()
+27:       if (!controller.signal.aborted) setDetail(row)
+28:     }).catch(() => { if (!controller.signal.aborted) setError(true) })
+29:     return () => controller.abort()
+30:   }, [kind, documentId, sellerId, token, authHeaders])
+31:   const base = location.pathname.split('/chat')[0]
+32:   return <Paper variant="outlined" sx={{ m: 2, p: 2 }}>
+33:     <Button onClick={() => navigate(`${base}/chat?seller_id=${sellerId}`)}>Вернуться в чат</Button>
+34:     {error && <Alert severity="error">Документ не найден или у вас нет права его просматривать.</Alert>}
+35:     {detail ? <>
+36:       <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, my: 2 }}>
+37:         <Box><Typography variant="h5">{detail.document.title}</Typography>
+38:           <Typography>{detail.document.seller_name}</Typography>
+39:           <Typography color="text.secondary">Статус: {detail.status}</Typography></Box>
+40:         <ChatOpenButton token={token} authHeaders={authHeaders} currentUserId={currentUserId}
+41:           sellerId={sellerId} sellerName={detail.document.seller_name} attachedDocument={detail.document} />
+42:       </Box>
+43:       <Table><TableHead><TableRow><TableCell>{kind === 'fbs_supply' ? 'Заказ' : 'Товар'}</TableCell><TableCell>Количество</TableCell></TableRow></TableHead>
+44:         <TableBody>{detail.lines.map((line, i) => <TableRow key={i}>
+45:           <TableCell>{line.order_id ? <Button onClick={() => navigate(`${base}/chat/documents/fbs_order/${line.order_id}?seller_id=${sellerId}`)}>{line.product}</Button> : line.product}</TableCell>
+46:           <TableCell>{line.quantity}</TableCell>
+47:         </TableRow>)}</TableBody></Table>
+48:       {base === '/app/ff' && kind !== 'fbs_order' && <Button sx={{ mt: 2 }} onClick={() => navigate(
+49:         kind === 'fbs_supply' ? `/app/ff/fbs?supply_id=${documentId}` :
+50:         kind === 'inbound_intake' ? `/app/ff/reception?open=${documentId}` :
+51:         kind === 'outbound_shipment' ? `/app/ff/supplies-shipments?open_outbound=${documentId}` :
+52:         `/app/ff/mp-shipments?open_mp=${documentId}`)}>Открыть рабочий документ</Button>}
+53:     </> : !error && <Typography>Загрузка документа…</Typography>}
+54:   </Paper>
+55: }
+END_SOURCE
+
+SOURCE wms397-chat-mvp/frontend/src/screens/chat/ChatScreen.tsx SHA256=0585a8789c04972c6c1fcdec1ac9fef66174f199f58143f79802a4d23703fd5d BASE_HEAD=dfcd0959dfed721620039edba656aa436e7855ec
+1: import { useCallback, useEffect, useRef, useState } from 'react'
+2: import { useSearchParams } from 'react-router-dom'
+3: import { Alert, Box, Button, List, ListItemButton, ListItemText, Paper, Typography } from '@mui/material'
+4: import { ChatComposer } from '../../components/chat/ChatComposer'
+5: import { ChatFeed } from '../../components/chat/ChatFeed'
+6: import { ExtraChatCreateDialog } from '../../components/chat/ExtraChatCreateDialog'
+7: import { ChatParticipants } from '../../components/chat/ChatParticipants'
+8: import { listConversations, listMessages, type ChatConversation, type ChatMessage } from '../../components/chat/chatApi'
+9: 
+10: type Props = {
+11:   token: string
+12:   authHeaders: (token: string) => Record<string, string>
+13:   currentUserId: string | null
+14:   sellers: { id: string; name: string }[]
+15:   isFulfillmentAdmin?: boolean
+16: }
+17: export function ChatScreen({ token, authHeaders, currentUserId, sellers, isFulfillmentAdmin = false }: Props) {
+18:   const [params] = useSearchParams()
+19:   const [conversations, setConversations] = useState<ChatConversation[]>([])
+20:   const [selectedId, setSelectedId] = useState<string | null>(null)
+21:   const [messages, setMessages] = useState<ChatMessage[]>([])
+22:   const [error, setError] = useState<string | null>(null)
+23:   const [createOpen, setCreateOpen] = useState(false)
+24:   const [membersOpen, setMembersOpen] = useState(false)
+25:   const [olderBusy, setOlderBusy] = useState(false)
+26:   const selectedRef = useRef(selectedId)
+27:   selectedRef.current = selectedId
+28:   const desiredSeller = params.get('seller_id')
+29:   const loadConversations = useCallback(async () => {
+30:     try {
+31:       const rows = await listConversations(token, authHeaders)
+32:       setConversations(rows)
+33:       setSelectedId((id) => id && rows.some((r) => r.id === id) ? id :
+34:         (rows.find((r) => r.kind === 'main' && r.seller_id === desiredSeller) ?? rows[0])?.id ?? null)
+35:     } catch { setError('Не удалось загрузить чаты. Повторите обновление.') }
+36:   }, [token, authHeaders, desiredSeller])
+37:   useEffect(() => { void loadConversations() }, [loadConversations])
+38:   useEffect(() => {
+39:     if (!selectedId) return
+40:     let active = true
+41:     setMessages([]); setError(null)
+42:     const load = async () => {
+43:       try {
+44:         const items = await listMessages(token, authHeaders, selectedId)
+45:         if (active) setMessages((old) => {
+46:           const map = new Map(old.map((m) => [m.id, m]))
+47:           items.forEach((m) => map.set(m.id, m))
+48:           return Array.from(map.values()).sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
+49:         })
+50:       } catch { if (active) { setMessages([]); setError('Не удалось прочитать чат. Проверьте соединение и доступ.') } }
+51:     }
+52:     void load()
+53:     const timer = window.setInterval(() => void load(), 4000)
+54:     return () => { active = false; window.clearInterval(timer) }
+55:   }, [selectedId, token, authHeaders])
+56:   const changed = useCallback((msg: ChatMessage) => {
+57:     if (msg.conversation_id !== selectedRef.current) return
+58:     setMessages((rows) => [...rows.filter((r) => r.id !== msg.id), msg]
+59:       .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)))
+60:   }, [])
+61:   const selected = conversations.find((r) => r.id === selectedId)
+62:   const label = (c: ChatConversation) => c.title ?? sellers.find((s) => s.id === c.seller_id)?.name ?? 'Основной чат'
+63:   const older = async () => {
+64:     if (!selectedId || !messages.length || olderBusy) return
+65:     const id = selectedId
+66:     setOlderBusy(true)
+67:     try {
+68:       const rows = await listMessages(token, authHeaders, id, messages[0].id)
+69:       if (selectedRef.current === id) rows.forEach(changed)
+70:     } catch { setError('Не удалось загрузить предыдущие сообщения.') }
+71:     finally { setOlderBusy(false) }
+72:   }
+73:   return <Box sx={{ display: 'flex', height: 'calc(100vh - 110px)', gap: 1, p: 1 }}>
+74:     <Paper variant="outlined" sx={{ width: { xs: 170, md: 280 }, overflowY: 'auto' }}>
+75:       <Typography variant="h6" sx={{ p: 1 }}>Чаты</Typography>
+76:       <List>{conversations.map((c) => <ListItemButton key={c.id} selected={c.id === selectedId}
+77:         onClick={() => { setMessages([]); setSelectedId(c.id) }}>
+78:         <ListItemText primary={label(c)} secondary={c.kind === 'main' ? 'Основной чат' : 'Дополнительный чат'} />
+79:       </ListItemButton>)}</List>
+80:       {isFulfillmentAdmin && <Button onClick={() => setCreateOpen(true)}>Новый чат</Button>}
+81:       <Button onClick={() => void loadConversations()}>Обновить список</Button>
+82:     </Paper>
+83:     <Paper variant="outlined" sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+84:       {error && <Alert severity="error">{error}</Alert>}
+85:       {selected ? <>
+86:         <Box sx={{ p: 1.5, borderBottom: 1, borderColor: 'divider' }}>
+87:           <Typography variant="h6">{label(selected)}</Typography>
+88:           {isFulfillmentAdmin && selected.kind === 'extra' && <Button onClick={() => setMembersOpen(true)}>Участники</Button>}
+89:         </Box>
+90:         <Box sx={{ flex: 1, overflowY: 'auto' }}>
+91:           {messages.length > 0 && <Button disabled={olderBusy} onClick={() => void older()}>Предыдущие сообщения</Button>}
+92:           <ChatFeed key={selected.id} token={token} authHeaders={authHeaders} currentUserId={currentUserId}
+93:             messages={messages} onChanged={changed} />
+94:         </Box>
+95:         <ChatComposer key={selected.id} token={token} authHeaders={authHeaders} conversationId={selected.id} onSent={changed} />
+96:         {membersOpen && <ChatParticipants token={token} authHeaders={authHeaders} conversation={selected}
+97:           onClose={() => setMembersOpen(false)} />}
+98:       </> : <Typography sx={{ p: 3 }}>Выберите чат.</Typography>}
+99:     </Paper>
+100:     {isFulfillmentAdmin && <ExtraChatCreateDialog open={createOpen} onClose={() => setCreateOpen(false)} token={token}
+101:       authHeaders={authHeaders} sellers={sellers} onCreated={(c) => { setConversations((rows) => [...rows, c]); setSelectedId(c.id) }} />}
+102:   </Box>
+103: }
+END_SOURCE

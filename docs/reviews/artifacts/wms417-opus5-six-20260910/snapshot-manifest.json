@@ -1,0 +1,670 @@
+{
+  "captured_at_utc": "2026-09-10T05:57:43.495956+00:00",
+  "lanes": [
+    {
+      "lane": "stock_merge",
+      "tasks": [
+        "338",
+        "341",
+        "329",
+        "060",
+        "349",
+        "352",
+        "386"
+      ],
+      "request": "stock_merge-request.txt",
+      "bytes": 412685,
+      "files": [
+        {
+          "worktree": "wms338-stock-min-formula",
+          "path": "backend/app/services/inventory_service.py",
+          "sha256": "a0fb7aadc1ebcab502f2f223d24dfefd3ac5be1b9d35d1780d30fd16744e5873",
+          "base_head": "331a0339cfe585d9265550eca46cd27518026e3d",
+          "lines": 2000
+        },
+        {
+          "worktree": "wms338-stock-min-formula",
+          "path": "backend/app/services/fbs_stock_rule_service.py",
+          "sha256": "0c1f97215f6ddaeb1a749a2ac985a4d34909349f1eaeac5efac7ee11ec36988d",
+          "base_head": "331a0339cfe585d9265550eca46cd27518026e3d",
+          "lines": 982
+        },
+        {
+          "worktree": "wms338-stock-min-formula",
+          "path": "backend/app/services/fbs_stock_availability_service.py",
+          "sha256": "8bccd8e37317bd14b924c7b74d9d56ba088da586ead7c409c89d0f03c69ff2f9",
+          "base_head": "331a0339cfe585d9265550eca46cd27518026e3d",
+          "lines": 280
+        },
+        {
+          "worktree": "wms338-stock-min-formula",
+          "path": "backend/app/services/marketplace_unload_service.py",
+          "sha256": "784abf6d509ebf1b63541abbcbf8af66428a72dd80bf2bb958d1902c31bac278",
+          "base_head": "331a0339cfe585d9265550eca46cd27518026e3d",
+          "lines": 1252
+        },
+        {
+          "worktree": "wms338-stock-min-formula",
+          "path": "backend/app/services/fbs_warehouse_binding_service.py",
+          "sha256": "47ba50c260bce59e4662d7e5029aee09b687eee7d66d349dc637c30b3c1143d4",
+          "base_head": "331a0339cfe585d9265550eca46cd27518026e3d",
+          "lines": 823
+        },
+        {
+          "worktree": "wms338-stock-min-formula",
+          "path": "backend/tests/test_inventory_stock_cap_wms338.py",
+          "sha256": "4bb09841f77e2704c97bce97deb2dd6f79457469a43b1ec60b553a66dc80497a",
+          "base_head": "331a0339cfe585d9265550eca46cd27518026e3d",
+          "lines": 459
+        },
+        {
+          "worktree": "wms338-stock-min-formula",
+          "path": "frontend/src/screens/ff/products-fbs/FbsStockDialog.tsx",
+          "sha256": "9595f5bf51835cd08198a8515ce732e13fa7e6742d7361cbb1c0ac2d1b35173d",
+          "base_head": "331a0339cfe585d9265550eca46cd27518026e3d",
+          "lines": 565
+        },
+        {
+          "worktree": "wms349-merge-service",
+          "path": "backend/app/services/product_merge_service.py",
+          "sha256": "48ff0352275fbdc126da4bc7ed2698946bfca54daaba381f837c23474a8fb7f5",
+          "base_head": "9ce9a9952af3e43f68ef3fb7f9cd5204904bcc19",
+          "lines": 382
+        },
+        {
+          "worktree": "wms352-ozon-publication",
+          "path": "backend/app/services/ozon_fbs_sync_service.py",
+          "sha256": "7347163c8261ca034ee2d880984b1453237c0a290be488e9f01b241f920f450e",
+          "base_head": "cfab77e8d67aab1a978e637e09bfc32d8b93abb4",
+          "lines": 1026
+        }
+      ]
+    },
+    {
+      "lane": "cancel_identity",
+      "tasks": [
+        "111",
+        "112",
+        "121",
+        "122"
+      ],
+      "request": "cancel_identity-request.txt",
+      "bytes": 432418,
+      "files": [
+        {
+          "worktree": "wms111-wb-cancel-return",
+          "path": "backend/app/services/fbs_cancel_return_document_service.py",
+          "sha256": "fef1049d100ef5b952ceeca8a99ee2296d54a9aaa1695fde99fd11f536d357ab",
+          "base_head": "dba1754c9ddd7eb3a123d933b377bbde0e203839",
+          "lines": 339
+        },
+        {
+          "worktree": "wms111-wb-cancel-return",
+          "path": "backend/app/services/fbs_cancellation_service.py",
+          "sha256": "181c818a5e2648c75d087b6ffb00319c328ce0b78e6b386d10c521e7359f8296",
+          "base_head": "dba1754c9ddd7eb3a123d933b377bbde0e203839",
+          "lines": 477
+        },
+        {
+          "worktree": "wms111-wb-cancel-return",
+          "path": "backend/app/services/fbs_cancelled_after_pack_service.py",
+          "sha256": "bc870ca746f65daacc9284df51cf82a6d48ea18f48f578d8eebc453e0b264c49",
+          "base_head": "dba1754c9ddd7eb3a123d933b377bbde0e203839",
+          "lines": 705
+        },
+        {
+          "worktree": "wms111-wb-cancel-return",
+          "path": "backend/app/services/fbs_packaging_integration_service.py",
+          "sha256": "f202c18bc3ecffa93c2170b4fdea2ba90f430897bcd968e38ddd36665862a711",
+          "base_head": "dba1754c9ddd7eb3a123d933b377bbde0e203839",
+          "lines": 896
+        },
+        {
+          "worktree": "wms111-wb-cancel-return",
+          "path": "backend/app/services/fbs_order_billing_service.py",
+          "sha256": "579b482ed6e10e32a74d2572ba15bebaaf1614ed51341a67a5a9b28e8066843c",
+          "base_head": "dba1754c9ddd7eb3a123d933b377bbde0e203839",
+          "lines": 302
+        },
+        {
+          "worktree": "wms111-wb-cancel-return",
+          "path": "backend/app/services/fbs_tracking_service.py",
+          "sha256": "a37f5519deb66fd6450e7ffe7ba5dea6a08d2f988f204e64d3e3633c1d436140",
+          "base_head": "dba1754c9ddd7eb3a123d933b377bbde0e203839",
+          "lines": 464
+        },
+        {
+          "worktree": "wms111-wb-cancel-return",
+          "path": "backend/app/services/fbs_shipment_service.py",
+          "sha256": "8af9e27054f1994f47c78e776e9b69dae72cb2a848fa1ad290bbd346a1bbb0b5",
+          "base_head": "dba1754c9ddd7eb3a123d933b377bbde0e203839",
+          "lines": 2738
+        },
+        {
+          "worktree": "wms111-wb-cancel-return",
+          "path": "backend/app/services/wb_marketplace_orders_service.py",
+          "sha256": "9e40bdf374c223756c45b768504c21b1ef706be313eb6c0c06f009341b0425b7",
+          "base_head": "dba1754c9ddd7eb3a123d933b377bbde0e203839",
+          "lines": 1611
+        },
+        {
+          "worktree": "wms111-wb-cancel-return",
+          "path": "backend/app/api/fbs_orders.py",
+          "sha256": "2d2916873549c1b8bca4ec1a85a6aadf82601f4681d7f4ad6a85372a5d80aecd",
+          "base_head": "dba1754c9ddd7eb3a123d933b377bbde0e203839",
+          "lines": 702
+        },
+        {
+          "worktree": "wms111-wb-cancel-return",
+          "path": "backend/tests/test_wms111_cancel_return_review.py",
+          "sha256": "b985d5af5aa900eabce9f425f70d16654be5daf083da627dd3d359b5ca244d43",
+          "base_head": "dba1754c9ddd7eb3a123d933b377bbde0e203839",
+          "lines": 404
+        },
+        {
+          "worktree": "wms111-wb-cancel-return",
+          "path": "frontend/src/screens/v2/FbsCancelledAfterPackDialog.tsx",
+          "sha256": "861e081c7e55554529e0412d8fa8111e94956289f68fad977bbbdecb4cf641dd",
+          "base_head": "dba1754c9ddd7eb3a123d933b377bbde0e203839",
+          "lines": 161
+        },
+        {
+          "worktree": "wms121-supply-identity",
+          "path": "backend/alembic/versions/20260910_0258_wms122_wb_supply_external_id.py",
+          "sha256": "27867178b7dbbf9b9a6f7027f3508e36cea1dc1586a9c5e66f21d0c42e03495c",
+          "base_head": "14e637cceda3b74ccb23c539a2ddf62535ea2e14",
+          "lines": 256
+        }
+      ]
+    },
+    {
+      "lane": "chat",
+      "tasks": [
+        "397",
+        "399"
+      ],
+      "request": "chat-request.txt",
+      "bytes": 169020,
+      "files": [
+        {
+          "worktree": "wms397-chat-mvp",
+          "path": "backend/app/models/chat.py",
+          "sha256": "d01d6cdf7f6e0e7c9b089b2d518c87948dc2da29976a53cb9213e7898685cab1",
+          "base_head": "dfcd0959dfed721620039edba656aa436e7855ec",
+          "lines": 250
+        },
+        {
+          "worktree": "wms397-chat-mvp",
+          "path": "backend/app/api/chat_routes.py",
+          "sha256": "6b092d61bf4708f5d8b0c3e8082c7b9d892fe7ab9b48b138b73b5e22c0e101bb",
+          "base_head": "dfcd0959dfed721620039edba656aa436e7855ec",
+          "lines": 756
+        },
+        {
+          "worktree": "wms397-chat-mvp",
+          "path": "backend/app/services/chat_service.py",
+          "sha256": "0074fb366360327a18efb29042f2ebbcac42eb10dac11d9b3dc07540e4510686",
+          "base_head": "dfcd0959dfed721620039edba656aa436e7855ec",
+          "lines": 553
+        },
+        {
+          "worktree": "wms397-chat-mvp",
+          "path": "backend/app/services/chat_document_service.py",
+          "sha256": "4a69e66eec933e8a8e2b52a85da9edc26c64a281f97eb51484772414cac7417a",
+          "base_head": "dfcd0959dfed721620039edba656aa436e7855ec",
+          "lines": 156
+        },
+        {
+          "worktree": "wms397-chat-mvp",
+          "path": "backend/app/services/chat_attachment_storage.py",
+          "sha256": "babb9ceed081630c6089d895e84b1468515c0e3b93698fe6e49df80447ed91c5",
+          "base_head": "dfcd0959dfed721620039edba656aa436e7855ec",
+          "lines": 75
+        },
+        {
+          "worktree": "wms397-chat-mvp",
+          "path": "backend/tests/test_chat_api.py",
+          "sha256": "6104370cf2c09127e33f61e7880bab115dbccb71ea4f0d945120405331ca21fe",
+          "base_head": "dfcd0959dfed721620039edba656aa436e7855ec",
+          "lines": 830
+        },
+        {
+          "worktree": "wms397-chat-mvp",
+          "path": "frontend/src/components/chat/ChatFeed.tsx",
+          "sha256": "3aec2c8547bae7d3f03455d272448052eeb98516ce35a6e3f0d5aeb3f80959c8",
+          "base_head": "dfcd0959dfed721620039edba656aa436e7855ec",
+          "lines": 120
+        },
+        {
+          "worktree": "wms397-chat-mvp",
+          "path": "frontend/src/components/chat/ChatComposer.tsx",
+          "sha256": "ac242912a5413021f4860eda6f1afb13e789d945a0418f331c76b43ea2771554",
+          "base_head": "dfcd0959dfed721620039edba656aa436e7855ec",
+          "lines": 101
+        },
+        {
+          "worktree": "wms397-chat-mvp",
+          "path": "frontend/src/components/chat/ExtraChatCreateDialog.tsx",
+          "sha256": "0717cfdfcedb7b693b1f5b6c4f8d81beb8031592079f44d0644d9a6c79f48e11",
+          "base_head": "dfcd0959dfed721620039edba656aa436e7855ec",
+          "lines": 221
+        },
+        {
+          "worktree": "wms397-chat-mvp",
+          "path": "frontend/src/components/chat/ChatDialog.tsx",
+          "sha256": "76a1b5459f7793e21a49f0112a4dc993af2be5b02ff9022fa29116470392c066",
+          "base_head": "dfcd0959dfed721620039edba656aa436e7855ec",
+          "lines": 48
+        },
+        {
+          "worktree": "wms397-chat-mvp",
+          "path": "frontend/src/components/chat/ChatAttachmentView.tsx",
+          "sha256": "b1db30955f07e95cb3ec576a81c708e0a601717c1fc1e1673e37cfa7c35f6b64",
+          "base_head": "dfcd0959dfed721620039edba656aa436e7855ec",
+          "lines": 34
+        },
+        {
+          "worktree": "wms397-chat-mvp",
+          "path": "frontend/src/components/chat/ChatDocumentAction.tsx",
+          "sha256": "7b9e85d1a56e2672a1fc3b09fd4cd828e9e786a263d84f868695486a1e3bfa57",
+          "base_head": "dfcd0959dfed721620039edba656aa436e7855ec",
+          "lines": 30
+        },
+        {
+          "worktree": "wms397-chat-mvp",
+          "path": "frontend/src/components/chat/ChatParticipants.tsx",
+          "sha256": "d90e92bf40c752ba2d60d536b57a2e0ec93e7302d2dc37828d2f3b1b607eb847",
+          "base_head": "dfcd0959dfed721620039edba656aa436e7855ec",
+          "lines": 43
+        },
+        {
+          "worktree": "wms397-chat-mvp",
+          "path": "frontend/src/components/chat/ChatOpenButton.tsx",
+          "sha256": "1ae68aabce843a77f8ae28dd1e52aaf910f502ee8b7a0dd4062e1a77d225e266",
+          "base_head": "dfcd0959dfed721620039edba656aa436e7855ec",
+          "lines": 62
+        },
+        {
+          "worktree": "wms397-chat-mvp",
+          "path": "frontend/src/components/chat/AttachedDocCard.tsx",
+          "sha256": "7f93967582eedb17f9db3d4ffb8e6e920802f84b66fc6fc2ef51de929f6742e0",
+          "base_head": "dfcd0959dfed721620039edba656aa436e7855ec",
+          "lines": 78
+        },
+        {
+          "worktree": "wms397-chat-mvp",
+          "path": "frontend/src/screens/chat/ChatDocumentScreen.tsx",
+          "sha256": "deb9667b8978ad59b06f8fff549d9be6dc127660a6c13001841e3da337904ebf",
+          "base_head": "dfcd0959dfed721620039edba656aa436e7855ec",
+          "lines": 55
+        },
+        {
+          "worktree": "wms397-chat-mvp",
+          "path": "frontend/src/screens/chat/ChatScreen.tsx",
+          "sha256": "0585a8789c04972c6c1fcdec1ac9fef66174f199f58143f79802a4d23703fd5d",
+          "base_head": "dfcd0959dfed721620039edba656aa436e7855ec",
+          "lines": 103
+        }
+      ]
+    },
+    {
+      "lane": "warehouse",
+      "tasks": [
+        "062",
+        "153",
+        "154",
+        "155",
+        "156",
+        "174",
+        "177",
+        "179",
+        "184"
+      ],
+      "request": "warehouse-request.txt",
+      "bytes": 709809,
+      "files": [
+        {
+          "worktree": "wms062-warehouse-docs",
+          "path": "backend/app/services/auth_service.py",
+          "sha256": "6bfe1c77cd697980d93755f6bd0d58a0ebe04fa2e889c3e75a1839dcac270008",
+          "base_head": "ed930463ae3504e1eb1112031a98408a3ee227dd",
+          "lines": 343
+        },
+        {
+          "worktree": "wms062-warehouse-docs",
+          "path": "backend/app/services/catalog_service.py",
+          "sha256": "a8429194cf466182b1c3305e5cc0dd9dda265ba4b52881d5610632b7cb7a9ff9",
+          "base_head": "ed930463ae3504e1eb1112031a98408a3ee227dd",
+          "lines": 1544
+        },
+        {
+          "worktree": "wms062-warehouse-docs",
+          "path": "backend/app/services/inventory_count_service.py",
+          "sha256": "44c77a493eb991eb5caac70f0e89caef90ac2018cdff8e5d12986cc7f1bf6b68",
+          "base_head": "ed930463ae3504e1eb1112031a98408a3ee227dd",
+          "lines": 1698
+        },
+        {
+          "worktree": "wms062-warehouse-docs",
+          "path": "backend/app/services/warehouse_map_service.py",
+          "sha256": "c3dc50860ba4b5dac7bbf006cae0b9882d9ba12c22d23521c07c98452c263139",
+          "base_head": "ed930463ae3504e1eb1112031a98408a3ee227dd",
+          "lines": 1756
+        },
+        {
+          "worktree": "wms062-warehouse-docs",
+          "path": "backend/app/services/discrepancy_act_service.py",
+          "sha256": "8a97509f385af70ee1a63a0ea57dbc67fe9bd64b3b33234474030ab6ffeafbe9",
+          "base_head": "ed930463ae3504e1eb1112031a98408a3ee227dd",
+          "lines": 251
+        },
+        {
+          "worktree": "wms062-warehouse-docs",
+          "path": "backend/app/api/inventory_counts.py",
+          "sha256": "13ee54d0e427104ae1c9c3ebb596551be08a4740d9cd25b18583ccd3bb28389b",
+          "base_head": "ed930463ae3504e1eb1112031a98408a3ee227dd",
+          "lines": 1072
+        },
+        {
+          "worktree": "wms062-warehouse-docs",
+          "path": "backend/app/models/inventory_count.py",
+          "sha256": "12a23b280daf88dfb9dbe699cc9409e1e29f9ac33dc5c9f93288dd3e799e6d52",
+          "base_head": "ed930463ae3504e1eb1112031a98408a3ee227dd",
+          "lines": 228
+        },
+        {
+          "worktree": "wms062-warehouse-docs",
+          "path": "backend/tests/test_inventory_counts.py",
+          "sha256": "62f1cdd4e68cf77950188330b73439af90699a21acf9c89efebbc6c4a47ab955",
+          "base_head": "ed930463ae3504e1eb1112031a98408a3ee227dd",
+          "lines": 2168
+        },
+        {
+          "worktree": "wms062-warehouse-docs",
+          "path": "frontend/src/screens/ff/inventory/FfInventoryCountScreen.tsx",
+          "sha256": "2f19bfb2a18697a9ad2cf284454e57703d5d51305d3504aaaa3c817355dc689f",
+          "base_head": "ed930463ae3504e1eb1112031a98408a3ee227dd",
+          "lines": 733
+        },
+        {
+          "worktree": "wms062-warehouse-docs",
+          "path": "frontend/src/screens/ff/inventory/InventoryTree.tsx",
+          "sha256": "fdb218c0a28436e847b886a68ad0903d431bd8e0139c685ec2bdb5254aeb7a85",
+          "base_head": "ed930463ae3504e1eb1112031a98408a3ee227dd",
+          "lines": 442
+        },
+        {
+          "worktree": "wms062-warehouse-docs",
+          "path": "frontend/src/screens/ff/inventory/inventoryCountApi.ts",
+          "sha256": "fc32f9cd544337f96abbd123254249f58b116fdad7015d1661eef9f96593de9e",
+          "base_head": "ed930463ae3504e1eb1112031a98408a3ee227dd",
+          "lines": 541
+        },
+        {
+          "worktree": "wms062-warehouse-docs",
+          "path": "frontend/src/screens/ff/FfInboundRequestView.tsx",
+          "sha256": "d15b668d1ffc7798be5dacd9d82ee50da3cf015ae9f607ed058202898e56a391",
+          "base_head": "ed930463ae3504e1eb1112031a98408a3ee227dd",
+          "lines": 4061
+        }
+      ]
+    },
+    {
+      "lane": "auth_audit",
+      "tasks": [
+        "056",
+        "325",
+        "270",
+        "377"
+      ],
+      "request": "auth_audit-request.txt",
+      "bytes": 145521,
+      "files": [
+        {
+          "worktree": "wms270-login-and-ports",
+          "path": "backend/app/api/auth.py",
+          "sha256": "4d4b1429683c66f06a68d6454e180a18b3ffc9c6165abd03d1ca5521773c5538",
+          "base_head": "95691999f2051f930c6efdedb9c39be02c86f814",
+          "lines": 492
+        },
+        {
+          "worktree": "wms270-login-and-ports",
+          "path": "backend/app/services/auth_service.py",
+          "sha256": "6e086dd10d2ae76a351c697aea30d79301bcbed0fd2d2f17267faa231273f683",
+          "base_head": "95691999f2051f930c6efdedb9c39be02c86f814",
+          "lines": 345
+        },
+        {
+          "worktree": "wms270-login-and-ports",
+          "path": "backend/app/services/login_rate_limit.py",
+          "sha256": "1e29507fa115ce95677056e5657e021aaff84cc8b96eab552412e858a3ddfc5c",
+          "base_head": "95691999f2051f930c6efdedb9c39be02c86f814",
+          "lines": 112
+        },
+        {
+          "worktree": "wms270-login-and-ports",
+          "path": "backend/tests/test_wms270_login_rate_limit.py",
+          "sha256": "8a8448728f81fd2e7b583f12d13c8f8177fa344392fe9edcbbe0b3919d333ea4",
+          "base_head": "95691999f2051f930c6efdedb9c39be02c86f814",
+          "lines": 227
+        },
+        {
+          "worktree": "wms270-login-and-ports",
+          "path": "backend/tests/test_wms270_login_leak.py",
+          "sha256": "61b5ef47205865b83fdcdf9d5ec3874a609b555be8744eb504df9540f00d362f",
+          "base_head": "95691999f2051f930c6efdedb9c39be02c86f814",
+          "lines": 155
+        },
+        {
+          "worktree": "wms270-login-and-ports",
+          "path": "docker-compose.yml",
+          "sha256": "bbf929df254576d96c240cec31d9fa1c8a9d149388710932e514bca496181abe",
+          "base_head": "95691999f2051f930c6efdedb9c39be02c86f814",
+          "lines": 132
+        },
+        {
+          "worktree": "wms270-login-and-ports",
+          "path": "docker-compose.wms-host-8088.yml",
+          "sha256": "3899a92b7670b1959e24068877d22c269e91dab8f74ed7a5d20621ee6dd08e31",
+          "base_head": "95691999f2051f930c6efdedb9c39be02c86f814",
+          "lines": 14
+        },
+        {
+          "worktree": "wms056-audit-trail",
+          "path": "backend/app/services/document_event_service.py",
+          "sha256": "9b4d112a70e2b6c121c5cb88726a2464d3cbddd0a2b8efe5d0d866600693e496",
+          "base_head": "45177be54a7b2d8755a10ca1c8c70ceca313a1f1",
+          "lines": 813
+        },
+        {
+          "worktree": "wms056-audit-trail",
+          "path": "backend/app/api/document_events.py",
+          "sha256": "4e8ea567d66a11a04b4ae1759c6088f065ff811168d5628a003fb243afc71853",
+          "base_head": "45177be54a7b2d8755a10ca1c8c70ceca313a1f1",
+          "lines": 89
+        },
+        {
+          "worktree": "wms056-audit-trail",
+          "path": "backend/app/services/staff_permissions_service.py",
+          "sha256": "4a1f4550a46caa20fc250ee9caacd52a3e40c68144dc3297260983c5966d1ed5",
+          "base_head": "45177be54a7b2d8755a10ca1c8c70ceca313a1f1",
+          "lines": 189
+        },
+        {
+          "worktree": "wms056-audit-trail",
+          "path": "backend/app/services/seller_staff_permissions_service.py",
+          "sha256": "8c2791952ca20054d93295ad126517270f4ebbdfd49bf05711f4b087e6dffcec",
+          "base_head": "45177be54a7b2d8755a10ca1c8c70ceca313a1f1",
+          "lines": 256
+        },
+        {
+          "worktree": "wms056-audit-trail",
+          "path": "backend/app/api/staff_accounts.py",
+          "sha256": "91872363e946d717b6135bb5739ec13caa68bad8ee86e521afc3375a280d6d86",
+          "base_head": "45177be54a7b2d8755a10ca1c8c70ceca313a1f1",
+          "lines": 361
+        },
+        {
+          "worktree": "wms056-audit-trail",
+          "path": "backend/app/models/document_event.py",
+          "sha256": "7ac5ce3fb9c4aff4b1231362fdeecefd5b26ab59b494e4abf16f17d48b29b462",
+          "base_head": "45177be54a7b2d8755a10ca1c8c70ceca313a1f1",
+          "lines": 130
+        }
+      ]
+    },
+    {
+      "lane": "mobile_update",
+      "tasks": [
+        "363",
+        "401",
+        "402",
+        "412"
+      ],
+      "request": "mobile_update-request.txt",
+      "bytes": 313328,
+      "files": [
+        {
+          "worktree": "wms363-ozon-tsd",
+          "path": "backend/app/api/fbs_orders.py",
+          "sha256": "3dac055b04f17c320a814686771012fd38603c57aded9b15832dfc6969457211",
+          "base_head": "9332976b1321cea9041b627874f438d223692ec0",
+          "lines": 712
+        },
+        {
+          "worktree": "wms363-ozon-tsd",
+          "path": "backend/app/api/fbs_supplies.py",
+          "sha256": "706b0ab6df2e416798b9c727f664fbebf78299f3cd141c3af572f3c70e85da60",
+          "base_head": "9332976b1321cea9041b627874f438d223692ec0",
+          "lines": 2425
+        },
+        {
+          "worktree": "wms363-ozon-tsd",
+          "path": "backend/app/api/fbs_kiz.py",
+          "sha256": "543cacbf1ce41d531dccb824c08e699bf7206ad072df52709115dd81f87bf49e",
+          "base_head": "9332976b1321cea9041b627874f438d223692ec0",
+          "lines": 236
+        },
+        {
+          "worktree": "wms363-ozon-tsd",
+          "path": "backend/tests/test_wms363_ozon_tsd.py",
+          "sha256": "022fdea33d6681f047e3a1dc2d647bfe7f84fe993684152393a2f8fef800e178",
+          "base_head": "9332976b1321cea9041b627874f438d223692ec0",
+          "lines": 281
+        },
+        {
+          "worktree": "wms397-mobile",
+          "path": "android/app/src/main/java/ru/wms/tsd/features/fbs/FbsPrinting.kt",
+          "sha256": "a0dac3c416077a497708d1aed91f16c9d1c825e28421857e0a05b1a5f249a50e",
+          "base_head": "b90d20ab61222bf89379006f2b0a898ba1a10068",
+          "lines": 71
+        },
+        {
+          "worktree": "wms397-mobile",
+          "path": "android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt",
+          "sha256": "ec4b194f4c337230ea1237b554a854ca37a3bb673342d2dbd7d0c26a49730326",
+          "base_head": "b90d20ab61222bf89379006f2b0a898ba1a10068",
+          "lines": 477
+        },
+        {
+          "worktree": "wms397-mobile",
+          "path": "android/app/src/main/java/ru/wms/tsd/features/fbs/FbsScreens.kt",
+          "sha256": "7c78ff2806aa5235e2491ca23ca8e32548a0e98a6bed9cf44a96ece54837278a",
+          "base_head": "b90d20ab61222bf89379006f2b0a898ba1a10068",
+          "lines": 273
+        },
+        {
+          "worktree": "wms397-mobile",
+          "path": "android/app/src/main/java/ru/wms/tsd/features/update/UpdateRepository.kt",
+          "sha256": "ff6a6431cbffc7d645e50bc53d3d50f50e71694593a7e5c18b55524e54fdcead",
+          "base_head": "b90d20ab61222bf89379006f2b0a898ba1a10068",
+          "lines": 153
+        },
+        {
+          "worktree": "wms397-mobile",
+          "path": "android/app/src/main/java/ru/wms/tsd/features/update/UpdateViewModel.kt",
+          "sha256": "9d97a1902f5562a24dcfc7251d5d2a077d3a355956fb63b4db1bbffc046f892d",
+          "base_head": "b90d20ab61222bf89379006f2b0a898ba1a10068",
+          "lines": 70
+        },
+        {
+          "worktree": "wms397-mobile",
+          "path": "android/app/src/main/java/ru/wms/tsd/features/update/UpdateInstaller.kt",
+          "sha256": "a40a44e9913d240d82f66294078f37d41807674ec265a8f062a20cf66927f93c",
+          "base_head": "b90d20ab61222bf89379006f2b0a898ba1a10068",
+          "lines": 51
+        },
+        {
+          "worktree": "wms397-mobile",
+          "path": "android/app/src/main/java/ru/wms/tsd/features/update/UpdateScreen.kt",
+          "sha256": "b589e99bca99e0adf0d1d261691ec5a05f8938fc6a416dffc484de420863283d",
+          "base_head": "b90d20ab61222bf89379006f2b0a898ba1a10068",
+          "lines": 85
+        },
+        {
+          "worktree": "wms397-mobile",
+          "path": "android/app/src/main/java/ru/wms/tsd/core/auth/AuthStore.kt",
+          "sha256": "555e283b2c25df3f72cb56ebdcc62a5b7d71d93f2090e9b82f2cfe8ed0f9cd79",
+          "base_head": "b90d20ab61222bf89379006f2b0a898ba1a10068",
+          "lines": 97
+        },
+        {
+          "worktree": "wms397-mobile",
+          "path": "android/app/src/main/java/ru/wms/tsd/core/auth/AuthManager.kt",
+          "sha256": "595bbde60eac0a5febd7fe8916f42dafa5c6cc4b1d17b525efc369c8f891893a",
+          "base_head": "b90d20ab61222bf89379006f2b0a898ba1a10068",
+          "lines": 181
+        },
+        {
+          "worktree": "wms397-mobile",
+          "path": "android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsApi.kt",
+          "sha256": "6f97ebbd2a2ea85ade0adf55507b1689e7d76bafaf649e4075ca4bfc83cfe6f3",
+          "base_head": "b90d20ab61222bf89379006f2b0a898ba1a10068",
+          "lines": 108
+        },
+        {
+          "worktree": "wms397-mobile",
+          "path": "android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt",
+          "sha256": "d3c3248ead5b9bd71ec2459732be4c379cc5d176eea6797caab734e8b11adf28",
+          "base_head": "b90d20ab61222bf89379006f2b0a898ba1a10068",
+          "lines": 339
+        },
+        {
+          "worktree": "wms397-mobile",
+          "path": "android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsDelivery.kt",
+          "sha256": "7f9ef5ee66f2ec8ef62a975e784a9c48342eaee71346a71fd6faa0a6cd823153",
+          "base_head": "b90d20ab61222bf89379006f2b0a898ba1a10068",
+          "lines": 28
+        },
+        {
+          "worktree": "wms397-mobile",
+          "path": "android/app/src/test/java/ru/wms/tsd/features/update/UpdateTest.kt",
+          "sha256": "9c4f01b3de90eb91aa7ac5b902c295ac96ad8ae998ae8d4d634fd76195befdab",
+          "base_head": "b90d20ab61222bf89379006f2b0a898ba1a10068",
+          "lines": 137
+        },
+        {
+          "worktree": "wms397-mobile",
+          "path": "android/app/src/main/java/ru/wms/tsd/MainActivity.kt",
+          "sha256": "07dcbab1dd063affd008a731a2696f243d6e0be1ff6ed1bcf0010bfca9316963",
+          "base_head": "b90d20ab61222bf89379006f2b0a898ba1a10068",
+          "lines": 180
+        },
+        {
+          "worktree": "wms397-mobile",
+          "path": "android/app/src/main/java/ru/wms/tsd/Navigation.kt",
+          "sha256": "e255dff747126218495e1a3c971dae0eb16ce7142fc3a8f96f4ba6eced506c37",
+          "base_head": "b90d20ab61222bf89379006f2b0a898ba1a10068",
+          "lines": 208
+        },
+        {
+          "worktree": "wms397-mobile",
+          "path": "android/app/src/main/AndroidManifest.xml",
+          "sha256": "8df27902644da124baf21dadff9c8545d9b9a1787f9dd7ac41203251e1fb227a",
+          "base_head": "b90d20ab61222bf89379006f2b0a898ba1a10068",
+          "lines": 43
+        }
+      ]
+    }
+  ]
+}
