@@ -792,6 +792,9 @@ async def get_ff_catalog_page(
     search: Annotated[str | None, Query(max_length=255)] = None,
     category: Annotated[str | None, Query(max_length=255)] = None,
     marketplace: Annotated[str | None, Query(max_length=32)] = None,
+    stock_publication: Annotated[
+        Literal["wb", "ozon", "both", "any", "none"] | None, Query()
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> FfCatalogPageOut:
@@ -802,6 +805,7 @@ async def get_ff_catalog_page(
         search=search,
         category=category,
         marketplace=marketplace,
+        stock_publication=stock_publication,
         limit=limit,
         offset=offset,
     )
