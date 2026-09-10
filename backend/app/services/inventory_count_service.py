@@ -625,6 +625,52 @@ async def created_container_ids(
     return {(row.container_kind, str(row.container_id)) for row in rows.all()}
 
 
+async def _confirmed_container_removed(
+    session: AsyncSession, count: InventoryCount, kind: ContainerKind, container_id: uuid.UUID,
+) -> bool:
+    """Recognize removal by another count without treating foreign objects as absent.
+
+    Called only after a missing-container error for a persisted empty confirmation.
+    Keep that fact on the document, including when it has no goods rows to post.
+    """
+    obj: Pallet | WarehouseBox | None
+    if kind == "pallet":
+        obj = await session.get(Pallet, container_id, with_for_update=True, populate_existing=True)
+    else:
+        obj = await session.get(
+            WarehouseBox, container_id, with_for_update=True, populate_existing=True,
+        )
+    if obj is not None:
+        if (obj.tenant_id != count.tenant_id or obj.warehouse_id != count.warehouse_id
+                or (isinstance(obj, WarehouseBox) and obj.container_kind != kind)):
+            raise InventoryCountError("container_not_found")
+        if obj.inbound_request_id is not None:
+            raise InventoryCountError("container_linked_to_inbound")
+        if not isinstance(obj, Pallet) or obj.disbanded_at is None:
+            return False
+    elif kind != "pallet":
+        # An inbound container with this UUID is not an already removed warehouse box.
+        inbound_id = await session.scalar(
+            select(InboundIntakeBox.id).where(InboundIntakeBox.id == container_id)
+            if kind == "box" else
+            select(InboundIntakeCargoPlace.id).where(InboundIntakeCargoPlace.id == container_id)
+        )
+        if inbound_id is not None:
+            return False
+    if await session.scalar(select(InventoryBalance.id).where(
+        InventoryBalance.container_kind == kind, InventoryBalance.container_id == container_id,
+        InventoryBalance.quantity != 0,
+    ).limit(1)) is not None:
+        raise InventoryCountError("container_not_empty")
+    if kind == "pallet":
+        for model in (WarehouseBox, InboundIntakeBox, InboundIntakeCargoPlace):
+            if await session.scalar(select(model.id).where(
+                model.pallet_id == container_id,
+            ).limit(1)) is not None:
+                raise InventoryCountError("container_not_empty")
+    return True
+
+
 async def _clear_empty_confirmation(
     session: AsyncSession, count: InventoryCount,
     changed: set[tuple[str | None, str]],
@@ -638,9 +684,21 @@ async def _clear_empty_confirmation(
             if uuid.UUID(place["id"]) not in locations:
                 kept.append(place)
             continue
-        _, refs = await _container_scope(
-            session, count.tenant_id, cast(ContainerKind, place["kind"]), uuid.UUID(place["id"]),
-        )
+        kind = cast(ContainerKind, place["kind"])
+        container_id = uuid.UUID(place["id"])
+        try:
+            warehouse_id, refs = await _container_scope(
+                session, count.tenant_id, kind, container_id,
+            )
+        except InventoryCountError as exc:
+            if exc.code != "object_not_found" or not await _confirmed_container_removed(
+                session, count, kind, container_id,
+            ):
+                raise
+            refs = [(kind, container_id)]
+        else:
+            if warehouse_id != count.warehouse_id:
+                raise InventoryCountError("container_not_found")
         if not any((kind, str(cid)) in changed for kind, cid in refs):
             kept.append(place)
     count.empty_places = kept
@@ -1641,10 +1699,17 @@ async def post_count(
     for place in sorted(count.empty_places, key=lambda item: item["kind"] == "pallet"):
         if place["kind"] == "cell":
             continue
-        await delete_document_container(
-            session, tenant_id, count_id, kind=cast(ContainerKind, place["kind"]),
-            container_id=uuid.UUID(place["id"]), commit=False,
-        )
+        kind = cast(ContainerKind, place["kind"])
+        container_id = uuid.UUID(place["id"])
+        try:
+            await delete_document_container(
+                session, tenant_id, count_id, kind=kind, container_id=container_id, commit=False,
+            )
+        except InventoryCountError as exc:
+            if exc.code != "container_not_found" or not await _confirmed_container_removed(
+                session, count, kind, container_id,
+            ):
+                raise
     count.status = STATUS_POSTED
     count.posted_at = datetime.now(UTC)
     count.posted_by_user_id = user_id
