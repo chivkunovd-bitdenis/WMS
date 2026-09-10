@@ -350,6 +350,8 @@ async def get_pick_options(
             sku_code=(
                 ozon_bindings[product_id].external_sku
                 if supply.marketplace == "ozon" and product_id in ozon_bindings
+                else None
+                if supply.marketplace == "ozon"
                 else product.sku_code
             ),
             product_name=(
