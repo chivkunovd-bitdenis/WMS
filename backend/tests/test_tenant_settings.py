@@ -131,12 +131,14 @@ async def test_tenant_settings_forbidden_for_staff(async_client: AsyncClient) ->
     )
     assert create_staff.status_code == 201, create_staff.text
 
+    # WMS-270: до установки пароля вход отдаёт унифицированный 401
+    # invalid_credentials — прежний 403 password_setup_required был оракулом.
     need_pw = await async_client.post(
         "/auth/login",
         json={"email": "staff-tenant-settings@example.com", "password": ""},
     )
-    assert need_pw.status_code == 403
-    assert need_pw.json()["detail"] == "password_setup_required"
+    assert need_pw.status_code == 401
+    assert need_pw.json()["detail"] == "invalid_credentials"
 
     setup = await set_password_via_link(
         async_client, "staff-tenant-settings@example.com", "password123"

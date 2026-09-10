@@ -1,0 +1,87 @@
+{
+  "server_sha": "120b106cc3f47dd28fa499e094c7cde83e8a6b40",
+  "api_files": {
+    "backend/app/api/products.py": "2211c3dea261011553fc23ed013726fcc3b25d751b5ff1399c11d4bb432700a4",
+    "backend/app/services/seller_wb_catalog_service.py": "f1a55da663a70420bc2701297803e470492f697afc6fb06936f55322c0c569ef"
+  },
+  "containers": {
+    "api": {
+      "image": "sha256:7c8c3003d9ed279988d52c56e5ce702012b13a605d9d15a3b914b8eb42ed5199",
+      "started": "2026-09-10T10:05:28.273704069Z",
+      "running": true
+    },
+    "web": {
+      "image": "sha256:71ef6744adde3428b6ce0bdbc20a887e464f8bc78ccf9f8c195975cbd8d93851",
+      "started": "2026-09-10T10:05:28.638306044Z",
+      "running": true
+    },
+    "celery_worker": {
+      "image": "sha256:732b1f05313bab65574acc88c11f208f4f5cfb519a232a751ea736e26ee3819e",
+      "started": "2026-09-10T09:11:20.526285233Z",
+      "running": true
+    },
+    "celery_beat": {
+      "image": "sha256:bdb846b97df025ba3043b96b0e23cd6aba817fe7f12cef581431411395e3168a",
+      "started": "2026-09-10T09:11:20.829882479Z",
+      "running": true
+    }
+  },
+  "web_hashes": {
+    "/index.html": "9f76bedda6166a2fdf606f95929d671f1c46a8b210db909b8d7ac9e47e99b173",
+    "/assets/FfProductsCatalogScreen-BtQM_qNc.js": "4a248324d3f6eebc4d4550313d1e41dc4200cba75ba3d611c04ba7245eaf4822"
+  },
+  "schema": "20260908_0257",
+  "expected_sha": "120b106cc3f47dd28fa499e094c7cde83e8a6b40",
+  "api_hashes_match_git": true,
+  "frontend_source_sha256": "1f919aea011a4bf2f5b450e027bec6f616147bd77095b53fddf629e1558c8e68",
+  "public": {
+    "/": {
+      "status": 200,
+      "sha256": "9f76bedda6166a2fdf606f95929d671f1c46a8b210db909b8d7ac9e47e99b173"
+    },
+    "/seller/": {
+      "status": 200,
+      "sha256": "6d6bba9a664f4c6f5da6fc6d8ac66df31b6781695fad928633bbd5edde94ccab"
+    },
+    "/api/health": {
+      "status": 200,
+      "sha256": "a29ee2b15c494311c52521766e44af56a3ad2248e7a8ab465e5206463c13d288"
+    },
+    "/api/openapi.json": {
+      "status": 200,
+      "sha256": "cc6f8f3fd29c8f7d60a737b3216beb7f52e9d65dd1329b6a176c8e34c4c91892"
+    },
+    "/index.html": {
+      "status": 200,
+      "sha256": "9f76bedda6166a2fdf606f95929d671f1c46a8b210db909b8d7ac9e47e99b173"
+    },
+    "/assets/FfProductsCatalogScreen-BtQM_qNc.js": {
+      "status": 200,
+      "sha256": "4a248324d3f6eebc4d4550313d1e41dc4200cba75ba3d611c04ba7245eaf4822"
+    }
+  },
+  "stock_publication_parameter": {
+    "name": "stock_publication",
+    "in": "query",
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "enum": [
+            "wb",
+            "ozon",
+            "both",
+            "any",
+            "none"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Stock Publication"
+    }
+  },
+  "verified": true
+}

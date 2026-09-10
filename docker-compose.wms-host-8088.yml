@@ -1,8 +1,14 @@
-# Optional overlay on servers where 80/443 are taken — expose HTTP on 8088.
+# WMS-377: host-specific overlay for the existing HTTPS edge container.
+# Its verified upstream is 172.18.0.1:8088, not host loopback. Publish on that
+# private bridge only; changing this to 127.0.0.1 would break the HTTPS route.
+# WMS-270: API trusts only its private WMS proxy network, never arbitrary XFF.
 services:
+  api:
+    environment:
+      FORWARDED_ALLOW_IPS: "172.21.0.0/16"
   web:
     ports: !override
-      - "8088:80"
+      - "172.18.0.1:8088:80"
     volumes: !override
       - ./deploy/Caddyfile.http:/etc/caddy/Caddyfile:ro
     environment:

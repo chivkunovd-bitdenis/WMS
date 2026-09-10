@@ -101,12 +101,14 @@ async def test_admin_creates_staff_user_first_login_and_permissions(
     assert patched.json()["permissions"]["mp_shipments"] is True
     assert patched.json()["permissions"]["reception"] is True
 
+    # WMS-270: пустой пароль по аккаунту с must_set_password возвращает
+    # унифицированный 401 invalid_credentials.
     need_pw = await async_client.post(
         "/auth/login",
         json={"email": staff_email, "password": ""},
     )
-    assert need_pw.status_code == 403
-    assert need_pw.json()["detail"] == "password_setup_required"
+    assert need_pw.status_code == 401
+    assert need_pw.json()["detail"] == "invalid_credentials"
 
     set_pw = await set_password_via_link(async_client, staff_email, "password123")
     assert set_pw.status_code == 200, set_pw.text
