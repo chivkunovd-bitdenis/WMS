@@ -1,11 +1,11 @@
 {
-  "phase": "mobile_api_and_preview_v10_published_acceptance_running",
+  "phase": "mobile_update_accepted_catalogue_handed_to_integration",
   "quota_session_id": "5ed12390-4d22-4b83-b183-114202609010",
   "quota_tool_pty": 75581,
   "last_weekly_used_percent": 87,
   "last_weekly_remaining_percent": 13,
   "recorded_at_utc": "2026-09-09T21:10:11.500624+00:00",
-  "last_full_progress_check_utc": "2026-09-10T08:28:51.649833+00:00",
+  "last_full_progress_check_utc": "2026-09-10T09:03:28.892570+00:00",
   "coordinator_session_id": "01a0884c-2c18-7d22-a2a8-8bef2f3d8fe3",
   "automation_id": "wms-claude",
   "quota_minutes": 10,
@@ -37,8 +37,8 @@
     "WMS-377"
   ],
   "next_queue_commit": "aadac0b6039a70912bf12412aeca90028b675fc8",
-  "last_heartbeat_utc": "2026-09-10T08:28:51.649833+00:00",
-  "intervention": "Root independently verified production Git0771833b, public OpenAPI sort/marketplace and published v10 manifest/server asset digest. Coordinator97025 active; no duplicate writer. Mobile12345 reports actual installer9to10 and matching installed hash; PIN/document acceptance still running. Automation prompt replaced to remove obsolete PIDs and unpublished-APK instructions.",
+  "last_heartbeat_utc": "2026-09-10T09:03:28.892570+00:00",
+  "intervention": "Root read saved in-app acceptance507414e1 and visually inspected resumed Ozon document. Root independently completed WMS418 full shell UI→actualAPI→SQLite→reread, including disable Ozon. Proofdb25bf33pushed, coordinatorhandoff31a0ea4cpushed. Owned testservers stopped. Coordinator97025 active; previous worker PIDs now absent; consult newest launch descriptors before resume.",
   "last_full_progress_artifact": "progress-20260909T2215.json",
   "coordinator_provider": "codex",
   "coordinator_model": "gpt-6-astra",
@@ -58,24 +58,8 @@
     "mobile-lane": "a1e35af42df51c631",
     "merge-lane": "a3f469302a51bc5bb"
   },
-  "agent_count": 3,
-  "current_agents": {
-    "mobile": {
-      "pid": 12345,
-      "thread_id": "01a0884d-9d82-7f41-a45a-91123f9ea9d8",
-      "scope": "actual in-app9to10 and preserved PIN/server/document"
-    },
-    "chat": {
-      "pid": 10727,
-      "thread_id": "01a08850-7ad7-74d1-a817-cd06b28e2bb5",
-      "scope": "draft recovery and working document links"
-    },
-    "audit_print_lock": {
-      "pid": 13066,
-      "thread_id": "01a08a4d-bce6-7180-9ebd-79ce79ecbc45",
-      "scope": "Ozon order/print asset lock inversion"
-    }
-  },
+  "agent_count": 0,
+  "current_agents": {},
   "astra_wave1_directory": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/wave1",
   "owner_authorized_resume": true,
   "required_claude_model": "Opus 5",
@@ -105,10 +89,14 @@
     "sha256": "cfe8b5adc1bbd62e728184b9a18a1e5a14a837b3028de865e493c6203bd36870",
     "size_bytes": 45624909,
     "source_commit": "d5d8f5a5cbfcb22756ebea1f137e0f2029c63e33",
-    "acceptance": "Worker reports actual network install; PIN/document verification not yet completed"
+    "acceptance": "Actual app-button9to10 accepted on Android15 emulator; preserved PIN/server/WB+Ozon documents;20-second background resume. Server form back required one process restart without clearing data. Physical ATOL/Android7/printer not accepted.",
+    "acceptance_commit": "507414e19952f33bde21aad89ef4550ec0d4a653"
   },
   "root_wms418": {
     "commit": "95ab5fc48d0f4c7df808ec8a71d8d231d02e559c",
-    "state": "Code pushed; full UI acceptance and narrow integration pending; root owner"
+    "state": "Full manual UI accepted, handed to coordinator for narrow integration/review/release; not production",
+    "proof_commit": "db25bf338a10ecc58f7aa4f2ff919bf17ab2698c",
+    "handoff_commit": "31a0ea4c",
+    "owned_test_servers": "stopped"
   }
 }
