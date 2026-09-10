@@ -15,10 +15,12 @@ from app.models.billing import (
     BillingTariffServiceState,
     BillingTariffVersionV2,
 )
+from app.models.document_event import DOCUMENT_TYPE_BILLING_TARIFF_MATRIX, EVENT_DATA_CHANGED
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.user import User
+from app.services.document_event_service import record_document_mutation
 
 MOSCOW = ZoneInfo("Europe/Moscow")
 
@@ -211,6 +213,38 @@ def _interval_overlaps(
     return (end is None or other_start < end) and (other_end is None or start < other_end)
 
 
+def _matrix_audit_fields(
+    tenant: Tenant,
+    config: BillingTariffMatrixConfig,
+    versions: list[BillingTariffVersionV2],
+) -> dict[str, object]:
+    return {
+        "revision": config.revision,
+        "billing_enabled_from": tenant.billing_enabled_from,
+        "services": [
+            {"service_code": state.service_code, "enabled": state.enabled}
+            for state in sorted(config.service_states, key=lambda state: state.service_code)
+        ],
+        "versions": [
+            {
+                "version_id": str(row.id),
+                "seller_id": str(row.seller_id) if row.seller_id else None,
+                "product_id": str(row.product_id) if row.product_id else None,
+                "employee_user_id": str(row.employee_user_id) if row.employee_user_id else None,
+                "service_code": row.service_code,
+                "unit": row.unit,
+                "enabled": row.enabled,
+                "rate_kopecks": row.rate,
+                "valid_from_at": cast(datetime, _as_utc(row.valid_from_at)).isoformat(),
+                "valid_to_at": cast(datetime, _as_utc(row.valid_to_at)).isoformat()
+                if row.valid_to_at is not None
+                else None,
+            }
+            for row in sorted(versions, key=lambda row: str(row.id))
+        ],
+    }
+
+
 async def save_tariff_matrix(
     session: AsyncSession,
     *,
@@ -348,6 +382,7 @@ async def save_tariff_matrix(
         ):
             raise BillingTariffMatrixError("billing_tariff_matrix_product_requires_item")
 
+    before = _matrix_audit_fields(tenant, config, current_versions)
     changed = False
     for draft in normalized_versions:
         stream = [row for row in current_versions if _scope_key(row) == _scope_key(draft)]
@@ -408,4 +443,13 @@ async def save_tariff_matrix(
     if changed:
         config.revision += 1
     await session.flush()
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_BILLING_TARIFF_MATRIX,
+        document_id=tenant_id,
+        event_type=EVENT_DATA_CHANGED,
+        before=before,
+        after=_matrix_audit_fields(tenant, config, current_versions),
+    )
     return config

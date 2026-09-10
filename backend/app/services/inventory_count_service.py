@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from sqlalchemy import Select, and_, func, or_, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import Select, and_, delete, func, or_, select
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -30,7 +30,12 @@ from app.models.seller_wildberries_imported_card import SellerWildberriesImporte
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
-from app.services import inventory_service, tenant_settings_service, warehouse_map_service
+from app.services import (
+    inventory_service,
+    pallet_service,
+    tenant_settings_service,
+    warehouse_map_service,
+)
 from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.inventory_container_service import ContainerKind
 from app.services.sorting_location_service import (
@@ -317,7 +322,7 @@ async def create_count(
     if filters and filters.product_ids:
         stmt = stmt.where(Product.id.in_(filters.product_ids))
 
-    container_object = False
+    container_refs: list[tuple[ContainerKind, uuid.UUID]] = []
     if object_scope is not None:
         if object_scope.type in {"storage_location", "location", "cell"}:
             location = await session.get(StorageLocation, object_scope.id)
@@ -341,7 +346,6 @@ async def create_count(
                 warehouse_id = location.warehouse_id
                 stmt = stmt.where(InventoryBalance.storage_location_id == location.id)
         elif object_scope.type in {"pallet", "box", "cargo_place"}:
-            container_object = True
             container_kind = cast(ContainerKind, object_scope.type)
             warehouse_id, container_refs = await _container_scope(
                 session,
@@ -365,8 +369,6 @@ async def create_count(
 
     result = await session.execute(stmt)
     balances = list(result.all())
-    if container_object and not balances:
-        raise InventoryCountError("container_has_no_stock")
     if warehouse_id is None:
         warehouse_ids = {location.warehouse_id for _, _, location in balances}
         if len(warehouse_ids) == 1:
@@ -401,6 +403,13 @@ async def create_count(
             for balance, _, _ in balances
         ]
     )
+    # Reuse the document-container relation to keep an explicitly selected empty
+    # object visible too; attachment is not a confirmation of zero stock.
+    session.add_all([
+        InventoryCountCreatedContainer(tenant_id=tenant_id, count_id=count.id,
+                                       container_kind=kind, container_id=cid)
+        for kind, cid in container_refs
+    ])
     await session.commit()
     loaded = await get_count(session, tenant_id, count.id)
     assert loaded is not None
@@ -470,43 +479,73 @@ async def list_counts(
     return list(result.scalars().unique().all())
 
 
+_SENTINEL: Any = object()
+
+
 async def save_actuals(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     count_id: uuid.UUID,
     values: list[tuple[uuid.UUID, int | None]],
+    *,
+    comment: str | Any | None = _SENTINEL,
+    expected_comment: str | Any | None = _SENTINEL,
 ) -> InventoryCount:
+    """Сохранить фактические количества по строкам пересчёта.
+
+    WMS-155: комментарий тоже редактируется этой ручкой. Значение по умолчанию —
+    сентинел, чтобы отличить «оставить как было» от «стереть» (`None` = пусто).
+    """
     result = await session.execute(
         select(InventoryCount)
         .where(
             InventoryCount.id == count_id,
             InventoryCount.tenant_id == tenant_id,
         )
-        .with_for_update()
+        .with_for_update().execution_options(populate_existing=True)
     )
     count = result.scalar_one_or_none()
     if count is None:
         raise InventoryCountError("not_found")
     if count.status != STATUS_DRAFT:
         raise InventoryCountError("not_editable")
+    if expected_comment is not _SENTINEL and (count.comment or "") != (expected_comment or ""):
+        raise InventoryCountError("comment_changed")
     line_ids = [line_id for line_id, _ in values]
     if len(line_ids) != len(set(line_ids)):
         raise InventoryCountError("duplicate_line")
-    lines_result = await session.execute(
-        select(InventoryCountLine)
-        .where(
-            InventoryCountLine.count_id == count.id,
-            InventoryCountLine.id.in_(line_ids),
+    if line_ids:
+        lines_result = await session.execute(
+            select(InventoryCountLine)
+            .where(
+                InventoryCountLine.count_id == count.id,
+                InventoryCountLine.id.in_(line_ids),
+            )
+            .with_for_update().execution_options(populate_existing=True)
         )
-        .with_for_update()
-    )
-    lines = {line.id: line for line in lines_result.scalars()}
+        lines = {line.id: line for line in lines_result.scalars()}
+    else:
+        lines = {}
     if len(lines) != len(line_ids):
         raise InventoryCountError("line_not_found")
     for line_id, actual_quantity in values:
         if actual_quantity is not None and actual_quantity < 0:
             raise InventoryCountError("invalid_actual_quantity")
         lines[line_id].actual_quantity = actual_quantity
+    changed_containers = {
+        (lines[line_id].container_kind, str(lines[line_id].container_id))
+        for line_id, actual in values if actual != 0
+    }
+    await _clear_empty_confirmation(
+        session, count, changed_containers,
+        {cast(uuid.UUID, lines[line_id].storage_location_id) for line_id, actual in values
+         if actual != 0 and lines[line_id].storage_location_id is not None},
+    )
+    if comment is not _SENTINEL:
+        normalized = comment.strip() if isinstance(comment, str) else comment
+        if isinstance(normalized, str) and not normalized:
+            normalized = None
+        count.comment = normalized
     await session.commit()
     loaded = await get_count(session, tenant_id, count.id)
     assert loaded is not None
@@ -519,6 +558,7 @@ async def create_document_container(
     count_id: uuid.UUID,
     *,
     kind: ContainerKind,
+    cell_id: uuid.UUID | None = None,
 ) -> InventoryCount:
     """Завести пустую тару прямо в документе пересчёта.
 
@@ -528,6 +568,9 @@ async def create_document_container(
     она пуста по определению, оператор только что её завёл. Общее правило
     прунинга не трогаем, здесь только точечное исключение для этой пары
     (документ, тара).
+
+    WMS-153: если оператор выбрал ячейку — тара сразу создаётся в ней. Иначе
+    (когда оператор запустил счёт по всему складу) — на складе без ячейки.
     """
     result = await session.execute(
         select(InventoryCount)
@@ -535,7 +578,7 @@ async def create_document_container(
             InventoryCount.id == count_id,
             InventoryCount.tenant_id == tenant_id,
         )
-        .with_for_update()
+        .with_for_update().execution_options(populate_existing=True)
     )
     count = result.scalar_one_or_none()
     if count is None:
@@ -550,6 +593,7 @@ async def create_document_container(
             tenant_id,
             count.warehouse_id,
             kind=kind,
+            storage_location_id=cell_id,
             commit=False,
         )
     except warehouse_map_service.WarehouseMapError as exc:
@@ -579,6 +623,437 @@ async def created_container_ids(
         )
     )
     return {(row.container_kind, str(row.container_id)) for row in rows.all()}
+
+
+async def _confirmed_container_removed(
+    session: AsyncSession, count: InventoryCount, kind: ContainerKind, container_id: uuid.UUID,
+) -> bool:
+    """Recognize removal by another count without treating foreign objects as absent.
+
+    Called only after a missing-container error for a persisted empty confirmation.
+    Keep that fact on the document, including when it has no goods rows to post.
+    """
+    obj: Pallet | WarehouseBox | None
+    if kind == "pallet":
+        obj = await session.get(Pallet, container_id, with_for_update=True, populate_existing=True)
+    else:
+        obj = await session.get(
+            WarehouseBox, container_id, with_for_update=True, populate_existing=True,
+        )
+    if obj is not None:
+        if (obj.tenant_id != count.tenant_id or obj.warehouse_id != count.warehouse_id
+                or (isinstance(obj, WarehouseBox) and obj.container_kind != kind)):
+            raise InventoryCountError("container_not_found")
+        if obj.inbound_request_id is not None:
+            raise InventoryCountError("container_linked_to_inbound")
+        if not isinstance(obj, Pallet) or obj.disbanded_at is None:
+            return False
+    elif kind != "pallet":
+        # An inbound container with this UUID is not an already removed warehouse box.
+        inbound_id = await session.scalar(
+            select(InboundIntakeBox.id).where(InboundIntakeBox.id == container_id)
+            if kind == "box" else
+            select(InboundIntakeCargoPlace.id).where(InboundIntakeCargoPlace.id == container_id)
+        )
+        if inbound_id is not None:
+            return False
+    if await session.scalar(select(InventoryBalance.id).where(
+        InventoryBalance.container_kind == kind, InventoryBalance.container_id == container_id,
+        InventoryBalance.quantity != 0,
+    ).limit(1)) is not None:
+        raise InventoryCountError("container_not_empty")
+    if kind == "pallet":
+        for model in (WarehouseBox, InboundIntakeBox, InboundIntakeCargoPlace):
+            if await session.scalar(select(model.id).where(
+                model.pallet_id == container_id,
+            ).limit(1)) is not None:
+                raise InventoryCountError("container_not_empty")
+    return True
+
+
+async def _clear_empty_confirmation(
+    session: AsyncSession, count: InventoryCount,
+    changed: set[tuple[str | None, str]],
+    locations: set[uuid.UUID],
+) -> None:
+    if not count.empty_places:
+        return
+    kept = []
+    for place in count.empty_places:
+        if place["kind"] == "cell":
+            if uuid.UUID(place["id"]) not in locations:
+                kept.append(place)
+            continue
+        kind = cast(ContainerKind, place["kind"])
+        container_id = uuid.UUID(place["id"])
+        try:
+            warehouse_id, refs = await _container_scope(
+                session, count.tenant_id, kind, container_id,
+            )
+        except InventoryCountError as exc:
+            if exc.code != "object_not_found" or not await _confirmed_container_removed(
+                session, count, kind, container_id,
+            ):
+                raise
+            refs = [(kind, container_id)]
+        else:
+            if warehouse_id != count.warehouse_id:
+                raise InventoryCountError("container_not_found")
+        if not any((kind, str(cid)) in changed for kind, cid in refs):
+            kept.append(place)
+    count.empty_places = kept
+
+
+async def mark_place_empty(
+    session: AsyncSession, tenant_id: uuid.UUID, count_id: uuid.UUID,
+    *, kind: str, place_id: uuid.UUID | None,
+) -> InventoryCount:
+    count = await session.scalar(
+        select(InventoryCount).where(InventoryCount.id == count_id,
+                                    InventoryCount.tenant_id == tenant_id)
+        .with_for_update().execution_options(populate_existing=True)
+    )
+    if count is None:
+        raise InventoryCountError("not_found")
+    if count.status != STATUS_DRAFT:
+        raise InventoryCountError("not_editable")
+    if count.warehouse_id is None:
+        raise InventoryCountError("warehouse_not_found")
+    if kind == "cell":
+        if place_id is None:
+            place_id = (await get_or_create_sorting_location(
+                session, tenant_id, count.warehouse_id,
+            )).id
+        location = await session.get(StorageLocation, place_id)
+        if (location is None or location.tenant_id != tenant_id
+                or location.warehouse_id != count.warehouse_id or location.deleted_at is not None):
+            raise InventoryCountError("cell_not_found")
+        tree = await warehouse_map_service.get_warehouse_map(session, tenant_id, count.warehouse_id)
+        refs: set[tuple[str, uuid.UUID]] = set()
+        def collect(nodes: list[dict[str, Any]]) -> None:
+            for node in nodes:
+                if node["kind"] in {"box", "cargo_place", "pallet"}:
+                    refs.add((node["kind"], uuid.UUID(str(node["id"]))))
+                collect(node.get("children", []))
+        if location.code == SORTING_LOCATION_CODE:
+            collect(tree["unassigned"])
+        for cell in tree["cells"]:
+            if str(cell["id"]) == str(place_id):
+                collect(cell.get("children", []))
+        condition = InventoryCountLine.storage_location_id == place_id
+    else:
+        if place_id is None:
+            raise InventoryCountError("container_not_found")
+        warehouse_id, scoped = await _container_scope(
+            session, tenant_id, cast(ContainerKind, kind), place_id,
+        )
+        if warehouse_id != count.warehouse_id:
+            raise InventoryCountError("container_not_found")
+        refs = set(scoped)
+        condition = or_(*[and_(InventoryCountLine.container_kind == k,
+                              InventoryCountLine.container_id == cid) for k, cid in refs])
+    removable: set[tuple[str, uuid.UUID]] = set()
+    for ref_kind, ref_id in refs:
+        obj: Pallet | WarehouseBox | None
+        if ref_kind == "pallet":
+            obj = await session.get(Pallet, ref_id)
+        else:
+            obj = await session.get(WarehouseBox, ref_id)
+        if (obj is not None and obj.tenant_id == tenant_id
+                and obj.warehouse_id == count.warehouse_id and obj.inbound_request_id is None):
+            removable.add((ref_kind, ref_id))
+    if kind != "cell" and (kind, place_id) not in removable:
+        raise InventoryCountError("container_linked_to_inbound")
+    refs = removable
+    lines = (await session.scalars(select(InventoryCountLine).where(
+        InventoryCountLine.count_id == count_id, condition,
+    ).with_for_update().execution_options(populate_existing=True))).all()
+    for line in lines:
+        line.actual_quantity = 0
+    existing = {(item["kind"], item["id"]) for item in count.empty_places}
+    existing.update((k, str(cid)) for k, cid in refs)
+    if kind == "cell":
+        existing.add(("cell", str(place_id)))
+    count.empty_places = [{"kind": k, "id": cid} for k, cid in sorted(existing)]
+    await session.commit()
+    loaded = await get_count(session, tenant_id, count_id)
+    assert loaded is not None
+    return loaded
+
+
+async def move_line_to_container(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    count_id: uuid.UUID,
+    line_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID,
+    container_kind: ContainerKind,
+    container_id: uuid.UUID,
+) -> InventoryCount:
+    """Переложить товар в тару — вторая доработка от 03.09.2026, WMS-153.
+
+    На карте склада перемещение остатка уже есть: `warehouse_map_service.
+    move_object` находит остаток, переносит его и пишет движение
+    (`MOVEMENT_TYPE_WAREHOUSE_MAP`). Второй, документный, механизм переноса
+    заводить нельзя — вызываем ровно ту же функцию, что и карта склада, а
+    здесь только переводим адрес строки документа (продукт + текущее место)
+    в её контракт (`object_id` = id остатка, а не строки).
+
+    Переносим весь остаток, что физически лежит в этом месте по этому
+    товару, — ровно то, что видно в строке (там ровно один товар и один
+    адрес). Частичный перенос постановкой не запрошен.
+
+    Строка документа переезжает вместе с остатком: адрес (storage_location_id,
+    container_kind, container_id) правим на новый. `actual_quantity` не
+    трогаем — если оператор уже посчитал это место, счёт остаётся тем же
+    счётом, просто в новой таре; если строка ещё не считана (actual is
+    None), ожидание просто следует за товаром.
+    """
+    result = await session.execute(
+        select(InventoryCount)
+        .where(InventoryCount.id == count_id, InventoryCount.tenant_id == tenant_id)
+        .with_for_update().execution_options(populate_existing=True)
+    )
+    count = result.scalar_one_or_none()
+    if count is None:
+        raise InventoryCountError("not_found")
+    if count.status != STATUS_DRAFT:
+        raise InventoryCountError("not_editable")
+    if count.warehouse_id is None:
+        raise InventoryCountError("warehouse_not_found")
+
+    line_result = await session.execute(
+        select(InventoryCountLine)
+        .where(InventoryCountLine.id == line_id, InventoryCountLine.count_id == count_id)
+        .with_for_update().execution_options(populate_existing=True)
+    )
+    line = line_result.scalar_one_or_none()
+    if line is None:
+        raise InventoryCountError("line_not_found")
+    if line.storage_location_id is None:
+        raise InventoryCountError("line_storage_location_missing")
+    if line.container_kind == container_kind and line.container_id == container_id:
+        raise InventoryCountError("already_there")
+
+    # Этот же товар уже посчитан в целевой таре другой строкой документа.
+    # Объединять два независимо введённых факта молча нельзя — как и с
+    # удалением непустой тары (см. delete_document_container), отказываем
+    # понятным сообщением вместо угадывания, что оператор имел в виду.
+    conflict = await session.scalar(
+        select(InventoryCountLine.id).where(
+            InventoryCountLine.count_id == count_id,
+            InventoryCountLine.id != line_id,
+            InventoryCountLine.product_id == line.product_id,
+            InventoryCountLine.container_kind == container_kind,
+            InventoryCountLine.container_id == container_id,
+        )
+    )
+    if conflict is not None:
+        raise InventoryCountError("product_already_at_destination")
+
+    await inventory_service.lock_stock_product(session, tenant_id, line.product_id)
+    destination_has_stock = await session.scalar(
+        select(InventoryBalance.id).where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id == line.product_id,
+            InventoryBalance.container_kind == container_kind,
+            InventoryBalance.container_id == container_id,
+            InventoryBalance.quantity != 0,
+        ).limit(1)
+    )
+    if destination_has_stock is not None:
+        raise InventoryCountError("product_already_at_destination")
+    balance = await session.scalar(
+        select(InventoryBalance).where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id == line.product_id,
+            InventoryBalance.storage_location_id == line.storage_location_id,
+            InventoryBalance.container_kind == line.container_kind,
+            InventoryBalance.container_id == line.container_id,
+            InventoryBalance.quantity > 0,
+        ).execution_options(populate_existing=True)
+    )
+    if balance is None:
+        raise InventoryCountError("move_source_empty")
+
+    try:
+        await warehouse_map_service.move_object(
+            session,
+            tenant_id=tenant_id,
+            warehouse_id=count.warehouse_id,
+            actor_user_id=actor_user_id,
+            kind="product",
+            object_id=balance.id,
+            to_kind=container_kind,
+            to_id=container_id,
+            quantity=int(balance.quantity),
+            commit=False,
+        )
+    except warehouse_map_service.WarehouseMapError as exc:
+        raise InventoryCountError(exc.code) from exc
+
+    destination_location_id = await warehouse_map_service.resolve_container_location(
+        session, tenant_id, count.warehouse_id, container_kind, container_id
+    )
+
+    line.storage_location_id = destination_location_id
+    line.container_kind = container_kind
+    line.container_id = container_id
+    await _clear_empty_confirmation(
+        session, count, {(container_kind, str(container_id))}, {destination_location_id},
+    )
+    await session.commit()
+
+    loaded = await get_count(session, tenant_id, count_id)
+    assert loaded is not None
+    return loaded
+
+
+async def delete_document_container(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    count_id: uuid.UUID,
+    *,
+    kind: ContainerKind,
+    container_id: uuid.UUID,
+    commit: bool = True,
+) -> InventoryCount:
+    """Удалить пустую тару прямо из документа — третья доработка от 03.09.2026, WMS-153.
+
+    Удаляем только по-настоящему пустую тару: смотрим на живой остаток по
+    всему складу, а не только на строки этого документа. Документ может быть
+    сужен по селлеру или категории (см. `_found_notice`), и «пусто в
+    документе» тогда не значит «пусто физически» — удалять по такому
+    неполному признаку нельзя.
+
+    Тара, привязанная к приёмке (`inbound_request_id` не пуст, либо это вовсе
+    не склад-тара, а короб/грузоместо конкретной приёмки), этой ручкой не
+    трогается — она принадлежит другому процессу, и его инварианты здесь не
+    известны. Короб/грузоместо удаляются насовсем (как и в других местах
+    системы, где к этому моменту в них уже пусто, например `fbs_packing_box_
+    service.delete_box`); палета — тем же путём, что и на карте склада
+    (`pallet_service.disband_pallet`), просто ей нечего переносить, раз она
+    пуста.
+    """
+    result = await session.execute(
+        select(InventoryCount)
+        .where(InventoryCount.id == count_id, InventoryCount.tenant_id == tenant_id)
+        .with_for_update().execution_options(populate_existing=True)
+    )
+    count = result.scalar_one_or_none()
+    if count is None:
+        raise InventoryCountError("not_found")
+    if count.status != STATUS_DRAFT:
+        raise InventoryCountError("not_editable")
+    if count.warehouse_id is None:
+        raise InventoryCountError("warehouse_not_found")
+    warehouse_id = count.warehouse_id
+
+    async def _direct_balance(container_kind: str, cid: uuid.UUID) -> int:
+        total = await session.scalar(
+            select(func.count(InventoryBalance.id)).where(
+                InventoryBalance.quantity != 0,
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.container_kind == container_kind,
+                InventoryBalance.container_id == cid,
+            )
+        )
+        return int(total or 0)
+
+    if kind == "pallet":
+        pallet = await session.get(
+            Pallet, container_id, with_for_update=True, populate_existing=True,
+        )
+        if (
+            pallet is None
+            or pallet.tenant_id != tenant_id
+            or pallet.warehouse_id != warehouse_id
+            or pallet.disbanded_at is not None
+        ):
+            raise InventoryCountError("container_not_found")
+        if pallet.inbound_request_id is not None:
+            raise InventoryCountError("container_linked_to_inbound")
+        has_children = (
+            await session.scalar(
+                select(WarehouseBox.id)
+                .where(WarehouseBox.tenant_id == tenant_id, WarehouseBox.pallet_id == container_id)
+                .limit(1)
+            )
+            or await session.scalar(
+                select(InboundIntakeBox.id)
+                .where(
+                    InboundIntakeBox.tenant_id == tenant_id,
+                    InboundIntakeBox.pallet_id == container_id,
+                )
+                .limit(1)
+            )
+            or await session.scalar(
+                select(InboundIntakeCargoPlace.id)
+                .where(
+                    InboundIntakeCargoPlace.tenant_id == tenant_id,
+                    InboundIntakeCargoPlace.pallet_id == container_id,
+                )
+                .limit(1)
+            )
+        ) is not None
+        if has_children or await _direct_balance("pallet", container_id) != 0:
+            raise InventoryCountError("container_not_empty")
+        try:
+            await pallet_service.disband_pallet(session, tenant_id, container_id, commit=False)
+        except pallet_service.PalletServiceError as exc:
+            raise InventoryCountError(exc.code) from exc
+    else:
+        box = await session.get(
+            WarehouseBox, container_id, with_for_update=True, populate_existing=True,
+        )
+        if (
+            box is not None
+            and box.tenant_id == tenant_id
+            and box.warehouse_id == warehouse_id
+            and box.container_kind == kind
+        ):
+            if box.inbound_request_id is not None:
+                raise InventoryCountError("container_linked_to_inbound")
+            if await _direct_balance(kind, container_id) != 0:
+                raise InventoryCountError("container_not_empty")
+            await session.delete(box)
+        else:
+            # Не складской короб/грузоместо — либо тары вовсе нет, либо она
+            # заведена конкретной приёмкой (InboundIntakeBox / InboundIntake
+            # CargoPlace). Тот случай трогать здесь нельзя, см. docstring.
+            belongs_to_inbound = await session.scalar(
+                select(InboundIntakeBox.id).where(
+                    InboundIntakeBox.id == container_id, InboundIntakeBox.tenant_id == tenant_id,
+                )
+                if kind == "box"
+                else select(InboundIntakeCargoPlace.id).where(
+                    InboundIntakeCargoPlace.id == container_id,
+                    InboundIntakeCargoPlace.tenant_id == tenant_id,
+                )
+            )
+            if belongs_to_inbound is not None:
+                raise InventoryCountError("container_linked_to_inbound")
+            raise InventoryCountError("container_not_found")
+
+    # Тара удалена — запись-исключение из прунинга (если тару когда-то
+    # создали этой же кнопкой) больше ни на что не ссылается, подчищаем её.
+    await session.execute(
+        delete(InventoryCountCreatedContainer).where(
+            InventoryCountCreatedContainer.tenant_id == tenant_id,
+            InventoryCountCreatedContainer.container_kind == kind,
+            InventoryCountCreatedContainer.container_id == container_id,
+        )
+    )
+    if not commit:
+        await session.flush()
+        return count
+    count.empty_places = [item for item in count.empty_places
+                              if (item["kind"], item["id"]) != (kind, str(container_id))]
+    await session.commit()
+    loaded = await get_count(session, tenant_id, count_id)
+    assert loaded is not None
+    return loaded
 
 
 @dataclass(frozen=True)
@@ -658,7 +1133,7 @@ async def record_found(
     locked = await session.execute(
         select(InventoryCount)
         .where(InventoryCount.id == count_id, InventoryCount.tenant_id == tenant_id)
-        .with_for_update()
+        .with_for_update().execution_options(populate_existing=True)
     )
     if locked.scalar_one_or_none() is None:
         raise InventoryCountError("count_not_found")
@@ -735,6 +1210,9 @@ async def record_found(
         raise InventoryCountError("barcode_is_ambiguous")
     product = products[0]
 
+    await _clear_empty_confirmation(
+        session, count, {(container_kind, str(container_id))}, {storage_location_id},
+    )
     existing = next(
         (
             line
@@ -837,7 +1315,7 @@ async def add_manual_line(
     locked = await session.execute(
         select(InventoryCount)
         .where(InventoryCount.id == count_id, InventoryCount.tenant_id == tenant_id)
-        .with_for_update()
+        .with_for_update().execution_options(populate_existing=True)
     )
     if locked.scalar_one_or_none() is None:
         raise InventoryCountError("count_not_found")
@@ -862,6 +1340,9 @@ async def add_manual_line(
     if quantity <= 0:
         raise InventoryCountError("invalid_actual_quantity")
 
+    await _clear_empty_confirmation(
+        session, count, {(container_kind, str(container_id))}, {storage_location_id},
+    )
     existing = next(
         (
             line
@@ -1033,7 +1514,7 @@ async def _increment_existing_found_line(
             InventoryCountLine.container_kind == container_kind,
             InventoryCountLine.container_id == container_id,
         )
-        .with_for_update()
+        .with_for_update().execution_options(populate_existing=True)
     )
     if line is None:
         raise InventoryCountError("count_not_found")
@@ -1062,7 +1543,7 @@ async def _current_quantity(
         InventoryBalance.container_id == line.container_id,
     )
     if lock:
-        stmt = stmt.with_for_update()
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
     value = await session.scalar(stmt)
     return int(value or 0)
 
@@ -1131,7 +1612,77 @@ async def current_quantities(
     return values
 
 
+async def _lock_post_removal_stock(
+    session: AsyncSession, count: InventoryCount, lines: list[InventoryCountLine],
+) -> None:
+    """Claim removal resources before movements, never wait across stock lock orders.
+
+    Stock writers use Product -> Container -> Balance; map/pallet paths can already
+    hold Container or Balance. Product locks are held by the caller. NOWAIT on all
+    remaining claims breaks either inverse edge, with a full rollback by post_count.
+    """
+    removals = {(item["kind"], uuid.UUID(item["id"])) for item in count.empty_places
+                if item["kind"] != "cell"}
+    if not removals:
+        return
+    container_predicate = or_(*[
+        and_(InventoryBalance.container_kind == kind, InventoryBalance.container_id == cid)
+        for kind, cid in removals
+    ])
+    # Include hidden goods and zero rows: deletion must check all stock, and pallet
+    # disbanding can readdress zero balances to an existing loose sorting balance.
+    container_products = select(InventoryBalance.product_id).where(
+        InventoryBalance.tenant_id == count.tenant_id, container_predicate,
+    )
+    balances = (await session.scalars(select(InventoryBalance).where(
+        InventoryBalance.tenant_id == count.tenant_id,
+        or_(InventoryBalance.product_id.in_([line.product_id for line in lines]),
+            InventoryBalance.product_id.in_(container_products)),
+    ).order_by(InventoryBalance.id).with_for_update(nowait=True)
+        .execution_options(populate_existing=True))).all()
+    stock_rows: list[InventoryCountLine | InventoryBalance] = [*lines, *balances]
+    refs = removals | {(row.container_kind, row.container_id) for row in stock_rows
+                       if row.container_kind is not None and row.container_id is not None}
+    for kind, cid in sorted(refs, key=lambda ref: (ref[0], str(ref[1]))):
+        # Lock by physical identity; normal scope/type/inbound checks still run
+        # below. Missing rows remain the responsibility of stale-confirmation logic.
+        queries = [select(Pallet.id).where(Pallet.id == cid)] if kind == "pallet" else [
+            select(WarehouseBox.id).where(WarehouseBox.id == cid),
+            select(InboundIntakeBox.id).where(InboundIntakeBox.id == cid)
+            if kind == "box" else
+            select(InboundIntakeCargoPlace.id).where(InboundIntakeCargoPlace.id == cid),
+        ]
+        for query in queries:
+            await session.scalar(query.with_for_update(nowait=True))
+    if any(kind == "pallet" for kind, _ in removals):
+        # Existing pallet disband locks locations through its joined balance query.
+        # Claim these (and its loose sorting destination) without a late wait too.
+        await session.execute(select(StorageLocation.id).where(
+            or_(StorageLocation.id.in_([row.storage_location_id for row in balances]),
+                and_(StorageLocation.tenant_id == count.tenant_id,
+                     StorageLocation.warehouse_id == count.warehouse_id,
+                     StorageLocation.code == SORTING_LOCATION_CODE)),
+        ).order_by(StorageLocation.id).with_for_update(nowait=True))
+
+
 async def post_count(
+    session: AsyncSession, tenant_id: uuid.UUID, count_id: uuid.UUID, user_id: uuid.UUID,
+) -> PostResult:
+    try:
+        return await _post_count(session, tenant_id, count_id, user_id)
+    except DBAPIError as exc:
+        await session.rollback()
+        if getattr(exc.orig, "sqlstate", None) == "55P03":
+            raise InventoryCountError("balance_changed_during_post") from exc
+        raise
+    except InventoryCountError:
+        # A normal container_not_empty refusal must not leave earlier movements
+        # committable by a service caller. post_count owns this transaction.
+        await session.rollback()
+        raise
+
+
+async def _post_count(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     count_id: uuid.UUID,
@@ -1143,7 +1694,7 @@ async def post_count(
             InventoryCount.id == count_id,
             InventoryCount.tenant_id == tenant_id,
         )
-        .with_for_update()
+        .with_for_update().execution_options(populate_existing=True)
     )
     count = result.scalar_one_or_none()
     if count is None:
@@ -1154,14 +1705,15 @@ async def post_count(
         select(InventoryCountLine)
         .where(InventoryCountLine.count_id == count.id)
         .order_by(InventoryCountLine.id)
-        .with_for_update()
+        .with_for_update().execution_options(populate_existing=True)
     )
     entered_lines = [line for line in lines_result.scalars() if line.actual_quantity is not None]
-    if not entered_lines:
+    if not entered_lines and not count.empty_places:
         raise InventoryCountError("empty_count")
 
     for product_id in sorted({line.product_id for line in entered_lines}, key=str):
         await inventory_service.lock_stock_product(session, tenant_id, product_id)
+    await _lock_post_removal_stock(session, count, entered_lines)
 
     stock_deductions: list[inventory_service.StockDeduction] = []
     changed_balances: list[ChangedBalance] = []
@@ -1212,6 +1764,23 @@ async def post_count(
             raise
         posted_lines += 1
 
+    await session.flush()
+    # A zero goods row alone does not claim that the entire container is empty.
+    # Only the operator's explicit place confirmation authorizes removal.
+    for place in sorted(count.empty_places, key=lambda item: item["kind"] == "pallet"):
+        if place["kind"] == "cell":
+            continue
+        kind = cast(ContainerKind, place["kind"])
+        container_id = uuid.UUID(place["id"])
+        try:
+            await delete_document_container(
+                session, tenant_id, count_id, kind=kind, container_id=container_id, commit=False,
+            )
+        except InventoryCountError as exc:
+            if exc.code != "container_not_found" or not await _confirmed_container_removed(
+                session, count, kind, container_id,
+            ):
+                raise
     count.status = STATUS_POSTED
     count.posted_at = datetime.now(UTC)
     count.posted_by_user_id = user_id
@@ -1238,7 +1807,7 @@ async def cancel_count(
             InventoryCount.id == count_id,
             InventoryCount.tenant_id == tenant_id,
         )
-        .with_for_update()
+        .with_for_update().execution_options(populate_existing=True)
     )
     count = result.scalar_one_or_none()
     if count is None:

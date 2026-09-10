@@ -46,6 +46,7 @@ function plural(n: number, one: string, few: string, many: string): string {
 
 type Props = {
   open: boolean
+  busy?: boolean
   /** Что пересчитываем: «Короб КР-000471», «Ячейка А-01-02». */
   title: string
   /** Где это лежит. Пусто, когда пересчитываем саму ячейку. */
@@ -59,6 +60,7 @@ type Props = {
    */
   initialCount: InventoryCount | null
   onClose: () => void
+  onMarkEmpty?: (count: InventoryCount, target: { kind: 'cell' | 'pallet' | 'box' | 'cargo_place'; id: string }) => void
   onSave: (count: InventoryCount) => void
   onPost: (count: InventoryCount) => void
 }
@@ -78,7 +80,7 @@ function countRevisionKey(count: InventoryCount | null): string {
     }
   }
   for (const cell of count.cells) walk(cell.children)
-  return `${count.id}:${actuals.join('|')}`
+  return `${count.id}:${count.comment}:${JSON.stringify(count.emptyPlaces)}:${actuals.join('|')}`
 }
 
 export function InventoryCountDialog(props: Props) {
@@ -87,12 +89,14 @@ export function InventoryCountDialog(props: Props) {
 
 function InventoryCountDialogState({
   open,
+  busy = false,
   title,
   place,
   initialCount,
   onClose,
   onSave,
   onPost,
+  onMarkEmpty,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const [count, setCount] = useState<InventoryCount | null>(initialCount)
@@ -119,6 +123,7 @@ function InventoryCountDialogState({
   }, [scanFocus])
 
   function handleScan(code: string) {
+    if (busy) return
     setCount((current) => {
       if (!current) return current
       // Диалог с карты склада не ходит на сервер, значит и находку не запишет.
@@ -178,31 +183,47 @@ function InventoryCountDialogState({
   }
 
   function handleActual(row: InvRow, value: number | null) {
+    if (busy) return
     setCount((current) => (current ? setActual(current, row.id, value) : current))
   }
 
   const postReason =
-    t.counted === 0 ? 'Не введено ни одной цифры' : undefined
+    busy ? 'Дождитесь сохранения' : t.counted === 0 && !count?.emptyPlaces?.length ? 'Не введено ни одной цифры' : undefined
 
   return (
     <AppDialog
       open={open}
       title={`Пересчёт: ${title}`}
-      onClose={onClose}
+      onClose={() => { if (!busy) onClose() }}
       maxWidth="lg"
       testId="inventory-count-dialog"
       actions={
         <>
-          <SecondaryAction onClick={onClose} data-testid="inv-dialog-close">
+          <SecondaryAction onClick={onClose} disabledReason={busy ? 'Дождитесь сохранения' : undefined} data-testid="inv-dialog-close">
             Закрыть
           </SecondaryAction>
           <SecondaryAction
-            onClick={() => count && onSave(count)}
-            disabledReason={t.counted === 0 ? 'Нечего сохранять' : undefined}
+            onClick={() => !busy && count && onSave(count)}
+            disabledReason={busy ? 'Дождитесь сохранения' : undefined}
             data-testid="inv-dialog-save"
           >
             Сохранить
           </SecondaryAction>
+          {onMarkEmpty ? (
+            <SecondaryAction
+              onClick={() => {
+                const selected = rows.find((row) => row.key === selectedKey)
+                if (count && selected && selected.kind !== 'product') {
+                  if (!window.confirm('Подтвердить, что всё выбранное место пусто? Все введённые количества здесь, включая содержимое тары, станут нулём. Остаток изменится только при проведении.')) return
+                  onMarkEmpty(count, { kind: selected.kind, id: selected.id })
+                }
+              }}
+              disabledReason={busy ? 'Дождитесь сохранения'
+                : !rows.some((row) => row.key === selectedKey && row.kind !== 'product')
+                  ? 'Выберите ячейку или тару' : undefined}
+              data-testid="inv-dialog-mark-empty"
+            >Здесь пусто</SecondaryAction>
+          ) : null}
           <PrimaryAction
             onClick={() => setConfirmPost(true)}
             disabledReason={postReason}
@@ -268,6 +289,7 @@ function InventoryCountDialogState({
         {/* Свободная строка про причину. Та же, что на экране документа: человек
             пишет «пересорт» у полки, а видит это тот, кто откроет документ потом. */}
         <CommentField
+          disabled={busy}
           value={count?.comment ?? ''}
           onCommit={(comment) =>
             setCount((current) => (current ? { ...current, comment } : current))
@@ -282,7 +304,7 @@ function InventoryCountDialogState({
           <InventoryTree
             rows={rows}
             loading={false}
-            readOnly={false}
+            readOnly={busy}
             highlightedKey={scanFocus?.key}
             selectedKey={selectedKey}
             onSelect={handleSelectRow}

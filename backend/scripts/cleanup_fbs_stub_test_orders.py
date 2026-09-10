@@ -68,7 +68,6 @@ from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_packing_box import FbsPackingBoxItem
 from app.models.fbs_print_asset import FbsPrintAsset
 from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
-from app.models.fbs_stock_pool_debit import FbsStockPoolDebit
 
 
 class CleanupBlockedError(RuntimeError):
@@ -88,7 +87,6 @@ async def count_related_records(
         "packing_boxes": 0,
         "reversals": 0,
         "print_assets": 0,
-        "stock_pool_debits": 0,
     }
 
     if not fbs_order_ids:
@@ -140,11 +138,6 @@ async def count_related_records(
         FbsPrintAsset.fbs_order_id.in_(fbs_order_ids)
     )
     counts["print_assets"] = (await session.scalar(stmt)) or 0
-
-    stmt = select(func.count(FbsStockPoolDebit.id)).where(
-        FbsStockPoolDebit.order_id.in_(fbs_order_ids)
-    )
-    counts["stock_pool_debits"] = (await session.scalar(stmt)) or 0
 
     return counts
 
@@ -223,7 +216,6 @@ async def report_orders(
     print(f"  FbsPackingBoxItem:                {related_counts['packing_boxes']}")
     print(f"  FbsShipmentReversalLedger:        {related_counts['reversals']}")
     print(f"  FbsPrintAsset:                    {related_counts['print_assets']}")
-    print(f"  FbsStockPoolDebit:                {related_counts['stock_pool_debits']}")
 
     # Mark orders with supply_id
     orders_with_supply = [o for o in found_orders if o.supply_id]
@@ -255,7 +247,6 @@ async def report_orders(
         + related_counts['packing_boxes']
         + related_counts['reversals']
         + related_counts['print_assets']
-        + related_counts['stock_pool_debits']
     )
 
     return found_orders, total_related
@@ -265,7 +256,7 @@ async def ensure_orders_are_safe_to_delete(
     session: AsyncSession,
     orders: Sequence[FbsOrder],
 ) -> None:
-    """Fail closed before any DELETE that could corrupt supply or stock-pool accounting."""
+    """Fail closed before any DELETE that could corrupt supply or shipment accounting."""
     linked_supply_ids = sorted(
         {str(order.supply_id) for order in orders if order.supply_id is not None}
     )
@@ -275,16 +266,6 @@ async def ensure_orders_are_safe_to_delete(
         )
 
     order_ids = [order.id for order in orders]
-    debit_count = await session.scalar(
-        select(func.count(FbsStockPoolDebit.id)).where(
-            FbsStockPoolDebit.order_id.in_(order_ids)
-        )
-    )
-    if int(debit_count or 0) > 0:
-        raise CleanupBlockedError(
-            "selected orders have FBS stock-pool debits; use an accounting-aware recovery"
-        )
-
     reversal_count = await session.scalar(
         select(func.count(FbsShipmentReversalLedger.id)).where(
             FbsShipmentReversalLedger.fbs_order_id.in_(order_ids)

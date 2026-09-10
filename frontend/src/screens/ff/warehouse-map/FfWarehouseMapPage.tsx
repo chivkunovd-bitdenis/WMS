@@ -1,3 +1,4 @@
+import { changedActualIds } from '../inventory/InventoryRows'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Box } from '@mui/material'
 import { apiUrl } from '../../../api'
@@ -14,6 +15,7 @@ import {
   postCount,
   postResultNote,
   saveCountActuals,
+  markCountPlaceEmpty,
   type CountObjectType,
 } from '../inventory/inventoryCountApi'
 import type { InventoryCount } from '../inventory/InventoryTypes'
@@ -61,6 +63,7 @@ const MAP_ERROR_MESSAGES: Record<string, string> = {
 /** Человеческий текст вместо кода ошибки, пришедшего с сервера. */
 function humanError(err: unknown, fallback: string): string {
   const raw = err instanceof Error ? err.message : ''
+  if (raw === 'comment_changed') return 'Другой сотрудник изменил комментарий. Откройте документ заново и сверьте текст.'
   return MAP_ERROR_MESSAGES[raw] ?? (raw || fallback)
 }
 
@@ -86,6 +89,7 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
   const [loading, setLoading] = useState(warehouses.length > 0)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [operationError, setOperationError] = useState<string | null>(null)
+  const [countBusy, setCountBusy] = useState(false)
   const selectedWarehouseRef = useRef(warehouseId)
   const loadVersionRef = useRef(0)
   // Пересчёт открывается прямо на карте: человек стоит у полки и не должен
@@ -328,16 +332,48 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
   }
 
   async function saveCount(edited: InventoryCount) {
+    if (!count || countBusy || count.id !== edited.id) return
+    setCountBusy(true)
     try {
-      setCount(await saveCountActuals(token, edited))
+      const saved = await saveCountActuals(token, edited, changedActualIds(edited, count), {
+        updateComment: edited.comment !== count.comment,
+        comment: edited.comment,
+        expectedComment: count.comment,
+      })
+      setCount((current) => current?.id === saved.id ? saved : current)
     } catch (err) {
       setOperationError(humanError(err, 'Не удалось сохранить пересчёт'))
+    } finally {
+      setCountBusy(false)
+    }
+  }
+
+  async function markEmpty(edited: InventoryCount, target: { kind: 'cell' | 'pallet' | 'box' | 'cargo_place'; id: string }) {
+    if (!count || countBusy || count.id !== edited.id) return
+    setCountBusy(true)
+    try {
+      await saveCountActuals(token, edited, changedActualIds(edited, count), {
+        updateComment: edited.comment !== count.comment,
+        comment: edited.comment, expectedComment: count.comment,
+      })
+      const saved = await markCountPlaceEmpty(token, edited.id, target)
+      setCount((current) => current?.id === saved.id ? saved : current)
+    } catch (err) {
+      setOperationError(humanError(err, 'Не удалось подтвердить пустое место'))
+    } finally {
+      setCountBusy(false)
     }
   }
 
   async function postAndClose(edited: InventoryCount) {
+    if (!count || countBusy || count.id !== edited.id) return
+    setCountBusy(true)
     try {
-      const result = await postCount(token, edited)
+      const result = await postCount(token, edited, changedActualIds(edited, count), {
+        expectedComment: count.comment,
+        updateComment: edited.comment !== count.comment,
+        comment: edited.comment,
+      })
       setCount(null)
       setCountTarget(null)
       // Проведение меняет остаток, поэтому карту читаем заново: старая картинка
@@ -346,6 +382,8 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
       await load({ preserveOperationError: true })
     } catch (err) {
       setOperationError(humanError(err, 'Не удалось провести пересчёт'))
+    } finally {
+      setCountBusy(false)
     }
   }
 
@@ -383,6 +421,8 @@ export function FfWarehouseMapPage({ token, warehouses }: Props) {
         title={countTarget?.title ?? ''}
         place={data && countTarget ? placeOf(data, countTarget) : null}
         initialCount={count}
+        busy={countBusy}
+        onMarkEmpty={(edited, target) => void markEmpty(edited, target)}
         onClose={() => {
           setCount(null)
           setCountTarget(null)

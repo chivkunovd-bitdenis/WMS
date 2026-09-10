@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any, cast
 
-import jwt
 from sqlalchemy import Connection, event, func, insert, inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,7 +49,7 @@ from app.models.marketplace_unload import (
     MarketplaceUnloadLine,
     MarketplaceUnloadRequest,
 )
-from app.services.tokens import decode_access_token
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +90,25 @@ def system_document_events() -> Iterator[None]:
         _actor_context.reset(token)
 
 
+def current_document_event_actor() -> DocumentEventActor:
+    """Return the authenticated actor bound to the current request.
+
+    Services that record explicit audit rows (WMS-056 tare removal, WMS-325
+    staff permission mutations) call this to get the acting user without
+    re-decoding the token themselves.
+    """
+    return _actor_context.get()
+
+
+def bind_authenticated_document_actor(user_id: uuid.UUID) -> None:
+    """Called only after get_current_user validates identity and tenant.
+
+    The middleware owns request lifetime and resets this context on exit.
+    Auditing must use the same identity as authorization, not parse JWT again.
+    """
+    _actor_context.set(DocumentEventActor(actor_user_id=user_id, source=SOURCE_USER))
+
+
 _original_background_task_call = BackgroundTask.__call__
 
 
@@ -100,7 +118,7 @@ async def _run_system_document_background_task(task: BackgroundTask) -> None:
 
 
 class DocumentEventActorMiddleware:
-    """Extract the already validated JWT identity for transaction-level auditing."""
+    """Scope the authenticated audit actor to one request."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -109,28 +127,11 @@ class DocumentEventActorMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        actor = _actor_from_scope(scope)
-        token = _actor_context.set(actor)
+        token = _actor_context.set(_SYSTEM_ACTOR)
         try:
             await self.app(scope, receive, send)
         finally:
             _actor_context.reset(token)
-
-
-def _actor_from_scope(scope: Scope) -> DocumentEventActor:
-    headers = {key.lower(): value for key, value in scope.get("headers", [])}
-    raw = headers.get(b"authorization", b"").decode("latin-1")
-    scheme, _, credential = raw.partition(" ")
-    if scheme.lower() != "bearer" or not credential:
-        return _SYSTEM_ACTOR
-    try:
-        payload = decode_access_token(credential)
-        subject = payload.get("sub")
-        if not isinstance(subject, str):
-            return _SYSTEM_ACTOR
-        return DocumentEventActor(actor_user_id=uuid.UUID(subject), source=SOURCE_USER)
-    except (jwt.PyJWTError, ValueError):
-        return _SYSTEM_ACTOR
 
 
 def _json_value(value: object) -> object:
@@ -268,6 +269,66 @@ async def record_document_event_safely(session: AsyncSession, **values: Any) -> 
         return False
 
 
+async def record_document_mutation(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    document_type: str,
+    document_id: uuid.UUID,
+    event_type: str,
+    before: dict[str, object] | None,
+    after: dict[str, object] | None,
+    product_id: uuid.UUID | None = None,
+    qty: int | None = None,
+) -> bool:
+    """Observe an explicit field projection in the warehouse transaction.
+
+    Callers supply only named audit fields, never model/request dumps. Identity
+    comes exclusively from the authenticated request context; system work must
+    use system_document_events(). No second billing fact or commit is created.
+    """
+    if before == after:
+        return False
+    actor = current_document_event_actor()
+    payload: dict[str, object] = {
+        "before": {key: _json_value(value) for key, value in before.items()}
+        if before is not None else None,
+        "after": {key: _json_value(value) for key, value in after.items()}
+        if after is not None else None,
+    }
+    try:
+        connection = await session.connection()
+        async with connection.begin_nested():
+            if actor.actor_user_id is not None:
+                name = await connection.scalar(
+                    select(User.email).where(
+                        User.id == actor.actor_user_id, User.tenant_id == tenant_id
+                    )
+                )
+                if name is None:
+                    # Never invent an actor or use an identity from another tenant.
+                    return False
+                payload["actor_name_snapshot"] = name
+                payload["actor_user_id_snapshot"] = str(actor.actor_user_id)
+            return await record_document_event_safely(
+                session,
+                tenant_id=tenant_id,
+                document_type=document_type,
+                document_id=document_id,
+                event_type=event_type,
+                actor_user_id=actor.actor_user_id,
+                source=actor.source,
+                product_id=product_id,
+                qty=qty,
+                payload_json=payload,
+            )
+    except Exception:
+        logger.exception(
+            "document mutation audit failed: type=%s event=%s", document_type, event_type
+        )
+        return False
+
+
 async def list_document_events(
     session: AsyncSession,
     *,
@@ -287,7 +348,11 @@ async def list_document_events(
             DocumentEvent.document_id == document_id,
         )
         .options(selectinload(DocumentEvent.actor), selectinload(DocumentEvent.product))
-        .order_by(DocumentEvent.occurred_at.desc(), DocumentEvent.created_at.desc())
+        .order_by(
+            DocumentEvent.occurred_at.desc(),
+            DocumentEvent.created_at.desc(),
+            DocumentEvent.id.desc(),
+        )
         .limit(limit)
         .offset(offset)
     )

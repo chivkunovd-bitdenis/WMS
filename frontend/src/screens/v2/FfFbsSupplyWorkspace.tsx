@@ -1,3 +1,4 @@
+import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import {
   Alert,
@@ -113,6 +114,7 @@ type Props = {
   initialWorkspace?: FbsWorkspace | null
   open: boolean; addressStorageEnabled?: boolean
   onClose: () => void
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 const STAGES = [
@@ -305,6 +307,7 @@ export function FfFbsSupplyWorkspace({
   initialWorkspace,
   open, addressStorageEnabled = true,
   onClose,
+  onDirtyChange,
 }: Props) {
   const [workspace, setWorkspace] = useState<FbsWorkspace | null>(initialWorkspace ?? null)
   const [stage, setStage] = useState<StageKey>('composition')
@@ -364,19 +367,56 @@ export function FfFbsSupplyWorkspace({
   const [skipHonestSignOpen, setSkipHonestSignOpen] = useState(false)
   const [skipHonestSignBusy, setSkipHonestSignBusy] = useState(false)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
+  const boxAssignmentDirty = Object.values(boxProductQty).some((value) => Boolean(value.trim())) ||
+    boxSelectedPositionIds.size > 0
+  const unsavedInput = open && (
+    plannedShipmentDateDraft !== (workspace?.supply.planned_shipment_date ?? '') ||
+    boxCount !== '1' || boxAssignmentDirty || addableSelected.size > 0 ||
+    Boolean(kizScanValue.trim() || kizScanActive || kizConfirmTarget)
+  )
+  useEffect(() => {
+    onDirtyChange?.(unsavedInput)
+    return () => onDirtyChange?.(false)
+  }, [unsavedInput, onDirtyChange])
+  const requestClose = () => {
+    if (confirmDiscardChanges(unsavedInput)) {
+      onDirtyChange?.(false)
+      onClose()
+    }
+  }
+  const closeBoxAssignment = () => {
+    if (!confirmDiscardChanges(boxAssignmentDirty)) return
+    setBoxProductQty({})
+    setBoxSelectedPositionIds(new Set())
+    setBoxAssignTarget(null)
+  }
+  const closeAddOrders = () => {
+    if (!confirmDiscardChanges(addableSelected.size > 0)) return
+    setAddableSelected(new Set())
+    setAddOrdersOpen(false)
+  }
+
   const isOzonSupply = workspace?.supply.marketplace === 'ozon'
   const boxesWithoutDistribution = !isOzonSupply && Boolean(workspace?.supply.boxes_without_distribution)
   const providerName = isOzonSupply ? 'Ozon' : 'WB'
   const boxOperationsDisabled = fbsBoxOperationsDisabled(
     workspace?.supply.marketplace ?? 'wb',
   )
+  const workspaceOpenGeneration = useRef(0)
+  useEffect(() => {
+    workspaceOpenGeneration.current += 1
+    return () => { workspaceOpenGeneration.current += 1 }
+  }, [open, supplyId])
 
   const load = useCallback(
     async (silent = false) => {
-      if (!supplyId) return
+      if (!open || !supplyId) return
+      const generation = workspaceOpenGeneration.current
+      const isCurrent = () => workspaceOpenGeneration.current === generation
       if (!silent) setBusy(true)
       try {
         const next = await fetchFbsWorkspace(token, authHeaders, supplyId)
+        if (!isCurrent()) return
         setWorkspace(next)
         if (!silent) {
           setStage((current) => fbsStageAfterWorkspaceRefresh(
@@ -387,16 +427,17 @@ export function FfFbsSupplyWorkspace({
         }
         return next
       } catch (cause) {
-        if (!silent) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось загрузить поставку.')
+        if (isCurrent() && !silent) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось загрузить поставку.')
       } finally {
-        if (!silent) setBusy(false)
+        if (isCurrent() && !silent) setBusy(false)
       }
     },
-    [supplyId, token, authHeaders],
+    [open, supplyId, token, authHeaders],
   )
 
   useEffect(() => {
     if (!open || !supplyId) return
+    setBusy(false)
     setError(null)
     setNotice(null)
     setWorkspace(initialWorkspace ?? null)
@@ -873,7 +914,10 @@ export function FfFbsSupplyWorkspace({
       }),
       '',
     )
-    if (next) clearPersistentOperationKey(workspace.supply.id, 'box-create', `${boxMode}:${count}`)
+    if (next) {
+      clearPersistentOperationKey(workspace.supply.id, 'box-create', `${boxMode}:${count}`)
+      setBoxCount('1')
+    }
   }
 
   const assignBoxOrders = async () => {
@@ -1561,7 +1605,7 @@ export function FfFbsSupplyWorkspace({
           if (!kizScanBusy) dropKizScanActive()
           return
         }
-        onClose()
+        requestClose()
       }}
       maxWidth={false}
       fullScreen={false}
@@ -1664,7 +1708,7 @@ export function FfFbsSupplyWorkspace({
               ) : null}
             </Stack>
           </Box>
-          <IconButton onClick={onClose} disabled={busy} aria-label="Закрыть">
+          <IconButton onClick={requestClose} disabled={busy} aria-label="Закрыть">
             <CloseIcon />
           </IconButton>
         </Stack>
@@ -1814,7 +1858,7 @@ export function FfFbsSupplyWorkspace({
                     requestId={supplyId}
                     source="fbs"
                     hideHeader
-                    onPaused={onClose}
+                    onPaused={requestClose}
                     onFinished={() => { void load() }}
                   />
                 </Box>
@@ -2440,7 +2484,7 @@ export function FfFbsSupplyWorkspace({
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
       />
-      <Dialog open={addOrdersOpen} onClose={addOrdersBusy ? undefined : () => setAddOrdersOpen(false)} maxWidth="md" fullWidth>
+      <Dialog open={addOrdersOpen} onClose={addOrdersBusy ? undefined : closeAddOrders} maxWidth="md" fullWidth>
         <DialogTitle>Добавить заказы в поставку</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={1.5}>
@@ -2490,7 +2534,7 @@ export function FfFbsSupplyWorkspace({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAddOrdersOpen(false)} disabled={addOrdersBusy}>
+          <Button onClick={closeAddOrders} disabled={addOrdersBusy}>
             Отмена
           </Button>
           <Button
@@ -2744,7 +2788,7 @@ export function FfFbsSupplyWorkspace({
           </Button>
         </DialogActions>
       </Dialog>
-      <Dialog open={Boolean(boxAssignTarget)} onClose={busy ? undefined : () => setBoxAssignTarget(null)} maxWidth={isOzonSupply ? 'xl' : 'md'} fullWidth slotProps={isOzonSupply ? { paper: { sx: { minHeight: '75vh', maxHeight: '95vh' } } } : undefined}>
+      <Dialog open={Boolean(boxAssignTarget)} onClose={busy ? undefined : closeBoxAssignment} maxWidth={isOzonSupply ? 'xl' : 'md'} fullWidth slotProps={isOzonSupply ? { paper: { sx: { minHeight: '75vh', maxHeight: '95vh' } } } : undefined}>
         <DialogTitle>Добавить товары в короб {boxAssignName}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={1.5} sx={{ pt: 1 }}>

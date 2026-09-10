@@ -5,7 +5,6 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
-    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -34,7 +33,6 @@ class StockDirection(Base):
     __table_args__ = (
         CheckConstraint("quantity >= 0", name="ck_stock_directions_quantity_nonnegative"),
         Index("ix_stock_directions_tenant_product", "tenant_id", "product_id"),
-        Index("ix_stock_directions_tenant_product_fbs", "tenant_id", "product_id", "is_fbs"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -47,9 +45,6 @@ class StockDirection(Base):
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
-    is_fbs: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="false"
-    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

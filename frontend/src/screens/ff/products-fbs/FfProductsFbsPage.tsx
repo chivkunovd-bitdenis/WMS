@@ -5,6 +5,8 @@ import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { ErrorNotice } from '../../../ui-kit'
 import { ProductsScreen } from './ProductsScreen'
 import type { FbsRule, Product, Seller } from './stub'
+import { qualifyWarehouseRuleValues, warehouseNumberFromRuleKey, warehouseRuleKey,
+  type WarehouseRuleBinding } from './fbsWarehouseRuleKeys'
 
 // Экран управления остатком FBS, подключённый к серверу.
 //
@@ -61,7 +63,7 @@ type ApiSellerWarehouse = {
  */
 export const TOTAL_KEY = '__total__'
 
-export function toProduct(row: ApiCatalogRow, rule: ApiRule | undefined, sellerId: string): Product {
+export function toProduct(row: ApiCatalogRow, rule: ApiRule | undefined, sellerId: string): Product & { savedPublishedNow?: number } {
   const onHand = rule?.on_hand ?? 0
   const reserved = rule?.reserved ?? 0
   return {
@@ -74,22 +76,25 @@ export function toProduct(row: ApiCatalogRow, rule: ApiRule | undefined, sellerI
     category: row.wb_subject_name ?? '—',
     stock: { [TOTAL_KEY]: { onHand, reserved } },
     marketplaces: row.marketplaces,
+    savedPublishedNow: rule?.published_now,
   }
 }
 
-export function toRule(productId: string, rule: ApiRule | undefined): FbsRule {
+export function toRule(
+  productId: string, rule: ApiRule | undefined, bindings?: WarehouseRuleBinding[],
+): FbsRule {
+  const qualify = (values: Record<string, number>) => bindings
+    ? qualifyWarehouseRuleValues(values, bindings) : values
   return {
     productId,
     publish: rule?.publish ?? false,
     publishOzon: rule?.publish_ozon ?? rule?.publish ?? false,
     sameEverywhere: rule?.same_everywhere ?? true,
     percent: rule?.percent ?? 0,
-    byWarehouse: rule?.by_warehouse ?? {},
+    byWarehouse: qualify(rule?.by_warehouse ?? {}),
     unitsMode: rule?.units_mode ?? false,
-    // В поля ввода подставляется ОСТАТОК квоты, а не то, что когда-то выделили:
-    // оператор правит числа, глядя на сегодняшний расклад. Сохранение запишет
-    // введённое как новое выделение и сдвинет точку отсчёта расхода.
-    unitsByWarehouse: rule?.units_remaining_by_warehouse ?? {},
+    // Stored operator caps survive orders and percentage mode unchanged.
+    unitsByWarehouse: qualify(rule?.units_by_warehouse ?? {}),
   }
 }
 
@@ -149,7 +154,7 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
       setProducts(
         withSeller.map((row) => toProduct(row, loadedRules.get(row.id), row.seller_id as string)),
       )
-      setRules(withSeller.map((row) => toRule(row.id, loadedRules.get(row.id))))
+      const loadedBindings = new Map<string, WarehouseRuleBinding[]>()
 
       // Склады продавца нужны для ползунков: без них модалка не знает, между чем
       // делить процент. Тянем только по тем продавцам, чьи товары на экране.
@@ -160,11 +165,17 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
           headers: headers(token),
         })
         const rows = whRes.ok ? ((await whRes.json()) as ApiSellerWarehouse[]) : []
+        const bindingsRes = await fetch(apiUrl(`/operations/fbs-sellers/${id}/warehouse-bindings`), {
+          headers: headers(token),
+        })
+        if (!bindingsRes.ok) throw new Error(await readApiErrorMessage(bindingsRes))
+        const bindings = (await bindingsRes.json()) as Array<WarehouseRuleBinding & { is_active: boolean }>
+        loadedBindings.set(id, bindings.filter((one) => one.is_active))
         built.push({
           id,
           name: known.get(id) ?? '—',
           warehouses: rows.map((one) => ({
-            id: String(one.wb_warehouse_id),
+            id: warehouseRuleKey(one),
             name: one.name ?? `Склад ${one.wb_warehouse_id}`,
             boundTo: one.wms_warehouse_id,
             fbsEnabled: one.served,
@@ -177,6 +188,9 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
           })),
         })
       }
+      setRules(withSeller.map((row) => toRule(
+        row.id, loadedRules.get(row.id), loadedBindings.get(row.seller_id as string),
+      )))
       setSellers(built)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить товары')
@@ -191,6 +205,11 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
 
   async function saveRule(productIds: string[], rule: FbsRule): Promise<string | null> {
     setError(null)
+    // WMS-060/WMS-338: сюда нужно передавать поштучный режим и числа по складам,
+    // иначе API подставит `units_mode=false` и `units_by_warehouse={}`, а сервис
+    // молча запишет получившееся правило поверх операторского. То есть открытие
+    // окна с любым сохранением через /ff/fbs-stock раньше сбрасывало режим
+    // штук и операторский потолок. Отправляем всё, что нужно правилу целиком.
     const body = {
       publish: rule.changedPublication && !rule.changedPublication.includes("wb")
                           ? undefined : rule.publish,
@@ -199,6 +218,8 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
       same_everywhere: rule.sameEverywhere,
       percent: rule.percent,
       by_warehouse: rule.byWarehouse,
+      units_mode: rule.unitsMode,
+      units_by_warehouse: rule.unitsByWarehouse,
     }
     try {
       if (productIds.length === 1) {
@@ -212,7 +233,7 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
         const res = await fetch(apiUrl('/products/fbs-rule'), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', ...headers(token) },
-          body: JSON.stringify({ product_ids: productIds, ...body }),
+          body: JSON.stringify({ product_ids: productIds, rule: body }),
         })
         if (!res.ok) throw new Error(await readApiErrorMessage(res))
       }
@@ -231,7 +252,7 @@ export function FfProductsFbsPage({ token, sellers: sellerList }: Props) {
       const current = sellers
         .find((one) => one.id === sellerId)
         ?.warehouses.find((one) => one.id === warehouseId)
-      const res = await fetch(apiUrl(`/fbs-sellers/${sellerId}/warehouses/${warehouseId}`), {
+      const res = await fetch(apiUrl(`/fbs-sellers/${sellerId}/warehouses/${warehouseNumberFromRuleKey(warehouseId)}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...headers(token) },
         body: JSON.stringify({

@@ -314,8 +314,10 @@ async def test_complete_receiving_mixed_box_then_loose_api(
 
 
 @pytest.mark.asyncio
-async def test_complete_receiving_no_discrepancy(async_client: AsyncClient) -> None:
-    """TC-NEW-IN-BE-03: complete-receiving clean when fact matches plan."""
+async def test_complete_receiving_matched_goods_still_reports_missing_box(
+    async_client: AsyncClient,
+) -> None:
+    """TC-NEW-IN-BE-03: Matching goods do not cancel a missing planned box."""
     suffix = str(int(time.time() * 1000))
     ah = await _admin_headers(async_client, suffix)
     rid, _pid, sku = await _submitted_request(async_client, ah, suffix, expected_qty=2)
@@ -331,7 +333,8 @@ async def test_complete_receiving_no_discrepancy(async_client: AsyncClient) -> N
     done = await async_client.post(f"{base}/complete-receiving", headers=ah)
     assert done.status_code == 200, done.text
     body = done.json()
-    assert body["has_discrepancy"] is False
+    assert body["has_discrepancy"] is True
+    assert body["boxes_discrepancy"] is True
     assert body["status"] == "sorting"
 
 
@@ -394,3 +397,243 @@ async def test_reopen_receiving_reverses_sorting_and_allows_recomplete(
     )
     row_final = next(r for r in bal_final.json() if r["product_id"] == pid)
     assert row_final["quantity_in_sorting"] == 5
+
+
+# WMS-174: если план коробов 2, а по факту оператор создал 1 короб —
+# сервер обязан вернуть boxes_discrepancy=True после complete-receiving.
+# Раньше здесь всегда стоял False (begin_receiving передавал actual_box_count=None).
+@pytest.mark.asyncio
+async def test_complete_receiving_reports_box_count_discrepancy(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    ah = await _admin_headers(async_client, suffix)
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "Wbx", "code": f"wbx-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    wid = wh.json()["id"]
+
+    seller = await async_client.post(
+        "/sellers",
+        headers=ah,
+        json={"name": f"Seller-box {suffix}"},
+    )
+    assert seller.status_code in (200, 201), seller.text
+    seller_id = seller.json()["id"]
+
+    pr = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Pbx",
+            "sku_code": f"sku-box-{suffix}",
+            "seller_id": seller_id,
+            "length_mm": 100,
+            "width_mm": 100,
+            "height_mm": 100,
+        },
+    )
+    assert pr.status_code == 200, pr.text
+    pid = pr.json()["id"]
+    sku = pr.json()["sku_code"]
+
+    base = "/operations/inbound-intake-requests"
+    cr = await async_client.post(
+        base,
+        headers=ah,
+        json={"warehouse_id": wid, "seller_id": seller_id},
+    )
+    assert cr.status_code == 201, cr.text
+    rid = cr.json()["id"]
+
+    ln = await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=ah,
+        json={"product_id": pid, "expected_qty": 6},
+    )
+    assert ln.status_code == 201, ln.text
+
+    # Планируем два короба, но создадим только один — расхождение по коробам.
+    await set_planned_boxes(async_client, base, rid, ah, count=2)
+    sub = await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    assert sub.status_code == 200, sub.text
+
+    req_base = f"/operations/inbound-intake-requests/{rid}"
+    box = await async_client.post(f"{req_base}/boxes", headers=ah)
+    assert box.status_code == 201, box.text
+    box_id = box.json()["id"]
+
+    for _ in range(6):
+        scan = await async_client.post(
+            f"{req_base}/boxes/{box_id}/scan",
+            headers=ah,
+            json={"barcode": sku},
+        )
+        assert scan.status_code == 200, scan.text
+
+    close = await async_client.post(f"{req_base}/boxes/{box_id}/close", headers=ah)
+    assert close.status_code == 200, close.text
+
+    done = await async_client.post(f"{req_base}/complete-receiving", headers=ah)
+    assert done.status_code == 200, done.text
+    body = done.json()
+    assert body["planned_box_count"] == 2
+    assert body["actual_box_count"] == 1
+    assert body["boxes_discrepancy"] is True
+    assert body["has_discrepancy"] is True
+
+
+# WMS-174: пометка «пришёл битым» на конкретном коробе — просто заметка,
+# ничего не блокирует и не двигает остатки.
+@pytest.mark.asyncio
+async def test_inbound_box_damaged_flag_toggle(async_client: AsyncClient) -> None:
+    suffix = str(int(time.time() * 1000))
+    ah = await _admin_headers(async_client, suffix)
+    rid, _pid, _sku = await _submitted_request(async_client, ah, suffix, expected_qty=1)
+    base = f"/operations/inbound-intake-requests/{rid}"
+
+    box = await async_client.post(f"{base}/boxes", headers=ah)
+    assert box.status_code == 201, box.text
+    box_id = box.json()["id"]
+    assert box.json()["is_damaged"] is False
+
+    mark = await async_client.patch(
+        f"{base}/boxes/{box_id}/damaged",
+        headers=ah,
+        json={"is_damaged": True},
+    )
+    assert mark.status_code == 200, mark.text
+    assert mark.json()["is_damaged"] is True
+
+    # Признак живой: обычный чтением заявки короб приходит уже помеченным.
+    got = await async_client.get(base, headers=ah)
+    boxes_out = {b["id"]: b for b in got.json()["boxes"]}
+    assert boxes_out[box_id]["is_damaged"] is True
+
+    unmark = await async_client.patch(
+        f"{base}/boxes/{box_id}/damaged",
+        headers=ah,
+        json={"is_damaged": False},
+    )
+    assert unmark.status_code == 200
+    assert unmark.json()["is_damaged"] is False
+
+
+# WMS-174: пометка чужой (несуществующей) пары request/box не должна проходить.
+@pytest.mark.asyncio
+async def test_inbound_box_damaged_flag_rejects_unknown_box(async_client: AsyncClient) -> None:
+    suffix = str(int(time.time() * 1000))
+    ah = await _admin_headers(async_client, suffix)
+    rid, _pid, _sku = await _submitted_request(async_client, ah, suffix, expected_qty=1)
+    base = f"/operations/inbound-intake-requests/{rid}"
+
+    missing = await async_client.patch(
+        f"{base}/boxes/00000000-0000-4000-8000-000000000000/damaged",
+        headers=ah,
+        json={"is_damaged": True},
+    )
+    assert missing.status_code == 404
+    assert missing.json()["detail"] == "box_not_found"
+
+
+# WMS-174: приёмка «россыпью» (ни одного короба не создано) не должна
+# считаться совпадением, если был задан ненулевой план коробов.
+@pytest.mark.asyncio
+async def test_complete_receiving_zero_boxes_compares_with_plan(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    ah = await _admin_headers(async_client, suffix)
+    rid, _pid, sku = await _submitted_request(async_client, ah, suffix, expected_qty=2)
+    base = f"/operations/inbound-intake-requests/{rid}"
+
+    for _ in range(2):
+        await async_client.post(
+            f"{base}/receiving/scan",
+            headers=ah,
+            json={"barcode": sku},
+        )
+
+    done = await async_client.post(f"{base}/complete-receiving", headers=ah)
+    assert done.status_code == 200, done.text
+    body = done.json()
+    assert body["actual_box_count"] == 0
+    assert body["planned_box_count"] == 1
+    assert body["boxes_discrepancy"] is True
+    assert body["has_discrepancy"] is True
+
+
+async def test_ff_list_hides_only_seller_drafts_and_preserves_seller_scope(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(time.time_ns())
+    ah = await _admin_headers(async_client, suffix)
+    wh = await async_client.get("/warehouses", headers=ah)
+    assert wh.status_code == 200, wh.text
+    wid = wh.json()[0]["id"]
+    base = "/operations/inbound-intake-requests"
+    seller_ids = []
+    seller_headers = []
+    for index in range(2):
+        seller = await async_client.post("/sellers", headers=ah, json={"name": f"Draft {index}"})
+        assert seller.status_code == 201, seller.text
+        seller_id = seller.json()["id"]
+        seller_ids.append(seller_id)
+        email = f"draft-{suffix}-{index}@example.com"
+        account = await async_client.post(
+            "/auth/seller-accounts",
+            headers=ah,
+            json={
+                "seller_id": seller_id,
+                "email": email,
+                "password": "password123",
+            },
+        )
+        assert account.status_code == 201, account.text
+        login = await async_client.post(
+            "/auth/login", json={"email": email, "password": "password123"}
+        )
+        assert login.status_code == 200, login.text
+        seller_headers.append({"Authorization": f"Bearer {login.json()['access_token']}"})
+    ff = await async_client.post(
+        base, headers=ah, json={"warehouse_id": wid, "seller_id": seller_ids[0]}
+    )
+    assert ff.status_code == 201, ff.text
+    drafts = []
+    for sh in seller_headers:
+        response = await async_client.post(base, headers=sh, json={"warehouse_id": wid})
+        assert response.status_code == 201, response.text
+        drafts.append(response.json()["id"])
+    listed = await async_client.get(base, headers=ah)
+    assert listed.status_code == 200, listed.text
+    assert {row["id"] for row in listed.json()} == {ff.json()["id"]}
+    own = await async_client.get(base, headers=seller_headers[0])
+    assert own.status_code == 200, own.text
+    assert {row["id"] for row in own.json()} == {ff.json()["id"], drafts[0]}
+    product = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Draft product",
+            "sku_code": f"draft-{suffix}",
+            "seller_id": seller_ids[0],
+        },
+    )
+    assert product.status_code == 200, product.text
+    line = await async_client.post(
+        f"{base}/{drafts[0]}/lines",
+        headers=seller_headers[0],
+        json={
+            "product_id": product.json()["id"],
+            "expected_qty": 1,
+        },
+    )
+    assert line.status_code == 201, line.text
+    await set_planned_boxes(async_client, base, drafts[0], seller_headers[0])
+    submitted = await async_client.post(f"{base}/{drafts[0]}/submit", headers=seller_headers[0])
+    assert submitted.status_code == 200, submitted.text
+    listed = await async_client.get(base, headers=ah)
+    assert {row["id"] for row in listed.json()} == {ff.json()["id"], drafts[0]}

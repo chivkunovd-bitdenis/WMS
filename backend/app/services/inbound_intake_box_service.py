@@ -8,6 +8,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.document_event import (
+    DOCUMENT_TYPE_INBOUND_INTAKE,
+    EVENT_TARE_LINE_QTY_CHANGED,
+)
 from app.models.inbound_intake import (
     InboundIntakeBox,
     InboundIntakeBoxLine,
@@ -17,6 +21,10 @@ from app.models.inbound_intake import (
 from app.models.product import Product
 from app.services import inbound_intake_service as intake_svc
 from app.services.box_barcode_service import generate_box_barcode
+from app.services.document_event_service import (
+    current_document_event_actor,
+    record_document_event_safely,
+)
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
 # IN-BE-01 collapsed chain — keep in sync with inbound_intake_service status constants.
@@ -70,6 +78,12 @@ async def create_open_box(
         session.add(box)
         try:
             await session.flush()
+            await intake_svc.record_container_mutation(
+                session,
+                box,
+                before=None,
+                after=intake_svc.container_audit_fields(box),
+            )
             await session.commit()
             return await _load_box(session, box.id)
         except IntegrityError:
@@ -108,6 +122,12 @@ async def create_boxes_for_request(
             except IntegrityError:
                 session.expunge(box)
                 continue
+            await intake_svc.record_container_mutation(
+                session,
+                box,
+                before=None,
+                after=intake_svc.container_audit_fields(box),
+            )
             created.append(box)
             break
         else:
@@ -166,7 +186,14 @@ async def mark_box_label_printed(
     box = await session.get(InboundIntakeBox, box_id)
     if box is None or box.request_id != request_id or box.tenant_id != tenant_id:
         raise InboundIntakeBoxError("box_not_found")
+    before = intake_svc.container_audit_fields(box)
     box.label_printed_at = datetime.now(UTC)
+    await intake_svc.record_container_mutation(
+        session,
+        box,
+        before=before,
+        after=intake_svc.container_audit_fields(box),
+    )
     await session.flush()
     stmt = (
         select(InboundIntakeBox)
@@ -225,7 +252,14 @@ async def _close_open_boxes(session: AsyncSession, request_id: uuid.UUID) -> Non
     open_box = await _open_box_for_request(session, request_id)
     if open_box is None:
         return
+    before = intake_svc.container_audit_fields(open_box)
     open_box.intake_closed_at = datetime.now(UTC)
+    await intake_svc.record_container_mutation(
+        session,
+        open_box,
+        before=before,
+        after=intake_svc.container_audit_fields(open_box),
+    )
     await session.flush()
 
 
@@ -385,8 +419,15 @@ async def open_box_by_barcode(
     box = next((b for b in boxes if b.internal_barcode.upper() == raw), None)
     if box is None:
         raise InboundIntakeBoxError("box_not_found")
+    before = intake_svc.container_audit_fields(box)
     if box.intake_opened_at is None:
         box.intake_opened_at = datetime.now(UTC)
+    await intake_svc.record_container_mutation(
+        session,
+        box,
+        before=before,
+        after=intake_svc.container_audit_fields(box),
+    )
     await session.flush()
     await session.commit()
     return await _load_box(session, box.id)
@@ -448,6 +489,7 @@ async def scan_product_into_box(
             InboundIntakeBoxLine.product_id == product_id_hint,
         )
         line = (await session.execute(box_line_stmt)).scalar_one_or_none()
+        qty_before_scan = int(line.quantity) if line is not None else 0
         if line is None:
             line = InboundIntakeBoxLine(
                 box_id=box_id,
@@ -467,6 +509,18 @@ async def scan_product_into_box(
             raise InboundIntakeBoxError("actual_below_posted")
         if req.status == intake_svc.STATUS_SUBMITTED:
             req.status = intake_svc.STATUS_RECEIVING
+        # WMS-056: скан +1 в короб — тоже правка состава; чтобы позднее снятие
+        # можно было восстановить, фиксируем изменение количества.
+        await _record_tare_edit(
+            session,
+            tenant_id=tenant_id,
+            request_id=request_id,
+            container_kind="box",
+            container_id=box_id,
+            product_id=product_id_hint,
+            qty_before=qty_before_scan,
+            qty_after=qty_before_scan + 1,
+        )
         await session.commit()
 
         result_stmt = (
@@ -502,6 +556,7 @@ async def scan_product_into_box(
     )
     res = await session.execute(stmt)
     line = res.scalar_one_or_none()
+    qty_before_scan = int(line.quantity) if line is not None else 0
     if line is None:
         line = InboundIntakeBoxLine(box_id=box_id, product_id=product_id, quantity=1)
         session.add(line)
@@ -513,6 +568,17 @@ async def scan_product_into_box(
     if req_loaded is None:
         raise InboundIntakeBoxError("request_not_found")
     await _sync_line_actuals_from_box_totals(session, req_loaded)
+    # WMS-056: авто-скан также правит состав тары — пишем append-only факт.
+    await _record_tare_edit(
+        session,
+        tenant_id=tenant_id,
+        request_id=request_id,
+        container_kind="box",
+        container_id=box_id,
+        product_id=product_id,
+        qty_before=qty_before_scan,
+        qty_after=qty_before_scan + 1,
+    )
     await session.commit()
 
     stmt2 = (
@@ -550,6 +616,8 @@ async def set_product_quantity_in_open_box(
     res = await session.execute(stmt)
     line = res.scalar_one_or_none()
 
+    qty_before = int(line.quantity) if line is not None else 0
+
     if quantity == 0:
         if line is None:
             return await _load_box(session, box.id)
@@ -578,8 +646,61 @@ async def set_product_quantity_in_open_box(
     if req_loaded is None:
         raise InboundIntakeBoxError("request_not_found")
     await _sync_line_actuals_from_box_totals(session, req_loaded)
+    # WMS-056: append-only факт правки состава короба на существующей границе;
+    # автор из проверенного JWT, до/после — в payload_json. Пишем ДО commit,
+    # чтобы событие уехало в ту же транзакцию, что и изменение состава.
+    if qty_before != quantity:
+        await _record_tare_edit(
+            session,
+            tenant_id=tenant_id,
+            request_id=request_id,
+            container_kind="box",
+            container_id=box_id,
+            product_id=product_id,
+            qty_before=qty_before,
+            qty_after=quantity,
+        )
     await session.commit()
     return await _load_box(session, box.id)
+
+
+async def _record_tare_edit(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    container_kind: str,
+    container_id: uuid.UUID,
+    product_id: uuid.UUID,
+    qty_before: int,
+    qty_after: int,
+) -> None:
+    """Write one append-only audit row for a receiving-tare composition edit.
+
+    WMS-056: The receiving-tare/box line has no `removed_at/removed_by`;
+    setting quantity to 0 physically deletes the row. This helper records
+    the before/after quantity, container reference, product, actor and time
+    in the existing document_event journal so history survives.
+    """
+    actor = current_document_event_actor()
+    payload = {
+        "container_kind": container_kind,
+        "container_id": str(container_id),
+        "qty_before": qty_before,
+        "qty_after": qty_after,
+    }
+    await record_document_event_safely(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_INBOUND_INTAKE,
+        document_id=request_id,
+        event_type=EVENT_TARE_LINE_QTY_CHANGED,
+        source=actor.source,
+        actor_user_id=actor.actor_user_id,
+        qty=qty_after,
+        product_id=product_id,
+        payload_json=payload,
+    )
 
 
 async def close_box_intake(
@@ -596,7 +717,14 @@ async def close_box_intake(
         raise InboundIntakeBoxError("box_closed")
     if box.intake_opened_at is None:
         raise InboundIntakeBoxError("no_open_box")
+    before = intake_svc.container_audit_fields(box)
     box.intake_closed_at = datetime.now(UTC)
+    await intake_svc.record_container_mutation(
+        session,
+        box,
+        before=before,
+        after=intake_svc.container_audit_fields(box),
+    )
     req_loaded = await intake_svc.get_request(session, tenant_id, request_id)
     if req_loaded is None:
         raise InboundIntakeBoxError("request_not_found")
@@ -622,6 +750,12 @@ async def delete_empty_box(
     total_qty = sum(int(ln.quantity) for ln in box.lines)
     if total_qty > 0:
         raise InboundIntakeBoxError("box_not_empty")
+    await intake_svc.record_container_mutation(
+        session,
+        box,
+        before=intake_svc.container_audit_fields(box),
+        after=None,
+    )
     await session.delete(box)
     await session.commit()
 

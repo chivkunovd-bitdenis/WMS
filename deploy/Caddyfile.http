@@ -12,7 +12,7 @@
   handle_path /api/* {
     reverse_proxy api:8000 {
       # Forward the verified client only, not a caller-supplied header chain.
-      header_up X-Forwarded-For {http.request.client_ip}
+      header_up X-Forwarded-For {client_ip}
     }
   }
 

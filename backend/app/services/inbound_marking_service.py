@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
 from app.models.background_job import BackgroundJob
+from app.models.document_event import DOCUMENT_TYPE_INBOUND_INTAKE, EVENT_DATA_CHANGED
 from app.models.fbs_order import FbsOrderMarking
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.marking_code import (
@@ -32,6 +33,7 @@ from app.models.marking_code import (
 )
 from app.models.product import Product
 from app.services import public_marking_check as public_check
+from app.services.document_event_service import record_document_mutation
 from app.services.inbound_intake_service import (
     RECEIVING_STATUSES,
     InboundIntakeError,
@@ -390,6 +392,27 @@ async def delete_code(
     ):
         if await session.scalar(stmt.limit(1)) is not None:
             raise InboundIntakeError("marking_code_already_used")
+    # Keep only validated identities of the attachment being removed, never CIS/meta content.
+    try:
+        line_id = str(uuid.UUID(str(_meta(own[0]).get("line_id"))))
+    except ValueError:
+        line_id = None
+    attachment = {
+        "code_id": str(code.id),
+        "line_id": line_id,
+        "attachment_event_id": str(own[0].id),
+        "attached_by_user_id": str(own[0].actor_user_id) if own[0].actor_user_id else None,
+        "pool_id": str(code.pool_id) if code.pool_id else None,
+    }
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_INBOUND_INTAKE,
+        document_id=req.id,
+        event_type=EVENT_DATA_CHANGED,
+        before={**attachment, "attached": True, "code_exists": True},
+        after={**attachment, "attached": False, "code_exists": is_printed_pool},
+    )
     await session.execute(delete(MarkingCodeEvent).where(MarkingCodeEvent.id == own[0].id))
     if not is_printed_pool:
         await session.execute(delete(MarkingCode).where(MarkingCode.id == code.id))

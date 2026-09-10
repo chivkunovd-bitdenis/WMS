@@ -1652,6 +1652,19 @@ async def test_fbs_legacy_technical_binding_repairs_to_sole_operational_warehous
     seller_uuid = uuid.UUID(seller_id)
     warehouse_uuid = uuid.UUID(warehouse_id)
 
+    # WMS-062 создаёт «Основной» при регистрации, поэтому у арендатора теперь
+    # два операционных склада (свой созданный + «Основной»). Тест проверяет
+    # ремонт привязки, когда операционный склад ровно один — поэтому перед
+    # проверкой выключаем автоматически заведённый склад из операционных.
+    async with SessionLocal() as session:
+        await session.execute(
+            Warehouse.__table__.update()
+            .where(Warehouse.tenant_id == tenant_id)
+            .where(Warehouse.id != warehouse_uuid)
+            .values(is_operational=False)
+        )
+        await session.commit()
+
     async with SessionLocal() as session:
         technical = Warehouse(
             tenant_id=tenant_id,

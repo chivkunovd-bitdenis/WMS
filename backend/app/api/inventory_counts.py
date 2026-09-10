@@ -69,6 +69,11 @@ class InventoryCountActualIn(BaseModel):
 
 class InventoryCountActualBatchIn(BaseModel):
     lines: list[InventoryCountActualIn]
+    # WMS-155: комментарий редактируется вместе с фактическими количествами.
+    # Опущенное поле означает «не менять», пустая строка — стереть.
+    comment: str | None = Field(default=None, max_length=4000)
+    update_comment: bool = False
+    expected_comment: str | None = Field(default=None, max_length=4000)
 
 
 class InventoryCountFoundIn(BaseModel):
@@ -208,6 +213,7 @@ class InventoryCountDetailOut(BaseModel):
     posted_by: str | None
     comment: str
     address_storage: bool
+    empty_places: list[dict[str, str]] = []
     lines: list[InventoryCountLineOut]
     cells: list[CountCellOut]
     # Ячейки склада, которые сканер обязан узнавать, включая пустые по учёту.
@@ -544,6 +550,7 @@ async def _detail_out(
     # её по-прежнему можно, а пустой строкой она документ не раздувает. Тара,
     # заведённая прямо в этом документе, — исключение, см. _prune_empty_containers.
     created_container_ids = await service.created_container_ids(session, count.id)
+    created_container_ids.update((item["kind"], item["id"]) for item in count.empty_places)
     scannable_containers: list[CountScannableContainerOut] = []
     if unassigned is not None:
         unassigned.children = _prune_empty_containers(
@@ -566,7 +573,7 @@ async def _detail_out(
             *[
                 cell
                 for cell in cells_by_id.values()
-                if cell.children
+                if cell.children or {"kind": "cell", "id": cell.id} in count.empty_places
             ],
             *fallback_cells,
         ]
@@ -608,6 +615,7 @@ async def _detail_out(
         posted_at=count.posted_at.isoformat() if count.posted_at is not None else None,
         posted_by=count.posted_by.email if count.posted_by is not None else None,
         comment=count.comment or "",
+        empty_places=count.empty_places,
         address_storage=address_storage,
         lines=line_rows,
         cells=cells,
@@ -628,6 +636,7 @@ def _http_error(exc: service.InventoryCountError) -> HTTPException:
         "object_not_found",
         "product_not_found",
         "storage_location_not_found",
+        "location_not_found",
     }:
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
     if exc.code in {
@@ -635,11 +644,20 @@ def _http_error(exc: service.InventoryCountError) -> HTTPException:
         "already_posted",
         "not_cancellable",
         "empty_count",
+        "comment_changed",
         "container_has_no_stock",
         "balance_changed_during_post",
         "count_not_editable",
         "barcode_is_ambiguous",
         "container_reference_invalid",
+        # Переложить товар в тару (WMS-153): состояние на момент действия не
+        # позволяет продолжить, а не «данных не существует».
+        "already_there",
+        "product_already_at_destination",
+        "move_source_empty",
+        # Удалить пустую тару (WMS-153).
+        "container_not_empty",
+        "container_linked_to_inbound",
     }:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.code)
@@ -732,11 +750,44 @@ async def save_inventory_count_lines(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InventoryCountDetailOut:
     try:
-        count = await service.save_actuals(
-            session,
-            user.tenant_id,
-            count_id,
-            [(line.line_id, line.actual_quantity) for line in body.lines],
+        if body.update_comment:
+            count = await service.save_actuals(
+                session,
+                user.tenant_id,
+                count_id,
+                [(line.line_id, line.actual_quantity) for line in body.lines],
+                comment=body.comment,
+                expected_comment=(
+                    body.expected_comment if "expected_comment" in body.model_fields_set
+                    else service._SENTINEL
+                ),
+            )
+        else:
+            count = await service.save_actuals(
+                session,
+                user.tenant_id,
+                count_id,
+                [(line.line_id, line.actual_quantity) for line in body.lines],
+            )
+    except service.InventoryCountError as exc:
+        raise _http_error(exc) from None
+    return await _detail_out(session, count)
+
+
+class InventoryCountEmptyPlaceIn(BaseModel):
+    kind: Literal["cell", "pallet", "box", "cargo_place"]
+    id: uuid.UUID | None = None
+
+
+@router.post("/{count_id}/empty-place", response_model=InventoryCountDetailOut)
+async def mark_inventory_count_place_empty(
+    count_id: uuid.UUID, body: InventoryCountEmptyPlaceIn,
+    user: Annotated[User, Depends(require_inventory_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryCountDetailOut:
+    try:
+        count = await service.mark_place_empty(
+            session, user.tenant_id, count_id, kind=body.kind, place_id=body.id,
         )
     except service.InventoryCountError as exc:
         raise _http_error(exc) from None
@@ -745,6 +796,10 @@ async def save_inventory_count_lines(
 
 class InventoryCountContainerCreateIn(BaseModel):
     kind: Literal["pallet", "box", "cargo_place"]
+    # WMS-153: оператор указывает ячейку, в которой создаётся тара. None —
+    # исторический режим «просто на складе», для совместимости с существующим
+    # UI и мобильным ТСД, где ячейка ещё не выбрана.
+    cell_id: uuid.UUID | None = None
 
 
 @router.post("/{count_id}/containers", response_model=InventoryCountDetailOut)
@@ -766,6 +821,7 @@ async def create_inventory_count_container(
             user.tenant_id,
             count_id,
             kind=body.kind,
+            cell_id=body.cell_id,
         )
     except service.InventoryCountError as exc:
         raise _http_error(exc) from None
@@ -859,6 +915,70 @@ async def add_inventory_count_manual_line(
         expected_quantity=result.expected_quantity,
         notice=result.notice,
     )
+
+
+class InventoryCountLineMoveIn(BaseModel):
+    """Переложить товар в тару — вторая доработка от 03.09.2026, WMS-153."""
+
+    container_kind: Literal["pallet", "box", "cargo_place"]
+    container_id: uuid.UUID
+
+
+@router.post("/{count_id}/lines/{line_id}/move", response_model=InventoryCountDetailOut)
+async def move_inventory_count_line(
+    count_id: uuid.UUID,
+    line_id: uuid.UUID,
+    body: InventoryCountLineMoveIn,
+    user: Annotated[User, Depends(require_inventory_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryCountDetailOut:
+    """Переложить товар строки в выбранную тару.
+
+    Тот же перенос остатка, что и на карте склада (`/warehouses/{id}/map/move`),
+    вызванный из документа пересчёта: см. `service.move_line_to_container`.
+    """
+    try:
+        count = await service.move_line_to_container(
+            session,
+            user.tenant_id,
+            count_id,
+            line_id,
+            actor_user_id=user.id,
+            container_kind=body.container_kind,
+            container_id=body.container_id,
+        )
+    except service.InventoryCountError as exc:
+        raise _http_error(exc) from None
+    return await _detail_out(session, count)
+
+
+@router.delete(
+    "/{count_id}/containers/{kind}/{container_id}", response_model=InventoryCountDetailOut
+)
+async def delete_inventory_count_container(
+    count_id: uuid.UUID,
+    kind: Literal["pallet", "box", "cargo_place"],
+    container_id: uuid.UUID,
+    user: Annotated[User, Depends(require_inventory_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryCountDetailOut:
+    """Удалить пустую тару — третья доработка от 03.09.2026, WMS-153.
+
+    Удаляет, только если тара по-настоящему пуста (см. `service.
+    delete_document_container`); если в ней что-то лежит, отказывает понятным
+    кодом ошибки вместо тихого игнорирования.
+    """
+    try:
+        count = await service.delete_document_container(
+            session,
+            user.tenant_id,
+            count_id,
+            kind=kind,
+            container_id=container_id,
+        )
+    except service.InventoryCountError as exc:
+        raise _http_error(exc) from None
+    return await _detail_out(session, count)
 
 
 @router.post("/{count_id}/post", response_model=InventoryCountPostOut)

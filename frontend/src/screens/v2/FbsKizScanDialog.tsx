@@ -1,3 +1,4 @@
+import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import {
   Box,
@@ -125,6 +126,11 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
   const [debugOpen, setDebugOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const requestClose = () => {
+    const dirty = Boolean(value.trim() || active || confirmTarget) || pairs.some((pair) => pair.status !== 'ok')
+    if (confirmDiscardChanges(dirty)) onClose()
+  }
+
 
   // Сканер стреляет в активное поле. Пока запрос идёт, поле заблокировано и фокус
   // теряется — без возврата фокуса следующий выстрел уходит в никуда.
@@ -290,7 +296,7 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
 
   return (
     <>
-      <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="sm" fullWidth data-testid="fbs-kiz-dialog">
+      <Dialog open={open} onClose={busy ? undefined : requestClose} maxWidth="sm" fullWidth data-testid="fbs-kiz-dialog">
         <DialogTitle sx={{ pb: 0.5 }}>
           Внести КИЗ
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
@@ -427,7 +433,7 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose} disabled={busy}>
+          <Button onClick={requestClose} disabled={busy}>
             {allDone ? 'Закрыть' : 'Отмена'}
           </Button>
           {allDone ? null : (

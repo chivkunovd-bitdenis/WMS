@@ -193,7 +193,10 @@ async def update_fbs_order_reservation(
         if order.warehouse_id is None:
             order.reserve_status = RESERVE_STATUS_WAREHOUSE_UNMAPPED
             return
-        pools: dict[uuid.UUID, FbsBindingStockPool] = {}
+        # WMS-338/341: pool.quantity — операторский потолок, менять его может
+        # только оператор. Резерв заказа под потолком не расходуется: сколько
+        # публикуем в кабинет решает split_amounts как min(cap, свободный),
+        # а сам резерв уменьшает свободное через существующую строку резерва.
         for pid, quantity in required.items():
             product = products[pid]
             if product is None:
@@ -201,28 +204,26 @@ async def update_fbs_order_reservation(
                 return
             if product.fbs_units_mode:
                 pool = await _order_stock_pool(session, order, pid)
-                if pool is None or pool.quantity < quantity:
-                    order.reserve_status = RESERVE_STATUS_NO_STOCK
+                if pool is None:
+                    # Правило поштучного режима задаётся существованием pool.
+                    order.reserve_status = RESERVE_STATUS_NOT_PUBLISHED
                     return
-                pools[pid] = pool
             else:
                 if order.marketplace == "wb" and (
                     not product.fbs_stock_sync_enabled or product.fbs_percent is None
                 ):
                     order.reserve_status = RESERVE_STATUS_NOT_PUBLISHED
                     return
-                available = await fbs_available_qty_for_product(
-                    session,
-                    order.tenant_id,
-                    order.warehouse_id,
-                    pid,
-                    exclude_fbs_order_id=order.id,
-                )
-                if available < quantity:
-                    order.reserve_status = RESERVE_STATUS_NO_STOCK
-                    return
-        for pid, pool in pools.items():
-            pool.quantity -= required[pid]
+            available = await fbs_available_qty_for_product(
+                session,
+                order.tenant_id,
+                order.warehouse_id,
+                pid,
+                exclude_fbs_order_id=order.id,
+            )
+            if available < quantity:
+                order.reserve_status = RESERVE_STATUS_NO_STOCK
+                return
         if order.marketplace == "ozon" and positions:
             for position in positions:
                 assert position.product_id is not None
@@ -251,12 +252,11 @@ async def update_fbs_order_reservation(
     else:
         if not reservations:
             return
+        # WMS-338/341: снятие резерва не возвращает ничего в pool.quantity —
+        # операторский потолок неизменен по контракту. Само удаление строки
+        # резерва увеличивает свободный остаток, и следующая публикация уедет
+        # с новым min(cap, free) без отдельного счётчика.
         for reservation in reservations:
-            product = products[reservation.product_id]
-            if not shipped and product is not None and product.fbs_units_mode:
-                pool = await _order_stock_pool(session, order, reservation.product_id)
-                if pool is not None:
-                    pool.quantity += reservation.quantity
             await session.delete(reservation)
         for position in positions:
             position.reserved_quantity = 0
@@ -271,43 +271,13 @@ async def _deduct_inventory_from_fbs(
     warehouse_id: uuid.UUID,
     shortage: int,
 ) -> list[StockDeduction]:
-    """Недостача: сначала обычный свободный остаток, затем доступное ФБС."""
-    if not product.fbs_units_mode:
-        return [(product.id, None, shortage)]
-    from app.services.fbs_stock_availability_service import fbs_stock_breakdown_by_product
+    """Report physical shortage without inventing stock reserved by a cap.
 
-    pools = list(
-        (
-            await session.scalars(
-                select(FbsBindingStockPool)
-                .join(FbsWarehouseBinding)
-                .where(
-                    FbsBindingStockPool.tenant_id == product.tenant_id,
-                    FbsBindingStockPool.product_id == product.id,
-                    FbsWarehouseBinding.wms_warehouse_id == warehouse_id,
-                )
-                .order_by(FbsBindingStockPool.binding_id)
-                .execution_options(populate_existing=True)
-            )
-        ).all()
-    )
-    if not pools:
-        return [(product.id, None, shortage)]
-    stock = (
-        await fbs_stock_breakdown_by_product(session, product.tenant_id, warehouse_id, [product.id])
-    )[product.id]
-    ordinary_free = max(0, stock.free - sum(p.quantity for p in pools))
-    deductions: list[StockDeduction] = [(product.id, None, min(shortage, ordinary_free))]
-    remaining = max(0, shortage - ordinary_free)
-    for pool in pools:
-        take = min(remaining, pool.quantity)
-        if take:
-            deductions.append((product.id, pool.binding_id, take))
-        pool.quantity -= take
-        remaining -= take
-        if remaining == 0:
-            break
-    return deductions
+    Publication caps do not describe separate inventory. The actual movement
+    below reduces physical stock; order reservations and operator caps survive.
+    The tuple format is retained for the inventory document response.
+    """
+    return [(product.id, None, shortage)]
 
 
 async def _physical_on_hand(
@@ -1692,49 +1662,18 @@ async def apply_fbs_supply_write_off(
     if quantity < 1:
         msg = "quantity must be positive"
         raise ValueError(msg)
-    # При отгрузке без резерва (существующий сценарий подтверждения минуса)
-    # расходуем только доступное своего направления. Обычный зарезервированный
-    # заказ уже исключён из него, повторно его не вычитаем.
-    product = await lock_stock_product(session, tenant_id, product_id)
-    if fbs_order_id is not None and product is not None and product.fbs_units_mode:
-        order = await session.get(FbsOrder, fbs_order_id)
-        if order is None or order.tenant_id != tenant_id:
+    # WMS-338/341: передача без резерва больше не расходует операторский потолок.
+    # Физическое списание уменьшает баланс через record_movement_and_adjust_balance,
+    # и следующая публикация уедет как min(cap, free) без второго счётчика.
+    await lock_stock_product(session, tenant_id, product_id)
+    if fbs_order_id is not None:
+        # Санити-чек: заказ существует и наш. Значение операторского потолка
+        # мы уже не трогаем, но проверить принадлежность строку заказа надо
+        # — иначе тихо спишем чужой физический товар по подложенному id.
+        sanity_order = await session.get(FbsOrder, fbs_order_id)
+        if sanity_order is None or sanity_order.tenant_id != tenant_id:
             raise ValueError("fbs order not found")
-        wb_reserved = await session.scalar(
-            select(func.sum(FbsOrderReservation.quantity)).where(
-                FbsOrderReservation.fbs_order_id == fbs_order_id,
-                FbsOrderReservation.product_id == product_id,
-            )
-        )
-        position_reserved = await session.scalar(
-            select(func.sum(FbsOrderProductReservation.quantity))
-            .join(FbsOrderProduct)
-            .where(
-                FbsOrderProduct.order_id == fbs_order_id,
-                FbsOrderProductReservation.product_id == product_id,
-            )
-        )
-        unreserved = max(0, quantity - int(wb_reserved or 0) - int(position_reserved or 0))
-        if unreserved:
-            pool = await _order_stock_pool(session, order, product_id)
-            if pool is not None:
-                pool.quantity = max(0, pool.quantity - unreserved)
 
-    from app.services import stock_direction_service
-
-    if product is None or not product.fbs_units_mode:
-        try:
-            await stock_direction_service.consume_fbs_pool(
-                session,
-                tenant_id,
-                product_id,
-                quantity,
-            )
-        except stock_direction_service.StockDirectionError as exc:
-            # Пул кончился — это тоже расхождение, а не повод отказать в списании
-            # того, что уже уехало.
-            if exc.code != "insufficient_fbs_pool":
-                raise
     return await record_movement_and_adjust_balance(
         session,
         tenant_id=tenant_id,
