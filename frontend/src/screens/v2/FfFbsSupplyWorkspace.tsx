@@ -305,7 +305,9 @@ function productLabelFromPosition(
     product_name: position.name,
     sku_code: position.sku ?? position.seller_article ?? order.product.sku ?? `WMS-${order.id}`,
     wb_vendor_code: position.seller_article,
-    wb_size: order.product.size,
+    // Ozon position DTO does not carry a size.  The compatibility product can
+    // describe another position, so an absent position size stays blank.
+    wb_size: null,
     barcode,
   }
 }
@@ -1183,9 +1185,13 @@ export function FfFbsSupplyWorkspace({
           ?? (isOzonSupply ? `Ozon-${firstOrder.external_order_id ?? firstOrder.id}` : `WB-${firstOrder.wb_order_id}`),
         productName: firstOzonPosition?.name ?? workspace.supply.name,
         productLabel: productLabelFromOrder(firstOrder, workspace.supply.marketplace),
-        productBarcodeOptions: productBarcodeOptionsForOrder(firstOrder, workspace.supply.marketplace),
+        productBarcodeOptions: isOzonSupply && firstOzonPosition
+          ? productBarcodeOptionsForPosition(firstOzonPosition, 'ozon')
+          : productBarcodeOptionsForOrder(firstOrder, workspace.supply.marketplace),
         fbsTape: {
           orders: tapeOrders,
+          selectedBarcodeOrderId: isOzonSupply ? firstOrder.id : undefined,
+          selectedBarcodePositionId: isOzonSupply ? firstOzonPosition?.id ?? undefined : undefined,
           markingShortage: markingShortageForOrders(orders),
           includeOrderQr: !isOzonSupply,
           print: ({ layout, allowPartial, reprint: printReprint }) => {
@@ -1265,7 +1271,9 @@ export function FfFbsSupplyWorkspace({
         productName: ozonPosition?.name ?? line?.product_name ?? order.product.name,
         packagingInstructions: line?.packaging_instructions,
         productLabel: productLabelFromOrder(order, workspace.supply.marketplace),
-        productBarcodeOptions: productBarcodeOptionsForOrder(order, workspace.supply.marketplace),
+        productBarcodeOptions: workspace.supply.marketplace === 'ozon' && ozonPosition
+          ? productBarcodeOptionsForPosition(ozonPosition, 'ozon')
+          : productBarcodeOptionsForOrder(order, workspace.supply.marketplace),
         fbsTape: {
           orders: [{
             orderId: order.id,
@@ -1275,6 +1283,8 @@ export function FfFbsSupplyWorkspace({
             productLabel: productLabelFromOrder(order, workspace.supply.marketplace),
             productLabels: productLabelsFromOrder(order, workspace.supply.marketplace),
           }],
+          selectedBarcodeOrderId: workspace.supply.marketplace === 'ozon' ? order.id : undefined,
+          selectedBarcodePositionId: workspace.supply.marketplace === 'ozon' ? ozonPosition?.id ?? undefined : undefined,
           markingShortage: markingShortageForOrders([order]),
           includeOrderQr: false,
           print: ({ layout, allowPartial, reprint: printReprint }) => {
