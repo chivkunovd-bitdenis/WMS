@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Alert, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
   Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination,
@@ -20,6 +21,9 @@ type Props = {
 export function FbsCancelledAfterPackDialog({
   open, token, authHeaders, sellerId, onClose, onOpenSupply,
 }: Props) {
+  const navigate = useNavigate()
+  const [cancelledFrom, setCancelledFrom] = useState('')
+  const [cancelledTo, setCancelledTo] = useState('')
   const [search, setSearch] = useState('')
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(0)
@@ -35,7 +39,7 @@ export function FbsCancelledAfterPackDialog({
     return () => window.clearTimeout(timer)
   }, [search])
 
-  useEffect(() => { setPage(0) }, [sellerId])
+  useEffect(() => { setPage(0) }, [sellerId, cancelledFrom, cancelledTo])
 
   useEffect(() => {
     if (!open) return
@@ -44,6 +48,8 @@ export function FbsCancelledAfterPackDialog({
     setError(null)
     void fetchFbsCancelledAfterPack(token, authHeaders, {
       sellerId, search: query, limit: PAGE_SIZE, offset: page * PAGE_SIZE,
+      cancelledFrom: cancelledFrom ? new Date(cancelledFrom).toISOString() : undefined,
+      cancelledTo: cancelledTo ? new Date(cancelledTo).toISOString() : undefined,
     }).then((result) => {
       if (!current) return
       setItems(result.items)
@@ -55,14 +61,15 @@ export function FbsCancelledAfterPackDialog({
       setError(cause instanceof Error ? cause.message : 'Не удалось загрузить список.')
     }).finally(() => { if (current) setBusy(false) })
     return () => { current = false }
-  }, [open, token, authHeaders, sellerId, query, page, revision])
+  }, [open, token, authHeaders, sellerId, query, page, revision, cancelledFrom, cancelledTo])
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg" data-testid="fbs-cancelled-after-pack">
       <DialogTitle>К вскрытию · Wildberries</DialogTitle>
       <DialogContent>
         <Typography color="text.secondary" sx={{ mb: 2 }}>
-          Отменённые заказы со следами сборки. Найдите короб и выньте отменённый заказ перед выездом.
+          Отменённые заказы со следами сборки. До передачи заказ нужно вынуть из короба;
+          после передачи проверьте документ возврата.
         </Typography>
         <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
           <TextField
@@ -71,6 +78,14 @@ export function FbsCancelledAfterPackDialog({
             slotProps={{ htmlInput: { maxLength: 200 } }} data-testid="fbs-cancelled-after-pack-search"
           />
           <Button onClick={refresh} disabled={busy}>Обновить</Button>
+        </Stack>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
+          <TextField size="small" label="Отмена с" type="datetime-local" value={cancelledFrom}
+            onChange={(event) => setCancelledFrom(event.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }} />
+          <TextField size="small" label="Отмена по" type="datetime-local" value={cancelledTo}
+            onChange={(event) => setCancelledTo(event.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }} />
         </Stack>
         {error ? <Alert severity="error">{error}</Alert> : null}
         {busy ? <CircularProgress size={24} aria-label="Загрузка списка" /> : (
@@ -104,11 +119,27 @@ export function FbsCancelledAfterPackDialog({
                           {item.supply.wb_supply_id || item.supply.name || 'Открыть поставку'}
                         </Button>
                       ) : item.supply.wb_supply_id || '—'}
-                      {item.supply_departed ? <Typography variant="caption" sx={{ display: 'block' }}>Поставка передана</Typography> : null}
+                      {item.transfer_at ? <Typography variant="caption" sx={{ display: 'block' }}>
+                        Передана {new Date(item.transfer_at).toLocaleString('ru-RU')}
+                      </Typography> : null}
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">{item.cancellation_reason}</Typography>
-                      <Typography variant="caption">Обновлено {new Date(item.cancelled_at).toLocaleString('ru-RU')}</Typography>
+                      <Typography variant="body2">
+                        {item.cancelled_after_transfer === null ? 'Граница передачи неизвестна'
+                          : item.cancelled_after_transfer ? 'После передачи'
+                            : item.transfer_at ? 'До передачи' : 'Передача не подтверждена'}
+                      </Typography>
+                      <Typography variant="caption" sx={{ display: 'block' }}>
+                        {item.cancelled_at_source === 'wb_payload' ? 'Отмена по данным WB'
+                          : item.cancelled_at_source === 'observed_at' ? 'Впервые замечено WMS'
+                            : 'Последнее изменение; время отмены неизвестно'}
+                        {' · '}{new Date(item.cancelled_at).toLocaleString('ru-RU')}
+                      </Typography>
+                      {item.return_document_id ? <Button size="small" onClick={() => {
+                        onClose()
+                        navigate(`/app/ff/reception?open_inbound=${encodeURIComponent(item.return_document_id!)}`)
+                      }}>Открыть возврат</Button> : null}
                     </TableCell>
                   </TableRow>
                 ))}
