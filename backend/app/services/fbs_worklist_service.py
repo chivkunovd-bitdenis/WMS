@@ -97,6 +97,16 @@ def _is_supplier_status_new(supplier_status: str | None) -> bool:
     return supplier_status is None or supplier_status.strip().lower() == FBS_ORDER_STATUS_NEW
 
 
+def _deadline_in_work_clause(server_now: datetime) -> ColumnElement[bool]:
+    """Заказ ещё в работе: срок не вышел — а у Ozon срок из работы и не выводит."""
+    return or_(FbsOrder.marketplace == "ozon", FbsOrder.deadline_at >= server_now)
+
+
+def _deadline_expired_clause(server_now: datetime) -> ColumnElement[bool]:
+    """Просрочен и потому нерабочий. Заказы Ozon сюда не попадают (WMS-422)."""
+    return and_(FbsOrder.marketplace != "ozon", FbsOrder.deadline_at < server_now)
+
+
 def _supplier_new_clause() -> ColumnElement[bool]:
     return or_(
         FbsOrder.supplier_status.is_(None),
@@ -297,11 +307,15 @@ async def _fetch_orders_page(
         if status_group == "new":
             stmt = stmt.where(_supplier_new_clause())
             # BL-3: "Новые" показывают только заказы, которые WB ещё реально примет.
-            stmt = stmt.where(FbsOrder.deadline_at >= server_now)
+            # WMS-422: у Ozon просрочка заказ из работы не выводит — кабинет
+            # продолжает отдавать отправление как неотгруженное. Работать с ним
+            # можно только здесь: чекбоксы и кнопки поставки живут на вкладке
+            # «Новые», на остальных вкладках строка нерабочая.
+            stmt = stmt.where(_deadline_in_work_clause(server_now))
         elif status_group == "expired":
             stmt = stmt.where(_supplier_new_clause())
             # BL-3: "Просрочены" — зеркало "new", но с истёкшим дедлайном.
-            stmt = stmt.where(FbsOrder.deadline_at < server_now)
+            stmt = stmt.where(_deadline_expired_clause(server_now))
     if wb_warehouse_id is not None:
         stmt = stmt.where(FbsOrder.wb_warehouse_id == wb_warehouse_id)
     if search and search.strip():
@@ -385,10 +399,10 @@ async def _fetch_warehouse_options(
         stmt = stmt.where(FbsOrder.status.in_(allowed))
         if status_group == "new":
             stmt = stmt.where(_supplier_new_clause())
-            stmt = stmt.where(FbsOrder.deadline_at >= server_now)
+            stmt = stmt.where(_deadline_in_work_clause(server_now))
         elif status_group == "expired":
             stmt = stmt.where(_supplier_new_clause())
-            stmt = stmt.where(FbsOrder.deadline_at < server_now)
+            stmt = stmt.where(_deadline_expired_clause(server_now))
     stmt = stmt.order_by(TenantWbMpWarehouse.name.asc(), FbsOrder.wb_warehouse_id.asc())
     res = await session.execute(stmt)
     options: dict[str, dict[str, Any]] = {}
