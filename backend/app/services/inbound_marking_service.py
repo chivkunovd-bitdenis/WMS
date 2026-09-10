@@ -520,8 +520,11 @@ async def _run_check_job(job_id: uuid.UUID) -> None:
             for seller_id, entries in by_seller.items():
                 credential = credentials[seller_id]
                 has_cz_token = credential is not None and credential.has_cz_token
-                for offset in range(0, len(entries), true_api.BATCH_SIZE):
-                    batch = entries[offset : offset + true_api.BATCH_SIZE]
+                # Public mobile/check is one-code-per-request, so persist each
+                # answer before starting the next potentially slow request.
+                batch_size = true_api.BATCH_SIZE if has_cz_token else 1
+                for offset in range(0, len(entries), batch_size):
+                    batch = entries[offset : offset + batch_size]
                     if has_cz_token:
                         token = tokens.get(seller_id)
                         checks = (
