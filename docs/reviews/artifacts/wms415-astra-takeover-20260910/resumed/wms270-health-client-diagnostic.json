@@ -1,0 +1,1 @@
+[{"client": "{http.request.client_ip}:0", "probe": "wms270-69a26723ceea4348892885cc2fb537fc-mac", "status": 200}, {"client": "{http.request.client_ip}:0", "probe": "wms270-69a26723ceea4348892885cc2fb537fc-server", "status": 200}]
