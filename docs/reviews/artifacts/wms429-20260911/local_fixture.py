@@ -138,7 +138,7 @@ async def seed() -> dict[str, str]:
             seller_id=seller.id,
             name="Учебный Ozon товар A",
             sku_code="WMS429-OZ-A",
-            wb_barcode="429200000001",
+            wb_barcode="999100000001",
             fbs_stock_sync_enabled=False,
             fbs_ozon_stock_sync_enabled=True,
         )
@@ -147,7 +147,7 @@ async def seed() -> dict[str, str]:
             seller_id=seller.id,
             name="Учебный Ozon товар B",
             sku_code="WMS429-OZ-B",
-            wb_barcode="429200000002",
+            wb_barcode="999100000002",
             fbs_stock_sync_enabled=True,
             fbs_ozon_stock_sync_enabled=True,
         )
