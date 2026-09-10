@@ -1,0 +1,74 @@
+{
+  "updated_at_utc": "2026-09-10T22:17:10.023084+00:00",
+  "phase": "PARALLEL_IMPLEMENTATION",
+  "release_branch": "codex/wms-release-20260911",
+  "base_sha": "dcac6251bb7defc9fa6c3e3b1a4dbc35555ae382",
+  "preserved_refs": [
+    "85d802b1",
+    "8de937e5"
+  ],
+  "automation_id": "wms-11",
+  "production_authorized": true,
+  "apk_publication_authorized": true,
+  "chat_deployment_authorized": false,
+  "development_test_policy": "No repeated author tests/builds; root runs necessary final checks only",
+  "review_sequence": [
+    "single Claude Opus5 xhigh",
+    "parallel fixes",
+    "isolated Astra high"
+  ],
+  "agents": {
+    "ozon": {
+      "native_task": "/root/ozon_release_0911",
+      "model": "gpt-5.6-terra",
+      "effort": "high",
+      "checkout": ".worktrees/wms-ozon-20260911",
+      "scope_ids": [
+        418,
+        424,
+        425,
+        427,
+        431
+      ]
+    },
+    "integrations": {
+      "native_task": "/root/integrations_0911",
+      "model": "gpt-5.6-terra",
+      "effort": "high",
+      "checkout": ".worktrees/wms-integrations-20260911",
+      "scope_ids": [
+        280,
+        396
+      ]
+    },
+    "claude_lanes": {
+      "native_task": "/root/claude_lanes_0911",
+      "model": "gpt-5.6-terra",
+      "effort": "high",
+      "checkouts": {
+        "storage": ".worktrees/wms-storage-20260911",
+        "print": ".worktrees/wms-print-20260911",
+        "chat": ".worktrees/wms-chat-20260911"
+      },
+      "claude_requested_model": "claude-opus-5",
+      "claude_requested_effort": "xhigh",
+      "scope_ids": [
+        430,
+        402,
+        397,
+        399
+      ]
+    }
+  },
+  "external_inputs": {
+    "printer_hardware": "Asked owner OS/model/USB or network; awaiting text answer"
+  },
+  "prohibitions": [
+    "No production chat",
+    "No credential dashboards or secret changes",
+    "No mobile PROGRESS/raw logs",
+    "No live operator document mutation for QA",
+    "No new FBS navigation blockers",
+    "No new frontend beyond explicit scope"
+  ]
+}
