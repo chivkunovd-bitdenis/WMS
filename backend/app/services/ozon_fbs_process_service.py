@@ -1151,6 +1151,16 @@ async def handoff_supply(
     )
 
 
+# WMS-428. Спецификация Ozon перечисляет у перевозки четыре статуса — `received`,
+# `closed`, `sended` и `cancelled`, — и `formed` среди них нет. Живой кабинет
+# 10.09.2026 сразу после успешного `/v1/carriage/approve` вернул именно
+# `formed`: перевозка сформирована, груз ещё не поехал. Требовать здесь `sended`
+# значит не принять ни одну настоящую передачу — она получает этот статус
+# позже, когда отгрузку физически заберут. Подтверждением считаем всё, кроме
+# отмены; `cancelled` и любой незнакомый статус по-прежнему дают отказ.
+_CARRIAGE_CONFIRMED_STATUSES = frozenset({"formed", "sended", "received", "closed"})
+
+
 async def _finish_carriage_handoff(
     provider: OzonMarketplaceProvider,
     *,
@@ -1204,7 +1214,7 @@ async def _finish_carriage_handoff(
         response_type=OzonCarriageCarriageGetResponse,
         read=True,
     )
-    if confirmed.status not in {"sended", "received", "closed"}:
+    if confirmed.status not in _CARRIAGE_CONFIRMED_STATUSES:
         raise OzonFbsProcessError("ozon_carriage_unconfirmed", "Ozon не подтвердил отгрузку.")
     barcode = await _call(
         provider,
