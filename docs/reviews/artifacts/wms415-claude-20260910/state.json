@@ -1,11 +1,11 @@
 {
-  "phase": "WMS418_deployed_continue_WMS415_WMS416",
+  "phase": "WMS270_postdeploy_shared_login_limit_remediation",
   "quota_session_id": "5ed12390-4d22-4b83-b183-114202609010",
   "quota_tool_pty": 75581,
   "last_weekly_used_percent": 87,
   "last_weekly_remaining_percent": 13,
   "recorded_at_utc": "2026-09-09T21:10:11.500624+00:00",
-  "last_full_progress_check_utc": "2026-09-10T10:09:11.975542+00:00",
+  "last_full_progress_check_utc": "2026-09-10T10:33:21.439051+00:00",
   "coordinator_session_id": "01a0884c-2c18-7d22-a2a8-8bef2f3d8fe3",
   "automation_id": "wms-claude",
   "quota_minutes": 10,
@@ -37,8 +37,8 @@
     "WMS-377"
   ],
   "next_queue_commit": "aadac0b6039a70912bf12412aeca90028b675fc8",
-  "last_heartbeat_utc": "2026-09-10T09:46:39.355275+00:00",
-  "intervention": "Urgent418 separate PR216 deployed; root verified server SHA, two API file hashes, public catalogue asset hash and OpenAPI. Same coordinator25612 continues other authorized tasks; automation updated without duplicate publisher.",
+  "last_heartbeat_utc": "2026-09-10T10:33:21.439051+00:00",
+  "intervention": "Verified current coordinator25612 live, PR215 merged all CI pass, SSH/API/HTTPS/ports and safe diagnostic. Coordinator owns active proxy correction and proposed API rollback; no duplicate writer or auth saturation probes.",
   "last_full_progress_artifact": "progress-20260909T2215.json",
   "coordinator_provider": "codex",
   "coordinator_model": "gpt-6-astra",
@@ -81,8 +81,8 @@
     "WMS-111",
     "WMS-112"
   ],
-  "production_git_sha": "120b106cc3f47dd28fa499e094c7cde83e8a6b40",
-  "production_scope": "Mobile API, Ozon352/386 and isolated catalogue publication filter418 deployed; broad coordinator candidate not deployed",
+  "production_git_sha": "1922a2242ad626a9618cb2b7300e6cf500d25b4d",
+  "production_scope": "PR215 deployed, live acceptance failed shared login limiter; coordinator remediating. Filter418 preserved, HTTPS200, direct8088/15174 timed out. Rollback API announced but not root verified at10:32UTC.",
   "published_apk": {
     "version_code": 10,
     "version_name": "0.1.9-ozon-tsd",
@@ -104,5 +104,13 @@
     "production_verified_at_utc": "2026-09-10T10:09:11.975542+00:00",
     "production_catalog_asset_sha256": "4a248324d3f6eebc4d4550313d1e41dc4200cba75ba3d611c04ba7245eaf4822",
     "coordinator_proof_commit": "237e9c70"
+  },
+  "auth270_incident": {
+    "observed_utc": "2026-09-10T10:33:21.439051+00:00",
+    "diagnostic": "Both sources resolve to literal {http.request.client_ip}:0",
+    "api_image_at_check": "sha256:fe66c88c44f9fe346a4dda34b59f6dcf76cf3149b75e8ed9296f5f4570d5aaab",
+    "rollback_verified": false,
+    "owner": "coordinator25612",
+    "status": "remediation active"
   }
 }
