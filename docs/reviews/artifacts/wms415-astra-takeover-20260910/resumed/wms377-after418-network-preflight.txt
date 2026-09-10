@@ -1,0 +1,2 @@
+WMS proxy topology verified; no network or container was changed.
+{"verified": true, "production_base": "120b106cc3f47dd28fa499e094c7cde83e8a6b40", "scope": "read-only current topology with security candidate config"}

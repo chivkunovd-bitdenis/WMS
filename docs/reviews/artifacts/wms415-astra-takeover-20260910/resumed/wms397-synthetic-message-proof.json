@@ -1,0 +1,13 @@
+[
+  {
+    "id": "8c66f6da-c2cd-48c5-8208-136ff65e06e6",
+    "conversation_id": "e4ba513b-4dfb-4401-bc24-d2f47329e304",
+    "attached_document": {
+      "kind": "fbs_supply",
+      "id": "37c461c8-63ab-444c-b4c4-e3272648c57f",
+      "title": "FBS-TEST-1",
+      "seller_id": "a18533cc-8cc8-4a02-99ae-6d48f2d828ee",
+      "seller_name": "Учебный селлер 1"
+    }
+  }
+]
