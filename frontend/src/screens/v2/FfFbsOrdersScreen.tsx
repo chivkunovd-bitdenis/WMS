@@ -346,7 +346,7 @@ const NewOrderRow = memo(function NewOrderRow({
                 {order.product.id ? order.product.name : 'Товар не сопоставлен'}
               </Typography>
             )}
-            <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.25 }}>
+            <Stack direction="row" spacing={0.75} sx={{ mt: 0.25, alignItems: 'center' }}>
               <Typography variant="caption" color="text.secondary">
                 {orderNumberLabel(order)}
               </Typography>
@@ -1675,7 +1675,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                             )) : <Typography variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
                               {order.product.id ? order.product.name : 'Товар не сопоставлен'}
                             </Typography>}
-                            <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.25 }}>
+                            <Stack direction="row" spacing={0.75} sx={{ mt: 0.25, alignItems: 'center' }}>
                               <Typography variant="caption" color="text.secondary">
                                 Заказ {orderNumberLabel(order)}
                               </Typography>
