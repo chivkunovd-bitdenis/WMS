@@ -34,17 +34,20 @@ jobs:
             export GIT_CONFIG_KEY_1=http.version
             export GIT_CONFIG_VALUE_1=HTTP/1.1
             cd "${WMS_REPO_DIR:-/opt/wms}"
-            ./scripts/deploy/prod-update.sh
+            git fetch --prune origin
+            # Execute the current trunk script, not the previous deployment's
+            # version. The script retains its branch/SHA guard before building.
+            deploy_script="$(git show origin/etalon:scripts/deploy/prod-update.sh)"
+            WMS_REPO_DIR="$PWD" bash -c "$deploy_script" </dev/null
 
-      - name: Smoke check (HTTP 200)
+      - name: Smoke check (public HTTPS 200)
         run: |
           set -euo pipefail
-          HOST="${{ secrets.DEPLOY_SSH_HOST }}"
-          PORT="${{ secrets.DEPLOY_HTTP_PORT || '8088' }}"
+          BASE_URL="https://wms.sellerfocus.pro"
           for path in "/" "/seller/" "/api/health"; do
             code="000"
             for attempt in $(seq 1 10); do
-              code=$(curl -sS -o /dev/null -w "%{http_code}" "http://${HOST}:${PORT}${path}" || true)
+              code=$(curl -sS -o /dev/null -w "%{http_code}" "${BASE_URL}${path}" || true)
               if [ "${code}" = "200" ]; then
                 break
               fi
