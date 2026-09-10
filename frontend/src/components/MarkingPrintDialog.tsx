@@ -1952,7 +1952,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   ? <>К печати: {fbsTapeProductUnits} {plural(fbsTapeProductUnits, ['единица', 'единицы', 'единиц'])} ·{' '}
                     {fbsTapeBarcodeLabels} {productBarcodeName} · итого {fbsTapeSheets}{' '}
                     {plural(fbsTapeSheets, ['лист', 'листа', 'листов'])}</>
-                  : <>{fbsTapeOrders.length} {plural(fbsTapeOrders.length, ['заказ', 'заказа', 'заказов'])} ·{' '}
+                  : <>К печати: {fbsTapeOrders.length} {plural(fbsTapeOrders.length, ['заказ', 'заказа', 'заказов'])} ·{' '}
                     {includesOrderQr ? `${fbsTapeOrders.length} QR + ` : ''}
                     {fbsTapeBarcodeLabels} {productBarcodeName} · итого {fbsTapeSheets}{' '}
                     {plural(fbsTapeSheets, ['лист', 'листа', 'листов'])}</>}

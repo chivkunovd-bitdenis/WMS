@@ -23,3 +23,15 @@ With Ozon barcode fixtures deliberately different from Product WB barcodes, actu
 Actual start-work returned200, but card reread returned500 because nullable wb_supply_id failed FbsSupplyOut validation. Fixed in6e65feda; UI reread after reload remains pending.
 
 Storage existing menu /app/ff/inventory now opens the simple report; no extra sidebar route. Fixture total6 liter-days/900kopecks. Seller expansion shows volume2/1, liter-days4/2, period rate150kopecks, current rate200, amount600/300. CategoryA reduces total to4/600; date09September plus categoryA yields2/400. These are actual UI interactions against isolated data, not production accounting verification.
+
+## Final print check and workstation lock
+
+After the null-number correction, the Ozon card reopened successfully. Actual picking
+showed both Ozon position barcodes (429200000001/2); WB picking separately retained
+its WB barcode 429100000001. The multi-position Ozon print button opened the existing
+constructor after6ca628f7. It exposed the last copy/count defect: helper mentioned QR,
+summary said WB/one sheet for quantity1+2. The bounded52ed89c4 correction changes
+these labels/count/preview and adds the already-requested WMS-421 marketplace chip.
+Before its final visual reread, CUA reported that the Mac locked and automatic unlock
+failed. Manual unlock was requested. These last visuals and post-deploy browser
+reread are therefore pending; typecheck/build is not reported as visual acceptance.
