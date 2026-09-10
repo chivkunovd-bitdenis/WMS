@@ -2402,3 +2402,129 @@ async def test_empty_cell_does_not_schedule_inbound_container_deletion(
     async with SessionLocal() as session:
         assert await session.get(WarehouseBox, cid) is not None
         assert await session.scalar(select(func.count(InventoryMovement.id))) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["box", "cargo_place", "pallet"])
+@pytest.mark.parametrize("save_first", [False, True])
+async def test_confirmed_empty_container_deleted_by_other_count_is_idempotent(
+    async_client: AsyncClient, kind: str, save_first: bool,
+) -> None:
+    setup = await _tenant(async_client, "AlreadyRemoved")
+    count_a = await _create_all(async_client, setup)
+    count_b = await _create_all(async_client, setup)
+    cid = await _create_container(async_client, setup, count_a["id"], kind,
+                                  cell_id=setup.location_id)
+    base_a = f"/operations/inventory-counts/{count_a['id']}"
+    marked = await async_client.post(f"{base_a}/empty-place", headers=setup.headers,
+                                     json={"kind": kind, "id": str(cid)})
+    assert marked.status_code == 200, marked.text
+    removed = await async_client.delete(
+        f"/operations/inventory-counts/{count_b['id']}/containers/{kind}/{cid}",
+        headers=setup.headers,
+    )
+    assert removed.status_code == 200, removed.text
+    if save_first:
+        for comment in ["After another count removed the container", "Saved again"]:
+            saved = await async_client.put(f"{base_a}/lines", headers=setup.headers,
+                                           json={"lines": [], "update_comment": True,
+                                                 "comment": comment})
+            assert saved.status_code == 200, saved.text
+            assert saved.json()["comment"] == comment
+            assert saved.json()["empty_places"] == [{"kind": kind, "id": str(cid)}]
+    posted = await async_client.post(f"{base_a}/post", headers=setup.headers)
+    assert posted.status_code == 200, posted.text
+    reread = await async_client.get(base_a, headers=setup.headers)
+    assert reread.json()["status"] == "posted"
+    assert reread.json()["empty_places"] == [{"kind": kind, "id": str(cid)}]
+    async with SessionLocal() as session:
+        assert await session.scalar(select(func.count(InventoryMovement.id))) == 0
+        if kind == "pallet":
+            pallet = await session.get(Pallet, cid)
+            assert pallet is not None and pallet.disbanded_at is not None
+        else:
+            assert await session.get(WarehouseBox, cid) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scope", ["tenant", "warehouse", "kind"])
+@pytest.mark.parametrize("operation", ["save", "post"])
+async def test_stale_empty_confirmation_does_not_hide_foreign_container(
+    async_client: AsyncClient, scope: str, operation: str,
+) -> None:
+    from app.models.inventory_count import InventoryCount
+
+    setup = await _tenant(async_client, "StaleScope")
+    other = await _tenant(async_client, "ForeignScope")
+    count = await _create_all(async_client, setup)
+    cid = await _create_container(async_client, setup, count["id"], "box",
+                                  cell_id=setup.location_id)
+    base = f"/operations/inventory-counts/{count['id']}"
+    marked = await async_client.post(f"{base}/empty-place", headers=setup.headers,
+                                     json={"kind": "box", "id": str(cid)})
+    assert marked.status_code == 200, marked.text
+    async with SessionLocal() as session:
+        box = await session.get(WarehouseBox, cid)
+        assert box is not None
+        # Synthetic corrupt/stale reference: never reinterpret another scope as deletion.
+        if scope == "tenant":
+            box.tenant_id = other.tenant_id
+            box.warehouse_id = other.warehouse_id
+        elif scope == "warehouse":
+            default_id = await session.scalar(select(inventory_count_service.Warehouse.id).where(
+                inventory_count_service.Warehouse.tenant_id == setup.tenant_id,
+                inventory_count_service.Warehouse.id != setup.warehouse_id,
+            ))
+            assert default_id is not None
+            box.warehouse_id = default_id
+        else:
+            box.container_kind = "cargo_place"
+        await session.commit()
+    response = (
+        await async_client.put(f"{base}/lines", headers=setup.headers,
+                               json={"lines": [], "update_comment": True, "comment": "Rejected"})
+        if operation == "save" else
+        await async_client.post(f"{base}/post", headers=setup.headers)
+    )
+    assert response.status_code == 404, response.text
+    assert response.json()["detail"] == "container_not_found"
+    async with SessionLocal() as session:
+        assert await session.get(WarehouseBox, cid) is not None
+        stored = await session.get(InventoryCount, uuid.UUID(count["id"]))
+        assert stored is not None and stored.status == "draft" and not stored.comment
+        assert await session.scalar(select(func.count(InventoryMovement.id))) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("orphan_stock", [False, True])
+async def test_stale_empty_confirmation_keeps_missing_and_nonempty_errors_distinct(
+    async_client: AsyncClient, orphan_stock: bool,
+) -> None:
+    setup = await _tenant(async_client, "MissingBalance")
+    product = await _product(async_client, setup, name="Orphan stock guard")
+    count = await _create_all(async_client, setup)
+    other = await _create_all(async_client, setup)
+    cid = await _create_container(async_client, setup, count["id"], "box",
+                                  cell_id=setup.location_id)
+    base = f"/operations/inventory-counts/{count['id']}"
+    marked = await async_client.post(f"{base}/empty-place", headers=setup.headers,
+                                     json={"kind": "box", "id": str(cid)})
+    assert marked.status_code == 200, marked.text
+    removed = await async_client.delete(
+        f"/operations/inventory-counts/{other['id']}/containers/box/{cid}",
+        headers=setup.headers,
+    )
+    assert removed.status_code == 200, removed.text
+    if orphan_stock:
+        await _balance(setup, product, 3, container_kind="box", container_id=cid)
+        posted = await async_client.post(f"{base}/post", headers=setup.headers)
+        assert posted.status_code == 409 and posted.json()["detail"] == "container_not_empty"
+        async with SessionLocal() as session:
+            assert await session.scalar(select(InventoryBalance.quantity).where(
+                InventoryBalance.product_id == product,
+            )) == 3
+            assert await session.scalar(select(func.count(InventoryMovement.id))) == 0
+    else:
+        # Explicit DELETE is still strict; idempotency is only for a saved confirmation.
+        repeated = await async_client.delete(f"{base}/containers/box/{cid}", headers=setup.headers)
+        assert repeated.status_code == 404 and repeated.json()["detail"] == "container_not_found"

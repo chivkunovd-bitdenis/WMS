@@ -241,3 +241,57 @@ container_linked_to_inbound, чтобы не уничтожать историч
 точные требуемые изменения переданы выше, App.tsx/FfSuppliesShipmentsPage принадлежат
 chat, исполнитель их не менял. WMS182/187/190 не принимаются этим отчётом.
 Ни канон, ни общие handoff-файлы исполнитель не редактировал; merge/CI/deploy не делал.
+
+## WMS-154: исправление stale empty_places после интеграционного review
+
+Продолжение от исходного `e7179854bf310dfca8780a43870468a966bf5cd6`.
+Полностью прочитан координаторский
+`artifacts/wms415-astra-takeover-20260910/resumed/review-integrated-result.md`,
+review frozen-кандидата `abb2bebaeb0d798d4b5bc093bdc7a6884789d2c4`.
+Эта правка отвечает только на warehouse P2 про удаление тары другим пересчётом.
+WMS111/112 остаются STOP; WMS418 и соседние findings не менялись.
+
+Реальное воспроизведение в собственной PostgreSQL-базе
+`wms415_warehouse_astra_20260910`: A подтверждает пустую тару, B удаляет её штатным
+HTTP DELETE, затем A сохраняет комментарий либо сразу проводится. До исправления
+**6 failed**: box/cargo_place/pallet × save-first/direct-post. Сохранение получало
+404 object_not_found, проведение —404 container_not_found, точно как в finding.
+
+Исправление ограничено inventory_count_service.py. При этих двух конкретных кодах
+ошибки проверяется, действительно ли тара уже удалена. Существующий чужой объект,
+иной склад или вид тары не считаются отсутствием. Для палеты учитывается штатное
+расформирование с повторным чтением под блокировкой. Ненулевой остаток или вложенная
+тара сохраняют отказ; inbound-объект не маскируется под удалённый складской короб.
+Другие коды ошибок пробрасываются без подавления. Обычный DELETE остаётся строгим.
+Факт empty_places сохраняется в A, поэтому пустой документ без товарных строк можно
+сохранить повторно и провести после удаления тары из B. Новых сущностей/полей/
+журналов/счётчиков, UX или изменений stock-service нет.
+
+После исправления выполнено:
+
+```sh
+WMS_TEST_DATABASE_URL=postgresql+psycopg://deniscivkunov@localhost/wms415_warehouse_astra_20260910 \
+.venv/bin/pytest -q tests/test_inventory_counts.py \
+-k 'deleted_by_other_count or stale_empty_confirmation or new_stock_in_confirmed or delete_container or recount_after_empty' --tb=short
+.venv/bin/ruff check .
+.venv/bin/mypy .
+```
+
+Результат: **22 passed,56deselected**,29.60s; Ruff PASS; mypy PASS,438files.
+В 14 новых вариантах проверены повторное сохранение, проведение и повторное чтение
+A для всех трёх видов тары, отсутствие движений, отказы чужого tenant/warehouse/вида,
+сохранность ненулевого orphan-остатка и строгий повторный DELETE. Дополнительно
+прошли прежние проверки удаления непустой/вложенной/inbound-тары и пересчёта после
+подтверждения пустоты. Только синтетические данные; один pytest worker, полный
+pytest не запускался. Frontend не менялся, его проверки и новый UX не требовались.
+
+Точный набор файлов этого follow-up:
+
+- `backend/app/services/inventory_count_service.py`
+- `backend/tests/test_inventory_counts.py`
+- `docs/reviews/wms415-warehouse-astra-20260910.md`
+
+App.tsx/FfInboundRequestView/FfSuppliesShipmentsPage, канон, takeover handoff,
+миграции и соседние полосы не редактировались. Статус warehouse P2: воспроизведён,
+исправлен, целевые проверки пройдены; передаётся на повторное независимое review.
+Это не приёмка интегрированного кандидата, не CI, не deploy и не новый browser pass.
