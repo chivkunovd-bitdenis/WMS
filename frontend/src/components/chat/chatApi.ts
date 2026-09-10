@@ -200,3 +200,17 @@ export function makeClientMessageId(): string {
   const rand = Math.random().toString(36).slice(2, 10)
   return `cli-${Date.now().toString(36)}-${rand}`
 }
+
+
+export async function listDraftAttachments(token: string, authHeaders: HeaderFn, conversationId: string): Promise<ChatAttachment[]> {
+  return jsonOrThrow<ChatAttachment[]>(await fetch(apiUrl(`/operations/chat/conversations/${conversationId}/draft-attachments`), {
+    headers: authHeaders(token),
+  }))
+}
+
+export async function discardDraftAttachment(token: string, authHeaders: HeaderFn, conversationId: string, attachmentId: string): Promise<void> {
+  const response = await fetch(apiUrl(`/operations/chat/conversations/${conversationId}/draft-attachments/${attachmentId}`), {
+    method: 'DELETE', headers: authHeaders(token),
+  })
+  if (!response.ok) await jsonOrThrow(response)
+}

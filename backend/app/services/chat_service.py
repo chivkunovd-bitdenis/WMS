@@ -609,3 +609,64 @@ async def require_draft_upload_budget(
     ).one()
     if used_bytes + size_bytes > MAX_MESSAGE_TOTAL_BYTES or used_files >= MAX_MESSAGE_ATTACHMENTS:
         raise ChatError("draft_upload_budget_exceeded")
+
+
+async def list_draft_attachments(
+    session: AsyncSession, conv: ChatConversation, uploader: User
+) -> list[ChatAttachment]:
+    """Only the caller's unlinked files in this already-authorized conversation."""
+    return list(
+        (
+            await session.execute(
+                select(ChatAttachment)
+                .where(
+                    ChatAttachment.tenant_id == conv.tenant_id,
+                    ChatAttachment.conversation_id == conv.id,
+                    ChatAttachment.uploader_user_id == uploader.id,
+                    ChatAttachment.message_id.is_(None),
+                )
+                .order_by(ChatAttachment.created_at, ChatAttachment.id)
+                .limit(100)
+            )
+        ).scalars()
+    )
+
+
+async def discard_draft_attachment(
+    session: AsyncSession, conv: ChatConversation, uploader: User, attachment_id: uuid.UUID
+) -> None:
+    from app.services.chat_attachment_storage import get_backend
+
+    # Same existing owner lock as uploads; attachment lock also arbitrates a
+    # concurrent send. Never delete a file that has won attachment to a message.
+    await session.execute(
+        select(User.id)
+        .where(
+            User.id == uploader.id,
+            User.tenant_id == conv.tenant_id,
+        )
+        .with_for_update()
+    )
+    row = (
+        await session.execute(
+            select(ChatAttachment)
+            .where(
+                ChatAttachment.id == attachment_id,
+                ChatAttachment.tenant_id == conv.tenant_id,
+                ChatAttachment.conversation_id == conv.id,
+                ChatAttachment.uploader_user_id == uploader.id,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise ChatError("attachment_not_found")
+    if row.message_id is not None:
+        raise ChatError("attachment_already_sent")
+    # Only an explicit caller-selected draft. Storage failure leaves its row
+    # recoverable so the user can retry; no background/age-based deletion.
+    storage_key = row.storage_key
+    await session.delete(row)
+    await session.flush()
+    get_backend().delete_object(storage_key)

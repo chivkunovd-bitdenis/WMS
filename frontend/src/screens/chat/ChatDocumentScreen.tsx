@@ -1,3 +1,5 @@
+import { SellerMarketplaceUnloadDialog } from '../../components/SellerMarketplaceUnloadDialog'
+import { workingDocumentTarget } from '../../components/chat/documentTarget'
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Alert, Box, Button, Paper, Table, TableBody, TableCell, TableHead, TableRow, Typography } from '@mui/material'
@@ -5,7 +7,7 @@ import { apiUrl } from '../../api'
 import { ChatOpenButton } from '../../components/chat/ChatOpenButton'
 import type { AttachedDocument } from '../../components/chat/chatApi'
 
-type DocumentDetail = { document: AttachedDocument; status: string; lines: { product: string; quantity: number; received?: number; order_id?: string }[] }
+type DocumentDetail = { warehouse_id: string | null; document: AttachedDocument; status: string; lines: { product: string; quantity: number; received?: number; order_id?: string }[] }
 type Props = {
   token: string; authHeaders: (t: string) => Record<string, string>; currentUserId: string | null
 }
@@ -34,12 +36,12 @@ function DocumentScreen({ token, authHeaders, currentUserId }: Props) {
     return () => controller.abort()
   }, [kind, documentId, sellerId, token, authHeaders])
   const base = location.pathname.split('/chat')[0]
-  const workDocumentTarget = base === '/app/ff' ? (
-    kind === 'fbs_supply' ? `/app/ff/fbs?supply_id=${documentId}` :
-    kind === 'inbound_intake' ? `/app/ff/reception?open=${documentId}` :
-    kind === 'outbound_shipment' ? `/app/ff/mp-shipments?open_outbound=${documentId}` :
-    kind === 'marketplace_unload' ? `/app/ff/mp-shipments?open_mp=${documentId}` : null
-  ) : kind === 'inbound_intake' ? `${base}/inbound/${documentId}` : null
+  const workDocumentTarget = workingDocumentTarget({ kind: kind ?? '', id: documentId ?? '', seller_id: sellerId }, base)
+  // Reuse the seller's actual existing MP dialog on this already registered route.
+  if (detail && base !== '/app/ff' && kind === 'marketplace_unload') return <SellerMarketplaceUnloadDialog
+    open requestId={detail.document.id} token={token} authHeaders={authHeaders}
+    warehouseId={detail.warehouse_id} catalogScopeKey={sellerId} busy={false}
+    onClose={() => navigate(`${base}/chat?seller_id=${sellerId}`)} onRefreshList={async () => {}} />
   return <Paper variant="outlined" sx={{ m: 2, p: 2 }}>
     <Button onClick={() => navigate(`${base}/chat?seller_id=${sellerId}`)}>Вернуться в чат</Button>
     {error && <Alert severity="error">Документ не найден или у вас нет права его просматривать.</Alert>}

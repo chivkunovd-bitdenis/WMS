@@ -1,3 +1,4 @@
+import { workingDocumentTarget } from './documentTarget'
 // Attached-document card rendered inside a chat message.
 //
 // Two behaviours combined into a single component per the owner's minimal
@@ -33,8 +34,8 @@ export const AttachedDocCard = memo(function AttachedDocCard({
   const base = basePath ?? (location.pathname.startsWith('/app/ff') ? '/app/ff' : location.pathname.startsWith('/app/seller') ? '/app/seller' : '')
   const label = KIND_LABEL[document.kind] ?? 'Документ'
   const target = useMemo(
-    () => `${base}/chat/documents/${document.kind}/${document.id}?seller_id=${document.seller_id}`,
-    [document.kind, document.id, document.seller_id, base],
+    () => workingDocumentTarget(document, base) ?? `${base}/chat/documents/${document.kind}/${document.id}?seller_id=${document.seller_id}`,
+    [document, base],
   )
   const clickable = target !== null
   return (

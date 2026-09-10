@@ -105,9 +105,9 @@ class ChatConversation(Base):
 class ChatParticipant(Base):
     """Membership row.
 
-    For main chats FF portal members always have access implicitly and only
-    the seller-side user is stored explicitly. Extra chats require an explicit
-    row for every reader/writer.
+    Main-chat access is implicit for tenant FF users and the owning seller.
+    Extra chats require an explicit row for every reader/writer, including
+    administrators; main chats do not store participant rows.
     """
 
     __tablename__ = "chat_participants"
