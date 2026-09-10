@@ -816,7 +816,13 @@ def compute_selection_blockers(
                 "message": "Склад WB не привязан к WMS — привяжите его на вкладке «Остатки WB».",
             }
         )
-    if _as_utc(order.deadline_at) < _as_utc(server_now):
+    # WMS-420. Просрочка запирает выбор только у Wildberries: там сборку после
+    # срока уже не примут. Ozon отправление не аннулирует — живой ответ по
+    # 0110009646-0483-1 через полтора часа после срока по-прежнему отдаёт
+    # `awaiting_packaging` в списке неотгруженных, и запрета на ship в его
+    # спецификации нет. Сам факт просрочки оператор видит по вкладке
+    # «Просрочены»; отнимать у него возможность сдать заказ мы не вправе.
+    if order.marketplace != "ozon" and _as_utc(order.deadline_at) < _as_utc(server_now):
         blockers.append({"code": "deadline_passed", "message": "Срок сборки истёк."})
     return blockers
 
