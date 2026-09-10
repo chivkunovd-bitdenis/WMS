@@ -423,14 +423,13 @@ async def claim_next_print_job(
                 BackgroundJob.tenant_id == tenant_id,
                 BackgroundJob.job_type == JOB_TYPE_FBS_LABEL_PRINT,
                 BackgroundJob.status == JOB_STATUS_PENDING,
+                BackgroundJob.payload_json["warehouse_id"].as_string() == str(warehouse_id),
             )
             .order_by(BackgroundJob.created_at)
             .limit(_CLAIM_SCAN_LIMIT)
         )
     ).all()
     for candidate in candidates:
-        if (candidate.payload_json or {}).get("warehouse_id") != str(warehouse_id):
-            continue
         claimed = await session.execute(
             update(BackgroundJob)
             .where(

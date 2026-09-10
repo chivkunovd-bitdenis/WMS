@@ -23,6 +23,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -158,7 +159,8 @@ def submit_to_queue(
     одна отправка: неизвестный исход наверх уходит как ``UnknownPrintOutcome``.
     """
     suffix = ".pdf" if content_type == "application/pdf" else ".png"
-    with tempfile.TemporaryDirectory(prefix="wms-print-") as directory:
+    directory = tempfile.mkdtemp(prefix="wms-print-")
+    try:
         path = Path(directory) / ("label" + suffix)
         path.write_bytes(data)
         try:
@@ -180,6 +182,10 @@ def submit_to_queue(
                 "Квитанция очереди не подтверждена; автоматический повтор запрещён"
             )
         return receipt.group(1)
+    finally:
+        # Once lp has returned, a cleanup failure must not turn its successful
+        # queue receipt into a false failed handoff.
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 def report_result(
