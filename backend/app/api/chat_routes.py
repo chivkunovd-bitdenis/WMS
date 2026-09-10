@@ -23,7 +23,6 @@ Authorization uses the existing ``require_ff_or_seller`` guard plus
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
 from typing import Annotated, Any, NoReturn
 from urllib.parse import quote
 
@@ -32,7 +31,6 @@ from fastapi import (
     APIRouter,
     Depends,
     File,
-    Form,
     HTTPException,
     Query,
     UploadFile,
@@ -44,7 +42,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
-    get_current_user,
     get_effective_seller_id,
     require_ff_or_seller,
     require_fulfillment_admin,
@@ -53,7 +50,6 @@ from app.core.roles import FF_PORTAL_ROLES, FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.chat import (
     CHAT_KIND_EXTRA,
-    CHAT_KIND_MAIN,
     ChatAttachment,
     ChatConversation,
     ChatMessage,
@@ -70,7 +66,12 @@ from app.services.chat_attachment_storage import (
     is_image_content_type,
     put_bytes,
 )
-from app.services.chat_document_service import read_document
+from app.services.chat_document_service import (
+    DocumentKey,
+    read_document,
+    read_document_cards,
+    readable_document_kinds,
+)
 
 router = APIRouter(prefix="/operations/chat", tags=["operations", "chat"])
 
@@ -235,13 +236,57 @@ def _raise_chat_error(exc: chat_service.ChatError) -> NoReturn:
         "client_message_id_too_long",
     }:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=code)
+    if code == "main_participants_implicit":
+        raise HTTPException(422, detail=code)
     if code == "document_not_found":
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=code)
-    if code == "message_files_too_large":
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=code)
+    if code in {"message_files_too_large", "draft_upload_budget_exceeded"}:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, detail=code)
     if code in {"deleted", "client_message_id_conflict"}:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=code)
     raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=code)
+
+
+async def _visible_messages_out(
+    session: AsyncSession,
+    user: User,
+    effective_seller_id: uuid.UUID | None,
+    messages: list[ChatMessage],
+    attachments: dict[uuid.UUID, list[ChatAttachment]],
+) -> list[MessageOut]:
+    keys: dict[uuid.UUID, DocumentKey] = {}
+    for msg in messages:
+        if msg.attached_document:
+            try:
+                doc = msg.attached_document
+                keys[msg.id] = (doc["kind"], uuid.UUID(doc["id"]), uuid.UUID(doc["seller_id"]))
+            except (KeyError, ValueError, TypeError):
+                pass
+    cards = await read_document_cards(
+        session, user, keys.values(), effective_seller_id=effective_seller_id
+    )
+    authors = (
+        {
+            author.id: author.email
+            for author in (
+                await session.execute(
+                    select(User).where(
+                        User.tenant_id == user.tenant_id,
+                        User.id.in_({m.author_user_id for m in messages}),
+                    )
+                )
+            ).scalars()
+        }
+        if messages
+        else {}
+    )
+    result = []
+    for msg in messages:
+        row = _message_out(msg, attachments.get(msg.id, []))
+        row.author_label = authors.get(msg.author_user_id, "Участник")
+        row.attached_document = cards.get(keys[msg.id]) if msg.id in keys else None
+        result.append(row)
+    return result
 
 
 async def _visible_message_out(
@@ -251,25 +296,11 @@ async def _visible_message_out(
     msg: ChatMessage,
     attachments: list[ChatAttachment],
 ) -> MessageOut:
-    result = _message_out(msg, attachments)
-    author = await session.get(User, msg.author_user_id)
-    if author is not None and author.tenant_id == user.tenant_id:
-        result.author_label = author.email
-    if msg.attached_document:
-        try:
-            doc = msg.attached_document
-            current = await read_document(
-                session,
-                user,
-                kind=doc["kind"],
-                document_id=uuid.UUID(doc["id"]),
-                seller_id=uuid.UUID(doc["seller_id"]),
-                effective_seller_id=effective_seller_id,
-            )
-            result.attached_document = current["document"]
-        except (chat_service.ChatError, KeyError, ValueError):
-            result.attached_document = None
-    return result
+    return (
+        await _visible_messages_out(
+            session, user, effective_seller_id, [msg], {msg.id: attachments}
+        )
+    )[0]
 
 
 # ---------------------------------------------------------------------------
@@ -283,13 +314,9 @@ async def list_conversations(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> ConversationListOut:
-    seller_query = select(Seller).where(Seller.tenant_id == user.tenant_id)
-    if user.role == FULFILLMENT_SELLER:
-        seller_query = seller_query.where(Seller.id == effective_seller_id)
-    for seller in (await session.execute(seller_query.order_by(Seller.id))).scalars():
-        await chat_service.ensure_main_chat(
-            session, tenant_id=user.tenant_id, seller_id=seller.id, created_by=user
-        )
+    await chat_service.ensure_visible_main_chats(
+        session, user, effective_seller_id=effective_seller_id
+    )
     await session.commit()
     convs = await chat_service.list_conversations_for_user(
         session, user, effective_seller_id=effective_seller_id
@@ -309,7 +336,7 @@ async def get_main_chat(
     if resolved_seller_id is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="seller_id_required")
     # A seller may only ask for their own seller_id.
-    if effective_seller_id is not None and resolved_seller_id != effective_seller_id:
+    if user.role == FULFILLMENT_SELLER and resolved_seller_id != effective_seller_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="forbidden")
     seller = await chat_service.resolve_seller(session, user.tenant_id, resolved_seller_id)
     if seller is None:
@@ -421,6 +448,8 @@ async def add_participant(
     conv = await chat_service.load_conversation(session, admin.tenant_id, conversation_id)
     if conv is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="conversation_not_found")
+    if conv.kind != CHAT_KIND_EXTRA:
+        raise HTTPException(422, detail="main_participants_implicit")
     stmt = select(User).where(User.id == payload.user_id, User.tenant_id == admin.tenant_id)
     user_to_add = (await session.execute(stmt)).scalar_one_or_none()
     if user_to_add is None:
@@ -459,12 +488,9 @@ async def list_messages(
                 continue
             attachments_by_msg.setdefault(att.message_id, []).append(att)
     return MessageListOut(
-        items=[
-            await _visible_message_out(
-                session, user, effective_seller_id, m, attachments_by_msg.get(m.id, [])
-            )
-            for m in msgs
-        ]
+        items=await _visible_messages_out(
+            session, user, effective_seller_id, msgs, attachments_by_msg
+        )
     )
 
 
@@ -568,15 +594,17 @@ async def upload_attachment(
     user: Annotated[User, Depends(require_ff_or_seller)],
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
-    is_image: Annotated[bool | None, Form()] = None,
 ) -> AttachmentOut:
     conv = await _require_readable_conversation(conversation_id, user, session, effective_seller_id)
     raw = await file.read(MAX_ATTACHMENT_BYTES + 1)
     if not raw:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="empty_file")
     if len(raw) > MAX_ATTACHMENT_BYTES:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="file_too_large")
-    content_type = (file.content_type or "application/octet-stream").strip()
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, detail="file_too_large")
+    raw_content_type = file.content_type or "application/octet-stream"
+    if len(raw_content_type) > 128 or any(ord(c) < 32 or ord(c) > 126 for c in raw_content_type):
+        raise HTTPException(422, detail="invalid_content_type")
+    content_type = raw_content_type.strip() or "application/octet-stream"
     filename = (file.filename or "file").replace("\r", "").replace("\n", "").strip()[:255] or "file"
     detected_image = is_image_content_type(content_type)
     resolved_image = detected_image
@@ -601,15 +629,12 @@ async def upload_attachment(
                     raise ValueError("image_too_large")
         except (RuntimeError, ValueError):
             raise HTTPException(422, detail="invalid_image") from None
+    try:
+        await chat_service.require_draft_upload_budget(session, user, len(raw))
+    except chat_service.ChatError as exc:
+        _raise_chat_error(exc)
     attachment_id = uuid.uuid4()
     storage_key = build_storage_key(user.tenant_id, attachment_id, filename)
-    try:
-        put_bytes(storage_key, raw, content_type=content_type)
-    except Exception as exc:  # pragma: no cover — depends on backend
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"storage_unavailable:{type(exc).__name__}",
-        ) from exc
     # Instantiate the ORM row with a caller-chosen id so it matches storage.
     row = ChatAttachment(
         id=attachment_id,
@@ -624,7 +649,17 @@ async def upload_attachment(
         storage_key=storage_key,
     )
     session.add(row)
+    # Reject database constraints before writing an object. Storage and SQL do
+    # not share a transaction; a later commit failure still needs an explicit
+    # reconciliation contract, not automatic deletion of user files here.
     await session.flush()
+    try:
+        put_bytes(storage_key, raw, content_type=content_type)
+    except Exception as exc:  # pragma: no cover — depends on backend
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"storage_unavailable:{type(exc).__name__}",
+        ) from exc
     await session.commit()
     return _attachment_out(row)
 
@@ -675,10 +710,6 @@ __all__ = [
     "MessageOut",
     "router",
 ]
-
-
-# Silence unused-import warnings for imports that stay in the annotations.
-_ = (CHAT_KIND_MAIN, CHAT_KIND_EXTRA, get_current_user, datetime)
 
 
 def _eligible_participant(user: User, seller_id: uuid.UUID) -> bool:
@@ -734,23 +765,20 @@ async def document_options(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> list[dict[str, Any]]:
-    stmt = select(Seller).where(Seller.tenant_id == user.tenant_id)
+    if kind not in chat_service.ALLOWED_ATTACHED_DOCUMENT_KINDS:
+        raise HTTPException(422, detail="bad_document_kind")
+    if kind not in await readable_document_kinds(session, user):
+        raise HTTPException(403, detail="forbidden")
+    stmt = select(Seller.id).where(Seller.tenant_id == user.tenant_id)
     if user.role == FULFILLMENT_SELLER:
         stmt = stmt.where(Seller.id == effective_seller_id)
-    result = []
-    for seller in (await session.execute(stmt)).scalars():
-        try:
-            detail = await read_document(
-                session,
-                user,
-                kind=kind,
-                document_id=document_id,
-                seller_id=seller.id,
-                effective_seller_id=effective_seller_id,
-            )
-        except chat_service.ChatError as exc:
-            if exc.code == "document_not_found":
-                continue
-            _raise_chat_error(exc)
-        result.append(detail["document"])
-    return result
+    seller_ids = (await session.execute(stmt.order_by(Seller.id))).scalars().all()
+    cards = await read_document_cards(
+        session,
+        user,
+        [(kind, document_id, sid) for sid in seller_ids],
+        effective_seller_id=effective_seller_id,
+    )
+    return [
+        cards[(kind, document_id, sid)] for sid in seller_ids if (kind, document_id, sid) in cards
+    ]

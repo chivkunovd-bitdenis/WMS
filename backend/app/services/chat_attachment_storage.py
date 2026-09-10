@@ -30,10 +30,6 @@ MAX_MESSAGE_ATTACHMENTS = 10
 IMAGE_CONTENT_TYPES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"})
 
 
-class ChatStorageUnavailable(RuntimeError):
-    pass
-
-
 def _safe_filename(raw: str) -> str:
     stripped = raw.strip().replace("/", "_").replace("\\", "_")
     cleaned = _SAFE_FILENAME_RE.sub("_", stripped) or "file"
@@ -64,11 +60,6 @@ def put_bytes(storage_key: str, content: bytes, *, content_type: str) -> None:
 def get_bytes(storage_key: str) -> bytes:
     backend = get_backend()
     return backend.get_bytes(storage_key)
-
-
-def delete_object(storage_key: str) -> None:
-    backend = get_backend()
-    backend.delete_object(storage_key)
 
 
 def is_image_content_type(content_type: str) -> bool:
