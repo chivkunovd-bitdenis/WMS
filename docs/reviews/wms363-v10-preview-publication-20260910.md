@@ -33,3 +33,13 @@ ru.wms.tsd, versionCode10, versionName0.1.9-ozon-tsd, minSdk24.
 черезadb запрещена как замена этому доказательству. На момент этой записи
 успешная установка через приложение ещё не подтверждена. Физический ATOL,
 сканер и принтер этой публикацией не проверены.
+
+
+Координатор отдельно проверил уже установленный пакет: base.apk на эмуляторе
+имеет тот же SHA256cfe8b5adc1bb…; versionCode10, lastUpdateTime11:24:28.
+Android installerPackageName/initiatingPackageName — системный установщик
+com.google.android.packageinstaller, originatingPackageName — ru.wms.tsd.
+[Фильтрованное доказательство пакета](artifacts/wms415-astra-takeover-20260910/resumed/published-v10/installed-package-verification.json).
+Это дополнительная проверка файла и источника запуска установки. Протокол
+нажатий, PIN/server/незавершённого документа ещё оформляет исполнитель;
+наличие пакета не подменяет эти проверки. Stored auth и raw mobile logs не читались.

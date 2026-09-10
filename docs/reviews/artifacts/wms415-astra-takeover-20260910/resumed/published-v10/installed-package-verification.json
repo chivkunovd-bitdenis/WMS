@@ -1,0 +1,11 @@
+{
+  "installed_apk_sha256": "cfe8b5adc1bbd62e728184b9a18a1e5a14a837b3028de865e493c6203bd36870",
+  "package_evidence": [
+    "versionCode=10 minSdk=24 targetSdk=35",
+    "versionName=0.1.9-ozon-tsd",
+    "lastUpdateTime=2026-09-10 11:24:28",
+    "installerPackageName=com.google.android.packageinstaller",
+    "initiatingPackageName=com.google.android.packageinstaller",
+    "originatingPackageName=ru.wms.tsd"
+  ]
+}
