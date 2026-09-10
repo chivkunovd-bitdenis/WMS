@@ -46,6 +46,7 @@ import { HonestSignPoolPage } from './screens/shared/HonestSignPoolPage'
 import { HonestSignProductPage } from './screens/shared/HonestSignProductPage'
 import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
 import { FfStoragePage } from './screens/ff/FfStoragePage'
+import { FfStorageReportPage } from './screens/ff/FfStorageReportPage'
 import { FfInventoryPage } from './screens/ff/inventory/FfInventoryPage'
 import { FfProductsFbsPage } from './screens/ff/products-fbs/FfProductsFbsPage'
 import { FfSortingObjectsPage } from './screens/ff/sorting-objects/FfSortingObjectsPage'
@@ -3303,6 +3304,20 @@ export default function App() {
           <Route
             path="ff/inventory"
             element={token && canInventoryOps ? <FfStoragePage isFulfillmentAdmin={isFulfillmentAdmin} token={token} /> : ffAccessDenied}
+          />
+
+          <Route
+            path="ff/storage-report"
+            element={
+              token && canInventoryOps ? (
+                <FfStorageReportPage
+                  token={token}
+                  sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
+                />
+              ) : (
+                ffAccessDenied
+              )
+            }
           />
 
           {/* Раскладка объектами: товар в коробе, короб на палете, палета в ячейке.
