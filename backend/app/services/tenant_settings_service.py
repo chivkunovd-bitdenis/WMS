@@ -7,8 +7,10 @@ from typing import TypedDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.document_event import DOCUMENT_TYPE_TENANT_SETTINGS, EVENT_DATA_CHANGED
 from app.models.tenant import Tenant
 from app.services import inventory_service as inv_svc
+from app.services.document_event_service import record_document_mutation
 
 
 class TenantSettingsData(TypedDict):
@@ -58,6 +60,16 @@ async def get_tenant_settings(
     }
 
 
+def _audit_settings(tenant: Tenant) -> dict[str, object]:
+    return {
+        "address_storage_enabled": tenant.address_storage_enabled,
+        "separate_marking_print_enabled": tenant.separate_marking_print_enabled,
+        "fbs_shipment_cutoff_time": tenant.fbs_shipment_cutoff_time.isoformat()
+        if tenant.fbs_shipment_cutoff_time is not None
+        else None,
+    }
+
+
 async def update_tenant_settings(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -69,6 +81,7 @@ async def update_tenant_settings(
     actor_user_id: uuid.UUID | None,
 ) -> TenantSettingsData:
     tenant = await get_tenant(session, tenant_id)
+    before = _audit_settings(tenant)
     if address_storage_enabled is not None:
         if tenant.address_storage_enabled and not address_storage_enabled:
             await inv_svc.migrate_all_address_balances_to_sorting(
@@ -81,6 +94,15 @@ async def update_tenant_settings(
         tenant.separate_marking_print_enabled = separate_marking_print_enabled
     if set_fbs_shipment_cutoff_time:
         tenant.fbs_shipment_cutoff_time = fbs_shipment_cutoff_time
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_TENANT_SETTINGS,
+        document_id=tenant_id,
+        event_type=EVENT_DATA_CHANGED,
+        before=before,
+        after=_audit_settings(tenant),
+    )
     await session.commit()
     await session.refresh(tenant)
     return {

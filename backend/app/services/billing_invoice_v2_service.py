@@ -25,11 +25,16 @@ from app.models.billing import (
     BillingLedgerEntry,
     BillingProfile,
 )
+from app.models.document_event import (
+    DOCUMENT_TYPE_BILLING_INVOICE,
+    EVENT_DOCUMENT_CREATED,
+    EVENT_STATUS_CHANGED,
+)
 from app.models.fbs_order import FbsOrder
 from app.models.marketplace_unload import MarketplaceUnloadRequest
 from app.models.operation_fact import OperationFact
 from app.models.seller import Seller
-from app.services.billing_invoice_service import invoiced_ledger_ids
+from app.services.billing_invoice_service import invoice_audit_fields, invoiced_ledger_ids
 from app.services.billing_ledger_service import (
     BillingLedgerError,
     OperationalBillingLine,
@@ -38,6 +43,7 @@ from app.services.billing_ledger_service import (
     record_operational_charge,
 )
 from app.services.billing_seller_report_service import moscow_interval
+from app.services.document_event_service import record_document_mutation
 from app.services.document_number_service import DOC_TYPE_INVOICE, next_document_number
 from app.services.fbs_order_billing_service import _positions, confirmed_order_handover_dates
 
@@ -724,6 +730,15 @@ async def create_invoice_v2(
     except IntegrityError as exc:
         raise BillingInvoiceV2Error("idempotency_conflict") from exc
     await session.refresh(invoice, attribute_names=["lines_v2"])
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_BILLING_INVOICE,
+        document_id=invoice.id,
+        event_type=EVENT_DOCUMENT_CREATED,
+        before=None,
+        after=invoice_audit_fields(invoice),
+    )
     return invoice
 
 
@@ -745,8 +760,18 @@ async def cancel_invoice_v2(
     session: AsyncSession, *, tenant_id: uuid.UUID, invoice_id: uuid.UUID
 ) -> BillingInvoiceV2:
     invoice = await get_invoice_v2(session, tenant_id=tenant_id, invoice_id=invoice_id)
+    before = invoice_audit_fields(invoice)
     if invoice.status == "issued":
         invoice.status = "cancelled"
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_BILLING_INVOICE,
+        document_id=invoice.id,
+        event_type=EVENT_STATUS_CHANGED,
+        before=before,
+        after=invoice_audit_fields(invoice),
+    )
     return invoice
 
 
