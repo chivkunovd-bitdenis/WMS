@@ -23,9 +23,15 @@ from app.models.billing import (
     BillingRunIssue,
     BillingTariffVersion,
 )
+from app.models.document_event import (
+    DOCUMENT_TYPE_BILLING_INVOICE,
+    EVENT_DOCUMENT_CREATED,
+    EVENT_STATUS_CHANGED,
+)
 from app.models.inbound_intake import InboundIntakeRequest
 from app.models.marketplace_unload import MarketplaceUnloadRequest
 from app.models.seller import Seller
+from app.services.document_event_service import record_document_mutation
 from app.services.document_number_service import DOC_TYPE_INVOICE, next_document_number
 
 REASONS = {
@@ -472,6 +478,27 @@ async def invoiced_ledger_ids(
     return {entry_id for entry_id in occupied if entry_id is not None}
 
 
+def invoice_audit_fields(invoice: BillingInvoice | BillingInvoiceV2) -> dict[str, object]:
+    fields: dict[str, object] = {
+        "invoice_id": invoice.id,
+        "seller_id": invoice.seller_id,
+        "status": invoice.status,
+    }
+    if isinstance(invoice, BillingInvoice):
+        fields.update(
+            origin="legacy", period=invoice.period, total_amount_kopecks=str(invoice.total_amount)
+        )
+    else:
+        fields.update(
+            origin="v2",
+            period_start=invoice.period_start,
+            period_end=invoice.period_end,
+            creation_mode=invoice.creation_mode,
+            total_amount_kopecks=invoice.total_amount_kopecks,
+        )
+    return fields
+
+
 async def form_invoice(
     session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID, period: date
 ) -> BillingInvoice | BillingRunIssue | list[BillingRunIssue] | None:
@@ -623,6 +650,15 @@ async def form_invoice(
         return winner
     else:
         await savepoint.commit()
+        await record_document_mutation(
+            session,
+            tenant_id=tenant_id,
+            document_type=DOCUMENT_TYPE_BILLING_INVOICE,
+            document_id=invoice.id,
+            event_type=EVENT_DOCUMENT_CREATED,
+            before=None,
+            after=invoice_audit_fields(invoice),
+        )
         return invoice
 
 
@@ -637,6 +673,16 @@ async def cancel_invoice(
     )
     if invoice is None:
         raise ValueError("Счёт не найден")
+    before = invoice_audit_fields(invoice)
     if invoice.status == "issued":
         invoice.status = "cancelled"
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_BILLING_INVOICE,
+        document_id=invoice.id,
+        event_type=EVENT_STATUS_CHANGED,
+        before=before,
+        after=invoice_audit_fields(invoice),
+    )
     return invoice

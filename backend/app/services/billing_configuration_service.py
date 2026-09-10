@@ -9,9 +9,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.billing import BillingLedgerEntry, BillingProfile, BillingTariffVersion
+from app.models.document_event import (
+    DOCUMENT_TYPE_BILLING_PROFILE,
+    DOCUMENT_TYPE_BILLING_TARIFF,
+    EVENT_DATA_CHANGED,
+)
 from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
+from app.services.document_event_service import record_document_mutation
 from app.services.staff_packaging_billing_service import rub_to_kopecks
 
 
@@ -61,6 +67,33 @@ def validate_inn(inn: str) -> str:
     return value
 
 
+def _profile_audit_fields(profile: BillingProfile) -> dict[str, object]:
+    # Invoice requisites only; no request/model dump or unrelated seller fields.
+    return {
+        "seller_id": profile.seller_id,
+        "legal_name": profile.legal_name,
+        "inn": profile.inn,
+        "kpp": profile.kpp,
+        "bank_name": profile.bank_name,
+        "bik": profile.bik,
+        "settlement_account": profile.settlement_account,
+        "correspondent_account": profile.correspondent_account,
+    }
+
+
+def _tariff_audit_fields(tariff: BillingTariffVersion) -> dict[str, object]:
+    return {
+        "version_id": str(tariff.id),
+        "seller_id": str(tariff.seller_id) if tariff.seller_id else None,
+        "warehouse_id": str(tariff.warehouse_id) if tariff.warehouse_id else None,
+        "service_code": tariff.service_code,
+        "unit": tariff.unit,
+        "amount_kopecks": tariff.amount,
+        "valid_from": tariff.valid_from.isoformat(),
+        "valid_to": tariff.valid_to.isoformat() if tariff.valid_to else None,
+    }
+
+
 async def save_profile(
     session: AsyncSession,
     *,
@@ -92,6 +125,7 @@ async def save_profile(
             BillingProfile.tenant_id == tenant_id, BillingProfile.seller_id == seller_id
         )
     )
+    before = _profile_audit_fields(profile) if profile is not None else None
     if profile is None:
         profile = BillingProfile(tenant_id=tenant_id, seller_id=seller_id)
         session.add(profile)
@@ -103,6 +137,15 @@ async def save_profile(
     profile.settlement_account = _required_text(settlement_account)
     profile.correspondent_account = _required_text(correspondent_account)
     await session.flush()
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_BILLING_PROFILE,
+        document_id=profile.id,
+        event_type=EVENT_DATA_CHANGED,
+        before=before,
+        after=_profile_audit_fields(profile),
+    )
     return profile
 
 
@@ -230,6 +273,10 @@ async def create_tariff(
         amount=amount_kopecks,
         valid_from=valid_from,
     )
+    before: dict[str, object] = {
+        "billing_enabled_from": tenant.billing_enabled_from,
+        "versions": [_tariff_audit_fields(previous)] if previous is not None else [],
+    }
     nested = await session.begin_nested()
     try:
         if previous:
@@ -250,4 +297,17 @@ async def create_tariff(
         raise BillingConfigurationError("Дата пересекает будущую версию ставки") from exc
     else:
         await nested.commit()
+    await record_document_mutation(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_BILLING_TARIFF,
+        document_id=tenant_id,
+        event_type=EVENT_DATA_CHANGED,
+        before=before,
+        after={
+            "billing_enabled_from": tenant.billing_enabled_from,
+            "versions": ([_tariff_audit_fields(previous)] if previous is not None else [])
+            + [_tariff_audit_fields(tariff)],
+        },
+    )
     return tariff
