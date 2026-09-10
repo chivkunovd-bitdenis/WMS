@@ -1,0 +1,1 @@
+{"verified": true, "wms_subnet": "172.21.0.0/16", "edge_subnet": "172.18.0.0/16", "mode": "read-only topology with candidate config"}

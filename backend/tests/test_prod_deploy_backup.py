@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -11,13 +12,18 @@ from pathlib import Path
 import pytest
 
 
-@pytest.mark.parametrize("backup_error", ["", "dump", "archive", "listing", "empty"])
+@pytest.mark.parametrize("backup_error", ["", "dump", "archive", "listing", "empty", "network"])
 def test_deploy_requires_verified_backup_before_migration(
     tmp_path: Path, backup_error: str,
 ) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    (repo / "docker-compose.wms-host-8088.yml").touch()
+    source = Path(__file__).resolve().parents[2]
+    for relative in ("docker-compose.wms-host-8088.yml", "deploy/Caddyfile.http",
+                     "scripts/deploy/verify-wms-host-network.py"):
+        target = repo / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source / relative, target)
     commands = tmp_path / "commands.jsonl"
     binaries = tmp_path / "bin"
     binaries.mkdir()
@@ -33,6 +39,30 @@ error = os.environ["TEST_BACKUP_ERROR"]
 if name == "git" and args[:1] == ["rev-parse"]:
     print("a" * 40)
 elif name == "docker":
+    if args[:3] == ["network", "ls", "-q"]:
+        print("wms-network")
+        sys.exit(0)
+    if args[:2] == ["network", "inspect"]:
+        edge = args[2] == "edge-network"
+        number = 18 if edge else (22 if error == "network" else 21)
+        print(json.dumps([{"Id": args[2], "Name": args[2], "IPAM": {"Config": [
+            {"Subnet": f"172.{number}.0.0/16", "Gateway": f"172.{number}.0.1"}
+        ]}}]))
+        sys.exit(0)
+    if args[:1] == ["inspect"] and "NetworkSettings.Networks" in args[-1]:
+        edge = args[1] == "synthetic-edge"
+        network = "edge-network" if edge else "wms-network"
+        number = 18 if edge else 21
+        print(json.dumps({network: {"NetworkID": network, "Gateway": f"172.{number}.0.1",
+                                  "IPAddress": f"172.{number}.0.6", "IPPrefixLen": 16}}))
+        sys.exit(0)
+    if args[:2] == ["ps", "-q"]:
+        if "publish=443" in args:
+            print("synthetic-edge")
+            sys.exit(0)
+        if any(v.endswith("service=api") or v.endswith("service=web") for v in args):
+            print("synthetic-wms-service")
+            sys.exit(0)
     if any("pg_dump" in arg for arg in args):
         assert sys.stdin.read() == ""
         print("synthetic backup")
@@ -65,6 +95,12 @@ elif name == "docker":
         check=False,
     )
     calls = [json.loads(line) for line in commands.read_text().splitlines()]
+    if backup_error == "network":
+        assert result.returncode != 0
+        assert "subnet/gateway changed" in result.stderr
+        assert not any("build" in call or "stop" in call or "migrations" in call for call in calls)
+        assert not backup_dir.exists()
+        return
     stop = next(i for i, call in enumerate(calls) if call[-4:] == [
         "stop", "api", "celery_worker", "celery_beat",
     ])

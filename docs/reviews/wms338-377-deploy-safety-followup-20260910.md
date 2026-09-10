@@ -25,3 +25,10 @@ backup, ошибку dump и испорченный архив. 3 PASS; bash -n,
 7целевыхtestsPASS: dump/archivefail, listingfail,emptylist, actualworkflow
 bootstrap gitshowfail и scriptcommandчитающаяstdin. Ruff/bash-nPASS.
 Повторноеindependentreviewэтогопоследнегоdeltaещёнепройдено.
+
+
+## WMS-270/377: topology preflight before deployment
+
+Independent review at891281e7 acceptedauth/limiter butfoundoneP2: hardcodedtrustsubnetswerenotcomparedwithactualDockerbridgesbeforedeployment. Newverify-wms-host-network.py reads onlynetworkmetadata andComposeprojectlabel; validatescandidateoverlay/Caddytrust, existingWMSdefaultsubnet/gateway, actualapi/webmembership andHTTPSedgegateway/subnet. Drift/missingorambiguousnetwork/containerfailsbeforebuild,writershutdownorDDL; nothingrecreatesnetworks. NormalcontainerIPchangeinsidepreservedsubnetpasses.
+
+15focusedtestsPASS18.67s coveroldbackup/bootstrap/legacybehavior, actualdeployscriptfailurebeforebuildonnetworkdrift, WMS/edgechangedsubnets, detachedapi, missingnetwork, twoedges, within-subnetcontainerreplacement. ScopedRuff/bash-nPASSafterformatting/executablemodefix. Rootranthesameverifieragainstactualservermetadatawithcandidatepublicconfigsinephemeraltempdir: verifiedtrue, WMS172.21.0.0/16, edge172.18.0.0/16. ActiveHTTPSedgeiswb-finance-caddy-1; existingweb172.21.0.6, edge172.18.0.9. Noactualconfig/network/servicechange. ExactproofJSONresumed/wms377-candidate-network-preflight-20260910.json. FullHTTPSclientchain/closedportsremainafterdeploychecks.

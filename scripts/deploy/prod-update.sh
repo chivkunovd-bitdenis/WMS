@@ -63,6 +63,10 @@ fi
 COMPOSE=(docker compose -f docker-compose.prod.yml)
 if [[ -f docker-compose.wms-host-8088.yml ]]; then
   COMPOSE+=(-f docker-compose.wms-host-8088.yml)
+  # Fail before build, writer shutdown or DDL if Docker recreated either bridge.
+  echo "==> verify existing private proxy topology"
+  DB_CONTAINER="$("${COMPOSE[@]}" ps -q db)"
+  python3 scripts/deploy/verify-wms-host-network.py "$DB_CONTAINER"
 fi
 
 BUILD_SERVICES=(migrations api celery_worker celery_beat web)
