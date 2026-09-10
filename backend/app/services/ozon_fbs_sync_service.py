@@ -664,6 +664,9 @@ def _apply_requirements(order: FbsOrder, kinds: list[str], seen: bool) -> None:
     не имеет права трактовать незнание как разрешение.
     """
     if not seen:
+        # Catalog SGTIN is partial knowledge: preserve it without claiming that
+        # Ozon has answered about IMEI/UIN or clearing earlier requirements.
+        order.required_meta_json = list(dict.fromkeys([*(order.required_meta_json or []), *kinds]))
         return
     order.required_meta_json = list(kinds)
     details = dict(order.meta_details_json or {})
@@ -800,7 +803,7 @@ async def sync_ozon_orders(
         raw_substatus = _text(row, "substatus")
         if raw_status is None:
             raw_status = raw_substatus
-        required_kinds, _ = _requirement_kinds(row)
+        required_kinds, requirements_seen = _requirement_kinds(row)
         fallback_product_id = await _product_id_for_row(session, tenant_id, seller_id, row)
         positions = await _posting_products_for_row(session, tenant_id, seller_id, row)
         binding = await _binding_for_row(session, tenant_id, seller_id, row)
@@ -810,8 +813,6 @@ async def sync_ozon_orders(
             session, positions, fallback_product_id
         ):
             required_kinds.append(MARKING_KIND_SGTIN)
-        # Строку отправления мы разобрали — значит про требования знаем.
-        requirements_seen = True
         has_positions_payload = isinstance(row.get("products"), list)
         product_id = _primary_product_id(positions, fallback_product_id)
         positions_mapped = _positions_are_mapped(positions, fallback_product_id)
@@ -963,6 +964,7 @@ async def sync_ozon_order_statuses(
         (
             await session.execute(
                 select(FbsOrder)
+                .options(selectinload(FbsOrder.product_positions))
                 .where(
                     FbsOrder.tenant_id == tenant_id,
                     FbsOrder.seller_id == seller_id,
@@ -1010,6 +1012,10 @@ async def sync_ozon_order_statuses(
         # его и здесь: у заказа, заведённого до появления разбора требований,
         # оно иначе не появилось бы никогда.
         required_kinds, requirements_seen = _requirement_kinds(row)
+        if MARKING_KIND_SGTIN not in required_kinds and await _honest_sign_required_by_catalog(
+            session, order.product_positions, order.product_id
+        ):
+            required_kinds.append(MARKING_KIND_SGTIN)
         _apply_requirements(order, required_kinds, requirements_seen)
         status_value = _text(row, "status")
         substatus_value = _text(row, "substatus")

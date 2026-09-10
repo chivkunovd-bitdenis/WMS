@@ -642,3 +642,42 @@ def test_repeat_sync_reordered_metadata_matches_the_product_not_the_index() -> N
     sync_svc._update_position_metadata([first, second], incoming)
     assert (first.name, first.position_index) == ("First updated", 0)
     assert (second.name, second.position_index) == ("Second updated", 1)
+
+
+@pytest.mark.parametrize("catalog_marked", [False, True])
+async def test_import_absent_requirements_does_not_claim_complete_knowledge(
+    db_session: AsyncSession, catalog_marked: bool,
+) -> None:
+    ctx = await _seed(db_session)
+    ctx.product.requires_honest_sign = catalog_marked
+    await db_session.commit()
+    await _sync(db_session, ctx, [posting_row()])
+    order = await _order(db_session)
+    assert order.required_meta_json == (["sgtin"] if catalog_marked else [])
+    assert not gate_svc.ozon_requirements_known(order)
+    assert not gate_svc.compute_delivery_allowed(order, [])
+    assert "ещё не получены" in gate_svc.delivery_message(order, [])
+    await _sync(db_session, ctx, [posting_row(requirements={})])
+    assert gate_svc.ozon_requirements_known(order)
+    assert order.required_meta_json == (["sgtin"] if catalog_marked else [])
+    await _sync(db_session, ctx, [posting_row()])
+    assert gate_svc.ozon_requirements_known(order)
+    assert order.required_meta_json == (["sgtin"] if catalog_marked else [])
+
+
+async def test_status_refresh_preserves_catalog_marking_requirement(
+    db_session: AsyncSession,
+) -> None:
+    ctx = await _seed(db_session)
+    ctx.product.requires_honest_sign = True
+    await db_session.commit()
+    await _sync(db_session, ctx, [posting_row(requirements={})])
+    row = posting_row(requirements={})
+    provider = OzonMarketplaceProvider(transport=FakeMarketplaceTransport(statuses=[row]))
+    await sync_svc.sync_ozon_order_statuses(
+        db_session, ctx.tenant.id, ctx.seller.id, provider, AsyncMock(),
+    )
+    order = await _order(db_session)
+    assert order.required_meta_json == ["sgtin"]
+    assert gate_svc.ozon_requirements_known(order)
+    assert not gate_svc.compute_delivery_allowed(order, [])

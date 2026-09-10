@@ -41,9 +41,7 @@ def current_markings(
     if not positions or any(quantity <= 0 for quantity in positions.values()):
         return []
     kinds = {
-        str(kind).strip().lower()
-        for kind in (order.required_meta_json or [])
-        if str(kind).strip()
+        str(kind).strip().lower() for kind in (order.required_meta_json or []) if str(kind).strip()
     } or {marking.kind for marking in markings}
     candidates = [
         marking
@@ -71,9 +69,8 @@ def current_markings(
 def ozon_requirements_known(order: FbsOrder) -> bool:
     """Разобраны ли требования по маркировке этого отправления.
 
-    Признак ставит разбор отправления (`ozon_fbs_sync_service`) из двух
-    источников сразу: требований самого Ozon (`requirements`) и флага
-    маркируемости у товаров отправления в нашем каталоге.
+    Признак ставится только после ответа Ozon о requirements. Каталог
+    дополнительно требует SGTIN, но ничего не сообщает о других видах кодов.
 
     Отличать «требований нет» от «мы их не разбирали» обязательно: раньше оба
     случая выглядели как пустой `required_meta_json`, и гейт выпускал
@@ -84,10 +81,10 @@ def ozon_requirements_known(order: FbsOrder) -> bool:
 
 
 def compute_delivery_allowed(order: FbsOrder, markings: list[FbsOrderMarking]) -> bool:
+    if not ozon_requirements_known(order):
+        return False
     required = {
-        str(kind).strip().lower()
-        for kind in (order.required_meta_json or [])
-        if str(kind).strip()
+        str(kind).strip().lower() for kind in (order.required_meta_json or []) if str(kind).strip()
     }
     if not required:
         # Пустое требование — разрешение только у отправления, требования
@@ -135,9 +132,7 @@ def apply_status(
         if marking.meta_status in {META_STATUS_REJECTED, META_STATUS_REPLACEMENT_REQUIRED}:
             continue
         own_details = (
-            dict(marking.meta_details_json)
-            if isinstance(marking.meta_details_json, dict)
-            else {}
+            dict(marking.meta_details_json) if isinstance(marking.meta_details_json, dict) else {}
         )
         marking.meta_details_json = {**own_details, **shared_details}
         marking.reason = reason
@@ -158,15 +153,15 @@ def apply_status(
 
 
 def delivery_message(order: FbsOrder, markings: list[FbsOrderMarking]) -> str:
-    if not order.required_meta_json:
-        if ozon_requirements_known(order):
-            return "Ozon: маркировка не требуется."
+    if not ozon_requirements_known(order):
         # Утверждать «не требуется» мы не вправе: требования по этому
         # отправлению ещё не разобраны, значит мы просто не знаем.
         return (
             "Требования по маркировке этого отправления Ozon ещё не получены — "
             "обновите заказы Ozon."
         )
+    if not order.required_meta_json:
+        return "Ozon: маркировка не требуется."
     if compute_delivery_allowed(order, markings):
         return "Ozon: маркировка подтверждена для всех товаров."
     return "Ozon не подтвердил маркировку для всех товаров отправления."
