@@ -619,7 +619,7 @@ async def print_statement(
 
 
 class StorageReportProductOut(BaseModel):
-    product_id: uuid.UUID
+    product_id: uuid.UUID | None
     sku: str | None
     product_name: str
     seller_article: str | None
