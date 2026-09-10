@@ -1,0 +1,7 @@
+{
+  "api_pid": 50954,
+  "api_url": "http://127.0.0.1:8397",
+  "api_script": "backend/scripts/wms397_chat_fixture.py",
+  "web_pid": 50955,
+  "web_url": "http://127.0.0.1:5397/app/ff/chat"
+}

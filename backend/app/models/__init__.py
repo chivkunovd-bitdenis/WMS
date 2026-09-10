@@ -17,6 +17,12 @@ from app.models.billing import (
     BillingTariffVersion,
     BillingTariffVersionV2,
 )
+from app.models.chat import (
+    ChatAttachment,
+    ChatConversation,
+    ChatMessage,
+    ChatParticipant,
+)
 from app.models.discrepancy_act import DiscrepancyAct, DiscrepancyActLine
 from app.models.document_event import DocumentEvent
 from app.models.document_sequence import DocumentDisplaySequence, DocumentSequence
@@ -117,6 +123,10 @@ __all__ = [
     "BillingTariffServiceState",
     "BillingTariffVersion",
     "BillingTariffVersionV2",
+    "ChatAttachment",
+    "ChatConversation",
+    "ChatMessage",
+    "ChatParticipant",
     "DiscrepancyAct",
     "DiscrepancyActLine",
     "DocumentDisplaySequence",
