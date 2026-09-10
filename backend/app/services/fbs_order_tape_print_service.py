@@ -57,6 +57,10 @@ class FbsOrderTapePrintedCode:
     id: uuid.UUID
     cis_code: str
     has_label_artifact: bool
+    # Ozon associates each KIZ with one posting position.  The tape response
+    # carries that existing association so the client never labels it as the
+    # first product of a multi-position posting.
+    order_product_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -299,6 +303,7 @@ async def print_fbs_order_tape(
                     printed_codes=[FbsOrderTapePrintedCode(
                         id=code.id, cis_code=code.cis_code,
                         has_label_artifact=bool(code.label_artifact_pdf),
+                        order_product_id=existing.order_product_id,
                     )],
                 ))
                 continue
@@ -344,10 +349,9 @@ async def print_fbs_order_tape(
         shortage_total += printed.shortage or 0
         if (printed.shortage or 0) > 0 and not allow_partial:
             continue
-        if printed.codes:
-            marking = _existing_sgtin_marking(order)
-            if marking is not None:
-                bindings_to_send[order.id] = marking.id
+        marking = _existing_sgtin_marking(order)
+        if printed.codes and marking is not None:
+            bindings_to_send[order.id] = marking.id
         result_orders.append(
             FbsOrderTapeOrder(
                 order_id=order.id,
@@ -360,6 +364,7 @@ async def print_fbs_order_tape(
                         id=row.id,
                         cis_code=row.cis_code,
                         has_label_artifact=row.has_label_artifact,
+                        order_product_id=marking.order_product_id if marking is not None else None,
                     )
                     for row in printed.printed_codes
                 ],

@@ -83,11 +83,16 @@ type FbsTapeAsset = {
 type FbsTapeOrderContext = {
   orderId: string
   wbOrderId: number
+  marketplace: 'wb' | 'ozon'
   requiresHonestSign: boolean
   productLabel: ProductThermalLabelData
   /** One Ozon posting can have several products.  Keep their own labels and
    * quantities instead of repeating the compatibility product for every unit. */
-  productLabels?: Array<{ productLabel: ProductThermalLabelData; copies: number }>
+  productLabels?: Array<{
+    positionId?: string
+    productLabel: ProductThermalLabelData
+    copies: number
+  }>
 }
 
 type FbsTapePrintOrder = {
@@ -95,7 +100,12 @@ type FbsTapePrintOrder = {
   wb_order_id: number
   requires_honest_sign: boolean
   qr_asset: FbsTapeAsset | null
-  printed_codes: Array<{ id: string; cis_code: string; has_label_artifact: boolean }>
+  printed_codes: Array<{
+    id: string
+    cis_code: string
+    has_label_artifact: boolean
+    order_product_id: string | null
+  }>
   shortage: number | null
 }
 
@@ -112,6 +122,15 @@ type FbsTapeContext = {
   includeOrderQr: boolean
   print: (args: { layout: PrintLayout; allowPartial: boolean; reprint: boolean }) => Promise<FbsTapePrintResult>
   confirmQrApplied: (asset: FbsTapeAsset) => Promise<void>
+}
+
+function productLabelForPrintedFbsCode(
+  order: FbsTapeOrderContext,
+  code: FbsTapePrintOrder['printed_codes'][number],
+): ProductThermalLabelData | null {
+  if (order.marketplace !== 'ozon') return order.productLabel
+  if (!code.order_product_id) return null
+  return order.productLabels?.find((item) => item.positionId === code.order_product_id)?.productLabel ?? null
 }
 
 /** Fixed layout for non-ЧЗ: one WB barcode label per unit, no constructor. */
@@ -891,14 +910,19 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   cis: code.cis_code,
                   codeId: code.id,
                   hasLabelArtifact: code.has_label_artifact,
-                  productLabel: order.productLabel,
+                  productLabel: productLabelForPrintedFbsCode(order, code),
                 }))
                 orderSections.push(
-                  ...(await buildMarkingTapeSections(units, printLayout, order.productLabel, {
-                    authToken: ctx.token,
-                    labelSize: size,
-                    signal: controller.signal,
-                  })),
+                  ...(await buildMarkingTapeSections(
+                    units,
+                    printLayout,
+                    order.marketplace === 'ozon' ? null : order.productLabel,
+                    {
+                      authToken: ctx.token,
+                      labelSize: size,
+                      signal: controller.signal,
+                    },
+                  )),
                 )
               }
             } else if (fallbackLabelCopies > 0) {

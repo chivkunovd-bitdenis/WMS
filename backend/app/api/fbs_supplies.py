@@ -331,6 +331,7 @@ class FbsOrderTapePrintedCodeOut(BaseModel):
     id: str
     cis_code: str
     has_label_artifact: bool
+    order_product_id: str | None
 
 
 class FbsOrderTapeOrderOut(BaseModel):
@@ -1981,6 +1982,9 @@ async def print_fbs_supply_order_tape(
                         id=str(code.id),
                         cis_code=code.cis_code,
                         has_label_artifact=code.has_label_artifact,
+                        order_product_id=(
+                            str(code.order_product_id) if code.order_product_id is not None else None
+                        ),
                     )
                     for code in order.printed_codes
                 ],

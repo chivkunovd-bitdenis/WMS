@@ -400,7 +400,12 @@ export type FbsOrderPrintTapeOrder = {
   requires_honest_sign: boolean
   qr_asset: FbsPrintAsset | null
   codes: string[]
-  printed_codes: Array<{ id: string; cis_code: string; has_label_artifact: boolean }>
+  printed_codes: Array<{
+    id: string
+    cis_code: string
+    has_label_artifact: boolean
+    order_product_id: string | null
+  }>
   shortage: number | null
 }
 
