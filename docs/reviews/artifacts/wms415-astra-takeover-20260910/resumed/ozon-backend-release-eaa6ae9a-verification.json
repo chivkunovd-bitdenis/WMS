@@ -1,0 +1,36 @@
+{
+  "head": "eaa6ae9aecee875c50b31afa6b2cc224bb57d043",
+  "containers": {
+    "wms_prod-api-1": {
+      "sha256": {
+        "app/services/ozon_fbs_sync_service.py": "dce6b7a1fda59c2719a704e17460335a2d46f1abb0c83537635a66b8b9bf508e",
+        "app/services/ozon_fbs_marking_gate_service.py": "b205082435792bd225bcf367da5d446dac2afeeca109c2995fff266428ab276d"
+      },
+      "state_started_image": "running|2026-09-10T09:11:20.531455738Z|sha256:0af9db0a95d3bff16fb2a9baf5eafc97eff7cac793e1884e47aad82fed6c2793"
+    },
+    "wms_prod-celery_worker-1": {
+      "sha256": {
+        "app/services/ozon_fbs_sync_service.py": "dce6b7a1fda59c2719a704e17460335a2d46f1abb0c83537635a66b8b9bf508e",
+        "app/services/ozon_fbs_marking_gate_service.py": "b205082435792bd225bcf367da5d446dac2afeeca109c2995fff266428ab276d"
+      },
+      "state_started_image": "running|2026-09-10T09:11:20.526285233Z|sha256:732b1f05313bab65574acc88c11f208f4f5cfb519a232a751ea736e26ee3819e"
+    },
+    "wms_prod-celery_beat-1": {
+      "sha256": {
+        "app/services/ozon_fbs_sync_service.py": "dce6b7a1fda59c2719a704e17460335a2d46f1abb0c83537635a66b8b9bf508e",
+        "app/services/ozon_fbs_marking_gate_service.py": "b205082435792bd225bcf367da5d446dac2afeeca109c2995fff266428ab276d"
+      },
+      "state_started_image": "running|2026-09-10T09:11:20.829882479Z|sha256:bdb846b97df025ba3043b96b0e23cd6aba817fe7f12cef581431411395e3168a"
+    }
+  },
+  "expected_sha256": {
+    "app/services/ozon_fbs_sync_service.py": "dce6b7a1fda59c2719a704e17460335a2d46f1abb0c83537635a66b8b9bf508e",
+    "app/services/ozon_fbs_marking_gate_service.py": "b205082435792bd225bcf367da5d446dac2afeeca109c2995fff266428ab276d"
+  },
+  "public_https": {
+    "/api/health": 200,
+    "/": 200,
+    "/seller/": 200,
+    "/api/openapi.json": 200
+  }
+}
