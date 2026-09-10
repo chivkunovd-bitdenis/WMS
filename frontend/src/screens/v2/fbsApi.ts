@@ -233,7 +233,12 @@ export type FbsWorklistOrder = {
   positions: Array<{
     id?: string | null
     image_url?: string | null
+    barcode?: string | null
     product_id: string | null
+    marketplace_bindings?: Array<{
+      marketplace: 'wb' | 'ozon'
+      external_barcodes?: string[]
+    }>
     name: string
     seller_article: string | null
     sku: string | null
