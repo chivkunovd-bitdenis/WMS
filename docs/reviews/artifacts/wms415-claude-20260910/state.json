@@ -1,16 +1,16 @@
 {
-  "phase": "WMS270_postdeploy_shared_login_limit_remediation",
+  "phase": "continued415_after_verified_API_recovery",
   "quota_session_id": "5ed12390-4d22-4b83-b183-114202609010",
   "quota_tool_pty": 75581,
   "last_weekly_used_percent": 87,
   "last_weekly_remaining_percent": 13,
   "recorded_at_utc": "2026-09-09T21:10:11.500624+00:00",
-  "last_full_progress_check_utc": "2026-09-10T10:33:21.439051+00:00",
+  "last_full_progress_check_utc": "2026-09-10T11:17:26.649168+00:00",
   "coordinator_session_id": "01a0884c-2c18-7d22-a2a8-8bef2f3d8fe3",
   "automation_id": "wms-claude",
   "quota_minutes": 10,
   "progress_minutes": 20,
-  "coordinator_pid": 25612,
+  "coordinator_pid": 38677,
   "quota_pid": 61235,
   "coordinator_checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord",
   "coordinator_branch": "codex/wms415-coord-20260910",
@@ -38,12 +38,12 @@
   ],
   "next_queue_commit": "aadac0b6039a70912bf12412aeca90028b675fc8",
   "last_heartbeat_utc": "2026-09-10T10:33:21.439051+00:00",
-  "intervention": "Verified current coordinator25612 live, PR215 merged all CI pass, SSH/API/HTTPS/ports and safe diagnostic. Coordinator owns active proxy correction and proposed API rollback; no duplicate writer or auth saturation probes.",
+  "intervention": "Prior coordinator and workers absent. Resumed same CLI thread38677; no deployment running at root check. User affected by closed8088 received verified HTTPS login link. Preserve operator access; finish proxy fix runtime verification before narrow release.",
   "last_full_progress_artifact": "progress-20260909T2215.json",
   "coordinator_provider": "codex",
   "coordinator_model": "gpt-6-astra",
   "coordinator_effort": "high",
-  "coordinator_events": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/urgent418-release-events.jsonl",
+  "coordinator_events": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms415-coord/docs/reviews/artifacts/wms415-astra-takeover-20260910/continued415-after-status-events.jsonl",
   "claude_coordinator_stopped": true,
   "claude_coordinator_session_id": "2a1f478a-9d10-48fe-b183-114202609010",
   "claude_session_used_percent": 100,
@@ -82,7 +82,7 @@
     "WMS-112"
   ],
   "production_git_sha": "1922a2242ad626a9618cb2b7300e6cf500d25b4d",
-  "production_scope": "PR215 deployed, live acceptance failed shared login limiter; coordinator remediating. Filter418 preserved, HTTPS200, direct8088/15174 timed out. Rollback API announced but not root verified at10:32UTC.",
+  "production_scope": "Mixed verified recovery: checkout/web1922, API rebuilt120b image5b0f5e9d; faulty shared login limiter removed; filter418 preserved; ports closed.",
   "published_apk": {
     "version_code": 10,
     "version_name": "0.1.9-ozon-tsd",
@@ -109,8 +109,8 @@
     "observed_utc": "2026-09-10T10:33:21.439051+00:00",
     "diagnostic": "Both sources resolve to literal {http.request.client_ip}:0",
     "api_image_at_check": "sha256:fe66c88c44f9fe346a4dda34b59f6dcf76cf3149b75e8ed9296f5f4570d5aaab",
-    "rollback_verified": false,
-    "owner": "coordinator25612",
-    "status": "remediation active"
+    "rollback_verified": true,
+    "owner": "coordinator38677",
+    "status": "API recovered and root hashes verified; corrected proxy7e0d136e pending runtime review and release"
   }
 }
