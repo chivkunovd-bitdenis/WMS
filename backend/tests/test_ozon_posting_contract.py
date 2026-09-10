@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.billing import BillingLedgerEntry
 from app.models.fbs_order import (
@@ -151,7 +152,9 @@ async def _sync(db_session: AsyncSession, ctx: SimpleNamespace, rows: list[dict[
 async def _order(db_session: AsyncSession) -> FbsOrder:
     return (
         await db_session.execute(
-            select(FbsOrder).where(FbsOrder.external_order_id == POSTING_NUMBER)
+            select(FbsOrder)
+            .options(selectinload(FbsOrder.product_positions))
+            .where(FbsOrder.external_order_id == POSTING_NUMBER)
         )
     ).scalar_one()
 
@@ -677,6 +680,9 @@ async def test_status_refresh_preserves_catalog_marking_requirement(
     await sync_svc.sync_ozon_order_statuses(
         db_session, ctx.tenant.id, ctx.seller.id, provider, AsyncMock(),
     )
+    # A fresh ORM read must not depend on the polling instance remaining alive.
+    await db_session.flush()
+    db_session.expunge_all()
     order = await _order(db_session)
     assert order.required_meta_json == ["sgtin"]
     assert gate_svc.ozon_requirements_known(order)

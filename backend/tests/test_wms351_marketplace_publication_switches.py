@@ -293,9 +293,11 @@ async def test_bulk_untouched_marketplace_preserves_each_products_legacy_value(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("ozon_enabled", [True, False])
-async def test_ozon_order_scope_uses_its_own_switch(
+@pytest.mark.parametrize("served", [True, False])
+async def test_ozon_order_scope_uses_served_independently_of_publication(
     db_session: AsyncSession,
     ozon_enabled: bool,
+    served: bool,
 ) -> None:
     from unittest.mock import AsyncMock
 
@@ -308,10 +310,13 @@ async def test_ozon_order_scope_uses_its_own_switch(
     tenant, seller, _warehouse, provider = await _seed_ozon_scope_case(
         db_session,
         published=not ozon_enabled,
-        served=True,
+        served=served,
     )
     product = (await db_session.scalars(select(Product))).one()
     product.fbs_ozon_stock_sync_enabled = ozon_enabled
     await db_session.commit()
     result = await sync_ozon_orders(db_session, tenant.id, seller.id, provider, AsyncMock())
-    assert result["orders_created"] == int(ozon_enabled)
+    assert result["orders_created"] == int(served)
+    await db_session.refresh(product)
+    assert product.fbs_stock_sync_enabled is (not ozon_enabled)
+    assert product.fbs_ozon_stock_sync_enabled is ozon_enabled
