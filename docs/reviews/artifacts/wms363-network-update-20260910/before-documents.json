@@ -1,0 +1,20 @@
+{
+  "observed_at_utc": "2026-09-10T08:20:13.973426+00:00",
+  "source": "isolated fixture SQLite; read-only",
+  "supplies": [
+    {
+      "id": "21e363e0-e6c6-49b6-8e80-92af50b3a982",
+      "name": "WMS363-ozon-unfinished",
+      "marketplace": "ozon",
+      "status": "assembling",
+      "order_count": 2
+    },
+    {
+      "id": "95b8355c-fb2f-4911-a0bd-8fce0021250e",
+      "name": "WMS363-wb-unfinished",
+      "marketplace": "wb",
+      "status": "draft",
+      "order_count": 2
+    }
+  ]
+}

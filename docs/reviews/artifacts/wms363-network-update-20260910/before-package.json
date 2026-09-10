@@ -1,0 +1,8 @@
+{
+  "observed_at_utc": "2026-09-10T08:21:09.659188+00:00",
+  "package": "ru.wms.tsd",
+  "versionCode": 9,
+  "versionName": "0.1.8-wms401-orders-first",
+  "installed_base_apk_sha256": "ccb8d7ea57863133f1b2c0dc549ffb10c74d17620203ff0ba3f43f88726457a6",
+  "source": "read-only installed package metadata and exact base.apk checksum; no auth storage"
+}

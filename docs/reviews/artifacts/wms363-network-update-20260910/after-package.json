@@ -1,0 +1,12 @@
+{
+  "observed_at_utc": "2026-09-10T08:25:07.900072+00:00",
+  "package": "ru.wms.tsd",
+  "versionCode": 10,
+  "versionName": "0.1.9-ozon-tsd",
+  "installed_base_apk_sha256": "cfe8b5adc1bbd62e728184b9a18a1e5a14a837b3028de865e493c6203bd36870",
+  "source": "read-only installed base.apk checksum after actual app download and Android installer Update tap",
+  "adb_install_used": false,
+  "system_installer_component": "com.google.android.packageinstaller/com.android.packageinstaller.PackageInstallerActivity",
+  "system_action": "Update",
+  "installer_returned_to": "Android launcher"
+}
