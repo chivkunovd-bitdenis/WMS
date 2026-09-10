@@ -23,33 +23,42 @@ index 7bf60a3..c070618 100644
      @GET("operations/fbs-orders/worklist")
 -    suspend fun orders(@Query("marketplace") marketplace: String = "wb", @Query("status_group") group: String? = null, @Query("limit") limit: Int = 100, @Query("cursor") cursor: String? = null): Response<FbsOrderPage>
 +    suspend fun orders(@Query("marketplace") marketplace: String = "wb", @Query("status_group") group: String? = null, @Query("limit") limit: Int = 100, @Query("cursor") cursor: String? = null, @Query("sort") sort: String = "oldest"): Response<FbsOrderPage>
- 
+
      @POST("operations/fbs-supplies/from-orders")
      suspend fun createSupply(@Body body: SupplyCreateBody): Response<FbsWorkspace>
 @@ -41,7 +41,7 @@ interface FbsApi {
      @GET suspend fun asset(@Url path: String): Response<ResponseBody>
- 
+
      @DELETE("operations/fbs-supplies/{supplyId}/boxes/{boxId}/orders/{orderId}")
 -    suspend fun removeBoxOrder(@Path("supplyId") supplyId: String, @Path("boxId") boxId: String, @Path("orderId") orderId: String): Response<FbsWorkspace>
 +    suspend fun removeBoxOrder(@Path("supplyId") supplyId: String, @Path("boxId") boxId: String, @Path("orderId") orderId: String, @Query("order_product_id") positionId: String? = null): Response<FbsWorkspace>
- 
+
      @GET("operations/fbs-supplies/worklist")
      suspend fun worklist(
 @@ -94,6 +94,9 @@ interface FbsApi {
          @Body body: AssignOrdersBody,
      ): Response<FbsWorkspace>
- 
+
 +    @POST("operations/fbs-supplies/{supplyId}/boxes/{boxId}/retry-qr")
 +    suspend fun prepareBoxLabel(@Path("supplyId") supplyId: String, @Path("boxId") boxId: String): Response<FbsWorkspace>
 +
      @POST("operations/fbs-supplies/{supplyId}/delivery-preflight")
      suspend fun deliveryPreflight(@Path("supplyId") supplyId: String): Response<FbsDeliveryPreflight>
- 
+
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsDelivery.kt b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsDelivery.kt
-index d537f5c..76cb1b6 100644
+index d537f5c..b4601c7 100644
 --- a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsDelivery.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsDelivery.kt
-@@ -13,16 +13,16 @@ fun <T> Response<T>.deliveryBody(): T {
+@@ -3,7 +3,7 @@ package ru.wms.tsd.core.api.fbs
+ import kotlinx.serialization.json.*
+ import retrofit2.Response
+
+-/** Retain the complete request when the server cannot establish WB's result. */
++/** Retain the complete request when the server cannot establish the marketplace result. */
+ class FbsDeliveryError(message: String, val keepRequest: Boolean) : Exception(message)
+
+ fun <T> Response<T>.deliveryBody(): T {
+@@ -13,16 +13,19 @@ fun <T> Response<T>.deliveryBody(): T {
      }.getOrNull()
      val code = (detail?.get("code") as? JsonPrimitive)?.contentOrNull
      val suppliedMessage = (detail?.get("message") as? JsonPrimitive)?.contentOrNull
@@ -63,11 +72,15 @@ index d537f5c..76cb1b6 100644
          !suppliedMessage.isNullOrBlank() -> suppliedMessage
          else -> "Не удалось получить результат передачи (HTTP ${code()}). Повторите проверку."
      }
-     // A proxy error or expired session says nothing about an earlier request's outcome.
+-    // A proxy error or expired session says nothing about an earlier request's outcome.
 -    throw FbsDeliveryError(message, pending || code == null || code() in setOf(401, 403))
-+    throw FbsDeliveryError(message, pending || code == null || code() >= 500 || code() in setOf(401, 403))
++    // Only these service outcomes establish that a fresh confirmation is safe.
++    // meta_validation_fail is persisted as FAILED after a definitive WB business refusal.
++    // Checkpoint failures and unfamiliar 4xx responses do not establish the outcome.
++    val definitiveRefusal = code in setOf("stale_preflight", "meta_validation_fail")
++    throw FbsDeliveryError(message, !definitiveRefusal || code() >= 500 || code() in setOf(401, 403))
  }
- 
+
  fun FbsWorkspace.deliveryConfirmed(): Boolean = supply.status in setOf("in_delivery", "done")
 diff --git a/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt b/android/app/src/main/java/ru/wms/tsd/core/api/fbs/FbsModels.kt
 index b683911..1442fba 100644
@@ -88,7 +101,7 @@ index b683911..1442fba 100644
 +    val id: String = "",
 +    val barcode: String? = null,
  )
- 
+
  @Serializable data class FbsSticker(val code: String? = null, val status: String)
 @@ -128,6 +131,8 @@ data class FbsBox(
      @SerialName("assigned_order_ids") val assignedOrderIds: List<String> = emptyList(),
@@ -97,18 +110,18 @@ index b683911..1442fba 100644
 +    @SerialName("assigned_order_product_ids") val assignedOrderProductIds: List<String> = emptyList(),
 +    @SerialName("ozon_assembled") val ozonAssembled: Boolean = false,
  )
- 
+
  @Serializable
 @@ -198,7 +203,10 @@ data class PackagingLine(
      @SerialName("without_distribution") val withoutDistribution: Boolean = false,
  )
- 
+
 -@Serializable data class AssignOrdersBody(@SerialName("order_ids") val orderIds: List<String>)
 +@Serializable data class AssignOrdersBody(
 +    @SerialName("order_ids") val orderIds: List<String> = emptyList(),
 +    @SerialName("order_product_ids") val orderProductIds: List<String> = emptyList(),
 +)
- 
+
  @Serializable
  data class FbsDeliveryPreflight(
 @@ -291,6 +299,8 @@ data class FbsDeliveryCheck(
@@ -146,19 +159,28 @@ index b683911..1442fba 100644
 +fun KizLookup.displayNumber(): String = if (marketplace == "ozon") "Ozon ${externalOrderId ?: orderId}" else "WB $wbOrderId"
 +fun FbsWorkspace.marketplaceLabel(): String = if (supply.marketplace == "ozon") "Ozon" else "WB"
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsPrinting.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsPrinting.kt
-index 8fafb2f..21c2d20 100644
+index 8fafb2f..d3b23f3 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsPrinting.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsPrinting.kt
-@@ -33,7 +33,7 @@ fun printLabels(context: Context, html: String) {
+@@ -33,21 +33,28 @@ fun printLabels(context: Context, html: String) {
                      view.destroy()
                      return@evaluateJavascript
                  }
 -            val delegate = view.createPrintDocumentAdapter("Этикетки WB FBS")
++            try {
 +            val delegate = view.createPrintDocumentAdapter("Этикетки FBS")
              val adapter = object : PrintDocumentAdapter() {
                  override fun onStart() = delegate.onStart()
                  override fun onLayout(old: PrintAttributes?, new: PrintAttributes?, cancellation: CancellationSignal?, callback: LayoutResultCallback?, extras: Bundle?) = delegate.onLayout(old, new, cancellation, callback, extras)
-@@ -45,7 +45,7 @@ fun printLabels(context: Context, html: String) {
+                 override fun onWrite(pages: Array<out PageRange>?, destination: ParcelFileDescriptor?, cancellation: CancellationSignal?, callback: WriteResultCallback?) = delegate.onWrite(pages, destination, cancellation, callback)
+                 override fun onFinish() {
+-                    delegate.onFinish()
+-                    activePrintViews -= view
+-                    view.destroy()
++                    try { delegate.onFinish() } finally {
++                        activePrintViews -= view
++                        view.destroy()
++                    }
                  }
              }
              val manager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
@@ -166,17 +188,24 @@ index 8fafb2f..21c2d20 100644
 +            manager.print("Этикетки FBS", adapter,
                  PrintAttributes.Builder().setMediaSize(PrintAttributes.MediaSize("WMS_58_40", "58 × 40 мм", 2283, 1575))
                      .setMinMargins(PrintAttributes.Margins.NO_MARGINS).build())
++            } catch (_: Exception) {
++                activePrintViews -= view
++                view.destroy()
++                android.widget.Toast.makeText(context, "Не удалось открыть печать. Повторите выбор принтера.", android.widget.Toast.LENGTH_LONG).show()
++            }
              }
-@@ -56,7 +56,7 @@ fun printLabels(context: Context, html: String) {
- 
+         }
+     }
+@@ -56,7 +63,7 @@ fun printLabels(context: Context, html: String) {
+
  fun escapedLabel(value: String): String = value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
  fun inlineImage(bytes: ByteArray, contentType: String): String {
 -    require(contentType.substringBefore(';') in setOf("image/png", "image/jpeg", "image/webp")) { "Этикетка WB не является изображением" }
 +    require(contentType.substringBefore(';') in setOf("image/png", "image/jpeg", "image/webp")) { "Этикетка не является изображением" }
      return "data:${contentType.substringBefore(';')};base64,${Base64.encodeToString(bytes, Base64.NO_WRAP)}"
  }
- 
-@@ -69,3 +69,34 @@ fun labelPage(text: String, barcode: String? = null, dataMatrix: Boolean = false
+
+@@ -69,3 +76,34 @@ fun labelPage(text: String, barcode: String? = null, dataMatrix: Boolean = false
  fun labelsDocument(encoder: String, pages: List<String>): String = """<!doctype html><html><head><meta charset="utf-8"><style>
  @page{size:58mm 40mm;margin:0}body{margin:0;background:white;color:black}section{width:56mm;height:38mm;padding:1mm;page-break-after:always;overflow:hidden;text-align:center}section:last-child{page-break-after:auto}img,canvas{max-width:54mm;max-height:29mm;object-fit:contain}p{font:10px sans-serif;margin:1mm;overflow-wrap:anywhere}
  </style><script>$encoder</script></head><body>${pages.joinToString("")}</body></html>"""
@@ -225,12 +254,12 @@ index ee2b141..339f092 100644
  import ru.wms.tsd.AppGraph
 @@ -27,10 +26,13 @@ import ru.wms.tsd.core.api.fbs.*
  import ru.wms.tsd.ui.patterns.ScanScaffold
- 
+
  internal fun displayTime(value: String): String = runCatching {
 -    DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.systemDefault()).format(OffsetDateTime.parse(value).toInstant())
 +    DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.systemDefault()).format(apiInstant(value))
  }.getOrDefault(value)
- 
+
 -@Composable private fun fbsViewModel(): FbsViewModel = viewModel(factory = FbsViewModel.Factory(AppGraph.apiProvider))
 +@Composable private fun fbsViewModel(): FbsViewModel {
 +    val context = LocalContext.current.applicationContext
@@ -381,7 +410,7 @@ index ee2b141..339f092 100644
          onDismissRequest = vm::cancelPickSource,
          title = { Text("Откуда подобрать товар") },
 diff --git a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
-index 599ee0a..99ea917 100644
+index 599ee0a..029fa66 100644
 --- a/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
 +++ b/android/app/src/main/java/ru/wms/tsd/features/fbs/FbsViewModel.kt
 @@ -5,7 +5,11 @@ import androidx.lifecycle.ViewModelProvider
@@ -399,7 +428,7 @@ index 599ee0a..99ea917 100644
 @@ -19,10 +23,13 @@ import ru.wms.tsd.core.api.fbs.*
  import ru.wms.tsd.core.api.readableError
  import ru.wms.tsd.ui.patterns.ScanFlash
- 
+
 +fun apiInstant(value: String): Instant = runCatching { OffsetDateTime.parse(value).toInstant() }
 +    .getOrElse { LocalDateTime.parse(value).toInstant(ZoneOffset.UTC) }
 +
@@ -409,7 +438,7 @@ index 599ee0a..99ea917 100644
 -    .minWithOrNull(compareBy<FbsOrder> { runCatching { OffsetDateTime.parse(it.createdAt).toInstant() }.getOrDefault(Instant.MAX) }.thenBy { it.wbOrderId })
 +    .filter { order -> if (order.marketplace == "ozon") order.positions.any { it.pickedQuantity < it.quantity && barcode in listOfNotNull(it.barcode, it.sku, it.sellerArticle) } else barcode in listOfNotNull(order.product.barcode, order.product.sku, order.product.sellerArticle) }
 +    .minWithOrNull(compareBy<FbsOrder> { runCatching { apiInstant(it.createdAt) }.getOrDefault(Instant.MAX) }.thenBy { it.wbOrderId })
- 
+
  /**
   * Первый экран показывает заказы в порядке старейших сначала (WMS-401): точка отсчёта —
 @@ -30,11 +37,11 @@ fun oldestMatchingOrder(orders: List<FbsOrder>, barcode: String): FbsOrder? = or
@@ -419,22 +448,31 @@ index 599ee0a..99ea917 100644
 -    compareBy<FbsOrder> { runCatching { OffsetDateTime.parse(it.createdAt).toInstant() }.getOrDefault(Instant.MAX) }.thenBy { it.wbOrderId }
 +    compareBy<FbsOrder> { runCatching { apiInstant(it.createdAt) }.getOrDefault(Instant.MAX) }.thenBy { it.wbOrderId }
  )
- 
+
  fun isDeadlineNear(deadline: String, now: Instant = Instant.now()): Boolean =
 -    runCatching { OffsetDateTime.parse(deadline).toInstant().isBefore(now.plusSeconds(6 * 3600)) }.getOrDefault(false)
 +    runCatching { apiInstant(deadline).isBefore(now.plusSeconds(6 * 3600)) }.getOrDefault(false)
- 
+
  fun isKizScan(value: String): Boolean = value.startsWith("]d2", true) || value.startsWith("(01)") ||
      (value.startsWith("01") && value.length >= 20 && value.substring(2, 16).all(Char::isDigit) && value.substring(16, 18) == "21")
 @@ -82,7 +89,7 @@ data class FbsState(
      val marketplace: String = "wb",
  )
- 
+
 -class FbsViewModel(private val api: ApiProvider) : ViewModel() {
 +class FbsViewModel(private val api: ApiProvider, private val decodePdf: (ByteArray) -> List<String> = { error("PDF renderer unavailable") }) : ViewModel() {
      private class PickSourceCancelled : Exception()
      private val mutable = MutableStateFlow(FbsState())
      val state: StateFlow<FbsState> = mutable
+@@ -97,7 +104,7 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+         val action: suspend () -> Unit = when (mode) {
+             "pick" -> pickAction(text, key)
+             "pack" -> kizAction(text, key)
+-            else -> { { scanBox(text) } }
++            else -> boxScanAction(text)
+         }
+         perform(action)
+     } } }
 @@ -144,8 +151,9 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
       * cursor (данные другого магазина не показываем), затем перезагружаем.
       */
@@ -545,36 +583,83 @@ index 599ee0a..99ea917 100644
              }
              mutable.value = state.value.copy(kizOrder = null, pendingKiz = null, kizResult = notice)
          }
-@@ -365,6 +380,15 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
-         val workspace = state.value.workspace ?: return
-         workspace.boxes.firstOrNull { value == it.barcode || value == it.wbTrbxId }?.let { selectBox(it.id); return }
-         val boxId = state.value.selectedBoxId ?: error("Откройте или отсканируйте короб")
-+        if (workspace.supply.marketplace == "ozon") {
-+            val assignedPositions = workspace.boxes.flatMap { it.assignedOrderProductIds }.toSet()
-+            val candidates = sortedOrders(workspace.orders).flatMap { order -> order.positions.filter { position ->
-+                position.id !in assignedPositions && value in listOfNotNull(position.barcode, position.sku, position.sellerArticle, order.externalOrderId, order.sticker.code)
-+            } }
-+            val position = candidates.firstOrNull() ?: error("Нет свободной позиции с таким кодом. Выберите позицию в коробе.")
-+            assignPosition(boxId, position.id)
-+            return
-+        }
-         val assigned = workspace.boxes.flatMap { it.assignedOrderIds }.toSet()
-         val unassigned = workspace.orders.filter { it.id !in assigned }
-         val order = unassigned.sortedBy { it.createdAt }.firstOrNull {
-@@ -377,6 +401,21 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
-         val updated = required { api.fbs().assignOrders(workspace.supply.id, boxId, AssignOrdersBody(listOf(order.id))) }
-         mutable.value = state.value.copy(workspace = updated)
+@@ -361,22 +376,71 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+             mutable.value = state.value.copy(workspace = workspace, selectedBoxId = workspace.boxes.firstOrNull { it.id !in oldIds }?.id)
+         }
      }
+-    private suspend fun scanBox(value: String) {
+-        val workspace = state.value.workspace ?: return
+-        workspace.boxes.firstOrNull { value == it.barcode || value == it.wbTrbxId }?.let { selectBox(it.id); return }
+-        val boxId = state.value.selectedBoxId ?: error("Откройте или отсканируйте короб")
+-        val assigned = workspace.boxes.flatMap { it.assignedOrderIds }.toSet()
+-        val unassigned = workspace.orders.filter { it.id !in assigned }
+-        val order = unassigned.sortedBy { it.createdAt }.firstOrNull {
+-            value in listOfNotNull(it.sticker.code, it.wbOrderId.toString(), it.product.barcode, it.product.sku, it.product.sellerArticle)
+-        } ?: run {
+-            val found = required { api.fbs().lookupKiz(workspace.supply.id, value) }
+-            unassigned.firstOrNull { it.id == found.orderId }
+-                ?: error("Нет нераспределённого заказа с таким кодом")
++    private fun boxScanAction(value: String): suspend () -> Unit {
++        val supplyId = state.value.workspace?.supply?.id
++        // Resolve once: after a lost response, the same scan must never consume the
++        // next matching unit or position. Reread only to reconcile this exact target.
++        var target: Pair<String, AssignOrdersBody>? = null
++        return action@{
++            if (supplyId == null || openedSupplyId != supplyId) return@action
++            refresh(supplyId)
++            val workspace = state.value.workspace ?: return@action
++            if (target == null) {
++                workspace.boxes.firstOrNull { value == it.barcode || value == it.wbTrbxId }?.let {
++                    selectBox(it.id); return@action
++                }
++                val boxId = state.value.selectedBoxId ?: error("Откройте или отсканируйте короб")
++                val body = if (workspace.supply.marketplace == "ozon") {
++                    val assigned = workspace.boxes.flatMap { it.assignedOrderProductIds }.toSet()
++                    val position = sortedOrders(workspace.orders).flatMap { order -> order.positions.filter {
++                        it.id !in assigned && value in listOfNotNull(it.barcode, it.sku, it.sellerArticle, order.externalOrderId, order.sticker.code)
++                    } }.firstOrNull() ?: error("Нет свободной позиции с таким кодом. Выберите позицию в коробе.")
++                    AssignOrdersBody(orderProductIds = listOf(position.id))
++                } else {
++                    val assigned = workspace.boxes.flatMap { it.assignedOrderIds }.toSet()
++                    val unassigned = workspace.orders.filter { it.id !in assigned }
++                    val order = sortedOrders(unassigned).firstOrNull {
++                        value in listOfNotNull(it.sticker.code, it.wbOrderId.toString(), it.product.barcode, it.product.sku, it.product.sellerArticle)
++                    } ?: run {
++                        val found = required { api.fbs().lookupKiz(supplyId, value) }
++                        unassigned.firstOrNull { it.id == found.orderId }
++                            ?: error("Нет нераспределённого заказа с таким кодом")
++                    }
++                    AssignOrdersBody(listOf(order.id))
++                }
++                target = boxId to body
++            }
++            val (boxId, body) = target!!
++            val box = workspace.boxes.firstOrNull { it.id == boxId } ?: error("Короб не найден")
++            val inTarget = body.orderIds.all { it in box.assignedOrderIds } &&
++                body.orderProductIds.all { it in box.assignedOrderProductIds }
++            if (inTarget) return@action
++            val elsewhere = workspace.boxes.filter { it.id != boxId }.any { other ->
++                body.orderIds.any { it in other.assignedOrderIds } || body.orderProductIds.any { it in other.assignedOrderProductIds }
++            }
++            check(!elsewhere) { "Позиция уже в другом коробе. Проверьте распределение." }
++            mutable.value = state.value.copy(workspace = required { api.fbs().assignOrders(supplyId, boxId, body) })
+         }
+-        val updated = required { api.fbs().assignOrders(workspace.supply.id, boxId, AssignOrdersBody(listOf(order.id))) }
++    }
 +    private suspend fun assignPosition(boxId: String, positionId: String) {
 +        val supplyId = state.value.workspace?.supply?.id ?: return
 +        val updated = required { api.fbs().assignOrders(supplyId, boxId, AssignOrdersBody(orderProductIds = listOf(positionId))) }
-+        mutable.value = state.value.copy(workspace = updated)
-+    }
+         mutable.value = state.value.copy(workspace = updated)
+     }
 +    fun toggleBoxPosition(box: FbsBox, order: FbsOrder, position: FbsPosition) = launch {
 +        val supplyId = state.value.workspace?.supply?.id ?: return@launch
-+        if (position.id in box.assignedOrderProductIds) {
++        val remove = position.id in box.assignedOrderProductIds
++        refresh(supplyId)
++        val current = state.value.workspace?.boxes?.firstOrNull { it.id == box.id } ?: error("Короб не найден")
++        val present = position.id in current.assignedOrderProductIds
++        if (remove && present) {
 +            mutable.value = state.value.copy(workspace = required { api.fbs().removeBoxOrder(supplyId, box.id, order.id, position.id) })
-+        } else assignPosition(box.id, position.id)
++        } else if (!remove && !present) assignPosition(box.id, position.id)
 +    }
 +    fun prepareBoxLabel(boxId: String) = launch {
 +        val supplyId = state.value.workspace?.supply?.id ?: return@launch
@@ -583,7 +668,13 @@ index 599ee0a..99ea917 100644
      fun setBoxQuantity(box: FbsBox, productId: String, quantity: Int) = launch {
          val supplyId = state.value.workspace?.supply?.id ?: return@launch
          // A prior removal may have reached the server before its response was lost.
-@@ -395,12 +434,17 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+@@ -390,17 +454,22 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+             }
+         } else {
+             val assigned = workspace.boxes.flatMap { it.assignedOrderIds }.toSet()
+-            val add = workspace.orders.filter { it.id !in assigned && it.product.id == productId }.sortedBy { it.createdAt }.take(quantity - inBox.size)
++            val add = sortedOrders(workspace.orders.filter { it.id !in assigned && it.product.id == productId }).take(quantity - inBox.size)
+             require(add.size == quantity - inBox.size) { "Не хватает свободных заказов этого товара" }
              if (add.isNotEmpty()) mutable.value = state.value.copy(workspace = required { api.fbs().assignOrders(workspace.supply.id, box.id, AssignOrdersBody(add.map { it.id })) })
          }
      }
@@ -603,7 +694,7 @@ index 599ee0a..99ea917 100644
      }
      fun printOrders(encoder: String, ids: List<String>, barcodeCopies: Int, kizCopies: Int, includeQr: Boolean) {
          val workspace = state.value.workspace ?: return
-@@ -444,15 +488,20 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+@@ -444,15 +513,20 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
                  val entry = tape?.orders?.firstOrNull { it.orderId == id }
                  if (includeQr) {
                      val asset = if (entry != null) entry.qrAsset ?: error("Не получен QR заказа WB ${order.wbOrderId}")
@@ -628,7 +719,7 @@ index 599ee0a..99ea917 100644
                  }
                  for (code in entry?.codes.orEmpty()) repeat(kizCopies) { pages += labelPage(order.product.name, code, dataMatrix = true) }
              }
-@@ -462,16 +511,16 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
+@@ -462,16 +536,16 @@ class FbsViewModel(private val api: ApiProvider) : ViewModel() {
      }
      fun printBoxes(encoder: String, boxIds: List<String>) = launch {
          val workspace = state.value.workspace ?: return@launch
@@ -643,7 +734,7 @@ index 599ee0a..99ea917 100644
          mutable.value = state.value.copy(printDocument = labelsDocument(encoder, pages))
      }
      fun clearPrint() { mutable.value = state.value.copy(printDocument = null) }
- 
+
 -    class Factory(private val api: ApiProvider) : ViewModelProvider.Factory {
 -        @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>): T = FbsViewModel(api) as T
 +    class Factory(private val api: ApiProvider, private val decodePdf: (ByteArray) -> List<String> = { error("PDF renderer unavailable") }) : ViewModelProvider.Factory {
@@ -656,7 +747,7 @@ index a394c47..a1d4051 100644
 +++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsApiContractTest.kt
 @@ -13,6 +13,26 @@ import ru.wms.tsd.core.api.generated.infrastructure.ApiClient
  import ru.wms.tsd.core.api.readableError
- 
+
  class FbsApiContractTest {
 +    @Test fun `Ozon requests carry marketplace sort position and label reuse on the wire`() = runTest {
 +        val server = MockWebServer(); server.start()
@@ -681,8 +772,30 @@ index a394c47..a1d4051 100644
      @Test fun `delivery transport retains cancellation details and replays exact request body`() = runTest {
          val server = MockWebServer(); server.start()
          try {
+diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsDeliveryTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsDeliveryTest.kt
+index a9c44b8..fb85a09 100644
+--- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsDeliveryTest.kt
++++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsDeliveryTest.kt
+@@ -112,6 +112,17 @@ class FbsDeliveryTest {
+         assertNotEquals(bodies[0].idempotencyKey, bodies[1].idempotencyKey)
+         assertEquals("version-2", bodies[1].confirmedPreflightVersion)
+     }
++    @Test fun `checkpoint and unfamiliar conflicts keep the exact request across reopen`() = runTest {
++        for (code in listOf("fbs_shipment_checkpoint_incomplete", "new_unknown_conflict")) {
++            val bodies = mutableListOf<DeliverBody>()
++            coEvery { service.deliver("supply", capture(bodies)) } returnsMany listOf(failure(code), Response.success(workspace("in_delivery")))
++            val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.openDeliveryConfirmation(); vm.confirmDelivery()
++            assertEquals(bodies.single(), saved["supply"])
++            val reopened = FbsViewModel(provider); reopened.loadSupply("supply"); reopened.openDeliveryConfirmation()
++            assertEquals(2, bodies.size); assertEquals(bodies[0], bodies[1])
++            assertTrue(saved.isEmpty())
++        }
++    }
+     @Test fun `disk write failure prevents delivery request`() = runTest {
+         every { provider.saveFbsDelivery(any(), any()) } throws IllegalStateException("disk unavailable")
+         val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.openDeliveryConfirmation(); vm.confirmDelivery()
 diff --git a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
-index f07014b..53417ec 100644
+index f07014b..d7576e3 100644
 --- a/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
 +++ b/android/app/src/test/java/ru/wms/tsd/features/fbs/FbsViewModelTest.kt
 @@ -5,6 +5,7 @@ import io.mockk.*
@@ -696,7 +809,7 @@ index f07014b..53417ec 100644
 @@ -42,6 +43,105 @@ class FbsViewModelTest {
      }
      @After fun teardown() { Dispatchers.resetMain() }
- 
+
 +    @Test fun `Ozon selection resets WB cursor selection and uses Ozon for both requests`() = runTest {
 +        val wb = order("1", "2026-09-08T09:00:00Z").copy(status = "new")
 +        coEvery { service.orders(marketplace = "wb", group = null, cursor = null) } returns Response.success(FbsOrderPage(listOf(wb), "wb-cursor", "now"))
@@ -834,3 +947,55 @@ index f07014b..53417ec 100644
          } finally { unmockkStatic(Base64::class) }
      }
      @Test fun `box technical QR resolves its exact order without marking gates`() = runTest {
+@@ -294,6 +395,51 @@ class FbsViewModelTest {
+         assertNotNull(vm.state.value.error)
+         coVerify(exactly = 0) { service.assignOrders(any(), any(), any()) }
+     }
++    @Test fun `lost box assignment response rereads exact target without assigning next matching order`() = runTest {
++        for (marketplace in listOf("wb", "ozon")) {
++            val box = FbsBox("box", 1, "BOX")
++            val orders = listOf(order("1", "2026-09-08T09:00:00Z"), order("2", "2026-09-08T10:00:00Z")).map {
++                it.copy(marketplace = marketplace, positions = listOf(FbsPosition(id = "p${it.id}", productId = "product", name = "Товар", quantity = 2, pickedQuantity = 0, barcode = "4600000000001")))
++            }
++            val initial = workspace(orders).let { it.copy(supply = it.supply.copy(marketplace = marketplace), boxes = listOf(box)) }
++            val updated = initial.copy(boxes = listOf(if (marketplace == "wb") box.copy(assignedOrderIds = listOf("1")) else box.copy(assignedOrderProductIds = listOf("p1"))))
++            var actual = initial
++            coEvery { service.workspace("supply") } answers { Response.success(actual) }
++            val bodies = mutableListOf<AssignOrdersBody>()
++            coEvery { service.assignOrders("supply", "box", capture(bodies)) } answers {
++                actual = updated
++                throw IOException("response lost after assignment")
++            }
++            val vm = FbsViewModel(provider); vm.loadSupply("supply"); vm.selectBox("box"); vm.scan("boxes", "4600000000001")
++            assertNotNull(vm.state.value.error)
++            vm.retry()
++            assertNull(vm.state.value.error)
++            assertEquals(updated, vm.state.value.workspace)
++            assertEquals(1, bodies.size)
++            assertEquals(if (marketplace == "wb") AssignOrdersBody(listOf("1")) else AssignOrdersBody(orderProductIds = listOf("p1")), bodies.single())
++        }
++    }
++    @Test fun `Ozon position button retry reconciles successful add and remove`() = runTest {
++        val position = FbsPosition(id = "p1", productId = "product", name = "Товар", quantity = 2, pickedQuantity = 0)
++        val ozon = order("1", "2026-09-08T09:00:00Z").copy(marketplace = "ozon", positions = listOf(position))
++        val empty = FbsBox("box", 1, "BOX")
++        val filled = empty.copy(assignedOrderProductIds = listOf("p1"))
++        var current = workspace(listOf(ozon)).copy(boxes = listOf(empty))
++        coEvery { service.workspace("supply") } answers { Response.success(current) }
++        coEvery { service.assignOrders("supply", "box", any()) } answers {
++            current = current.copy(boxes = listOf(filled)); throw IOException("lost")
++        }
++        coEvery { service.removeBoxOrder("supply", "box", "1", "p1") } answers {
++            current = current.copy(boxes = listOf(empty)); throw IOException("lost")
++        }
++        val vm = FbsViewModel(provider); vm.loadSupply("supply")
++        vm.toggleBoxPosition(empty, ozon, position); vm.retry(); assertNull(vm.state.value.error)
++        assertEquals(listOf("p1"), vm.state.value.workspace!!.boxes.single().assignedOrderProductIds)
++        vm.toggleBoxPosition(filled, ozon, position); vm.retry(); assertNull(vm.state.value.error)
++        assertTrue(vm.state.value.workspace!!.boxes.single().assignedOrderProductIds.isEmpty())
++        coVerify(exactly = 1) { service.assignOrders(any(), any(), any()) }
++        coVerify(exactly = 1) { service.removeBoxOrder("supply", "box", "1", "p1") }
++    }
+     @Test fun `box quantity retry rereads successful deletes after lost response`() = runTest {
+         val box = FbsBox("box", 1, "BOX", assignedOrderIds = listOf("1", "2"))
+         val initial = workspace(listOf(order("1", "2026-09-08T09:00:00Z"), order("2", "2026-09-08T10:00:00Z"))).copy(boxes = listOf(box))
