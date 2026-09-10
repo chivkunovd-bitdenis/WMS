@@ -150,7 +150,16 @@ function externalSupplyHint(order: FbsWorklistOrder): string {
 // вайлдберрисовского маршрута. Название приходит в самом отправлении, справочника
 // методов у Ozon нет. У WB маршрут прежний — ПВЗ или склад/СЦ.
 function deliveryRouteLabel(order: FbsWorklistOrder): string {
+  if (order.marketplace === 'ozon') {
+    return order.delivery_route?.trim() || 'Маршрут Ozon не указан'
+  }
   return order.delivery_route?.trim() || (order.can_pvz ? 'ПВЗ' : 'Склад / СЦ')
+}
+
+function warehouseFilterLabel(marketplace: '__all__' | 'wb' | 'ozon'): string {
+  if (marketplace === 'ozon') return 'Склад селлера / Ozon'
+  if (marketplace === 'wb') return 'Склад селлера / WB'
+  return 'Склад селлера / маркетплейс'
 }
 
 function DeliveryRouteChip({ order }: { order: FbsWorklistOrder }) {
@@ -293,6 +302,9 @@ const NewOrderRow = memo(function NewOrderRow({
   onGoToCatalog,
 }: NewOrderRowProps) {
   const blocked = blockingSelectionBlockers(order.selection_blockers).length > 0
+  const ozonPositions = order.marketplace === 'ozon' && order.positions.length > 0
+    ? order.positions
+    : null
   return (
     <TableRow
       ref={(node) => registerRow(order.id, node)}
@@ -318,16 +330,22 @@ const NewOrderRow = memo(function NewOrderRow({
       <TableCell sx={{ minWidth: 300 }}>
         <Stack direction="row" spacing={1.25}>
           <LazyProductPhotoThumb
-            src={order.product.image_url}
-            alt={order.product.name}
+            src={ozonPositions?.[0]?.image_url ?? order.product.image_url}
+            alt={ozonPositions?.[0]?.name ?? order.product.name}
             size={52}
             previewSize={280}
             testId={`fbs-product-photo-${order.id}`}
           />
           <Box sx={{ minWidth: 220 }}>
-            <Typography variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
-              {order.product.id ? order.product.name : 'Товар не сопоставлен'}
-            </Typography>
+            {ozonPositions ? ozonPositions.map((position) => (
+              <Typography key={position.id ?? position.sku ?? position.name} variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
+                {position.name}
+              </Typography>
+            )) : (
+              <Typography variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
+                {order.product.id ? order.product.name : 'Товар не сопоставлен'}
+              </Typography>
+            )}
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
               {orderNumberLabel(order)}
             </Typography>
@@ -346,24 +364,37 @@ const NewOrderRow = memo(function NewOrderRow({
         </Stack>
       </TableCell>
       <TableCell sx={{ minWidth: 170 }}>
-        <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
-          {order.product.seller_article ?? '—'}
-        </Typography>
+        {ozonPositions ? ozonPositions.map((position) => (
+          <Typography key={position.id ?? position.sku ?? position.name} variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+            {position.seller_article ?? '—'}
+          </Typography>
+        )) : <>
+          <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+            {order.product.seller_article ?? '—'}
+          </Typography>
         {order.product.wb_article ? (
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'nowrap' }}>
             WB {order.product.wb_article}
           </Typography>
-        ) : null}
+        ) : null}</>}
       </TableCell>
       <TableCell sx={{ minWidth: 170 }}>
-        <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+        {ozonPositions ? ozonPositions.map((position) => (
+          <Typography key={position.id ?? position.sku ?? position.name} variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+            {position.sku ?? '—'}
+          </Typography>
+        )) : <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
           {order.product.sku ?? '—'}
-        </Typography>
+        </Typography>}
       </TableCell>
       <TableCell sx={{ minWidth: 150 }}>
-        <Typography variant="body2" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}>
+        {ozonPositions ? ozonPositions.map((position) => (
+          <Typography key={position.id ?? position.sku ?? position.name} variant="body2" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}>
+            {position.barcode ?? '—'}
+          </Typography>
+        )) : <Typography variant="body2" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}>
           {order.product.barcode ?? '—'}
-        </Typography>
+        </Typography>}
       </TableCell>
       <TableCell sx={{ minWidth: 80 }}>
         <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
@@ -384,6 +415,7 @@ const NewOrderRow = memo(function NewOrderRow({
           deadlineAt={order.deadline_at}
           serverNow={serverNow}
           cancelled={order.status === 'cancelled'}
+          marketplace={order.marketplace}
         />
       </TableCell>
     </TableRow>
@@ -1301,10 +1333,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
           </FormControl>
           {statusGroup === 'new' ? (
             <FormControl sx={{ minWidth: 260 }}>
-              <InputLabel id="fbs-worklist-warehouse-label">Склад селлера / WB</InputLabel>
+              <InputLabel id="fbs-worklist-warehouse-label">{warehouseFilterLabel(marketplace)}</InputLabel>
               <Select
                 labelId="fbs-worklist-warehouse-label"
-                label="Склад селлера / WB"
+                label={warehouseFilterLabel(marketplace)}
                 value={wbWarehouseId}
                 onChange={(event) => {
                   setWbWarehouseId(String(event.target.value))
@@ -1585,6 +1617,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
 
               const localSupplyMissing = !order.supply_id
               const metaFlag = metadataProblem(order)
+              const ozonPositions = order.marketplace === 'ozon' && order.positions.length > 0
+                ? order.positions
+                : null
               const row = (
                 <TableRow
                   key={order.id}
@@ -1612,16 +1647,20 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                       <TableCell sx={{ minWidth: 300 }}>
                         <Stack direction="row" spacing={1.25}>
                           <ProductPhotoThumb
-                            src={order.product.image_url}
-                            alt={order.product.name}
+                            src={ozonPositions?.[0]?.image_url ?? order.product.image_url}
+                            alt={ozonPositions?.[0]?.name ?? order.product.name}
                             size={56}
                             previewSize={280}
                             testId={`fbs-product-photo-${order.id}`}
                           />
                           <Box sx={{ minWidth: 220 }}>
-                            <Typography variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
+                            {ozonPositions ? ozonPositions.map((position) => (
+                              <Typography key={position.id ?? position.sku ?? position.name} variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
+                                {position.name}
+                              </Typography>
+                            )) : <Typography variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
                               {order.product.id ? order.product.name : 'Товар не сопоставлен'}
-                            </Typography>
+                            </Typography>}
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                               Заказ {orderNumberLabel(order)}
                             </Typography>
@@ -1629,24 +1668,37 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                         </Stack>
                       </TableCell>
                       <TableCell sx={{ minWidth: 170 }}>
-                        <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
-                          {order.product.seller_article ?? '—'}
-                        </Typography>
+                        {ozonPositions ? ozonPositions.map((position) => (
+                          <Typography key={position.id ?? position.sku ?? position.name} variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+                            {position.seller_article ?? '—'}
+                          </Typography>
+                        )) : <>
+                          <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+                            {order.product.seller_article ?? '—'}
+                          </Typography>
                         {order.product.wb_article ? (
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'nowrap' }}>
                             WB {order.product.wb_article}
                           </Typography>
-                        ) : null}
+                        ) : null}</>}
                       </TableCell>
                       <TableCell sx={{ minWidth: 170 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        {ozonPositions ? ozonPositions.map((position) => (
+                          <Typography key={position.id ?? position.sku ?? position.name} variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            {position.sku ?? '—'}
+                          </Typography>
+                        )) : <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
                           {order.product.sku ?? '—'}
-                        </Typography>
+                        </Typography>}
                       </TableCell>
                       <TableCell sx={{ minWidth: 150 }}>
-                        <Typography variant="body2" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}>
+                        {ozonPositions ? ozonPositions.map((position) => (
+                          <Typography key={position.id ?? position.sku ?? position.name} variant="body2" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}>
+                            {position.barcode ?? '—'}
+                          </Typography>
+                        )) : <Typography variant="body2" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}>
                           {order.product.barcode ?? '—'}
-                        </Typography>
+                        </Typography>}
                       </TableCell>
                       <TableCell sx={{ minWidth: 80 }}>
                         <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
@@ -1665,6 +1717,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                           deadlineAt={order.deadline_at}
                           serverNow={serverNow}
                           cancelled={order.status === 'cancelled'}
+                          marketplace={order.marketplace}
                         />
                       </TableCell>
                       <TableCell>
