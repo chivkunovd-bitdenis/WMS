@@ -1,6 +1,7 @@
 """WMS-402: file delivery, replay safety and tenant/warehouse boundaries."""
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import fitz
 import pytest
@@ -50,6 +51,17 @@ async def test_document_replay_claim_and_queue_receipt_do_not_repeat_print(db_se
         await jobs.load_print_job_content(db_session, tenant.id, job.id, warehouse_id=warehouse.id)
     assert premature.value.code == "print_job_not_running"
     assert await jobs.claim_next_print_job(db_session, tenant.id, warehouse_id=uuid.uuid4()) is None
+    # A dormant warehouse must not starve another warehouse behind the scan limit.
+    other_warehouse_id = uuid.uuid4()
+    db_session.add_all([
+        BackgroundJob(
+            tenant_id=tenant.id, job_type="fbs_label_print", status="pending",
+            payload_json={"warehouse_id": str(other_warehouse_id)},
+            created_at=datetime.now(UTC) - timedelta(days=1),
+        )
+        for _ in range(100)
+    ])
+    await db_session.flush()
     claimed = await jobs.claim_next_print_job(db_session, tenant.id, warehouse_id=warehouse.id)
     assert claimed is not None and claimed.id == job.id
     await db_session.commit()

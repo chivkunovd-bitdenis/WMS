@@ -7823,13 +7823,25 @@
           "has_label_artifact": {
             "type": "boolean",
             "title": "Has Label Artifact"
+          },
+          "order_product_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Product Id"
           }
         },
         "type": "object",
         "required": [
           "id",
           "cis_code",
-          "has_label_artifact"
+          "has_label_artifact",
+          "order_product_id"
         ],
         "title": "FbsOrderTapePrintedCodeOut"
       },
@@ -8243,12 +8255,41 @@
             "title": "Product Id"
           },
           "sku_code": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Sku Code"
           },
           "product_name": {
             "type": "string",
             "title": "Product Name"
+          },
+          "seller_article": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Article"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
           },
           "planned_qty": {
             "type": "integer",
@@ -8271,6 +8312,8 @@
           "product_id",
           "sku_code",
           "product_name",
+          "seller_article",
+          "barcode",
           "planned_qty",
           "picked_qty",
           "locations"
@@ -10236,6 +10279,14 @@
             "type": "string",
             "title": "Id"
           },
+          "marketplace": {
+            "type": "string",
+            "enum": [
+              "wb",
+              "ozon"
+            ],
+            "title": "Marketplace"
+          },
           "seller_id": {
             "type": "string",
             "title": "Seller Id"
@@ -10245,7 +10296,14 @@
             "title": "Warehouse Id"
           },
           "wb_supply_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Wb Supply Id"
           },
           "name": {
@@ -10385,6 +10443,7 @@
         "type": "object",
         "required": [
           "id",
+          "marketplace",
           "seller_id",
           "warehouse_id",
           "wb_supply_id",
@@ -11218,6 +11277,30 @@
         ],
         "title": "FbsWorklistInventoryOut"
       },
+      "FbsWorklistMarketplaceBindingOut": {
+        "properties": {
+          "marketplace": {
+            "type": "string",
+            "enum": [
+              "wb",
+              "ozon"
+            ],
+            "title": "Marketplace"
+          },
+          "external_barcodes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "External Barcodes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "marketplace"
+        ],
+        "title": "FbsWorklistMarketplaceBindingOut"
+      },
       "FbsWorklistMetadataOut": {
         "properties": {
           "required": {
@@ -11650,6 +11733,13 @@
             ],
             "title": "Product Id"
           },
+          "marketplace_bindings": {
+            "items": {
+              "$ref": "#/components/schemas/FbsWorklistMarketplaceBindingOut"
+            },
+            "type": "array",
+            "title": "Marketplace Bindings"
+          },
           "name": {
             "type": "string",
             "title": "Name"
@@ -11817,6 +11907,13 @@
               }
             ],
             "title": "Size"
+          },
+          "marketplace_bindings": {
+            "items": {
+              "$ref": "#/components/schemas/FbsWorklistMarketplaceBindingOut"
+            },
+            "type": "array",
+            "title": "Marketplace Bindings"
           }
         },
         "type": "object",
@@ -12558,6 +12655,13 @@
               }
             ],
             "title": "Size"
+          },
+          "marketplace_bindings": {
+            "items": {
+              "$ref": "#/components/schemas/FbsWorklistMarketplaceBindingOut"
+            },
+            "type": "array",
+            "title": "Marketplace Bindings"
           },
           "packaging_instructions": {
             "anyOf": [
@@ -27240,6 +27344,208 @@
           "status"
         ],
         "title": "StorageRebuildOut"
+      },
+      "StorageReportOut": {
+        "properties": {
+          "date_from": {
+            "type": "string",
+            "title": "Date From"
+          },
+          "date_to": {
+            "type": "string",
+            "title": "Date To"
+          },
+          "total_liter_days": {
+            "type": "string",
+            "title": "Total Liter Days"
+          },
+          "total_amount_kopecks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Amount Kopecks"
+          },
+          "sellers": {
+            "items": {
+              "$ref": "#/components/schemas/StorageReportSellerOut"
+            },
+            "type": "array",
+            "title": "Sellers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date_from",
+          "date_to",
+          "total_liter_days",
+          "total_amount_kopecks",
+          "sellers"
+        ],
+        "title": "StorageReportOut"
+      },
+      "StorageReportProductOut": {
+        "properties": {
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
+          "sku": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sku"
+          },
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "seller_article": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Article"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "volume_liters": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume Liters"
+          },
+          "liter_days": {
+            "type": "string",
+            "title": "Liter Days"
+          },
+          "period_rate_kopecks": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Rate Kopecks"
+          },
+          "current_rate_kopecks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Rate Kopecks"
+          },
+          "amount_kopecks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Kopecks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "sku",
+          "product_name",
+          "seller_article",
+          "category",
+          "volume_liters",
+          "liter_days",
+          "period_rate_kopecks",
+          "current_rate_kopecks",
+          "amount_kopecks"
+        ],
+        "title": "StorageReportProductOut"
+      },
+      "StorageReportSellerOut": {
+        "properties": {
+          "seller_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Seller Id"
+          },
+          "seller_name": {
+            "type": "string",
+            "title": "Seller Name"
+          },
+          "liter_days": {
+            "type": "string",
+            "title": "Liter Days"
+          },
+          "amount_kopecks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Kopecks"
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/StorageReportProductOut"
+            },
+            "type": "array",
+            "title": "Products"
+          }
+        },
+        "type": "object",
+        "required": [
+          "seller_id",
+          "seller_name",
+          "liter_days",
+          "amount_kopecks",
+          "products"
+        ],
+        "title": "StorageReportSellerOut"
       },
       "StorageStatementOut": {
         "properties": {
