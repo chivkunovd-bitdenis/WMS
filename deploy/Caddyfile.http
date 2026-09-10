@@ -1,8 +1,19 @@
+{
+  servers {
+    # Existing edge bridge and WMS bridge gateway on this deployment host.
+    trusted_proxies static 172.18.0.0/16 172.21.0.1/32
+    trusted_proxies_strict
+  }
+}
+
 :80 {
   encode gzip zstd
 
   handle_path /api/* {
-    reverse_proxy api:8000
+    reverse_proxy api:8000 {
+      # Forward the verified client only, not a caller-supplied header chain.
+      header_up X-Forwarded-For {http.request.client_ip}
+    }
   }
 
   redir /seller /seller/
