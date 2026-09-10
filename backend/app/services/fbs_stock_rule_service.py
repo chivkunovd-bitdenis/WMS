@@ -434,34 +434,7 @@ async def get_rule_view(
     tenant_id: uuid.UUID,
     product_id: uuid.UUID,
 ) -> FbsRuleView:
-    product = await session.get(Product, product_id)
-    if product is None or product.tenant_id != tenant_id:
-        raise FbsStockRuleError("product_not_found", message="Товар не найден.")
-    if product.seller_id is None:
-        raise FbsStockRuleError(
-            "product_without_seller",
-            message="У товара нет продавца, поэтому складов WB для него тоже нет.",
-        )
-    bindings = await _seller_bindings(session, tenant_id, product.seller_id, publishing_only=False)
-    # WMS-376. Число на экране обязано считаться по тому же множеству, по
-    # которому считает публикация, — по транслирующим привязкам. Раньше здесь
-    # стояли обслуживаемые, и после развязки галок оператор видел бы одно, а в
-    # кабинет уезжало другое.
-    publishing = [binding for binding in bindings if binding.stock_sync_enabled]
-    pool_rows = await _pool_rows(session, product_id, [b.id for b in bindings])
-    rule = rule_from_product(product, pool_rows, bindings)
-    on_hand, reserved, free = await _free_stock_for_bindings(
-        session, tenant_id, product_id, bindings
-    )
-    amounts = split_amounts(rule, free, publishing, pool_rows=pool_rows)
-    return FbsRuleView(
-        rule=rule,
-        on_hand=on_hand,
-        reserved=reserved,
-        free_stock=free,
-        published_now=sum(amounts.values()),
-        units_remaining_by_warehouse=_units_by_wb(rule, bindings),
-    )
+    return (await get_rule_views(session, tenant_id, [product_id]))[product_id]
 
 
 async def get_rule_views(
@@ -522,6 +495,7 @@ async def get_rule_views(
                 pools_by_product[pool.product_id][pool.binding_id] = pool
 
         stock_by_product = {product_id: [0, 0, 0] for product_id in seller_product_ids}
+        free_by_warehouse: dict[uuid.UUID, dict[uuid.UUID, int]] = {}
         warehouse_ids = sorted({binding.wms_warehouse_id for binding in bindings}, key=str)
         for warehouse_id in warehouse_ids:
             breakdown = await fbs_stock_breakdown_by_product(
@@ -531,6 +505,7 @@ async def get_rule_views(
                 seller_product_ids,
                 include_global_direction_reserve=False,
             )
+            free_by_warehouse[warehouse_id] = {pid: row.free for pid, row in breakdown.items()}
             for product_id, row in breakdown.items():
                 totals = stock_by_product[product_id]
                 totals[0] += row.on_hand
@@ -556,8 +531,21 @@ async def get_rule_views(
             pool_rows = pools_by_product[product.id]
             rule = rule_from_product(product, pool_rows, bindings)
             on_hand, reserved, free = stock_by_product[product.id]
-            # То же, что и в get_rule_view: экран считает по публикующим.
-            amounts = split_amounts(rule, free, publishing, pool_rows=pool_rows)
+            directions = direction_totals.get(product.id)
+            direction_reserved = int(directions.total) if directions is not None else 0
+            amounts: dict[uuid.UUID, int] = {}
+            for warehouse_id in warehouse_ids:
+                local_bindings = [b for b in publishing if b.wms_warehouse_id == warehouse_id]
+                # Match publish_amounts_for_binding: global direction reserves
+                # are conservatively deducted from each physical warehouse.
+                local_free = max(
+                    0, free_by_warehouse[warehouse_id].get(product.id, 0) - direction_reserved
+                )
+                local_pools = {b.id: pool_rows[b.id] for b in local_bindings if b.id in pool_rows}
+                if _has_rule(product, local_pools):
+                    amounts.update(
+                        split_amounts(rule, local_free, local_bindings, pool_rows=local_pools)
+                    )
             views[product.id] = FbsRuleView(
                 rule=rule,
                 on_hand=on_hand,
@@ -639,9 +627,10 @@ async def set_rule_for_products(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     product_ids: list[uuid.UUID],
-    rule: FbsRule,
+    rule: FbsRule | None,
     *,
     updated_by: uuid.UUID | None = None,
+    _binding_quantity: tuple[uuid.UUID, int] | None = None,
 ) -> None:
     """Записать правило одному товару или сразу нескольким.
 
@@ -697,13 +686,30 @@ async def set_rule_for_products(
             raise FbsStockRuleError("mixed_sellers")
         bindings = await _seller_bindings(session, tenant_id, seller_id, publishing_only=False)
         served = [binding for binding in bindings if binding.served]
-        rule = _qualified_rule(rule, bindings)
         old_rules = {}
         for product in products:
             pools = await _pool_rows(session, product.id, [b.id for b in bindings])
             old_rules[product.id] = _qualified_rule(
                 rule_from_product(product, pools, bindings), bindings
             )
+        if _binding_quantity is not None:
+            binding_id, quantity = _binding_quantity
+            binding = next((b for b in bindings if b.id == binding_id), None)
+            if binding is None:
+                raise FbsStockRuleError("binding_not_found")
+            if len(products) != 1:
+                raise FbsStockRuleError("invalid_selection")
+            previous = old_rules[products[0].id]
+            rule = replace(
+                previous,
+                units_mode=True,
+                units_by_warehouse={
+                    **previous.units_by_warehouse, _binding_key(binding): quantity,
+                },
+            )
+        if rule is None:
+            raise FbsStockRuleError("rule_not_configured")
+        rule = _qualified_rule(rule, bindings)
         product_rules = {
             product.id: replace(
                 rule,
@@ -741,8 +747,7 @@ async def set_rule_for_products(
                 old_rule = old_rules[product.id]
                 _validate_units(effective_rule, None)
                 if any(
-                    value > (old_rule.units_by_warehouse.get(key, 0)
-                             if old_rule.units_mode else 0)
+                    value > old_rule.units_by_warehouse.get(key, 0)
                     for key, value in validation_rule.units_by_warehouse.items()
                 ):
                     _validate_units(validation_rule, product_free)
@@ -750,8 +755,7 @@ async def set_rule_for_products(
                     local_bindings = [b for b in bindings if b.wms_warehouse_id == warehouse_id]
                     local_keys = {_binding_key(b) for b in local_bindings}
                     increases = any(
-                        value > (old_rule.units_by_warehouse.get(key, 0)
-                                 if old_rule.units_mode else 0)
+                        value > old_rule.units_by_warehouse.get(key, 0)
                         for key, value in validation_rule.units_by_warehouse.items()
                         if key in local_keys
                     )
@@ -816,23 +820,6 @@ async def set_rule_for_products(
                 binding.stock_sync_enabled = True
 
         binding_by_key = {_binding_key(binding): binding for binding in bindings}
-        # WMS-342. Обнуление выделения ниже раньше искало строки по одному товару и
-        # тенанту — то есть доставало ВСЁ, включая привязки чужой площадки. Оператор
-        # сохранял правило доли для Wildberries и молча стирал штуки, выделенные на
-        # Ozon: товар исчезал с озоновской витрины, и связать это с действием было
-        # нечем. Тот же класс аварии, что квота 04.09.2026, зашедший с другой стороны.
-        #
-        # Правило распоряжается ровно тем, что охватывает: привязками ЭТОГО продавца
-        # и ТЕХ площадок, чьи склады оно перечисляет. Неактивные привязки охваченных
-        # площадок из зачистки не исключаем: оставленное там число опубликовалось бы, как
-        # только привязку вернут в строй.
-        governed_bindings = select(FbsWarehouseBinding.id).where(
-            FbsWarehouseBinding.tenant_id == tenant_id,
-            FbsWarehouseBinding.seller_id == seller_id,
-            FbsWarehouseBinding.marketplace.in_(
-                sorted({binding.marketplace for binding in bindings})
-            ),
-        )
         for product in products:
             product.fbs_ozon_stock_sync_enabled = product_rules[product.id].publishes("ozon")
             product.fbs_stock_sync_enabled = product_rules[product.id].publishes("wb")
@@ -842,16 +829,6 @@ async def set_rule_for_products(
             # обратно — работает то, что было. Оба числа лежат рядом, режим решает,
             # какое из них читает публикация.
             product.fbs_units_mode = rule.units_mode
-            if not rule.units_mode:
-                await session.execute(
-                    update(FbsBindingStockPool)
-                    .where(
-                        FbsBindingStockPool.product_id == product.id,
-                        FbsBindingStockPool.tenant_id == tenant_id,
-                        FbsBindingStockPool.binding_id.in_(governed_bindings),
-                    )
-                    .values(quantity=0)
-                )
             pool_rows = await _pool_rows(session, product.id, [b.id for b in bindings])
             for warehouse_key, binding in binding_by_key.items():
                 percent = rule.by_warehouse.get(warehouse_key)
@@ -873,9 +850,6 @@ async def set_rule_for_products(
                 pool.percent = percent
                 if rule.units_mode:
                     pool.quantity = int(units or 0)
-                else:
-                    # Оператор переключил режим; резервы заказов остаются.
-                    pool.quantity = 0
                 pool.updated_by = updated_by
         for marketplace in sorted(changed):
             if any(r.publishes(marketplace) for r in product_rules.values()):
@@ -914,16 +888,6 @@ async def reset_legacy_limits_for_products(
         update(Product)
         .where(Product.id.in_(unique_ids), Product.tenant_id == tenant_id)
         .values(fbs_stock_limit=0)
-    )
-    await session.execute(
-        update(FbsBindingStockPool)
-        .where(
-            FbsBindingStockPool.tenant_id == tenant_id,
-            FbsBindingStockPool.product_id.in_(
-                [product.id for product in products if not product.fbs_units_mode]
-            ),
-        )
-        .values(quantity=0)
     )
     await session.commit()
     return len(unique_ids)
