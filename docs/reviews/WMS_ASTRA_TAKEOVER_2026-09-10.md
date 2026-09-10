@@ -286,3 +286,12 @@ Chat655/643 интегрирован ba47e9d6: независимое review ACC
 Authreview24222 завершён ACCEPT96a8dc4c, PR215f318a811 CIидёт, deployстрогопосле418. Warehouse23666 завершён2798b386pushed:9new+43regressionPGPASS, старый40P01воспроизведён. Новый read-only warehouse reviewerзапущенвпрежнемthread (PIDвlaunchJSONreview-warehouse-empty-lock-final); результатещёнет. Audit23667продолжается, неподменятьегоwriter. Всеastra6high;111112STOP/94229не запускать/секретыPROGRESSrawmobileисключены.
 
 CUA ранее заблокированный transport восстановился последним getTab663118663: увиден настоящий локальный FBS Учебная1 на5415, вкладкаПодбор. Это только чтениеэкрана; nestedconfirm/chatпослеинтеграции ещёнеприняты. Browserhandle tab доступенвCUA, URLсsupply_id37c461c8-63ab-444c-b4c4-e3272648c57f. Не считатьстарыйtransportвечнымблокером;5397explicitdenialпо-прежнемунеобходить.
+
+
+### 13:07 МСК — срочный WMS-418 ВЫПУЩЕН, продолжение415/416
+
+PR216head44f52743, CI34462815600 полностьюSUCCESS, merged/deployed120b106cc3f47dd28fa499e094c7cde83e8a6b40. Deploy29106 завершился0, api/web started10:05:28UTC, обаruntimeAPIhash=Git, publiccatalogJS/indexhash=web, health/HTTPS/OpenAPI200 иstock_publication enum присутствует. Schema0257 неизменна, worker/beat остаютсянаeaa images/start09:11, никакихDDL/auth/network/flags/secrets. Полныйпротокол wms418-production-20260910.md иresumed/wms418-production-verification-20260910.json. Root исходныйfullUIпринял; coordinatorproductionChrome663118697 показалобычнуюформувхода, незасчитыватькакfilterclick. HandleprodTabсейчасCUAживой; старыйlocal663118663 ужезакрытпослепрерывания.
+
+Широкийcoord1255d88dсодержитacceptedwarehouse2798→5c7d8656(9rootPGPASS), acceptedbillingd310/89a→3d160fca/c7082fb8, reports463/e9e(23rootPGPASS); этисрезыневошливfilterrelease. NewauditwriterPID28174/thread01a08a4d-bce6-7180-9ebd-79ce79ecbc45 вwms056-audit-trail: маркировочныепулы/удалениепривязкикодаприёмки/шаблоныпечатииexistingDocumentEvent, scopedtests. Предыдущие23666/23667/24222/26109/26742/27507завершены; не дублироватьwriters.
+
+Следующийшаг: auth215f318a811 ужеCI34462255065PASS иindependentreview96a8ACCEPT. Сначала сохранитьновыйproduction120bвправильнойauthветке, точныйdiffбезпотери418, затемвыпусксread-onlytopologyguard иactualHTTPSclientIP/закрытием8088/15174. Далееchat/UIcancel/live/broad325/416; срочный418 большеихнеблокирует.111112STOP иархивсохраняются. Секреты/PROGRESS/rawmobileeventsнечитать, клиентскиескладскиеданныерадиприёмкинеменять.
